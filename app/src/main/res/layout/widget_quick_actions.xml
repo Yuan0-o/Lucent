@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Combined "quick actions" widget (task 9): note / task / assistant in one compact bar. Each cell
+     is its own tap target. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_bg"
+    android:padding="8dp"
+    android:baselineAligned="false">
+
+    <LinearLayout
+        android:id="@+id/cell_note"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_margin="4dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_cell_bg"
+        android:padding="8dp">
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:src="@drawable/ic_widget_note"
+            android:contentDescription="New note" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Note"
+            android:textColor="@color/widget_text"
+            android:textSize="12sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/cell_task"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_margin="4dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_cell_bg"
+        android:padding="8dp">
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:src="@drawable/ic_widget_task"
+            android:contentDescription="New task" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Task"
+            android:textColor="@color/widget_text"
+            android:textSize="12sp"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/cell_ask"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_margin="4dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_cell_bg"
+        android:padding="8dp">
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:src="@drawable/ic_widget_assistant"
+            android:contentDescription="Ask the assistant" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Ask"
+            android:textColor="@color/widget_text"
+            android:textSize="12sp"
+            android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>

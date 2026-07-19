@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Which directories the FileProvider is allowed to hand out content:// URIs for.
+
+    Deliberately narrow: only the single "attachment-preview" subdirectory of the app's internal
+    cache. That is where AttachmentAccess writes the *decrypted* temporary copy of an attachment
+    right before opening/sharing it, and nowhere else. The encrypted originals under files/ and the
+    key files under files/keys/ are never exposed here — the provider simply cannot address them, so
+    even a buggy caller can't leak a ciphertext file or, far worse, a key.
+-->
+<paths>
+    <cache-path name="attachment-preview" path="attachment-preview/" />
+</paths>

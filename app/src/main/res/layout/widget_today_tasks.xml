@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    "Today's tasks" widget: a glass card with a header (title + quick-add "+") and a scrollable list
+    of the tasks still to do. The ListView is fed by TodayTasksWidgetService; the empty view shows
+    when there are none.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_today_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="6dp">
+
+        <TextView
+            android:id="@+id/widget_today_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Tasks"
+            android:textColor="#FFFFFFFF"
+            android:textSize="16sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_today_add"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/widget_button_background"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#FFFFFFFF"
+            android:textSize="18sp"
+            android:includeFontPadding="false" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_today_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Nothing to do. Tap + to add a task."
+        android:textColor="#B3FFFFFF"
+        android:textSize="13sp"
+        android:paddingTop="8dp"
+        android:visibility="gone" />
+
+    <ListView
+        android:id="@+id/widget_today_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:divider="#1AFFFFFF"
+        android:dividerHeight="1dp" />
+</LinearLayout>

@@ -1,0 +1,5 @@
+<resources>
+    <!-- Launcher label, shown under the home-screen icon. Uses the mathematical
+         script (bold) capitals so it renders as 𝓛𝓾𝓬𝓮𝓷𝓽 on the launcher. -->
+    <string name="app_name">𝓛𝓾𝓬𝓮𝓷𝓽</string>
+</resources>

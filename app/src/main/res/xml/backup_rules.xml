@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Belt and braces. `android:allowBackup="false"` already stops Android's auto-backup entirely, so
+  nothing here should ever be consulted. It exists so that if someone flips allowBackup back on in a
+  future edit — the sort of one-line change that looks harmless — the app's data still does not
+  quietly start flowing to Google Drive.
+-->
+<full-backup-content>
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="file" path="." />
+    <exclude domain="external" path="." />
+    <exclude domain="root" path="." />
+</full-backup-content>
