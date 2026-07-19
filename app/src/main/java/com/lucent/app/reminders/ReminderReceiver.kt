@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.lucent.app.MainActivity
 import com.lucent.app.R
+import com.lucent.app.data.SettingsRepository
 
 /**
  * Fires when a scheduled task reminder comes due (see [ReminderScheduler]) and posts the
@@ -37,8 +38,19 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val taskId = intent.getLongExtra(ReminderScheduler.EXTRA_TASK_ID, -1L)
         if (taskId < 0) return
+
+        // This receiver can be the first Lucent code to run in a fresh process — no Activity, so
+        // nobody has applied the saved UI language yet and S would fall back to the device locale.
+        // A reminder is user-visible text, so load the setting first (a DataStore first() is a
+        // fast local read; and if it ever fails, the system-locale fallback is still sensible).
+        try {
+            com.lucent.app.i18n.L.apply(
+                kotlinx.coroutines.runBlocking { SettingsRepository(context).appLanguageOnce() }
+            )
+        } catch (_: Throwable) { }
+
         val title = intent.getStringExtra(ReminderScheduler.EXTRA_TASK_TITLE)
-            ?.takeIf { it.isNotBlank() } ?: "Untitled task"
+            ?.takeIf { it.isNotBlank() } ?: com.lucent.app.i18n.S.untitledTask
 
         Notifications.ensureChannel(context)
         if (!Notifications.canPost(context)) return
@@ -69,14 +81,14 @@ class ReminderReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(context, Notifications.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Task due")
+            .setContentTitle(com.lucent.app.i18n.S.notifTaskDue)
             .setContentText(title)
             .setStyle(NotificationCompat.BigTextStyle().bigText(title))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
-            .addAction(R.drawable.ic_notification, "Mark as Done", donePendingIntent)
+            .addAction(R.drawable.ic_notification, com.lucent.app.i18n.S.notifMarkDone, donePendingIntent)
             .build()
 
         try {

@@ -89,36 +89,36 @@ object AppTools {
         }
         val title = s("title", "note_title", "task_title", "new_title")
         return when (name) {
-            "create_note" -> "Create a note titled \"${s("title")}\""
-            "update_note" -> "Edit the note \"$title\"" + newTitleSuffix(a)
-            "delete_note" -> "Move the note \"$title\" to Trash"
-            "pin_note" -> if (a.optBoolean("pinned", true)) "Pin the note \"$title\"" else "Unpin the note \"$title\""
-            "set_note_attachment" -> "Save the file \"${s("file_name")}\" onto the note \"$title\""
-            "remove_note_attachment" -> "Remove the file \"${s("file_name")}\" from the note \"$title\""
-            "attach_upload_to_note" -> "Attach your uploaded file to the note \"$title\""
-            "create_task" -> "Create a task titled \"${s("title")}\"" + dueSuffix(s("due"))
-            "complete_task" -> "Mark the task \"$title\" as done"
-            "update_task" -> "Edit the task \"$title\"" + newTitleSuffix(a)
-            "delete_task" -> "Move the task \"$title\" to Trash"
-            "pin_task" -> if (a.optBoolean("pinned", true)) "Pin the task \"$title\"" else "Unpin the task \"$title\""
-            "set_task_priority" -> "Set the priority of \"$title\" to ${s("priority")}"
-            "set_task_due_date" -> "Set the due date of \"$title\" to ${s("due_at")}"
-            "add_subtask" -> "Add the subtask \"${s("item")}\" to \"$title\""
-            "set_subtask_done" -> "Check off the subtask \"${s("item")}\" on \"$title\""
-            "remove_subtask" -> "Remove the subtask \"${s("item")}\" from \"$title\""
-            "set_task_attachment" -> "Save the file \"${s("file_name")}\" onto the task \"$title\""
-            "remove_task_attachment" -> "Remove the file \"${s("file_name")}\" from the task \"$title\""
-            "attach_upload_to_task" -> "Attach your uploaded file to the task \"$title\""
-            else -> "Run \"$name\""
+            "create_note" -> com.lucent.app.i18n.S.ccCreateNote(s("title"))
+            "update_note" -> com.lucent.app.i18n.S.ccEditNote(title) + newTitleSuffix(a)
+            "delete_note" -> com.lucent.app.i18n.S.ccDeleteNote(title)
+            "pin_note" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinNote(title) else com.lucent.app.i18n.S.ccUnpinNote(title)
+            "set_note_attachment" -> com.lucent.app.i18n.S.ccSaveFileOnNote(s("file_name"), title)
+            "remove_note_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromNote(s("file_name"), title)
+            "attach_upload_to_note" -> com.lucent.app.i18n.S.ccAttachUploadToNote(title)
+            "create_task" -> com.lucent.app.i18n.S.ccCreateTask(s("title")) + dueSuffix(s("due"))
+            "complete_task" -> com.lucent.app.i18n.S.ccCompleteTask(title)
+            "update_task" -> com.lucent.app.i18n.S.ccEditTask(title) + newTitleSuffix(a)
+            "delete_task" -> com.lucent.app.i18n.S.ccDeleteTask(title)
+            "pin_task" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinTask(title) else com.lucent.app.i18n.S.ccUnpinTask(title)
+            "set_task_priority" -> com.lucent.app.i18n.S.ccSetPriority(title, s("priority"))
+            "set_task_due_date" -> com.lucent.app.i18n.S.ccSetDueDate(title, s("due_at"))
+            "add_subtask" -> com.lucent.app.i18n.S.ccAddSubtask(s("item"), title)
+            "set_subtask_done" -> com.lucent.app.i18n.S.ccCheckSubtask(s("item"), title)
+            "remove_subtask" -> com.lucent.app.i18n.S.ccRemoveSubtask(s("item"), title)
+            "set_task_attachment" -> com.lucent.app.i18n.S.ccSaveFileOnTask(s("file_name"), title)
+            "remove_task_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromTask(s("file_name"), title)
+            "attach_upload_to_task" -> com.lucent.app.i18n.S.ccAttachUploadToTask(title)
+            else -> com.lucent.app.i18n.S.ccRunGeneric(name)
         }
     }
 
     private fun newTitleSuffix(a: JSONObject): String {
         val nt = a.optString("new_title", "")
-        return if (nt.isNotBlank()) " (rename to \"$nt\")" else ""
+        return if (nt.isNotBlank()) com.lucent.app.i18n.S.ccRenameSuffix(nt) else ""
     }
 
-    private fun dueSuffix(due: String): String = if (due.isNotBlank()) " due $due" else ""
+    private fun dueSuffix(due: String): String = if (due.isNotBlank()) com.lucent.app.i18n.S.ccDueSuffix(due) else ""
 
     private fun baseDefinitions(): List<ToolDefinition> = listOf(
         // ---- Notes ----

@@ -15,8 +15,11 @@ import androidx.core.content.ContextCompat
 object Notifications {
 
     const val CHANNEL_ID = "task_reminders"
-    private const val CHANNEL_NAME = "Task reminders"
-    private const val CHANNEL_DESC = "Alerts you when a task with a reminder reaches its due time"
+    // Read at call time (not consts) so the channel is (re)registered under the CURRENT UI
+    // language: createNotificationChannel with an existing id updates its user-visible name, and
+    // ensureChannel runs on every launch, so a language switch renames the channel next start.
+    private val CHANNEL_NAME: String get() = com.lucent.app.i18n.S.notifChannelName
+    private val CHANNEL_DESC: String get() = com.lucent.app.i18n.S.notifChannelDesc
 
     /**
      * Create the reminder channel if it isn't there already. Idempotent and cheap — creating a
