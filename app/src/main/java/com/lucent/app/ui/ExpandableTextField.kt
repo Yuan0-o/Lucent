@@ -93,7 +93,7 @@ fun ExpandableGlassTextField(
         ) {
             Icon(
                 Icons.Default.OpenInFull,
-                contentDescription = "Expand text box",
+                contentDescription = com.lucent.app.i18n.S.expandTextBox,
                 tint = onGradientMuted,
                 modifier = Modifier.size(18.dp)
             )
@@ -202,7 +202,7 @@ private fun ExpandedEditor(
                         IconButton(onClick = onCollapse, modifier = Modifier.size(32.dp)) {
                             Icon(
                                 Icons.Default.CloseFullscreen,
-                                contentDescription = "Collapse text box",
+                                contentDescription = com.lucent.app.i18n.S.collapseTextBox,
                                 tint = onGradientMuted,
                                 modifier = Modifier.size(18.dp)
                             )

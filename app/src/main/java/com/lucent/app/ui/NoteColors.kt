@@ -38,16 +38,30 @@ import androidx.compose.ui.unit.dp
  * any [NoteColor.swatch] can be passed straight through as the card tint with no "if no colour"
  * branch at any call site.
  */
-enum class NoteColor(val key: String, val label: String, val swatch: Color) {
-    DEFAULT("", "Default", Color.White),
-    RED("red", "Red", Color(0xFFD32F2F)),
-    ORANGE("orange", "Orange", Color(0xFFEF6C00)),
-    YELLOW("yellow", "Yellow", Color(0xFFF9A825)),
-    GREEN("green", "Green", Color(0xFF2E7D32)),
-    TEAL("teal", "Teal", Color(0xFF00897B)),
-    BLUE("blue", "Blue", Color(0xFF1565C0)),
-    PURPLE("purple", "Purple", Color(0xFF8E24AA)),
-    PINK("pink", "Pink", Color(0xFFC2185B));
+enum class NoteColor(val key: String, val swatch: Color) {
+    DEFAULT("", Color.White),
+    RED("red", Color(0xFFD32F2F)),
+    ORANGE("orange", Color(0xFFEF6C00)),
+    YELLOW("yellow", Color(0xFFF9A825)),
+    GREEN("green", Color(0xFF2E7D32)),
+    TEAL("teal", Color(0xFF00897B)),
+    BLUE("blue", Color(0xFF1565C0)),
+    PURPLE("purple", Color(0xFF8E24AA)),
+    PINK("pink", Color(0xFFC2185B));
+
+    // Live i18n lookup (localization task); call sites keep reading `color.label`.
+    val label: String
+        get() = when (this) {
+            DEFAULT -> com.lucent.app.i18n.S.colorDefault
+            RED -> com.lucent.app.i18n.S.colorRed
+            ORANGE -> com.lucent.app.i18n.S.colorOrange
+            YELLOW -> com.lucent.app.i18n.S.colorYellow
+            GREEN -> com.lucent.app.i18n.S.colorGreen
+            TEAL -> com.lucent.app.i18n.S.colorTeal
+            BLUE -> com.lucent.app.i18n.S.colorBlue
+            PURPLE -> com.lucent.app.i18n.S.colorPurple
+            PINK -> com.lucent.app.i18n.S.colorPink
+        }
 
     companion object {
         fun fromKey(key: String?): NoteColor = entries.firstOrNull { it.key == (key?.trim() ?: "") } ?: DEFAULT
@@ -92,7 +106,7 @@ fun ColorPickerRow(selected: NoteColor, onSelect: (NoteColor) -> Unit, modifier:
                         onSelect(option)
                     }
                     .semantics {
-                        contentDescription = "${option.label} note colour"
+                        contentDescription = com.lucent.app.i18n.S.noteColorA11y(option.label)
                         this.selected = isSelected
                     },
                 contentAlignment = Alignment.Center
@@ -131,6 +145,6 @@ fun NoteColorDot(colorKey: String, modifier: Modifier = Modifier, size: Dp = 9.d
             .size(size)
             .clip(CircleShape)
             .background(color.swatch)
-            .semantics { contentDescription = "${color.label} note" }
+            .semantics { contentDescription = com.lucent.app.i18n.S.noteWithColorA11y(color.label) }
     )
 }

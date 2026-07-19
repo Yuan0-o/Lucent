@@ -219,7 +219,7 @@ fun LucentSplash(
                 textAlign = TextAlign.Center
             )
             Text(
-                "Tap to skip",
+                com.lucent.app.i18n.S.tapToSkip,
                 color = onGradient.copy(alpha = glassEased * (1f - exitEased) * 0.35f),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,

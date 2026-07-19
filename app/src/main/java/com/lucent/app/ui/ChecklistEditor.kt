@@ -60,13 +60,13 @@ fun ChecklistEditorSection(
             ) {
                 Checkbox(checked = item.done, onCheckedChange = { onToggle(item) })
                 Text(
-                    item.text.ifBlank { "(empty)" },
+                    item.text.ifBlank { com.lucent.app.i18n.S.checklistEmptyItem },
                     color = if (item.done) onGradientMuted else onGradient,
                     textDecoration = if (item.done) TextDecoration.LineThrough else null,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = { onRemove(item) }) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove \"${item.text}\"", tint = onGradientMuted)
+                    Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.checklistRemoveA11y(item.text), tint = onGradientMuted)
                 }
             }
         }
@@ -109,7 +109,7 @@ fun ChecklistView(
     val done = items.count { it.done }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            "${header ?: "Checklist"} · $done/${items.size}",
+            "${header ?: com.lucent.app.i18n.S.checklist} · $done/${items.size}",
             color = onGradientMuted,
             fontSize = 12.sp
         )
@@ -120,7 +120,7 @@ fun ChecklistView(
                     onCheckedChange = onToggle?.let { toggle -> { checked -> toggle(item, checked) } }
                 )
                 Text(
-                    item.text.ifBlank { "(empty)" },
+                    item.text.ifBlank { com.lucent.app.i18n.S.checklistEmptyItem },
                     color = if (item.done) onGradientMuted else onGradient,
                     textDecoration = if (item.done) TextDecoration.LineThrough else null,
                     modifier = Modifier.weight(1f)
@@ -152,7 +152,7 @@ fun ChecklistPreviewInline(
                     modifier = Modifier.scale(0.7f)
                 )
                 Text(
-                    item.text.ifBlank { "(empty)" },
+                    item.text.ifBlank { com.lucent.app.i18n.S.checklistEmptyItem },
                     color = onGradientMuted,
                     fontSize = 13.sp,
                     textDecoration = if (item.done) TextDecoration.LineThrough else null,
@@ -162,7 +162,7 @@ fun ChecklistPreviewInline(
             }
         }
         if (items.size > maxVisible) {
-            Text("+${items.size - maxVisible} more", color = onGradientMuted, fontSize = 12.sp)
+            Text(com.lucent.app.i18n.S.checklistMore(items.size - maxVisible), color = onGradientMuted, fontSize = 12.sp)
         }
     }
 }

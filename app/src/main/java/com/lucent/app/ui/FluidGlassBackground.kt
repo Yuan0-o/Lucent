@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalInspectionMode
+import com.lucent.app.nativebridge.LucentNative
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -192,45 +193,68 @@ fun FluidGlassBackground(
         val baseRadius = minDim * 0.42f
         val blend = if (additive) BlendMode.Plus else BlendMode.SrcOver
 
+        // Rust fast path (see nativebridge/LucentNative + rust/src/lib.rs): all six blobs' frame
+        // parameters — the exact same oscillator formulas, same constants — computed in one native
+        // call into a reused buffer, instead of ~30 Kotlin trig evaluations per frame. On devices
+        // where the library isn't available the loop below runs its original math unchanged, so
+        // the animation is pixel-identical either way; only who does the arithmetic differs.
+        val nativeOk = LucentNative.blobFrame(t, size.width, size.height, blobFrameBuf)
+
         for (i in 0 until BLOB_COUNT) {
-            // angle = 2π * (t / period) + phase. sin/cos are 2π-periodic so this wraps seamlessly and
-            // never needs the animation system to "restart" a value — it just keeps counting.
-            val ax = TAU * (t / PERIOD_X[i]) + PHASE_X[i]
-            val ay = TAU * (t / PERIOD_Y[i]) + PHASE_Y[i]
-            // Pulse breathes 0.82 → 1.18 on a reversing curve, matching the old Reverse tween.
-            // RepeatMode.Reverse plays forward then backward, so a full up-and-back cycle spans
-            // TWICE the tween duration — hence the % (2*period) here, not % period. The raw triangle
-            // is passed through smoothstep so it eases in and out at the turnarounds, reproducing the
-            // gentle feel of the original FastOutSlowInEasing instead of a hard linear ramp.
-            val pulsePhase = (t / (2f * PERIOD_PULSE[i])) % 1f
-            val triangle = if (pulsePhase < 0.5f) pulsePhase * 2f else (1f - pulsePhase) * 2f
-            val eased = triangle * triangle * (3f - 2f * triangle) // smoothstep
-            val pulse = 0.82f + 0.36f * eased
+            val cx: Float
+            val cy: Float
+            val radius: Float
+            val corner: Float
+            val squash: Float
+            val angleDeg: Float
+            if (nativeOk) {
+                val o = i * 6
+                cx = blobFrameBuf[o]
+                cy = blobFrameBuf[o + 1]
+                radius = blobFrameBuf[o + 2]
+                corner = blobFrameBuf[o + 3]
+                squash = blobFrameBuf[o + 4]
+                angleDeg = blobFrameBuf[o + 5]
+            } else {
+                // angle = 2π * (t / period) + phase. sin/cos are 2π-periodic so this wraps seamlessly and
+                // never needs the animation system to "restart" a value — it just keeps counting.
+                val ax = TAU * (t / PERIOD_X[i]) + PHASE_X[i]
+                val ay = TAU * (t / PERIOD_Y[i]) + PHASE_Y[i]
+                // Pulse breathes 0.82 → 1.18 on a reversing curve, matching the old Reverse tween.
+                // RepeatMode.Reverse plays forward then backward, so a full up-and-back cycle spans
+                // TWICE the tween duration — hence the % (2*period) here, not % period. The raw triangle
+                // is passed through smoothstep so it eases in and out at the turnarounds, reproducing the
+                // gentle feel of the original FastOutSlowInEasing instead of a hard linear ramp.
+                val pulsePhase = (t / (2f * PERIOD_PULSE[i])) % 1f
+                val triangle = if (pulsePhase < 0.5f) pulsePhase * 2f else (1f - pulsePhase) * 2f
+                val eased = triangle * triangle * (3f - 2f * triangle) // smoothstep
+                val pulse = 0.82f + 0.36f * eased
 
-            val cx = (BASE_X[i] + AMP_X[i] * cos(ax)) * size.width
-            val cy = (BASE_Y[i] + AMP_Y[i] * sin(ay)) * size.height
-            val radius = baseRadius * SIZE_FACTOR[i] * pulse
+                cx = (BASE_X[i] + AMP_X[i] * cos(ax)) * size.width
+                cy = (BASE_Y[i] + AMP_Y[i] * sin(ay)) * size.height
+                radius = baseRadius * SIZE_FACTOR[i] * pulse
 
-            // Where this blob currently sits between round and square. Two long sines are summed
-            // (weighted, so neither dominates) and mapped to 0..1, then passed through smoothstep —
-            // which is what makes the shape *linger* as a circle and *linger* as a square, easing
-            // through the in-between states rather than sliding past them at constant speed. A
-            // linear ramp here reads as mechanical no matter how long the period is.
-            val morphRaw = 0.62f * sin(TAU * (t / PERIOD_MORPH_A[i]) + PHASE_MORPH[i]) +
-                0.38f * sin(TAU * (t / PERIOD_MORPH_B[i]))
-            val morph01 = ((morphRaw + 1f) * 0.5f).coerceIn(0f, 1f)
-            val morph = morph01 * morph01 * (3f - 2f * morph01) // smoothstep
-            val corner = CORNER_CIRCLE + (CORNER_SQUARE - CORNER_CIRCLE) * morph
+                // Where this blob currently sits between round and square. Two long sines are summed
+                // (weighted, so neither dominates) and mapped to 0..1, then passed through smoothstep —
+                // which is what makes the shape *linger* as a circle and *linger* as a square, easing
+                // through the in-between states rather than sliding past them at constant speed. A
+                // linear ramp here reads as mechanical no matter how long the period is.
+                val morphRaw = 0.62f * sin(TAU * (t / PERIOD_MORPH_A[i]) + PHASE_MORPH[i]) +
+                    0.38f * sin(TAU * (t / PERIOD_MORPH_B[i]))
+                val morph01 = ((morphRaw + 1f) * 0.5f).coerceIn(0f, 1f)
+                val morph = morph01 * morph01 * (3f - 2f * morph01) // smoothstep
+                corner = CORNER_CIRCLE + (CORNER_SQUARE - CORNER_CIRCLE) * morph
 
-            // Gentle anisotropy: one axis grows as the other shrinks.
-            val squash = 1f + SQUASH_AMOUNT * sin(TAU * (t / PERIOD_SQUASH[i]) + PHASE_MORPH[i])
+                // Gentle anisotropy: one axis grows as the other shrinks.
+                squash = 1f + SQUASH_AMOUNT * sin(TAU * (t / PERIOD_SQUASH[i]) + PHASE_MORPH[i])
 
-            // Every blob spins now, not just the square ones — a rotating circle is invisible, but a
-            // shape that is *becoming* a square is not, so the rotation quietly reveals itself as the
-            // corners arrive and fades back out as they go. Alternating direction by index parity
-            // keeps neighbours from turning in sympathy.
-            val dir = if (i % 2 == 0) 1f else -1f
-            val angleDeg = dir * (t / PERIOD_ROTATE[i]) * 360f
+                // Every blob spins now, not just the square ones — a rotating circle is invisible, but a
+                // shape that is *becoming* a square is not, so the rotation quietly reveals itself as the
+                // corners arrive and fades back out as they go. Alternating direction by index parity
+                // keeps neighbours from turning in sympathy.
+                val dir = if (i % 2 == 0) 1f else -1f
+                angleDeg = dir * (t / PERIOD_ROTATE[i]) * 360f
+            }
 
             // Position, size, spin and squash the hoisted unit-brush with a single canvas transform.
             // The brush is fixed at radius 1 around the origin, so translating to the centre and
@@ -256,6 +280,12 @@ fun FluidGlassBackground(
         }
     }
 }
+
+// Reused frame buffer for the native path: [cx, cy, radius, corner, squash, angleDeg] × 6.
+// One allocation for the app's lifetime — the draw loop stays at zero allocations per frame.
+// Written and read only on the UI (render) thread inside the Canvas lambda, so no synchronization
+// is needed.
+private val blobFrameBuf = FloatArray(BLOB_COUNT * 6)
 
 /**
  * Colours for the "Cycle" background option: slowly rotates through every palette in [palettes],

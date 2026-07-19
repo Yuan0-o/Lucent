@@ -107,7 +107,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val DEFAULT_TAGS = listOf("Study", "Work", "Game", "Sports", "Other")
+private val DEFAULT_TAGS: List<String>
+    get() = listOf(com.lucent.app.i18n.S.tagStudy, com.lucent.app.i18n.S.tagWork, com.lucent.app.i18n.S.tagGame, com.lucent.app.i18n.S.tagSports, com.lucent.app.i18n.S.tagOther)
 
 @Composable
 fun NotesScreen(active: Boolean = true) {
@@ -369,7 +370,7 @@ fun NotesScreen(active: Boolean = true) {
                 )
             }
             withContext(Dispatchers.Main) {
-                LucentToast.show(appContext, "Note saved")
+                LucentToast.show(appContext, com.lucent.app.i18n.S.noteSaved)
             }
         }
         composing = false
@@ -452,21 +453,21 @@ fun NotesScreen(active: Boolean = true) {
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
-            title = { Text("Unsaved changes") },
-            text = { Text(if (editingId != null) "You have unsaved changes to this note. Save them before leaving?" else "This note hasn't been saved yet. Save it before leaving?") },
+            title = { Text(com.lucent.app.i18n.S.unsavedChangesTitle) },
+            text = { Text(if (editingId != null) com.lucent.app.i18n.S.unsavedNoteExistingBody else com.lucent.app.i18n.S.unsavedNoteNewBody) },
             confirmButton = {
                 TextButton(onClick = {
                     showUnsavedDialog = false
                     saveNote()
-                }) { Text("Save") }
+                }) { Text(com.lucent.app.i18n.S.actionSave) }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = {
                         showUnsavedDialog = false
                         discardComposer()
-                    }) { Text("Discard") }
-                    TextButton(onClick = { showUnsavedDialog = false }) { Text("Cancel") }
+                    }) { Text(com.lucent.app.i18n.S.actionDiscard) }
+                    TextButton(onClick = { showUnsavedDialog = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
                 }
             }
         )
@@ -516,7 +517,7 @@ fun NotesScreen(active: Boolean = true) {
                             val preCheck = AttachmentLimits.checkSingle(hint)
                             if (!preCheck.allowed) { message = preCheck.message; continue }
                         }
-                        val newAtt = uriToAttachment(context, uri) ?: run { message = "Couldn't read one of the files."; null } ?: continue
+                        val newAtt = uriToAttachment(context, uri) ?: run { message = com.lucent.app.i18n.S.couldNotReadOneFile; null } ?: continue
                         val incoming = AttachmentLimits.sizeOf(context, newAtt)
                         val postCheck = AttachmentLimits.checkSingle(incoming)
                         if (postCheck.allowed) {
@@ -540,12 +541,9 @@ fun NotesScreen(active: Boolean = true) {
     noteToDelete?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToDelete = null },
-            title = { Text("Move to trash?") },
+            title = { Text(com.lucent.app.i18n.S.moveToTrashTitle) },
             text = {
-                Text(
-                    "\"${note.title.ifBlank { "Untitled note" }}\" will be moved to Trash. " +
-                        "You can restore it from there for the next ${TrashCleanup.RETENTION_DAYS} days."
-                )
+                Text(com.lucent.app.i18n.S.moveNoteTrashBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote }, TrashCleanup.RETENTION_DAYS))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -554,9 +552,9 @@ fun NotesScreen(active: Boolean = true) {
                     }
                     if (viewingId == note.id) viewingId = null
                     noteToDelete = null
-                }) { Text("Move to trash") }
+                }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
-            dismissButton = { TextButton(onClick = { noteToDelete = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { noteToDelete = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -566,12 +564,9 @@ fun NotesScreen(active: Boolean = true) {
         val count = selectedNoteIds.size
         AlertDialog(
             onDismissRequest = { showBatchDeleteConfirm = false },
-            title = { Text("Move to trash?") },
+            title = { Text(com.lucent.app.i18n.S.moveToTrashTitle) },
             text = {
-                Text(
-                    "$count note${if (count == 1) "" else "s"} will be moved to Trash. " +
-                        "You can restore ${if (count == 1) "it" else "them"} for the next ${TrashCleanup.RETENTION_DAYS} days."
-                )
+                Text(if (count == 1) com.lucent.app.i18n.S.moveOneNoteTrashBody(TrashCleanup.RETENTION_DAYS) else com.lucent.app.i18n.S.moveNNotesTrashBody(count, TrashCleanup.RETENTION_DAYS))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -584,9 +579,9 @@ fun NotesScreen(active: Boolean = true) {
                             db.noteDao().getByIdOnce(id)?.let { db.noteDao().update(it.copy(trashedAt = now)) }
                         }
                     }
-                }) { Text("Move to trash") }
+                }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
-            dismissButton = { TextButton(onClick = { showBatchDeleteConfirm = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { showBatchDeleteConfirm = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -596,16 +591,9 @@ fun NotesScreen(active: Boolean = true) {
         val willArchive = !note.archived
         AlertDialog(
             onDismissRequest = { noteToToggleArchive = null },
-            title = { Text(if (willArchive) "Archive this note?" else "Restore this note?") },
+            title = { Text(if (willArchive) com.lucent.app.i18n.S.archiveNoteTitle else com.lucent.app.i18n.S.restoreNoteTitle) },
             text = {
-                Text(
-                    if (willArchive) {
-                        "\"${note.title.ifBlank { "Untitled note" }}\" will move out of your notes and " +
-                            "into the archive. Nothing is deleted — you can restore it from there whenever you like."
-                    } else {
-                        "\"${note.title.ifBlank { "Untitled note" }}\" will move back into your notes."
-                    }
-                )
+                Text(if (willArchive) com.lucent.app.i18n.S.archiveNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote }) else com.lucent.app.i18n.S.unarchiveNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote }))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -618,15 +606,15 @@ fun NotesScreen(active: Boolean = true) {
                             else target.copy(archived = true, archivedAt = System.currentTimeMillis())
                         )
                         withContext(Dispatchers.Main) {
-                            LucentToast.show(appContext, if (target.archived) "Note restored" else "Note archived")
+                            LucentToast.show(appContext, if (target.archived) com.lucent.app.i18n.S.noteRestoredToast else com.lucent.app.i18n.S.noteArchivedToast)
                         }
                     }
                     // The note is about to leave whichever list is showing, so the detail page can't
                     // keep standing on it.
                     if (viewingId == target.id) closeDetail()
-                }) { Text(if (willArchive) "Archive" else "Restore") }
+                }) { Text(if (willArchive) com.lucent.app.i18n.S.archive else com.lucent.app.i18n.S.actionRestore) }
             },
-            dismissButton = { TextButton(onClick = { noteToToggleArchive = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { noteToToggleArchive = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -636,21 +624,18 @@ fun NotesScreen(active: Boolean = true) {
         val willPin = !note.pinned
         AlertDialog(
             onDismissRequest = { noteToTogglePin = null },
-            title = { Text(if (willPin) "Pin this note?" else "Unpin this note?") },
+            title = { Text(if (willPin) com.lucent.app.i18n.S.pinNoteTitle else com.lucent.app.i18n.S.unpinNoteTitle) },
             text = {
-                Text(
-                    if (willPin) "\"${note.title.ifBlank { "Untitled note" }}\" will be pinned to the top of your notes."
-                    else "\"${note.title.ifBlank { "Untitled note" }}\" will no longer be pinned to the top."
-                )
+                Text(if (willPin) com.lucent.app.i18n.S.pinNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote }) else com.lucent.app.i18n.S.unpinNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote }))
             },
             confirmButton = {
                 TextButton(onClick = {
                     val target = note
                     noteToTogglePin = null
                     AppScope.io.launch { db.noteDao().update(target.copy(pinned = !target.pinned)) }
-                }) { Text(if (willPin) "Pin" else "Unpin") }
+                }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
-            dismissButton = { TextButton(onClick = { noteToTogglePin = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { noteToTogglePin = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -667,9 +652,9 @@ fun NotesScreen(active: Boolean = true) {
             Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
                     }
-                    Text(if (editingId != null) "Edit note" else "New note", color = onGradient, fontSize = 20.sp)
+                    Text(if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote, color = onGradient, fontSize = 20.sp)
                 }
 
                 Column(modifier = Modifier.fillMaxWidth().frostedGlass(tint = selectedColor.swatch).padding(16.dp)) {
@@ -677,7 +662,7 @@ fun NotesScreen(active: Boolean = true) {
                     // while editing — or after the user has started typing — would turn a one-tap
                     // convenience into a one-tap way to obliterate your own work.
                     if (editingId == null && !noteDirty) {
-                        Text("Start from a template", color = onGradientMuted, fontSize = 12.sp)
+                        Text(com.lucent.app.i18n.S.startFromTemplate, color = onGradientMuted, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(6.dp))
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -704,7 +689,7 @@ fun NotesScreen(active: Boolean = true) {
                     OutlinedTextField(
                         value = newTitle,
                         onValueChange = { newTitle = it },
-                        placeholder = { Text("Title") },
+                        placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -721,7 +706,7 @@ fun NotesScreen(active: Boolean = true) {
                             tint = if (isChecklistMode) onGradient else onGradientMuted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Checklist note", color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(com.lucent.app.i18n.S.checklistNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(checked = isChecklistMode, onCheckedChange = { isChecklistMode = it })
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -739,7 +724,7 @@ fun NotesScreen(active: Boolean = true) {
                                 checklistItems = checklistItems.map { if (it.id == item.id) it.copy(done = !it.done) else it }
                             },
                             onRemove = { item -> checklistItems = checklistItems.filterNot { it.id == item.id } },
-                            addLabel = "Add item"
+                            addLabel = com.lucent.app.i18n.S.addItem
                         )
                     } else {
                         // Body field with an expand toggle in its bottom-right corner. Expanding
@@ -755,14 +740,14 @@ fun NotesScreen(active: Boolean = true) {
                             // dropped when the Links toggle is off (task 3), and the whole hint is gone
                             // in plain-text mode where a user can't act on it.
                             placeholder = when {
-                                markdownEnabled && linksEnabled -> "Details — Markdown and [[links]] supported"
-                                markdownEnabled -> "Details — Markdown supported"
+                                markdownEnabled && linksEnabled -> com.lucent.app.i18n.S.detailsMarkdownLinks
+                                markdownEnabled -> com.lucent.app.i18n.S.detailsMarkdown
                                 // Links without Markdown is now a real combination, so it gets its
                                 // own hint rather than falling through to the bare one.
-                                linksEnabled -> "Details — [[links]] supported"
-                                else -> "Details"
+                                linksEnabled -> com.lucent.app.i18n.S.detailsLinks
+                                else -> com.lucent.app.i18n.S.detailsPlaceholder
                             },
-                            expandedTitle = if (editingId != null) "Edit note" else "New note",
+                            expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
                             collapsedMinHeight = 120.dp,
                             collapsedMaxHeight = 320.dp
                         )
@@ -790,17 +775,17 @@ fun NotesScreen(active: Boolean = true) {
                             tint = if (pinned) onGradient else onGradientMuted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pin to top", color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("Colour", color = onGradient, fontSize = 14.sp)
+                    Text(com.lucent.app.i18n.S.labelColour, color = onGradient, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(6.dp))
                     ColorPickerRow(selected = selectedColor, onSelect = { selectedColor = it })
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("Tags", color = onGradient)
+                    Text(com.lucent.app.i18n.S.labelTags, color = onGradient)
                     Spacer(modifier = Modifier.height(4.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -821,7 +806,7 @@ fun NotesScreen(active: Boolean = true) {
                         OutlinedTextField(
                             value = newCustomTag,
                             onValueChange = { newCustomTag = it },
-                            placeholder = { Text("New tag") },
+                            placeholder = { Text(com.lucent.app.i18n.S.newTag) },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
@@ -833,14 +818,14 @@ fun NotesScreen(active: Boolean = true) {
                                 newCustomTag = ""
                             }
                         }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add tag", tint = onGradient)
+                            Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.a11yAddTag, tint = onGradient)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(onClick = { filePicker.launch("*/*") }) {
                         Icon(Icons.Default.AttachFile, contentDescription = null, tint = onGradient)
-                        Text(" Attach file", color = onGradient)
+                        Text(com.lucent.app.i18n.S.attachFileLeading, color = onGradient)
                     }
                     PendingAttachmentChips(pendingAttachments, onGradientMuted) { att ->
                         pendingAttachments = Attachments.removeByName(context, pendingAttachments, att.name)
@@ -849,7 +834,7 @@ fun NotesScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(onClick = { saveNote() }) {
                         Icon(Icons.Default.Add, contentDescription = null)
-                        Text(if (editingId != null) " Save changes" else " Add note")
+                        Text(if (editingId != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addNoteBtn)
                     }
                 }
             }
@@ -928,9 +913,9 @@ fun NotesScreen(active: Boolean = true) {
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { closeDetail() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
                     }
-                    Text("Note", color = onGradient, fontSize = 20.sp)
+                    Text(com.lucent.app.i18n.S.screenNote, color = onGradient, fontSize = 20.sp)
                     Spacer(modifier = Modifier.width(8.dp))
 
                     // Action icons live in a right-aligned, horizontally-scrollable strip (task 17).
@@ -951,7 +936,7 @@ fun NotesScreen(active: Boolean = true) {
                         )
                         // Edit — opens the composer for this note (same action as the bottom button).
                         IconButton(onClick = { startEdit(note) }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = onGradient)
+                            Icon(Icons.Default.Edit, contentDescription = com.lucent.app.i18n.S.actionEdit, tint = onGradient)
                         }
                         // Archive / Restore — mirrors the bottom button: archives a live note, or
                         // restores one opened from the archive. Runs on the app-lifetime scope and
@@ -960,7 +945,7 @@ fun NotesScreen(active: Boolean = true) {
                         IconButton(onClick = { noteToToggleArchive = note }) {
                             Icon(
                                 if (note.archived) Icons.Filled.Unarchive else Icons.Default.Archive,
-                                contentDescription = if (note.archived) "Restore" else "Archive",
+                                contentDescription = if (note.archived) com.lucent.app.i18n.S.actionRestore else com.lucent.app.i18n.S.archive,
                                 tint = onGradient
                             )
                         }
@@ -971,7 +956,7 @@ fun NotesScreen(active: Boolean = true) {
                             IconButton(onClick = { historyForId = note.id }) {
                                 Icon(
                                     Icons.Default.History,
-                                    contentDescription = "Version history (${versionCount.size})",
+                                    contentDescription = com.lucent.app.i18n.S.a11yVersionHistory(versionCount.size),
                                     tint = onGradient
                                 )
                             }
@@ -986,12 +971,12 @@ fun NotesScreen(active: Boolean = true) {
                                 putExtra(Intent.EXTRA_SUBJECT, note.title.ifBlank { "Note" })
                                 putExtra(Intent.EXTRA_TEXT, shareTextForNote(note))
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share note"))
+                            context.startActivity(Intent.createChooser(sendIntent, com.lucent.app.i18n.S.shareNoteChooser))
                         }) {
-                            Icon(Icons.Default.Share, contentDescription = "Share", tint = onGradient)
+                            Icon(Icons.Default.Share, contentDescription = com.lucent.app.i18n.S.actionShare, tint = onGradient)
                         }
                         IconButton(onClick = { noteToDelete = note }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = onGradient)
+                            Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
                         }
                     }
                 }
@@ -1003,7 +988,7 @@ fun NotesScreen(active: Boolean = true) {
                     // checklist is outside for the same reason its checkboxes need to stay live.
                     SelectionContainer {
                         Column {
-                            Text(note.title.ifBlank { "Untitled" }, color = onGradient, fontSize = 22.sp)
+                            Text(note.title.ifBlank { com.lucent.app.i18n.S.untitled }, color = onGradient, fontSize = 22.sp)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(formatTimestamp(note.updatedAt), color = onGradientMuted, fontSize = 12.sp)
                             if (note.tags.isNotBlank()) {
@@ -1017,7 +1002,7 @@ fun NotesScreen(active: Boolean = true) {
                         Spacer(modifier = Modifier.height(12.dp))
                         ChecklistView(
                             items = checklistView,
-                            header = "Items",
+                            header = com.lucent.app.i18n.S.historyItemsHeader,
                             onToggle = { item, checked ->
                                 AppScope.io.launch {
                                     db.noteDao().update(
@@ -1065,7 +1050,7 @@ fun NotesScreen(active: Boolean = true) {
                 if (linksActive) {
                     if (outgoing.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        NoteLinkChips("Links to", outgoing) { target -> viewingId = target.id }
+                        NoteLinkChips(com.lucent.app.i18n.S.linksToHeader, outgoing) { target -> viewingId = target.id }
                     }
                     if (broken.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1073,7 +1058,7 @@ fun NotesScreen(active: Boolean = true) {
                     }
                     if (backlinks.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        NoteLinkChips("Linked from", backlinks) { source -> viewingId = source.id }
+                        NoteLinkChips(com.lucent.app.i18n.S.linkedFromHeader, backlinks) { source -> viewingId = source.id }
                     }
                 }
 
@@ -1084,7 +1069,7 @@ fun NotesScreen(active: Boolean = true) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     GlassCapsuleButton(
-                        text = "Edit note",
+                        text = com.lucent.app.i18n.S.editNote,
                         icon = Icons.Default.Edit,
                         onClick = { startEdit(note) },
                         modifier = Modifier.weight(1f)
@@ -1094,7 +1079,7 @@ fun NotesScreen(active: Boolean = true) {
                     // on the app-lifetime scope and then leave the detail page, since the note is
                     // about to move between the home grid and the archive.
                     GlassCapsuleButton(
-                        text = if (note.archived) "Restore" else "Archive",
+                        text = if (note.archived) com.lucent.app.i18n.S.actionRestore else com.lucent.app.i18n.S.archive,
                         icon = if (note.archived) Icons.Filled.Unarchive else Icons.Default.Archive,
                         // Confirmation first (task 7) — the dialog performs the write and leaves the page.
                         onClick = { noteToToggleArchive = note },
@@ -1166,7 +1151,7 @@ fun NotesScreen(active: Boolean = true) {
                     // a way out, and batch delete for the current selection.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { exitSelection() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel selection", tint = onGradient)
+                            Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yCancelSelection, tint = onGradient)
                         }
                         Text(
                             "${selectedNoteIds.size} selected",
@@ -1179,13 +1164,13 @@ fun NotesScreen(active: Boolean = true) {
                             val allIds = sortedNotes.map { it.id }.toSet()
                             selectedNoteIds = if (selectedNoteIds.containsAll(allIds)) emptySet() else allIds
                         }) {
-                            Text(if (selectedNoteIds.containsAll(sortedNotes.map { it.id }.toSet()) && sortedNotes.isNotEmpty()) "Clear all" else "Select all")
+                            Text(if (selectedNoteIds.containsAll(sortedNotes.map { it.id }.toSet()) && sortedNotes.isNotEmpty()) com.lucent.app.i18n.S.clearAllSelection else com.lucent.app.i18n.S.selectAll)
                         }
                         IconButton(
                             onClick = { if (selectedNoteIds.isNotEmpty()) showBatchDeleteConfirm = true },
                             enabled = selectedNoteIds.isNotEmpty()
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete selected", tint = onGradient)
+                            Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.a11yDeleteSelected, tint = onGradient)
                         }
                     }
                 } else {
@@ -1202,7 +1187,7 @@ fun NotesScreen(active: Boolean = true) {
                             OutlinedTextField(
                                 value = searchText,
                                 onValueChange = { searchText = it },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search notes") },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotes) },
                                 trailingIcon = { SearchHelpButton() },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
@@ -1230,26 +1215,26 @@ fun NotesScreen(active: Boolean = true) {
                             // doesn't grow an icon every time another action is added.
                             Box {
                                 IconButton(onClick = { showOverflowMenu = true }) {
-                                    Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = onGradientMuted)
+                                    Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
                                 }
                                 DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
                                     DropdownMenuItem(
-                                        text = { Text("Select notes") },
+                                        text = { Text(com.lucent.app.i18n.S.selectNotes) },
                                         leadingIcon = { Icon(Icons.Default.Checklist, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; selectionMode = true }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Search everything") },
+                                        text = { Text(com.lucent.app.i18n.S.searchEverything) },
                                         leadingIcon = { Icon(Icons.Default.TravelExplore, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showSearch = true }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Archived notes") },
+                                        text = { Text(com.lucent.app.i18n.S.screenArchivedNotes) },
                                         leadingIcon = { Icon(Icons.Default.Inventory2, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showArchive = true }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Trash") },
+                                        text = { Text(com.lucent.app.i18n.S.screenTrash) },
                                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showTrash = true }
                                     )
@@ -1257,7 +1242,7 @@ fun NotesScreen(active: Boolean = true) {
                             }
                         },
                         trailing = {
-                            NewItemButton(contentDescription = "New note", onClick = { startCreate() })
+                            NewItemButton(contentDescription = com.lucent.app.i18n.S.newNote, onClick = { startCreate() })
                         }
                     )
 
@@ -1289,8 +1274,8 @@ fun NotesScreen(active: Boolean = true) {
                         item(key = "empty_state", span = { GridItemSpan(maxLineSpan) }) {
                             EmptyState(
                                 isFiltered = searchText.isNotBlank() || dateRange != null,
-                                emptyMessage = "No notes yet. Tap + to write one, or ask the assistant.",
-                                noMatchMessage = "No notes match that search."
+                                emptyMessage = com.lucent.app.i18n.S.emptyNotesHint,
+                                noMatchMessage = com.lucent.app.i18n.S.noNotesMatchSearch
                             )
                         }
                     } else {
@@ -1383,7 +1368,7 @@ private fun NoteCard(
                     PinnedMarker(modifier = Modifier.padding(top = 2.dp, end = 4.dp))
                 }
                 Text(
-                    note.title.ifBlank { "Untitled" },
+                    note.title.ifBlank { com.lucent.app.i18n.S.untitled },
                     color = onGradient,
                     fontSize = 15.sp,
                     maxLines = 2,
@@ -1394,14 +1379,14 @@ private fun NoteCard(
                 // Selection tick replaces the delete affordance while choosing.
                 Icon(
                     if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = if (selected) "Selected" else "Not selected",
+                    contentDescription = if (selected) com.lucent.app.i18n.S.a11ySelected else com.lucent.app.i18n.S.a11yNotSelected,
                     tint = if (selected) onGradient else onGradientMuted,
                     modifier = Modifier.padding(start = 6.dp).size(20.dp)
                 )
             } else {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Delete",
+                    contentDescription = com.lucent.app.i18n.S.actionDelete,
                     tint = onGradientMuted,
                     modifier = Modifier
                         .padding(start = 6.dp)

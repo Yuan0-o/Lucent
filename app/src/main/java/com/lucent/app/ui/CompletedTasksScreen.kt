@@ -91,11 +91,10 @@ fun CompletedTasksScreen(
     taskToRestore?.let { task ->
         AlertDialog(
             onDismissRequest = { taskToRestore = null },
-            title = { Text("Mark as not done?") },
+            title = { Text(com.lucent.app.i18n.S.markNotDoneTitle) },
             text = {
                 Text(
-                    "\"${task.title.ifBlank { "Untitled task" }}\" will move back into your active " +
-                        "tasks. Its reminder will be re-armed if the due time is still ahead."
+                    com.lucent.app.i18n.S.markNotDoneBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask })
                 )
             },
             confirmButton = {
@@ -106,9 +105,9 @@ fun CompletedTasksScreen(
                     // sending it back to active re-evaluates its reminder rather than leaving it
                     // silently disarmed.
                     AppScope.io.launch { TaskActions.restore(context, db, target) }
-                }) { Text("Mark as not done") }
+                }) { Text(com.lucent.app.i18n.S.markNotDone) }
             },
-            dismissButton = { TextButton(onClick = { taskToRestore = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
     var dateField by remember { mutableStateOf(CompletedDateField.COMPLETED) }
@@ -131,9 +130,9 @@ fun CompletedTasksScreen(
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
-            Text("Completed tasks", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            Text(com.lucent.app.i18n.S.screenCompletedTasks, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
         }
 
         // A small insights strip: how much has actually been finished, in total and lately.
@@ -151,9 +150,9 @@ fun CompletedTasksScreen(
             Row(
                 modifier = Modifier.fillMaxWidth().frostedGlass().padding(vertical = 12.dp, horizontal = 8.dp)
             ) {
-                StatTile(value = completed.size.toString(), label = "Total", modifier = Modifier.weight(1f))
-                StatTile(value = past7.toString(), label = "Past 7 days", modifier = Modifier.weight(1f))
-                StatTile(value = past30.toString(), label = "Past 30 days", modifier = Modifier.weight(1f))
+                StatTile(value = completed.size.toString(), label = com.lucent.app.i18n.S.statTotal, modifier = Modifier.weight(1f))
+                StatTile(value = past7.toString(), label = com.lucent.app.i18n.S.statPast7, modifier = Modifier.weight(1f))
+                StatTile(value = past30.toString(), label = com.lucent.app.i18n.S.statPast30, modifier = Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -162,7 +161,7 @@ fun CompletedTasksScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = { Text("Search completed") },
+                label = { Text(com.lucent.app.i18n.S.searchCompleted) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 modifier = Modifier.weight(1f)
             )
@@ -186,13 +185,13 @@ fun CompletedTasksScreen(
                 FilterChip(
                     selected = dateField == CompletedDateField.COMPLETED,
                     onClick = { dateField = CompletedDateField.COMPLETED },
-                    label = { Text("Completed on") }
+                    label = { Text(com.lucent.app.i18n.S.filterCompletedOn) }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 FilterChip(
                     selected = dateField == CompletedDateField.CREATED,
                     onClick = { dateField = CompletedDateField.CREATED },
-                    label = { Text("Created on") }
+                    label = { Text(com.lucent.app.i18n.S.filterCreatedOn) }
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -204,8 +203,7 @@ fun CompletedTasksScreen(
         if (filtered.isEmpty()) {
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(24.dp)) {
                 Text(
-                    if (completed.isEmpty()) "Nothing here yet. Tasks you finish will appear here."
-                    else "No completed tasks match your search.",
+                    if (completed.isEmpty()) com.lucent.app.i18n.S.completedEmpty else com.lucent.app.i18n.S.completedNoMatch,
                     color = onGradientMuted
                 )
             }
@@ -239,24 +237,24 @@ fun CompletedTasksScreen(
                             CompletedCheckbox()
                             Column(modifier = Modifier.padding(start = 8.dp)) {
                                 Text(
-                                    task.title.ifBlank { "Untitled task" },
+                                    task.title.ifBlank { com.lucent.app.i18n.S.untitledTask },
                                     color = onGradient,
                                     textDecoration = TextDecoration.LineThrough
                                 )
                                 task.completedAt?.let { done ->
-                                    Text("Completed ${formatTimestamp(done)}", color = onGradientMuted, fontSize = 12.sp)
+                                    Text(com.lucent.app.i18n.S.completedOn(formatTimestamp(done)), color = onGradientMuted, fontSize = 12.sp)
                                 }
-                                Text("Created ${formatTimestamp(task.createdAt)}", color = onGradientMuted, fontSize = 12.sp)
+                                Text(com.lucent.app.i18n.S.createdOn(formatTimestamp(task.createdAt)), color = onGradientMuted, fontSize = 12.sp)
                             }
                         }
                         // Two quick actions: send back to active (undo), or delete outright.
                         // Opening the detail page (tap the card) also lets the user do the
                         // same things through the same confirmation flow as the home list.
                         IconButton(onClick = { taskToRestore = task }) {
-                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Mark as active", tint = onGradient)
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.a11yMarkActive, tint = onGradient)
                         }
                         IconButton(onClick = { onDeleteRequest(task) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = onGradient)
+                            Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
                         }
                     }
                 }

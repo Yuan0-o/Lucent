@@ -52,7 +52,8 @@ import kotlinx.coroutines.launch
  */
 private enum class ArchiveGrouping { TIME, TAG }
 
-private const val UNTAGGED_LABEL = "Untagged"
+// Sentinel key for the "no tags" bucket; its visible label is localized at the display site.
+private const val UNTAGGED_KEY = "\u0000untagged"
 
 /**
  * The dedicated archive screen for notes. Reached from the archive icon in the Notes header.
@@ -91,18 +92,18 @@ fun ArchivedNotesScreen(
     noteToRestore?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToRestore = null },
-            title = { Text("Restore this note?") },
+            title = { Text(com.lucent.app.i18n.S.restoreNoteTitle) },
             text = {
-                Text("\"${note.title.ifBlank { "Untitled note" }}\" will move out of the archive and back into your notes.")
+                Text(com.lucent.app.i18n.S.restoreNoteArchiveBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote }))
             },
             confirmButton = {
                 TextButton(onClick = {
                     val target = note
                     noteToRestore = null
                     scope.launch { db.noteDao().update(target.copy(archived = false, archivedAt = null)) }
-                }) { Text("Restore") }
+                }) { Text(com.lucent.app.i18n.S.actionRestore) }
             },
-            dismissButton = { TextButton(onClick = { noteToRestore = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { noteToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -119,15 +120,15 @@ fun ArchivedNotesScreen(
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
-            Text("Archived notes", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            Text(com.lucent.app.i18n.S.screenArchivedNotes, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
         }
 
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            label = { Text("Search archive") },
+            label = { Text(com.lucent.app.i18n.S.searchArchive) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             modifier = Modifier.fillMaxWidth()
         )
@@ -136,18 +137,18 @@ fun ArchivedNotesScreen(
 
         // Grouping toggle: Time (flat, newest first) or Tag (grouped by tag). Time is the default.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Group by", color = onGradientMuted, fontSize = 13.sp)
+            Text(com.lucent.app.i18n.S.groupBy, color = onGradientMuted, fontSize = 13.sp)
             Spacer(modifier = Modifier.width(8.dp))
             FilterChip(
                 selected = grouping == ArchiveGrouping.TIME,
                 onClick = { grouping = ArchiveGrouping.TIME },
-                label = { Text("Time") }
+                label = { Text(com.lucent.app.i18n.S.filterTime) }
             )
             Spacer(modifier = Modifier.width(8.dp))
             FilterChip(
                 selected = grouping == ArchiveGrouping.TAG,
                 onClick = { grouping = ArchiveGrouping.TAG },
-                label = { Text("Tag") }
+                label = { Text(com.lucent.app.i18n.S.filterTag) }
             )
         }
 
@@ -156,8 +157,8 @@ fun ArchivedNotesScreen(
         if (filtered.isEmpty()) {
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(24.dp)) {
                 Text(
-                    if (archived.isEmpty()) "Nothing archived yet. Notes you archive will appear here."
-                    else "No archived notes match your search.",
+                    if (archived.isEmpty()) com.lucent.app.i18n.S.archivedEmpty
+                    else com.lucent.app.i18n.S.archivedNoMatch,
                     color = onGradientMuted
                 )
             }
@@ -200,7 +201,7 @@ fun ArchivedNotesScreen(
                     groups.forEach { (tag, notesForTag) ->
                         item(key = "header_$tag") {
                             Text(
-                                tag,
+                                if (tag == UNTAGGED_KEY) com.lucent.app.i18n.S.untaggedLabel else tag,
                                 color = onGradient,
                                 fontSize = 15.sp,
                                 modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
@@ -246,7 +247,7 @@ private fun buildTagGroups(notes: List<Note>): List<Pair<String, List<Note>>> {
         .map { it.key to it.value.toList() }
         .toMutableList()
     if (untagged.isNotEmpty()) {
-        result += UNTAGGED_LABEL to untagged.toList()
+        result += UNTAGGED_KEY to untagged.toList()
     }
     return result
 }
@@ -286,27 +287,27 @@ private fun ArchivedNoteCard(
                         PinnedMarker(modifier = Modifier.padding(end = 4.dp))
                     }
                     Text(
-                        note.title.ifBlank { "Untitled note" },
+                        note.title.ifBlank { com.lucent.app.i18n.S.untitledNote },
                         color = onGradient,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
                 val stamp = note.archivedAt ?: note.updatedAt
-                Text("Archived ${formatTimestamp(stamp)}", color = onGradientMuted, fontSize = 12.sp)
+                Text(com.lucent.app.i18n.S.archivedOn(formatTimestamp(stamp)), color = onGradientMuted, fontSize = 12.sp)
             }
             IconButton(onClick = onRestore) {
-                Icon(Icons.Filled.Unarchive, contentDescription = "Restore to notes", tint = onGradient)
+                Icon(Icons.Filled.Unarchive, contentDescription = com.lucent.app.i18n.S.a11yRestoreToNotes, tint = onGradient)
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = onGradient)
+                Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
             }
         }
         // A checklist note has no body to preview, so show its progress instead — "3/5 done" is the
         // only thing worth knowing about a checklist you're not currently looking at.
         val preview = if (note.isChecklist) {
             val items = Checklist.parse(note.checklist)
-            if (items.isEmpty()) "" else "Checklist · ${items.count { it.done }}/${items.size} done"
+            if (items.isEmpty()) "" else com.lucent.app.i18n.S.checklistDoneCount(items.count { it.done }, items.size)
         } else {
             note.body
         }

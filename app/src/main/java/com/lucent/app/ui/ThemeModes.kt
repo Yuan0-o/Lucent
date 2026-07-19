@@ -30,14 +30,37 @@ import androidx.compose.ui.graphics.Color
  * palette in front of it and drag the contrast of every piece of text down with it. A wash you notice
  * only when you look for it is the right amount for something the whole app sits on top of.
  */
-enum class LucentThemeMode(val key: String, val label: String, val detail: String) {
-    SYSTEM("system", "System default", "Follow the device's light/dark setting"),
-    LIGHT("light", "Light", "The neutral pale backdrop"),
-    DARK("dark", "Dark", "The near-black backdrop"),
-    MONET_WHEAT("monet_yellow", "Monet wheat", "Pale straw — a light theme"),
-    MONET_GARDEN("monet_green", "Monet garden", "Pale water-garden green — a light theme"),
-    MONET_MORNING("monet_blue", "Monet morning", "Pale morning blue — a light theme"),
-    MONET_WISTERIA("monet_purple", "Monet wisteria", "Pale wisteria — a light theme");
+enum class LucentThemeMode(val key: String) {
+    SYSTEM("system"),
+    LIGHT("light"),
+    DARK("dark"),
+    MONET_WHEAT("monet_yellow"),
+    MONET_GARDEN("monet_green"),
+    MONET_MORNING("monet_blue"),
+    MONET_WISTERIA("monet_purple");
+
+    // Live i18n lookups (localization task); `label`/`detail` call sites are unchanged.
+    val label: String
+        get() = when (this) {
+            SYSTEM -> com.lucent.app.i18n.S.themeSystem
+            LIGHT -> com.lucent.app.i18n.S.themeLight
+            DARK -> com.lucent.app.i18n.S.themeDark
+            MONET_WHEAT -> com.lucent.app.i18n.S.themeMonetWheat
+            MONET_GARDEN -> com.lucent.app.i18n.S.themeMonetGarden
+            MONET_MORNING -> com.lucent.app.i18n.S.themeMonetMorning
+            MONET_WISTERIA -> com.lucent.app.i18n.S.themeMonetWisteria
+        }
+
+    val detail: String
+        get() = when (this) {
+            SYSTEM -> com.lucent.app.i18n.S.themeSystemDesc
+            LIGHT -> com.lucent.app.i18n.S.themeLightDesc
+            DARK -> com.lucent.app.i18n.S.themeDarkDesc
+            MONET_WHEAT -> com.lucent.app.i18n.S.themeMonetWheatDesc
+            MONET_GARDEN -> com.lucent.app.i18n.S.themeMonetGardenDesc
+            MONET_MORNING -> com.lucent.app.i18n.S.themeMonetMorningDesc
+            MONET_WISTERIA -> com.lucent.app.i18n.S.themeMonetWisteriaDesc
+        }
 
     /**
      * Whether this theme draws light-on-dark. Only [SYSTEM] consults the device; every other option

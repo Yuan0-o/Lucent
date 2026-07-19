@@ -227,7 +227,7 @@ fun TasksScreen(active: Boolean = true) {
         if (!granted) {
             LucentToast.show(
                 context,
-                "Reminders need notification permission to alert you. You can grant it in system settings.",
+                com.lucent.app.i18n.S.notifPermissionRationale,
                 longDuration = true
             )
         }
@@ -377,7 +377,7 @@ fun TasksScreen(active: Boolean = true) {
             // have an alarm, so there's no "did I need to cancel that" branch to get wrong.
             ReminderScheduler.sync(appContext, saved)
             withContext(Dispatchers.Main) {
-                LucentToast.show(appContext, "Task saved")
+                LucentToast.show(appContext, com.lucent.app.i18n.S.taskSaved)
             }
         }
         composing = false
@@ -451,21 +451,21 @@ fun TasksScreen(active: Boolean = true) {
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
-            title = { Text("Unsaved changes") },
-            text = { Text(if (editingTask != null) "You have unsaved changes to this task. Save them before leaving?" else "This task hasn't been saved yet. Save it before leaving?") },
+            title = { Text(com.lucent.app.i18n.S.unsavedChangesTitle) },
+            text = { Text(if (editingTask != null) com.lucent.app.i18n.S.unsavedTaskExistingBody else com.lucent.app.i18n.S.unsavedTaskNewBody) },
             confirmButton = {
                 TextButton(onClick = {
                     showUnsavedDialog = false
                     saveTask()
-                }) { Text("Save") }
+                }) { Text(com.lucent.app.i18n.S.actionSave) }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = {
                         showUnsavedDialog = false
                         discardComposer()
-                    }) { Text("Discard") }
-                    TextButton(onClick = { showUnsavedDialog = false }) { Text("Cancel") }
+                    }) { Text(com.lucent.app.i18n.S.actionDiscard) }
+                    TextButton(onClick = { showUnsavedDialog = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
                 }
             }
         )
@@ -503,7 +503,7 @@ fun TasksScreen(active: Boolean = true) {
                             val preCheck = AttachmentLimits.checkSingle(hint)
                             if (!preCheck.allowed) { message = preCheck.message; continue }
                         }
-                        val newAtt = uriToAttachment(context, uri) ?: run { message = "Couldn't read one of the files."; null } ?: continue
+                        val newAtt = uriToAttachment(context, uri) ?: run { message = com.lucent.app.i18n.S.couldNotReadOneFile; null } ?: continue
                         val incoming = AttachmentLimits.sizeOf(context, newAtt)
                         val postCheck = AttachmentLimits.checkSingle(incoming)
                         if (postCheck.allowed) {
@@ -524,12 +524,9 @@ fun TasksScreen(active: Boolean = true) {
     taskToDelete?.let { task ->
         AlertDialog(
             onDismissRequest = { taskToDelete = null },
-            title = { Text("Move to trash?") },
+            title = { Text(com.lucent.app.i18n.S.moveToTrashTitle) },
             text = {
-                Text(
-                    "\"${task.title.ifBlank { "Untitled task" }}\" will be moved to Trash. " +
-                        "You can restore it from there for the next ${TrashCleanup.RETENTION_DAYS} days."
-                )
+                Text(com.lucent.app.i18n.S.moveTaskTrashBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask }, TrashCleanup.RETENTION_DAYS))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -537,9 +534,9 @@ fun TasksScreen(active: Boolean = true) {
                     taskToDelete = null
                     if (viewingId == toTrash.id) viewingId = null
                     AppScope.io.launch { TaskActions.trash(context, db, toTrash) }
-                }) { Text("Move to trash") }
+                }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
-            dismissButton = { TextButton(onClick = { taskToDelete = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToDelete = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -549,12 +546,9 @@ fun TasksScreen(active: Boolean = true) {
         val repeats = RepeatRule.fromKey(task.repeatRule) != RepeatRule.NONE
         AlertDialog(
             onDismissRequest = { taskToComplete = null },
-            title = { Text("Complete this task?") },
+            title = { Text(com.lucent.app.i18n.S.completeTaskTitle) },
             text = {
-                Text(
-                    "Mark \"${task.title.ifBlank { "Untitled task" }}\" as done? It'll move to your completed tasks history." +
-                        if (repeats) " Because it repeats, the next occurrence will be created automatically." else ""
-                )
+                Text(com.lucent.app.i18n.S.completeTaskBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask }))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -564,9 +558,9 @@ fun TasksScreen(active: Boolean = true) {
                     // repeats — spawns the next occurrence and arms its reminder. Exactly what the
                     // assistant's complete_task does, because it is literally the same function.
                     AppScope.io.launch { TaskActions.complete(context, db, toComplete) }
-                }) { Text("Confirm") }
+                }) { Text(com.lucent.app.i18n.S.actionConfirm) }
             },
-            dismissButton = { TextButton(onClick = { taskToComplete = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToComplete = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -575,21 +569,18 @@ fun TasksScreen(active: Boolean = true) {
         val hasFutureDue = task.dueAt != null
         AlertDialog(
             onDismissRequest = { taskToRestore = null },
-            title = { Text("Mark as not done?") },
+            title = { Text(com.lucent.app.i18n.S.markNotDoneTitle) },
             text = {
-                Text(
-                    "\"${task.title.ifBlank { "Untitled task" }}\" will move back to your active tasks." +
-                        if (hasFutureDue) " Its reminder will be re-armed if the due time is still ahead." else ""
-                )
+                Text(com.lucent.app.i18n.S.notDoneTaskBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask }))
             },
             confirmButton = {
                 TextButton(onClick = {
                     val toRestore = task
                     taskToRestore = null
                     AppScope.io.launch { TaskActions.restore(context, db, toRestore) }
-                }) { Text("Mark as not done") }
+                }) { Text(com.lucent.app.i18n.S.markNotDone) }
             },
-            dismissButton = { TextButton(onClick = { taskToRestore = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -598,11 +589,11 @@ fun TasksScreen(active: Boolean = true) {
         val willPin = !task.pinned
         AlertDialog(
             onDismissRequest = { taskToTogglePin = null },
-            title = { Text(if (willPin) "Pin this task?" else "Unpin this task?") },
+            title = { Text(if (willPin) com.lucent.app.i18n.S.pinTaskTitle else com.lucent.app.i18n.S.unpinTaskTitle) },
             text = {
                 Text(
-                    if (willPin) "\"${task.title.ifBlank { "Untitled task" }}\" will be pinned to the top of your tasks."
-                    else "\"${task.title.ifBlank { "Untitled task" }}\" will no longer be pinned to the top."
+                    if (willPin) com.lucent.app.i18n.S.pinTaskBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask })
+                    else com.lucent.app.i18n.S.unpinTaskBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask })
                 )
             },
             confirmButton = {
@@ -610,9 +601,9 @@ fun TasksScreen(active: Boolean = true) {
                     val target = task
                     taskToTogglePin = null
                     AppScope.io.launch { db.taskDao().update(target.copy(pinned = !target.pinned)) }
-                }) { Text(if (willPin) "Pin" else "Unpin") }
+                }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
-            dismissButton = { TextButton(onClick = { taskToTogglePin = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToTogglePin = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -621,11 +612,11 @@ fun TasksScreen(active: Boolean = true) {
         val count = selectedTaskIds.size
         AlertDialog(
             onDismissRequest = { showBatchDeleteConfirm = false },
-            title = { Text("Move to trash?") },
+            title = { Text(com.lucent.app.i18n.S.moveToTrashTitle) },
             text = {
                 Text(
-                    "$count task${if (count == 1) "" else "s"} will be moved to Trash. " +
-                        "You can restore ${if (count == 1) "it" else "them"} for the next ${TrashCleanup.RETENTION_DAYS} days."
+                    if (count == 1) com.lucent.app.i18n.S.moveOneTaskTrashBody(TrashCleanup.RETENTION_DAYS)
+                    else com.lucent.app.i18n.S.moveNTasksTrashBody(count, TrashCleanup.RETENTION_DAYS)
                 )
             },
             confirmButton = {
@@ -638,9 +629,9 @@ fun TasksScreen(active: Boolean = true) {
                             db.taskDao().getByIdOnce(id)?.let { TaskActions.trash(context, db, it) }
                         }
                     }
-                }) { Text("Move to trash") }
+                }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
-            dismissButton = { TextButton(onClick = { showBatchDeleteConfirm = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { showBatchDeleteConfirm = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -657,16 +648,16 @@ fun TasksScreen(active: Boolean = true) {
             Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
                     }
-                    Text(if (editingTask != null) "Edit task" else "New task", color = onGradient, fontSize = 20.sp)
+                    Text(if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask, color = onGradient, fontSize = 20.sp)
                 }
 
                 Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
                     OutlinedTextField(
                         value = newTitle,
                         onValueChange = { newTitle = it },
-                        placeholder = { Text("Title") },
+                        placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -683,7 +674,7 @@ fun TasksScreen(active: Boolean = true) {
                             tint = if (subtasksEnabled) onGradient else onGradientMuted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Subtasks", color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(com.lucent.app.i18n.S.labelSubtasks, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(checked = subtasksEnabled, onCheckedChange = { subtasksEnabled = it })
                     }
                     if (subtasksEnabled) {
@@ -698,7 +689,7 @@ fun TasksScreen(active: Boolean = true) {
                             },
                             onToggle = { item -> subtasks = subtasks.map { if (it.id == item.id) it.copy(done = !it.done) else it } },
                             onRemove = { item -> subtasks = subtasks.filterNot { it.id == item.id } },
-                            addLabel = "Add subtask"
+                            addLabel = com.lucent.app.i18n.S.addSubtask
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -709,8 +700,8 @@ fun TasksScreen(active: Boolean = true) {
                     ExpandableGlassTextField(
                         value = newNotes,
                         onValueChange = { newNotes = it },
-                        placeholder = "Details",
-                        expandedTitle = if (editingTask != null) "Edit task" else "New task",
+                        placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
+                        expandedTitle = if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask,
                         collapsedMinHeight = 120.dp,
                         collapsedMaxHeight = 320.dp
                     )
@@ -726,7 +717,7 @@ fun TasksScreen(active: Boolean = true) {
                             tint = if (pinned) onGradient else onGradientMuted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pin to top", color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
 
@@ -774,7 +765,7 @@ fun TasksScreen(active: Boolean = true) {
                     ) {
                         Icon(Icons.Default.AttachFile, contentDescription = null, tint = onGradientMuted)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Attach file", color = onGradient, fontSize = 14.sp)
+                        Text(com.lucent.app.i18n.S.attachFile, color = onGradient, fontSize = 14.sp)
                     }
                     PendingAttachmentChips(pendingAttachments, onGradientMuted) { att ->
                         pendingAttachments = Attachments.removeByName(context, pendingAttachments, att.name)
@@ -783,7 +774,7 @@ fun TasksScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(onClick = { saveTask() }) {
                         Icon(Icons.Default.Add, contentDescription = null)
-                        Text(if (editingTask != null) " Save changes" else " Add task")
+                        Text(if (editingTask != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addTaskBtn)
                     }
                 }
             }
@@ -845,9 +836,9 @@ fun TasksScreen(active: Boolean = true) {
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { closeDetail() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
                     }
-                    Text("Task", color = onGradient, fontSize = 20.sp)
+                    Text(com.lucent.app.i18n.S.screenTask, color = onGradient, fontSize = 20.sp)
                     Spacer(modifier = Modifier.width(8.dp))
 
                     // The action strip (task 6). A task's detail page used to offer three actions
@@ -878,14 +869,14 @@ fun TasksScreen(active: Boolean = true) {
                         }) {
                             Icon(
                                 if (task.isDone) Icons.AutoMirrored.Filled.Undo else Icons.Default.CheckCircle,
-                                contentDescription = if (task.isDone) "Mark as not done" else "Mark as done",
+                                contentDescription = if (task.isDone) com.lucent.app.i18n.S.markNotDone else com.lucent.app.i18n.S.markDone,
                                 tint = onGradient
                             )
                         }
                         // Edit — the same action as the button at the bottom of the page, brought up
                         // here so it's reachable without scrolling past a long set of details.
                         IconButton(onClick = { startEdit(task) }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = onGradient)
+                            Icon(Icons.Default.Edit, contentDescription = com.lucent.app.i18n.S.actionEdit, tint = onGradient)
                         }
                         IconButton(onClick = {
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -893,12 +884,12 @@ fun TasksScreen(active: Boolean = true) {
                                 putExtra(Intent.EXTRA_SUBJECT, task.title.ifBlank { "Task" })
                                 putExtra(Intent.EXTRA_TEXT, shareTextForTask(task))
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share task"))
+                            context.startActivity(Intent.createChooser(sendIntent, com.lucent.app.i18n.S.shareTaskChooser))
                         }) {
-                            Icon(Icons.Default.Share, contentDescription = "Share", tint = onGradient)
+                            Icon(Icons.Default.Share, contentDescription = com.lucent.app.i18n.S.actionShare, tint = onGradient)
                         }
                         IconButton(onClick = { taskToDelete = task }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = onGradient)
+                            Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
                         }
                     }
                 }
@@ -917,7 +908,7 @@ fun TasksScreen(active: Boolean = true) {
                         SelectionContainer(modifier = Modifier.weight(1f)) {
                             Column {
                                 Text(
-                                    task.title.ifBlank { "Untitled task" },
+                                    task.title.ifBlank { com.lucent.app.i18n.S.untitledTask },
                                     color = onGradient,
                                     fontSize = 22.sp,
                                     textDecoration = if (task.isDone) TextDecoration.LineThrough else null
@@ -927,22 +918,22 @@ fun TasksScreen(active: Boolean = true) {
                                     PriorityBadge(taskPriority)
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("Created ${formatTimestamp(task.createdAt)}", color = onGradientMuted, fontSize = 12.sp)
+                                Text(com.lucent.app.i18n.S.createdOn(formatTimestamp(task.createdAt)), color = onGradientMuted, fontSize = 12.sp)
                                 task.dueAt?.let { due ->
                                     Text(
-                                        if (overdue) friendlyDue(due) else "Due ${friendlyDue(due)}",
+                                        if (overdue) friendlyDue(due) else com.lucent.app.i18n.S.dueWhen(friendlyDue(due)),
                                         color = if (overdue) OverdueColor else onGradientMuted,
                                         fontSize = 12.sp
                                     )
                                 }
                                 if (taskRepeat != RepeatRule.NONE) {
-                                    Text("Repeats ${taskRepeat.label.lowercase()}", color = onGradientMuted, fontSize = 12.sp)
+                                    Text(com.lucent.app.i18n.S.repeatsEvery(taskRepeat.uiLabel), color = onGradientMuted, fontSize = 12.sp)
                                 }
                                 if (task.reminderEnabled && task.dueAt != null && !task.isDone) {
-                                    Text("Reminder on", color = onGradientMuted, fontSize = 12.sp)
+                                    Text(com.lucent.app.i18n.S.reminderOn, color = onGradientMuted, fontSize = 12.sp)
                                 }
                                 task.completedAt?.let { done ->
-                                    Text("Completed ${formatTimestamp(done)}", color = onGradientMuted, fontSize = 12.sp)
+                                    Text(com.lucent.app.i18n.S.completedOn(formatTimestamp(done)), color = onGradientMuted, fontSize = 12.sp)
                                 }
                                 if (task.notes.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -956,7 +947,7 @@ fun TasksScreen(active: Boolean = true) {
                         Spacer(modifier = Modifier.height(12.dp))
                         ChecklistView(
                             items = subtaskItems,
-                            header = "Subtasks",
+                            header = com.lucent.app.i18n.S.labelSubtasks,
                             // A completed task is locked along with its subtasks, so the checkboxes
                             // become genuinely non-interactive rather than merely greyed out.
                             onToggle = if (task.isDone) {
@@ -983,7 +974,7 @@ fun TasksScreen(active: Boolean = true) {
                 // same width so the slot looks identical in both states.
                 if (task.isDone) {
                     GlassCapsuleButton(
-                        text = "Mark as not done",
+                        text = com.lucent.app.i18n.S.markNotDone,
                         icon = Icons.AutoMirrored.Filled.Undo,
                         // Asks first (task 7) rather than firing on the tap.
                         onClick = { taskToRestore = task },
@@ -991,7 +982,7 @@ fun TasksScreen(active: Boolean = true) {
                     )
                 } else {
                     GlassCapsuleButton(
-                        text = "Edit task",
+                        text = com.lucent.app.i18n.S.editTask,
                         icon = Icons.Default.Edit,
                         onClick = { startEdit(task) },
                         modifier = Modifier.fillMaxWidth()
@@ -1050,7 +1041,7 @@ fun TasksScreen(active: Boolean = true) {
                 if (selectionMode) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { exitSelection() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel selection", tint = onGradient)
+                            Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yCancelSelection, tint = onGradient)
                         }
                         Text(
                             "${selectedTaskIds.size} selected",
@@ -1062,13 +1053,13 @@ fun TasksScreen(active: Boolean = true) {
                             val allIds = sortedActive.map { it.id }.toSet()
                             selectedTaskIds = if (selectedTaskIds.containsAll(allIds)) emptySet() else allIds
                         }) {
-                            Text(if (selectedTaskIds.containsAll(sortedActive.map { it.id }.toSet()) && sortedActive.isNotEmpty()) "Clear all" else "Select all")
+                            Text(if (selectedTaskIds.containsAll(sortedActive.map { it.id }.toSet()) && sortedActive.isNotEmpty()) com.lucent.app.i18n.S.clearAllSelection else com.lucent.app.i18n.S.selectAll)
                         }
                         IconButton(
                             onClick = { if (selectedTaskIds.isNotEmpty()) showBatchDeleteConfirm = true },
                             enabled = selectedTaskIds.isNotEmpty()
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete selected", tint = onGradient)
+                            Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.a11yDeleteSelected, tint = onGradient)
                         }
                     }
                 } else {
@@ -1084,7 +1075,7 @@ fun TasksScreen(active: Boolean = true) {
                             OutlinedTextField(
                                 value = searchText,
                                 onValueChange = { searchText = it },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search tasks") },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchTasks) },
                                 trailingIcon = { SearchHelpButton() },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
@@ -1111,26 +1102,26 @@ fun TasksScreen(active: Boolean = true) {
                             // bar doesn't grow an icon each time another action appears.
                             Box {
                                 IconButton(onClick = { showOverflowMenu = true }) {
-                                    Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = onGradientMuted)
+                                    Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
                                 }
                                 DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
                                     DropdownMenuItem(
-                                        text = { Text("Select tasks") },
+                                        text = { Text(com.lucent.app.i18n.S.selectTasks) },
                                         leadingIcon = { Icon(Icons.Default.Checklist, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; selectionMode = true }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Search everything") },
+                                        text = { Text(com.lucent.app.i18n.S.searchEverything) },
                                         leadingIcon = { Icon(Icons.Default.TravelExplore, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showSearch = true }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Completed tasks") },
+                                        text = { Text(com.lucent.app.i18n.S.screenCompletedTasks) },
                                         leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showingHistory = true }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Trash") },
+                                        text = { Text(com.lucent.app.i18n.S.screenTrash) },
                                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showTrash = true }
                                     )
@@ -1138,7 +1129,7 @@ fun TasksScreen(active: Boolean = true) {
                             }
                         },
                         trailing = {
-                            NewItemButton(contentDescription = "New task", onClick = { startCreate() })
+                            NewItemButton(contentDescription = com.lucent.app.i18n.S.newTask, onClick = { startCreate() })
                         }
                     )
 
@@ -1175,8 +1166,8 @@ fun TasksScreen(active: Boolean = true) {
                             Box(modifier = Modifier.fillMaxWidth().fillParentMaxHeight()) {
                                 EmptyState(
                                     isFiltered = searchText.isNotBlank() || dateRange != null,
-                                    emptyMessage = "No tasks yet. Tap + to add one, or ask the assistant.",
-                                    noMatchMessage = "No tasks match that search."
+                                    emptyMessage = com.lucent.app.i18n.S.emptyTasksHint,
+                                    noMatchMessage = com.lucent.app.i18n.S.noTasksMatchSearch
                                 )
                             }
                         }
@@ -1264,7 +1255,7 @@ private fun TaskCard(
                 // arm completion.
                 Icon(
                     if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = if (selected) "Selected" else "Not selected",
+                    contentDescription = if (selected) com.lucent.app.i18n.S.a11ySelected else com.lucent.app.i18n.S.a11yNotSelected,
                     tint = if (selected) onGradient else onGradientMuted,
                     modifier = Modifier.padding(horizontal = 12.dp).size(22.dp)
                 )
@@ -1285,7 +1276,7 @@ private fun TaskCard(
                     PriorityDot(priority)
                     if (priority != TaskPriority.NONE) Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        task.title.ifBlank { "Untitled task" },
+                        task.title.ifBlank { com.lucent.app.i18n.S.untitledTask },
                         color = onGradient,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -1295,7 +1286,7 @@ private fun TaskCard(
                 Text(createdLabel, color = onGradientMuted, fontSize = 12.sp)
                 task.dueAt?.let { due ->
                     Text(
-                        if (overdue) friendlyDue(due) else "Due ${friendlyDue(due)}",
+                        if (overdue) friendlyDue(due) else com.lucent.app.i18n.S.dueWhen(friendlyDue(due)),
                         color = if (overdue) OverdueColor else onGradientMuted,
                         fontSize = 12.sp
                     )
@@ -1308,14 +1299,14 @@ private fun TaskCard(
                         if (repeats) {
                             Icon(
                                 Icons.Default.Repeat,
-                                contentDescription = "Repeats",
+                                contentDescription = com.lucent.app.i18n.S.a11yRepeats,
                                 tint = onGradientMuted,
                                 modifier = Modifier.size(13.dp)
                             )
                             if (progress != null) Spacer(modifier = Modifier.width(8.dp))
                         }
                         progress?.let { (done, total) ->
-                            Text("$done/$total subtasks", color = onGradientMuted, fontSize = 12.sp)
+                            Text(com.lucent.app.i18n.S.nSubtasks(done, total), color = onGradientMuted, fontSize = 12.sp)
                         }
                     }
                 }
@@ -1323,7 +1314,7 @@ private fun TaskCard(
             if (!selectionMode) {
                 PinIconButton(pinned = task.pinned, onToggle = onTogglePin)
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = onGradient)
+                    Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
                 }
             }
         }
@@ -1347,7 +1338,7 @@ private fun TaskSectionHeader(label: String) {
 /** Plain-text rendering of a task for the OS share sheet. */
 private fun shareTextForTask(task: Task): String {
     val sb = StringBuilder()
-    sb.append(task.title.ifBlank { "Untitled task" })
+    sb.append(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask })
     task.dueAt?.let { sb.append("\nDue: ").append(formatTimestamp(it)) }
     TaskPriority.fromValue(task.priority).takeIf { it != TaskPriority.NONE }?.let {
         sb.append("\nPriority: ").append(it.label)
@@ -1413,14 +1404,14 @@ private fun DueDateRow(dueAt: Long?, minMillis: Long, onChange: (Long?) -> Unit)
         Icon(Icons.Default.CalendarToday, contentDescription = null, tint = onGradientMuted)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = if (dueAt != null) "Due ${formatTimestamp(dueAt)}" else "Set a due date",
+            text = if (dueAt != null) com.lucent.app.i18n.S.dueWhen(formatTimestamp(dueAt)) else com.lucent.app.i18n.S.setADueDate,
             color = onGradient,
             fontSize = 14.sp,
             modifier = Modifier.weight(1f)
         )
         if (dueAt != null) {
             IconButton(onClick = { onChange(null) }) {
-                Icon(Icons.Default.Close, contentDescription = "Clear due date", tint = onGradientMuted)
+                Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yClearDueDate, tint = onGradientMuted)
             }
         }
     }

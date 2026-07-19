@@ -165,7 +165,7 @@ fun DateFilterIconButton(active: Boolean, onClick: () -> Unit, modifier: Modifie
     IconButton(onClick = onClick, modifier = modifier) {
         Icon(
             Icons.Default.CalendarToday,
-            contentDescription = "Filter by date",
+            contentDescription = com.lucent.app.i18n.S.a11yFilterByDate,
             tint = if (active) onGradient else onGradientMuted
         )
     }
@@ -204,7 +204,7 @@ fun DateFilterChip(startMillis: Long, endMillis: Long, onClear: () -> Unit, modi
         IconButton(onClick = onClear, modifier = Modifier.size(30.dp)) {
             Icon(
                 Icons.Default.Close,
-                contentDescription = "Clear date filter",
+                contentDescription = com.lucent.app.i18n.S.a11yClearDateFilter,
                 tint = onGradient,
                 modifier = Modifier.size(15.dp)
             )
@@ -260,7 +260,7 @@ fun CollapsibleActionBar(
         IconButton(onClick = onToggleExpanded) {
             Icon(
                 if (expanded) Icons.Default.ChevronRight else Icons.Default.ChevronLeft,
-                contentDescription = if (expanded) "Hide actions" else "Show more actions",
+                contentDescription = if (expanded) com.lucent.app.i18n.S.a11yHideActions else com.lucent.app.i18n.S.a11yShowMoreActions,
                 tint = tint
             )
         }
@@ -394,17 +394,17 @@ fun SearchHelpButton(modifier: Modifier = Modifier) {
     var showing by remember { mutableStateOf(false) }
 
     IconButton(onClick = { showing = true }, modifier = modifier) {
-        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "Search tips", tint = onGradientMuted)
+        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = com.lucent.app.i18n.S.searchTipsTitle, tint = onGradientMuted)
     }
 
     if (showing) {
         AlertDialog(
             onDismissRequest = { showing = false },
-            title = { Text("Search tips") },
+            title = { Text(com.lucent.app.i18n.S.searchTipsTitle) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
-                        "Combine any of these — everything must match.",
+                        com.lucent.app.i18n.S.searchTipsIntro,
                         fontSize = 13.sp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -421,7 +421,7 @@ fun SearchHelpButton(modifier: Modifier = Modifier) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showing = false }) { Text("Got it") } }
+            confirmButton = { TextButton(onClick = { showing = false }) { Text(com.lucent.app.i18n.S.gotIt) } }
         )
     }
 }
@@ -483,7 +483,7 @@ fun NoteLinkChips(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        note.title.ifBlank { "Untitled" },
+                        note.title.ifBlank { com.lucent.app.i18n.S.untitled },
                         color = onGradient,
                         fontSize = 13.sp,
                         maxLines = 1,
@@ -515,7 +515,7 @@ fun BrokenLinkChips(
     val shape = RoundedCornerShape(percent = 50)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text("Links to notes that don't exist yet — tap to create", color = onGradientMuted, fontSize = 12.sp)
+        Text(com.lucent.app.i18n.S.brokenLinksHint, color = onGradientMuted, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(6.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

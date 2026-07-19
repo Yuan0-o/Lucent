@@ -98,7 +98,7 @@ fun PdfViewer(att: Attachment) {
         pages != null -> {
             val bitmaps = pages!!
             if (bitmaps.isEmpty()) {
-                Text("This PDF has no pages to show.", color = Color.White)
+                Text(com.lucent.app.i18n.S.pdfNoPages, color = Color.White)
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
@@ -108,7 +108,7 @@ fun PdfViewer(att: Attachment) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Image(
                                 bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Page ${index + 1}",
+                                contentDescription = com.lucent.app.i18n.S.pdfPageA11y(index + 1),
                                 contentScale = ContentScale.FillWidth,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -116,7 +116,7 @@ fun PdfViewer(att: Attachment) {
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                "Page ${index + 1} of ${bitmaps.size}",
+                                com.lucent.app.i18n.S.pdfPageOf(index + 1, bitmaps.size),
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 11.sp
                             )
@@ -126,7 +126,7 @@ fun PdfViewer(att: Attachment) {
             }
         }
         failed -> Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text("Couldn't render this PDF. Try \"Open with\" instead.", color = Color.White)
+            Text(com.lucent.app.i18n.S.pdfRenderFailed, color = Color.White)
         }
         else -> Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             CircularProgressIndicator(color = Color.White)

@@ -106,15 +106,12 @@ fun NoteHistoryScreen(
     confirmRestore?.let { version ->
         AlertDialog(
             onDismissRequest = { confirmRestore = null },
-            title = { Text("Restore this version?") },
+            title = { Text(com.lucent.app.i18n.S.restoreVersionTitle) },
             text = {
-                Text(
-                    "The note will go back to how it read on ${formatTimestamp(version.savedAt)}. " +
-                        "The current text is saved to history first, so you can undo this too."
-                )
+                Text(com.lucent.app.i18n.S.restoreVersionBody(formatTimestamp(version.savedAt)))
             },
-            confirmButton = { TextButton(onClick = { restore(version) }) { Text("Restore") } },
-            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } }
+            confirmButton = { TextButton(onClick = { restore(version) }) { Text(com.lucent.app.i18n.S.actionRestore) } },
+            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -124,15 +121,15 @@ fun NoteHistoryScreen(
         Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { previewing = null }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
                 }
-                Text("Version", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+                Text(com.lucent.app.i18n.S.screenVersion, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
             }
 
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(preview.title.ifBlank { "Untitled" }, color = onGradient, fontSize = 22.sp)
+                Text(preview.title.ifBlank { com.lucent.app.i18n.S.untitled }, color = onGradient, fontSize = 22.sp)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("As of ${formatTimestamp(preview.savedAt)}", color = onGradientMuted, fontSize = 12.sp)
+                Text(com.lucent.app.i18n.S.historyAsOf(formatTimestamp(preview.savedAt)), color = onGradientMuted, fontSize = 12.sp)
                 // A quiet size read-out for this revision, so "how much did I have written on July 3rd"
                 // is answerable at a glance. Checklist versions store their items separately, so count
                 // the checklist text for those and the body for plain-text ones.
@@ -155,18 +152,18 @@ fun NoteHistoryScreen(
                     ChecklistView(
                         items = Checklist.parse(preview.checklist),
                         onToggle = null,
-                        header = "Items"
+                        header = com.lucent.app.i18n.S.historyItemsHeader
                     )
                 } else if (preview.body.isNotBlank()) {
                     MarkdownText(text = preview.body)
                 } else {
-                    Text("(empty)", color = onGradientMuted)
+                    Text(com.lucent.app.i18n.S.emptyParen, color = onGradientMuted)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
             GlassCapsuleButton(
-                text = "Restore this version",
+                text = com.lucent.app.i18n.S.restoreThisVersion,
                 icon = Icons.AutoMirrored.Filled.Undo,
                 onClick = { confirmRestore = preview }
             )
@@ -178,23 +175,18 @@ fun NoteHistoryScreen(
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
-            Text("Version history", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            Text(com.lucent.app.i18n.S.screenVersionHistory, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
         }
 
-        Text(
-            "Earlier versions of \"${note.title.ifBlank { "Untitled" }}\", saved on this device each time " +
-                "the text changed. The last ${NoteHistory.MAX_VERSIONS_PER_NOTE} are kept.",
-            color = onGradientMuted,
-            fontSize = 12.sp
-        )
+        Text(com.lucent.app.i18n.S.historyIntro(note.title.ifBlank { com.lucent.app.i18n.S.untitled }))
         Spacer(modifier = Modifier.height(16.dp))
 
         if (versions.isEmpty()) {
             EmptyState(
                 isFiltered = false,
-                emptyMessage = "No earlier versions yet. One is saved automatically the first time you change this note's text.",
+                emptyMessage = com.lucent.app.i18n.S.historyEmpty,
                 noMatchMessage = ""
             )
             return
@@ -231,9 +223,9 @@ private fun VersionCard(version: NoteVersion, onPreview: () -> Unit, onRestore: 
         if (version.isChecklist) {
             val items = Checklist.parse(version.checklist)
             val done = items.count { it.done }
-            if (items.isEmpty()) "(empty checklist)" else "Checklist · $done/${items.size} done"
+            if (items.isEmpty()) com.lucent.app.i18n.S.emptyChecklistParen else com.lucent.app.i18n.S.checklistDoneCount(done, items.size)
         } else {
-            version.body.ifBlank { "(empty)" }
+            version.body.ifBlank { com.lucent.app.i18n.S.emptyParen }
         }
     }
 
@@ -251,7 +243,7 @@ private fun VersionCard(version: NoteVersion, onPreview: () -> Unit, onRestore: 
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    version.title.ifBlank { "Untitled" },
+                    version.title.ifBlank { com.lucent.app.i18n.S.untitled },
                     color = onGradient,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -259,7 +251,7 @@ private fun VersionCard(version: NoteVersion, onPreview: () -> Unit, onRestore: 
                 Text(formatTimestamp(version.savedAt), color = onGradientMuted, fontSize = 12.sp)
             }
             IconButton(onClick = onRestore) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Restore this version", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.restoreThisVersion, tint = onGradient)
             }
         }
         Spacer(modifier = Modifier.height(6.dp))

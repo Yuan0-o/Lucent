@@ -68,7 +68,7 @@ object ShareIntake {
         return when {
             firstLine.isNotEmpty() -> firstLine.take(80)
             attachment != null -> attachment.name
-            else -> "Shared"
+            else -> com.lucent.app.i18n.S.sharedDefaultTitle
         }
     }
 
@@ -110,14 +110,14 @@ fun ShareIntakeDialog() {
 
     AlertDialog(
         onDismissRequest = { ShareIntake.clear() },
-        title = { Text("Add to Lucent") },
+        title = { Text(com.lucent.app.i18n.S.shareDialogTitle) },
         text = {
             val preview = shared.text?.take(140)
             Text(
                 when {
-                    !preview.isNullOrBlank() && shared.streamUri != null -> "Save the shared text and file as a new:"
-                    !preview.isNullOrBlank() -> "Save \"$preview\" as a new:"
-                    else -> "Save the shared file as a new:"
+                    !preview.isNullOrBlank() && shared.streamUri != null -> com.lucent.app.i18n.S.shareSaveTextAndFile
+                    !preview.isNullOrBlank() -> com.lucent.app.i18n.S.shareSaveTextAs(preview)
+                    else -> com.lucent.app.i18n.S.shareSaveFile
                 }
             )
         },
@@ -129,7 +129,7 @@ fun ShareIntakeDialog() {
                     val id = withContext(Dispatchers.IO) { ShareIntake.createNote(context, payload) }
                     AppNavigation.openNote(id)
                 }
-            }) { Text("New note") }
+            }) { Text(com.lucent.app.i18n.S.newNote) }
         },
         dismissButton = {
             TextButton(onClick = {
@@ -139,7 +139,7 @@ fun ShareIntakeDialog() {
                     val id = withContext(Dispatchers.IO) { ShareIntake.createTask(context, payload) }
                     AppNavigation.openTask(id)
                 }
-            }) { Text("New task") }
+            }) { Text(com.lucent.app.i18n.S.newTask) }
         }
     )
 }

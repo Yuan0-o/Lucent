@@ -84,16 +84,16 @@ fun TrashNotesScreen(onBack: () -> Unit) {
     noteToRestore?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToRestore = null },
-            title = { Text("Restore this note?") },
-            text = { Text("\"${note.title.ifBlank { "Untitled note" }}\" will be moved out of Trash and back into your notes.") },
+            title = { Text(com.lucent.app.i18n.S.restoreNoteTitle) },
+            text = { Text(com.lucent.app.i18n.S.restoreNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote })) },
             confirmButton = {
                 TextButton(onClick = {
                     val target = note
                     noteToRestore = null
                     AppScope.io.launch { db.noteDao().update(target.copy(trashedAt = null)) }
-                }) { Text("Restore") }
+                }) { Text(com.lucent.app.i18n.S.actionRestore) }
             },
-            dismissButton = { TextButton(onClick = { noteToRestore = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { noteToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
     var confirmEmptyTrash by remember { mutableStateOf(false) }
@@ -108,28 +108,28 @@ fun TrashNotesScreen(onBack: () -> Unit) {
     noteToPurge?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToPurge = null },
-            title = { Text("Delete forever?") },
-            text = { Text("\"${note.title.ifBlank { "Untitled note" }}\" will be permanently deleted, along with its attachments and version history. This can't be undone.") },
+            title = { Text(com.lucent.app.i18n.S.deleteForeverTitle) },
+            text = { Text(com.lucent.app.i18n.S.deleteNoteForeverBody(note.title.ifBlank { com.lucent.app.i18n.S.untitledNote })) },
             confirmButton = {
-                TextButton(onClick = { purge(note); noteToPurge = null }) { Text("Delete forever") }
+                TextButton(onClick = { purge(note); noteToPurge = null }) { Text(com.lucent.app.i18n.S.deleteForever) }
             },
-            dismissButton = { TextButton(onClick = { noteToPurge = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { noteToPurge = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
     if (confirmEmptyTrash) {
         AlertDialog(
             onDismissRequest = { confirmEmptyTrash = false },
-            title = { Text("Empty trash?") },
-            text = { Text("All ${trashed.size} note${if (trashed.size == 1) "" else "s"} in Trash will be permanently deleted. This can't be undone.") },
+            title = { Text(com.lucent.app.i18n.S.emptyTrashTitle) },
+            text = { Text(if (trashed.size == 1) com.lucent.app.i18n.S.emptyTrashNotesBodyOne else com.lucent.app.i18n.S.emptyTrashNotesBody(trashed.size)) },
             confirmButton = {
                 TextButton(onClick = {
                     val toPurge = trashed.toList()
                     confirmEmptyTrash = false
                     AppScope.io.launch { toPurge.forEach { TrashCleanup.purgeNote(context, db, it) } }
-                }) { Text("Empty trash") }
+                }) { Text(com.lucent.app.i18n.S.emptyTrash) }
             },
-            dismissButton = { TextButton(onClick = { confirmEmptyTrash = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmEmptyTrash = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -144,16 +144,16 @@ fun TrashNotesScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
-            Text("Trash", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            Text(com.lucent.app.i18n.S.screenTrash, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
             if (trashed.isNotEmpty()) {
-                TextButton(onClick = { confirmEmptyTrash = true }) { Text("Empty trash") }
+                TextButton(onClick = { confirmEmptyTrash = true }) { Text(com.lucent.app.i18n.S.emptyTrash) }
             }
         }
 
         Text(
-            "Kept for ${TrashCleanup.RETENTION_DAYS} days, then deleted automatically.",
+            com.lucent.app.i18n.S.trashRetention(TrashCleanup.RETENTION_DAYS),
             color = onGradientMuted,
             fontSize = 12.sp
         )
@@ -162,7 +162,7 @@ fun TrashNotesScreen(onBack: () -> Unit) {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            label = { Text("Search trash") },
+            label = { Text(com.lucent.app.i18n.S.searchTrash) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -173,8 +173,8 @@ fun TrashNotesScreen(onBack: () -> Unit) {
         if (filtered.isEmpty()) {
             EmptyState(
                 isFiltered = searchQuery.isNotBlank(),
-                emptyMessage = "Trash is empty.",
-                noMatchMessage = "No trashed notes match that search."
+                emptyMessage = com.lucent.app.i18n.S.trashEmpty,
+                noMatchMessage = com.lucent.app.i18n.S.noTrashedNotesMatch
             )
             return
         }
@@ -207,7 +207,7 @@ private fun TrashedNoteCard(
     val preview = remember(note) {
         if (note.isChecklist) {
             val items = Checklist.parse(note.checklist)
-            if (items.isEmpty()) "(empty checklist)" else "Checklist · ${items.count { it.done }}/${items.size} done"
+            if (items.isEmpty()) "(empty checklist)" else com.lucent.app.i18n.S.checklistDoneCount(items.count { it.done }, items.size)
         } else {
             note.body
         }
@@ -231,7 +231,7 @@ private fun TrashedNoteCard(
                         Spacer(modifier = Modifier.width(6.dp))
                     }
                     Text(
-                        note.title.ifBlank { "Untitled note" },
+                        note.title.ifBlank { com.lucent.app.i18n.S.untitledNote },
                         color = onGradient,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -239,16 +239,16 @@ private fun TrashedNoteCard(
                 }
                 val stamp = note.trashedAt ?: note.updatedAt
                 Text(
-                    "Trashed ${formatTimestamp(stamp)}" + if (note.archived) " · was archived" else "",
+                    com.lucent.app.i18n.S.trashedOn(formatTimestamp(stamp)) + if (note.archived) " · was archived" else "",
                     color = onGradientMuted,
                     fontSize = 12.sp
                 )
             }
             IconButton(onClick = onRestore) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Restore", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.actionRestore, tint = onGradient)
             }
             IconButton(onClick = onPurge) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete forever", tint = onGradient)
+                Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.a11yDeleteForever, tint = onGradient)
             }
         }
         if (preview.isNotBlank()) {
