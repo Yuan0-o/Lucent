@@ -36,7 +36,24 @@ data class ToolParam(val name: String, val type: String, val description: String
 
 data class ToolDefinition(val name: String, val description: String, val params: List<ToolParam>)
 
-data class ToolCallRequest(val id: String, val name: String, val argumentsJson: String)
+/**
+ * One tool call the model asked to make.
+ *
+ * [thoughtSignature] is Google-only and normally null. Gemini's thinking-class models (2.5 and, with
+ * mandatory enforcement, 3.x) attach an opaque, encrypted `thoughtSignature` string to the *part*
+ * that carries a `functionCall`. That signature must be echoed back **verbatim, on the same part**,
+ * when the call is threaded into the next request's history — otherwise the API rejects the follow-up
+ * turn with `400 INVALID_ARGUMENT: Function call is missing a thought_signature in functionCall parts`
+ * and the tool loop dies before the model can answer. For parallel calls in one response only the
+ * first part carries a signature, so this is null on the rest; that is expected and handled. The other
+ * providers (OpenAI, Anthropic) leave it null and ignore it entirely.
+ */
+data class ToolCallRequest(
+    val id: String,
+    val name: String,
+    val argumentsJson: String,
+    val thoughtSignature: String? = null
+)
 
 /** An image pulled out of a note/task attachment so it can be shown to a vision model. */
 data class ToolImage(val mime: String, val data: String, val name: String)
