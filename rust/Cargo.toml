@@ -1,0 +1,25 @@
+[package]
+name = "lucent_native"
+version = "0.1.0"
+edition = "2021"
+description = "Performance-critical primitives for Lucent: PBKDF2 / AES-GCM and the background-animation frame math, exposed over JNI. Byte-for-byte and value-for-value identical to the Kotlin implementations they accelerate."
+license = "MIT"
+
+[lib]
+name = "lucent_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = { version = "0.21", default-features = false }
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+sha2 = { version = "0.10", default-features = false }
+hmac = "0.12"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# Deliberately NOT panic = "abort": every JNI export wraps its body in catch_unwind so a Rust
+# panic degrades to "native unavailable, Kotlin fallback used" instead of killing the app.
+strip = "symbols"
