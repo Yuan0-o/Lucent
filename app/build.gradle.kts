@@ -62,6 +62,17 @@ android {
                 //
                 // Build a smaller, CPU-only APK with -PcpuOnly (e.g. if the Vulkan build ever fails).
                 arguments += "-DLUCENT_ENABLE_VULKAN=${if (project.hasProperty("cpuOnly")) "OFF" else "ON"}"
+
+                // llama.cpp's Vulkan backend does find_package(SPIRV-Headers CONFIG REQUIRED). That
+                // package isn't in the NDK, and cross-compiling normally restricts find_package to the
+                // NDK sysroot — so CI installs SPIRV-Headers on the host and points this env var at its
+                // config dir. Pass it through as SPIRV-Headers_DIR, and allow find_package to look
+                // outside the sysroot (BOTH) so a host, header-only package resolves. Only Vulkan
+                // builds set the env var; a -PcpuOnly build ignores all of this.
+                System.getenv("LUCENT_SPIRV_HEADERS_DIR")?.takeIf { it.isNotBlank() }?.let { dir ->
+                    arguments += "-DSPIRV-Headers_DIR=$dir"
+                    arguments += "-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
+                }
             }
         }
     }
