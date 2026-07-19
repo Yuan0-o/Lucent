@@ -37,7 +37,7 @@ class GenerationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val name = intent?.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() } ?: "Assistant"
+        val name = intent?.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() } ?: com.lucent.app.i18n.S.tabAssistant
         ensureChannel(this)
         val notification = buildNotification(this, name)
         try {
@@ -59,8 +59,9 @@ class GenerationService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "assistant_generation"
-        private const val CHANNEL_NAME = "Assistant replies"
-        private const val CHANNEL_DESC = "Shown briefly while the assistant is generating a reply"
+        // Read at call time so the channel registers under the current UI language (see Notifications).
+        private val CHANNEL_NAME: String get() = com.lucent.app.i18n.S.genChannelName
+        private val CHANNEL_DESC: String get() = com.lucent.app.i18n.S.genChannelDesc
         private const val NOTIF_ID = 5170
         private const val EXTRA_NAME = "assistant_name"
 
@@ -98,8 +99,8 @@ class GenerationService : Service() {
             )
             return NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("$name is replying…")
-                .setContentText("Finishing your reply in the background")
+                .setContentTitle(com.lucent.app.i18n.S.genReplyingTitle(name))
+                .setContentText(com.lucent.app.i18n.S.genReplyingBody)
                 .setOngoing(true)
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)

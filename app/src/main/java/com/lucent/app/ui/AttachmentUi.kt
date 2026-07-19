@@ -219,7 +219,7 @@ fun PendingAttachmentChips(
                 Icon(Icons.Default.AttachFile, contentDescription = null, tint = tint)
                 Text(att.name, color = tint, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(start = 6.dp))
                 IconButton(onClick = { onRemove(att) }, modifier = Modifier.padding(0.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove ${att.name}", tint = tint)
+                    Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yRemoveNamed(att.name), tint = tint)
                 }
             }
         }
@@ -319,14 +319,14 @@ private fun AttachmentChipRow(att: Attachment, tint: Color, onClick: () -> Unit,
         IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
             Icon(
                 Icons.Default.Download,
-                contentDescription = "Download ${att.name}",
+                contentDescription = com.lucent.app.i18n.S.a11yDownloadNamed(att.name),
                 tint = tint,
                 modifier = Modifier.size(18.dp)
             )
         }
         Icon(
             Icons.Default.Visibility,
-            contentDescription = "Open ${att.name}",
+            contentDescription = com.lucent.app.i18n.S.a11yOpenNamed(att.name),
             tint = tint.copy(alpha = 0.7f)
         )
     }

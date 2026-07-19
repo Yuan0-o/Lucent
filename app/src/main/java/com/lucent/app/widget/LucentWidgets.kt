@@ -95,7 +95,7 @@ class TaskSummaryWidget : AppWidgetProvider() {
                     views.setTextViewText(R.id.summary_count, if (count >= 0) count.toString() else "—")
                     views.setTextViewText(
                         R.id.summary_label,
-                        if (count == 1) "open task" else "open tasks"
+                        if (count == 1) context.getString(R.string.widget_open_task_one) else context.getString(R.string.widget_open_tasks)
                     )
                     views.setOnClickPendingIntent(R.id.widget_root, WidgetActions.pendingIntent(appContext, WidgetActions.OPEN_TASKS))
                     appWidgetManager.updateAppWidget(id, views)
@@ -172,7 +172,7 @@ private class TodayTasksFactory(private val context: Context) : RemoteViewsServi
                             task.notes.isNotBlank() -> task.notes.lineSequence().firstOrNull()?.trim().orEmpty()
                             else -> ""
                         }
-                        Row(task.id, task.title.ifBlank { "Untitled task" }, subtitle)
+                        Row(task.id, task.title.ifBlank { context.getString(R.string.widget_untitled_task) }, subtitle)
                     }
             }
         } catch (t: Throwable) {
@@ -228,7 +228,7 @@ class PinnedNoteWidget : AppWidgetProvider() {
         for (id in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_pinned_note).apply {
                 if (note == null) {
-                    setTextViewText(R.id.widget_pinned_title, "No pinned note")
+                    setTextViewText(R.id.widget_pinned_title, context.getString(R.string.widget_no_pinned_note))
                     setViewVisibility(R.id.widget_pinned_body, android.view.View.GONE)
                     setOnClickPendingIntent(R.id.widget_pinned_root, WidgetActions.pendingIntent(context, WidgetActions.NEW_NOTE))
                 } else {
@@ -237,7 +237,7 @@ class PinnedNoteWidget : AppWidgetProvider() {
                     } else {
                         note.body
                     }
-                    setTextViewText(R.id.widget_pinned_title, note.title.ifBlank { "Untitled" })
+                    setTextViewText(R.id.widget_pinned_title, note.title.ifBlank { context.getString(R.string.widget_untitled) })
                     if (preview.isBlank()) {
                         setViewVisibility(R.id.widget_pinned_body, android.view.View.GONE)
                     } else {

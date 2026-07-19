@@ -95,7 +95,7 @@ fun openAttachmentExternally(context: Context, att: Attachment) {
         val uri = AttachmentAccess.contentUri(context, att)
         withContext(Dispatchers.Main) {
             if (uri == null) {
-                toast(context, "Couldn't open this file")
+                toast(context, com.lucent.app.i18n.S.cantOpenFile)
                 return@withContext
             }
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -103,9 +103,9 @@ fun openAttachmentExternally(context: Context, att: Attachment) {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             try {
-                context.startActivity(Intent.createChooser(intent, "Open with"))
+                context.startActivity(Intent.createChooser(intent, com.lucent.app.i18n.S.openWith))
             } catch (t: Throwable) {
-                toast(context, "No app can open this file")
+                toast(context, com.lucent.app.i18n.S.noAppCanOpen)
             }
         }
     }
@@ -117,7 +117,7 @@ fun shareAttachment(context: Context, att: Attachment) {
         val uri = AttachmentAccess.contentUri(context, att)
         withContext(Dispatchers.Main) {
             if (uri == null) {
-                toast(context, "Couldn't share this file")
+                toast(context, com.lucent.app.i18n.S.cantShareFile)
                 return@withContext
             }
             val intent = Intent(Intent.ACTION_SEND).apply {
@@ -126,9 +126,9 @@ fun shareAttachment(context: Context, att: Attachment) {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             try {
-                context.startActivity(Intent.createChooser(intent, "Share file"))
+                context.startActivity(Intent.createChooser(intent, com.lucent.app.i18n.S.shareFileChooser))
             } catch (t: Throwable) {
-                toast(context, "Couldn't share this file")
+                toast(context, com.lucent.app.i18n.S.cantShareFile)
             }
         }
     }
@@ -159,7 +159,7 @@ fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
                 false
             }
             withContext(Dispatchers.Main) {
-                toast(context, if (ok) "Saved" else "Couldn't save this file")
+                toast(context, if (ok) com.lucent.app.i18n.S.savedToast else com.lucent.app.i18n.S.cantSaveFile)
             }
         }
     }
@@ -244,7 +244,7 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
                     modifier = Modifier.weight(1f).padding(start = 8.dp)
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.actionClose, tint = Color.White)
                 }
             }
             }
@@ -261,11 +261,11 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (att.isImage) {
-                    ViewerAction(Icons.Default.Edit, "Edit") { editing = true }
+                    ViewerAction(Icons.Default.Edit, com.lucent.app.i18n.S.actionEdit) { editing = true }
                 }
-                ViewerAction(Icons.Default.Download, "Save") { save(att) }
-                ViewerAction(Icons.Default.Share, "Share") { shareAttachment(context, att) }
-                ViewerAction(Icons.Default.Launch, "Open with") {
+                ViewerAction(Icons.Default.Download, com.lucent.app.i18n.S.actionSave) { save(att) }
+                ViewerAction(Icons.Default.Share, com.lucent.app.i18n.S.actionShare) { shareAttachment(context, att) }
+                ViewerAction(Icons.Default.Launch, com.lucent.app.i18n.S.openWith) {
                     openAttachmentExternally(context, att)
                 }
             }
@@ -342,7 +342,7 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
                     })
                 }
         )
-        failed -> Text("Couldn't load this image", color = Color.White)
+        failed -> Text(com.lucent.app.i18n.S.cantLoadImage, color = Color.White)
         else -> CircularProgressIndicator(color = Color.White)
     }
 }
@@ -568,7 +568,7 @@ private fun InlineMediaPlayer(
                                         completed -> Icons.Default.Replay
                                         else -> Icons.Default.PlayArrow
                                     },
-                                    contentDescription = if (playing) "Pause" else "Play",
+                                    contentDescription = if (playing) com.lucent.app.i18n.S.a11yPause else com.lucent.app.i18n.S.a11yPlay,
                                     tint = Color.White
                                 )
                             }
@@ -603,7 +603,7 @@ private fun InlineMediaPlayer(
                 }
             }
         }
-        failed -> Text("Couldn't load this media", color = Color.White)
+        failed -> Text(com.lucent.app.i18n.S.cantLoadMedia, color = Color.White)
         else -> CircularProgressIndicator(color = Color.White)
     }
 }
@@ -638,7 +638,7 @@ private fun NonPreviewableInfo(att: Attachment) {
         Text(att.name, color = Color.White, fontSize = 16.sp)
         Spacer(Modifier.height(4.dp))
         Text(
-            "No in-app preview for this type. Save it, or open it in another app.",
+            com.lucent.app.i18n.S.noPreviewForType,
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 13.sp
         )

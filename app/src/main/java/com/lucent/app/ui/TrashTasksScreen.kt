@@ -75,53 +75,50 @@ fun TrashTasksScreen(onBack: () -> Unit) {
     taskToRestore?.let { task ->
         AlertDialog(
             onDismissRequest = { taskToRestore = null },
-            title = { Text("Restore this task?") },
+            title = { Text(com.lucent.app.i18n.S.restoreTaskTitle) },
             text = {
-                Text(
-                    "\"${task.title.ifBlank { "Untitled task" }}\" will be moved out of Trash and back " +
-                        "into your tasks. Any reminder it had is re-armed if its due time is still ahead."
-                )
+                Text(com.lucent.app.i18n.S.restoreTaskBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask }))
             },
             confirmButton = {
                 TextButton(onClick = {
                     val target = task
                     taskToRestore = null
                     AppScope.io.launch { TaskActions.untrash(context, db, target) }
-                }) { Text("Restore") }
+                }) { Text(com.lucent.app.i18n.S.actionRestore) }
             },
-            dismissButton = { TextButton(onClick = { taskToRestore = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
     taskToPurge?.let { task ->
         AlertDialog(
             onDismissRequest = { taskToPurge = null },
-            title = { Text("Delete forever?") },
-            text = { Text("\"${task.title.ifBlank { "Untitled task" }}\" will be permanently deleted, along with its attachments. This can't be undone.") },
+            title = { Text(com.lucent.app.i18n.S.deleteForeverTitle) },
+            text = { Text(com.lucent.app.i18n.S.deleteTaskForeverBody(task.title.ifBlank { com.lucent.app.i18n.S.untitledTask })) },
             confirmButton = {
                 TextButton(onClick = {
                     val toPurge = task
                     taskToPurge = null
                     AppScope.io.launch { TrashCleanup.purgeTask(context, db, toPurge) }
-                }) { Text("Delete forever") }
+                }) { Text(com.lucent.app.i18n.S.deleteForever) }
             },
-            dismissButton = { TextButton(onClick = { taskToPurge = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { taskToPurge = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
     if (confirmEmptyTrash) {
         AlertDialog(
             onDismissRequest = { confirmEmptyTrash = false },
-            title = { Text("Empty trash?") },
-            text = { Text("All ${trashed.size} task${if (trashed.size == 1) "" else "s"} in Trash will be permanently deleted. This can't be undone.") },
+            title = { Text(com.lucent.app.i18n.S.emptyTrashTitle) },
+            text = { Text(if (trashed.size == 1) com.lucent.app.i18n.S.emptyTrashTasksBodyOne else com.lucent.app.i18n.S.emptyTrashTasksBody(trashed.size)) },
             confirmButton = {
                 TextButton(onClick = {
                     val toPurge = trashed.toList()
                     confirmEmptyTrash = false
                     AppScope.io.launch { toPurge.forEach { TrashCleanup.purgeTask(context, db, it) } }
-                }) { Text("Empty trash") }
+                }) { Text(com.lucent.app.i18n.S.emptyTrash) }
             },
-            dismissButton = { TextButton(onClick = { confirmEmptyTrash = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmEmptyTrash = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
@@ -136,16 +133,16 @@ fun TrashTasksScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
-            Text("Trash", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            Text(com.lucent.app.i18n.S.screenTrash, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
             if (trashed.isNotEmpty()) {
-                TextButton(onClick = { confirmEmptyTrash = true }) { Text("Empty trash") }
+                TextButton(onClick = { confirmEmptyTrash = true }) { Text(com.lucent.app.i18n.S.emptyTrash) }
             }
         }
 
         Text(
-            "Kept for ${TrashCleanup.RETENTION_DAYS} days, then deleted automatically.",
+            com.lucent.app.i18n.S.trashRetention(TrashCleanup.RETENTION_DAYS),
             color = onGradientMuted,
             fontSize = 12.sp
         )
@@ -154,7 +151,7 @@ fun TrashTasksScreen(onBack: () -> Unit) {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            label = { Text("Search trash") },
+            label = { Text(com.lucent.app.i18n.S.searchTrash) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -165,8 +162,8 @@ fun TrashTasksScreen(onBack: () -> Unit) {
         if (filtered.isEmpty()) {
             EmptyState(
                 isFiltered = searchQuery.isNotBlank(),
-                emptyMessage = "Trash is empty.",
-                noMatchMessage = "No trashed tasks match that search."
+                emptyMessage = com.lucent.app.i18n.S.trashEmpty,
+                noMatchMessage = com.lucent.app.i18n.S.noTrashedTasksMatch
             )
             return
         }
@@ -213,7 +210,7 @@ private fun TrashedTaskCard(
                     PriorityDot(priority)
                     if (priority != TaskPriority.NONE) Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        task.title.ifBlank { "Untitled task" },
+                        task.title.ifBlank { com.lucent.app.i18n.S.untitledTask },
                         color = onGradient,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -222,16 +219,16 @@ private fun TrashedTaskCard(
                 }
                 val stamp = task.trashedAt ?: task.createdAt
                 Text(
-                    "Trashed ${formatTimestamp(stamp)}" + if (task.isDone) " · was completed" else "",
+                    com.lucent.app.i18n.S.trashedOn(formatTimestamp(stamp)) + if (task.isDone) " · was completed" else "",
                     color = onGradientMuted,
                     fontSize = 12.sp
                 )
             }
             IconButton(onClick = onRestore) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Restore", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.actionRestore, tint = onGradient)
             }
             IconButton(onClick = onPurge) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete forever", tint = onGradient)
+                Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.a11yDeleteForever, tint = onGradient)
             }
         }
         if (task.notes.isNotBlank()) {

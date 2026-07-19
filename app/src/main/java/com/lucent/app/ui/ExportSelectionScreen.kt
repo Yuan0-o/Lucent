@@ -78,7 +78,7 @@ fun <T> ExportSelectionScreen(
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
             Text(title, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
         }
@@ -108,11 +108,11 @@ fun <T> ExportSelectionScreen(
                 selectedIds = if (allVisibleSelected) selectedIds - visibleIds else selectedIds + visibleIds
             })
             Text(
-                if (query.isBlank()) "Select all" else "Select all matching",
+                if (query.isBlank()) com.lucent.app.i18n.S.selectAll else com.lucent.app.i18n.S.selectAllMatching,
                 color = onGradient,
                 modifier = Modifier.weight(1f).padding(start = 4.dp)
             )
-            Text("${selectedIds.size} selected", color = onGradientMuted, fontSize = 13.sp)
+            Text(com.lucent.app.i18n.S.nSelected(selectedIds.size), color = onGradientMuted, fontSize = 13.sp)
         }
 
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -133,7 +133,7 @@ fun <T> ExportSelectionScreen(
                         selectedIds = if (i in selectedIds) selectedIds - i else selectedIds + i
                     })
                     Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
-                        Text(label(item).ifBlank { "Untitled" }, color = onGradient, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(label(item).ifBlank { com.lucent.app.i18n.S.untitled }, color = onGradient, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val sub = subtitle(item)
                         if (sub.isNotBlank()) {
                             Text(sub, color = onGradientMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -146,7 +146,7 @@ fun <T> ExportSelectionScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Format picker (task 1): the same selection can be written as Markdown, Word, PDF, or Excel.
-        Text("Format", color = onGradientMuted, fontSize = 12.sp)
+        Text(com.lucent.app.i18n.S.labelFormat, color = onGradientMuted, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -171,7 +171,7 @@ fun <T> ExportSelectionScreen(
             enabled = selectedIds.isNotEmpty(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (selectedIds.isEmpty()) "Export" else "Export ${selectedIds.size} selected")
+            Text(if (selectedIds.isEmpty()) com.lucent.app.i18n.S.actionExport else com.lucent.app.i18n.S.exportNSelected(selectedIds.size))
         }
     }
 }

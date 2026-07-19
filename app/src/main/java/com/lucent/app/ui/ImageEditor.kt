@@ -258,12 +258,12 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            ToolChip("Draw", Icons.Default.Brush, tool == EditTool.DOODLE) { tool = EditTool.DOODLE }
-                            ToolChip("Mosaic", Icons.Default.GridOn, tool == EditTool.MOSAIC) { tool = EditTool.MOSAIC }
-                            ToolChip("Crop", Icons.Default.Crop, tool == EditTool.CROP) { tool = EditTool.CROP }
+                            ToolChip(com.lucent.app.i18n.S.toolDraw, Icons.Default.Brush, tool == EditTool.DOODLE) { tool = EditTool.DOODLE }
+                            ToolChip(com.lucent.app.i18n.S.toolMosaic, Icons.Default.GridOn, tool == EditTool.MOSAIC) { tool = EditTool.MOSAIC }
+                            ToolChip(com.lucent.app.i18n.S.toolCrop, Icons.Default.Crop, tool == EditTool.CROP) { tool = EditTool.CROP }
                             if (tool == EditTool.CROP) {
                                 Text(
-                                    "Apply crop",
+                                    com.lucent.app.i18n.S.applyCrop,
                                     color = Color.Black,
                                     fontSize = 13.sp,
                                     modifier = Modifier
@@ -300,17 +300,17 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                     ) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "Cancel",
+                            contentDescription = com.lucent.app.i18n.S.actionCancel,
                             tint = Color.White,
                             modifier = Modifier.size(26.dp).clickable { onDismiss() }
                         )
-                        Text("Edit image", color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                        Text(com.lucent.app.i18n.S.editImageTitle, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
                         // Undo sits next to Save because that is where the eye already is after an
                         // edit. Dimmed rather than hidden when there is nothing to undo, so the
                         // control's existence is discoverable before it is needed.
                         Icon(
                             Icons.AutoMirrored.Filled.Undo,
-                            contentDescription = if (canUndo) "Undo last edit" else "Nothing to undo",
+                            contentDescription = if (canUndo) com.lucent.app.i18n.S.a11yUndoLastEdit else com.lucent.app.i18n.S.a11yNothingToUndo,
                             tint = if (canUndo) Color.White else Color.White.copy(alpha = 0.30f),
                             modifier = Modifier
                                 .size(26.dp)
@@ -318,7 +318,7 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                         )
                         Spacer(Modifier.size(14.dp))
                         Text(
-                            if (saving) "Saving…" else "Save",
+                            if (saving) com.lucent.app.i18n.S.savingEllipsis else com.lucent.app.i18n.S.actionSave,
                             color = Color.Black,
                             fontSize = 14.sp,
                             modifier = Modifier
@@ -340,7 +340,7 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                     }
                 }
                 failed -> Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text("Couldn't open this image for editing.", color = Color.White)
+                    Text(com.lucent.app.i18n.S.imageOpenFailed, color = Color.White)
                 }
                 else -> Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     CircularProgressIndicator(color = Color.White)

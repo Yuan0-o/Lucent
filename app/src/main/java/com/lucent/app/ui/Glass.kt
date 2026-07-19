@@ -165,7 +165,7 @@ fun Modifier.frostedGlass(cornerRadius: Dp = 20.dp, tint: Color = Color.White): 
         )
 }
 
-private val timestampFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
+private val timestampFormatter get() = com.lucent.app.i18n.LDates.of(com.lucent.app.i18n.S.patternTimestamp)
 
 fun formatTimestamp(millis: Long): String {
     val zoned = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
@@ -174,7 +174,7 @@ fun formatTimestamp(millis: Long): String {
 
 // Date-only formatter used by the date-search chips (no time of day, since the filter matches a
 // whole calendar day rather than a specific instant).
-private val dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
+private val dateFormatter get() = com.lucent.app.i18n.LDates.of(com.lucent.app.i18n.S.patternDateFull)
 
 fun formatDate(millis: Long): String {
     val zoned = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
@@ -237,25 +237,45 @@ const val PALETTE_CYCLE = "CYCLE"
  * Every palette has exactly three colours so the cycling option can cross-fade between any two of
  * them element by element.
  */
-enum class LucentPalette(val label: String, val colors: List<Color>, val group: PaletteGroup) {
+enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     // ---- Classic (original) ----
-    SUNSET("Sunset", listOf(Color(0xFF3A1C71), Color(0xFFD76D77), Color(0xFFFFAF7B)), PaletteGroup.CLASSIC),
-    OCEAN("Ocean", listOf(Color(0xFF00507A), Color(0xFF3A6EA5), Color(0xFF4FD9C4)), PaletteGroup.CLASSIC),
-    FOREST("Forest", listOf(Color(0xFF0F4C3A), Color(0xFF1F9E6B), Color(0xFFB6E388)), PaletteGroup.CLASSIC),
-    BERRY("Berry", listOf(Color(0xFF5B2C82), Color(0xFFB43D8F), Color(0xFFFF7CA3)), PaletteGroup.CLASSIC),
-    MIDNIGHT("Midnight", listOf(Color(0xFF16213E), Color(0xFF0F3460), Color(0xFF533483)), PaletteGroup.CLASSIC),
+    SUNSET(listOf(Color(0xFF3A1C71), Color(0xFFD76D77), Color(0xFFFFAF7B)), PaletteGroup.CLASSIC),
+    OCEAN(listOf(Color(0xFF00507A), Color(0xFF3A6EA5), Color(0xFF4FD9C4)), PaletteGroup.CLASSIC),
+    FOREST(listOf(Color(0xFF0F4C3A), Color(0xFF1F9E6B), Color(0xFFB6E388)), PaletteGroup.CLASSIC),
+    BERRY(listOf(Color(0xFF5B2C82), Color(0xFFB43D8F), Color(0xFFFF7CA3)), PaletteGroup.CLASSIC),
+    MIDNIGHT(listOf(Color(0xFF16213E), Color(0xFF0F3460), Color(0xFF533483)), PaletteGroup.CLASSIC),
 
     // ---- Solid (elegant single-hue) ----
-    BLUSH("Blush", listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.SOLID),
-    LAVENDER("Lavender", listOf(Color(0xFF4B3A6B), Color(0xFF8A6FB0), Color(0xFFCBB6E8)), PaletteGroup.SOLID),
-    SAGE("Sage", listOf(Color(0xFF2F4A3C), Color(0xFF5E8B6F), Color(0xFFAFCBB4)), PaletteGroup.SOLID),
-    SAND("Sand", listOf(Color(0xFF7A5C36), Color(0xFFC1996A), Color(0xFFEAD6B8)), PaletteGroup.SOLID),
-    SLATE("Slate", listOf(Color(0xFF2A3A4A), Color(0xFF4F6B84), Color(0xFF9DB4C8)), PaletteGroup.SOLID),
-    TERRACOTTA("Terracotta", listOf(Color(0xFF7A3B2E), Color(0xFFC26A50), Color(0xFFEAB59B)), PaletteGroup.SOLID),
-    TEAL("Teal", listOf(Color(0xFF10403B), Color(0xFF2E7E76), Color(0xFF8FC9C0)), PaletteGroup.SOLID),
+    BLUSH(listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.SOLID),
+    LAVENDER(listOf(Color(0xFF4B3A6B), Color(0xFF8A6FB0), Color(0xFFCBB6E8)), PaletteGroup.SOLID),
+    SAGE(listOf(Color(0xFF2F4A3C), Color(0xFF5E8B6F), Color(0xFFAFCBB4)), PaletteGroup.SOLID),
+    SAND(listOf(Color(0xFF7A5C36), Color(0xFFC1996A), Color(0xFFEAD6B8)), PaletteGroup.SOLID),
+    SLATE(listOf(Color(0xFF2A3A4A), Color(0xFF4F6B84), Color(0xFF9DB4C8)), PaletteGroup.SOLID),
+    TERRACOTTA(listOf(Color(0xFF7A3B2E), Color(0xFFC26A50), Color(0xFFEAB59B)), PaletteGroup.SOLID),
+    TEAL(listOf(Color(0xFF10403B), Color(0xFF2E7E76), Color(0xFF8FC9C0)), PaletteGroup.SOLID),
 
     // ---- Gradient (vivid multi-hue) ----
-    AURORA("Aurora", listOf(Color(0xFF0FA3A3), Color(0xFF6A5AE0), Color(0xFFE85D9E)), PaletteGroup.GRADIENT),
-    PEACH_DUSK("Peach Dusk", listOf(Color(0xFFFF8A5B), Color(0xFFEE4D8F), Color(0xFF8A4FD8)), PaletteGroup.GRADIENT),
-    COSMIC("Cosmic", listOf(Color(0xFF1E5AE8), Color(0xFF9B2FE8), Color(0xFF2ED0C0)), PaletteGroup.GRADIENT)
+    AURORA(listOf(Color(0xFF0FA3A3), Color(0xFF6A5AE0), Color(0xFFE85D9E)), PaletteGroup.GRADIENT),
+    PEACH_DUSK(listOf(Color(0xFFFF8A5B), Color(0xFFEE4D8F), Color(0xFF8A4FD8)), PaletteGroup.GRADIENT),
+    COSMIC(listOf(Color(0xFF1E5AE8), Color(0xFF9B2FE8), Color(0xFF2ED0C0)), PaletteGroup.GRADIENT);
+
+    // Live i18n lookup (localization task); call sites keep reading `palette.label`.
+    val label: String
+        get() = when (this) {
+            SUNSET -> com.lucent.app.i18n.S.paletteSunset
+            OCEAN -> com.lucent.app.i18n.S.paletteOcean
+            FOREST -> com.lucent.app.i18n.S.paletteForest
+            BERRY -> com.lucent.app.i18n.S.paletteBerry
+            MIDNIGHT -> com.lucent.app.i18n.S.paletteMidnight
+            BLUSH -> com.lucent.app.i18n.S.paletteBlush
+            LAVENDER -> com.lucent.app.i18n.S.paletteLavender
+            SAGE -> com.lucent.app.i18n.S.paletteSage
+            SAND -> com.lucent.app.i18n.S.paletteSand
+            SLATE -> com.lucent.app.i18n.S.paletteSlate
+            TERRACOTTA -> com.lucent.app.i18n.S.paletteTerracotta
+            TEAL -> com.lucent.app.i18n.S.paletteTeal
+            AURORA -> com.lucent.app.i18n.S.paletteAurora
+            PEACH_DUSK -> com.lucent.app.i18n.S.palettePeachDusk
+            COSMIC -> com.lucent.app.i18n.S.paletteCosmic
+        }
 }

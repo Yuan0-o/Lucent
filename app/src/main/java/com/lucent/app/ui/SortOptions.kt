@@ -22,10 +22,19 @@ import com.lucent.app.data.SearchQuery
 import com.lucent.app.data.Task
 
 /** Sort choices for the Notes home list. Persisted via [com.lucent.app.data.SettingsRepository.notesSort]. */
-enum class NoteSort(val key: String, val label: String) {
-    RECENT("recent", "Last edited"),
-    OLDEST("oldest", "Oldest first"),
-    TITLE_AZ("title_az", "Title A–Z");
+enum class NoteSort(val key: String) {
+    RECENT("recent"),
+    OLDEST("oldest"),
+    TITLE_AZ("title_az");
+
+    // Live i18n lookup (localization task): reading S inside composition re-renders the sort
+    // menu the moment the language switches, while call sites keep using `sort.label` unchanged.
+    val label: String
+        get() = when (this) {
+            RECENT -> com.lucent.app.i18n.S.sortLastEdited
+            OLDEST -> com.lucent.app.i18n.S.sortOldestFirst
+            TITLE_AZ -> com.lucent.app.i18n.S.sortTitleAz
+        }
 
     companion object {
         fun fromKey(key: String?): NoteSort = entries.firstOrNull { it.key == key } ?: RECENT
@@ -33,12 +42,21 @@ enum class NoteSort(val key: String, val label: String) {
 }
 
 /** Sort choices for the Tasks home list. Persisted via [com.lucent.app.data.SettingsRepository.tasksSort]. */
-enum class TaskSort(val key: String, val label: String) {
-    RECENT("recent", "Newest first"),
-    OLDEST("oldest", "Oldest first"),
-    TITLE_AZ("title_az", "Title A–Z"),
-    PRIORITY("priority", "Priority"),
-    DUE_DATE("due", "Due date");
+enum class TaskSort(val key: String) {
+    RECENT("recent"),
+    OLDEST("oldest"),
+    TITLE_AZ("title_az"),
+    PRIORITY("priority"),
+    DUE_DATE("due");
+
+    val label: String
+        get() = when (this) {
+            RECENT -> com.lucent.app.i18n.S.sortNewestFirst
+            OLDEST -> com.lucent.app.i18n.S.sortOldestFirst
+            TITLE_AZ -> com.lucent.app.i18n.S.sortTitleAz
+            PRIORITY -> com.lucent.app.i18n.S.sortPriority
+            DUE_DATE -> com.lucent.app.i18n.S.sortDueDate
+        }
 
     companion object {
         fun fromKey(key: String?): TaskSort = entries.firstOrNull { it.key == key } ?: RECENT
@@ -126,7 +144,7 @@ fun <T> SortMenuButton(
         IconButton(onClick = { expanded = true }) {
             Icon(
                 Icons.AutoMirrored.Filled.Sort,
-                contentDescription = "Sort by ${label(current)}",
+                contentDescription = com.lucent.app.i18n.S.sortByA11y(label(current)),
                 tint = if (isDefault) tint else activeTint
             )
         }

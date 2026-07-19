@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.data.RepeatRule
+import com.lucent.app.data.RepeatRule
 import com.lucent.app.data.TaskPriority
+import com.lucent.app.i18n.S
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -93,7 +95,7 @@ fun PriorityBadge(priority: TaskPriority, modifier: Modifier = Modifier) {
             modifier = Modifier.size(14.dp)
         )
         Spacer(modifier = Modifier.width(3.dp))
-        Text("${priority.label} priority", color = priority.color(), fontSize = 12.sp)
+        Text(S.priorityBadge(priority.uiLabel), color = priority.color(), fontSize = 12.sp)
     }
 }
 
@@ -122,7 +124,7 @@ fun PriorityBadge(priority: TaskPriority, modifier: Modifier = Modifier) {
 fun PriorityPickerRow(selected: TaskPriority, onSelect: (TaskPriority) -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
     Column(modifier = modifier.fillMaxWidth()) {
-        Text("Priority", color = onGradient, fontSize = 14.sp)
+        Text(S.labelPriority, color = onGradient, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -212,7 +214,7 @@ fun RepeatRuleRow(selected: RepeatRule, onSelect: (RepeatRule) -> Unit, modifier
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Repeat, contentDescription = null, tint = onGradientMuted, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Repeat", color = onGradient, fontSize = 14.sp)
+            Text(S.labelRepeat, color = onGradient, fontSize = 14.sp)
         }
         Spacer(modifier = Modifier.height(6.dp))
         FlowRow(
@@ -259,9 +261,9 @@ fun ReminderToggleRow(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("Remind me at the due time", color = if (hasDueDate) onGradient else onGradientMuted, fontSize = 14.sp)
+            Text(S.remindAtDueTime, color = if (hasDueDate) onGradient else onGradientMuted, fontSize = 14.sp)
             if (!hasDueDate) {
-                Text("Set a due date above to enable", color = onGradientMuted, fontSize = 12.sp)
+                Text(S.setDueDateToEnable, color = onGradientMuted, fontSize = 12.sp)
             }
         }
         Switch(checked = armed, enabled = hasDueDate, onCheckedChange = onToggle)
@@ -283,7 +285,7 @@ fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Mo
     ) {
         Icon(
             if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPinOutlined,
-            contentDescription = if (pinned) "Unpin" else "Pin to top",
+            contentDescription = if (pinned) S.unpin else S.pinToTop,
             tint = if (pinned) onGradient else onGradientMuted
         )
     }
@@ -301,7 +303,7 @@ fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp) {
     val onGradientMuted = LocalOnGradientMuted.current
     Icon(
         Icons.Filled.PushPin,
-        contentDescription = "Pinned",
+        contentDescription = S.pinned,
         tint = onGradientMuted,
         modifier = modifier.size(size)
     )
@@ -309,8 +311,8 @@ fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp) {
 
 // ---- Due-date labelling ----
 
-private val dueDayFormatter = DateTimeFormatter.ofPattern("MMM d")
-private val dueTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+private val dueDayFormatter get() = com.lucent.app.i18n.LDates.of(S.patternMonthDay)
+private val dueTimeFormatter get() = com.lucent.app.i18n.LDates.of(S.patternTime)
 
 /** True when a pending task's due time has already passed. A completed task is never overdue. */
 fun isOverdue(dueAt: Long?, isDone: Boolean): Boolean {
@@ -334,10 +336,33 @@ fun friendlyDue(dueAt: Long): String {
     val date = zoned.toLocalDate()
     val time = zoned.format(dueTimeFormatter)
     return when {
-        date.isEqual(today) -> "Today $time"
-        date.isEqual(today.plusDays(1)) -> "Tomorrow $time"
-        date.isEqual(today.minusDays(1)) -> "Yesterday $time"
-        date.isBefore(today) -> "Overdue · ${zoned.format(dueDayFormatter)}"
-        else -> "${zoned.format(dueDayFormatter)} · $time"
+        date.isEqual(today) -> S.dueTodayAt(time)
+        date.isEqual(today.plusDays(1)) -> S.dueTomorrowAt(time)
+        date.isEqual(today.minusDays(1)) -> S.dueYesterdayAt(time)
+        date.isBefore(today) -> S.dueOverdueOn(zoned.format(dueDayFormatter))
+        else -> S.dueOn(zoned.format(dueDayFormatter), time)
     }
 }
+
+/**
+ * The localized display name for a priority (localization task). [TaskPriority.label] itself
+ * stays English on purpose: it feeds the assistant's tool results and file exports' data columns,
+ * which must remain stable for the model; the UI reads this instead.
+ */
+val TaskPriority.uiLabel: String
+    get() = when (this) {
+        TaskPriority.NONE -> S.priorityNone
+        TaskPriority.LOW -> S.priorityLow
+        TaskPriority.MEDIUM -> S.priorityMedium
+        TaskPriority.HIGH -> S.priorityHigh
+    }
+
+/** The localized display name for a repeat rule; same reasoning as [TaskPriority.uiLabel]. */
+val RepeatRule.uiLabel: String
+    get() = when (this) {
+        RepeatRule.NONE -> S.repeatNone
+        RepeatRule.DAILY -> S.repeatDaily
+        RepeatRule.WEEKLY -> S.repeatWeekly
+        RepeatRule.MONTHLY -> S.repeatMonthly
+        RepeatRule.YEARLY -> S.repeatYearly
+    }

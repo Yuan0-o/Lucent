@@ -14,7 +14,7 @@ fun copyToClipboard(context: Context, text: String) {
     cm.setPrimaryClip(ClipData.newPlainText("Lucent", text))
     // Tactile confirmation — copying is a valid interaction and the task calls it out specifically.
     Haptics.tick(context)
-    LucentToast.show(context, "Copied")
+    LucentToast.show(context, com.lucent.app.i18n.S.copiedToast)
 }
 
 /**

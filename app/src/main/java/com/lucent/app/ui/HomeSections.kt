@@ -15,7 +15,17 @@ package com.lucent.app.ui
  * Older keep whatever order the caller already sorted them into (the user's chosen sort), so picking
  * "Title A–Z" still orders those sections alphabetically.
  */
-enum class HomeSection(val label: String) { RECENT("Recent"), TODAY("Today"), OLDER("Older") }
+enum class HomeSection {
+    RECENT, TODAY, OLDER;
+
+    // Live i18n lookup (localization task); call sites keep reading `section.label`.
+    val label: String
+        get() = when (this) {
+            RECENT -> com.lucent.app.i18n.S.sectionRecent
+            TODAY -> com.lucent.app.i18n.S.sectionToday
+            OLDER -> com.lucent.app.i18n.S.sectionOlder
+        }
+}
 
 data class Sectioned<T>(
     val recent: List<T>,

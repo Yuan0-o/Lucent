@@ -159,9 +159,9 @@ fun SearchScreen(
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onGradient)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
-            Text("Search everything", color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            Text(com.lucent.app.i18n.S.searchEverything, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
             SearchHelpButton()
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -169,7 +169,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = raw,
             onValueChange = { raw = it },
-            placeholder = { Text("Notes, tasks, tags, checklists…") },
+            placeholder = { Text(com.lucent.app.i18n.S.searchPlaceholder) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = onGradientMuted) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -200,26 +200,25 @@ fun SearchScreen(
         when {
             query.isEmpty -> EmptyState(
                 isFiltered = false,
-                emptyMessage = "Search across every note and task — including archived, completed, " +
-                    "and trashed ones. Tap a filter above to narrow it down.",
+                emptyMessage = com.lucent.app.i18n.S.searchEmptyHint,
                 noMatchMessage = ""
             )
 
             searching -> EmptyState(
                 isFiltered = false,
-                emptyMessage = "Searching…",
+                emptyMessage = com.lucent.app.i18n.S.searchingEllipsis,
                 noMatchMessage = ""
             )
 
             total == 0 -> EmptyState(
                 isFiltered = true,
                 emptyMessage = "",
-                noMatchMessage = "Nothing matched \"$raw\"."
+                noMatchMessage = com.lucent.app.i18n.S.searchNoMatch(raw)
             )
 
             else -> {
                 Text(
-                    "$total result${if (total == 1) "" else "s"}",
+                    if (total == 1) com.lucent.app.i18n.S.oneResult else com.lucent.app.i18n.S.nResults(total),
                     color = onGradientMuted,
                     fontSize = 12.sp
                 )
@@ -230,7 +229,7 @@ fun SearchScreen(
                 ) {
                     if (noteResults.isNotEmpty()) {
                         item(key = "notes_header") {
-                            SectionHeader("Notes", noteResults.size, Icons.AutoMirrored.Filled.Notes)
+                            SectionHeader(com.lucent.app.i18n.S.tabNotes, noteResults.size, Icons.AutoMirrored.Filled.Notes)
                         }
                         items(noteResults, key = { "n${it.id}" }) { note ->
                             NoteResultRow(note = note, onOpen = { onOpenNote(note) })
@@ -238,7 +237,7 @@ fun SearchScreen(
                     }
                     if (taskResults.isNotEmpty()) {
                         item(key = "tasks_header") {
-                            SectionHeader("Tasks", taskResults.size, Icons.Default.CheckCircle)
+                            SectionHeader(com.lucent.app.i18n.S.tabTasks, taskResults.size, Icons.Default.CheckCircle)
                         }
                         items(taskResults, key = { "t${it.id}" }) { task ->
                             TaskResultRow(task = task, onOpen = { onOpenTask(task) })
@@ -298,8 +297,8 @@ private fun NoteResultRow(note: Note, onOpen: () -> Unit) {
         else note.body
     }
     val state = when {
-        note.trashedAt != null -> "In trash"
-        note.archived -> "Archived"
+        note.trashedAt != null -> com.lucent.app.i18n.S.statusInTrash
+        note.archived -> com.lucent.app.i18n.S.statusArchived
         else -> null
     }
 
@@ -317,7 +316,7 @@ private fun NoteResultRow(note: Note, onOpen: () -> Unit) {
             NoteColorDot(note.color)
             if (NoteColor.fromKey(note.color) != NoteColor.DEFAULT) Spacer(modifier = Modifier.width(6.dp))
             Text(
-                note.title.ifBlank { "Untitled" },
+                note.title.ifBlank { com.lucent.app.i18n.S.untitled },
                 color = onGradient,
                 fontSize = 15.sp,
                 maxLines = 1,
@@ -354,8 +353,8 @@ private fun TaskResultRow(task: Task, onOpen: () -> Unit) {
     val priority = remember(task.priority) { TaskPriority.fromValue(task.priority) }
     val progress = remember(task.subtasks) { Checklist.progress(task.subtasks) }
     val state = when {
-        task.trashedAt != null -> "In trash"
-        task.isDone -> "Completed"
+        task.trashedAt != null -> com.lucent.app.i18n.S.statusInTrash
+        task.isDone -> com.lucent.app.i18n.S.statusCompleted
         else -> null
     }
 
@@ -373,7 +372,7 @@ private fun TaskResultRow(task: Task, onOpen: () -> Unit) {
             PriorityDot(priority)
             if (priority != TaskPriority.NONE) Spacer(modifier = Modifier.width(6.dp))
             Text(
-                task.title.ifBlank { "Untitled task" },
+                task.title.ifBlank { com.lucent.app.i18n.S.untitledTask },
                 color = onGradient,
                 fontSize = 15.sp,
                 maxLines = 1,
@@ -388,14 +387,14 @@ private fun TaskResultRow(task: Task, onOpen: () -> Unit) {
             val overdue = isOverdue(due, task.isDone)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                if (overdue || task.isDone) friendlyDue(due) else "Due ${friendlyDue(due)}",
+                if (overdue || task.isDone) friendlyDue(due) else com.lucent.app.i18n.S.duePrefix(friendlyDue(due)),
                 color = if (overdue) OverdueColor else onGradientMuted,
                 fontSize = 12.sp
             )
         }
         progress?.let { (done, totalItems) ->
             Spacer(modifier = Modifier.height(4.dp))
-            Text("$done/$totalItems subtasks done", color = onGradientMuted, fontSize = 11.sp)
+            Text(com.lucent.app.i18n.S.subtasksDone(done, totalItems), color = onGradientMuted, fontSize = 11.sp)
         }
         if (task.notes.isNotBlank()) {
             Spacer(modifier = Modifier.height(4.dp))

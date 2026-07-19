@@ -135,7 +135,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
             ) {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = onGradient)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Lucent is locked", color = onGradient, fontSize = 20.sp)
+                Text(com.lucent.app.i18n.S.lockIsLocked, color = onGradient, fontSize = 20.sp)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (stage) {
@@ -143,7 +143,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                         OutlinedTextField(
                             value = password,
                             onValueChange = { password = it; error = "" },
-                            label = { Text("Password") },
+                            label = { Text(com.lucent.app.i18n.S.lockPassword) },
                             singleLine = true,
                             isError = error.isNotEmpty(),
                             visualTransformation = PasswordVisualTransformation(),
@@ -161,11 +161,11 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                                     password = ""
                                     AppLockController.unlock()
                                 } else {
-                                    error = "Wrong password. Try again."
+                                    error = com.lucent.app.i18n.S.lockWrongPassword
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Unlock") }
+                        ) { Text(com.lucent.app.i18n.S.lockUnlock) }
                         Spacer(modifier = Modifier.height(4.dp))
                         // "Forgot password?" is only offered when there is actually a security
                         // question behind it (task 9). A lock set up without one has no recovery
@@ -176,11 +176,10 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                                 error = ""
                                 answer = ""
                                 stage = LockStage.ANSWER_QUESTION
-                            }) { Text("Forgot password?") }
+                            }) { Text(com.lucent.app.i18n.S.lockForgotPassword) }
                         } else if (credentials.isNotEmpty()) {
                             Text(
-                                "No security question was set for this lock, so the password can't be " +
-                                    "reset. If it's lost, the only way back in is to clear all data.",
+                                com.lucent.app.i18n.S.lockNoSecurityQuestion,
                                 color = onGradientMuted,
                                 fontSize = 12.sp
                             )
@@ -190,16 +189,16 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                     LockStage.ANSWER_QUESTION -> {
                         val question = AppLock.question(credentials)
                         Text(
-                            "Answer your security question to set a new password.",
+                            com.lucent.app.i18n.S.lockAnswerToReset,
                             color = onGradientMuted, fontSize = 13.sp
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text(question.ifBlank { "Security question" }, color = onGradient, fontSize = 15.sp)
+                        Text(question.ifBlank { com.lucent.app.i18n.S.lockSecurityQuestionFallback }, color = onGradient, fontSize = 15.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = answer,
                             onValueChange = { answer = it; error = "" },
-                            label = { Text("Answer") },
+                            label = { Text(com.lucent.app.i18n.S.lockAnswer) },
                             singleLine = true,
                             isError = error.isNotEmpty(),
                             modifier = Modifier.fillMaxWidth()
@@ -218,24 +217,24 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                                     confirmPassword = ""
                                     stage = LockStage.SET_NEW_PASSWORD
                                 } else {
-                                    error = "That answer doesn't match."
+                                    error = com.lucent.app.i18n.S.lockAnswerMismatch
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Continue") }
+                        ) { Text(com.lucent.app.i18n.S.lockContinue) }
                         Spacer(modifier = Modifier.height(4.dp))
                         TextButton(onClick = { error = ""; stage = LockStage.ENTER_PASSWORD }) {
-                            Text("Back to password")
+                            Text(com.lucent.app.i18n.S.lockBackToPassword)
                         }
                     }
 
                     LockStage.SET_NEW_PASSWORD -> {
-                        Text("Choose a new password.", color = onGradientMuted, fontSize = 13.sp)
+                        Text(com.lucent.app.i18n.S.lockChooseNewPassword, color = onGradientMuted, fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(10.dp))
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { newPassword = it; error = "" },
-                            label = { Text("New password") },
+                            label = { Text(com.lucent.app.i18n.S.lockNewPassword) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
@@ -244,7 +243,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { confirmPassword = it; error = "" },
-                            label = { Text("Confirm new password") },
+                            label = { Text(com.lucent.app.i18n.S.lockConfirmNewPassword) },
                             singleLine = true,
                             isError = error.isNotEmpty(),
                             visualTransformation = PasswordVisualTransformation(),
@@ -259,12 +258,12 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                             enabled = newPassword.isNotEmpty() && confirmPassword.isNotEmpty(),
                             onClick = {
                                 if (newPassword != confirmPassword) {
-                                    error = "The passwords don't match."
+                                    error = com.lucent.app.i18n.S.lockPasswordsDontMatch
                                     return@Button
                                 }
                                 val updated = AppLock.changePassword(credentials, newPassword)
                                 if (updated == null) {
-                                    error = "Couldn't update the password. Try again."
+                                    error = com.lucent.app.i18n.S.lockCouldntUpdate
                                     return@Button
                                 }
                                 scope.launch { repo.setAppLockCredentials(updated) }
@@ -274,7 +273,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color) {
                                 AppLockController.unlock()
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Set password & unlock") }
+                        ) { Text(com.lucent.app.i18n.S.lockSetPasswordUnlock) }
                     }
                 }
             }
