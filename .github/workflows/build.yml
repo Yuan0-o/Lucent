@@ -149,6 +149,27 @@ jobs:
       # with the NDK, so normally nothing is needed here — but we also put that same glslc on PATH and
       # apt-install one as a fallback, so shader compilation can't fail for want of a compiler. To
       # build CPU-only instead, add -PcpuOnly to the gradle line below (and this step is harmless).
+      # Speed up repeat builds. llama.cpp is pinned (b9888), so its hundreds of C/C++ objects are
+      # identical from run to run — ccache serves them from cache instead of recompiling. The first
+      # build is still slow; every build after it is much faster. ggml turns ccache on automatically
+      # once it's on PATH (GGML_CCACHE defaults to ON — earlier logs showed it looking for ccache).
+      - name: Cache ccache (C/C++ build cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-lucent-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-lucent-${{ runner.os }}-
+
+      - name: Set up ccache
+        run: |
+          set -eu
+          command -v ccache >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y ccache; }
+          echo "CCACHE_DIR=${{ runner.temp }}/ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+          mkdir -p "${{ runner.temp }}/ccache"
+          ccache --version | head -1
+
       - name: Provide Vulkan shader compiler (glslc)
         run: |
           set -eu
