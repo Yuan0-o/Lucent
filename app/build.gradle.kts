@@ -73,6 +73,15 @@ android {
                     arguments += "-DSPIRV-Headers_DIR=$dir"
                     arguments += "-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
                 }
+
+                // ggml-vulkan.cpp includes the C++ Vulkan header <vulkan/vulkan.hpp>, which the NDK
+                // does NOT ship (it carries only the C header vulkan.h). CI provides Vulkan-Headers
+                // (which has vulkan.hpp) and points this env var at its include dir; pass it as
+                // Vulkan_INCLUDE_DIR so find_package(Vulkan) uses those headers. The Android
+                // libvulkan.so from the NDK is still used for linking — only the headers change.
+                System.getenv("LUCENT_VULKAN_INCLUDE_DIR")?.takeIf { it.isNotBlank() }?.let { inc ->
+                    arguments += "-DVulkan_INCLUDE_DIR=$inc"
+                }
             }
         }
     }
