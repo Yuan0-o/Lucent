@@ -10,7 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-data class ToolAcc(var id: String = "", var name: String = "", val args: StringBuilder = StringBuilder())
+data class ToolAcc(var id: String = "", var name: String = "", val args: StringBuilder = StringBuilder(), var thoughtSignature: String? = null)
 
 object LlmClient {
 
@@ -143,7 +143,7 @@ object LlmClient {
                         val toolCalls = mutableListOf<ToolCallRequest>()
                         (if (spec == ApiSpec.ANTHROPIC) anthropicToolAcc else openAiToolAcc).forEach { (_, acc) ->
                             if (acc.name.isNotBlank()) {
-                                toolCalls.add(ToolCallRequest(acc.id.ifBlank { "call" }, acc.name, acc.args.toString().ifBlank { "{}" }))
+                                toolCalls.add(ToolCallRequest(acc.id.ifBlank { "call" }, acc.name, acc.args.toString().ifBlank { "{}" }, acc.thoughtSignature))
                             }
                         }
                         Result.success(RawModelReply(fullText.toString(), toolCalls, returnedImageMime, returnedImageData))
@@ -256,6 +256,12 @@ object LlmClient {
                                     val acc = openAiToolAcc.getOrPut(i) { ToolAcc() }
                                     acc.name = fc.optString("name")
                                     acc.args.append(args.toString())
+                                    // The thought signature Gemini's thinking models require sits on the
+                                    // PART, next to functionCall — not inside it. Capture it so it can be
+                                    // echoed back verbatim in the next turn's history; without it the
+                                    // follow-up request 400s and the tool loop never completes. Absent on
+                                    // non-thinking models and on the 2nd+ of parallel calls, which is fine.
+                                    part.optString("thoughtSignature").takeIf { it.isNotEmpty() }?.let { acc.thoughtSignature = it }
                                 }
                                 part.optJSONObject("inlineData")?.let { inlineData ->
                                     returnedImageMime = inlineData.optString("mimeType")
@@ -482,7 +488,15 @@ object LlmClient {
                     if (turn.content.isNotBlank()) parts.put(JSONObject().put("text", turn.content))
                     for (c in turn.toolCalls) {
                         val args = try { JSONObject(c.argumentsJson) } catch (e: Exception) { JSONObject() }
-                        parts.put(JSONObject().put("functionCall", JSONObject().put("name", c.name).put("args", args)))
+                        val part = JSONObject().put("functionCall", JSONObject().put("name", c.name).put("args", args))
+                        // Re-attach the thought signature Gemini gave us for this call, on the same part,
+                        // exactly as received. This is the fix for the 400 "missing thought_signature"
+                        // that killed every tool call on the thinking models: the model can't process the
+                        // functionResponse in the next turn unless it sees its own signed reasoning token
+                        // back in history. Null on non-thinking models and on parallel-call siblings, in
+                        // which case we simply omit the field — which is what the API expects.
+                        c.thoughtSignature?.takeIf { it.isNotBlank() }?.let { part.put("thoughtSignature", it) }
+                        parts.put(part)
                     }
                     contents.put(JSONObject().put("role", "model").put("parts", parts))
                 }
@@ -624,7 +638,8 @@ object LlmClient {
             if (part.has("text")) text = (text ?: "") + part.optString("text")
             part.optJSONObject("functionCall")?.let { fc ->
                 val args = fc.optJSONObject("args") ?: JSONObject()
-                toolCalls.add(ToolCallRequest("call_$i", fc.optString("name"), args.toString()))
+                val sig = part.optString("thoughtSignature").takeIf { it.isNotEmpty() }
+                toolCalls.add(ToolCallRequest("call_$i", fc.optString("name"), args.toString(), sig))
             }
             part.optJSONObject("inlineData")?.let { inlineData ->
                 imageMime = inlineData.optString("mimeType")
