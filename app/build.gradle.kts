@@ -135,7 +135,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 full-mode: strip unused code and resources, then obfuscate, to shrink the APK.
+            // Keep rules live in proguard-rules.pro; the -optimize default file already preserves
+            // native-method names, and Compose/Room/OkHttp/SQLCipher ship their own consumer rules.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             // findByName returns null when the environment isn't set, which simply leaves the APK
             // unsigned rather than failing the build.
             signingConfig = signingConfigs.findByName("release")
