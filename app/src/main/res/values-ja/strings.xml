@@ -1,0 +1,15 @@
+<resources>
+    <!-- Japanese widget strings. The app_name brand mark is deliberately not translated. -->
+    <string name="widget_ask">質問</string>
+    <string name="widget_new_note">新規メモ</string>
+    <string name="widget_new_task">新規タスク</string>
+    <string name="widget_note">メモ</string>
+    <string name="widget_task">タスク</string>
+    <string name="widget_tasks_title">タスク</string>
+    <string name="widget_today_empty">やることはありません。＋でタスクを追加。</string>
+    <string name="widget_open_tasks">件の未完了タスク</string>
+    <string name="widget_open_task_one">件の未完了タスク</string>
+    <string name="widget_no_pinned_note">固定されたメモはありません</string>
+    <string name="widget_untitled">無題</string>
+    <string name="widget_untitled_task">無題のタスク</string>
+</resources>

@@ -1,0 +1,15 @@
+<resources>
+    <!-- Korean widget strings. The app_name brand mark is deliberately not translated. -->
+    <string name="widget_ask">질문</string>
+    <string name="widget_new_note">새 노트</string>
+    <string name="widget_new_task">새 할 일</string>
+    <string name="widget_note">노트</string>
+    <string name="widget_task">할 일</string>
+    <string name="widget_tasks_title">할 일</string>
+    <string name="widget_today_empty">할 일이 없습니다. +로 추가하세요.</string>
+    <string name="widget_open_tasks">개의 미완료 할 일</string>
+    <string name="widget_open_task_one">개의 미완료 할 일</string>
+    <string name="widget_no_pinned_note">고정된 노트 없음</string>
+    <string name="widget_untitled">제목 없음</string>
+    <string name="widget_untitled_task">제목 없는 할 일</string>
+</resources>
