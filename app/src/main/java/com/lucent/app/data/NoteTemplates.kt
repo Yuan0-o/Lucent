@@ -25,68 +25,55 @@ enum class TemplateIcon { JOURNAL, MEETING, IDEA, CHECKLIST }
  * template produces something that reads as a formatted document rather than a page of literal
  * hashes. The checklist template goes further and returns actual checklist items, since "a list of
  * things to tick off" is a mode the note model already has and faking it with text would be worse.
+ *
+ * Localization: labels, scaffold text, and date formats all come from the catalog (the localization
+ * task). `label` is a computed property rather than a constructor value so a chip re-renders in the
+ * new language the moment the setting changes; the scaffold a template *inserts* is generated in
+ * the language active at that moment and then belongs to the user like any other typed text — it is
+ * deliberately NOT retranslated later, because at that point it's their document, not our UI.
  */
-enum class NoteTemplate(val label: String, val iconName: TemplateIcon) {
+enum class NoteTemplate(val iconName: TemplateIcon) {
 
-    JOURNAL("Journal entry", TemplateIcon.JOURNAL),
-    MEETING("Meeting notes", TemplateIcon.MEETING),
-    IDEA("Project idea", TemplateIcon.IDEA),
-    CHECKLIST("Checklist", TemplateIcon.CHECKLIST);
+    JOURNAL(TemplateIcon.JOURNAL),
+    MEETING(TemplateIcon.MEETING),
+    IDEA(TemplateIcon.IDEA),
+    CHECKLIST(TemplateIcon.CHECKLIST);
+
+    /** The chip's visible name, in the active UI language. */
+    val label: String
+        get() = when (this) {
+            JOURNAL -> com.lucent.app.i18n.S.tplJournal
+            MEETING -> com.lucent.app.i18n.S.tplMeeting
+            IDEA -> com.lucent.app.i18n.S.tplIdea
+            CHECKLIST -> com.lucent.app.i18n.S.tplChecklist
+        }
 
     /** The composer state this template produces. */
     fun prefill(): Prefill {
         val today = LocalDate.now()
-        val longDate = today.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy"))
-        val shortDate = today.format(DateTimeFormatter.ofPattern("d MMM yyyy"))
+        // Date *patterns* are catalog entries too, because a localized date is more than localized
+        // month names: Chinese wants year-month-day with its own separators, not an English
+        // ordering rendered with a Chinese locale. The locale supplies the day and month words;
+        // the pattern supplies the shape.
+        val locale = com.lucent.app.i18n.lucentLocale()
+        val longDate = today.format(DateTimeFormatter.ofPattern(com.lucent.app.i18n.S.tplLongDatePattern, locale))
+        val shortDate = today.format(DateTimeFormatter.ofPattern(com.lucent.app.i18n.S.tplShortDatePattern, locale))
 
         return when (this) {
             JOURNAL -> Prefill(
                 title = longDate,
-                body = buildString {
-                    appendLine("## How today went")
-                    appendLine()
-                    appendLine()
-                    appendLine("## What I'm grateful for")
-                    appendLine()
-                    appendLine()
-                    appendLine("## Tomorrow")
-                    appendLine()
-                }
+                body = com.lucent.app.i18n.S.tplJournalBody
             )
 
             MEETING -> Prefill(
-                title = "Meeting — $shortDate",
-                tags = setOf("Work"),
-                body = buildString {
-                    appendLine("**Attendees:** ")
-                    appendLine("**Date:** $shortDate")
-                    appendLine()
-                    appendLine("## Discussion")
-                    appendLine("- ")
-                    appendLine()
-                    appendLine("## Decisions")
-                    appendLine("- ")
-                    appendLine()
-                    appendLine("## Action items")
-                    appendLine("- ")
-                }
+                title = com.lucent.app.i18n.S.tplMeetingTitle(shortDate),
+                tags = setOf(com.lucent.app.i18n.S.tagWork),
+                body = com.lucent.app.i18n.S.tplMeetingBody(shortDate)
             )
 
             IDEA -> Prefill(
                 title = "",
-                body = buildString {
-                    appendLine("## The idea")
-                    appendLine()
-                    appendLine()
-                    appendLine("## Why it's worth doing")
-                    appendLine()
-                    appendLine()
-                    appendLine("## First step")
-                    appendLine()
-                    appendLine()
-                    appendLine("## Open questions")
-                    appendLine("- ")
-                }
+                body = com.lucent.app.i18n.S.tplIdeaBody
             )
 
             CHECKLIST -> Prefill(

@@ -110,6 +110,29 @@ private object SettingsKeys {
     // Purely local diagnostic logging. There is deliberately no "endpoint" or "upload" key anywhere
     // near this: the logs never leave the device (see StartupLog).
     val STARTUP_LOGGING_ENABLED = booleanPreferencesKey("startup_logging_enabled")
+
+    // ---- UI language (localization task) ----
+    // One value from a five-word vocabulary ("system"/"en"/"zh"/"ja"/"ko"), so — like theme and
+    // palette above — it is deliberately NOT encrypted: it says nothing private and it is read on
+    // the pre-first-frame startup path, where a Keystore round-trip would be pure cost.
+    val APP_LANGUAGE = stringPreferencesKey("app_language")
+
+    // ---- Local model (task: on-device GGUF assistant) ----
+    // Whether the assistant runs on the imported local model instead of a cloud API. The model
+    // file itself lives under filesDir/local_model (see LocalModelStore); this flag is just the
+    // routing switch, same tiny-vocabulary reasoning as the toggles above.
+    val LOCAL_MODEL_ENABLED = booleanPreferencesKey("local_model_enabled")
+
+    // Whether the on-device model may call tools (create/edit notes and tasks). OFF by default:
+    // driving the text tool-protocol costs extra generation rounds, which a weak phone feels, so it
+    // is opt-in with a warning. When off, local mode is a plain, fast chat that never calls a tool.
+    val LOCAL_TOOLS_ENABLED = booleanPreferencesKey("local_tools_enabled")
+
+    // Whether the on-device model offloads its layers to the GPU. OFF (= CPU) by default because CPU
+    // inference runs on every device and never crashes; GPU (Vulkan) can be faster but is unstable on
+    // some Android drivers, so it is opt-in with a warning. Only takes effect when the build ships a
+    // GPU backend (see app/src/main/cpp/CMakeLists.txt); otherwise the engine stays on CPU regardless.
+    val LOCAL_GPU_ENABLED = booleanPreferencesKey("local_gpu_enabled")
 }
 
 // Internal default chat style. Deliberately never surfaced in the Settings UI (the Chat Style
@@ -197,7 +220,12 @@ class SettingsRepository(private val context: Context) {
         val display: DisplayPrefs,
         val appLockEnabled: Boolean,
         val startupLoggingEnabled: Boolean,
-        val systemIntegrationEnabled: Boolean
+        val systemIntegrationEnabled: Boolean,
+        // The UI language is first-frame state exactly like the theme: composing the first frame
+        // in one language and snapping to another a beat later would be the same "blink" the display
+        // prefs exist to prevent, so it rides in the same single read. Defaults to English — the app
+        // ships English-first and the user picks another language (or "follow system") in Settings.
+        val appLanguage: String = "en"
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -210,9 +238,31 @@ class SettingsRepository(private val context: Context) {
             ),
             appLockEnabled = prefs[SettingsKeys.APP_LOCK_ENABLED] ?: false,
             startupLoggingEnabled = prefs[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false,
-            systemIntegrationEnabled = prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false
+            systemIntegrationEnabled = prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false,
+            appLanguage = prefs[SettingsKeys.APP_LANGUAGE] ?: "en"
         )
     }
+
+    // ---- UI language (localization task) ----
+    /** The chosen UI language key ("system", "en", "zh", "ja", "ko"); defaults to "en". See i18n/I18n.kt. */
+    val appLanguage: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "en" }
+    suspend fun setAppLanguage(value: String) { context.settingsDataStore.edit { it[SettingsKeys.APP_LANGUAGE] = value } }
+    /** One-shot read for contexts that run without the Activity (e.g. the reminder receiver). */
+    suspend fun appLanguageOnce(): String =
+        context.settingsDataStore.data.first()[SettingsKeys.APP_LANGUAGE] ?: "en"
+
+    // ---- Local model (task: on-device GGUF assistant) ----
+    /** Whether the assistant answers with the imported on-device model. Off by default. */
+    val localModelEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false }
+    suspend fun setLocalModelEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_MODEL_ENABLED] = value } }
+
+    /** Whether the on-device model may call in-app tools. Off by default (opt-in, perf warning). */
+    val localToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false }
+    suspend fun setLocalToolsEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_TOOLS_ENABLED] = value } }
+
+    /** Whether the on-device model offloads to the GPU. Off (= CPU, the safe default); opt-in. */
+    val localGpuEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_GPU_ENABLED] ?: false }
+    suspend fun setLocalGpuEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_GPU_ENABLED] = value } }
 
     /**
      * The active API key, decrypted for use.
