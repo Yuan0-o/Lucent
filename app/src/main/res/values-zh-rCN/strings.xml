@@ -1,0 +1,15 @@
+<resources>
+    <!-- Simplified Chinese widget strings. The app_name brand mark is deliberately not translated. -->
+    <string name="widget_ask">提问</string>
+    <string name="widget_new_note">新建笔记</string>
+    <string name="widget_new_task">新建任务</string>
+    <string name="widget_note">笔记</string>
+    <string name="widget_task">任务</string>
+    <string name="widget_tasks_title">任务</string>
+    <string name="widget_today_empty">暂无待办。点按 + 添加任务。</string>
+    <string name="widget_open_tasks">个未完成任务</string>
+    <string name="widget_open_task_one">个未完成任务</string>
+    <string name="widget_no_pinned_note">没有置顶笔记</string>
+    <string name="widget_untitled">无标题</string>
+    <string name="widget_untitled_task">无标题任务</string>
+</resources>
