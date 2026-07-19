@@ -67,6 +67,15 @@ set(GGML_NATIVE  OFF CACHE BOOL "" FORCE)
 set(GGML_OPENCL  OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP  OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE ON CACHE BOOL "" FORCE)
+
+# llama.cpp's llamafile sgemm kernels use ARMv8.2 FP16 NEON intrinsics (vld1q_f16, vld1_f16, ...)
+# that 32-bit armeabi-v7a doesn't have — sgemm.cpp won't compile at -march=armv7-a. Turn the
+# llamafile path OFF for v7a only; ggml falls back to its portable matmul there (slower, but 32-bit
+# devices are the slow case regardless). arm64-v8a keeps llamafile. (The default GPU build is
+# arm64-only anyway; this keeps the -PcpuOnly build, which re-adds v7a, compiling.)
+if (ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
+endif()
 if (LUCENT_ENABLE_VULKAN)
     message(STATUS "lucent: Vulkan GPU backend ENABLED")
     set(GGML_VULKAN ON CACHE BOOL "" FORCE)
