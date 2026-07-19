@@ -10,14 +10,7 @@
 sealed in an encrypted database on your own phone, fluent in four languages, and built
 from start to finish by pressing one button on GitHub and going off to put the kettle on.**
 
-![Platform](badges/platform.svg)
-![Build](badges/build.svg)
-<br/>
-![Interface](badges/ui.svg)
-![Assistant](badges/ai.svg)
-<br/>
-![Privacy](badges/privacy.svg)
-![License](badges/license.svg)
+![Lucent — Platform, Build, Interface, Assistant, Privacy, License](badges/badges.svg)
 
 </div>
 
