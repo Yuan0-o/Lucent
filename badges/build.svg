@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="208.69" height="34.00" viewBox="0 0 208.69 34.00" role="img" aria-label="Build: GitHub Actions">
+<svg xmlns="http://www.w3.org/2000/svg" width="169.6" height="34.00" viewBox="0 0 169.6 34.00" role="img" aria-label="Build: GitHub Actions">
   <defs>
     <clipPath id="clip-build">
-      <rect x="5" y="5" width="198.69" height="24" rx="12.0" ry="12.0"/>
+      <rect x="5" y="5" width="159.6" height="24" rx="12.0" ry="12.0"/>
     </clipPath>
     <linearGradient id="value-build" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#6fbf8f" stop-opacity="0.55"/>
@@ -30,19 +30,19 @@
 
   <g filter="url(#shadow-build)">
     <g clip-path="url(#clip-build)">
-      <rect x="5" y="5" width="198.69" height="24" fill="#11111a" fill-opacity="0.76"/>
-      <rect x="5" y="5" width="70.10" height="24" fill="#d7d7e2" fill-opacity="0.10"/>
-      <rect x="75.10" y="5" width="128.59" height="24" fill="url(#value-build)"/>
-      <ellipse cx="52.69" cy="7" rx="55.63" ry="6" fill="#ffffff" fill-opacity="0.38" filter="url(#blur-build)"/>
-      <rect x="5" y="5" width="198.69" height="13.92" fill="url(#sheen-build)"/>
-      <rect x="74.60" y="5" width="1" height="24" fill="#ffffff" fill-opacity="0.20"/>
+      <rect x="5" y="5" width="159.6" height="24" fill="#11111a" fill-opacity="0.76"/>
+      <rect x="5" y="5" width="46.94" height="24" fill="#d7d7e2" fill-opacity="0.10"/>
+      <rect x="51.94" y="5" width="112.66" height="24" fill="url(#value-build)"/>
+      <ellipse cx="43.3" cy="7" rx="44.69" ry="6" fill="#ffffff" fill-opacity="0.38" filter="url(#blur-build)"/>
+      <rect x="5" y="5" width="159.6" height="13.92" fill="url(#sheen-build)"/>
+      <rect x="51.44" y="5" width="1" height="24" fill="#ffffff" fill-opacity="0.20"/>
     </g>
-    <rect x="5.5" y="5.5" width="197.69" height="23" rx="11.50" ry="11.50" fill="none" stroke="#ffffff" stroke-opacity="0.30" stroke-width="1"/>
+    <rect x="5.5" y="5.5" width="158.6" height="23" rx="11.50" ry="11.50" fill="none" stroke="#ffffff" stroke-opacity="0.30" stroke-width="1"/>
   </g>
 
-  <text x="40.05" y="17.60" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#000000" fill-opacity="0.35">Build</text>
-  <text x="40.05" y="17.00" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#f2f2f6">Build</text>
+  <text x="28.47" y="17.60" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#000000" fill-opacity="0.35">Build</text>
+  <text x="28.47" y="17.00" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#f2f2f6">Build</text>
 
-  <text x="139.39" y="17.60" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#000000" fill-opacity="0.35">GitHub Actions</text>
-  <text x="139.39" y="17.00" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#ffffff">GitHub Actions</text>
+  <text x="108.27" y="17.60" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#000000" fill-opacity="0.35">GitHub Actions</text>
+  <text x="108.27" y="17.00" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#ffffff">GitHub Actions</text>
 </svg>
