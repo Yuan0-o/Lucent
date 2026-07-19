@@ -49,12 +49,15 @@ android {
         versionName = ciVersionName
 
         ndk {
-            // Ship the two ABIs every real Android phone uses: arm64-v8a (all modern devices) and
-            // armeabi-v7a (older 32-bit phones). x86_64 is intentionally dropped — no shipping phone
-            // uses it, and building llama.cpp from source for a third ABI is the slowest, flakiest
-            // part of CI. To also target the x86_64 emulator, re-add "x86_64" here AND in the
-            // cargo-ndk "-t" list below (and add the aarch64/armv7/x86_64 Rust targets in CI).
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            // Vulkan GPU + on-device LLMs need a modern 64-bit device, and llama.cpp's optimized CPU
+            // kernels (llamafile sgemm) use ARMv8.2 FP16 NEON intrinsics that 32-bit armeabi-v7a
+            // simply doesn't have — so the default (GPU) build ships arm64-v8a only. That also roughly
+            // halves CI time, since llama.cpp + the Vulkan shaders are compiled per ABI. A -PcpuOnly
+            // build additionally includes armeabi-v7a for older 32-bit phones (with the llamafile path
+            // disabled for it in CMakeLists.txt, since those FP16 kernels can't compile there).
+            // x86_64 stays dropped; to target the emulator, re-add it here AND in the cargo-ndk list.
+            abiFilters += if (project.hasProperty("cpuOnly")) listOf("arm64-v8a", "armeabi-v7a")
+                          else listOf("arm64-v8a")
         }
 
         externalNativeBuild {
