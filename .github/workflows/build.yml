@@ -206,12 +206,14 @@ jobs:
           echo "LUCENT_SPIRV_HEADERS_DIR=$CFG_DIR" >> "$GITHUB_ENV"
           echo "SPIRV-Headers config: $CFG_DIR"
 
-      # ggml-vulkan.cpp includes <vulkan/vulkan.hpp> — the C++ Vulkan bindings header. The Android
-      # NDK ships only the C header (vulkan.h), so the compile fails without this. Vulkan-Headers is
-      # header-only and provides vulkan.hpp; we just clone it and hand its include/ dir to the build
-      # (app/build.gradle.kts passes it as Vulkan_INCLUDE_DIR). The NDK's Android libvulkan.so is
-      # still what gets linked — only the headers come from here. Harmless for a -PcpuOnly build.
-      - name: Provide Vulkan-Headers (vulkan.hpp)
+      # ggml-vulkan.cpp includes both <vulkan/vulkan.hpp> (C++ Vulkan bindings) and
+      # <spirv/unified1/spirv.hpp> (C++ SPIR-V header). The NDK ships neither, and ggml-vulkan only
+      # links Vulkan::Vulkan — so it expects ONE include root holding both vulkan/ and spirv/ (which
+      # is how the full Vulkan SDK lays them out). We recreate that: clone Vulkan-Headers, drop the
+      # SPIR-V headers from SPIRV-Headers into the same include tree, and hand that single dir to the
+      # build as Vulkan_INCLUDE_DIR (see app/build.gradle.kts). The NDK's Android libvulkan.so is
+      # still what gets linked — only headers come from here. Harmless for a -PcpuOnly build.
+      - name: Provide Vulkan & SPIR-V headers for the compile
         run: |
           set -eu
           SRC="$RUNNER_TEMP/vulkan-headers"
@@ -221,12 +223,20 @@ jobs:
             [ "$attempt" = "3" ] && { echo "::error::Failed to clone Vulkan-Headers."; exit 1; }
             sleep 5
           done
-          if [ ! -f "$SRC/include/vulkan/vulkan.hpp" ]; then
-            echo "::error::Vulkan-Headers cloned but vulkan.hpp not found."
+          # Merge the SPIR-V C++ headers into the same include root (from the SPIRV-Headers clone the
+          # previous step made; fall back to its install prefix).
+          if [ -d "$RUNNER_TEMP/spirv-headers/include/spirv" ]; then
+            cp -r "$RUNNER_TEMP/spirv-headers/include/spirv" "$SRC/include/"
+          elif [ -d "$RUNNER_TEMP/spirv-headers-install/include/spirv" ]; then
+            cp -r "$RUNNER_TEMP/spirv-headers-install/include/spirv" "$SRC/include/"
+          fi
+          if [ ! -f "$SRC/include/vulkan/vulkan.hpp" ] || [ ! -f "$SRC/include/spirv/unified1/spirv.hpp" ]; then
+            echo "::error::Merged include dir missing vulkan.hpp and/or spirv.hpp."
+            ls -R "$SRC/include" | head -40
             exit 1
           fi
           echo "LUCENT_VULKAN_INCLUDE_DIR=$SRC/include" >> "$GITHUB_ENV"
-          echo "Vulkan-Headers include: $SRC/include"
+          echo "Vulkan + SPIR-V headers merged into: $SRC/include"
 
       - name: Decode release keystore from secret
         env:
