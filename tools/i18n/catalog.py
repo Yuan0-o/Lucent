@@ -357,7 +357,7 @@ ENTRIES = [
 
     # ---- Note history screen ----
     ("restoreVersionTitle", "Restore this version?", "恢复此版本？", "このバージョンを復元しますか？", "이 버전을 복원할까요?"),
-    ("restoreVersionBody(when: String)", "The note will go back to how it read on {when}. The current text is saved to history first, so you can undo this too.", "笔记将恢复到 {when} 时的内容。当前文本会先保存到历史记录，因此此操作也可撤销。", "メモは{when}時点の内容に戻ります。現在のテキストは先に履歴へ保存されるため、この操作も元に戻せます。", "노트가 {when} 시점의 내용으로 돌아갑니다. 현재 텍스트는 먼저 기록에 저장되므로 이 작업도 되돌릴 수 있습니다."),
+    ("restoreVersionBody(at: String)", "The note will go back to how it read on {at}. The current text is saved to history first, so you can undo this too.", "笔记将恢复到 {at} 时的内容。当前文本会先保存到历史记录，因此此操作也可撤销。", "メモは{at}時点の内容に戻ります。現在のテキストは先に履歴へ保存されるため、この操作も元に戻せます。", "노트가 {at} 시점의 내용으로 돌아갑니다. 현재 텍스트는 먼저 기록에 저장되므로 이 작업도 되돌릴 수 있습니다."),
     ("restoreThisVersion", "Restore this version", "恢复此版本", "このバージョンを復元", "이 버전 복원"),
     ("historyItemsHeader", "Items", "项目", "項目", "항목"),
     ("historyIntro(title: String)", "Earlier versions of \"{title}\", saved on this device each time you change this note.", "“{title}”的早期版本，每次修改此笔记时都会保存在此设备上。", "「{title}」の以前のバージョン。このメモを変更するたびに、この端末に保存されます。", "\"{title}\"의 이전 버전으로, 이 노트를 변경할 때마다 이 기기에 저장됩니다."),
@@ -393,11 +393,11 @@ ENTRIES = [
 
     # ---- Archived (extra) ----
     ("groupBy", "Group by", "分组方式", "グループ化", "그룹화 기준"),
-    ("archivedOn(when: String)", "Archived {when}", "归档于 {when}", "アーカイブ日 {when}", "보관일 {when}"),
+    ("archivedOn(at: String)", "Archived {at}", "归档于 {at}", "アーカイブ日 {at}", "보관일 {at}"),
 
     # ---- Note history (extra) ----
     ("screenVersion", "Version", "版本", "バージョン", "버전"),
-    ("historyAsOf(when: String)", "As of {when}", "截至 {when}", "{when}時点", "{when} 기준"),
+    ("historyAsOf(at: String)", "As of {at}", "截至 {at}", "{at}時点", "{at} 기준"),
     ("emptyParen", "(empty)", "（空）", "（空）", "(비어 있음)"),
 
     # ---- App lock (extra) ----
@@ -454,8 +454,8 @@ ENTRIES = [
     ("screenNote", "Note", "笔记", "メモ", "노트"),
     ("screenTask", "Task", "任务", "タスク", "할 일"),
     ("a11yVersionHistory(count: Int)", "Version history ({count})", "版本历史（{count}）", "バージョン履歴（{count}）", "버전 기록 ({count})"),
-    ("createdOn(when: String)", "Created {when}", "创建于 {when}", "作成 {when}", "생성 {when}"),
-    ("completedOn(when: String)", "Completed {when}", "完成于 {when}", "完了 {when}", "완료 {when}"),
+    ("createdOn(at: String)", "Created {at}", "创建于 {at}", "作成 {at}", "생성 {at}"),
+    ("completedOn(at: String)", "Completed {at}", "完成于 {at}", "完了 {at}", "완료 {at}"),
     ("reminderOn", "Reminder on", "提醒已开启", "リマインダー オン", "알림 켜짐"),
 
     # ---- Overflow menus / selection ----
@@ -684,7 +684,7 @@ ENTRIES = [
     ("backupPasswordBody", "This backup was protected with a password when it was exported. Enter it to see what's inside.", "此备份在导出时设置了密码保护。输入密码即可查看其中内容。", "このバックアップはエクスポート時にパスワードで保護されました。中身を見るには入力してください。", "이 백업은 내보낼 때 비밀번호로 보호되었습니다. 내용을 보려면 입력하세요."),
     ("wrongPassword", "Wrong password", "密码错误", "パスワードが違います", "잘못된 비밀번호"),
     ("restoreBackupTitle", "Restore this backup?", "恢复此备份？", "このバックアップを復元しますか？", "이 백업을 복원할까요?"),
-    ("exportedWhen(when: String)", "Exported {when}", "导出于 {when}", "エクスポート {when}", "내보냄 {when}"),
+    ("exportedWhen(at: String)", "Exported {at}", "导出于 {at}", "エクスポート {at}", "내보냄 {at}"),
     ("protectedByPassword", "Protected with your password.", "由你的密码保护。", "あなたのパスワードで保護されています。", "비밀번호로 보호됩니다."),
     ("protectedBuiltIn", "Encrypted with Lucent's built-in key.", "使用 Lucent 内置密钥加密。", "Lucent内蔵キーで暗号化されています。", "Lucent 내장 키로 암호화되어 있습니다."),
     ("backupEmpty", "This backup appears to be empty.", "此备份似乎是空的。", "このバックアップは空のようです。", "이 백업은 비어 있는 것 같습니다."),
@@ -759,7 +759,7 @@ ENTRIES = [
     ("a11ySearchTasks", "Search tasks", "搜索任务", "タスクを検索", "할 일 검색"),
     ("a11ySearchNotes", "Search notes", "搜索笔记", "メモを検索", "노트 검색"),
     ("markDone", "Mark as done", "标记为完成", "完了にする", "완료로 표시"),
-    ("dueWhen(when: String)", "Due {when}", "截止 {when}", "期限 {when}", "마감 {when}"),
+    ("dueWhen(at: String)", "Due {at}", "截止 {at}", "期限 {at}", "마감 {at}"),
     ("setADueDate", "Set a due date", "设置截止日期", "期限を設定", "마감일 설정"),
     ("emptyTasksHint", "No tasks yet. Tap + to add one, or ask the assistant.", "还没有任务。点按 + 添加，或让助手代劳。", "タスクはまだありません。＋をタップして追加するか、アシスタントに頼んでください。", "아직 할 일이 없습니다. +를 탭해 추가하거나 어시스턴트에게 부탁하세요."),
     ("noTasksMatchSearch", "No tasks match that search.", "没有任务符合该搜索。", "その検索に一致するタスクはありません。", "검색과 일치하는 할 일이 없습니다."),
@@ -776,7 +776,7 @@ ENTRIES = [
     ("trashEmpty", "Trash is empty.", "回收站是空的。", "ゴミ箱は空です。", "휴지통이 비어 있습니다."),
     ("noTrashedNotesMatch", "No trashed notes match that search.", "回收站中没有笔记符合该搜索。", "その検索に一致するゴミ箱内のメモはありません。", "검색과 일치하는 휴지통 노트가 없습니다."),
     ("noTrashedTasksMatch", "No trashed tasks match that search.", "回收站中没有任务符合该搜索。", "その検索に一致するゴミ箱内のタスクはありません。", "검색과 일치하는 휴지통 할 일이 없습니다."),
-    ("trashedOn(when: String)", "Trashed {when}", "移入回收站于 {when}", "ゴミ箱へ移動 {when}", "휴지통으로 이동 {when}"),
+    ("trashedOn(at: String)", "Trashed {at}", "移入回收站于 {at}", "ゴミ箱へ移動 {at}", "휴지통으로 이동 {at}"),
     ("a11yMarkActive", "Mark as active", "标记为进行中", "進行中に戻す", "진행 중으로 표시"),
     ("a11yRestoreToNotes", "Restore to notes", "恢复到笔记", "メモに復元", "노트로 복원"),
 
