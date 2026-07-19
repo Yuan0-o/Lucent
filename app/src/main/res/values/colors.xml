@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches backdropColor in MainActivity for the light theme (0xFFF4F3F8). -->
+    <color name="lucent_window_background">#FFF4F3F8</color>
+
+    <!-- Home-screen widget palette (task 9). Widgets can't render the app's live blur, so they use a
+         dark translucent "glass" card with light text — legible over almost any wallpaper while still
+         reading as part of Lucent. -->
+    <color name="widget_card">#D91A1A24</color>
+    <color name="widget_cell">#33FFFFFF</color>
+    <color name="widget_text">#FFFFFFFF</color>
+    <color name="widget_text_muted">#B3FFFFFF</color>
+    <color name="widget_accent">#FFC7B8F5</color>
+</resources>

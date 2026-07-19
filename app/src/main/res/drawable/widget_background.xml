@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The frosted-glass card look, approximated for a widget. Real Haze blur isn't available to
+    RemoteViews, so this is a translucent dark rounded rectangle with a faint light hairline border —
+    close enough to read as the same family as the in-app glass panels while sitting legibly on any
+    wallpaper.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="24dp" />
+    <solid android:color="#B3121218" />
+    <stroke android:width="1dp" android:color="#33FFFFFF" />
+</shape>

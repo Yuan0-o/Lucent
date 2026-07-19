@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        App theme. The only thing it customizes over the platform NoActionBar theme is the
+        window background used for the cold-start launch window (the frame the OS shows before
+        Compose has drawn anything). Making it match the app's own backdrop — and vary by
+        light/dark via the night-qualified color below — removes the brief mismatched flash on
+        startup. Everything else (the frosted-glass UI, palette, etc.) is drawn by Compose.
+    -->
+    <style name="Theme.Lucent" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/lucent_window_background</item>
+    </style>
+</resources>

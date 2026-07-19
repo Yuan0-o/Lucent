@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches backdropColor in MainActivity for the dark theme (0xFF0E0E14). Applied by the
+         system when the device is in dark mode, so the cold-start launch window is already dark
+         for dark-mode users instead of flashing a light background. -->
+    <color name="lucent_window_background">#FF0E0E14</color>
+</resources>

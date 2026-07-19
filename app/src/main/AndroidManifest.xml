@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Task reminders. Three permissions, and each one earns its place:
+
+         POST_NOTIFICATIONS is the runtime permission (Android 13+) for showing the reminder. It is
+         requested the first time the user actually turns a reminder on, never at launch — asking
+         for a permission before the user has expressed any interest in the feature is how you teach
+         people to reflexively deny.
+
+         SCHEDULE_EXACT_ALARM lets a reminder land on the minute. On Android 14+ it is denied by
+         default for a newly installed app, and Lucent never asks for it: ReminderScheduler checks
+         canScheduleExactAlarms() and quietly falls back to an inexact allow-while-idle alarm, which
+         needs no special access at all. Declaring it simply means a user who *wants* punctual
+         reminders can grant "Alarms & reminders" in system settings and have them, with no code
+         change and no nagging. If this app is ever published to Google Play, note that requesting
+         this permission requires a Play Console declaration — removing this one line degrades every
+         reminder to inexact and nothing else breaks.
+
+         RECEIVE_BOOT_COMPLETED lets pending reminders be re-armed after a restart, since alarms do
+         not survive a reboot.
+
+         Note what is NOT here: no storage permission (attachments live in the app's own private
+         directory), no location, no contacts, no analytics. Lucent talks to exactly one network
+         endpoint — the AI API the user configured themselves — and nothing else. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Keeps a reply generating if the user leaves the app mid-answer (issue 17). GenerationService
+         runs only while a reply is in flight and stops the instant it finishes, so this is a
+         short-lived foreground service, not a persistent background one. FOREGROUND_SERVICE is the
+         base permission; FOREGROUND_SERVICE_DATA_SYNC is the typed permission Android 14+ requires to
+         match the service's declared "dataSync" type (network I/O that must finish). The service is
+         started best-effort inside try/catch, so on any device where the OS refuses it the reply
+         still completes on the app's own background scope. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- allowBackup was "true", and it was the single largest privacy hole in the app.
+
+         With allowBackup="true", Android silently copies the app's data — the entire notes and tasks
+         database, and every photo in getExternalFilesDir() — to the user's Google Drive, and hands it
+         to a new phone during device transfer. For an app whose whole premise is that your notes live
+         on your device and answer to you, having Google quietly hold a plaintext copy of all of them
+         is not a small inconsistency; it undoes the premise.
+
+         Lucent has its own export: deliberate, encrypted, and password-protectable. That is the only
+         copy that should ever exist off the device, and it should exist because the user asked for it.
+
+         The two rules files are belt and braces — they exclude everything, so if someone ever flips
+         allowBackup back on in a future edit, the data still doesn't start flowing out. -->
+    <application
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Lucent"
+        android:supportsRtl="true">
+        <activity
+            android:name=".MainActivity"
+            android:launchMode="singleTask"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- System share / intent integration (task 6). This alias is what makes Lucent appear in
+             other apps' share sheets, and it is declared android:enabled="false" so that it does NOT
+             appear by default: a local-first app should be invisible to other apps until the user
+             opts in. ShareIntegration.setEnabled() toggles this component on/off in step with the
+             "System integration" setting, so Lucent is offered as a share target only while that
+             setting is on. It targets MainActivity, so a shared item is delivered there (see
+             MainActivity.handleShareIntent) and the user is asked whether to make it a note or task.
+             exported="true" is required for other apps to see it as a share target at all; that is
+             safe here because the only thing it does is hand an ACTION_SEND payload to our own
+             activity, which copies it into the encrypted database like any other note or task. -->
+        <activity-alias
+            android:name=".ShareTarget"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Posts a task's reminder notification. Only ever triggered by our own PendingIntent
+             (see ReminderScheduler), never by another app, so it is not exported. -->
+        <receiver
+            android:name=".reminders.ReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Handles the "Mark as Done" action button on a reminder notification (see
+             NotificationActionReceiver). Only our own notification's PendingIntent triggers it, so
+             like ReminderReceiver it is not exported. -->
+        <receiver
+            android:name=".reminders.NotificationActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Re-arms pending reminders after a reboot or an app update, since AlarmManager alarms
+             survive neither. The sender is the system — a different UID — so exported="true" is
+             required for the broadcast to reach it at all. That is safe here because every action
+             below is a protected system broadcast that only the OS is permitted to send. -->
+        <receiver
+            android:name=".reminders.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The short-lived foreground service that keeps a reply generating while the app is in the
+             background (issue 17). foregroundServiceType="dataSync" matches the type passed to
+             startForeground on Android 14+; exported=false because nothing outside the app should
+             ever start it. -->
+        <service
+            android:name=".GenerationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Hands out content:// URIs for attachments the user wants to open in another app, save to
+             their device, or share. Attachments are stored encrypted (chunked AES-256-GCM), and no
+             other app can read the app's private files anyway, so a viewer or the share sheet is
+             given a URI to a *decrypted* copy that Lucent writes into a locked-down cache directory
+             on demand (see AttachmentAccess). grantUriPermissions=true means only the specific app
+             the user picks gets a one-shot, revocable read grant to that one file — nothing is left
+             world-readable and nothing outlives the task. exported=false keeps the provider itself
+             unreachable by other apps; the temporary grant is the only way in. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Home-screen widgets (task 9). Each is an AppWidgetProvider (a BroadcastReceiver) with an
+             APPWIDGET_UPDATE filter and a meta-data pointer to its AppWidgetProviderInfo. They are
+             exported="true" because the widget host (the launcher, a different process) has to be able
+             to reach them; that's the standard, required contract for a widget and exposes nothing
+             beyond the widget itself. All they do is launch our own MainActivity with an action
+             extra — no data crosses the boundary. -->
+        <receiver
+            android:name=".widget.NewNoteWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_new_note_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.NewTaskWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_new_task_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.AssistantWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_assistant_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuickActionsWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_actions_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.TaskSummaryWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_task_summary_info" />
+        </receiver>
+
+        <!-- The two content widgets ported from the first settings variant: a scrollable list of
+             active tasks (backed by the RemoteViewsService below) and a pinned-note preview. -->
+        <receiver
+            android:name=".widget.TodayTasksWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_tasks_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.PinnedNoteWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pinned_note_info" />
+        </receiver>
+
+        <!-- Supplies the rows of the tasks-list widget. BIND_REMOTEVIEWS restricts binding to the
+             system's widget host, which is the standard, required contract for a collection widget. -->
+        <service
+            android:name=".widget.TodayTasksWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+    </application>
+
+</manifest>

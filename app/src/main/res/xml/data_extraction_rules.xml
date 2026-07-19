@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Android 12+ replacement for backup_rules.xml. Same reasoning: nothing leaves the device.
+
+  `cloud-backup` covers Google Drive auto-backup. `device-transfer` covers the phone-to-phone copy
+  during setup. Both are excluded: Lucent has its own encrypted export, which the user runs
+  deliberately and can protect with a password. An automatic, invisible copy of the whole database
+  and every attached photo — going to a third party the user never chose — is precisely the thing
+  this app claims not to do.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>
