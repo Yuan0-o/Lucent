@@ -205,8 +205,10 @@ object LocalLlm {
             try {
                 nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb)
             } catch (t: Throwable) {
-                Log.e("LocalLlm", "generate failed", t)
-                -3
+                // Distinct from the native side's own -3 (empty tokens): -20 means the native call
+                // itself threw into Java (e.g. a missing symbol), which is a different problem to chase.
+                Log.e("LocalLlm", "nativeGenerate threw", t)
+                -20
             }
         } finally {
             generating.set(false)
