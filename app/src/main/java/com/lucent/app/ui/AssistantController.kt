@@ -733,7 +733,7 @@ object AssistantController {
             val raw = synchronized(lock) { buffer.toString() }
 
             if (rc == 1) return                       // Stopped by the user (handled by stopGeneration).
-            if (rc != 0) { thinking = false; errorText = com.lucent.app.i18n.S.localModelGenerateFailed; return }
+            if (rc != 0) { thinking = false; errorText = com.lucent.app.i18n.S.localModelGenerateFailed + " [" + rc + "]"; return }
 
             val call = parseLocalToolCall(raw, validToolNames)
             if (call == null) {
@@ -826,7 +826,7 @@ object AssistantController {
             onDelta(piece)
         }
         if (rc == 1) return   // Stopped by the user; stopGeneration saved any partial.
-        if (rc != 0) { thinking = false; errorText = com.lucent.app.i18n.S.localModelGenerateFailed; return }
+        if (rc != 0) { thinking = false; errorText = com.lucent.app.i18n.S.localModelGenerateFailed + " [" + rc + "]"; return }
 
         val content = replyContent(
             deRobotify(synchronized(lock) { buffer.toString() }).trim(),

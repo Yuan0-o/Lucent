@@ -164,16 +164,16 @@ fun FluidGlassBackground(
         Array(BLOB_COUNT) { i ->
             val c = palette[i % palette.size]
             Brush.radialGradient(
-                // Reaches out past the box's edge midpoints (radius 1.4 vs the old 1.0) with a gentle
-                // three-stop falloff, so the rounded-rect *silhouette itself* is what's visible — the
-                // corners no longer sit in fully-transparent gradient. That is the whole reason the
-                // square phase now actually reads as a rounded square instead of every blob looking
-                // round no matter its corner value. Still a soft glow, not a hard-edged tile, and
-                // because the shapes are more filled they now visibly fuse and part as they drift past
-                // one another rather than just sliding over each other invisibly.
-                colors = listOf(c.copy(alpha = 0.48f), c.copy(alpha = 0.34f), c.copy(alpha = 0f)),
+                // A soft two-stop fade from a translucent centre straight out to fully transparent —
+                // the original look, restored. An earlier attempt added a near-opaque middle stop to
+                // force the rounded-square corners to show; that made every blob read as a filled
+                // tile with a hard rim that slid over its neighbours instead of melting into them.
+                // Back to the gentle single falloff so the blobs merge and part softly again. The
+                // radius is nudged just past the box (1.3 vs a bare 1.0) so the flat sides of the
+                // rounded-square phase still read faintly, without hardening the edge.
+                colors = listOf(c.copy(alpha = 0.55f), c.copy(alpha = 0f)),
                 center = Offset.Zero,
-                radius = 1.4f
+                radius = 1.3f
             )
         }
     }
