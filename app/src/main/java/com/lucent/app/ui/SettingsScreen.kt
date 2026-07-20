@@ -70,6 +70,7 @@ import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.AppLock
 import com.lucent.app.data.AttachmentLimits
+import com.lucent.app.data.BiometricAuth
 import com.lucent.app.data.BackupManager
 import com.lucent.app.data.MemoryTier
 import com.lucent.app.data.SettingsRepository
@@ -197,6 +198,10 @@ fun SettingsScreen(active: Boolean = true) {
 
     // --- Privacy toggles: App Lock (task 2), System integration (task 6), Startup logging (task 15) ---
     val appLockOn by repo.appLockEnabled.collectAsState(initial = false)
+    // Biometric unlock: whether the device can do it (checked once) and whether the user opted in.
+    // The toggle for it is shown in Security only when the lock is on AND the hardware is available.
+    val biometricAvailable = remember { BiometricAuth.isAvailable(context) }
+    val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = false)
     val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(initial = false)
     val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = false)
 
@@ -555,6 +560,13 @@ fun SettingsScreen(active: Boolean = true) {
     // Personalization guard has already resolved by the time this runs, so no edit can be lost.
     LaunchedEffect(active) {
         if (!active) route = SettingsRoute.Root
+    }
+
+    // A failed local-model import (e.g. "no .gguf in that zip") should not linger. Clearing it when
+    // the Local Model page is (re-)entered means the message shows once, for that attempt, and is
+    // gone the next time the user opens the page — whether they came back via the tab or the sub-nav.
+    LaunchedEffect(route) {
+        if (route == SettingsRoute.LocalModel) lmError = ""
     }
 
     // Registers this screen's dirty state with the app-lifetime guard so switching bottom-nav
@@ -2784,6 +2796,33 @@ fun SettingsScreen(active: Boolean = true) {
                             }
                         }
                     )
+                }
+
+                // ---- Biometric unlock ----
+                // Shown only once the lock is on AND the device actually has enrolled biometrics, so
+                // it reads as a follow-on choice to "App lock" rather than a dead control on phones
+                // that can't use it. Turning the lock off hides this again (and clears the opt-in via
+                // setAppLock), so re-enabling the lock always starts from "off".
+                if (appLockOn && biometricAvailable) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(S.biometricUnlockTitle, color = onGradient)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                S.biometricUnlockDesc,
+                                color = onGradientMuted,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = biometricOn,
+                            onCheckedChange = { turnOn ->
+                                scope.launch { repo.setAppLockBiometricEnabled(turnOn) }
+                            }
+                        )
+                    }
                 }
 
             }
