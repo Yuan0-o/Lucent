@@ -1,0 +1,123 @@
+# ============================================================================================
+#  Lucent — build the Windows desktop app (a single double-click installer .exe)
+# ============================================================================================
+#
+# This is the DESKTOP pipeline. It is entirely separate from build.yml (the Android APK) and shares
+# nothing with it — running one never affects the other, which is the requirement's first rule.
+#
+# What it does, in order:
+#   1. Compile the optional native libraries on the Windows runner:
+#        • lucent_llama.dll  — the on-device GGUF assistant (llama.cpp, CPU-only), from the SAME C++
+#          the Android build uses (app/src/main/cpp), via desktop/native/CMakeLists.txt.
+#        • lucent_native.dll — the Rust crypto/animation accelerator (rust/), via cargo.
+#      Both are OPTIONAL: the app has Kotlin/JCE fallbacks for every path they accelerate, so these
+#      steps are `continue-on-error` — a first run still produces a working .exe even if a native
+#      build needs a follow-up fix. When they succeed the DLLs are copied to the classpath resource
+#      folder (desktop/src/main/resources/native) where NativeLoader looks for them.
+#   2. Install WiX, which jpackage needs to produce a Windows .exe installer.
+#   3. Package with Compose for Desktop (TargetFormat.Exe) and upload ONLY that one installer.
+#
+# Historically the flakiest part is a mid-build clone, so llama.cpp is fetched up front with retries
+# into the directory the CMakeLists pre-seed hook checks first (mirrors the Android workflow).
+
+name: Build Windows desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    # A Windows installer (WiX/jpackage) can only be produced on Windows.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        # Same approach as build.yml: the wrapper isn't committed, so the action provides Gradle
+        # 8.13 directly. Caching disabled so a GitHub cache-service hiccup can't surface as a warning.
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.13'
+          cache-disabled: true
+
+      # ---- llama.cpp source, fetched up front with retries (pinned b9888) ----
+      # Cloned into the directory desktop/native/CMakeLists.txt pre-seeds from, so the compile step
+      # never has to hit the network mid-build. PowerShell here because the runner is Windows.
+      - name: Prefetch llama.cpp (pinned b9888)
+        shell: pwsh
+        run: |
+          $dest = "desktop/native/llama.cpp-src"
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+            git clone --depth 1 --branch b9888 https://github.com/ggml-org/llama.cpp $dest
+            if ($LASTEXITCODE -eq 0) { Write-Host "llama.cpp cloned on attempt $attempt"; break }
+            if ($attempt -eq 3) { Write-Error "Failed to clone llama.cpp after 3 attempts."; exit 1 }
+            Start-Sleep -Seconds 10
+          }
+
+      # ---- lucent_llama.dll (llama.cpp, CPU-only) ----
+      # continue-on-error: an on-device-model build failure must not block the whole installer — the
+      # app runs fine without it (the local model just stays unavailable until the DLL is fixed).
+      - name: Build lucent_llama.dll (CMake, CPU-only)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          cmake -S desktop/native -B desktop/native/build -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake --build desktop/native/build --config Release --parallel
+          New-Item -ItemType Directory -Force -Path desktop/src/main/resources/native | Out-Null
+          $dll = Get-ChildItem -Recurse -Path desktop/native/build -Filter lucent_llama.dll | Select-Object -First 1
+          if ($dll) {
+            Copy-Item $dll.FullName desktop/src/main/resources/native/lucent_llama.dll -Force
+            Write-Host "Copied $($dll.FullName)"
+          } else {
+            Write-Warning "lucent_llama.dll not found; the packaged app will run without the on-device model."
+          }
+
+      # ---- lucent_native.dll (Rust accelerator) ----
+      # Also optional: nativebridge/LucentNative has a Kotlin/JCE fallback for every function.
+      - name: Set up Rust (MSVC target)
+        continue-on-error: true
+        shell: pwsh
+        run: rustup target add x86_64-pc-windows-msvc
+
+      - name: Build lucent_native.dll (cargo)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          cargo build --release --manifest-path rust/Cargo.toml --target x86_64-pc-windows-msvc
+          New-Item -ItemType Directory -Force -Path desktop/src/main/resources/native | Out-Null
+          $dll = "rust/target/x86_64-pc-windows-msvc/release/lucent_native.dll"
+          if (Test-Path $dll) {
+            Copy-Item $dll desktop/src/main/resources/native/lucent_native.dll -Force
+            Write-Host "Copied $dll"
+          } else {
+            Write-Warning "lucent_native.dll not found; the app will use its Kotlin/JCE fallbacks."
+          }
+
+      # ---- WiX, required by jpackage to build a Windows .exe installer ----
+      - name: Install WiX
+        shell: pwsh
+        run: choco install wixtoolset -y --no-progress
+
+      # ---- Package the installer ----
+      # packageDistributionForCurrentOS honours desktop/build.gradle.kts's TargetFormat.Exe and emits
+      # the installer under desktop/build/compose/binaries/main/exe/.
+      - name: Package Windows .exe
+        shell: pwsh
+        run: gradle :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+
+      # ---- Upload ONLY the one installer, as agreed ----
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucent-windows-exe
+          path: desktop/build/compose/binaries/main/exe/*.exe
+          if-no-files-found: error
