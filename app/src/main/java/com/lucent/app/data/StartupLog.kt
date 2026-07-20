@@ -82,6 +82,43 @@ object StartupLog {
         if (!f.exists()) "" else try { f.readText() } catch (_: Throwable) { "" }
     }
 
+    /**
+     * What the "Export logs" button actually writes: the event log above, followed by a dump of THIS
+     * app's own logcat — which is where the native on-device-model engine's diagnostics (backend
+     * count, token counts, decode error codes) land, and the whole reason a bug report is useful.
+     * Reading our own process's logcat needs no permission on most devices; if an OEM build blocks it
+     * the section is noted as unavailable rather than failing the export, and the event log (which is
+     * captured independently, in-process) still carries the high-level trail.
+     */
+    fun buildExport(context: Context): String {
+        val events = readAll(context)
+        return buildString {
+            append("==== Lucent event log ====\n")
+            append(if (events.isBlank()) "(no events recorded)\n" else events)
+            append("\n==== logcat: this app only (includes the native model engine) ====\n")
+            append(captureOwnLogcat())
+        }
+    }
+
+    /**
+     * Dump this process's own logcat buffer. `--pid` scopes it to us, so it's only ever our own
+     * lines (no other app's data), and on API 24+ needs no special permission. Bounded so a huge
+     * buffer can't produce a runaway file.
+     */
+    private fun captureOwnLogcat(): String = try {
+        val pid = android.os.Process.myPid()
+        val proc = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "time", "--pid=$pid"))
+        val text = proc.inputStream.bufferedReader().use { it.readText() }
+        try { proc.waitFor() } catch (_: Throwable) {}
+        when {
+            text.isBlank() -> "(logcat returned nothing — some OEM builds, e.g. MIUI, restrict it; the event log above still applies)\n"
+            text.length > MAX_BYTES -> text.takeLast(MAX_BYTES)
+            else -> text
+        }
+    } catch (t: Throwable) {
+        "(couldn't read logcat on this device: ${t.message})\n"
+    }
+
     /** Whether there is anything to export yet. */
     fun hasEntries(context: Context): Boolean = synchronized(lock) {
         val f = logFile(context)
