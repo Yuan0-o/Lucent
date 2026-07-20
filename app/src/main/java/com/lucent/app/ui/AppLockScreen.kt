@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -29,9 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.data.AppLock
+import com.lucent.app.data.BiometricAuth
 import com.lucent.app.data.SettingsRepository
 import kotlinx.coroutines.launch
 
@@ -112,6 +116,13 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     // password" by comparing against an empty blob.
     val credentials by repo.appLockCredentials.collectAsState(initial = "")
 
+    // Biometric unlock is offered only when the user opted in AND the device can actually do it AND
+    // the host is a FragmentActivity (BiometricPrompt's requirement). If any of these is false the
+    // button simply doesn't appear and the password path is the only one shown — nothing breaks.
+    val biometricEnabled by repo.appLockBiometricEnabled.collectAsState(initial = false)
+    val biometricAvailable = remember { BiometricAuth.isAvailable(context) }
+    val activity = context as? FragmentActivity
+
     var stage by remember { mutableStateOf(LockStage.ENTER_PASSWORD) }
     var password by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("") }
@@ -166,6 +177,32 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(com.lucent.app.i18n.S.lockUnlock) }
+                        // Optional biometric shortcut. A success clears the lock exactly like a
+                        // correct password; a cancel or failure just leaves the password field in
+                        // place, so the fingerprint/face path is never the only way in.
+                        if (biometricEnabled && biometricAvailable && activity != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(
+                                onClick = {
+                                    BiometricAuth.authenticate(
+                                        activity = activity,
+                                        title = com.lucent.app.i18n.S.biometricPromptTitle,
+                                        subtitle = com.lucent.app.i18n.S.biometricPromptSubtitle,
+                                        negativeButtonText = com.lucent.app.i18n.S.biometricUsePassword,
+                                        onSuccess = {
+                                            password = ""
+                                            AppLockController.unlock()
+                                        },
+                                        onError = { msg -> error = msg.ifBlank { com.lucent.app.i18n.S.biometricFailed } }
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Fingerprint, contentDescription = null, tint = onGradient)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(com.lucent.app.i18n.S.biometricUse)
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         // "Forgot password?" is only offered when there is actually a security
                         // question behind it (task 9). A lock set up without one has no recovery
