@@ -660,38 +660,31 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     )
                 },
                 bottomBar = {
-                    // A single FLOATING glass capsule (7/8 width, four segments), built by the same
-                    // subtraction that produced [frostedGlass] — and for the same reason.
+                    // A single FLOATING frosted-glass capsule (7/8 width, four segments).
                     //
-                    // ### Why the blur had to go
+                    // ### What makes it read as glass
                     //
-                    // This capsule was the last surface in the app still trying to look like glass by
-                    // ADDING coats: a Haze blur, then a white fill on top of it, then a specular
-                    // sheen, then a counter-sheen gloss, then a rim. Five layers, each individually
-                    // defensible, stacking to something you could not see through at all — put a red
-                    // button behind it and no red came out the other side. Meanwhile every card in
-                    // the app looks like glass with two draws and an edge, because frostedGlass went
-                    // through this exact argument already and its comment records the conclusion:
-                    // the way to make a surface read as transparent is to stop painting it.
+                    // The capsule carries a real Haze blur, so whatever is behind it — the drifting
+                    // colour background AND any note or task list sliding underneath — comes through
+                    // TINTED and SOFTENED rather than sharp. That blur is the whole point: the colour
+                    // still renders through (so the pill is obviously translucent), but text behind it
+                    // is smeared out and unreadable, which is exactly what a pane of frosted glass does.
                     //
-                    // Haze's lightest material (`ultraThin`) still lays a fixed ~30% tint of the
-                    // container colour over whatever is behind it — near-black on the dark theme.
-                    // That tint was the floor: no amount of thinning the fill or the sheens could get
-                    // under it, which is why the previous pass at this ("use ultraThin instead of
-                    // thin") moved the number and not the problem.
+                    // Applying the blur here is safe. The card bug (a hard-edged block on every card)
+                    // came from putting a blurred layer INSIDE the `hazeSource` container that captures
+                    // the background. This Box is not there — it lives in the Scaffold's bottomBar slot,
+                    // a sibling of the content, exactly like the top bar, which blurs the same way.
                     //
-                    // So: no blur, no fill-on-top-of-blur, no sheen, no gloss. What is left is what
-                    // frostedGlass proved is enough — a fill light enough to read as a lift rather
-                    // than a coat, and one hairline rim shaded bright along the top edge — plus the
-                    // one thing a card does not need and a floating control does: a soft drop shadow,
-                    // so it reads as hovering ABOVE the page rather than printed onto it (task 5).
-                    // The colour behind it now comes through with its variation intact, and that
-                    // variation is the actual evidence of transparency (task 10).
+                    // On top of the blur sit only the things that model a small curved pane floating
+                    // over the page: a fill light enough to LIFT the surface without coating it (the
+                    // blur already lays down a tint, so this uses BLURRED_FILL, lighter than a card's
+                    // fill), one hairline rim shaded bright along the top edge, and a soft drop shadow
+                    // so the pill hovers ABOVE the page rather than being printed onto it (task 5).
                     val capsuleShape = RoundedCornerShape(percent = 50)
                     val glassDark = onGradient.luminance() > 0.5f
                     val capsuleFill = Color.White.copy(
-                        alpha = if (glassDark) com.lucent.app.ui.LucentGlass.NAV_FILL_DARK
-                        else com.lucent.app.ui.LucentGlass.NAV_FILL_LIGHT
+                        alpha = if (glassDark) com.lucent.app.ui.LucentGlass.BLURRED_FILL_DARK
+                        else com.lucent.app.ui.LucentGlass.BLURRED_FILL_LIGHT
                     )
                     val capsuleRim = lucentGlassRim(strong = true)
                     // Fainter than before: at the old 0.12/0.16 the three dividers read as structure —
@@ -721,9 +714,10 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                 .height(66.dp)
                                 // Drop shadow FIRST (before clip), with the capsule shape and a soft
                                 // ambient/spot colour, so the pill visibly floats above whatever is
-                                // behind it. clip = false lets the blur spill past the bounds. Safe
-                                // here, unlike inside a card: this Box is in the bottomBar slot, not
-                                // inside the hazeSource capture layer that the card bug came from.
+                                // behind it. clip = false lets the shadow's own soft edge spill past
+                                // the bounds. Safe here, unlike inside a card: this Box is in the
+                                // bottomBar slot, not inside the hazeSource capture layer that the card
+                                // bug came from.
                                 .shadow(
                                     elevation = if (glassDark) 18.dp else 12.dp,
                                     shape = capsuleShape,
@@ -732,6 +726,20 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                     spotColor = if (glassDark) Color.Black.copy(alpha = 0.45f) else Color(0xFF2A2A3A).copy(alpha = 0.34f)
                                 )
                                 .clip(capsuleShape)
+                                // The frosted-glass blur. The .clip above confines it to the pill
+                                // shape; the ultraThin material (the same one the top bar uses) tints
+                                // it with the theme's own backdrop, so the blur has no hard colour of
+                                // its own and the background's colour still reads through — just
+                                // softened, with anything sharp behind the pill blurred out. This
+                                // draws under the fill/rim/content, so the tab icons and labels on top
+                                // stay crisp.
+                                .hazeEffect(
+                                    state = hazeState,
+                                    style = HazeMaterials.ultraThin(
+                                        if (glassDark) com.lucent.app.ui.LucentGlass.HazeContainerDark
+                                        else com.lucent.app.ui.LucentGlass.HazeContainerLight
+                                    )
+                                )
                                 .background(capsuleFill)
                                 // Gradient rim: a bright catch of light along the top, fading to a
                                 // faint edge at the bottom — the tell-tale of a curved glass surface.
@@ -840,7 +848,7 @@ private fun CapsuleNavItem(
         }
         // maxLines = 1 with no ellipsis: every label in all four languages is short enough to fit
         // at this size, and pinning it to one line means a long translation would overflow visibly
-        // in testing rather than silently truncating to "数..." in a shipped build (task 5).
+        // in testing rather than silently truncating to a clipped part-word in a shipped build (task 5).
         Text(screen.label, color = tint, fontSize = 11.sp, maxLines = 1)
     }
 }
