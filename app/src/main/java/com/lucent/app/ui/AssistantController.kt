@@ -685,7 +685,7 @@ object AssistantController {
      * can create and edit things, exactly like the cloud one); web search and cross-conversation
      * memory stay off, keeping the model offline-capable and its prompt short. The prompt is English
      * (models follow English instructions most reliably) but explicitly orders replies in the user's
-     * own language, so a 中文 question gets a 中文 answer.
+     * own language, so a Chinese-language question gets a Chinese-language answer.
      *
      * ### The tool loop
      * GGUF models have no native function-calling channel, so tools run over a small text protocol:
@@ -916,7 +916,7 @@ object AssistantController {
      * The system prompt for a local tool-using turn: persona, the strict "reply in the user's
      * language, plain text only" rule, the exact JSON shape a tool call must take, and a compact
      * catalogue of the available tools. English instructions (models follow them most reliably)
-     * that nonetheless order replies in the user's own language, so a 中文 question gets a 中文 answer.
+     * that nonetheless order replies in the user's own language, so a Chinese-language question gets a Chinese-language answer.
      */
     private fun buildLocalSystemPrompt(tools: List<ToolDefinition>): String {
         val today = java.time.ZonedDateTime.now()

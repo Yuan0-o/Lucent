@@ -20,7 +20,8 @@ enum class FontScript { SYSTEM, LATIN, CHINESE, JAPANESE, KOREAN }
  * knows its stored [key], the [label] shown in the picker, which [script] it belongs to, and how to
  * build its [FontFamily] (null = platform default).
  *
- * The label is the font's OWN native name (思源宋体, しっぽり明朝, 송명, …) rather than a romanization,
+ * The label is the font's OWN native name — written in the script the font is designed for
+ * (Chinese, Japanese, Korean, and so on) rather than a romanization —
  * so a reader of that language recognizes it immediately and the picker reads elegantly in any of
  * the four UI languages. The picker draws each label in its own font, so the list also previews it.
  *
