@@ -100,7 +100,7 @@ import kotlinx.coroutines.withContext
 //   - LocalModel: the on-device GGUF assistant — import, enable, inspect, delete. It lives under
 //     Assistant beside API and Memory, because it IS an assistant backend: the fourth answer to
 //     "where do replies come from".
-private enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Font, Editor, Security, Privacy, Data }
+private enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Security, Privacy, Data }
 
 /** Which kind of item the selective Markdown-export picker is currently choosing. */
 private enum class ExportKind { NOTES, TASKS }
@@ -488,7 +488,6 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Api -> route = SettingsRoute.Assistant
             SettingsRoute.LocalModel -> route = SettingsRoute.Assistant
             SettingsRoute.Theme, SettingsRoute.Background -> route = SettingsRoute.Appearance
-            SettingsRoute.Font -> route = SettingsRoute.Language
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
             SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> route = SettingsRoute.Root
             else -> route = SettingsRoute.Root
@@ -1540,10 +1539,54 @@ fun SettingsScreen(active: Boolean = true) {
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                // Font lives here now (moved out of Appearance): a typeface is a writing/language
-                // choice as much as a visual one, so it sits with the language picker rather than
-                // alongside theme and background.
-                NavCard(S.settingsFontTitle, S.settingsFontSub) { route = SettingsRoute.Font }
+                // Font sits inline here, parallel to the language picker above rather than behind a
+                // further tap: a typeface is a writing/language choice as much as a visual one. Each
+                // row is drawn in its own face so the list doubles as a live preview; selecting saves
+                // immediately. Grouped by writing system with a localized header.
+                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                    Text(S.settingsFontTitle, color = onGradient, fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(S.settingsFontSub, color = onGradientMuted, fontSize = 13.sp)
+
+                    @Composable
+                    fun fontRow(f: LucentFont, shownLabel: String) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                AppScope.io.launch { repo.setFont(f.key) }
+                            }
+                        ) {
+                            RadioButton(
+                                selected = savedFont == f.key,
+                                onClick = { AppScope.io.launch { repo.setFont(f.key) } }
+                            )
+                            Text(
+                                shownLabel,
+                                color = onGradient,
+                                fontFamily = f.fontFamily,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(start = 10.dp)
+                            )
+                        }
+                    }
+
+                    @Composable
+                    fun fontGroup(header: String, script: FontScript) {
+                        Text(
+                            header,
+                            color = onGradientMuted,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                        )
+                        LucentFont.entries.filter { it.script == script }.forEach { fontRow(it, it.label) }
+                    }
+
+                    fontRow(LucentFont.SYSTEM, S.fontSystemLabel)
+                    fontGroup(S.fontGroupEnglish, FontScript.LATIN)
+                    fontGroup(S.fontGroupChinese, FontScript.CHINESE)
+                    fontGroup(S.fontGroupJapanese, FontScript.JAPANESE)
+                    fontGroup(S.fontGroupKorean, FontScript.KOREAN)
+                }
             }
 
             SettingsRoute.Assistant -> {
@@ -2132,55 +2175,6 @@ fun SettingsScreen(active: Boolean = true) {
                             }
                         }
                     }
-                }
-            }
-
-            SettingsRoute.Font -> {
-                BackHeader(S.settingsFontTitle) { route = SettingsRoute.Language }
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    // One row per font, its label drawn in its own font so the list doubles as a live
-                    // preview; selecting saves immediately. The list is grouped by writing system with
-                    // a localized header, so all twelve faces are shown but it's always clear which
-                    // language each is for. A small reusable row keeps the four groups identical.
-                    @Composable
-                    fun fontRow(f: LucentFont, shownLabel: String) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                AppScope.io.launch { repo.setFont(f.key) }
-                            }
-                        ) {
-                            RadioButton(
-                                selected = savedFont == f.key,
-                                onClick = { AppScope.io.launch { repo.setFont(f.key) } }
-                            )
-                            Text(
-                                shownLabel,
-                                color = onGradient,
-                                fontFamily = f.fontFamily,
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(start = 10.dp)
-                            )
-                        }
-                    }
-
-                    @Composable
-                    fun fontGroup(header: String, script: FontScript) {
-                        Text(
-                            header,
-                            color = onGradientMuted,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                        )
-                        LucentFont.entries.filter { it.script == script }.forEach { fontRow(it, it.label) }
-                    }
-
-                    // System first (localized label), then the four language groups.
-                    fontRow(LucentFont.SYSTEM, S.fontSystemLabel)
-                    fontGroup(S.fontGroupEnglish, FontScript.LATIN)
-                    fontGroup(S.fontGroupChinese, FontScript.CHINESE)
-                    fontGroup(S.fontGroupJapanese, FontScript.JAPANESE)
-                    fontGroup(S.fontGroupKorean, FontScript.KOREAN)
                 }
             }
 
