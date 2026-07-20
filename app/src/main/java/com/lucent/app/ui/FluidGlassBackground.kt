@@ -164,16 +164,16 @@ fun FluidGlassBackground(
         Array(BLOB_COUNT) { i ->
             val c = palette[i % palette.size]
             Brush.radialGradient(
-                // A soft two-stop fade from a translucent centre straight out to fully transparent —
-                // the original look, restored. An earlier attempt added a near-opaque middle stop to
-                // force the rounded-square corners to show; that made every blob read as a filled
-                // tile with a hard rim that slid over its neighbours instead of melting into them.
-                // Back to the gentle single falloff so the blobs merge and part softly again. The
-                // radius is nudged just past the box (1.3 vs a bare 1.0) so the flat sides of the
-                // rounded-square phase still read faintly, without hardening the edge.
+                // A soft two-stop fade from a translucent centre straight out to fully transparent,
+                // fading to nothing exactly at the box edge (radius 1.0). This is the original look:
+                // the blobs read as pure soft circles that melt into and part from one another. Two
+                // earlier attempts pushed the radius past 1.0 to make the rounded-square phase of the
+                // morph visible — but that let the flat sides read as *edges*, which is the "angular"
+                // look we're getting rid of here. At 1.0 the corners and flat sides sit in the fully
+                // transparent zone, so no straight edge is ever visible however the shape morphs.
                 colors = listOf(c.copy(alpha = 0.55f), c.copy(alpha = 0f)),
                 center = Offset.Zero,
-                radius = 1.3f
+                radius = 1.0f
             )
         }
     }

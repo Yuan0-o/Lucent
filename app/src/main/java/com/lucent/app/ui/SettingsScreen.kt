@@ -212,7 +212,7 @@ fun SettingsScreen(active: Boolean = true) {
                 val ok = withContext(Dispatchers.IO) {
                     try {
                         context.contentResolver.openOutputStream(uri)?.use { out ->
-                            out.write(StartupLog.readAll(context).toByteArray())
+                            out.write(StartupLog.buildExport(context).toByteArray())
                         } != null
                     } catch (e: Exception) {
                         false
@@ -2309,6 +2309,29 @@ fun SettingsScreen(active: Boolean = true) {
 
                     // ---- Local diagnostic logging ----
                     Spacer(modifier = Modifier.height(20.dp))
+                    // Turning logging ON asks for consent first — it can capture technical detail and
+                    // the text you type to the assistant. Turning it OFF is immediate (no dialog).
+                    var showLoggingConsent by remember { mutableStateOf(false) }
+                    if (showLoggingConsent) {
+                        AlertDialog(
+                            onDismissRequest = { showLoggingConsent = false },
+                            title = { Text(S.loggingConsentTitle) },
+                            text = { Text(S.loggingConsentBody) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showLoggingConsent = false
+                                    scope.launch { repo.setStartupLoggingEnabled(true) }
+                                    StartupLog.setEnabled(true)
+                                    // Log lines stay English on purpose so a bug report reads the same
+                                    // regardless of the UI language at the time.
+                                    StartupLog.event(context, "Logging enabled from Settings")
+                                }) { Text(S.loggingConsentConfirm) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showLoggingConsent = false }) { Text(S.actionCancel) }
+                            }
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(S.startupLoggingTitle, color = onGradient)
@@ -2323,12 +2346,12 @@ fun SettingsScreen(active: Boolean = true) {
                         Switch(
                             checked = startupLoggingOn,
                             onCheckedChange = { turnOn ->
-                                scope.launch { repo.setStartupLoggingEnabled(turnOn) }
-                                StartupLog.setEnabled(turnOn)
-                                // The log file itself is a diagnostic artefact and stays English on
-                                // purpose, like every other log line — it must read the same in a
-                                // bug report no matter what language the UI was in at the time.
-                                StartupLog.event(context, if (turnOn) "Logging enabled from Settings" else "")
+                                if (turnOn) {
+                                    showLoggingConsent = true          // enable only after consent
+                                } else {
+                                    scope.launch { repo.setStartupLoggingEnabled(false) }
+                                    StartupLog.setEnabled(false)
+                                }
                             }
                         )
                     }
