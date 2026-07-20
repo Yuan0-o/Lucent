@@ -190,7 +190,9 @@ fun SearchScreen(
                 FilterChip(
                     selected = token in activeTokens,
                     onClick = { raw = toggleSearchToken(raw, token) },
-                    label = { Text(token, fontSize = 12.sp) }
+                    // Label is localized; the query token stays the ASCII literal (`is:pinned`, …) so
+                    // the parser and any typed query are unchanged — only the on-chip text is translated.
+                    label = { Text(searchChipLabel(token), fontSize = 12.sp) }
                 )
             }
         }
@@ -265,6 +267,29 @@ internal fun toggleSearchToken(raw: String, token: String): String {
         parts.add(token)
     }
     return if (parts.isEmpty()) "" else parts.joinToString(" ") + " "
+}
+
+/**
+ * The translated label to show ON a filter chip. The chip still toggles the ASCII query token
+ * (kept as-is so the parser and any hand-typed query are unaffected); only this display text is
+ * localized. Falls back to the raw token if a new HINT is ever added without a label.
+ */
+private fun searchChipLabel(token: String): String = when (token) {
+    "tag:" -> com.lucent.app.i18n.S.searchChipTag
+    "is:pinned" -> com.lucent.app.i18n.S.searchChipPinned
+    "is:done" -> com.lucent.app.i18n.S.searchChipDone
+    "is:overdue" -> com.lucent.app.i18n.S.searchChipOverdue
+    "is:archived" -> com.lucent.app.i18n.S.searchChipArchived
+    "is:checklist" -> com.lucent.app.i18n.S.searchChipChecklist
+    "has:attachment" -> com.lucent.app.i18n.S.searchChipAttachment
+    "has:due" -> com.lucent.app.i18n.S.searchChipDue
+    "has:reminder" -> com.lucent.app.i18n.S.searchChipReminder
+    "has:subtasks" -> com.lucent.app.i18n.S.searchChipSubtasks
+    "priority:high" -> com.lucent.app.i18n.S.searchChipPriorityHigh
+    "due:today" -> com.lucent.app.i18n.S.searchChipDueToday
+    "due:week" -> com.lucent.app.i18n.S.searchChipDueWeek
+    "link:" -> com.lucent.app.i18n.S.searchChipLink
+    else -> token
 }
 
 @Composable

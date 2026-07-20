@@ -682,6 +682,13 @@ object AssistantController {
         } finally {
             loadingModel = false
         }
+        // Diagnostic trail (only written when the user has logging on): records how far the local
+        // turn got and, below, the exact result code — so a "couldn't reply" report is actionable
+        // even on a device whose OEM blocks logcat.
+        com.lucent.app.data.StartupLog.event(
+            ctx,
+            "local turn: supported=true, model=${com.lucent.app.local.LocalModelStore.displayName(ctx) ?: "?"}, gpu=$useGpu, loaded=$loaded"
+        )
         if (!loaded) {
             thinking = false
             errorText = com.lucent.app.i18n.S.localModelLoadFailed(com.lucent.app.i18n.S.localModelLoadFailedDetail)
@@ -825,6 +832,7 @@ object AssistantController {
             if (first) { first = false; thinking = false }
             onDelta(piece)
         }
+        appContextRef?.let { com.lucent.app.data.StartupLog.event(it, "local chat: generate rc=$rc") }
         if (rc == 1) return   // Stopped by the user; stopGeneration saved any partial.
         if (rc != 0) { thinking = false; errorText = com.lucent.app.i18n.S.localModelGenerateFailed + " [" + rc + "]"; return }
 
