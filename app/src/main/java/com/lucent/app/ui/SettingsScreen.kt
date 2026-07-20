@@ -3149,9 +3149,9 @@ private fun BackupModuleRow(
     label: String,
     module: BackupManager.BackupModule,
     selected: Set<BackupManager.BackupModule>,
-    onChange: (Set<BackupManager.BackupModule>) -> Unit,
     subLabel: String? = null,
-    onChooseItems: (() -> Unit)? = null
+    onChooseItems: (() -> Unit)? = null,
+    onChange: (Set<BackupManager.BackupModule>) -> Unit
 ) {
     val checked = module in selected
     Row(
