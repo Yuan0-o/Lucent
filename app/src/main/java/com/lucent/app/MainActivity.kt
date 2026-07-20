@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -588,7 +589,13 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp, bottom = 32.dp),
+                            // Sit the pill ABOVE the system navigation bar, then leave a clear gap
+                            // below it, so it reads as hovering over the app rather than pinned to the
+                            // very bottom edge. With edge-to-edge on, a bare fixed bottom padding put
+                            // the pill down in the gesture-bar zone with no air beneath it, which is
+                            // what made it look sunk into the bottom of the screen.
+                            .navigationBarsPadding()
+                            .padding(top = 12.dp, bottom = 18.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
