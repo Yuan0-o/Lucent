@@ -41,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -535,7 +536,9 @@ fun SettingsScreen(active: Boolean = true) {
     }
     DisposableEffect(Unit) { onDispose { UnsavedChangesGuard.clear("settings") } }
 
-    if (showUnsavedDialog) {
+    @Composable
+    @NonRestartableComposable
+    fun UnsavedChangesDialog() {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
             title = { Text(S.unsavedChangesTitle) },
@@ -559,6 +562,7 @@ fun SettingsScreen(active: Boolean = true) {
             }
         )
     }
+    if (showUnsavedDialog) { UnsavedChangesDialog() }
 
     // Inside a sub-menu, the system back button / edge-swipe returns to the Settings root
     // instead of leaving the screen. When already at the root this is disabled, so back falls
@@ -655,7 +659,9 @@ fun SettingsScreen(active: Boolean = true) {
         exportLauncher.launch("lucent-backup.lcb")
     }
 
-    if (showExportDialog) {
+    @Composable
+    @NonRestartableComposable
+    fun ExportBackupDialog() {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
             title = { Text(S.exportBackupTitle) },
@@ -708,6 +714,7 @@ fun SettingsScreen(active: Boolean = true) {
             }
         )
     }
+    if (showExportDialog) { ExportBackupDialog() }
 
     // =======================================================================================
     // Backup: import
@@ -776,7 +783,9 @@ fun SettingsScreen(active: Boolean = true) {
     }
 
     // --- Step 2: the password prompt (only for a backup made with a custom password) ---
-    pendingImportBytes?.let { bytes ->
+    @Composable
+    @NonRestartableComposable
+    fun ImportPasswordDialog(bytes: ByteArray) {
         AlertDialog(
             onDismissRequest = { pendingImportBytes = null },
             title = { Text(S.backupPasswordTitle) },
@@ -832,9 +841,12 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { pendingImportBytes = null }) { Text(S.actionCancel) } }
         )
     }
+    pendingImportBytes?.let { ImportPasswordDialog(it) }
 
     // --- Step 3: show what's in the file, and let them say no ---
-    importPreview?.let { preview ->
+    @Composable
+    @NonRestartableComposable
+    fun ImportPreviewDialog(preview: BackupManager.BackupPreview) {
         AlertDialog(
             onDismissRequest = { importPreview = null },
             title = { Text(S.restoreBackupTitle) },
@@ -905,6 +917,7 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { importPreview = null }) { Text(S.actionCancel) } }
         )
     }
+    importPreview?.let { ImportPreviewDialog(it) }
 
     // --- App Lock setup ---
     // Captures a password (twice) and, optionally, a security question and its answer, then turns the
@@ -927,7 +940,9 @@ fun SettingsScreen(active: Boolean = true) {
         LucentToast.show(context, S.appLockOnToast)
     }
 
-    if (showAppLockSetup) {
+    @Composable
+    @NonRestartableComposable
+    fun AppLockSetupDialog() {
         AlertDialog(
             onDismissRequest = { showAppLockSetup = false },
             title = { Text(S.appLockSetupTitle) },
@@ -999,6 +1014,7 @@ fun SettingsScreen(active: Boolean = true) {
             }
         )
     }
+    if (showAppLockSetup) { AppLockSetupDialog() }
 
     // --- Disable-lock confirmation (task) ---
     //
@@ -1006,7 +1022,9 @@ fun SettingsScreen(active: Boolean = true) {
     // password must be entered correctly before the protection is removed. The body spells out what
     // is being given up (anyone can then read everything without a password). A wrong password shows
     // an inline error and changes nothing; only a correct one disables the lock.
-    if (showAppLockDisable) {
+    @Composable
+    @NonRestartableComposable
+    fun AppLockDisableDialog() {
         AlertDialog(
             onDismissRequest = { showAppLockDisable = false },
             title = { Text(S.appLockDisableTitle) },
@@ -1053,6 +1071,7 @@ fun SettingsScreen(active: Boolean = true) {
             }
         )
     }
+    if (showAppLockDisable) { AppLockDisableDialog() }
 
     // --- "No security question" warning (task 9) ---
     //
@@ -1065,7 +1084,9 @@ fun SettingsScreen(active: Boolean = true) {
     //
     // The setup dialog stays open underneath, so "Add a question" returns to it with the password
     // the user already typed still there.
-    if (showNoRecoveryWarning) {
+    @Composable
+    @NonRestartableComposable
+    fun NoRecoveryWarningDialog() {
         AlertDialog(
             onDismissRequest = { showNoRecoveryWarning = false },
             title = { Text(S.noRecoveryTitle) },
@@ -1081,9 +1102,12 @@ fun SettingsScreen(active: Boolean = true) {
             }
         )
     }
+    if (showNoRecoveryWarning) { NoRecoveryWarningDialog() }
 
     // --- System integration privacy warning (task 6) ---
-    if (showShareWarning) {
+    @Composable
+    @NonRestartableComposable
+    fun ShareWarningDialog() {
         AlertDialog(
             onDismissRequest = { showShareWarning = false },
             title = { Text(S.shareWarnTitle) },
@@ -1103,8 +1127,11 @@ fun SettingsScreen(active: Boolean = true) {
             }
         )
     }
+    if (showShareWarning) { ShareWarningDialog() }
 
-    if (showClearData) {
+    @Composable
+    @NonRestartableComposable
+    fun ClearDataDialog() {
         AlertDialog(
             onDismissRequest = { showClearData = false },
             title = { Text(S.clearAllDataTitle) },
@@ -1142,11 +1169,14 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { showClearData = false }) { Text(S.actionCancel) } }
         )
     }
+    if (showClearData) { ClearDataDialog() }
 
     // Clear only notes. After deleting the rows, re-run the orphan sweep, which recomputes the
     // referenced attachment ids from whatever remains (tasks) and frees files that belonged only
     // to notes while keeping any still referenced elsewhere.
-    if (showClearNotes) {
+    @Composable
+    @NonRestartableComposable
+    fun ClearNotesDialog() {
         AlertDialog(
             onDismissRequest = { showClearNotes = false },
             title = { Text(S.clearNotesTitle) },
@@ -1167,8 +1197,11 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { showClearNotes = false }) { Text(S.actionCancel) } }
         )
     }
+    if (showClearNotes) { ClearNotesDialog() }
 
-    if (showClearTasks) {
+    @Composable
+    @NonRestartableComposable
+    fun ClearTasksDialog() {
         AlertDialog(
             onDismissRequest = { showClearTasks = false },
             title = { Text(S.clearTasksTitle) },
@@ -1191,6 +1224,7 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { showClearTasks = false }) { Text(S.actionCancel) } }
         )
     }
+    if (showClearTasks) { ClearTasksDialog() }
 
     // Clear only the assistant's chat history. Chat attachments are stored inline on each message
     // row, so deleting the rows frees them directly — no disk sweep needed. We also reset the
@@ -1199,7 +1233,9 @@ fun SettingsScreen(active: Boolean = true) {
     // Only acts on the explicit "Delete" press. The index is re-validated inside the click because
     // the profile list can change between opening the dialog and confirming; deleteProfile itself
     // also refuses to remove the last remaining profile.
-    profilePendingDelete?.let { idx ->
+    @Composable
+    @NonRestartableComposable
+    fun DeleteApiProfileDialog(idx: Int) {
         val name = profiles.getOrNull(idx)?.name?.ifBlank { S.apiFallbackName(idx + 1) } ?: S.thisApiFallback
         AlertDialog(
             onDismissRequest = { profilePendingDelete = null },
@@ -1214,8 +1250,11 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { profilePendingDelete = null }) { Text(S.actionCancel) } }
         )
     }
+    profilePendingDelete?.let { DeleteApiProfileDialog(it) }
 
-    if (showClearChats) {
+    @Composable
+    @NonRestartableComposable
+    fun ClearChatsDialog() {
         AlertDialog(
             onDismissRequest = { showClearChats = false },
             title = { Text(S.clearChatsTitle) },
@@ -1234,12 +1273,15 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { showClearChats = false }) { Text(S.actionCancel) } }
         )
     }
+    if (showClearChats) { ClearChatsDialog() }
 
     // --- Local model: per-slot delete confirmation (local-model task) ---
     // Deleting always asks first, for ANY model. If the model being deleted is the resident one the
     // engine is freed FIRST, then the file: unloading after deleting would leave a multi-gigabyte
     // model resident with nothing on disk to reload, which is the worst of both.
-    lmSlotPendingDelete?.let { slot ->
+    @Composable
+    @NonRestartableComposable
+    fun DeleteLocalModelDialog(slot: LocalModelStore.ModelSlot) {
         AlertDialog(
             onDismissRequest = { lmSlotPendingDelete = null },
             title = { Text(S.lmDeleteTitle) },
@@ -1253,11 +1295,14 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmSlotPendingDelete = null }) { Text(S.actionCancel) } }
         )
     }
+    lmSlotPendingDelete?.let { DeleteLocalModelDialog(it) }
 
     // --- Local model: name a model at import time (custom names, task requirement) ---
     // The file is already picked; this captures the label before the copy runs. Cancelling here
     // drops the pending import entirely (nothing was copied yet).
-    lmPendingImportUri?.let { uri ->
+    @Composable
+    @NonRestartableComposable
+    fun NameLocalModelDialog(uri: Uri) {
         AlertDialog(
             onDismissRequest = { lmPendingImportUri = null },
             title = { Text(S.lmNameModelTitle) },
@@ -1283,9 +1328,12 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmPendingImportUri = null }) { Text(S.actionCancel) } }
         )
     }
+    lmPendingImportUri?.let { NameLocalModelDialog(it) }
 
     // --- Local model: rename an imported model ---
-    lmRenameTarget?.let { slot ->
+    @Composable
+    @NonRestartableComposable
+    fun RenameLocalModelDialog(slot: LocalModelStore.ModelSlot) {
         AlertDialog(
             onDismissRequest = { lmRenameTarget = null },
             title = { Text(S.lmRenameTitle) },
@@ -1312,12 +1360,15 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmRenameTarget = null }) { Text(S.actionCancel) } }
         )
     }
+    lmRenameTarget?.let { RenameLocalModelDialog(it) }
 
     // --- Local model: warn before turning "use local model" ON ---
     // Enabling local mode freezes the cloud API and loads a multi-gigabyte model into RAM, so it
     // spells out the consequences first: the API stops being called, memory use is high, quitting the
     // app mid-reply interrupts the answer, and quitting frees that memory. Confirming enables it.
-    if (lmConfirmUseLocalOn) {
+    @Composable
+    @NonRestartableComposable
+    fun ConfirmUseLocalDialog() {
         AlertDialog(
             onDismissRequest = { lmConfirmUseLocalOn = false },
             title = { Text(S.lmUseLocalWarnTitle) },
@@ -1331,10 +1382,13 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmConfirmUseLocalOn = false }) { Text(S.actionCancel) } }
         )
     }
+    if (lmConfirmUseLocalOn) { ConfirmUseLocalDialog() }
 
     // Warn before letting the on-device model call tools: it can be slower and, on a small model,
     // unreliable. Confirming enables it; cancelling leaves it off.
-    if (lmConfirmToolsOn) {
+    @Composable
+    @NonRestartableComposable
+    fun ConfirmToolsDialog() {
         AlertDialog(
             onDismissRequest = { lmConfirmToolsOn = false },
             title = { Text(S.lmToolsWarnTitle) },
@@ -1348,10 +1402,13 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmConfirmToolsOn = false }) { Text(S.actionCancel) } }
         )
     }
+    if (lmConfirmToolsOn) { ConfirmToolsDialog() }
 
     // Warn before switching the on-device model to the GPU: faster on some phones, but Vulkan
     // drivers vary and it can be unstable; it also needs the GPU backend compiled into the build.
-    if (lmConfirmGpuOn) {
+    @Composable
+    @NonRestartableComposable
+    fun ConfirmGpuDialog() {
         AlertDialog(
             onDismissRequest = { lmConfirmGpuOn = false },
             title = { Text(S.lmGpuWarnTitle) },
@@ -1365,12 +1422,15 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmConfirmGpuOn = false }) { Text(S.actionCancel) } }
         )
     }
+    if (lmConfirmGpuOn) { ConfirmGpuDialog() }
 
     // --- Warn before letting a reply keep running after the app leaves the screen (task 2) ---
     // Same shape as the tools/GPU warnings, for the same reason: this is the one setting that lets
     // Lucent hold gigabytes of RAM while the user is doing something else entirely, so it is opt-in
     // behind a plain description of that cost. Turning it back OFF never asks.
-    if (lmConfirmBackgroundOn) {
+    @Composable
+    @NonRestartableComposable
+    fun ConfirmBackgroundDialog() {
         AlertDialog(
             onDismissRequest = { lmConfirmBackgroundOn = false },
             title = { Text(S.lmBackgroundWarnTitle) },
@@ -1384,6 +1444,7 @@ fun SettingsScreen(active: Boolean = true) {
             dismissButton = { TextButton(onClick = { lmConfirmBackgroundOn = false }) { Text(S.actionCancel) } }
         )
     }
+    if (lmConfirmBackgroundOn) { ConfirmBackgroundDialog() }
 
     // --- Selective Markdown export (choose which notes/tasks) ---
     // Lists for the picker, live so a just-added item is selectable.
@@ -1499,1198 +1560,1258 @@ fun SettingsScreen(active: Boolean = true) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rootScroll).hazeSource(state = LocalHazeState.current).padding(16.dp).padding(bottom = LocalBottomBarInset.current)
     ) {
-        when (route) {
-            SettingsRoute.Root -> {
-                // Section order (task 11), and it is deliberately a journey from the cosmetic to the
-                // irreversible: how it looks, what language it speaks, what it can do for you, how
-                // you write, who can get in, what leaves the device, and finally the page that can
-                // erase everything. The destructive page being last is the point — it is the one you
-                // should have to travel to rather than the one you land on.
-                NavCard(S.settingsAppearanceTitle, S.settingsAppearanceSub) { route = SettingsRoute.Appearance }
-                Spacer(modifier = Modifier.height(12.dp))
-                // Language sits beside Appearance because it answers the same kind of question —
-                // "how does this app present itself to me" — and a user hunting for it will look
-                // near the top, not under a technical heading (localization task).
-                NavCard(S.settingsLanguageTitle, S.settingsLanguageSub) { route = SettingsRoute.Language }
-                Spacer(modifier = Modifier.height(12.dp))
-                // The subtitle lists what is actually behind this card. It used to stop at the API,
-                // which quietly under-sold the section: memory and web search live here too, and a
-                // subtitle that names three of four things reads as a complete list rather than a
-                // truncated one — so the fourth looks like it isn't there.
-                NavCard(S.settingsAssistantTitle, S.settingsAssistantSub) { route = SettingsRoute.Assistant }
-                Spacer(modifier = Modifier.height(12.dp))
-                NavCard(S.settingsEditorTitle, S.settingsEditorSub) { route = SettingsRoute.Editor }
-                Spacer(modifier = Modifier.height(12.dp))
-                NavCard(S.settingsSecurityTitle, S.settingsSecuritySub) { route = SettingsRoute.Security }
-                Spacer(modifier = Modifier.height(12.dp))
-                NavCard(S.settingsPrivacyTitle, S.settingsPrivacySub) { route = SettingsRoute.Privacy }
-                Spacer(modifier = Modifier.height(12.dp))
-                NavCard(S.settingsDataTitle, S.settingsDataSub) { route = SettingsRoute.Data }
-            }
+        @Composable
+        @NonRestartableComposable
+        fun RootPage() {
+            // Section order (task 11), and it is deliberately a journey from the cosmetic to the
+            // irreversible: how it looks, what language it speaks, what it can do for you, how
+            // you write, who can get in, what leaves the device, and finally the page that can
+            // erase everything. The destructive page being last is the point — it is the one you
+            // should have to travel to rather than the one you land on.
+            NavCard(S.settingsAppearanceTitle, S.settingsAppearanceSub) { route = SettingsRoute.Appearance }
+            Spacer(modifier = Modifier.height(12.dp))
+            // Language sits beside Appearance because it answers the same kind of question —
+            // "how does this app present itself to me" — and a user hunting for it will look
+            // near the top, not under a technical heading (localization task).
+            NavCard(S.settingsLanguageTitle, S.settingsLanguageSub) { route = SettingsRoute.Language }
+            Spacer(modifier = Modifier.height(12.dp))
+            // The subtitle lists what is actually behind this card. It used to stop at the API,
+            // which quietly under-sold the section: memory and web search live here too, and a
+            // subtitle that names three of four things reads as a complete list rather than a
+            // truncated one — so the fourth looks like it isn't there.
+            NavCard(S.settingsAssistantTitle, S.settingsAssistantSub) { route = SettingsRoute.Assistant }
+            Spacer(modifier = Modifier.height(12.dp))
+            NavCard(S.settingsEditorTitle, S.settingsEditorSub) { route = SettingsRoute.Editor }
+            Spacer(modifier = Modifier.height(12.dp))
+            NavCard(S.settingsSecurityTitle, S.settingsSecuritySub) { route = SettingsRoute.Security }
+            Spacer(modifier = Modifier.height(12.dp))
+            NavCard(S.settingsPrivacyTitle, S.settingsPrivacySub) { route = SettingsRoute.Privacy }
+            Spacer(modifier = Modifier.height(12.dp))
+            NavCard(S.settingsDataTitle, S.settingsDataSub) { route = SettingsRoute.Data }
+        }
 
-            SettingsRoute.Language -> {
-                BackHeader(S.settingsLanguageTitle) { route = SettingsRoute.Root }
+        @Composable
+        @NonRestartableComposable
+        fun LanguagePage() {
+            BackHeader(S.settingsLanguageTitle) { route = SettingsRoute.Root }
 
-                // One flat radio list: "follow the system", then the four languages, each shown in
-                // its OWN language (the one universal convention for language pickers — a reader who
-                // can't parse the current UI language can still find their own name). Selecting
-                // writes the setting; MainActivity's collector applies it, and because the catalog
-                // is snapshot state every S-reading text in the app — including this list —
-                // recomposes in the new language on the very next frame. No restart, no flash.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.langPageHint, color = onGradientMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
+            // One flat radio list: "follow the system", then the four languages, each shown in
+            // its OWN language (the one universal convention for language pickers — a reader who
+            // can't parse the current UI language can still find their own name). Selecting
+            // writes the setting; MainActivity's collector applies it, and because the catalog
+            // is snapshot state every S-reading text in the app — including this list —
+            // recomposes in the new language on the very next frame. No restart, no flash.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.langPageHint, color = onGradientMuted, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
 
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { AppScope.io.launch { repo.setAppLanguage(AppLanguage.SYSTEM.key) } }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = savedLanguage == AppLanguage.SYSTEM.key,
+                        onClick = { AppScope.io.launch { repo.setAppLanguage(AppLanguage.SYSTEM.key) } }
+                    )
+                    Column(modifier = Modifier.padding(start = 4.dp)) {
+                        Text(S.langSystem, color = onGradient)
+                        Text(
+                            S.langSystemDetail(AppLanguage.systemDefault().label),
+                            color = onGradientMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                listOf(AppLanguage.EN, AppLanguage.ZH, AppLanguage.JA, AppLanguage.KO).forEach { lang ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { AppScope.io.launch { repo.setAppLanguage(AppLanguage.SYSTEM.key) } }
+                            .clickable { AppScope.io.launch { repo.setAppLanguage(lang.key) } }
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = savedLanguage == AppLanguage.SYSTEM.key,
-                            onClick = { AppScope.io.launch { repo.setAppLanguage(AppLanguage.SYSTEM.key) } }
+                            selected = savedLanguage == lang.key,
+                            onClick = { AppScope.io.launch { repo.setAppLanguage(lang.key) } }
                         )
-                        Column(modifier = Modifier.padding(start = 4.dp)) {
-                            Text(S.langSystem, color = onGradient)
+                        Text(lang.label, color = onGradient, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            // Font sits inline here, parallel to the language picker above rather than behind a
+            // further tap: a typeface is a writing/language choice as much as a visual one. Each
+            // row is drawn in its own face so the list doubles as a live preview; selecting saves
+            // immediately. Grouped by writing system with a localized header.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.settingsFontTitle, color = onGradient, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(S.settingsFontSub, color = onGradientMuted, fontSize = 13.sp)
+
+                @Composable
+               fun fontRow(f: LucentFont, shownLabel: String) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            AppScope.io.launch { repo.setFont(f.key) }
+                        }
+                    ) {
+                        RadioButton(
+                            selected = savedFont == f.key,
+                            onClick = { AppScope.io.launch { repo.setFont(f.key) } }
+                        )
+                        Text(
+                            shownLabel,
+                            color = onGradient,
+                            fontFamily = f.fontFamily,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(start = 10.dp)
+                        )
+                    }
+                }
+
+                @Composable
+               fun fontGroup(header: String, script: FontScript) {
+                    Text(
+                        header,
+                        color = onGradientMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                    )
+                    LucentFont.entries.filter { it.script == script }.forEach { fontRow(it, it.label) }
+                }
+
+                fontRow(LucentFont.SYSTEM, S.fontSystemLabel)
+                fontGroup(S.fontGroupEnglish, FontScript.LATIN)
+                fontGroup(S.fontGroupChinese, FontScript.CHINESE)
+                fontGroup(S.fontGroupJapanese, FontScript.JAPANESE)
+                fontGroup(S.fontGroupKorean, FontScript.KOREAN)
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun AssistantPage() {
+            BackHeader(S.settingsAssistantTitle) { route = SettingsRoute.Root }
+
+            // Order (task 10): Personalization, API, Memory & web, then Local model. The local
+            // model comes last because it is the alternative to everything above it: with it on,
+            // the API page's connection and the memory tier simply stop being consulted.
+            NavCard(S.settingsPersonalizationTitle, S.settingsPersonalizationSub) { route = SettingsRoute.Personalization }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // API is its own hierarchical page. The subtitle shows which profile is active so
+            // the user can see their current connection at a glance without opening it.
+            val activeName = profiles.getOrNull(selectedProfileIdx)?.name ?: ""
+            NavCard(S.settingsApiTitle, S.settingsApiSub(activeName)) { route = SettingsRoute.Api }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Memory and Networking are now two separate cards: one page for how much the
+            // assistant remembers (the memory tier), and a distinct page for going online (the
+            // web-search toggle). They used to share a single "Memory & web" card.
+            NavCard(S.settingsMemoryTitle, S.settingsMemorySub) { route = SettingsRoute.Memory }
+            Spacer(modifier = Modifier.height(12.dp))
+            NavCard(S.settingsNetworkTitle, S.settingsNetworkSub) { route = SettingsRoute.Network }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // On-device GGUF assistant (local-model task).
+            NavCard(S.settingsLocalModelTitle, S.settingsLocalModelSub) { route = SettingsRoute.LocalModel }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun LocalModelPage() {
+            BackHeader(S.settingsLocalModelTitle) { route = SettingsRoute.Assistant }
+
+            if (!LocalLlm.isSupported()) {
+                // The .so wasn't packaged for this ABI (or failed to load). Everything below
+                // would be a dead end, so say why once, plainly, instead of offering buttons
+                // that can only disappoint.
+                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                    Text(S.lmUnsupportedAbiNote, color = onGradientMuted, fontSize = 13.sp)
+                }
+            } else {
+                // =========================================================================
+                // The master switch — and, until it is on, nothing else (task 15)
+                // =========================================================================
+                //
+                // The page used to open with the importer: pick a multi-gigabyte file first,
+                // then decide whether you wanted the feature at all. That is backwards. Importing
+                // is the expensive, irreversible-feeling step, and asking for it before the user
+                // has said yes to anything makes the whole page read as a commitment. Worse, the
+                // enable switch sat *below* the importer and was disabled until a model existed,
+                // so the one control that explains what the page is for was the last thing you
+                // reached and the only one you couldn't touch.
+                //
+                // So the order is now the order of the decision: do you want the assistant to run
+                // on this device — yes — now here is what that involves. Everything below the
+                // switch is hidden while it is off, which also settles task 1 more firmly than
+                // greying would: a control that isn't there cannot be operated by accident, and
+                // the page stops presenting four questions when only the first one is live.
+                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                    // The experimental badge belongs to the FEATURE, so it moved here from the
+                    // models card (task 1) — it is the first thing read by someone deciding
+                    // whether to turn this on, rather than a note attached to the importer.
+                    Text(S.lmExperimentalNote, color = onGradient, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(S.lmUseLocalToggle, color = onGradient, fontSize = 16.sp)
+                            Text(S.lmUseLocalToggleDesc, color = onGradientMuted, fontSize = 13.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        // Switchable ON with no model imported, which the old build forbade.
+                        // It has to be: the importer only appears once this is on, so gating it
+                        // on a model that can only be imported afterwards was a deadlock. If it
+                        // is on with no model the page says so (lmNeedModelNotice below) and the
+                        // assistant answers with a clear "no model" error rather than silently
+                        // falling back to the cloud API.
+                        Switch(
+                            checked = localModelEnabled,
+                            onCheckedChange = { on ->
+                                if (on) lmConfirmUseLocalOn = true
+                                else AppScope.io.launch { repo.setLocalModelEnabled(false) }
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // Task 16: say plainly what this assistant is not. A user who attaches a
+                    // photo and gets a reply that ignores it will conclude the model is stupid;
+                    // the truth is that local mode is text-only and nothing about a chat box
+                    // with a paperclip in it hints at that.
+                    Text(S.lmTextOnlyNote, color = onGradientMuted, fontSize = 12.sp)
+                    if (!localModelEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(S.lmEnableToConfigureNote, color = onGradientMuted, fontSize = 12.sp)
+                    }
+                }
+
+                if (localModelEnabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ---------------------------------------------------------------
+                    // Models: import, choose the active one, rename, delete
+                    // ---------------------------------------------------------------
+                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(S.lmModelsTitle, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                            Text("${lmModels.size}/${LocalModelStore.MAX_MODELS}", color = onGradientMuted, fontSize = 13.sp)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.lmPageIntro, color = onGradientMuted, fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.lmSizeHint, color = onGradientMuted, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (lmModels.isEmpty()) {
+                            // Local mode is on with nothing to run: the single most confusing
+                            // state this feature can be in, so it is named rather than implied.
+                            Text(S.lmNeedModelNotice, color = onGradient, fontSize = 14.sp)
+                        } else {
+                            // One row per imported model: a radio picks the ACTIVE model (only it
+                            // is ever loaded), its name and size are shown, and each has rename +
+                            // delete. Switching the radio releases the loaded model right away.
+                            lmModels.forEach { slot ->
+                                val active = slot.id == lmActiveId
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    RadioButton(selected = active, onClick = { selectLocalModel(slot.id) })
+                                    Column(
+                                        modifier = Modifier.weight(1f).clickable { selectLocalModel(slot.id) }.padding(vertical = 4.dp)
+                                    ) {
+                                        Text(slot.name.ifBlank { "model.gguf" }, color = onGradient, fontSize = 14.sp)
+                                        Text(
+                                            AttachmentLimits.formatBytes(LocalModelStore.modelSizeBytes(context, slot.id)) +
+                                                (if (active) " · " + S.lmActiveTag else ""),
+                                            color = onGradientMuted,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    IconButton(onClick = {
+                                        lmRenameText = slot.name
+                                        lmRenameTarget = slot
+                                    }) {
+                                        Icon(Icons.Default.Edit, contentDescription = S.lmRenameA11y, tint = onGradientMuted)
+                                    }
+                                    IconButton(onClick = { lmSlotPendingDelete = slot }) {
+                                        Icon(Icons.Default.Delete, contentDescription = S.lmDeleteA11y, tint = onGradientMuted)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (lmImporting) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(S.lmImporting, color = onGradientMuted, fontSize = 13.sp)
+                            }
+                        } else if (lmCanImportMore) {
+                            GlassButton(
+                                text = S.lmImportButton,
+                                icon = Icons.Default.Add,
+                                onClick = { lmImportLauncher.launch(arrayOf("*/*")) }
+                            )
+                        } else {
+                            Text(S.lmSlotsFullHint(LocalModelStore.MAX_MODELS), color = onGradientMuted, fontSize = 12.sp)
+                        }
+                        if (lmError.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(lmError, color = Color(0xFFFFC1C1), fontSize = 13.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // The reset rule is stated ONCE, above both switches it governs (task 1),
+                    // rather than repeated inside each card. It is a property of the pair.
+                    Text(
+                        S.lmSubTogglesResetNote,
+                        color = onGradientMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ---- Opt-in: let the on-device model act on notes/tasks ----
+                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(S.lmToolsToggle, color = onGradient, fontSize = 16.sp)
+                                Text(S.lmToolsToggleDesc, color = onGradientMuted, fontSize = 13.sp)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Switch(
+                                checked = localToolsEnabled,
+                                onCheckedChange = { on ->
+                                    if (on) lmConfirmToolsOn = true
+                                    else AppScope.io.launch { repo.setLocalToolsEnabled(false) }
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ---- Opt-in: run the model on the GPU instead of the CPU ----
+                    // No "(experimental)" on this one any more (task 7): the page already opens
+                    // with an experimental badge on the feature, and stamping the word onto a
+                    // sub-option as well starts to read as noise rather than as a warning.
+                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(S.lmGpuToggle, color = onGradient, fontSize = 16.sp)
+                                Text(S.lmGpuToggleDesc, color = onGradientMuted, fontSize = 13.sp)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Switch(
+                                checked = localGpuEnabled,
+                                onCheckedChange = { on ->
+                                    if (on) lmConfirmGpuOn = true
+                                    else AppScope.io.launch { repo.setLocalGpuEnabled(false) }
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ---- Opt-in: keep generating after the app leaves the foreground ----
+                    // Hidden with the rest of this section when local mode is off, because it
+                    // describes something only the local model does (task 2).
+                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(S.lmBackgroundToggle, color = onGradient, fontSize = 16.sp)
+                                Text(S.lmBackgroundToggleDesc, color = onGradientMuted, fontSize = 13.sp)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Switch(
+                                checked = localBackgroundReply,
+                                onCheckedChange = { on ->
+                                    if (on) lmConfirmBackgroundOn = true
+                                    else AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun PersonalizationPage() {
+            BackHeader(S.settingsPersonalizationTitle) { leavePersonalization() }
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                OutlinedTextField(
+                    value = assistantName,
+                    onValueChange = { assistantName = it },
+                    label = { Text(S.fieldAssistantName) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = assistantStyle,
+                    onValueChange = { assistantStyle = it },
+                    label = { Text(S.fieldChatStyle) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                GlassButton(text = S.actionSave, onClick = { persistAssistantSettings() })
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Typing haptics lives here now (task 4). It's part of how the chat feels rather than
+            // anything to do with memory or the web, so it moved onto Personalization when the old
+            // combined "Memory & web" page was split apart. It writes immediately and isn't part
+            // of the name/style "unsaved changes" tracking, so leaving without pressing Save above
+            // never affects it.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.typingHapticsTitle, color = onGradient, fontSize = 16.sp)
+                        Text(
+                            S.typingHapticsDesc,
+                            color = onGradientMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = savedTypingHaptics,
+                        onCheckedChange = { on -> AppScope.io.launch { repo.setTypingHapticsEnabled(on) } }
+                    )
+                }
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun MemoryPage() {
+            BackHeader(S.settingsMemoryTitle) { route = SettingsRoute.Assistant }
+
+            // Memory tier. Each option explains both what the assistant will remember and the
+            // rough cost trade-off, since more context means more tokens per reply.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.memoryCostTitle, color = onGradient, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    S.memoryCostDesc,
+                    color = onGradientMuted,
+                    fontSize = 13.sp
+                )
+                // Local mode changes what this page is allowed to offer (task 8): an on-device
+                // model works from a short prompt, so the high tier is withdrawn while it is on.
+                // Saying that here, before the rows, means the greyed row below is explained
+                // before it is touched rather than only after.
+                if (localModelEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(S.memoryLocalTierNote, color = onGradientMuted, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val current = MemoryTier.fromKey(savedMemoryTier)
+
+                MemoryTierRow(
+                    selected = current == MemoryTier.LOW,
+                    title = S.memoryLowTitle,
+                    detail = S.memoryLowDesc,
+                    onGradient = onGradient,
+                    onGradientMuted = onGradientMuted,
+                    onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.LOW.key) } }
+                )
+                MemoryTierRow(
+                    selected = current == MemoryTier.MEDIUM,
+                    title = S.memoryMediumTitle,
+                    detail = S.memoryMediumDesc,
+                    onGradient = onGradient,
+                    onGradientMuted = onGradientMuted,
+                    onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) } }
+                )
+                // The high tier stays visible but greyed, and — importantly — stays TAPPABLE.
+                // A control that simply ignores touches teaches the user nothing except that the
+                // app is broken; this one answers with a bottom toast explaining why it's off and
+                // that their previous choice is being held for them (task 8: a toast, never a
+                // dialog — a modal for "you can't do that" is a punishment, not an explanation).
+                MemoryTierRow(
+                    selected = current == MemoryTier.HIGH,
+                    title = S.memoryHighTitle,
+                    detail = S.memoryHighDesc,
+                    onGradient = onGradient,
+                    onGradientMuted = onGradientMuted,
+                    dimmed = localModelEnabled,
+                    onClick = {
+                        if (localModelEnabled) LucentToast.show(context, S.memoryHighLocalDisabledHint)
+                        else AppScope.io.launch { repo.setMemoryTier(MemoryTier.HIGH.key) }
+                    }
+                )
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun NetworkPage() {
+            BackHeader(S.settingsNetworkTitle) { route = SettingsRoute.Assistant }
+
+            // Web search toggle: lets the cloud assistant look things up online.
+            //
+            // Unavailable while the local model is on (tasks 3/8) — it answers with no network
+            // at all, so a web-search switch in that mode would be a promise the app cannot
+            // keep. The row is dimmed rather than removed: hiding it would leave the user
+            // wondering where their setting went, and the value they had is coming back the
+            // moment local mode is switched off (SettingsRepository parks it).
+            val webSearchLocked = localModelEnabled
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // The whole row answers when it's locked, so a tap anywhere near the
+                        // switch — not only exactly on it — gets the explanation.
+                        .then(
+                            if (webSearchLocked) Modifier.clickable {
+                                LucentToast.show(context, S.webSearchLocalDisabledHint)
+                            } else Modifier
+                        )
+                ) {
+                    Column(modifier = Modifier.weight(1f).alpha(if (webSearchLocked) 0.38f else 1f)) {
+                        Text(S.webSearchTitle, color = onGradient, fontSize = 16.sp)
+                        Text(
+                            S.webSearchDesc,
+                            color = onGradientMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = savedWebSearch && !webSearchLocked,
+                        enabled = !webSearchLocked,
+                        onCheckedChange = { on -> AppScope.io.launch { repo.setWebSearchEnabled(on) } }
+                    )
+                }
+                if (webSearchLocked) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(S.webSearchLocalDisabledHint, color = onGradientMuted, fontSize = 12.sp)
+                }
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun ApiPage() {
+            BackHeader(S.settingsApiTitle) { route = SettingsRoute.Assistant }
+
+            // When local model mode is on, the cloud API is FROZEN — the assistant answers
+            // on-device and never calls the API. Say so plainly at the top of the page, with a
+            // one-tap way back to the Local model page to turn it off. That link matters more
+            // than usual now that the rest of the page is hidden behind the freeze: it is the
+            // only route out, so it has to be right here in the explanation.
+            if (localModelEnabled) {
+                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                    Text(S.apiFrozenTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.apiFrozenBody, color = onGradientMuted, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = { route = SettingsRoute.LocalModel }) {
+                        Text(S.apiFrozenManage, color = onGradient)
+                    }
+                }
+            }
+
+            // Task 18: while the freeze is on, the blocks below are HIDDEN rather than shown
+            // greyed. They were disabled before, which left a full API editor sitting under a
+            // banner saying it would never be used — fields you could type in, a Save button you
+            // could not press, a model list that would not load. Disabling communicates "not
+            // now"; the honest message here is "not while this mode is on", and the way a screen
+            // says that is by not offering the controls at all. Nothing is lost: every profile,
+            // key and model stays saved, and flipping local mode off brings this page back
+            // exactly as it was.
+            if (!localModelEnabled) {
+
+            // ---- API Selection: pick which saved profile is active ----
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(S.apiSelectionTitle, color = onGradient, modifier = Modifier.weight(1f))
+                    Text("${profiles.size}/${com.lucent.app.data.ApiProfiles.MAX}", color = onGradientMuted, fontSize = 13.sp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(S.apiSelectionDesc(com.lucent.app.data.ApiProfiles.MAX), color = onGradientMuted, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                if (profiles.isEmpty()) {
+                    // Deleting the last API is allowed now (task 6), so this state is reachable
+                    // and has to be a place the user can stand: it names what happened and both
+                    // ways forward, rather than an empty card that looks like a rendering bug.
+                    Text(S.apiNoneTitle, color = onGradient, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.apiNoneBody, color = onGradientMuted, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                profiles.forEachIndexed { idx, p ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        RadioButton(selected = idx == selectedProfileIdx, onClick = { selectProfile(idx) })
+                        Column(modifier = Modifier.weight(1f).clickable { selectProfile(idx) }.padding(vertical = 4.dp)) {
+                            Text(p.name.ifBlank { S.apiFallbackName(idx + 1) }, color = onGradient)
                             Text(
-                                S.langSystemDetail(AppLanguage.systemDefault().label),
+                                "${specLabel(p.spec)} · ${if (p.model.isBlank()) S.apiNoModel else p.model}",
                                 color = onGradientMuted,
                                 fontSize = 12.sp
                             )
                         }
-                    }
-
-                    listOf(AppLanguage.EN, AppLanguage.ZH, AppLanguage.JA, AppLanguage.KO).forEach { lang ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { AppScope.io.launch { repo.setAppLanguage(lang.key) } }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = savedLanguage == lang.key,
-                                onClick = { AppScope.io.launch { repo.setAppLanguage(lang.key) } }
-                            )
-                            Text(lang.label, color = onGradient, modifier = Modifier.padding(start = 4.dp))
+                        // The delete icon is shown on every row, the only profile included, and
+                        // every delete goes through the confirmation dialog below first — there
+                        // is no quiet path that removes a saved key (task 6).
+                        IconButton(onClick = { profilePendingDelete = idx }) {
+                            Icon(Icons.Default.Delete, contentDescription = S.apiDeleteA11y, tint = onGradientMuted)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                // Font sits inline here, parallel to the language picker above rather than behind a
-                // further tap: a typeface is a writing/language choice as much as a visual one. Each
-                // row is drawn in its own face so the list doubles as a live preview; selecting saves
-                // immediately. Grouped by writing system with a localized header.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.settingsFontTitle, color = onGradient, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(S.settingsFontSub, color = onGradientMuted, fontSize = 13.sp)
+                if (profiles.size < com.lucent.app.data.ApiProfiles.MAX) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(onClick = { addProfile() }) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = onGradient)
+                        Text(" " + S.apiAddButton, color = onGradient)
+                    }
+                }
+            }
 
-                    @Composable
-                    fun fontRow(f: LucentFont, shownLabel: String) {
+            // Nothing selected means nothing to edit, so the editor block is hidden entirely
+            // rather than bound to a phantom profile (task 6).
+            if (profiles.isNotEmpty()) {
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ---- Editor for the selected profile ----
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.apiEditTitle, color = onGradient)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = editingProfileName,
+                    onValueChange = { editingProfileName = it },
+                    label = { Text(S.fieldName) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = {
+                        key = it
+                        typingReveal = true
+                        keystrokeSeq++
+                    },
+                    label = { Text(S.fieldApiKey) },
+                    visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { manualReveal = true }) {
+                            Icon(
+                                if (keyVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = S.a11yToggleKeyVisibility
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(S.apiSpecTitle, color = onGradient)
+                Row {
+                    RadioButton(selected = spec == "openai", onClick = { spec = "openai" })
+                    Text(S.apiSpecOpenAi, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+                }
+                Row {
+                    RadioButton(selected = spec == "anthropic", onClick = { spec = "anthropic" })
+                    Text(S.apiSpecAnthropic, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+                }
+                Row {
+                    RadioButton(selected = spec == "google", onClick = { spec = "google" })
+                    Text(S.apiSpecGoogle, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(S.apiConnectionTitle, color = onGradient)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text(S.fieldBaseUrl) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    when (spec) {
+                        "anthropic" -> S.apiUrlExampleAnthropic
+                        "google" -> S.apiUrlExampleGoogle
+                        else -> S.apiUrlExampleOpenAi
+                    },
+                    color = onGradientMuted
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                // No `enabled = !localModelEnabled` guard any more: this whole block is hidden
+                // while the API is frozen (task 18), so the only way to reach this button is
+                // with local mode off.
+                GlassButton(text = S.fetchModels, onClick = {
+                    loading = true
+                    errorText = ""
+                    scope.launch {
+                        val apiSpecEnum = when (spec) {
+                            "anthropic" -> ApiSpec.ANTHROPIC
+                            "google" -> ApiSpec.GOOGLE
+                            else -> ApiSpec.OPENAI
+                        }
+                        val result = LlmClient.fetchModels(url.trim(), apiSpecEnum, key.trim())
+                        loading = false
+                        result.onSuccess { models = it }
+                            .onFailure { errorText = S.errorWithDetail(it.javaClass.simpleName, it.message ?: S.noDetails) }
+                    }
+                })
+
+                if (loading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CircularProgressIndicator()
+                }
+                if (errorText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(errorText, color = Color(0xFFFFC1C1))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(S.fieldModel, color = onGradient)
+                Box {
+                    GlassButton(
+                        text = if (selectedModel.isBlank()) S.chooseModel else selectedModel,
+                        onClick = { menuExpanded = true },
+                        enabled = models.isNotEmpty()
+                    )
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            models.forEach { m ->
+                                DropdownMenuItem(text = { Text(m) }, onClick = {
+                                    selectedModel = m
+                                    menuExpanded = false
+                                })
+                            }
+                        }
+                    }
+                }
+                if (models.isEmpty() && selectedModel.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.currentModelHint(selectedModel), color = onGradientMuted, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                // Saving writes the edits into the selected profile and activates it, so the
+                // assistant uses it right away.
+                GlassButton(text = S.saveApi, onClick = { saveActiveProfile(selectedProfileIdx) })
+            }
+            } // profiles.isNotEmpty()
+            } // !localModelEnabled
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun AppearancePage() {
+            BackHeader(S.settingsAppearanceTitle) { route = SettingsRoute.Root }
+            // Two hierarchical entries, mirroring the Assistant screen's structure. (Font moved
+            // to the Language screen — it's as much a writing choice as a visual one.)
+            NavCard(S.settingsThemeTitle, S.settingsThemeSub) { route = SettingsRoute.Theme }
+            Spacer(modifier = Modifier.height(12.dp))
+            NavCard(S.settingsBackgroundTitle, S.settingsBackgroundSub) { route = SettingsRoute.Background }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun ThemePage() {
+            BackHeader(S.settingsThemeTitle) { route = SettingsRoute.Appearance }
+            // One flat list of every appearance, System/Light/Dark and the four Monet tints
+            // alike (added task 1). They are peers, not a menu with a sub-menu of "extras":
+            // each one is simply an answer to "what should the app look like", and a tint is no
+            // less of an answer than "dark" is. Each row previews the actual backdrop colour it
+            // selects, so the choice can be made by eye rather than by name.
+            val systemDark = isSystemInDarkTheme()
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                LucentThemeMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = savedTheme == mode.key,
+                            onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                        )
+                        PaletteSwatch(mode.swatch(systemDark))
+                        Column(modifier = Modifier.padding(start = 10.dp)) {
+                            Text(mode.label, color = onGradient)
+                            Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun BackgroundPage() {
+            BackHeader(S.settingsBackgroundTitle) { route = SettingsRoute.Appearance }
+            // At the very top: the master switch for the drifting effect. Off = a still, flat
+            // theme colour, and the palette choice below only takes visible effect once it's on.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.backgroundAnimationTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.backgroundAnimationDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = backgroundAnimationEnabled,
+                        onCheckedChange = { checked -> scope.launch { repo.setBackgroundAnimationEnabled(checked) } }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            // The palette list only takes visible effect while the drifting effect is ON, so
+            // with the switch off every colour row is disabled and greyed out rather than
+            // pretending to work: the radio buttons go grey, the swatches and labels fade, and
+            // a tap anywhere on a row answers with a toast at the bottom of the screen saying
+            // the drifting background isn't on — instead of silently changing a setting whose
+            // result can't be seen (fix task).
+            val paletteEnabled = backgroundAnimationEnabled
+            // One alpha for everything in a disabled row, so swatch and label fade together.
+            val paletteAlpha = if (paletteEnabled) 1f else 0.38f
+           fun pickPalette(name: String) {
+                if (paletteEnabled) {
+                    AppScope.io.launch { repo.setPalette(name) }
+                } else {
+                    LucentToast.show(context, S.backgroundPaletteDisabledHint)
+                }
+            }
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                // Auto-cycle: rotates through every palette over time. Its swatch previews the
+                // spread of colours it moves through.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    // The whole row stays tappable while disabled so the tap can EXPLAIN itself
+                    // (the toast) — a dead row that ignores touches just looks broken.
+                    modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_CYCLE) }
+                ) {
+                    RadioButton(
+                        selected = savedPalette == PALETTE_CYCLE,
+                        enabled = paletteEnabled,
+                        onClick = { pickPalette(PALETTE_CYCLE) }
+                    )
+                    Box(modifier = Modifier.alpha(paletteAlpha)) {
+                        PaletteSwatch(LucentPalette.entries.map { it.colors.first() })
+                    }
+                    Text(
+                        S.paletteCycleAuto,
+                        color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
+                        modifier = Modifier.padding(start = 10.dp)
+                    )
+                }
+
+                // Palettes grouped by kind, each with a small colour preview.
+                listOf(
+                    S.paletteGroupSolid to PaletteGroup.SOLID,
+                    S.paletteGroupGradient to PaletteGroup.GRADIENT,
+                    S.paletteGroupClassic to PaletteGroup.CLASSIC
+                ).forEach { (heading, group) ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        heading,
+                        color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
+                        fontSize = 13.sp
+                    )
+                    LucentPalette.entries.filter { it.group == group }.forEach { p ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                AppScope.io.launch { repo.setFont(f.key) }
-                            }
+                            modifier = Modifier.fillMaxWidth().clickable { pickPalette(p.name) }
                         ) {
                             RadioButton(
-                                selected = savedFont == f.key,
-                                onClick = { AppScope.io.launch { repo.setFont(f.key) } }
+                                selected = savedPalette == p.name,
+                                enabled = paletteEnabled,
+                                onClick = { pickPalette(p.name) }
                             )
+                            Box(modifier = Modifier.alpha(paletteAlpha)) {
+                                PaletteSwatch(p.colors)
+                            }
                             Text(
-                                shownLabel,
-                                color = onGradient,
-                                fontFamily = f.fontFamily,
-                                fontSize = 16.sp,
+                                p.label,
+                                color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
                                 modifier = Modifier.padding(start = 10.dp)
                             )
                         }
                     }
+                }
+            }
+        }
 
-                    @Composable
-                    fun fontGroup(header: String, script: FontScript) {
+        @Composable
+        @NonRestartableComposable
+        fun EditorPage() {
+            BackHeader(S.settingsEditorTitle) { route = SettingsRoute.Root }
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.markdownFormattingTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            header,
+                            S.markdownFormattingDesc,
                             color = onGradientMuted,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                        )
-                        LucentFont.entries.filter { it.script == script }.forEach { fontRow(it, it.label) }
-                    }
-
-                    fontRow(LucentFont.SYSTEM, S.fontSystemLabel)
-                    fontGroup(S.fontGroupEnglish, FontScript.LATIN)
-                    fontGroup(S.fontGroupChinese, FontScript.CHINESE)
-                    fontGroup(S.fontGroupJapanese, FontScript.JAPANESE)
-                    fontGroup(S.fontGroupKorean, FontScript.KOREAN)
-                }
-            }
-
-            SettingsRoute.Assistant -> {
-                BackHeader(S.settingsAssistantTitle) { route = SettingsRoute.Root }
-
-                // Order (task 10): Personalization, API, Memory & web, then Local model. The local
-                // model comes last because it is the alternative to everything above it: with it on,
-                // the API page's connection and the memory tier simply stop being consulted.
-                NavCard(S.settingsPersonalizationTitle, S.settingsPersonalizationSub) { route = SettingsRoute.Personalization }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // API is its own hierarchical page. The subtitle shows which profile is active so
-                // the user can see their current connection at a glance without opening it.
-                val activeName = profiles.getOrNull(selectedProfileIdx)?.name ?: ""
-                NavCard(S.settingsApiTitle, S.settingsApiSub(activeName)) { route = SettingsRoute.Api }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Memory and Networking are now two separate cards: one page for how much the
-                // assistant remembers (the memory tier), and a distinct page for going online (the
-                // web-search toggle). They used to share a single "Memory & web" card.
-                NavCard(S.settingsMemoryTitle, S.settingsMemorySub) { route = SettingsRoute.Memory }
-                Spacer(modifier = Modifier.height(12.dp))
-                NavCard(S.settingsNetworkTitle, S.settingsNetworkSub) { route = SettingsRoute.Network }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // On-device GGUF assistant (local-model task).
-                NavCard(S.settingsLocalModelTitle, S.settingsLocalModelSub) { route = SettingsRoute.LocalModel }
-            }
-
-            SettingsRoute.LocalModel -> {
-                BackHeader(S.settingsLocalModelTitle) { route = SettingsRoute.Assistant }
-
-                if (!LocalLlm.isSupported()) {
-                    // The .so wasn't packaged for this ABI (or failed to load). Everything below
-                    // would be a dead end, so say why once, plainly, instead of offering buttons
-                    // that can only disappoint.
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Text(S.lmUnsupportedAbiNote, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                } else {
-                    // =========================================================================
-                    // The master switch — and, until it is on, nothing else (task 15)
-                    // =========================================================================
-                    //
-                    // The page used to open with the importer: pick a multi-gigabyte file first,
-                    // then decide whether you wanted the feature at all. That is backwards. Importing
-                    // is the expensive, irreversible-feeling step, and asking for it before the user
-                    // has said yes to anything makes the whole page read as a commitment. Worse, the
-                    // enable switch sat *below* the importer and was disabled until a model existed,
-                    // so the one control that explains what the page is for was the last thing you
-                    // reached and the only one you couldn't touch.
-                    //
-                    // So the order is now the order of the decision: do you want the assistant to run
-                    // on this device — yes — now here is what that involves. Everything below the
-                    // switch is hidden while it is off, which also settles task 1 more firmly than
-                    // greying would: a control that isn't there cannot be operated by accident, and
-                    // the page stops presenting four questions when only the first one is live.
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        // The experimental badge belongs to the FEATURE, so it moved here from the
-                        // models card (task 1) — it is the first thing read by someone deciding
-                        // whether to turn this on, rather than a note attached to the importer.
-                        Text(S.lmExperimentalNote, color = onGradient, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(S.lmUseLocalToggle, color = onGradient, fontSize = 16.sp)
-                                Text(S.lmUseLocalToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            // Switchable ON with no model imported, which the old build forbade.
-                            // It has to be: the importer only appears once this is on, so gating it
-                            // on a model that can only be imported afterwards was a deadlock. If it
-                            // is on with no model the page says so (lmNeedModelNotice below) and the
-                            // assistant answers with a clear "no model" error rather than silently
-                            // falling back to the cloud API.
-                            Switch(
-                                checked = localModelEnabled,
-                                onCheckedChange = { on ->
-                                    if (on) lmConfirmUseLocalOn = true
-                                    else AppScope.io.launch { repo.setLocalModelEnabled(false) }
-                                }
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        // Task 16: say plainly what this assistant is not. A user who attaches a
-                        // photo and gets a reply that ignores it will conclude the model is stupid;
-                        // the truth is that local mode is text-only and nothing about a chat box
-                        // with a paperclip in it hints at that.
-                        Text(S.lmTextOnlyNote, color = onGradientMuted, fontSize = 12.sp)
-                        if (!localModelEnabled) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(S.lmEnableToConfigureNote, color = onGradientMuted, fontSize = 12.sp)
-                        }
-                    }
-
-                    if (localModelEnabled) {
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // ---------------------------------------------------------------
-                        // Models: import, choose the active one, rename, delete
-                        // ---------------------------------------------------------------
-                        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(S.lmModelsTitle, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                Text("${lmModels.size}/${LocalModelStore.MAX_MODELS}", color = onGradientMuted, fontSize = 13.sp)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(S.lmPageIntro, color = onGradientMuted, fontSize = 13.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(S.lmSizeHint, color = onGradientMuted, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (lmModels.isEmpty()) {
-                                // Local mode is on with nothing to run: the single most confusing
-                                // state this feature can be in, so it is named rather than implied.
-                                Text(S.lmNeedModelNotice, color = onGradient, fontSize = 14.sp)
-                            } else {
-                                // One row per imported model: a radio picks the ACTIVE model (only it
-                                // is ever loaded), its name and size are shown, and each has rename +
-                                // delete. Switching the radio releases the loaded model right away.
-                                lmModels.forEach { slot ->
-                                    val active = slot.id == lmActiveId
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        RadioButton(selected = active, onClick = { selectLocalModel(slot.id) })
-                                        Column(
-                                            modifier = Modifier.weight(1f).clickable { selectLocalModel(slot.id) }.padding(vertical = 4.dp)
-                                        ) {
-                                            Text(slot.name.ifBlank { "model.gguf" }, color = onGradient, fontSize = 14.sp)
-                                            Text(
-                                                AttachmentLimits.formatBytes(LocalModelStore.modelSizeBytes(context, slot.id)) +
-                                                    (if (active) " · " + S.lmActiveTag else ""),
-                                                color = onGradientMuted,
-                                                fontSize = 12.sp
-                                            )
-                                        }
-                                        IconButton(onClick = {
-                                            lmRenameText = slot.name
-                                            lmRenameTarget = slot
-                                        }) {
-                                            Icon(Icons.Default.Edit, contentDescription = S.lmRenameA11y, tint = onGradientMuted)
-                                        }
-                                        IconButton(onClick = { lmSlotPendingDelete = slot }) {
-                                            Icon(Icons.Default.Delete, contentDescription = S.lmDeleteA11y, tint = onGradientMuted)
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (lmImporting) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator()
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(S.lmImporting, color = onGradientMuted, fontSize = 13.sp)
-                                }
-                            } else if (lmCanImportMore) {
-                                GlassButton(
-                                    text = S.lmImportButton,
-                                    icon = Icons.Default.Add,
-                                    onClick = { lmImportLauncher.launch(arrayOf("*/*")) }
-                                )
-                            } else {
-                                Text(S.lmSlotsFullHint(LocalModelStore.MAX_MODELS), color = onGradientMuted, fontSize = 12.sp)
-                            }
-                            if (lmError.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(lmError, color = Color(0xFFFFC1C1), fontSize = 13.sp)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // The reset rule is stated ONCE, above both switches it governs (task 1),
-                        // rather than repeated inside each card. It is a property of the pair.
-                        Text(
-                            S.lmSubTogglesResetNote,
-                            color = onGradientMuted,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // ---- Opt-in: let the on-device model act on notes/tasks ----
-                        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(S.lmToolsToggle, color = onGradient, fontSize = 16.sp)
-                                    Text(S.lmToolsToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Switch(
-                                    checked = localToolsEnabled,
-                                    onCheckedChange = { on ->
-                                        if (on) lmConfirmToolsOn = true
-                                        else AppScope.io.launch { repo.setLocalToolsEnabled(false) }
-                                    }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // ---- Opt-in: run the model on the GPU instead of the CPU ----
-                        // No "(experimental)" on this one any more (task 7): the page already opens
-                        // with an experimental badge on the feature, and stamping the word onto a
-                        // sub-option as well starts to read as noise rather than as a warning.
-                        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(S.lmGpuToggle, color = onGradient, fontSize = 16.sp)
-                                    Text(S.lmGpuToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Switch(
-                                    checked = localGpuEnabled,
-                                    onCheckedChange = { on ->
-                                        if (on) lmConfirmGpuOn = true
-                                        else AppScope.io.launch { repo.setLocalGpuEnabled(false) }
-                                    }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // ---- Opt-in: keep generating after the app leaves the foreground ----
-                        // Hidden with the rest of this section when local mode is off, because it
-                        // describes something only the local model does (task 2).
-                        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(S.lmBackgroundToggle, color = onGradient, fontSize = 16.sp)
-                                    Text(S.lmBackgroundToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Switch(
-                                    checked = localBackgroundReply,
-                                    onCheckedChange = { on ->
-                                        if (on) lmConfirmBackgroundOn = true
-                                        else AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            SettingsRoute.Personalization -> {
-                BackHeader(S.settingsPersonalizationTitle) { leavePersonalization() }
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    OutlinedTextField(
-                        value = assistantName,
-                        onValueChange = { assistantName = it },
-                        label = { Text(S.fieldAssistantName) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = assistantStyle,
-                        onValueChange = { assistantStyle = it },
-                        label = { Text(S.fieldChatStyle) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    GlassButton(text = S.actionSave, onClick = { persistAssistantSettings() })
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Typing haptics lives here now (task 4). It's part of how the chat feels rather than
-                // anything to do with memory or the web, so it moved onto Personalization when the old
-                // combined "Memory & web" page was split apart. It writes immediately and isn't part
-                // of the name/style "unsaved changes" tracking, so leaving without pressing Save above
-                // never affects it.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.typingHapticsTitle, color = onGradient, fontSize = 16.sp)
-                            Text(
-                                S.typingHapticsDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = savedTypingHaptics,
-                            onCheckedChange = { on -> AppScope.io.launch { repo.setTypingHapticsEnabled(on) } }
+                            fontSize = 13.sp
                         )
                     }
-                }
-            }
-
-            SettingsRoute.Memory -> {
-                BackHeader(S.settingsMemoryTitle) { route = SettingsRoute.Assistant }
-
-                // Memory tier. Each option explains both what the assistant will remember and the
-                // rough cost trade-off, since more context means more tokens per reply.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.memoryCostTitle, color = onGradient, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        S.memoryCostDesc,
-                        color = onGradientMuted,
-                        fontSize = 13.sp
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = markdownEnabled,
+                        onCheckedChange = { checked -> scope.launch { repo.setMarkdownEnabled(checked) } }
                     )
-                    // Local mode changes what this page is allowed to offer (task 8): an on-device
-                    // model works from a short prompt, so the high tier is withdrawn while it is on.
-                    // Saying that here, before the rows, means the greyed row below is explained
-                    // before it is touched rather than only after.
-                    if (localModelEnabled) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(S.memoryLocalTierNote, color = onGradientMuted, fontSize = 12.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val current = MemoryTier.fromKey(savedMemoryTier)
-
-                    MemoryTierRow(
-                        selected = current == MemoryTier.LOW,
-                        title = S.memoryLowTitle,
-                        detail = S.memoryLowDesc,
-                        onGradient = onGradient,
-                        onGradientMuted = onGradientMuted,
-                        onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.LOW.key) } }
-                    )
-                    MemoryTierRow(
-                        selected = current == MemoryTier.MEDIUM,
-                        title = S.memoryMediumTitle,
-                        detail = S.memoryMediumDesc,
-                        onGradient = onGradient,
-                        onGradientMuted = onGradientMuted,
-                        onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) } }
-                    )
-                    // The high tier stays visible but greyed, and — importantly — stays TAPPABLE.
-                    // A control that simply ignores touches teaches the user nothing except that the
-                    // app is broken; this one answers with a bottom toast explaining why it's off and
-                    // that their previous choice is being held for them (task 8: a toast, never a
-                    // dialog — a modal for "you can't do that" is a punishment, not an explanation).
-                    MemoryTierRow(
-                        selected = current == MemoryTier.HIGH,
-                        title = S.memoryHighTitle,
-                        detail = S.memoryHighDesc,
-                        onGradient = onGradient,
-                        onGradientMuted = onGradientMuted,
-                        dimmed = localModelEnabled,
-                        onClick = {
-                            if (localModelEnabled) LucentToast.show(context, S.memoryHighLocalDisabledHint)
-                            else AppScope.io.launch { repo.setMemoryTier(MemoryTier.HIGH.key) }
-                        }
-                    )
-                }
-            }
-
-            SettingsRoute.Network -> {
-                BackHeader(S.settingsNetworkTitle) { route = SettingsRoute.Assistant }
-
-                // Web search toggle: lets the cloud assistant look things up online.
-                //
-                // Unavailable while the local model is on (tasks 3/8) — it answers with no network
-                // at all, so a web-search switch in that mode would be a promise the app cannot
-                // keep. The row is dimmed rather than removed: hiding it would leave the user
-                // wondering where their setting went, and the value they had is coming back the
-                // moment local mode is switched off (SettingsRepository parks it).
-                val webSearchLocked = localModelEnabled
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // The whole row answers when it's locked, so a tap anywhere near the
-                            // switch — not only exactly on it — gets the explanation.
-                            .then(
-                                if (webSearchLocked) Modifier.clickable {
-                                    LucentToast.show(context, S.webSearchLocalDisabledHint)
-                                } else Modifier
-                            )
-                    ) {
-                        Column(modifier = Modifier.weight(1f).alpha(if (webSearchLocked) 0.38f else 1f)) {
-                            Text(S.webSearchTitle, color = onGradient, fontSize = 16.sp)
-                            Text(
-                                S.webSearchDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = savedWebSearch && !webSearchLocked,
-                            enabled = !webSearchLocked,
-                            onCheckedChange = { on -> AppScope.io.launch { repo.setWebSearchEnabled(on) } }
-                        )
-                    }
-                    if (webSearchLocked) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(S.webSearchLocalDisabledHint, color = onGradientMuted, fontSize = 12.sp)
-                    }
-                }
-            }
-
-            SettingsRoute.Api -> {
-                BackHeader(S.settingsApiTitle) { route = SettingsRoute.Assistant }
-
-                // When local model mode is on, the cloud API is FROZEN — the assistant answers
-                // on-device and never calls the API. Say so plainly at the top of the page, with a
-                // one-tap way back to the Local model page to turn it off. That link matters more
-                // than usual now that the rest of the page is hidden behind the freeze: it is the
-                // only route out, so it has to be right here in the explanation.
-                if (localModelEnabled) {
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Text(S.apiFrozenTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.apiFrozenBody, color = onGradientMuted, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { route = SettingsRoute.LocalModel }) {
-                            Text(S.apiFrozenManage, color = onGradient)
-                        }
-                    }
-                }
-
-                // Task 18: while the freeze is on, the blocks below are HIDDEN rather than shown
-                // greyed. They were disabled before, which left a full API editor sitting under a
-                // banner saying it would never be used — fields you could type in, a Save button you
-                // could not press, a model list that would not load. Disabling communicates "not
-                // now"; the honest message here is "not while this mode is on", and the way a screen
-                // says that is by not offering the controls at all. Nothing is lost: every profile,
-                // key and model stays saved, and flipping local mode off brings this page back
-                // exactly as it was.
-                if (!localModelEnabled) {
-
-                // ---- API Selection: pick which saved profile is active ----
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(S.apiSelectionTitle, color = onGradient, modifier = Modifier.weight(1f))
-                        Text("${profiles.size}/${com.lucent.app.data.ApiProfiles.MAX}", color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.apiSelectionDesc(com.lucent.app.data.ApiProfiles.MAX), color = onGradientMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (profiles.isEmpty()) {
-                        // Deleting the last API is allowed now (task 6), so this state is reachable
-                        // and has to be a place the user can stand: it names what happened and both
-                        // ways forward, rather than an empty card that looks like a rendering bug.
-                        Text(S.apiNoneTitle, color = onGradient, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.apiNoneBody, color = onGradientMuted, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-                    profiles.forEachIndexed { idx, p ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            RadioButton(selected = idx == selectedProfileIdx, onClick = { selectProfile(idx) })
-                            Column(modifier = Modifier.weight(1f).clickable { selectProfile(idx) }.padding(vertical = 4.dp)) {
-                                Text(p.name.ifBlank { S.apiFallbackName(idx + 1) }, color = onGradient)
-                                Text(
-                                    "${specLabel(p.spec)} · ${if (p.model.isBlank()) S.apiNoModel else p.model}",
-                                    color = onGradientMuted,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            // The delete icon is shown on every row, the only profile included, and
-                            // every delete goes through the confirmation dialog below first — there
-                            // is no quiet path that removes a saved key (task 6).
-                            IconButton(onClick = { profilePendingDelete = idx }) {
-                                Icon(Icons.Default.Delete, contentDescription = S.apiDeleteA11y, tint = onGradientMuted)
-                            }
-                        }
-                    }
-                    if (profiles.size < com.lucent.app.data.ApiProfiles.MAX) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        TextButton(onClick = { addProfile() }) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = onGradient)
-                            Text(" " + S.apiAddButton, color = onGradient)
-                        }
-                    }
-                }
-
-                // Nothing selected means nothing to edit, so the editor block is hidden entirely
-                // rather than bound to a phantom profile (task 6).
-                if (profiles.isNotEmpty()) {
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // ---- Editor for the selected profile ----
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.apiEditTitle, color = onGradient)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = editingProfileName,
-                        onValueChange = { editingProfileName = it },
-                        label = { Text(S.fieldName) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = key,
-                        onValueChange = {
-                            key = it
-                            typingReveal = true
-                            keystrokeSeq++
-                        },
-                        label = { Text(S.fieldApiKey) },
-                        visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { manualReveal = true }) {
-                                Icon(
-                                    if (keyVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = S.a11yToggleKeyVisibility
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(S.apiSpecTitle, color = onGradient)
-                    Row {
-                        RadioButton(selected = spec == "openai", onClick = { spec = "openai" })
-                        Text(S.apiSpecOpenAi, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-                    }
-                    Row {
-                        RadioButton(selected = spec == "anthropic", onClick = { spec = "anthropic" })
-                        Text(S.apiSpecAnthropic, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-                    }
-                    Row {
-                        RadioButton(selected = spec == "google", onClick = { spec = "google" })
-                        Text(S.apiSpecGoogle, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(S.apiConnectionTitle, color = onGradient)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        label = { Text(S.fieldBaseUrl) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        when (spec) {
-                            "anthropic" -> S.apiUrlExampleAnthropic
-                            "google" -> S.apiUrlExampleGoogle
-                            else -> S.apiUrlExampleOpenAi
-                        },
-                        color = onGradientMuted
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // No `enabled = !localModelEnabled` guard any more: this whole block is hidden
-                    // while the API is frozen (task 18), so the only way to reach this button is
-                    // with local mode off.
-                    GlassButton(text = S.fetchModels, onClick = {
-                        loading = true
-                        errorText = ""
-                        scope.launch {
-                            val apiSpecEnum = when (spec) {
-                                "anthropic" -> ApiSpec.ANTHROPIC
-                                "google" -> ApiSpec.GOOGLE
-                                else -> ApiSpec.OPENAI
-                            }
-                            val result = LlmClient.fetchModels(url.trim(), apiSpecEnum, key.trim())
-                            loading = false
-                            result.onSuccess { models = it }
-                                .onFailure { errorText = S.errorWithDetail(it.javaClass.simpleName, it.message ?: S.noDetails) }
-                        }
-                    })
-
-                    if (loading) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        CircularProgressIndicator()
-                    }
-                    if (errorText.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(errorText, color = Color(0xFFFFC1C1))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(S.fieldModel, color = onGradient)
-                    Box {
-                        GlassButton(
-                            text = if (selectedModel.isBlank()) S.chooseModel else selectedModel,
-                            onClick = { menuExpanded = true },
-                            enabled = models.isNotEmpty()
-                        )
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            Column(
-                                modifier = Modifier
-                                    .heightIn(max = 320.dp)
-                                    .verticalScroll(rememberScrollState())
-                            ) {
-                                models.forEach { m ->
-                                    DropdownMenuItem(text = { Text(m) }, onClick = {
-                                        selectedModel = m
-                                        menuExpanded = false
-                                    })
-                                }
-                            }
-                        }
-                    }
-                    if (models.isEmpty() && selectedModel.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.currentModelHint(selectedModel), color = onGradientMuted, fontSize = 12.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    // Saving writes the edits into the selected profile and activates it, so the
-                    // assistant uses it right away.
-                    GlassButton(text = S.saveApi, onClick = { saveActiveProfile(selectedProfileIdx) })
-                }
-                } // profiles.isNotEmpty()
-                } // !localModelEnabled
-            }
-
-            SettingsRoute.Appearance -> {
-                BackHeader(S.settingsAppearanceTitle) { route = SettingsRoute.Root }
-                // Two hierarchical entries, mirroring the Assistant screen's structure. (Font moved
-                // to the Language screen — it's as much a writing choice as a visual one.)
-                NavCard(S.settingsThemeTitle, S.settingsThemeSub) { route = SettingsRoute.Theme }
-                Spacer(modifier = Modifier.height(12.dp))
-                NavCard(S.settingsBackgroundTitle, S.settingsBackgroundSub) { route = SettingsRoute.Background }
-            }
-
-            SettingsRoute.Theme -> {
-                BackHeader(S.settingsThemeTitle) { route = SettingsRoute.Appearance }
-                // One flat list of every appearance, System/Light/Dark and the four Monet tints
-                // alike (added task 1). They are peers, not a menu with a sub-menu of "extras":
-                // each one is simply an answer to "what should the app look like", and a tint is no
-                // less of an answer than "dark" is. Each row previews the actual backdrop colour it
-                // selects, so the choice can be made by eye rather than by name.
-                val systemDark = isSystemInDarkTheme()
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    LucentThemeMode.entries.forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = savedTheme == mode.key,
-                                onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                            )
-                            PaletteSwatch(mode.swatch(systemDark))
-                            Column(modifier = Modifier.padding(start = 10.dp)) {
-                                Text(mode.label, color = onGradient)
-                                Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            SettingsRoute.Background -> {
-                BackHeader(S.settingsBackgroundTitle) { route = SettingsRoute.Appearance }
-                // At the very top: the master switch for the drifting effect. Off = a still, flat
-                // theme colour, and the palette choice below only takes visible effect once it's on.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.backgroundAnimationTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(S.backgroundAnimationDesc, color = onGradientMuted, fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = backgroundAnimationEnabled,
-                            onCheckedChange = { checked -> scope.launch { repo.setBackgroundAnimationEnabled(checked) } }
-                        )
-                    }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                // The palette list only takes visible effect while the drifting effect is ON, so
-                // with the switch off every colour row is disabled and greyed out rather than
-                // pretending to work: the radio buttons go grey, the swatches and labels fade, and
-                // a tap anywhere on a row answers with a toast at the bottom of the screen saying
-                // the drifting background isn't on — instead of silently changing a setting whose
-                // result can't be seen (fix task).
-                val paletteEnabled = backgroundAnimationEnabled
-                // One alpha for everything in a disabled row, so swatch and label fade together.
-                val paletteAlpha = if (paletteEnabled) 1f else 0.38f
-                fun pickPalette(name: String) {
-                    if (paletteEnabled) {
-                        AppScope.io.launch { repo.setPalette(name) }
-                    } else {
-                        LucentToast.show(context, S.backgroundPaletteDisabledHint)
-                    }
-                }
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    // Auto-cycle: rotates through every palette over time. Its swatch previews the
-                    // spread of colours it moves through.
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        // The whole row stays tappable while disabled so the tap can EXPLAIN itself
-                        // (the toast) — a dead row that ignores touches just looks broken.
-                        modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_CYCLE) }
-                    ) {
-                        RadioButton(
-                            selected = savedPalette == PALETTE_CYCLE,
-                            enabled = paletteEnabled,
-                            onClick = { pickPalette(PALETTE_CYCLE) }
-                        )
-                        Box(modifier = Modifier.alpha(paletteAlpha)) {
-                            PaletteSwatch(LucentPalette.entries.map { it.colors.first() })
-                        }
+                // Links is a fully independent switch now (task 8). It used to be a sub-toggle:
+                // greyed out and forced off whenever Markdown was off, on the theory that links
+                // are a Markdown feature. They aren't. Markdown decides whether text is
+                // *formatted*; links decide whether notes are *connected*. Anyone who wanted to
+                // see their text exactly as typed was made to give up their note graph as well —
+                // every [[link]] they had written went dead, and the switch that would have
+                // fixed it was greyed out with no explanation.
+                //
+                // All four combinations are now real and behave sensibly, plain-text-with-links
+                // included (see ui/Markdown.kt, LinkedPlainText).
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.linksTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            S.paletteCycleAuto,
-                            color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
-                            modifier = Modifier.padding(start = 10.dp)
-                        )
-                    }
-
-                    // Palettes grouped by kind, each with a small colour preview.
-                    listOf(
-                        S.paletteGroupSolid to PaletteGroup.SOLID,
-                        S.paletteGroupGradient to PaletteGroup.GRADIENT,
-                        S.paletteGroupClassic to PaletteGroup.CLASSIC
-                    ).forEach { (heading, group) ->
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            heading,
-                            color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
-                            fontSize = 13.sp
-                        )
-                        LucentPalette.entries.filter { it.group == group }.forEach { p ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { pickPalette(p.name) }
-                            ) {
-                                RadioButton(
-                                    selected = savedPalette == p.name,
-                                    enabled = paletteEnabled,
-                                    onClick = { pickPalette(p.name) }
-                                )
-                                Box(modifier = Modifier.alpha(paletteAlpha)) {
-                                    PaletteSwatch(p.colors)
-                                }
-                                Text(
-                                    p.label,
-                                    color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
-                                    modifier = Modifier.padding(start = 10.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            SettingsRoute.Editor -> {
-                BackHeader(S.settingsEditorTitle) { route = SettingsRoute.Root }
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.markdownFormattingTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                S.markdownFormattingDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = markdownEnabled,
-                            onCheckedChange = { checked -> scope.launch { repo.setMarkdownEnabled(checked) } }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    // Links is a fully independent switch now (task 8). It used to be a sub-toggle:
-                    // greyed out and forced off whenever Markdown was off, on the theory that links
-                    // are a Markdown feature. They aren't. Markdown decides whether text is
-                    // *formatted*; links decide whether notes are *connected*. Anyone who wanted to
-                    // see their text exactly as typed was made to give up their note graph as well —
-                    // every [[link]] they had written went dead, and the switch that would have
-                    // fixed it was greyed out with no explanation.
-                    //
-                    // All four combinations are now real and behave sensibly, plain-text-with-links
-                    // included (see ui/Markdown.kt, LinkedPlainText).
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.linksTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                S.linksDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = linksEnabled,
-                            onCheckedChange = { checked -> scope.launch { repo.setLinksEnabled(checked) } }
-                        )
-                    }
-                }
-            }
-
-            SettingsRoute.Security -> {
-                BackHeader(S.settingsSecurityTitle) { route = SettingsRoute.Root }
-
-                // Security is "who can get into this app", and right now that is exactly one control
-                // — the app lock, moved here by task 10. It is the page's only occupant on purpose:
-                // a page with one clear job is easier to trust than a page with a heading that
-                // covers two.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    // ---- App Lock ----
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.appLockTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                S.appLockDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = appLockOn,
-                            onCheckedChange = { turnOn ->
-                                if (turnOn) {
-                                    // Capture credentials before enabling; the lock isn't turned on
-                                    // until the setup dialog is completed.
-                                    lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
-                                    lockSetupError = ""
-                                    showAppLockSetup = true
-                                } else {
-                                    // Don't disable straight away: a dialog confirms the password
-                                    // first and explains the risk of removing the lock (task).
-                                    disablePw = ""; disableError = ""
-                                    showAppLockDisable = true
-                                }
-                            }
-                        )
-                    }
-
-                }
-            }
-
-            SettingsRoute.Privacy -> {
-                BackHeader(S.settingsPrivacyTitle) { route = SettingsRoute.Root }
-
-                // Privacy is the other half of the old combined page (task 10): not "who can get in"
-                // but "what gets out, or written down". Both switches here are off by default and
-                // both are about visibility beyond this screen — one makes Lucent visible to other
-                // apps, the other records a local file about what the app did.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    // ---- System share / intent integration ----
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.systemIntegrationTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                S.systemIntegrationDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = systemIntegrationOn,
-                            onCheckedChange = { turnOn ->
-                                if (turnOn) {
-                                    // Show the privacy warning first; only enable on explicit confirm.
-                                    showShareWarning = true
-                                } else {
-                                    scope.launch { repo.setSystemIntegrationEnabled(false) }
-                                    ShareIntegration.setEnabled(context, false)
-                                    // Disabling now gets the same bottom notification enabling does
-                                    // (task): an acknowledgement that the change took effect. No dialog
-                                    // — turning a feature *off* needs confirming, not warning about.
-                                    LucentToast.show(context, S.systemIntegrationOffToast)
-                                }
-                            }
-                        )
-                    }
-
-                    // ---- Local diagnostic logging ----
-                    Spacer(modifier = Modifier.height(20.dp))
-                    // Turning logging ON asks for consent first — it can capture technical detail and
-                    // the text you type to the assistant. Turning it OFF is immediate (no dialog).
-                    var showLoggingConsent by remember { mutableStateOf(false) }
-                    if (showLoggingConsent) {
-                        AlertDialog(
-                            onDismissRequest = { showLoggingConsent = false },
-                            title = { Text(S.loggingConsentTitle) },
-                            text = { Text(S.loggingConsentBody) },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    showLoggingConsent = false
-                                    scope.launch { repo.setStartupLoggingEnabled(true) }
-                                    StartupLog.setEnabled(true)
-                                    // Log lines stay English on purpose so a bug report reads the same
-                                    // regardless of the UI language at the time.
-                                    StartupLog.event(context, "Logging enabled from Settings")
-                                }) { Text(S.loggingConsentConfirm) }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showLoggingConsent = false }) { Text(S.actionCancel) }
-                            }
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.startupLoggingTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                S.startupLoggingDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = startupLoggingOn,
-                            onCheckedChange = { turnOn ->
-                                if (turnOn) {
-                                    showLoggingConsent = true          // enable only after consent
-                                } else {
-                                    scope.launch { repo.setStartupLoggingEnabled(false) }
-                                    StartupLog.setEnabled(false)
-                                }
-                            }
-                        )
-                    }
-                    if (startupLoggingOn) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row {
-                            GlassButton(text = S.exportLogs, onClick = { logsExportLauncher.launch("lucent-startup-log.txt") })
-                            Spacer(modifier = Modifier.width(12.dp))
-                            TextButton(onClick = {
-                                StartupLog.clear(context)
-                                // Toast rather than the Data page's backupStatus line, which isn't
-                                // shown on this page (task 5 moved these controls here).
-                                LucentToast.show(context, S.logsClearedToast)
-                            }) { Text(S.clearLogs) }
-                        }
-                    }
-                }
-            }
-
-            SettingsRoute.Data -> {
-                BackHeader(S.settingsDataTitle) { route = SettingsRoute.Root }
-
-                // Shown only in the (rare, alarming) case where the database couldn't be decrypted.
-                // Nothing was deleted — the old file was set aside — but silence here would leave
-                // someone staring at an empty app with no idea why, and no idea what to do.
-                if (lockedNotice != null && !lockedDismissed) {
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Text(S.lockedNoticeTitle, color = Color(0xFFFF8A80))
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            if (lockedNoticeFileName != null) S.lockedNoticeBody(lockedNoticeFileName)
-                            else lockedNotice,
+                            S.linksDesc,
                             color = onGradientMuted,
                             fontSize = 13.sp
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row {
-                            GlassButton(text = S.importBackup, onClick = { importLauncher.launch(arrayOf("*/*")) })
-                            Spacer(modifier = Modifier.width(12.dp))
-                            TextButton(onClick = {
-                                com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
-                                lockedDismissed = true
-                            }) { Text(S.actionDismiss) }
-                        }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = linksEnabled,
+                        onCheckedChange = { checked -> scope.launch { repo.setLinksEnabled(checked) } }
+                    )
+                }
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun SecurityPage() {
+            BackHeader(S.settingsSecurityTitle) { route = SettingsRoute.Root }
+
+            // Security is "who can get into this app", and right now that is exactly one control
+            // — the app lock, moved here by task 10. It is the page's only occupant on purpose:
+            // a page with one clear job is easier to trust than a page with a heading that
+            // covers two.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                // ---- App Lock ----
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.appLockTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            S.appLockDesc,
+                            color = onGradientMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = appLockOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) {
+                                // Capture credentials before enabling; the lock isn't turned on
+                                // until the setup dialog is completed.
+                                lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
+                                lockSetupError = ""
+                                showAppLockSetup = true
+                            } else {
+                                // Don't disable straight away: a dialog confirms the password
+                                // first and explains the risk of removing the lock (task).
+                                disablePw = ""; disableError = ""
+                                showAppLockDisable = true
+                            }
+                        }
+                    )
                 }
 
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun PrivacyPage() {
+            BackHeader(S.settingsPrivacyTitle) { route = SettingsRoute.Root }
+
+            // Privacy is the other half of the old combined page (task 10): not "who can get in"
+            // but "what gets out, or written down". Both switches here are off by default and
+            // both are about visibility beyond this screen — one makes Lucent visible to other
+            // apps, the other records a local file about what the app did.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                // ---- System share / intent integration ----
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.systemIntegrationTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            S.systemIntegrationDesc,
+                            color = onGradientMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = systemIntegrationOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) {
+                                // Show the privacy warning first; only enable on explicit confirm.
+                                showShareWarning = true
+                            } else {
+                                scope.launch { repo.setSystemIntegrationEnabled(false) }
+                                ShareIntegration.setEnabled(context, false)
+                                // Disabling now gets the same bottom notification enabling does
+                                // (task): an acknowledgement that the change took effect. No dialog
+                                // — turning a feature *off* needs confirming, not warning about.
+                                LucentToast.show(context, S.systemIntegrationOffToast)
+                            }
+                        }
+                    )
+                }
+
+                // ---- Local diagnostic logging ----
+                Spacer(modifier = Modifier.height(20.dp))
+                // Turning logging ON asks for consent first — it can capture technical detail and
+                // the text you type to the assistant. Turning it OFF is immediate (no dialog).
+                var showLoggingConsent by remember { mutableStateOf(false) }
+                if (showLoggingConsent) {
+                    AlertDialog(
+                        onDismissRequest = { showLoggingConsent = false },
+                        title = { Text(S.loggingConsentTitle) },
+                        text = { Text(S.loggingConsentBody) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showLoggingConsent = false
+                                scope.launch { repo.setStartupLoggingEnabled(true) }
+                                StartupLog.setEnabled(true)
+                                // Log lines stay English on purpose so a bug report reads the same
+                                // regardless of the UI language at the time.
+                                StartupLog.event(context, "Logging enabled from Settings")
+                            }) { Text(S.loggingConsentConfirm) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showLoggingConsent = false }) { Text(S.actionCancel) }
+                        }
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.startupLoggingTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            S.startupLoggingDesc,
+                            color = onGradientMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = startupLoggingOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) {
+                                showLoggingConsent = true          // enable only after consent
+                            } else {
+                                scope.launch { repo.setStartupLoggingEnabled(false) }
+                                StartupLog.setEnabled(false)
+                            }
+                        }
+                    )
+                }
+                if (startupLoggingOn) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row {
+                        GlassButton(text = S.exportLogs, onClick = { logsExportLauncher.launch("lucent-startup-log.txt") })
+                        Spacer(modifier = Modifier.width(12.dp))
+                        TextButton(onClick = {
+                            StartupLog.clear(context)
+                            // Toast rather than the Data page's backupStatus line, which isn't
+                            // shown on this page (task 5 moved these controls here).
+                            LucentToast.show(context, S.logsClearedToast)
+                        }) { Text(S.clearLogs) }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        @NonRestartableComposable
+        fun DataPage() {
+            BackHeader(S.settingsDataTitle) { route = SettingsRoute.Root }
+
+            // Shown only in the (rare, alarming) case where the database couldn't be decrypted.
+            // Nothing was deleted — the old file was set aside — but silence here would leave
+            // someone staring at an empty app with no idea why, and no idea what to do.
+            if (lockedNotice != null && !lockedDismissed) {
                 Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.backupRestoreTitle, color = onGradient)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.lockedNoticeTitle, color = Color(0xFFFF8A80))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        S.backupRestoreDesc,
+                        if (lockedNoticeFileName != null) S.lockedNoticeBody(lockedNoticeFileName)
+                        else lockedNotice,
                         color = onGradientMuted,
                         fontSize = 13.sp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Row {
-                        GlassButton(text = S.exportBackup, onClick = { showExportDialog = true })
-                        Spacer(modifier = Modifier.width(12.dp))
-                        // Allow any file so a beginner can always locate their .lcb even when the
-                        // device reports an unexpected MIME type for it. The import path validates the
-                        // content itself — it requires a Lucent .lcb envelope and rejects anything else
-                        // with a clear message (legacy ZIP/JSON support has been removed, task 5).
                         GlassButton(text = S.importBackup, onClick = { importLauncher.launch(arrayOf("*/*")) })
+                        Spacer(modifier = Modifier.width(12.dp))
+                        TextButton(onClick = {
+                            com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
+                            lockedDismissed = true
+                        }) { Text(S.actionDismiss) }
                     }
-                    if (backupStatus.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(backupStatus, color = onGradientMuted)
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(S.exportNotesTasksTitle, color = onGradient)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        S.exportNotesTasksDesc,
-                        color = onGradientMuted,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // Two full-width buttons, tasks first (task 9). They line up cleanly instead of the
-                    // old mismatched row, and each opens the pick-items-and-format screen.
-                    GlassButton(
-                        text = S.chooseTasksToExport,
-                        onClick = { exportKind = ExportKind.TASKS },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    GlassButton(
-                        text = S.chooseNotesToExport,
-                        onClick = { exportKind = ExportKind.NOTES },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(S.dangerZone, color = onGradient)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    // Targeted clears, then the full wipe. All four are identical full-width glass
-                    // pills in the danger tint; each asks for confirmation. Labels are kept short so
-                    // they fit on one line while still making each button's function obvious.
-                    //
-                    // These are the buttons task 11 was pointing at: they were solid Material red,
-                    // the only fully opaque objects on a page otherwise made of glass. They keep the
-                    // red — a destructive action should look destructive — but wear it as a tint on
-                    // the app's own material instead of arriving in someone else's.
-                    GlassButton(
-                        text = S.clearNotesBtn,
-                        onClick = { showClearNotes = true },
-                        danger = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    GlassButton(
-                        text = S.clearTasksBtn,
-                        onClick = { showClearTasks = true },
-                        danger = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    GlassButton(
-                        text = S.clearChatsBtn,
-                        onClick = { showClearChats = true },
-                        danger = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    GlassButton(
-                        text = S.clearAllDataBtn,
-                        onClick = { showClearData = true },
-                        danger = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
+                Spacer(modifier = Modifier.height(12.dp))
             }
+
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.backupRestoreTitle, color = onGradient)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    S.backupRestoreDesc,
+                    color = onGradientMuted,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row {
+                    GlassButton(text = S.exportBackup, onClick = { showExportDialog = true })
+                    Spacer(modifier = Modifier.width(12.dp))
+                    // Allow any file so a beginner can always locate their .lcb even when the
+                    // device reports an unexpected MIME type for it. The import path validates the
+                    // content itself — it requires a Lucent .lcb envelope and rejects anything else
+                    // with a clear message (legacy ZIP/JSON support has been removed, task 5).
+                    GlassButton(text = S.importBackup, onClick = { importLauncher.launch(arrayOf("*/*")) })
+                }
+                if (backupStatus.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(backupStatus, color = onGradientMuted)
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(S.exportNotesTasksTitle, color = onGradient)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    S.exportNotesTasksDesc,
+                    color = onGradientMuted,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                // Two full-width buttons, tasks first (task 9). They line up cleanly instead of the
+                // old mismatched row, and each opens the pick-items-and-format screen.
+                GlassButton(
+                    text = S.chooseTasksToExport,
+                    onClick = { exportKind = ExportKind.TASKS },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                GlassButton(
+                    text = S.chooseNotesToExport,
+                    onClick = { exportKind = ExportKind.NOTES },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(S.dangerZone, color = onGradient)
+                Spacer(modifier = Modifier.height(8.dp))
+                // Targeted clears, then the full wipe. All four are identical full-width glass
+                // pills in the danger tint; each asks for confirmation. Labels are kept short so
+                // they fit on one line while still making each button's function obvious.
+                //
+                // These are the buttons task 11 was pointing at: they were solid Material red,
+                // the only fully opaque objects on a page otherwise made of glass. They keep the
+                // red — a destructive action should look destructive — but wear it as a tint on
+                // the app's own material instead of arriving in someone else's.
+                GlassButton(
+                    text = S.clearNotesBtn,
+                    onClick = { showClearNotes = true },
+                    danger = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                GlassButton(
+                    text = S.clearTasksBtn,
+                    onClick = { showClearTasks = true },
+                    danger = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                GlassButton(
+                    text = S.clearChatsBtn,
+                    onClick = { showClearChats = true },
+                    danger = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                GlassButton(
+                    text = S.clearAllDataBtn,
+                    onClick = { showClearData = true },
+                    danger = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        when (route) {
+            SettingsRoute.Root -> RootPage()
+
+            SettingsRoute.Language -> LanguagePage()
+
+            SettingsRoute.Assistant -> AssistantPage()
+
+            SettingsRoute.LocalModel -> LocalModelPage()
+
+            SettingsRoute.Personalization -> PersonalizationPage()
+
+            SettingsRoute.Memory -> MemoryPage()
+
+            SettingsRoute.Network -> NetworkPage()
+
+            SettingsRoute.Api -> ApiPage()
+
+            SettingsRoute.Appearance -> AppearancePage()
+
+            SettingsRoute.Theme -> ThemePage()
+
+            SettingsRoute.Background -> BackgroundPage()
+
+            SettingsRoute.Editor -> EditorPage()
+
+            SettingsRoute.Security -> SecurityPage()
+
+            SettingsRoute.Privacy -> PrivacyPage()
+
+            SettingsRoute.Data -> DataPage()
         }
     }
 }
