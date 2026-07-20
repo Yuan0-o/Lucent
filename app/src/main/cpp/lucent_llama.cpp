@@ -125,6 +125,12 @@ extern "C" {
 JNIEXPORT jlong JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpath, jint n_ctx, jint n_threads, jint n_gpu_layers) {
     ensure_backend();
+    // Diagnostic, logged once per load: how many compute backends and devices ggml actually
+    // registered for this ABI. If this prints "dev=0" the build shipped no working backend and
+    // nothing can ever decode — it's the one line that tells a broken *build* apart from a broken
+    // *model*, without needing the phone in hand.
+    LOGI("backends registered: reg=%zu dev=%zu gpu_offload=%d",
+         ggml_backend_reg_count(), ggml_backend_dev_count(), (int) llama_supports_gpu_offload());
     const std::string path = from_jstring(env, jpath);
 
     auto * s = new (std::nothrow) Session();
@@ -271,13 +277,40 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
         llama_memory_clear(llama_get_memory(s->ctx), true);
         llama_sampler_reset(s->sampler);
 
-        // Feed the prompt in n_batch-sized slices.
+        LOGI("generate: prompt=%zu tokens, budget=%d, n_ctx=%d", tokens.size(), (int) budget, s->n_ctx);
+
+        // Explicit-batch decode — the production path. llama.h documents llama_batch_get_one as a
+        // transition helper to be avoided; here we own the token/pos/seq_id/logits arrays outright,
+        // advance the position counter ourselves, and mark for output only the token whose logits we
+        // actually sample. One reusable batch of n_batch slots for the whole turn.
         const int n_batch = 512;
-        for (size_t i = 0; i < tokens.size(); i += (size_t) n_batch) {
-            if (s->stop.load()) { s->busy.store(false); return 1; }
-            int chunk = (int) std::min((size_t) n_batch, tokens.size() - i);
-            llama_batch batch = llama_batch_get_one(tokens.data() + i, chunk);
-            if (llama_decode(s->ctx, batch) != 0) { s->busy.store(false); return -4; }
+        llama_batch batch = llama_batch_init(n_batch, 0, 1);
+        auto put = [&](llama_token id, llama_pos pos, bool want_logits) {
+            const int k = batch.n_tokens;
+            batch.token[k]     = id;
+            batch.pos[k]       = pos;
+            batch.n_seq_id[k]  = 1;
+            batch.seq_id[k][0] = 0;
+            batch.logits[k]    = want_logits ? 1 : 0;
+            batch.n_tokens++;
+        };
+
+        llama_pos n_past = 0;
+
+        // Prefill: feed the prompt in n_batch-sized slices. Only the last token of each slice is
+        // marked for output (the very last one is what the first sample reads); the rest just fill
+        // the KV cache.
+        for (size_t i = 0; i < tokens.size(); ) {
+            if (s->stop.load()) { llama_batch_free(batch); s->busy.store(false); return 1; }
+            size_t end = std::min(i + (size_t) n_batch, tokens.size());
+            batch.n_tokens = 0;
+            for (size_t j = i; j < end; ++j) put(tokens[j], n_past++, j + 1 == end);
+            int dec = llama_decode(s->ctx, batch);
+            if (dec != 0) {
+                LOGE("prompt decode failed: rc=%d at pos=%d (n_ctx=%d, batch=%d)", dec, (int) n_past, s->n_ctx, batch.n_tokens);
+                llama_batch_free(batch); s->busy.store(false); return -4;
+            }
+            i = end;
         }
 
         std::string pending;   // bytes held back until they form complete UTF-8
@@ -300,9 +333,20 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
                 }
             }
 
-            llama_batch batch = llama_batch_get_one(&tok, 1);
-            if (llama_decode(s->ctx, batch) != 0) { rc = -5; break; }
+            batch.n_tokens = 0;
+            put(tok, n_past++, true);
+            int dec = llama_decode(s->ctx, batch);
+            if (dec != 0) { LOGE("gen decode failed: rc=%d at pos=%d", dec, (int) n_past); rc = -5; break; }
             ++produced;
+        }
+        llama_batch_free(batch);
+
+        if (rc == 0 && produced == 0) {
+            // Loaded and decoded cleanly, but the model emitted end-of-turn before any content —
+            // almost always a chat-template mismatch for this specific model rather than an engine
+            // fault. Reported with its own code so it doesn't masquerade as a decode failure.
+            LOGE("generate produced 0 tokens (immediate EOG — check the chat template for this model)");
+            rc = -7;
         }
         if (s->stop.load() && rc == 0) rc = 1;
     } catch (...) {
