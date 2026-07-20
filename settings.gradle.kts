@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Lucent"
 include(":app")
+// Windows desktop build (Compose for Desktop). Lives beside :app and never touches it.
+include(":desktop")
