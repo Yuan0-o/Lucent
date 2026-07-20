@@ -253,6 +253,23 @@ ENTRIES = [
     ("helpDue", "today / tomorrow / week / overdue", "today／tomorrow／week／overdue（今天／明天／本周／逾期）", "today／tomorrow／week／overdue（今日／明日／今週／期限切れ）", "today / tomorrow / week / overdue (오늘/내일/이번 주/기한 지남)"),
     ("helpLink", "Notes linking to [[Recipes]]", "链接到 [[Recipes]] 的笔记", "[[Recipes]] にリンクするメモ", "[[Recipes]]로 연결되는 노트"),
 
+    # ---- Search filter chip labels (shown ON the operator chips; the underlying query token stays
+    #      the ASCII literal like is:pinned so typed queries and the parser are unchanged) ----
+    ("searchChipTag", "Tag", "标签", "タグ", "태그"),
+    ("searchChipPinned", "Pinned", "已置顶", "ピン留め", "고정됨"),
+    ("searchChipDone", "Done", "已完成", "完了", "완료"),
+    ("searchChipOverdue", "Overdue", "已逾期", "期限切れ", "기한 초과"),
+    ("searchChipArchived", "Archived", "已归档", "アーカイブ", "보관됨"),
+    ("searchChipChecklist", "Checklist", "清单", "チェックリスト", "체크리스트"),
+    ("searchChipAttachment", "Attachment", "有附件", "添付あり", "첨부 있음"),
+    ("searchChipDue", "Due date", "有截止日", "期限あり", "기한 있음"),
+    ("searchChipReminder", "Reminder", "有提醒", "リマインダー", "알림 있음"),
+    ("searchChipSubtasks", "Subtasks", "有子任务", "サブタスク", "하위 작업"),
+    ("searchChipPriorityHigh", "High priority", "高优先级", "優先度: 高", "높은 우선순위"),
+    ("searchChipDueToday", "Due today", "今天到期", "今日期限", "오늘 마감"),
+    ("searchChipDueWeek", "Due this week", "本周到期", "今週期限", "이번 주 마감"),
+    ("searchChipLink", "Link", "链接", "リンク", "링크"),
+
     # ---- Image editor ----
     ("toolDraw", "Draw", "涂鸦", "描く", "그리기"),
     ("toolMosaic", "Mosaic", "马赛克", "モザイク", "모자이크"),
@@ -706,8 +723,11 @@ ENTRIES = [
     ("shareWarnBody", "This makes Lucent appear in other apps' share sheets so you can send text and files into it. It's the one place Lucent becomes visible to other apps. Anything you choose to share INTO Lucent is copied into your encrypted database like any other note or task; Lucent still sends nothing out on its own. You can turn this off again at any time, and it's off until you confirm.", "这会让 Lucent 出现在其他应用的分享面板中，以便向其发送文字和文件。这是 Lucent 对其他应用可见的唯一场合。你选择分享进 Lucent 的内容会像普通笔记或任务一样复制进加密数据库；Lucent 自身仍然不会向外发送任何内容。你可以随时再次关闭，且在确认之前保持关闭。", "他のアプリの共有シートにLucentが表示され、テキストやファイルを送り込めるようになります。Lucentが他のアプリから見えるのはこの場面だけです。Lucentへ共有した内容は、他のメモやタスクと同様に暗号化データベースへコピーされます。Lucent自身が外へ何かを送ることはありません。いつでも再びオフにでき、確認するまではオフのままです。", "다른 앱의 공유 시트에 Lucent가 표시되어 텍스트와 파일을 보낼 수 있게 됩니다. Lucent가 다른 앱에 보이는 것은 이 경우뿐입니다. Lucent로 공유한 내용은 다른 노트나 할 일처럼 암호화된 데이터베이스에 복사되며, Lucent 스스로 밖으로 내보내는 것은 없습니다. 언제든 다시 끌 수 있으며, 확인하기 전까지는 꺼져 있습니다."),
     ("systemIntegrationOnToast", "System integration is on.", "系统集成已开启。", "システム連携をオンにしました。", "시스템 연동이 켜졌습니다."),
     ("systemIntegrationOffToast", "System integration is off.", "系统集成已关闭。", "システム連携をオフにしました。", "시스템 연동이 꺼졌습니다."),
-    ("startupLoggingTitle", "Startup logging", "启动日志", "起動ログ", "시작 로그"),
-    ("startupLoggingDesc", "Record app startup events to a local file for troubleshooting. These logs stay on this device and are never sent anywhere — the only way they leave is if you export them yourself below.", "将应用启动事件记录到本地文件以便排查问题。这些日志只保存在此设备上，绝不会被发送到任何地方——除非你在下方自行导出。", "トラブルシューティング用に、アプリの起動イベントをローカルファイルへ記録します。ログはこの端末に留まり、どこへも送信されません。外に出るのは、下であなた自身がエクスポートしたときだけです。", "문제 해결을 위해 앱 시작 이벤트를 로컬 파일에 기록합니다. 이 로그는 이 기기에만 저장되며 어디로도 전송되지 않습니다. 아래에서 직접 내보낼 때만 밖으로 나갑니다."),
+    ("startupLoggingTitle", "Diagnostic logging", "诊断日志", "診断ログ", "진단 로그"),
+    ("startupLoggingDesc", "Record diagnostic events — including errors and the on-device model engine's own output — to a local file for troubleshooting. These logs stay on this device and are never sent anywhere; the only way they leave is if you export them yourself below.", "将诊断事件——包括错误和本地模型引擎自身的输出——记录到本地文件以便排查问题。这些日志只保存在此设备上，绝不会被发送到任何地方——除非你在下方自行导出。", "トラブルシューティング用に、エラーや端末内モデルエンジン自身の出力を含む診断イベントをローカルファイルへ記録します。ログはこの端末に留まり、どこへも送信されません。外に出るのは、下であなた自身がエクスポートしたときだけです。", "문제 해결을 위해 오류와 온디바이스 모델 엔진 자체 출력 등 진단 이벤트를 로컬 파일에 기록합니다. 이 로그는 이 기기에만 저장되며 어디로도 전송되지 않습니다. 아래에서 직접 내보낼 때만 밖으로 나갑니다."),
+    ("loggingConsentTitle", "Enable diagnostic logging?", "开启诊断日志？", "診断ログを有効にしますか？", "진단 로그를 사용할까요?"),
+    ("loggingConsentBody", "This records technical events to a file on this device only — including errors, the model engine's output, and details like model and device. It may include text you type to the assistant. Nothing is ever sent anywhere: you export it yourself, only if you choose to share it for troubleshooting. You can turn it off and clear it at any time.", "这会把技术事件仅记录到本机的一个文件里——包括错误、模型引擎的输出，以及模型和设备等信息。其中可能包含你输入给助手的文字。任何内容都不会被发送到任何地方：只有你自己选择导出，才能用于排查问题的分享。你可以随时关闭并清除。", "エラー、モデルエンジンの出力、モデルや端末などの情報を含む技術的なイベントを、この端末内のファイルにのみ記録します。アシスタントに入力した文字が含まれることがあります。どこにも送信されません。共有する場合のみ、ご自身でエクスポートします。いつでもオフにして消去できます。", "오류, 모델 엔진 출력, 모델·기기 정보 등 기술적 이벤트를 이 기기 내 파일에만 기록합니다. 어시스턴트에 입력한 텍스트가 포함될 수 있습니다. 어디로도 전송되지 않으며, 공유하려는 경우에만 직접 내보냅니다. 언제든 끄고 삭제할 수 있습니다."),
+    ("loggingConsentConfirm", "Enable", "开启", "有効にする", "사용"),
     ("loggingEnabledEvent", "Logging enabled from Settings", "已在设置中开启日志", "設定でログを有効化", "설정에서 로그 사용 설정됨"),
     ("exportLogs", "Export logs", "导出日志", "ログをエクスポート", "로그 내보내기"),
     ("clearLogs", "Clear logs", "清除日志", "ログを消去", "로그 지우기"),
