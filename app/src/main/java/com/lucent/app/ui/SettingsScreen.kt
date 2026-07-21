@@ -317,14 +317,54 @@ fun SettingsScreen(active: Boolean = true) {
     var apiLimitPrompt by remember { mutableStateOf(false) }
     var exportPasswordVisible by remember { mutableStateOf(false) }
 
-    // A backup that needs a password we don't have. The bytes are held here rather than re-read on
-    // submit, because the picker's Uri may well not still be readable by the time the user finishes
-    // typing — and losing a backup to an expired permission grant would be an absurd way to lose one.
-    var pendingImportBytes by remember { mutableStateOf<ByteArray?>(null) }
+    // The picked backup, held as its SAF Uri and re-opened for each of the import flow's two
+    // streaming passes (inspect, then commit).
+    //
+    // History of this field, because each shape fixed a real failure. Originally the whole file
+    // was read into a ByteArray — and a backup carrying local model files is gigabytes, so that
+    // was an instant OutOfMemoryError, an Error the catch blocks never saw: the app simply
+    // vanished on import. The first fix staged the pick into a cache file, which cured the crash
+    // but still cost a full extra copy — for a 16 GB model backup that is 16 GB of scratch space
+    // and minutes of flash I/O before the preview could even appear. So now the Uri itself is the
+    // source: BackupManager streams both passes straight from the provider, and the only bytes
+    // ever written are the restored payloads themselves. The old worry about the picker's read
+    // grant expiring mid-flow is answered by taking a persistable read permission at pick time
+    // (released again on every exit below); even where a provider refuses persistence, the
+    // ordinary grant outlives this screen's inspect -> confirm -> commit sequence.
+    var importSourceUri by remember { mutableStateOf<Uri?>(null) }
+    // Whether the password prompt (step 2) is up for the picked backup.
+    var importPasswordPrompt by remember { mutableStateOf(false) }
     var importPasswordDraft by remember { mutableStateOf("") }
     var importPasswordError by remember { mutableStateOf(false) }
     // What's in the file, worked out without writing anything. Non-null means the confirm step is up.
     var importPreview by remember { mutableStateOf<BackupManager.BackupPreview?>(null) }
+    // A re-openable source over [uri] for BackupManager's streaming passes. Opening can fail if
+    // the grant is somehow gone; throwing (rather than returning an empty stream) lets inspect
+    // surface it as a readable message and lets commit's best-effort blob pass skip cleanly.
+    fun uriSource(uri: Uri) = BackupManager.BackupSource {
+        context.contentResolver.openInputStream(uri)
+            ?: throw java.io.FileNotFoundException("Backup could not be opened")
+    }
+    // Let go of the persistable read grant taken at pick time. Persisted grants are a bounded
+    // system resource, so they are held exactly as long as the flow needs them and no longer.
+    fun releaseImportGrant(uri: Uri) {
+        try {
+            context.contentResolver.releasePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: Throwable) {
+            // Never taken (provider refused persistence) or already gone — nothing to release.
+        }
+    }
+    // Close the import flow's file state. Called on every exit from the flow — cancel, a failed
+    // inspect, or the launcher replacing a stale pick. The one path that must NOT call this is a
+    // running restore: commit is still streaming from the Uri, so runRestore below does its own
+    // cleanup after commit returns.
+    fun discardImportSource() {
+        importSourceUri?.let { releaseImportGrant(it) }
+        importSourceUri = null
+        importPasswordPrompt = false
+    }
     // The actual restore + its post-restore housekeeping, in one place so the confirm button and the
     // API-limit prompt drive identical behaviour; only the API profile selection differs between them.
     // Passing a non-null (possibly empty) profile-name set makes the API restore MERGE into this
@@ -334,14 +374,30 @@ fun SettingsScreen(active: Boolean = true) {
         { preview, modules, convIds, apiNames ->
             importPreview = null
             apiLimitPrompt = false
+            // Capture the Uri before launching: commit's second streaming pass reads the
+            // model/font blobs straight from it (see BackupManager — the preview no longer carries
+            // a decrypted payload, which is what used to pin gigabytes of model file in memory and
+            // kill the import with an OutOfMemoryError the catch below could never see).
+            val sourceUri = importSourceUri
             scope.launch {
                 backupStatus = withContext(Dispatchers.IO) {
                     try {
-                        BackupManager.commit(context, db, repo, preview, modules, convIds, apiNames)
-                    } catch (e: Exception) {
-                        S.importFailed(e.message ?: "")
+                        BackupManager.commit(
+                            context, db, repo, preview, modules, convIds, apiNames,
+                            source = sourceUri?.let { uriSource(it) }
+                        )
+                    } catch (t: Throwable) {
+                        // Throwable, not Exception: the failure this flow historically died of was
+                        // an OutOfMemoryError, which is an Error. Streaming makes that unlikely,
+                        // but if anything of the kind ever recurs it must surface as a message,
+                        // not as the app vanishing.
+                        S.importFailed(t.message ?: "")
                     }
                 }
+                // Both passes are done; the grant has served its purpose.
+                importSourceUri = null
+                importPasswordPrompt = false
+                sourceUri?.let { releaseImportGrant(it) }
                 // A restored backup can bring in tasks that want reminders, and alarms aren't part of
                 // a backup file — they're OS state. BackupManager re-arms them, but the channel has to
                 // exist before one can be posted.
@@ -1063,27 +1119,53 @@ fun SettingsScreen(active: Boolean = true) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
-                val bytes = withContext(Dispatchers.IO) {
+                // A previous, abandoned pick may still hold state (and a grant); replace it.
+                discardImportSource()
+                // No whole-file read, and no staging copy either. The whole-file ByteArray was
+                // the crash (an OutOfMemoryError on any backup carrying model files, invisible
+                // to catch(Exception)); the staging copy that first replaced it cured the crash
+                // but still cost a full extra write — 16 GB of scratch space and minutes of
+                // flash I/O for a 16 GB model backup. BackupManager now streams both of its
+                // passes straight from the provider, so the pick costs nothing up front.
+                //
+                // Hold the read grant for the whole flow: OpenDocument Uris support persistable
+                // permissions, and taking one means the confirm dialog can sit open as long as
+                // the user likes without the source expiring underneath commit. Providers that
+                // refuse persistence throw; the ordinary session grant covers this screen's
+                // flow anyway, so that failure is deliberately ignored.
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Throwable) {
+                }
+                // The one cheap up-front check: can the document be opened at all? This keeps
+                // the friendly "couldn't read that file" for a dead pick, instead of a raw
+                // exception message out of inspect.
+                val openable = withContext(Dispatchers.IO) {
                     try {
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    } catch (e: Exception) {
-                        null
+                        context.contentResolver.openInputStream(uri)?.use { } != null
+                    } catch (_: Throwable) {
+                        false
                     }
                 }
-                if (bytes == null) {
+                if (!openable) {
+                    releaseImportGrant(uri)
                     backupStatus = S.couldNotReadThatFile
                     return@launch
                 }
+                importSourceUri = uri
+                val source = uriSource(uri)
 
-                val header = BackupManager.peekPasswordRequirement(bytes)
+                val header = BackupManager.peekPasswordRequirement(source)
                 if (header != null && header.needsPassword) {
                     // Try the password saved on this device first. On the phone that made the backup,
                     // that means restoring is still a single tap.
                     val stored = repo.backupPassword.first()
                     val preview = if (stored.isEmpty()) null else withContext(Dispatchers.IO) {
                         try {
-                            BackupManager.inspect(context, bytes, stored)
-                        } catch (e: Exception) {
+                            BackupManager.inspect(context, source, stored)
+                        } catch (_: Throwable) {
                             null
                         }
                     }
@@ -1092,19 +1174,22 @@ fun SettingsScreen(active: Boolean = true) {
                     } else {
                         importPasswordDraft = ""
                         importPasswordError = false
-                        pendingImportBytes = bytes
+                        importPasswordPrompt = true
                     }
                 } else {
                     val result = withContext(Dispatchers.IO) {
                         try {
-                            Result.success(BackupManager.inspect(context, bytes, null))
-                        } catch (e: Exception) {
-                            Result.failure(e)
+                            Result.success(BackupManager.inspect(context, source, null))
+                        } catch (t: Throwable) {
+                            Result.failure(t)
                         }
                     }
                     result.fold(
                         onSuccess = { importPreview = it },
-                        onFailure = { backupStatus = S.importFailed(it.message ?: "") }
+                        onFailure = {
+                            backupStatus = S.importFailed(it.message ?: "")
+                            discardImportSource()
+                        }
                     )
                 }
             }
@@ -1114,9 +1199,9 @@ fun SettingsScreen(active: Boolean = true) {
     // --- Step 2: the password prompt (only for a backup made with a custom password) ---
     @Composable
     @NonRestartableComposable
-    fun ImportPasswordDialog(bytes: ByteArray) {
+    fun ImportPasswordDialog(uri: Uri) {
         AlertDialog(
-            onDismissRequest = { pendingImportBytes = null },
+            onDismissRequest = { discardImportSource() },
             title = { Text(S.backupPasswordTitle) },
             text = {
                 Column {
@@ -1141,14 +1226,19 @@ fun SettingsScreen(active: Boolean = true) {
                         scope.launch {
                             val result = withContext(Dispatchers.IO) {
                                 try {
-                                    Result.success(BackupManager.inspect(context, bytes, attempt))
-                                } catch (e: Exception) {
-                                    Result.failure(e)
+                                    // Streaming inspect over the picked backup — the password's
+                                    // PBKDF2 cost is paid here once; commit reuses the validated
+                                    // password from the preview for its own pass.
+                                    Result.success(
+                                        BackupManager.inspect(context, uriSource(uri), attempt)
+                                    )
+                                } catch (t: Throwable) {
+                                    Result.failure(t)
                                 }
                             }
                             result.fold(
                                 onSuccess = {
-                                    pendingImportBytes = null
+                                    importPasswordPrompt = false
                                     importPreview = it
                                 },
                                 onFailure = { error ->
@@ -1158,8 +1248,8 @@ fun SettingsScreen(active: Boolean = true) {
                                         // only useful thing left to offer is another try.
                                         importPasswordError = true
                                     } else {
-                                        pendingImportBytes = null
                                         backupStatus = S.importFailed(error.message ?: "")
+                                        discardImportSource()
                                     }
                                 }
                             )
@@ -1167,17 +1257,19 @@ fun SettingsScreen(active: Boolean = true) {
                     }
                 ) { Text(S.lockContinue) }
             },
-            dismissButton = { TextButton(onClick = { pendingImportBytes = null }) { Text(S.actionCancel) } }
+            dismissButton = { TextButton(onClick = { discardImportSource() }) { Text(S.actionCancel) } }
         )
     }
-    pendingImportBytes?.let { ImportPasswordDialog(it) }
+    if (importPasswordPrompt) importSourceUri?.let { ImportPasswordDialog(it) }
 
     // --- Step 3: show what's in the file, and let them say no ---
     @Composable
     @NonRestartableComposable
     fun ImportPreviewDialog(preview: BackupManager.BackupPreview) {
         AlertDialog(
-            onDismissRequest = { importPreview = null },
+            // Backing out of the preview abandons the import: the staging copy goes with it, or a
+            // multi-gigabyte file would sit in cache until the next pick happened to replace it.
+            onDismissRequest = { importPreview = null; discardImportSource() },
             title = { Text(S.restoreBackupTitle) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -1334,7 +1426,9 @@ fun SettingsScreen(active: Boolean = true) {
                     }
                 ) { Text(S.actionRestore) }
             },
-            dismissButton = { TextButton(onClick = { importPreview = null }) { Text(S.actionCancel) } }
+            dismissButton = {
+                TextButton(onClick = { importPreview = null; discardImportSource() }) { Text(S.actionCancel) }
+            }
         )
     }
     importPreview?.let { ImportPreviewDialog(it) }
