@@ -183,7 +183,7 @@ class SettingsRepository(private val context: Context) {
         val appLockEnabled: Boolean,
         val startupLoggingEnabled: Boolean,
         val systemIntegrationEnabled: Boolean,
-        val appLanguage: String = "en",
+        val appLanguage: String = "system",
         // Desktop default is OFF — see the class comment.
         val backgroundAnimationEnabled: Boolean = false
     )
@@ -199,16 +199,16 @@ class SettingsRepository(private val context: Context) {
             appLockEnabled = bool(prefs, K.APP_LOCK_ENABLED) ?: false,
             startupLoggingEnabled = bool(prefs, K.STARTUP_LOGGING_ENABLED) ?: false,
             systemIntegrationEnabled = bool(prefs, K.SYSTEM_INTEGRATION_ENABLED) ?: false,
-            appLanguage = str(prefs, K.APP_LANGUAGE) ?: "en",
+            appLanguage = str(prefs, K.APP_LANGUAGE) ?: "system",
             backgroundAnimationEnabled = bool(prefs, K.BACKGROUND_ANIMATION_ENABLED) ?: false
         )
     }
 
     // ---- UI language ----
 
-    val appLanguage: Flow<String> = state.map { str(it, K.APP_LANGUAGE) ?: "en" }
+    val appLanguage: Flow<String> = state.map { str(it, K.APP_LANGUAGE) ?: "system" }
     suspend fun setAppLanguage(value: String) { edit { it[K.APP_LANGUAGE] = value } }
-    suspend fun appLanguageOnce(): String = str(state.first(), K.APP_LANGUAGE) ?: "en"
+    suspend fun appLanguageOnce(): String = str(state.first(), K.APP_LANGUAGE) ?: "system"
 
     // ---- Local model ----
 
@@ -324,6 +324,9 @@ class SettingsRepository(private val context: Context) {
             prefs[K.APP_LOCK_ENABLED] = enabled
             if (credentialsJson.isEmpty()) prefs.remove(K.APP_LOCK_CREDENTIALS_ENC)
             else prefs[K.APP_LOCK_CREDENTIALS_ENC] = LocalSecrets.encrypt(credentialsJson)
+            // Windows Hello only makes sense while the lock is on, so tearing the lock down also
+            // clears the Hello opt-in; re-enabling the lock then starts from "off".
+            if (!enabled) prefs.remove(K.APP_LOCK_HELLO_ENABLED)
         }
     }
 
