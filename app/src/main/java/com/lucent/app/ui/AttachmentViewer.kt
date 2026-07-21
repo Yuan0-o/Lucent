@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -181,18 +183,27 @@ fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
  * open it elsewhere. [onDismiss] closes it.
  */
 @Composable
-fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
+fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
+    AttachmentViewerDialog(listOf(att), 0, onDismiss)
+
+/**
+ * The full-screen attachment viewer. When a note or task has several attachments they can be swiped
+ * between with a horizontal pager (task E3); the chrome — title, page counter, and the
+ * Save/Share/Edit/Open-with row — always reflects whichever attachment is currently on screen.
+ */
+@Composable
+fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
+    if (attachments.isEmpty()) return
     val context = LocalContext.current
     val save = rememberSaveAttachmentLauncher()
-    // Opening the in-app image editor over this viewer; bumping reloadKey after a save forces the
-    // image to be re-decoded so the edit is visible immediately even though the attachment id is
-    // unchanged (the editor writes back over the same stored bytes).
     var editing by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
-    // Whether the viewer's own furniture — the title bar and the Save/Share/Open-with row — is
-    // showing. Tapping a video or audio track toggles it, which is what turns this dialog into an
-    // actual full-screen player instead of a video wedged between two toolbars.
     var chromeVisible by remember { mutableStateOf(true) }
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, attachments.size - 1)
+    ) { attachments.size }
+    val current = pagerState.currentPage.coerceIn(0, attachments.size - 1)
+    val att = attachments[current]
     val isMedia = att.isVideo || att.isAudio
 
     Dialog(
@@ -204,9 +215,6 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
         ) {
-            // The preview surface fills the screen; the top bar and bottom actions float over it.
-            // With the chrome hidden the reserved bands collapse to nothing, so the video really does
-            // use the whole display rather than merely losing two toolbars it was already inset by.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -216,20 +224,25 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                when {
-                    att.isImage -> ZoomableImage(att, reloadKey)
-                    att.isVideo || att.isAudio -> InlineMediaPlayer(
-                        att = att,
-                        chromeVisible = chromeVisible,
-                        onToggleChrome = { chromeVisible = !chromeVisible }
-                    )
-                    att.isPdf -> PdfViewer(att)
-                    else -> NonPreviewableInfo(att)
+                // One page per attachment; swiping moves between them. A zoomed-in image or a playing
+                // video consumes its own drags, so the pager only takes over the plain left/right swipe.
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    val a = attachments[page]
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        when {
+                            a.isImage -> ZoomableImage(a, if (page == current) reloadKey else 0)
+                            a.isVideo || a.isAudio -> InlineMediaPlayer(
+                                att = a,
+                                chromeVisible = chromeVisible,
+                                onToggleChrome = { chromeVisible = !chromeVisible }
+                            )
+                            a.isPdf -> PdfViewer(a)
+                            else -> NonPreviewableInfo(a)
+                        }
+                    }
                 }
             }
 
-            // Top bar: title + close. Hidden along with everything else while a video is playing
-            // full-screen; a tap anywhere on the video brings it back.
             if (!isMedia || chromeVisible) {
             Row(
                 modifier = Modifier
@@ -243,14 +256,20 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
                     fontSize = 15.sp,
                     modifier = Modifier.weight(1f).padding(start = 8.dp)
                 )
+                if (attachments.size > 1) {
+                    Text(
+                        "${current + 1} / ${attachments.size}",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.actionClose, tint = Color.White)
                 }
             }
             }
 
-            // Bottom action row. Images gain an Edit action (crop/mosaic/doodle); everything keeps
-            // Save / Share / Open-with.
             if (!isMedia || chromeVisible) {
             Row(
                 modifier = Modifier
