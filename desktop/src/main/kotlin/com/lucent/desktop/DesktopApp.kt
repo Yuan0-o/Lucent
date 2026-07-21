@@ -134,7 +134,7 @@ private fun DesktopShell(
 ) {
     // Opens on the Assistant, the mockup's hero screen and the app's centre of gravity. Cross-screen
     // jumps (Insights/Search "open this note") route through AppNavigation exactly as on Android.
-    var current by remember { mutableStateOf(Screen.Assistant) }
+    var current by remember { mutableStateOf(Screen.Tasks) }
     LaunchedEffect(AppNavigation.requestedScreen) {
         AppNavigation.consumeScreen()?.let { current = it }
     }
@@ -160,7 +160,7 @@ private fun DesktopShell(
                         // opens directly in its editor on the right tab.
                         onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Search) },
                         onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Search) },
-                        onBack = { AppNavigation.requestScreen(Screen.Assistant) }
+                        onBack = { AppNavigation.requestScreen(Screen.Tasks) }
                     )
                     Screen.Settings -> SettingsScreen()
                 }

@@ -5,6 +5,10 @@ import androidx.activity.compose.DesktopBackDispatcher
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -74,7 +78,18 @@ fun main() {
     application {
         val windowState = rememberWindowState(placement = WindowPlacement.Maximized)
         val trayState = rememberTrayState()
-        val icon = rememberVectorPainter(Icons.Default.AutoAwesome)
+        // The app icon — the same artwork as the Android launcher icon, bundled at
+        // resources/icons/lucent.png (and lucent.ico for the installer, see build.gradle). Loaded via
+        // Skia so it's version-robust; if anything goes wrong we fall back to the vector mark so a
+        // missing/broken resource can never stop the window from opening.
+        val fallbackIcon = rememberVectorPainter(Icons.Default.AutoAwesome)
+        val icon: Painter = remember {
+            runCatching {
+                val bytes = Thread.currentThread().contextClassLoader!!
+                    .getResourceAsStream("icons/lucent.png")!!.readBytes()
+                BitmapPainter(org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap())
+            }.getOrNull()
+        } ?: fallbackIcon
 
         // Desktop has no OS alarm service, so reminders can only fire while the app runs; when they do,
         // ReminderScheduler calls this notifier, which raises a Windows tray notification.

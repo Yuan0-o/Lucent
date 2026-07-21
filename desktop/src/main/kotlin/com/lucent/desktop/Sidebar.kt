@@ -65,23 +65,6 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // ---- New (opens a fresh Assistant chat) ----
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(onGradient.copy(alpha = 0.12f))
-                .clickable { Haptics.tick(android.content.DesktopContext); onSelect(Screen.Assistant) }
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-        ) {
-            Icon(Icons.Default.Add, contentDescription = null, tint = onGradient)
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(com.lucent.app.i18n.S.tabAssistant, color = onGradient, fontSize = 15.sp)
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
         // ---- Destinations, one per Screen ----
         Screen.entries.forEach { screen ->
             NavRow(
