@@ -208,7 +208,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val themeMode: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.THEME_MODE] ?: "system" }
-    val palette: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PALETTE] ?: "SUNSET" }
+    val palette: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PALETTE] ?: "CYCLE" }
     // App-wide font choice, stored as a LucentFont.key. Defaults to the platform font.
     val font: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.FONT] ?: "system" }
 
@@ -229,7 +229,7 @@ class SettingsRepository(private val context: Context) {
         val prefs = context.settingsDataStore.data.first()
         return DisplayPrefs(
             themeMode = prefs[SettingsKeys.THEME_MODE] ?: "system",
-            palette = prefs[SettingsKeys.PALETTE] ?: "SUNSET",
+            palette = prefs[SettingsKeys.PALETTE] ?: "CYCLE",
             font = prefs[SettingsKeys.FONT] ?: "system"
         )
     }
@@ -265,7 +265,7 @@ class SettingsRepository(private val context: Context) {
         return StartupPrefs(
             display = DisplayPrefs(
                 themeMode = prefs[SettingsKeys.THEME_MODE] ?: "system",
-                palette = prefs[SettingsKeys.PALETTE] ?: "SUNSET",
+                palette = prefs[SettingsKeys.PALETTE] ?: "CYCLE",
                 font = prefs[SettingsKeys.FONT] ?: "system"
             ),
             appLockEnabled = prefs[SettingsKeys.APP_LOCK_ENABLED] ?: false,
