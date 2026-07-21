@@ -77,6 +77,15 @@ compose.desktop {
             packageName = "Lucent"
             packageVersion = "1.0.0"
 
+            // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
+            // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with
+            // NoClassDefFoundError: java/sql/Driver. okhttp's HTTPS also needs jdk.crypto.ec, and some
+            // libraries touch sun.misc.Unsafe (jdk.unsupported). Bundling all JDK modules is the
+            // simplest guarantee that no runtime module is missing; it enlarges the installer somewhat.
+            // (To slim it later, replace with e.g. modules("java.sql", "java.naming", "jdk.crypto.ec",
+            // "jdk.unsupported").)
+            includeAllModules = true
+
             windows {
                 menu = true
                 menuGroup = "Lucent"
