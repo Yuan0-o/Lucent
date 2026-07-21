@@ -555,6 +555,11 @@ ENTRIES = [
     ("settingsPersonalizationSub", "Assistant name and chat style", "助手名称与聊天风格", "アシスタントの名前とチャットスタイル", "어시스턴트 이름과 대화 스타일"),
     ("settingsApiTitle", "API", "API", "API", "API"),
     ("settingsApiSub(active: String)", "Selection and connection · active: {active}", "选择与连接 · 当前：{active}", "選択と接続 · 使用中：{active}", "선택 및 연결 · 사용 중: {active}"),
+    # Shown in place of settingsApiSub while the local model is on: naming the "active" profile
+    # there would advertise a connection the app is deliberately not using (the API page itself
+    # says "Cloud API frozen"), so the card states the freeze instead. The title above it is
+    # already "API", so the subtitle doesn't repeat the word.
+    ("settingsApiSubFrozen", "Frozen while the local model is on", "已冻结 · 本地模型运行中", "凍結中 · ローカルモデル実行中", "동결됨 · 로컬 모델 실행 중"),
     ("settingsMemoryWebTitle", "Memory & web", "记忆与联网", "記憶とウェブ", "메모리 및 웹"),
     ("settingsMemoryWebSub", "How much it remembers · web search", "记住多少内容 · 网络搜索", "どこまで覚えるか · ウェブ検索", "기억 범위 · 웹 검색"),
     ("settingsMemoryTitle", "Memory", "记忆", "記憶", "메모리"),
