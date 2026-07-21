@@ -86,6 +86,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -184,7 +186,7 @@ fun TasksScreen(active: Boolean = true) {
         }
     }
     var editingTask by remember { mutableStateOf<Task?>(null) }
-    var newTitle by remember { mutableStateOf("") }
+    var newTitle by remember { mutableStateOf(TextFieldValue("")) }
     var newNotes by remember { mutableStateOf("") }
     var pendingAttachments by remember { mutableStateOf<List<Attachment>>(emptyList()) }
     var dueAt by remember { mutableStateOf<Long?>(null) }
@@ -256,7 +258,7 @@ fun TasksScreen(active: Boolean = true) {
 
     fun resetComposer() {
         editingTask = null
-        newTitle = ""
+        newTitle = TextFieldValue("")
         newNotes = ""
         pendingAttachments = emptyList()
         dueAt = null
@@ -311,7 +313,7 @@ fun TasksScreen(active: Boolean = true) {
 
     fun startEdit(task: Task) {
         editingTask = task
-        newTitle = task.title
+        newTitle = TextFieldValue(task.title, selection = TextRange(task.title.length))
         newNotes = task.notes
         pendingAttachments = Attachments.parse(task.attachments)
         dueAt = task.dueAt
@@ -339,14 +341,14 @@ fun TasksScreen(active: Boolean = true) {
         // from before it was toggled off — so an off switch means "no checklist" both for the
         // "nothing to save" check and for what actually gets written.
         val effectiveSubtasks = if (subtasksEnabled) composedSubtasks else emptyList()
-        if (newTitle.isBlank() && newNotes.isBlank() && pendingAttachments.isEmpty() && effectiveSubtasks.isEmpty()) {
+        if (newTitle.text.isBlank() && newNotes.isBlank() && pendingAttachments.isEmpty() && effectiveSubtasks.isEmpty()) {
             composing = false
             return
         }
         // Snapshot every composer field before the background write — same reasoning as
         // NotesScreen.saveNote: resetComposer() runs the instant this function returns, so reading
         // these vars from inside the coroutine would race it.
-        val title = newTitle
+        val title = newTitle.text
         val notesText = newNotes
         val attachmentsJson = Attachments.serialize(pendingAttachments)
         val due = dueAt
@@ -409,7 +411,7 @@ fun TasksScreen(active: Boolean = true) {
     val taskDirty = composing && run {
         val original = editingTask
         if (original != null) {
-            newTitle != original.title || newNotes != original.notes || dueAt != original.dueAt ||
+            newTitle.text != original.title || newNotes != original.notes || dueAt != original.dueAt ||
                 Attachments.serialize(pendingAttachments) != original.attachments ||
                 priority.value != original.priority || pinned != original.pinned ||
                 Checklist.serialize(subtasks) != original.subtasks ||
@@ -418,7 +420,7 @@ fun TasksScreen(active: Boolean = true) {
                 newSubtaskText.isNotBlank() ||
                 repeatRule.key != original.repeatRule || reminderEnabled != original.reminderEnabled
         } else {
-            newTitle.isNotBlank() || newNotes.isNotBlank() || pendingAttachments.isNotEmpty() ||
+            newTitle.text.isNotBlank() || newNotes.isNotBlank() || pendingAttachments.isNotEmpty() ||
                 dueAt != null || priority != TaskPriority.NONE || pinned || subtasks.isNotEmpty() ||
                 newSubtaskText.isNotBlank() ||
                 repeatRule != RepeatRule.NONE || reminderEnabled

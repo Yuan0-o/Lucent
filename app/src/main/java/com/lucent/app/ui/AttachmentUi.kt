@@ -291,7 +291,13 @@ fun CardAttachments(
     }
 
     viewing?.let { att ->
-        AttachmentViewerDialog(att = att, onDismiss = { viewing = null })
+        // Open the whole card's attachments in the pager, positioned on the tapped one, so the
+        // others can be swiped to (task E3).
+        AttachmentViewerDialog(
+            attachments = attachments,
+            initialIndex = attachments.indexOf(att).coerceAtLeast(0),
+            onDismiss = { viewing = null }
+        )
     }
 }
 
