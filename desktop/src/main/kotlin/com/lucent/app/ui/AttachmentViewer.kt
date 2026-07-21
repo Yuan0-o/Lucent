@@ -2,6 +2,8 @@ package com.lucent.app.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -70,11 +72,25 @@ import java.io.ByteArrayOutputStream
  * "Share" has no desktop equivalent and folds into Open-with.
  */
 @Composable
-fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
+fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
+    AttachmentViewerDialog(listOf(att), 0, onDismiss)
+
+/**
+ * The full-screen attachment viewer. Multiple attachments can be swiped between with a horizontal
+ * pager (task E3); the chrome reflects whichever attachment is currently shown.
+ */
+@Composable
+fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
+    if (attachments.isEmpty()) return
     val context = android.content.DesktopContext
     val save = rememberSaveAttachmentLauncher()
     var editing by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, attachments.size - 1)
+    ) { attachments.size }
+    val current = pagerState.currentPage.coerceIn(0, attachments.size - 1)
+    val att = attachments[current]
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -85,19 +101,32 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxSize().padding(bottom = 96.dp, top = 56.dp),
                 contentAlignment = Alignment.Center
             ) {
-                when {
-                    att.isImage -> ZoomableImage(att, reloadKey)
-                    att.isPdf -> PdfViewer(att)
-                    else -> NonPreviewableInfo(att)
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    val a = attachments[page]
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        when {
+                            a.isImage -> ZoomableImage(a, if (page == current) reloadKey else 0)
+                            a.isPdf -> PdfViewer(a)
+                            else -> NonPreviewableInfo(a)
+                        }
+                    }
                 }
             }
 
-            // Top bar: title + close.
+            // Top bar: title + page counter + close.
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(att.name, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                if (attachments.size > 1) {
+                    Text(
+                        "${current + 1} / ${attachments.size}",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.actionClose, tint = Color.White)
                 }
