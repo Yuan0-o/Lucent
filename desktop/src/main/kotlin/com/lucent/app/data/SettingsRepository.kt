@@ -164,7 +164,7 @@ class SettingsRepository(private val context: Context) {
     // ---- Display ----
 
     val themeMode: Flow<String> = state.map { str(it, K.THEME_MODE) ?: "system" }
-    val palette: Flow<String> = state.map { str(it, K.PALETTE) ?: "SUNSET" }
+    val palette: Flow<String> = state.map { str(it, K.PALETTE) ?: "CYCLE" }
     val font: Flow<String> = state.map { str(it, K.FONT) ?: "system" }
 
     data class DisplayPrefs(val themeMode: String, val palette: String, val font: String)
@@ -173,7 +173,7 @@ class SettingsRepository(private val context: Context) {
         val prefs = state.first()
         return DisplayPrefs(
             themeMode = str(prefs, K.THEME_MODE) ?: "system",
-            palette = str(prefs, K.PALETTE) ?: "SUNSET",
+            palette = str(prefs, K.PALETTE) ?: "CYCLE",
             font = str(prefs, K.FONT) ?: "system"
         )
     }
@@ -193,7 +193,7 @@ class SettingsRepository(private val context: Context) {
         return StartupPrefs(
             display = DisplayPrefs(
                 themeMode = str(prefs, K.THEME_MODE) ?: "system",
-                palette = str(prefs, K.PALETTE) ?: "SUNSET",
+                palette = str(prefs, K.PALETTE) ?: "CYCLE",
                 font = str(prefs, K.FONT) ?: "system"
             ),
             appLockEnabled = bool(prefs, K.APP_LOCK_ENABLED) ?: false,

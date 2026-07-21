@@ -34,6 +34,8 @@ import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.LockScreen
 import com.lucent.app.ui.LucentFont
 import com.lucent.app.ui.LucentPalette
+import com.lucent.app.ui.PALETTE_CYCLE
+import com.lucent.app.ui.rememberCyclingPaletteColors
 import com.lucent.app.ui.LucentThemeMode
 import com.lucent.app.ui.AssistantScreen
 import com.lucent.app.ui.InsightsScreen
@@ -85,8 +87,14 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
     val onGradient = if (isDark) Color.White else Color(0xFF20202B)
     val onGradientMuted = onGradient.copy(alpha = 0.65f)
     val backdropColor = themeChoice.backdrop(systemDark)
-    val paletteColors = LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
-        ?: LucentPalette.SUNSET.colors
+    val paletteColors = if (paletteName == PALETTE_CYCLE) {
+        // Auto-cycling background: drifts smoothly through every palette over time. Backdrop and
+        // text colours stay theme-based (above), so contrast is unaffected. (Parity with Android.)
+        rememberCyclingPaletteColors(LucentPalette.entries.map { it.colors })
+    } else {
+        LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
+            ?: LucentPalette.SUNSET.colors
+    }
 
     MaterialTheme(colorScheme = colors, typography = lucentTypography(LucentFont.fromKey(fontKey))) {
         CompositionLocalProvider(
