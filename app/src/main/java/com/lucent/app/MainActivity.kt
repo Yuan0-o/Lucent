@@ -707,18 +707,16 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                             // the pill down in the gesture-bar zone with no air beneath it, which is
                             // what made it look sunk into the bottom of the screen.
                             .navigationBarsPadding()
-                            .padding(top = 12.dp, bottom = 18.dp),
+                            .padding(top = 12.dp, bottom = 26.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(0.875f)
-                                // 66dp, down from 80dp. At 80 the "capsule" was as tall as a toolbar:
-                                // a rounded-cornered slab, which is exactly what it was described as.
-                                // Shorter, the same 50% corner radius finally reads as a pill — and
-                                // it hands ~14dp back to the screens underneath, which is what lets
-                                // the last row of the Settings list (the Data card) clear it (task 5).
-                                .height(66.dp)
+                                // 76dp — the pill height, raised from 66 by ~1.15x so the bar sits a
+                                // little taller under the thumb. The 50% corner radius still reads as a
+                                // pill rather than a toolbar slab at this height.
+                                .height(76.dp)
                                 // Drop shadow FIRST (before clip), with the capsule shape and a soft
                                 // ambient/spot colour, so the pill visibly floats above whatever is
                                 // behind it. clip = false lets the shadow's own soft edge spill past
