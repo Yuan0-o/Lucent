@@ -190,10 +190,9 @@ fun GlassButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
     danger: Boolean = false,
-    // Opt-in smaller footprint: less padding, smaller label and icon. Default false so every
-    // existing caller keeps the standard size; only a deliberately secondary action (the "attach
-    // file" button in [AttachmentSection]) turns this on so it sits *below* the primary button in
-    // the visual hierarchy rather than looming larger than it.
+    // Compact trims the pill down (tighter padding, smaller label and icon) so it can sit as a
+    // secondary action beside a larger primary button. Defaults to false, so every existing call
+    // site keeps its current size.
     compact: Boolean = false
 ) {
     val onGradient = LocalOnGradient.current
@@ -201,13 +200,12 @@ fun GlassButton(
     val shape = RoundedCornerShape(percent = 50)
     val glassDark = isDarkGlass()
 
-    // Compact shrinks every dimension of the button together, so it reads as the same control at a
-    // smaller size rather than a differently proportioned one.
-    val hPad = if (compact) 16.dp else 22.dp
-    val vPad = if (compact) 8.dp else 13.dp
-    val labelSize = if (compact) 13.sp else 15.sp
-    val iconSize = if (compact) 16.dp else 18.dp
+    // Two size profiles, selected by [compact]. The regular one is the original pill.
+    val padH = if (compact) 14.dp else 22.dp
+    val padV = if (compact) 8.dp else 13.dp
+    val iconSize = if (compact) 15.dp else 18.dp
     val iconGap = if (compact) 6.dp else 8.dp
+    val labelSize = if (compact) 13.sp else 15.sp
 
     // Danger is a solid slab, not a tint. DANGER_RED is the same hue the old wash used, at full
     // opacity, and it is identical on both themes on purpose: a destructive control should not
@@ -235,7 +233,7 @@ fun GlassButton(
                 Haptics.tick(context)
                 onClick()
             }
-            .padding(horizontal = hPad, vertical = vPad),
+            .padding(horizontal = padH, vertical = padV),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
@@ -280,9 +278,9 @@ fun AttachmentSection(
         GlassButton(
             text = com.lucent.app.i18n.S.attachFile,
             icon = Icons.Default.AttachFile,
-            // Compact so this optional "attach file" action is visibly the smaller, secondary control
-            // sitting beneath the larger primary Add/Save button — the two sizes are deliberately
-            // swapped from before, when the attachment button was the bigger of the pair.
+            // Deliberately compact: this optional step is the smaller, secondary action, sized down
+            // so the primary Add button below clearly outweighs it (they used to read the wrong way
+            // round, with the attachment picker larger than the primary action).
             compact = true,
             onClick = onPick
         )
