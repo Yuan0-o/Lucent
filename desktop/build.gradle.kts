@@ -91,8 +91,13 @@ compose.desktop {
                 menuGroup = "Lucent"
                 shortcut = true
                 // Stable across releases so the installer upgrades in place rather than installing a
-                // second copy. Must never change once shipped.
+                // second copy. Must never change once shipped. (This is what makes "install the new
+                // build over the old one" replace it — provided packageVersion above is bumped for the
+                // new release, since the installer only upgrades to a *higher* version.)
                 upgradeUuid = "8f4e2a10-1c3b-4d5e-9a7f-2b6c8d0e1f23"
+                // Install into the user's profile rather than Program Files, so installing and
+                // upgrading never needs administrator rights and the overwrite-upgrade is clean.
+                perUserInstall = true
                 // The .ico is bundled if present; the build still succeeds without it (jpackage falls
                 // back to a default icon), so a missing icon never fails CI.
                 val icoFile = project.file("src/main/resources/icons/lucent.ico")
