@@ -567,6 +567,9 @@ fun SettingsScreen(active: Boolean = true) {
     // gone the next time the user opens the page — whether they came back via the tab or the sub-nav.
     LaunchedEffect(route) {
         if (route == SettingsRoute.LocalModel) lmError = ""
+        // Same idea for the API page's "fetch models" error: a one-off failure (bad URL, network,
+        // empty address) shows once and is gone the next time the page is opened, rather than lingering.
+        if (route == SettingsRoute.Api) errorText = ""
     }
 
     // Registers this screen's dirty state with the app-lifetime guard so switching bottom-nav
@@ -2504,18 +2507,24 @@ fun SettingsScreen(active: Boolean = true) {
                 // while the API is frozen (task 18), so the only way to reach this button is
                 // with local mode off.
                 GlassButton(text = S.fetchModels, onClick = {
-                    loading = true
-                    errorText = ""
-                    scope.launch {
-                        val apiSpecEnum = when (spec) {
-                            "anthropic" -> ApiSpec.ANTHROPIC
-                            "google" -> ApiSpec.GOOGLE
-                            else -> ApiSpec.OPENAI
+                    if (url.trim().isEmpty()) {
+                        // No address yet: say so plainly instead of letting the HTTP client throw a
+                        // technical "malformed URL" style error the user can't act on.
+                        errorText = S.apiUrlRequired
+                    } else {
+                        loading = true
+                        errorText = ""
+                        scope.launch {
+                            val apiSpecEnum = when (spec) {
+                                "anthropic" -> ApiSpec.ANTHROPIC
+                                "google" -> ApiSpec.GOOGLE
+                                else -> ApiSpec.OPENAI
+                            }
+                            val result = LlmClient.fetchModels(url.trim(), apiSpecEnum, key.trim())
+                            loading = false
+                            result.onSuccess { models = it }
+                                .onFailure { errorText = S.errorWithDetail(it.javaClass.simpleName, it.message ?: S.noDetails) }
                         }
-                        val result = LlmClient.fetchModels(url.trim(), apiSpecEnum, key.trim())
-                        loading = false
-                        result.onSuccess { models = it }
-                            .onFailure { errorText = S.errorWithDetail(it.javaClass.simpleName, it.message ?: S.noDetails) }
                     }
                 })
 
