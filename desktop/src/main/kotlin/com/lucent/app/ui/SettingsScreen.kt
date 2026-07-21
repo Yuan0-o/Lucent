@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,10 +34,13 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -114,6 +118,8 @@ private enum class ExportKind { NOTES, TASKS }
 /** Sentinel distinguishing "wrong password, try again" from "this file is damaged". */
 private const val WRONG_PASSWORD = "__wrong_password__"
 
+// ModalBottomSheet (the post-restore result sheet) is still experimental in Material 3.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(active: Boolean = true) {
     val context = LocalContext.current
@@ -331,6 +337,17 @@ fun SettingsScreen(active: Boolean = true) {
     var importPasswordError by remember { mutableStateOf(false) }
     // What's in the file, worked out without writing anything. Non-null means the confirm step is up.
     var importPreview by remember { mutableStateOf<BackupManager.BackupPreview?>(null) }
+    // Outcome of the last finished restore, surfaced as a bottom sheet the moment commit returns.
+    // first = whether the commit succeeded (which picks the sheet's title), second = the same
+    // summary / failure text that also goes to the Data page's status line. Null = no sheet shown.
+    var importResultSheet by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    // The long-running backup operation currently in flight, if any: the label the modal
+    // progress dialog shows (null = no dialog up). While non-null the dialog blocks every
+    // other interaction, which is what keeps a second operation — or any other data action —
+    // from starting mid-stream.
+    var backupBusyLabel by remember { mutableStateOf<String?>(null) }
+    // The coroutine doing that work, so the dialog's Cancel button can cancel it cooperatively.
+    var backupOpJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     // Close the import flow's file state. Called on every exit from the flow — cancel or a failed
     // inspect. The file is the user's own on desktop, so this only drops the reference; nothing
     // is ever deleted from their disk.
@@ -352,32 +369,67 @@ fun SettingsScreen(active: Boolean = true) {
             // a decrypted payload, which is what used to pin gigabytes of model file in memory and
             // kill the import with an OutOfMemoryError the catch below could never see).
             val sourceFile = importSourceFile
-            scope.launch {
-                backupStatus = withContext(Dispatchers.IO) {
-                    try {
-                        BackupManager.commit(
-                            context, db, repo, preview, modules, convIds, apiNames,
-                            source = sourceFile?.let { BackupManager.fileSource(it) }
-                        )
-                    } catch (t: Throwable) {
-                        // Throwable, not Exception: the failure this flow historically died of was
-                        // an OutOfMemoryError, which is an Error. Streaming makes that unlikely,
-                        // but if anything of the kind ever recurs it must surface as a message,
-                        // not as the app vanishing.
-                        S.importFailed(t.message ?: "")
+            val job = scope.launch {
+                backupBusyLabel = S.importingBackup
+                // Whether commit itself returned (true) or threw (false), tracked separately so
+                // the result sheet below can title itself without parsing the message text.
+                var committed = true
+                // The outcome, recorded the instant commit produces one. A Cancel that lands after
+                // the database phase has begun does not abort that phase (it is shielded — see
+                // BackupManager.commit), but it still cancels this coroutine at the next suspension
+                // point; recording the outcome here is how the true result survives to be reported
+                // instead of a cancellation that never actually happened.
+                var outcome: String? = null
+                try {
+                    withContext(Dispatchers.IO) {
+                        outcome = try {
+                            BackupManager.commit(
+                                context, db, repo, preview, modules, convIds, apiNames,
+                                source = sourceFile?.let { BackupManager.fileSource(it) }
+                            )
+                        } catch (t: kotlinx.coroutines.CancellationException) {
+                            // A genuine cancel inside the cancellable blob phase — let it fly.
+                            throw t
+                        } catch (t: Throwable) {
+                            // Throwable, not Exception: the failure this flow historically died of
+                            // was an OutOfMemoryError, which is an Error. Streaming makes that
+                            // unlikely, but if anything of the kind ever recurs it must surface as
+                            // a message, not as the app vanishing.
+                            committed = false
+                            S.importFailed(t.message ?: "")
+                        }
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Cancel pressed while the blob phase was still streaming: nothing further
+                    // ran. The status line reports it; the completion sheet stays reserved for
+                    // restores that actually finished.
+                    if (outcome == null) backupStatus = S.importCancelledStatus
+                } finally {
+                    outcome?.let { result ->
+                        backupStatus = result
+                        // Announce the outcome in a bottom sheet as well. The status line above keeps the
+                        // same text for the rest of THIS visit to the Data page, but it is cleared the next
+                        // time the page is entered (see the LaunchedEffect(route) further down) — so the
+                        // sheet is the moment-of-completion announcement, and the line is only same-visit
+                        // context.
+                        importResultSheet = committed to result
+                        // A restored backup can bring in tasks that want reminders, and alarms aren't part of
+                        // a backup file — they're OS state. BackupManager re-arms them, but the channel has to
+                        // exist before one can be posted.
+                        com.lucent.app.reminders.Notifications.ensureChannel(context)
+                        // If a database had been set aside as undecryptable, restoring is the cure — retire
+                        // the notice rather than leaving it frightening someone who has already fixed it.
+                        com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
+                    }
+                    // The flow is over — done, failed, or cancelled; drop the file reference (the
+                    // user's file itself is untouched) and bring the modal down.
+                    importSourceFile = null
+                    importPasswordPrompt = false
+                    backupBusyLabel = null
+                    backupOpJob = null
                 }
-                // Both passes are done; drop the reference (the user's file itself is untouched).
-                importSourceFile = null
-                importPasswordPrompt = false
-                // A restored backup can bring in tasks that want reminders, and alarms aren't part of
-                // a backup file — they're OS state. BackupManager re-arms them, but the channel has to
-                // exist before one can be posted.
-                com.lucent.app.reminders.Notifications.ensureChannel(context)
-                // If a database had been set aside as undecryptable, restoring is the cure — retire
-                // the notice rather than leaving it frightening someone who has already fixed it.
-                com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
             }
+            backupOpJob = job
         }
     // Set when a database could not be decrypted on this launch. Nothing was deleted — see
     // DatabaseEncryption.setAside — but the user has to be told, and told what to do about it.
@@ -725,6 +777,10 @@ fun SettingsScreen(active: Boolean = true) {
         // Same for the API page's "fetch models" error: a one-off failure (bad URL, network, empty
         // address) shows once and is gone the next time the page is opened, rather than lingering.
         if (route == SettingsRoute.Api) errorText = ""
+        // And for the Data page's backup status line: the import/export outcome is announced in
+        // its own sheet at completion time, so the line is same-visit context only — re-entering
+        // the page starts it blank instead of showing a stale "Imported …" from last time.
+        if (route == SettingsRoute.Data) backupStatus = ""
     }
 
     // Registers this screen's dirty state with the app-lifetime guard so switching bottom-nav
@@ -829,30 +885,53 @@ fun SettingsScreen(active: Boolean = true) {
             conversationIds = exportConversationIds,
             apiProfileNames = exportApiProfileNames
         )
-        scope.launch {
-            // The full payload — notes (archived included), tasks, note version history, chats,
-            // conversations, every attachment, and all settings — sealed as one file. All of it,
-            // not just the API key. Written on IO so a large export can't stall the UI; use()
-            // closes the cipher stream even if the write throws, which matters because closing is
-            // what seals the final frame.
-            val result = withContext(Dispatchers.IO) {
-                try {
-                    file.outputStream().use { out ->
-                        BackupManager.exportEncrypted(context, db, repo, out, password, chosenSelection)
+        val job = scope.launch {
+            backupBusyLabel = S.exportingBackup
+            try {
+                // The full payload — notes (archived included), tasks, note version history,
+                // chats, conversations, every attachment, and all settings — sealed as one file.
+                // All of it, not just the API key. Written on IO so a large export can't stall the
+                // UI; use() closes the cipher stream even if the write throws, which matters
+                // because closing is what seals the final frame.
+                val result = withContext(Dispatchers.IO) {
+                    try {
+                        file.outputStream().use { out ->
+                            BackupManager.exportEncrypted(context, db, repo, out, password, chosenSelection)
+                        }
+                        if (password.isNullOrEmpty()) {
+                            S.backupSavedBuiltIn
+                        } else {
+                            S.backupSavedPassword
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        // A user cancel is handled — and the partial file removed — below.
+                        throw e
+                    } catch (e: Exception) {
+                        S.exportFailed(e.message ?: "")
                     }
-                    if (password.isNullOrEmpty()) {
-                        S.backupSavedBuiltIn
-                    } else {
-                        S.backupSavedPassword
-                    }
-                } catch (e: Exception) {
-                    S.exportFailed(e.message ?: "")
                 }
+                backupStatus = result
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Cancel pressed: the write aborted mid-stream, so the partial file is deleted
+                // best-effort — a half-written envelope that can never decrypt again is worse
+                // than no file at all.
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                    try {
+                        file.delete()
+                    } catch (_: Throwable) {
+                        // Already gone or locked by the OS — nothing further to do.
+                    }
+                }
+                backupStatus = S.exportCancelledStatus
+            } finally {
+                // The write is done, failed, or cancelled — clear the guard so the user can
+                // export again, and bring the modal down.
+                exportInFlight = false
+                backupBusyLabel = null
+                backupOpJob = null
             }
-            backupStatus = result
-            // The write is done (or failed) — clear the guard so the user can export again.
-            exportInFlight = false
         }
+        backupOpJob = job
     }
 
     fun beginExport(password: String?) {
@@ -1076,64 +1155,77 @@ fun SettingsScreen(active: Boolean = true) {
 
     fun pickImportBackup() {
         val file = DesktopFiles.openFile() ?: return
-        scope.launch {
-            // Replace whatever a previous, abandoned pick left behind.
-            discardImportSource()
-            // No whole-file read here any more. The old code did `file.readBytes()`, and a backup
-            // carrying local model files is gigabytes — an instant OutOfMemoryError on the JVM
-            // heap, which is an Error the old catch(Exception) never saw, so the app simply died
-            // the moment such a file was picked. BackupManager now streams both of its passes
-            // straight from the file instead.
-            val readable = withContext(Dispatchers.IO) {
-                try {
-                    file.isFile && file.canRead()
-                } catch (_: Throwable) {
-                    false
-                }
-            }
-            if (!readable) {
-                backupStatus = S.couldNotReadThatFile
-                return@launch
-            }
-            importSourceFile = file
-            val source = BackupManager.fileSource(file)
-
-            val header = BackupManager.peekPasswordRequirement(source)
-            if (header != null && header.needsPassword) {
-                // Try the password saved on this device first. On the machine that made the backup,
-                // that means restoring is still a single tap.
-                val stored = repo.backupPassword.first()
-                val preview = if (stored.isEmpty()) null else withContext(Dispatchers.IO) {
+        val job = scope.launch {
+            // Reading through a multi-gigabyte backup below is real work; the modal keeps every
+            // other action out of the way while it runs and offers the one safe exit.
+            backupBusyLabel = S.importingBackup
+            try {
+                // Replace whatever a previous, abandoned pick left behind.
+                discardImportSource()
+                // No whole-file read here any more. The old code did `file.readBytes()`, and a backup
+                // carrying local model files is gigabytes — an instant OutOfMemoryError on the JVM
+                // heap, which is an Error the old catch(Exception) never saw, so the app simply died
+                // the moment such a file was picked. BackupManager now streams both of its passes
+                // straight from the file instead.
+                val readable = withContext(Dispatchers.IO) {
                     try {
-                        BackupManager.inspect(context, source, stored)
+                        file.isFile && file.canRead()
                     } catch (_: Throwable) {
-                        null
+                        false
                     }
                 }
-                if (preview != null) {
-                    importPreview = preview
+                if (!readable) {
+                    backupStatus = S.couldNotReadThatFile
+                    return@launch
+                }
+                importSourceFile = file
+                val source = BackupManager.fileSource(file)
+
+                val header = BackupManager.peekPasswordRequirement(source)
+                if (header != null && header.needsPassword) {
+                    // Try the password saved on this device first. On the machine that made the backup,
+                    // that means restoring is still a single tap.
+                    val stored = repo.backupPassword.first()
+                    val preview = if (stored.isEmpty()) null else withContext(Dispatchers.IO) {
+                        try {
+                            BackupManager.inspect(context, source, stored)
+                        } catch (_: Throwable) {
+                            null
+                        }
+                    }
+                    if (preview != null) {
+                        importPreview = preview
+                    } else {
+                        importPasswordDraft = ""
+                        importPasswordError = false
+                        importPasswordPrompt = true
+                    }
                 } else {
-                    importPasswordDraft = ""
-                    importPasswordError = false
-                    importPasswordPrompt = true
-                }
-            } else {
-                val result = withContext(Dispatchers.IO) {
-                    try {
-                        Result.success(BackupManager.inspect(context, source, null))
-                    } catch (t: Throwable) {
-                        Result.failure(t)
+                    val result = withContext(Dispatchers.IO) {
+                        try {
+                            Result.success(BackupManager.inspect(context, source, null))
+                        } catch (t: Throwable) {
+                            Result.failure(t)
+                        }
                     }
+                    result.fold(
+                        onSuccess = { importPreview = it },
+                        onFailure = {
+                            backupStatus = S.importFailed(it.message ?: "")
+                            discardImportSource()
+                        }
+                    )
                 }
-                result.fold(
-                    onSuccess = { importPreview = it },
-                    onFailure = {
-                        backupStatus = S.importFailed(it.message ?: "")
-                        discardImportSource()
-                    }
-                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Cancel pressed while the file was being read: let go of the pick entirely.
+                discardImportSource()
+                backupStatus = S.importCancelledStatus
+            } finally {
+                backupBusyLabel = null
+                backupOpJob = null
             }
         }
+        backupOpJob = job
     }
 
     // --- Step 2: the password prompt (only for a backup made with a custom password) ---
@@ -1163,37 +1255,51 @@ fun SettingsScreen(active: Boolean = true) {
                     enabled = importPasswordDraft.isNotEmpty(),
                     onClick = {
                         val attempt = importPasswordDraft
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) {
-                                try {
-                                    // Streaming inspect over the picked file — the password's
-                                    // PBKDF2 cost is paid here once; commit reuses the validated
-                                    // password from the preview for its own pass.
-                                    Result.success(
-                                        BackupManager.inspect(context, BackupManager.fileSource(file), attempt)
-                                    )
-                                } catch (t: Throwable) {
-                                    Result.failure(t)
-                                }
-                            }
-                            result.fold(
-                                onSuccess = {
-                                    importPasswordPrompt = false
-                                    importPreview = it
-                                },
-                                onFailure = { error ->
-                                    if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
-                                        // Stay on the dialog. There is no recovery for a forgotten
-                                        // backup password — that is the whole point of it — so the
-                                        // only useful thing left to offer is another try.
-                                        importPasswordError = true
-                                    } else {
-                                        backupStatus = S.importFailed(error.message ?: "")
-                                        discardImportSource()
+                        val job = scope.launch {
+                            // The PBKDF2 cost plus a full read-through of the file: long enough on
+                            // a big backup to deserve the same modal-and-Cancel as the other passes.
+                            backupBusyLabel = S.importingBackup
+                            try {
+                                val result = withContext(Dispatchers.IO) {
+                                    try {
+                                        // Streaming inspect over the picked file — the password's
+                                        // PBKDF2 cost is paid here once; commit reuses the validated
+                                        // password from the preview for its own pass.
+                                        Result.success(
+                                            BackupManager.inspect(context, BackupManager.fileSource(file), attempt)
+                                        )
+                                    } catch (t: Throwable) {
+                                        Result.failure(t)
                                     }
                                 }
-                            )
+                                result.fold(
+                                    onSuccess = {
+                                        importPasswordPrompt = false
+                                        importPreview = it
+                                    },
+                                    onFailure = { error ->
+                                        if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
+                                            // Stay on the dialog. There is no recovery for a forgotten
+                                            // backup password — that is the whole point of it — so the
+                                            // only useful thing left to offer is another try.
+                                            importPasswordError = true
+                                        } else {
+                                            backupStatus = S.importFailed(error.message ?: "")
+                                            discardImportSource()
+                                        }
+                                    }
+                                )
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                // Cancel pressed mid-inspect: drop the pick, exactly like the
+                                // dialog's own Cancel button does.
+                                discardImportSource()
+                                backupStatus = S.importCancelledStatus
+                            } finally {
+                                backupBusyLabel = null
+                                backupOpJob = null
+                            }
                         }
+                        backupOpJob = job
                     }
                 ) { Text(S.lockContinue) }
             },
@@ -1372,6 +1478,70 @@ fun SettingsScreen(active: Boolean = true) {
         )
     }
     importPreview?.let { ImportPreviewDialog(it) }
+
+    // The moment-of-completion announcement for a finished restore (parity with the Android
+    // build): the status line on the Data page keeps the same text for the rest of THIS visit,
+    // but the sheet is what tells the user "it's done" the instant commit returns, wherever in
+    // Settings they are. Swipe, the scrim, or the button all dismiss it.
+    importResultSheet?.let { (committed, message) ->
+        val resultSheetState = rememberModalBottomSheetState()
+        fun dismissResultSheet() {
+            scope.launch { resultSheetState.hide() }.invokeOnCompletion { importResultSheet = null }
+        }
+        ModalBottomSheet(
+            onDismissRequest = { importResultSheet = null },
+            sheetState = resultSheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 16.dp)
+            ) {
+                Text(
+                    if (committed) S.restoreDoneTitle else S.restoreFailedTitle,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(message, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(18.dp))
+                Button(
+                    onClick = { dismissResultSheet() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(S.gotIt) }
+            }
+        }
+    }
+
+    // The modal progress dialog for a long-running backup export or import. Deliberately
+    // impossible to dismiss from the outside — no outside click, no Esc-equivalent back press —
+    // because the whole point is that nothing else may run while gigabytes are in flight; Cancel
+    // is the one way out, and it goes through cooperative cancellation so the streams shut down
+    // cleanly.
+    backupBusyLabel?.let { busyLabel ->
+        AlertDialog(
+            onDismissRequest = { /* Blocked on purpose — see the comment above. */ },
+            properties = androidx.compose.ui.window.DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            ),
+            title = { Text(busyLabel) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(S.backupBusyBody, fontSize = 13.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { backupOpJob?.cancel() }) { Text(S.actionCancel) }
+            }
+        )
+    }
 
     // Second-level picker for the restore dialog (task F2) — the import-side twin of the export one.
     // Built from the preview's own lists (not the live database), so it offers exactly what the file
