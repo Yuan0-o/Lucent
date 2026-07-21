@@ -70,6 +70,7 @@ import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.AppLock
 import com.lucent.app.data.AttachmentLimits
 import com.lucent.app.data.BackupManager
+import com.lucent.app.security.WindowsHello
 import com.lucent.app.data.MemoryTier
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.ShareIntegration
@@ -196,6 +197,14 @@ fun SettingsScreen(active: Boolean = true) {
 
     // --- Privacy toggles: App Lock (task 2), System integration (task 6), Startup logging (task 15) ---
     val appLockOn by repo.appLockEnabled.collectAsState(initial = false)
+    // Windows Hello: whether the user opted in, and whether this machine can actually do it (probed
+    // once, off the main thread). The toggle for it is shown in Security only when the lock is on AND
+    // Hello is available. See security/WindowsHello.
+    val helloEnabled by repo.appLockHelloEnabled.collectAsState(initial = false)
+    var helloAvailable by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        helloAvailable = WindowsHello.availability() == WindowsHello.Availability.AVAILABLE
+    }
     val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(initial = false)
     val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = false)
 
@@ -545,6 +554,13 @@ fun SettingsScreen(active: Boolean = true) {
     // Personalization guard has already resolved by the time this runs, so no edit can be lost.
     LaunchedEffect(active) {
         if (!active) route = SettingsRoute.Root
+    }
+
+    // A failed local-model import (e.g. "no .gguf in that zip") should not linger. Clearing it when
+    // the Local Model page is (re-)entered means the message shows once, for that attempt, and is
+    // gone the next time the user opens the page. (Parity with the Android build.)
+    LaunchedEffect(route) {
+        if (route == SettingsRoute.LocalModel) lmError = ""
     }
 
     // Registers this screen's dirty state with the app-lifetime guard so switching bottom-nav
@@ -2772,6 +2788,26 @@ fun SettingsScreen(active: Boolean = true) {
                             }
                         }
                     )
+                }
+
+                // ---- Windows Hello ----
+                // Shown only once the lock is on AND this machine actually has Hello set up, so it
+                // reads as a follow-on choice to "App lock" rather than a dead control. Turning the
+                // lock off hides this again (and clears the opt-in via setAppLock).
+                if (appLockOn && helloAvailable) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(S.helloTitle, color = onGradient)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(S.helloDesc, color = onGradientMuted, fontSize = 13.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = helloEnabled,
+                            onCheckedChange = { turnOn -> scope.launch { repo.setAppLockHelloEnabled(turnOn) } }
+                        )
+                    }
                 }
 
             }
