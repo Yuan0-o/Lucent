@@ -105,6 +105,13 @@ object Checklist {
     fun resetDone(json: String?): String = serialize(parse(json).map { it.copy(done = false) })
 
     /**
+     * Every item checked, keeping the items themselves — the mirror of [resetDone]. Used when the
+     * task that owns the list is marked complete (settings task B6): a finished task with
+     * half-ticked steps reads as unfinished, and its progress badge would sit mid-way forever.
+     */
+    fun completeAll(json: String?): String = serialize(parse(json).map { it.copy(done = true) })
+
+    /**
      * Fuzzy-match one item by its text — the same "exact match wins, otherwise a single unambiguous
      * partial match" rule the assistant's note/task title matching already uses. Returns null if
      * nothing matches, or if more than one item partially matches (too ambiguous to guess at, so

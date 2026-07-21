@@ -6,8 +6,15 @@
 #   1. There is no NDK, so <jni.h> comes from the JDK via find_package(JNI), and the one Android-only
 #      header the source pulls in (<android/log.h>) is satisfied by the tiny shim in shim/, which maps
 #      __android_log_print onto vfprintf(stderr).
-#   2. CPU-only. The Vulkan GPU backend is not built on desktop (the requirement's first cut is
-#      CPU-only, to keep CI and distribution simple); a portable CPU build runs on any x86-64 Windows.
+#   2. Two flavours from one CMakeLists. By default this is the guaranteed, portable CPU-only
+#      build that runs on any x86-64 Windows. Passing -DLUCENT_ENABLE_VULKAN=ON additionally
+#      compiles llama.cpp's Vulkan GPU backend into the DLL (settings task A4 — Windows GPU
+#      support, mirroring the Android build): the workflow builds the CPU DLL first, then makes a
+#      best-effort second build with Vulkan on and ships it as lucent_llama_vk.dll. NativeLoader
+#      loads the _vk variant only on machines that actually have the Vulkan runtime
+#      (vulkan-1.dll), so a machine without it keeps the CPU engine and nothing breaks. The
+#      in-app switch stays OFF (CPU) by default with a risk warning, exactly like Android, and a
+#      failed GPU load falls back to CPU inside LocalLlm.
 #
 # The JNI symbols the source exports (Java_com_lucent_app_local_LocalLlm_native*) are unchanged,
 # because the desktop copy of LocalLlm keeps the Android package name com.lucent.app.local — so no
@@ -58,12 +65,26 @@ set(LLAMA_BUILD_COMMON   OFF CACHE BOOL "" FORCE)
 set(LLAMA_CURL           OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 
-# CPU-only desktop build.
-#   GGML_VULKAN OFF  — no GPU backend on desktop for now (CI/distribution simplicity).
+# Backend selection.
+#   GGML_VULKAN      — OFF by default (the portable CPU baseline). The LUCENT_ENABLE_VULKAN option
+#                      below turns it on for the second, GPU-enabled engine build; it degrades
+#                      itself back to CPU-only with a warning when the Vulkan SDK isn't installed,
+#                      so a misconfigured environment can never fail the build outright.
 #   GGML_NATIVE OFF  — don't bake in -march=native; a portable binary runs on any x86-64 Windows
 #                      rather than faulting with an illegal instruction on an older CPU.
 #   GGML_OPENMP OFF  — avoid an external OpenMP runtime dependency in the shipped DLL.
-set(GGML_VULKAN  OFF CACHE BOOL "" FORCE)
+option(LUCENT_ENABLE_VULKAN "Compile the Vulkan GPU backend into the desktop engine" OFF)
+if (LUCENT_ENABLE_VULKAN)
+    if (DEFINED ENV{VULKAN_SDK})
+        set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+        message(STATUS "lucent(desktop): Vulkan GPU backend ENABLED (VULKAN_SDK=$ENV{VULKAN_SDK})")
+    else()
+        set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+        message(WARNING "lucent(desktop): LUCENT_ENABLE_VULKAN=ON but VULKAN_SDK is not set — building CPU-only instead.")
+    endif()
+else()
+    set(GGML_VULKAN  OFF CACHE BOOL "" FORCE)
+endif()
 set(GGML_OPENCL  OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE  OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP  OFF CACHE BOOL "" FORCE)

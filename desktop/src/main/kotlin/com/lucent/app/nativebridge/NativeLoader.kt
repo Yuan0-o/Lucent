@@ -16,6 +16,45 @@ import java.io.File
  */
 object NativeLoader {
 
+    /**
+     * Load the on-device LLM engine, preferring the Vulkan-enabled build when this machine can run
+     * it (settings task A4 — Windows GPU support, mirroring the Android build's approach).
+     *
+     * The Windows CI packages up to two engine DLLs: `lucent_llama.dll` (CPU-only — the guaranteed
+     * baseline) and `lucent_llama_vk.dll` (the same engine with llama.cpp's Vulkan GPU backend
+     * compiled in — built best-effort when the Vulkan SDK is available). The Vulkan build links
+     * against `vulkan-1.dll`, which ships with GPU drivers but is absent on some VMs and servers —
+     * loading it there would fail outright and take the local model down with it. So the choice is
+     * made HERE, once, before anything is loaded: the _vk variant is used only when the Windows
+     * Vulkan runtime is actually present, and everything else gets the CPU DLL. Only one of the two
+     * is ever loaded into the process (they export identical JNI symbols).
+     *
+     * With the CPU DLL resident, the in-app GPU switch stays harmless: llama.cpp simply reports no
+     * GPU devices, so a requested offload loads on the CPU instead — the same graceful fallback
+     * LocalLlm already applies when a driver rejects the offload. Default remains CPU either way;
+     * GPU is opt-in behind the existing warning dialog, exactly like Android.
+     */
+    fun loadLlmEngine(): Boolean {
+        if (vulkanRuntimePresent() && load("lucent_llama_vk")) return true
+        return load("lucent_llama")
+    }
+
+    /** Whether the Windows Vulkan loader (vulkan-1.dll) is present on this machine. */
+    private fun vulkanRuntimePresent(): Boolean {
+        return try {
+            val os = System.getProperty("os.name")?.lowercase() ?: ""
+            if (!os.contains("win")) {
+                false
+            } else {
+                val sysRoot = System.getenv("SystemRoot") ?: "C:\\Windows"
+                File(sysRoot, "System32\\vulkan-1.dll").exists() ||
+                    File(sysRoot, "SysWOW64\\vulkan-1.dll").exists()
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun load(baseName: String): Boolean {
         // 1) The conventional path, for developers who put the DLL on java.library.path.
         try {
