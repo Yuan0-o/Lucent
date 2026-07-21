@@ -2387,9 +2387,15 @@ fun SettingsScreen(active: Boolean = true) {
             Spacer(modifier = Modifier.height(12.dp))
 
             // API is its own hierarchical page. The subtitle shows which profile is active so
-            // the user can see their current connection at a glance without opening it.
+            // the user can see their current connection at a glance without opening it — except
+            // while the local model is on, when that would be a small lie: the named profile is
+            // exactly what the app is NOT using. The card then states the freeze instead, matching
+            // the "Cloud API frozen" notice the page itself shows when opened.
             val activeName = profiles.getOrNull(selectedProfileIdx)?.name ?: ""
-            NavCard(S.settingsApiTitle, S.settingsApiSub(activeName)) { route = SettingsRoute.Api }
+            NavCard(
+                S.settingsApiTitle,
+                if (localModelEnabled) S.settingsApiSubFrozen else S.settingsApiSub(activeName)
+            ) { route = SettingsRoute.Api }
 
             Spacer(modifier = Modifier.height(12.dp))
 
