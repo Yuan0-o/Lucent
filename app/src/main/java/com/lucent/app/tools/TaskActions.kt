@@ -2,6 +2,7 @@ package com.lucent.app.tools
 
 import android.content.Context
 import com.lucent.app.data.AppDatabase
+import com.lucent.app.data.Checklist
 import com.lucent.app.data.Note
 import com.lucent.app.data.NoteHistory
 import com.lucent.app.data.Recurrence
@@ -39,7 +40,18 @@ object TaskActions {
     suspend fun complete(context: Context, db: AppDatabase, task: Task): Task? {
         val appContext = context.applicationContext
 
-        db.taskDao().update(task.copy(isDone = true, completedAt = System.currentTimeMillis()))
+        db.taskDao().update(
+            task.copy(
+                isDone = true,
+                completedAt = System.currentTimeMillis(),
+                // Completing the task completes its whole checklist with it (settings task B6): a
+                // finished task with half-ticked steps reads as unfinished, and its progress badge
+                // would sit mid-way forever. The next occurrence of a repeating task is built from
+                // the ORIGINAL row below, and Recurrence already resets its ticks, so this can't
+                // leak into next week's copy.
+                subtasks = Checklist.completeAll(task.subtasks)
+            )
+        )
         ReminderScheduler.cancel(appContext, task.id)
 
         val next = Recurrence.nextOccurrence(task) ?: return null
