@@ -3,7 +3,12 @@ package com.lucent.app.data
 import android.content.Context
 import android.util.Base64
 import com.lucent.app.reminders.ReminderScheduler
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStream
@@ -318,6 +323,11 @@ object BackupManager {
         selection: BackupSelection = BackupSelection()
     ) {
         val modules = selection.modules
+        // Snapshot of the caller's Job, polled by the streaming loop below: a cancelled export
+        // (Cancel on the progress dialog) stops within one 64 KB piece instead of silently
+        // writing the rest of a multi-gigabyte file in the background.
+        val exportJob = coroutineContext[Job]
+        val cancelled: () -> Boolean = { exportJob?.isActive == false }
         val json = exportJsonFull(context, db, settings, selection)
         val jsonBytes = json.toByteArray(Charsets.UTF_8)
 
@@ -356,6 +366,7 @@ object BackupManager {
             cipherOut.write(jsonBytes)
             val buffer = ByteArray(1 shl 16)
             for ((name, file) in blobs) {
+                throwIfCancelled(cancelled)
                 val nameBytes = name.toByteArray(Charsets.UTF_8)
                 writeInt(cipherOut, nameBytes.size)
                 cipherOut.write(nameBytes)
@@ -365,6 +376,7 @@ object BackupManager {
                 // Fonts share the pipe for uniformity, not need — they are merely megabytes.
                 file.inputStream().use { input ->
                     while (true) {
+                        throwIfCancelled(cancelled)
                         val n = input.read(buffer)
                         if (n < 0) break
                         cipherOut.write(buffer, 0, n)
@@ -385,6 +397,21 @@ object BackupManager {
                 "; models=${modelFiles.size}; fonts=${fontFiles.size}" +
                 "; password=${if (password.isNullOrEmpty()) "no" else "yes"}"
         )
+    }
+
+    // ---- Cooperative cancellation for the streaming passes ----
+    //
+    // The heavy copy loops in this file are plain blocking IO running on Dispatchers.IO, and
+    // cancelling the calling coroutine cannot interrupt a blocking read/write by itself — a
+    // cancelled export or import would otherwise keep grinding through gigabytes in the
+    // background. Each suspend entry point captures its caller's Job once and hands the loops
+    // this poll; the loops call it between 64 KB pieces and abort by throwing
+    // CancellationException the moment the caller has been cancelled (the user pressed Cancel
+    // on the progress dialog).
+    private fun throwIfCancelled(cancelled: (() -> Boolean)?) {
+        if (cancelled != null && cancelled()) {
+            throw CancellationException("Backup operation cancelled")
+        }
     }
 
     private fun writeInt(out: OutputStream, value: Int) {
@@ -422,9 +449,10 @@ object BackupManager {
     )
 
     /** Read exactly [len] bytes or throw — the framing has no optional fields. */
-    private fun readFully(input: java.io.InputStream, buffer: ByteArray, len: Int) {
+    private fun readFully(input: java.io.InputStream, buffer: ByteArray, len: Int, cancelled: (() -> Boolean)? = null) {
         var read = 0
         while (read < len) {
+            throwIfCancelled(cancelled)
             val n = input.read(buffer, read, len - read)
             if (n < 0) throw java.io.EOFException("Backup payload ended early")
             read += n
@@ -437,9 +465,10 @@ object BackupManager {
      * jumping the frame parser into the middle of a GCM frame. Reading through keeps every skipped
      * byte authenticated, which for a backup is a feature, not a cost.
      */
-    private fun skipFully(input: java.io.InputStream, count: Long, scratch: ByteArray) {
+    private fun skipFully(input: java.io.InputStream, count: Long, scratch: ByteArray, cancelled: (() -> Boolean)? = null) {
         var remaining = count
         while (remaining > 0) {
+            throwIfCancelled(cancelled)
             val n = input.read(scratch, 0, minOf(remaining, scratch.size.toLong()).toInt())
             if (n < 0) throw java.io.EOFException("Backup payload ended early")
             remaining -= n
@@ -508,6 +537,9 @@ object BackupManager {
      */
     private fun scanPayload(
         plain: java.io.InputStream,
+        // Optional cooperative-cancel poll (see throwIfCancelled); checked between frames and
+        // threaded into the byte-moving helpers so a cancel aborts within one 64 KB piece.
+        cancelled: (() -> Boolean)? = null,
         onBlob: ((name: String, dataLen: Long, data: java.io.InputStream) -> Unit)? = null
     ): PayloadScan {
         val scratch = ByteArray(1 shl 16)
@@ -530,6 +562,7 @@ object BackupManager {
             buffer.write(b0)
             if (b1 >= 0) buffer.write(b1)
             while (true) {
+                throwIfCancelled(cancelled)
                 val n = plain.read(scratch)
                 if (n < 0) break
                 buffer.write(scratch, 0, n)
@@ -544,7 +577,7 @@ object BackupManager {
         }
         val manifestBytes = ByteArray(jsonLen)
         try {
-            readFully(plain, manifestBytes, jsonLen)
+            readFully(plain, manifestBytes, jsonLen, cancelled)
         } catch (_: java.io.EOFException) {
             throw IllegalArgumentException("That backup couldn't be read — the file may be damaged.")
         }
@@ -559,6 +592,7 @@ object BackupManager {
         var fontCount = 0
         var fontBytes = 0L
         while (true) {
+            throwIfCancelled(cancelled)
             val nameLen = try {
                 readIntOrEnd(plain) ?: break
             } catch (_: java.io.EOFException) {
@@ -584,7 +618,7 @@ object BackupManager {
                 modelBytes += dataLen
             }
             try {
-                if (onBlob != null) onBlob(name, dataLen, plain) else skipFully(plain, dataLen, scratch)
+                if (onBlob != null) onBlob(name, dataLen, plain) else skipFully(plain, dataLen, scratch, cancelled)
             } catch (_: java.io.EOFException) {
                 // The advertised bytes weren't all there: a truncated file. Everything counted or
                 // written so far stands; there is simply nothing further to walk.
@@ -615,11 +649,12 @@ object BackupManager {
         data: java.io.InputStream,
         wantModels: Boolean,
         wantFonts: Boolean,
-        scratch: ByteArray
+        scratch: ByteArray,
+        cancelled: (() -> Boolean)? = null
     ): Pair<Int, Int> {
         val isFont = name.startsWith(FONT_BLOB_PREFIX)
         if ((isFont && !wantFonts) || (!isFont && !wantModels)) {
-            skipFully(data, dataLen, scratch)
+            skipFully(data, dataLen, scratch, cancelled)
             return 0 to 0
         }
         var tmp: java.io.File? = null
@@ -638,6 +673,7 @@ object BackupManager {
             val os = tmpFile.outputStream()
             out = os
             while (written < dataLen) {
+                throwIfCancelled(cancelled)
                 val n = data.read(scratch, 0, minOf(dataLen - written, scratch.size.toLong()).toInt())
                 if (n < 0) throw java.io.EOFException("Backup payload ended early")
                 os.write(scratch, 0, n)
@@ -657,7 +693,14 @@ object BackupManager {
             try { out?.close() } catch (_: Throwable) {}
             tmp?.delete()
             throw eof
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            if (t is CancellationException) {
+                // A user cancel, not a fault: clean up the half-written temp file and abort the
+                // whole walk — do NOT drain and continue, the operation is being abandoned.
+                try { out?.close() } catch (_: Throwable) {}
+                tmp?.delete()
+                throw t
+            }
             // A destination-side failure (disk full, an unwritable name). The stream is fine, so
             // drain this blob's remaining bytes to stay frame-aligned, then carry on to the next.
             try { out?.close() } catch (_: Throwable) {}
@@ -1048,6 +1091,9 @@ object BackupManager {
         // a ByteArray first, which on a backup carrying the LOCAL_MODEL_FILES module meant an
         // OutOfMemoryError, and an OOM is an Error the UI's catch(Exception) never saw: the app
         // simply vanished. That is the "import crashes the app" bug, fixed at the root here.
+        // Cooperative cancel for the (potentially multi-gigabyte) read-through below.
+        val inspectJob = coroutineContext[Job]
+        val cancelled: () -> Boolean = { inspectJob?.isActive == false }
         val needsPassword: Boolean
         val scan: PayloadScan
         var plain: java.io.InputStream? = null
@@ -1058,7 +1104,7 @@ object BackupManager {
                 ?: throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
             plain = openDecrypted(source, password)
             scan = try {
-                scanPayload(plain)
+                scanPayload(plain, cancelled)
             } catch (t: java.io.IOException) {
                 if (t is BackupCrypto.WrongPasswordException) throw t
                 // A GCM tag failure on the very first frame is, overwhelmingly, a wrong password —
@@ -1193,6 +1239,11 @@ object BackupManager {
         // bytes go from the cipher straight to each blob's temp file in 64 KB pieces — the preview
         // no longer smuggles a multi-gigabyte payload across the confirm dialog, which is the
         // memory shape that used to kill the import of any backup containing a local model.
+        // Cooperative cancel: honoured through the blob phase (where the gigabytes and the
+        // time are), and checked once more before the database restore begins — see the
+        // comment above importJson below for why it stops being honoured after that point.
+        val commitJob = coroutineContext[Job]
+        val cancelled: () -> Boolean = { commitJob?.isActive == false }
         var restoredModels = 0
         var restoredFonts = 0
         if (preview.hasBlobs && source != null) {
@@ -1203,14 +1254,17 @@ object BackupManager {
                 var plain: java.io.InputStream? = null
                 try {
                     plain = openDecrypted(source, preview.password)
-                    scanPayload(plain) { name, dataLen, data ->
+                    scanPayload(plain, cancelled) { name, dataLen, data ->
                         val (m, f) = restoreOneBlob(
-                            context, name, dataLen, data, wantModels, wantFonts, scratch
+                            context, name, dataLen, data, wantModels, wantFonts, scratch, cancelled
                         )
                         restoredModels += m
                         restoredFonts += f
                     }
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    // A user cancel must abort the entire restore, not fall through to the
+                    // database phase as if the blob pass had merely hiccuped.
+                    if (t is CancellationException) throw t
                     // Best-effort by design, exactly as the old in-memory walk was: whatever blobs
                     // already landed stay landed, and the manifest restore below — the user's
                     // actual notes and tasks — still runs. The report will honestly show how many
@@ -1220,9 +1274,18 @@ object BackupManager {
                 }
             }
         }
-        val summary = importJson(
-            context, db, settings, preview.manifestJson, modules, conversationIds, apiProfileNames
-        )
+        // The manifest restore below is a stream of individual DB writes with no wrapping
+        // transaction, so a cancellation landing in the middle of it would leave a half-restored
+        // database — strictly worse than either outcome the user could have meant. Cancellation
+        // is therefore honoured only up to this point (the blob phase above, where the time
+        // actually goes); once the database restore starts it runs to completion, shielded by
+        // NonCancellable so a late Cancel press simply lets it finish.
+        throwIfCancelled(cancelled)
+        val summary = withContext(NonCancellable) {
+            importJson(
+                context, db, settings, preview.manifestJson, modules, conversationIds, apiProfileNames
+            )
+        }
         // Diagnostic breadcrumb (task F4): what a restore touched, counts and flags only. A no-op
         // unless logging is on.
         StartupLog.event(
