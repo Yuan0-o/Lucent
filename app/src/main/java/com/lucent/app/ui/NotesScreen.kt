@@ -1415,6 +1415,8 @@ fun NotesScreen(active: Boolean = true) {
                 // all — swallowed every gesture, including the one that raises the "Notes" title back
                 // into view after it has been scrolled away. Filling the area fixes both: the empty
                 // state now rides *inside* the grid as a full-width item rather than replacing it.
+                // Wrapped in a Box so the scroll-edge jump buttons can overlay the grid (task E2).
+                Box(modifier = Modifier.fillMaxSize()) {
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(2),
@@ -1458,6 +1460,15 @@ fun NotesScreen(active: Boolean = true) {
                             items(sortedNotes, key = { it.id }) { note -> renderCard(note) }
                         }
                     }
+                }
+                ScrollEdgeJumpButtons(
+                    canUp = gridState.canScrollBackward,
+                    canDown = gridState.canScrollForward,
+                    tint = onGradient,
+                    onUp = { scope.launch { gridState.animateScrollToItem(0) } },
+                    onDown = { scope.launch { gridState.animateScrollToItem((gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
+                )
                 }
             }
         }
