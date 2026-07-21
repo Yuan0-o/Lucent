@@ -50,9 +50,11 @@ object LocalLlm {
     const val HISTORY_TURNS = 8
 
     // Desktop adaptation: the engine DLL is packaged as a resource and extracted on first use
-    // (see nativebridge/NativeLoader); everything below this line is the Android file verbatim.
+    // (see nativebridge/NativeLoader). loadLlmEngine prefers the Vulkan-enabled DLL on machines
+    // that can run it and falls back to the CPU-only DLL everywhere else (settings task A4);
+    // everything below this line is the Android file verbatim.
     private val available: Boolean = run {
-        val ok = com.lucent.app.nativebridge.NativeLoader.load("lucent_llama")
+        val ok = com.lucent.app.nativebridge.NativeLoader.loadLlmEngine()
         if (!ok) Log.e("LocalLlm", "native engine library missing — local models unavailable")
         ok
     }

@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -78,6 +80,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -115,6 +118,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TasksScreen(active: Boolean = true) {
     val context = LocalContext.current
@@ -308,10 +312,16 @@ fun TasksScreen(active: Boolean = true) {
     }
 
     fun saveTask() {
+        // A subtask typed into the add field but never committed with "+" still counts (settings
+        // tasks B1/B4): it is folded in here, so typing the last item and hitting Save directly
+        // never silently drops it.
+        val pendingSubtask = newSubtaskText.trim()
+        val composedSubtasks =
+            if (pendingSubtask.isNotEmpty()) subtasks + Checklist.newItem(pendingSubtask) else subtasks
         // With the subtasks switch off, the task has no subtasks even if the editor still holds some
         // from before it was toggled off — so an off switch means "no checklist" both for the
         // "nothing to save" check and for what actually gets written.
-        val effectiveSubtasks = if (subtasksEnabled) subtasks else emptyList()
+        val effectiveSubtasks = if (subtasksEnabled) composedSubtasks else emptyList()
         if (newTitle.isBlank() && newNotes.isBlank() && pendingAttachments.isEmpty() && effectiveSubtasks.isEmpty()) {
             composing = false
             return
@@ -386,10 +396,14 @@ fun TasksScreen(active: Boolean = true) {
                 Attachments.serialize(pendingAttachments) != original.attachments ||
                 priority.value != original.priority || pinned != original.pinned ||
                 Checklist.serialize(subtasks) != original.subtasks ||
+                // Text sitting in the add field is work too (B4): losing it on exit because no "+"
+                // was pressed is exactly the bug this flag exists to prevent.
+                newSubtaskText.isNotBlank() ||
                 repeatRule.key != original.repeatRule || reminderEnabled != original.reminderEnabled
         } else {
             newTitle.isNotBlank() || newNotes.isNotBlank() || pendingAttachments.isNotEmpty() ||
                 dueAt != null || priority != TaskPriority.NONE || pinned || subtasks.isNotEmpty() ||
+                newSubtaskText.isNotBlank() ||
                 repeatRule != RepeatRule.NONE || reminderEnabled
         }
     }
@@ -655,6 +669,21 @@ fun TasksScreen(active: Boolean = true) {
     when {
         composing -> {
             // ---- Create / edit page ----
+            // Opening the editor of a task that already has subtasks jumps straight to the bottom
+            // of its subtask list — the add field under the last item — because that is where
+            // editing a checklist almost always continues (settings task B7). Decided once, when
+            // this page enters composition (startEdit has already populated the state by then), so
+            // later add/remove edits never re-trigger the jump.
+            val jumpToLastSubtask = remember { editingTask != null && subtasks.isNotEmpty() }
+            val subtaskEndRequester = remember { BringIntoViewRequester() }
+            if (jumpToLastSubtask) {
+                LaunchedEffect(Unit) {
+                    // Two frames so the scrollable column has laid out before it is asked to move.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    subtaskEndRequester.bringIntoView()
+                }
+            }
             Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()).padding(bottom = LocalBottomBarInset.current)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
@@ -699,7 +728,10 @@ fun TasksScreen(active: Boolean = true) {
                             },
                             onToggle = { item -> subtasks = subtasks.map { if (it.id == item.id) it.copy(done = !it.done) else it } },
                             onRemove = { item -> subtasks = subtasks.filterNot { it.id == item.id } },
-                            addLabel = com.lucent.app.i18n.S.addSubtask
+                            // Items are editable in place after being added (settings task B2).
+                            onEditText = { item, text -> subtasks = subtasks.map { if (it.id == item.id) it.copy(text = text) else it } },
+                            addLabel = com.lucent.app.i18n.S.addSubtask,
+                            addRowModifier = Modifier.bringIntoViewRequester(subtaskEndRequester)
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
