@@ -506,7 +506,9 @@ ENTRIES = [
     ("a11yVersionHistory(count: Int)", "Version history ({count})", "版本历史（{count}）", "バージョン履歴（{count}）", "버전 기록 ({count})"),
     ("createdOn(at: String)", "Created {at}", "创建于 {at}", "作成 {at}", "생성 {at}"),
     ("completedOn(at: String)", "Completed {at}", "完成于 {at}", "完了 {at}", "완료 {at}"),
-    ("reminderOn", "Reminder on", "提醒已开启", "リマインダー オン", "알림 켜짐"),
+    # Japanese does not put spaces between words; the old value had a stray space in the middle
+    # ("リマインダー オン"), which rendered as an odd gap inside the label.
+    ("reminderOn", "Reminder on", "提醒已开启", "リマインダーオン", "알림 켜짐"),
 
     # ---- Overflow menus / selection ----
     ("selectNotes", "Select notes", "选择笔记", "メモを選択", "노트 선택"),
