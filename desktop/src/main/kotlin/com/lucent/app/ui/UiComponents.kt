@@ -267,6 +267,8 @@ fun AttachmentSection(
         GlassButton(
             text = com.lucent.app.i18n.S.attachFile,
             icon = Icons.Default.AttachFile,
+            // Compact (wrap-content) so it reads as the smaller, secondary action beneath the wide
+            // primary Add button — the reverse of the two sitting at the same width.
             onClick = onPick
         )
         if (attachments.isNotEmpty()) {
