@@ -929,6 +929,12 @@ open class Tr {
     open fun backupNOfM(chosen: Int, total: Int): String = "${chosen} of ${total} selected"
     open val backupPickNotesTitle: String = "Which notes?"
     open val backupPickTasksTitle: String = "Which tasks?"
+    open val backupPickChatsTitle: String = "Which conversations?"
+    open val backupPickApiTitle: String = "Which API profiles?"
+    open fun backupImportApiLimit(canAdd: Int, max: Int): String =
+        "Over the ${max}-profile limit — choose up to ${canAdd} to import:"
+    open fun backupImportApiFull(max: Int): String =
+        "You already have the maximum of ${max} API profiles. Remove one first to import more."
     open val backupNothingToPick: String = "There is nothing here to back up yet."
 }
 
@@ -1749,6 +1755,12 @@ object Zh : Tr() {
     override fun backupNOfM(chosen: Int, total: Int): String = "已选 ${chosen}/${total}"
     override val backupPickNotesTitle: String = "选择要备份的笔记"
     override val backupPickTasksTitle: String = "选择要备份的任务"
+    override val backupPickChatsTitle: String = "选择要备份的对话"
+    override val backupPickApiTitle: String = "选择要备份的 API 配置"
+    override fun backupImportApiLimit(canAdd: Int, max: Int): String =
+        "超过 ${max} 个配置上限——请选择最多 ${canAdd} 个导入："
+    override fun backupImportApiFull(max: Int): String =
+        "你已有 ${max} 个 API 配置（已达上限）。请先删除一个再导入。"
     override val backupNothingToPick: String = "目前没有可备份的内容。"
 }
 
@@ -2567,6 +2579,12 @@ object Ja : Tr() {
     override fun backupNOfM(chosen: Int, total: Int): String = "${total} 件中 ${chosen} 件を選択"
     override val backupPickNotesTitle: String = "バックアップするメモ"
     override val backupPickTasksTitle: String = "バックアップするタスク"
+    override val backupPickChatsTitle: String = "バックアップする会話"
+    override val backupPickApiTitle: String = "バックアップする API プロファイル"
+    override fun backupImportApiLimit(canAdd: Int, max: Int): String =
+        "${max} 件の上限を超えています。インポートする ${canAdd} 件までを選択してください："
+    override fun backupImportApiFull(max: Int): String =
+        "API プロファイルは既に上限の ${max} 件です。インポートするには先に 1 件削除してください。"
     override val backupNothingToPick: String = "バックアップできるものはまだありません。"
 }
 
@@ -3385,5 +3403,11 @@ object Ko : Tr() {
     override fun backupNOfM(chosen: Int, total: Int): String = "${total}개 중 ${chosen}개 선택"
     override val backupPickNotesTitle: String = "백업할 노트"
     override val backupPickTasksTitle: String = "백업할 할 일"
+    override val backupPickChatsTitle: String = "백업할 대화"
+    override val backupPickApiTitle: String = "백업할 API 프로필"
+    override fun backupImportApiLimit(canAdd: Int, max: Int): String =
+        "${max}개 제한을 초과했습니다. 가져올 항목을 최대 ${canAdd}개 선택하세요:"
+    override fun backupImportApiFull(max: Int): String =
+        "API 프로필이 이미 최대 ${max}개입니다. 더 가져오려면 먼저 하나를 삭제하세요."
     override val backupNothingToPick: String = "아직 백업할 항목이 없습니다."
 }

@@ -108,11 +108,28 @@ object BackupManager {
     data class BackupSelection(
         val modules: Set<BackupModule> = DEFAULT_MODULES,
         val noteIds: Set<Long>? = null,
-        val taskIds: Set<Long>? = null
+        val taskIds: Set<Long>? = null,
+        // Which chat conversations and which API profiles ride along (task F1). Same convention as
+        // [noteIds]/[taskIds]: null = "everything in that module" (the default and what every prior
+        // release did), a non-null set is an explicit subset, and an EMPTY set is an explicit "none".
+        //
+        // Chats are chosen by CONVERSATION, not by individual message: a conversation is the thing a
+        // user can see and name, a message is not, and "back up this chat" always means the thread.
+        // Messages follow their conversation, so unselecting a conversation takes its messages with it.
+        //
+        // API profiles are identified by NAME (task F1 follow-up): the name is what the user sees and
+        // chooses in the picker, and matching on it keeps a selection meaningful even if the profile
+        // list is reordered. Names are distinct in normal use — the app's auto-naming (nextDefaultName)
+        // never repeats one — so a name maps to a single profile; a user who hand-duplicates a name
+        // simply selects both, the predictable reading of "include the profiles called X".
+        val conversationIds: Set<Long>? = null,
+        val apiProfileNames: Set<String>? = null
     ) {
         fun has(m: BackupModule) = m in modules
         fun wantsNote(id: Long) = noteIds?.contains(id) ?: true
         fun wantsTask(id: Long) = taskIds?.contains(id) ?: true
+        fun wantsConversation(id: Long) = conversationIds?.contains(id) ?: true
+        fun wantsApiProfileName(name: String) = apiProfileNames?.contains(name) ?: true
         /** Nothing at all would be written — the export button stays disabled on this. */
         val isEmpty: Boolean
             get() = modules.isEmpty() ||
@@ -120,6 +137,8 @@ object BackupManager {
                     when (m) {
                         BackupModule.NOTES -> noteIds?.isEmpty() == true
                         BackupModule.TASKS -> taskIds?.isEmpty() == true
+                        BackupModule.CHATS -> conversationIds?.isEmpty() == true
+                        BackupModule.API -> apiProfileNames?.isEmpty() == true
                         else -> false
                     }
                 }
@@ -194,12 +213,21 @@ object BackupManager {
         val noteVersions = if (BackupModule.NOTES in modules) {
             db.noteVersionDao().getAllOnce().filter { it.noteId in keptNoteIds }
         } else emptyList()
-        val chats = if (BackupModule.CHATS in modules) db.chatDao().getAll().first() else emptyList()
+        // Conversations narrowed to the chosen subset (task F1); a null selection keeps them all.
         val conversations =
-            if (BackupModule.CHATS in modules) db.chatConversationDao().getAllOnce() else emptyList()
+            if (BackupModule.CHATS in modules) {
+                db.chatConversationDao().getAllOnce().filter { selection.wantsConversation(it.id) }
+            } else emptyList()
+        // Messages follow the conversations that survived: a message whose conversation was unticked
+        // (or a legacy orphan message whose conversation id wasn't chosen) is dropped, so a
+        // per-conversation choice never leaves stray messages behind. A null selection keeps every
+        // message exactly as before.
+        val chats = if (BackupModule.CHATS in modules) {
+            db.chatDao().getAll().first().filter { selection.wantsConversation(it.conversationId) }
+        } else emptyList()
         return buildManifest(
             context, notes, tasks, noteVersions, chats, conversations, settings,
-            inlineAttachments = true, modules = modules
+            inlineAttachments = true, modules = modules, apiProfileNames = selection.apiProfileNames
         ).toString(2)
     }
 
@@ -269,6 +297,18 @@ object BackupManager {
                 }
             }
         }
+        // Diagnostic breadcrumb (task F4). Counts and flags only — never a title, a key, or any
+        // content — so the log stays safe to share even after an encrypted export. A no-op unless the
+        // user turned logging on. Per-item counts appear only when that dimension was narrowed.
+        StartupLog.event(
+            context,
+            "Backup exported: modules=${modules.joinToString(",") { it.name }}" +
+                (selection.noteIds?.let { "; notes=${it.size}" } ?: "") +
+                (selection.taskIds?.let { "; tasks=${it.size}" } ?: "") +
+                (selection.conversationIds?.let { "; chats=${it.size}" } ?: "") +
+                (selection.apiProfileNames?.let { "; apiProfiles=${it.size}" } ?: "") +
+                "; models=${modelFiles.size}; password=${if (password.isNullOrEmpty()) "no" else "yes"}"
+        )
     }
 
     private fun writeInt(out: OutputStream, value: Int) {
@@ -359,7 +399,10 @@ object BackupManager {
         conversations: List<ChatConversation>,
         settings: SettingsRepository,
         inlineAttachments: Boolean,
-        modules: Set<BackupModule> = DEFAULT_MODULES
+        modules: Set<BackupModule> = DEFAULT_MODULES,
+        // Null = every saved API profile travels (unchanged). A non-null set of profile NAMES narrows
+        // the API section to just those profiles (task F1); see the API block below.
+        apiProfileNames: Set<String>? = null
     ): JSONObject {
         val notesArray = JSONArray()
         notes.forEach {
@@ -438,6 +481,9 @@ object BackupManager {
                     .put("attachmentData", it.attachmentData ?: JSONObject.NULL)
                     .put("attachmentName", it.attachmentName ?: JSONObject.NULL)
                     .put("conversationId", it.conversationId)
+                    // The per-turn token estimate (task F3 completeness). Absent from older files, so
+                    // import reads it back with a 0 default — exactly the value a pre-token row had.
+                    .put("tokens", it.tokens)
             )
         }
 
@@ -463,23 +509,51 @@ object BackupManager {
         val wantLocal = BackupModule.LOCAL_ASSISTANT in modules
 
         val settingsObj = JSONObject()
-        if (wantApi) settingsObj
-            .put("baseUrl", settings.baseUrl.first())
-            .put("apiSpec", settings.apiSpec.first())
-            .put("apiKeyEncrypted", CryptoUtil.encrypt(settings.apiKey.first()))
-            .put("model", settings.model.first())
+        // The API section, optionally narrowed to a chosen subset of profiles (task F1).
+        //
+        // When no per-profile choice was made ([apiProfileNames] == null) or there are no saved
+        // profiles to narrow, the whole API state travels exactly as it always did: the flat
+        // connection keys mirror the active profile and every saved profile is included.
+        //
+        // When a subset was chosen, only those profiles travel; the selected index is remapped into
+        // the kept list, and the flat mirror keys are taken from whichever profile ends up selected
+        // there — so a profile the user deliberately excluded can never leak out through the legacy
+        // flat fields. The profile JSON already stores each key encrypted (see ApiProfiles.serialize),
+        // and the flat key is sealed with CryptoUtil the same way it always was.
+        if (wantApi) {
+            val rawProfilesJson = settings.apiProfilesJson.first()
+            val allProfiles = ApiProfiles.parse(rawProfilesJson)
+            if (apiProfileNames == null || allProfiles.isEmpty()) {
+                settingsObj
+                    .put("baseUrl", settings.baseUrl.first())
+                    .put("apiSpec", settings.apiSpec.first())
+                    .put("apiKeyEncrypted", CryptoUtil.encrypt(settings.apiKey.first()))
+                    .put("model", settings.model.first())
+                    .put("apiProfiles", rawProfilesJson)
+                    .put("apiProfileSelected", settings.apiProfileSelected.first())
+            } else {
+                val origSelected = settings.apiProfileSelected.first()
+                val keptIndexed = allProfiles.withIndex().filter { it.value.name in apiProfileNames }
+                val keptProfiles = keptIndexed.map { it.value }
+                val newSelected =
+                    keptIndexed.indexOfFirst { it.index == origSelected }.let { if (it >= 0) it else 0 }
+                val mirror = keptProfiles.getOrNull(newSelected)
+                settingsObj
+                    .put("baseUrl", mirror?.baseUrl ?: "")
+                    .put("apiSpec", mirror?.spec ?: "openai")
+                    .put("apiKeyEncrypted", CryptoUtil.encrypt(mirror?.apiKey ?: ""))
+                    .put("model", mirror?.model ?: "")
+                    .put("apiProfiles", ApiProfiles.serializeForBackup(keptProfiles))
+                    .put("apiProfileSelected", newSelected)
+            }
+        }
         if (wantSettings) settingsObj
             .put("themeMode", settings.themeMode.first())
             .put("palette", settings.palette.first())
             .put("font", settings.font.first())
             .put("assistantName", settings.assistantName.first())
             .put("assistantStyle", settings.assistantStyle.first())
-        // Full multi-API state. The profile JSON already stores each key encrypted (see
-        // ApiProfiles.serialize), so this is safe to include verbatim; on import we re-store
-        // it as-is and re-mirror the selected profile into the flat keys.
-        if (wantApi) settingsObj
-            .put("apiProfiles", settings.apiProfilesJson.first())
-            .put("apiProfileSelected", settings.apiProfileSelected.first())
+        // (The multi-API profile JSON is written in the consolidated API block above, task F1.)
         if (wantSettings) settingsObj
             // ---- Everything else the app remembers about how it should behave (task 17) ----
             //
@@ -628,7 +702,19 @@ object BackupManager {
         /** Where the blobs start in the decrypted payload, or -1 when there are none. */
         internal val blobOffset: Int = -1,
         /** The decrypted payload, retained only when there are blobs to write out on commit. */
-        internal val payload: ByteArray? = null
+        internal val payload: ByteArray? = null,
+        /**
+         * The conversations found in the file, as (id, title). Drives the import-side chat picker
+         * (task F2), exactly as the loaded conversation list drives the export-side one. Empty for a
+         * file with no chats, or one predating conversations.
+         */
+        val conversationList: List<Pair<Long, String>> = emptyList(),
+        /**
+         * The API profile NAMES found in the file. Drives the import-side API picker (task F2). Empty
+         * for a legacy single-API backup (which carries only the flat keys, not a named profile list)
+         * — matching the export side, where a file with no named profiles offers no per-profile choice.
+         */
+        val apiProfileNames: List<String> = emptyList()
     ) {
         /** True when the file parsed but holds nothing worth restoring. */
         val isEmpty: Boolean
@@ -704,6 +790,20 @@ object BackupManager {
             }
         }
 
+        // The conversations and API profile names in the file, for the import-side pickers (task F2).
+        // Parsed here (not counted), so the confirm dialog can offer "restore only these chats / these
+        // APIs" the same way the export dialog offers "back up only these".
+        val convList = root.optJSONArray("conversations")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.optLong("id", 0L)
+                if (id == 0L) null else id to o.optString("title", "")
+            }
+        } ?: emptyList()
+        val profileNames = root.optJSONObject("settings")?.optString("apiProfiles")?.let { pj ->
+            if (pj.isBlank()) emptyList() else ApiProfiles.parse(pj).map { it.name }
+        } ?: emptyList()
+
         return BackupPreview(
             manifestJson = manifestJson,
             formatVersion = root.optInt("version", 0),
@@ -729,7 +829,9 @@ object BackupManager {
             modelFiles = modelCount,
             modelBytes = modelBytes,
             blobOffset = blobOffset,
-            payload = if (blobOffset >= 0) payload else null
+            payload = if (blobOffset >= 0) payload else null,
+            conversationList = convList,
+            apiProfileNames = profileNames
         )
     }
 
@@ -744,7 +846,12 @@ object BackupManager {
         db: AppDatabase,
         settings: SettingsRepository,
         preview: BackupPreview,
-        modules: Set<BackupModule> = BackupModule.entries.toSet()
+        modules: Set<BackupModule> = BackupModule.entries.toSet(),
+        // Per-item restore choices (task F2), same convention as the export selection: null = restore
+        // everything in that module, a non-null set is an explicit subset. Chats by conversation id,
+        // API by profile name — the same handles the export side and the preview lists use.
+        conversationIds: Set<Long>? = null,
+        apiProfileNames: Set<String>? = null
     ): String {
         // Model files first, and deliberately so: the manifest's slot list is only adopted for
         // slots whose file is actually present (see LocalModelStore.restoreFromBackup), so the
@@ -755,7 +862,18 @@ object BackupManager {
         if (BackupModule.LOCAL_MODEL_FILES in modules && payload != null && preview.blobOffset >= 0) {
             restoredModels = restoreModelBlobs(context, payload, preview.blobOffset)
         }
-        val summary = importJson(context, db, settings, preview.manifestJson, modules)
+        val summary = importJson(
+            context, db, settings, preview.manifestJson, modules, conversationIds, apiProfileNames
+        )
+        // Diagnostic breadcrumb (task F4): what a restore touched, counts and flags only. A no-op
+        // unless logging is on.
+        StartupLog.event(
+            context,
+            "Backup restored: modules=${modules.joinToString(",") { it.name }}" +
+                (conversationIds?.let { "; chats=${it.size}" } ?: "") +
+                (apiProfileNames?.let { "; apiProfiles=${it.size}" } ?: "") +
+                "; models=$restoredModels"
+        )
         return if (restoredModels > 0) {
             summary + com.lucent.app.i18n.S.backupModelFilesRestored(restoredModels)
         } else summary
@@ -784,7 +902,11 @@ object BackupManager {
         db: AppDatabase,
         settings: SettingsRepository,
         json: String,
-        modules: Set<BackupModule> = BackupModule.entries.toSet()
+        modules: Set<BackupModule> = BackupModule.entries.toSet(),
+        // Per-item restore choices (task F2): null = everything in that module, a non-null set is an
+        // explicit subset. Chats by conversation id, API by profile name.
+        conversationIds: Set<Long>? = null,
+        apiProfileNames: Set<String>? = null
     ): String {
         val root = JSONObject(json)
         var importedNotes = 0
@@ -816,6 +938,10 @@ object BackupManager {
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val oldId = o.optLong("id", 0)
+                // Selective restore (task F2): skip a conversation the user didn't tick. Its messages
+                // are dropped below too, since they'd otherwise fall through to the "unknown
+                // conversation" bucket and reappear under a fresh thread the user didn't ask for.
+                if (conversationIds != null && oldId !in conversationIds) continue
                 val title = o.optString("title", "Conversation")
                 val createdAt = o.optLong("createdAt", System.currentTimeMillis())
                 val updatedAt = o.optLong("updatedAt", createdAt)
@@ -942,6 +1068,8 @@ object BackupManager {
                 val content = o.optString("content")
                 val timestamp = o.optLong("timestamp", System.currentTimeMillis())
                 val oldConvId = if (o.has("conversationId")) o.optLong("conversationId", 1) else 1L
+                // Selective restore (task F2): drop a message whose conversation the user didn't tick.
+                if (conversationIds != null && oldConvId !in conversationIds) continue
                 val newConvId = convIdRemap[oldConvId] ?: fallbackConversation()
                 val isDuplicate = existingChats.any { it.role == role && it.content == content && it.timestamp == timestamp }
                 if (isDuplicate) { skipped++; continue }
@@ -953,7 +1081,8 @@ object BackupManager {
                         attachmentMime = if (o.isNull("attachmentMime")) null else o.optString("attachmentMime"),
                         attachmentData = if (o.isNull("attachmentData")) null else o.optString("attachmentData"),
                         attachmentName = if (o.isNull("attachmentName")) null else o.optString("attachmentName"),
-                        conversationId = newConvId
+                        conversationId = newConvId,
+                        tokens = o.optInt("tokens", 0)
                     )
                 )
                 importedChats++
@@ -969,26 +1098,48 @@ object BackupManager {
             val restoreGeneral = BackupModule.SETTINGS in modules
             val restoreLocal = BackupModule.LOCAL_ASSISTANT in modules
             settingsRestored = restoreApi || restoreGeneral || restoreLocal
-            if (restoreApi && s.has("baseUrl")) settings.setBaseUrl(s.optString("baseUrl"))
-            if (restoreApi && s.has("apiSpec")) settings.setApiSpec(s.optString("apiSpec"))
-            if (restoreApi && s.has("apiKeyEncrypted")) {
+            // The flat connection keys are the legacy single-API mirror. They're restored only on a
+            // WHOLE-API restore (apiProfileNames == null). On a selective one they're deliberately
+            // skipped: the file's flat keys mirror whichever profile was active at export, which may
+            // be a profile the user didn't pick — writing it would leak an unselected key. The kept
+            // profiles below re-mirror the flat keys correctly instead.
+            val wholeApi = restoreApi && apiProfileNames == null
+            if (wholeApi && s.has("baseUrl")) settings.setBaseUrl(s.optString("baseUrl"))
+            if (wholeApi && s.has("apiSpec")) settings.setApiSpec(s.optString("apiSpec"))
+            if (wholeApi && s.has("apiKeyEncrypted")) {
                 val decrypted = CryptoUtil.decrypt(s.optString("apiKeyEncrypted"))
                 if (decrypted.isNotEmpty()) settings.setApiKey(decrypted)
             }
-            if (restoreApi && s.has("model")) settings.setModel(s.optString("model"))
+            if (wholeApi && s.has("model")) settings.setModel(s.optString("model"))
             if (restoreGeneral && s.has("themeMode")) settings.setThemeMode(s.optString("themeMode"))
             if (restoreGeneral && s.has("palette")) settings.setPalette(s.optString("palette"))
             if (restoreGeneral && s.has("font")) settings.setFont(s.optString("font"))
             if (restoreGeneral && s.has("assistantName")) settings.setAssistantName(s.optString("assistantName"))
             if (restoreGeneral && s.has("assistantStyle")) settings.setAssistantStyle(s.optString("assistantStyle"))
-            // Restore all saved API profiles (keys already encrypted inside the JSON) and the
-            // selection, re-mirroring the active one into the flat connection keys. Falls back to
-            // the flat apiKeyEncrypted above for backups made before multi-API existed.
+            // API profiles (keys already encrypted inside the JSON).
+            //
+            //  - WHOLE restore (apiProfileNames == null): unchanged — the file's profiles replace the
+            //    current set and the selected one is re-mirrored into the flat keys.
+            //  - SELECTIVE restore (task F2): MERGE the chosen profiles into the current set rather
+            //    than replacing it — appending only names not already present, capped at the max — so
+            //    pulling one API out of a shared backup never wipes the APIs already on this device.
             if (restoreApi && s.has("apiProfiles")) {
-                val profiles = com.lucent.app.data.ApiProfiles.parse(s.optString("apiProfiles"))
-                if (profiles.isNotEmpty()) {
-                    val sel = s.optInt("apiProfileSelected", 0)
-                    settings.saveApiProfiles(profiles, sel)
+                val parsed = com.lucent.app.data.ApiProfiles.parse(s.optString("apiProfiles"))
+                if (apiProfileNames == null) {
+                    if (parsed.isNotEmpty()) {
+                        settings.saveApiProfiles(parsed, s.optInt("apiProfileSelected", 0))
+                    }
+                } else {
+                    val chosen = parsed.filter { it.name in apiProfileNames }
+                    if (chosen.isNotEmpty()) {
+                        val current = com.lucent.app.data.ApiProfiles.parse(settings.apiProfilesJson.first())
+                        val existingNames = current.map { it.name }.toHashSet()
+                        val merged = (current + chosen.filter { it.name !in existingNames })
+                            .take(com.lucent.app.data.ApiProfiles.MAX)
+                        val sel = settings.apiProfileSelected.first()
+                            .coerceIn(0, (merged.size - 1).coerceAtLeast(0))
+                        settings.saveApiProfiles(merged, sel)
+                    }
                 }
             }
 

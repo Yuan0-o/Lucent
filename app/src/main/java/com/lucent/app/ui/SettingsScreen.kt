@@ -266,6 +266,19 @@ fun SettingsScreen(active: Boolean = true) {
     // to enumerate every note and task.
     var exportNoteIds by remember { mutableStateOf<Set<Long>?>(null) }
     var exportTaskIds by remember { mutableStateOf<Set<Long>?>(null) }
+    // Same per-item shape for the two sections that gained it in task F1: which chat conversations
+    // and which API profiles the export includes. Null = everything in that module (the default);
+    // API profiles are held by NAME (the label the user picks, stable across reordering), the same
+    // handle BackupManager filters on.
+    var exportConversationIds by remember { mutableStateOf<Set<Long>?>(null) }
+    var exportApiProfileNames by remember { mutableStateOf<Set<String>?>(null) }
+    // The REAL saved API profiles — not the synthetic single profile the API page shows when nothing
+    // has been saved yet (see `profiles` above). The per-profile export picker is built from and
+    // gated on this list, so its indices line up exactly with what BackupManager re-parses from the
+    // same stored JSON. When it's empty (a fresh install still on the legacy flat keys), no API
+    // drill-in is offered and the whole-API toggle is the only choice — which is the honest option
+    // when there is only one connection to include or leave out.
+    val realProfiles = remember(savedProfilesJson) { com.lucent.app.data.ApiProfiles.parse(savedProfilesJson) }
     // Which second-level picker is open, if any.
     var itemPicker by remember { mutableStateOf<ExportItemKind?>(null) }
     // The item lists behind the second-level picker. Loaded only while the export dialog is open:
@@ -273,17 +286,34 @@ fun SettingsScreen(active: Boolean = true) {
     // from is work for nothing, and on a large database it is work for nothing on every recomposition.
     var allNotes by remember { mutableStateOf<List<com.lucent.app.data.Note>>(emptyList()) }
     var allTasks by remember { mutableStateOf<List<com.lucent.app.data.Task>>(emptyList()) }
+    // Conversations behind the chat picker, loaded (like notes/tasks) only while the export dialog is
+    // open. API profiles need no load here — realProfiles above already comes from settings.
+    var allConversations by remember {
+        mutableStateOf<List<com.lucent.app.data.ChatConversation>>(emptyList())
+    }
     LaunchedEffect(showExportDialog) {
         if (showExportDialog) {
             val loadedNotes = withContext(Dispatchers.IO) { db.noteDao().getAllOnce() }
             val loadedTasks = withContext(Dispatchers.IO) { db.taskDao().getAllOnce() }
+            val loadedConversations = withContext(Dispatchers.IO) { db.chatConversationDao().getAllOnce() }
             allNotes = loadedNotes
             allTasks = loadedTasks
+            allConversations = loadedConversations
         }
     }
     // Which sections a restore applies. Populated from the file's own contents when the preview
     // opens, so the list offers what is actually in the file rather than a fixed menu of maybes.
     var restoreModules by remember { mutableStateOf(BackupManager.DEFAULT_MODULES) }
+    // Per-item restore choices (task F2), the import-side mirror of the export selection. Reset when a
+    // new preview opens (see the ImportPreviewDialog). Chats by conversation id, API by name — the
+    // handles the preview's own lists carry.
+    var restoreConversationIds by remember { mutableStateOf<Set<Long>?>(null) }
+    var restoreApiProfileNames by remember { mutableStateOf<Set<String>?>(null) }
+    var restoreItemPicker by remember { mutableStateOf<ExportItemKind?>(null) }
+    // Set when confirming a restore whose API profiles would push this device over ApiProfiles.MAX.
+    // Drives the API-limit prompt (below), which asks which of the incoming profiles to keep before
+    // any of them is written — the alternative, silently dropping the overflow, is never done.
+    var apiLimitPrompt by remember { mutableStateOf(false) }
     var exportPasswordVisible by remember { mutableStateOf(false) }
 
     // A backup that needs a password we don't have. The bytes are held here rather than re-read on
@@ -294,6 +324,32 @@ fun SettingsScreen(active: Boolean = true) {
     var importPasswordError by remember { mutableStateOf(false) }
     // What's in the file, worked out without writing anything. Non-null means the confirm step is up.
     var importPreview by remember { mutableStateOf<BackupManager.BackupPreview?>(null) }
+    // The actual restore + its post-restore housekeeping, in one place so the confirm button and the
+    // API-limit prompt drive identical behaviour; only the API profile selection differs between them.
+    // Passing a non-null (possibly empty) profile-name set makes the API restore MERGE into this
+    // device's profiles; passing null keeps the legacy whole-API replace (used for old single-API
+    // backups that carry only the flat connection keys).
+    val runRestore: (BackupManager.BackupPreview, Set<BackupManager.BackupModule>, Set<Long>?, Set<String>?) -> Unit =
+        { preview, modules, convIds, apiNames ->
+            importPreview = null
+            apiLimitPrompt = false
+            scope.launch {
+                backupStatus = withContext(Dispatchers.IO) {
+                    try {
+                        BackupManager.commit(context, db, repo, preview, modules, convIds, apiNames)
+                    } catch (e: Exception) {
+                        S.importFailed(e.message ?: "")
+                    }
+                }
+                // A restored backup can bring in tasks that want reminders, and alarms aren't part of
+                // a backup file — they're OS state. BackupManager re-arms them, but the channel has to
+                // exist before one can be posted.
+                com.lucent.app.reminders.Notifications.ensureChannel(context)
+                // If a database had been set aside as undecryptable, restoring is the cure — retire
+                // the notice rather than leaving it frightening someone who has already fixed it.
+                com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
+            }
+        }
     // Set when a database could not be decrypted on this launch. Nothing was deleted — see
     // DatabaseEncryption.setAside — but the user has to be told, and told what to do about it.
     val lockedNotice = remember { com.lucent.app.data.DatabaseEncryption.lockedNotice(context) }
@@ -670,7 +726,9 @@ fun SettingsScreen(active: Boolean = true) {
             val chosenSelection = BackupManager.BackupSelection(
                 modules = exportModules,
                 noteIds = exportNoteIds,
-                taskIds = exportTaskIds
+                taskIds = exportTaskIds,
+                conversationIds = exportConversationIds,
+                apiProfileNames = exportApiProfileNames
             )
             scope.launch {
                 // The full payload — notes (archived included), tasks, note version history, chats,
@@ -746,9 +804,33 @@ fun SettingsScreen(active: Boolean = true) {
                         onChooseItems = { itemPicker = ExportItemKind.TASKS },
                         onChange = { exportModules = it }
                     )
-                    BackupModuleRow(S.backupModChats, BackupManager.BackupModule.CHATS, exportModules) { exportModules = it }
+                    // Chats carry a second level too (task F1): the tick includes the whole assistant
+                    // history, "choose…" narrows it to particular conversations. Offered only when
+                    // there is more than nothing to pick.
+                    BackupModuleRow(
+                        label = S.backupModChats,
+                        module = BackupManager.BackupModule.CHATS,
+                        selected = exportModules,
+                        subLabel = exportConversationIds?.let { S.backupNOfM(it.size, allConversations.size) },
+                        onChooseItems = if (allConversations.isNotEmpty()) {
+                            { itemPicker = ExportItemKind.CHATS }
+                        } else null,
+                        onChange = { exportModules = it }
+                    )
                     BackupModuleRow(S.backupModSettings, BackupManager.BackupModule.SETTINGS, exportModules) { exportModules = it }
-                    BackupModuleRow(S.backupModApi, BackupManager.BackupModule.API, exportModules) { exportModules = it }
+                    // API likewise: include every saved connection, or pick which ones. The drill-in
+                    // is gated on realProfiles so its indices match what BackupManager filters on; a
+                    // fresh install still on the flat keys just gets the whole-API tick.
+                    BackupModuleRow(
+                        label = S.backupModApi,
+                        module = BackupManager.BackupModule.API,
+                        selected = exportModules,
+                        subLabel = exportApiProfileNames?.let { S.backupNOfM(it.size, realProfiles.size) },
+                        onChooseItems = if (realProfiles.isNotEmpty()) {
+                            { itemPicker = ExportItemKind.API }
+                        } else null,
+                        onChange = { exportModules = it }
+                    )
                     BackupModuleRow(S.backupModLocalAssistant, BackupManager.BackupModule.LOCAL_ASSISTANT, exportModules) { exportModules = it }
                     // The model files are offered only when there are some, and always with their
                     // real size attached: "include local model files" means something very
@@ -767,7 +849,7 @@ fun SettingsScreen(active: Boolean = true) {
                             modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
                         )
                     }
-                    if (BackupManager.BackupSelection(exportModules, exportNoteIds, exportTaskIds).isEmpty) {
+                    if (BackupManager.BackupSelection(exportModules, exportNoteIds, exportTaskIds, exportConversationIds, exportApiProfileNames).isEmpty) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(S.backupSelectionEmpty, color = DANGER_RED, fontSize = 12.sp)
                     }
@@ -803,7 +885,7 @@ fun SettingsScreen(active: Boolean = true) {
             // device still (correctly) asks for it, so the default file stays portable regardless.
             confirmButton = {
                 Button(
-                    enabled = !BackupManager.BackupSelection(exportModules, exportNoteIds, exportTaskIds).isEmpty,
+                    enabled = !BackupManager.BackupSelection(exportModules, exportNoteIds, exportTaskIds, exportConversationIds, exportApiProfileNames).isEmpty,
                     onClick = {
                         val password = exportPasswordDraft.ifBlank { null }
                         if (password != null) {
@@ -825,24 +907,44 @@ fun SettingsScreen(active: Boolean = true) {
     // with no good behaviour, and this way dismissing the picker returns to an export dialog that
     // never went away and still holds the password the user had already typed.
     itemPicker?.let { kind ->
-        val isNotes = kind == ExportItemKind.NOTES
-        val ids: List<Pair<Long, String>> = if (isNotes) {
-            allNotes.map { it.id to it.title.ifBlank { S.untitled } }
-        } else {
-            allTasks.map { it.id to it.title.ifBlank { S.untitledTask } }
+        // Notes and tasks are keyed on real row ids; chats on the conversation id; API on the
+        // profile INDEX carried as a Long, so one generic picker drives all four. In every case a
+        // full selection is stored back as null ("everything") rather than an explicit set of every
+        // id — that keeps the manifest honest if items are added between choosing and exporting, and
+        // it is what makes the "12 of 40" sub-label disappear again when the user re-ticks all.
+        val ids: List<Pair<Long, String>> = when (kind) {
+            ExportItemKind.NOTES -> allNotes.map { it.id to it.title.ifBlank { S.untitled } }
+            ExportItemKind.TASKS -> allTasks.map { it.id to it.title.ifBlank { S.untitledTask } }
+            ExportItemKind.CHATS -> allConversations.map { it.id to it.title.ifBlank { S.untitled } }
+            ExportItemKind.API -> realProfiles.mapIndexed { i, p -> i.toLong() to p.name.ifBlank { S.backupModApi } }
         }
-        val current = (if (isNotes) exportNoteIds else exportTaskIds) ?: ids.map { it.first }.toSet()
+        val current: Set<Long> = when (kind) {
+            ExportItemKind.NOTES -> exportNoteIds
+            ExportItemKind.TASKS -> exportTaskIds
+            ExportItemKind.CHATS -> exportConversationIds
+            ExportItemKind.API -> exportApiProfileNames?.let { names ->
+                realProfiles.mapIndexedNotNull { i, p -> if (p.name in names) i.toLong() else null }.toSet()
+            }
+        } ?: ids.map { it.first }.toSet()
+        val title = when (kind) {
+            ExportItemKind.NOTES -> S.backupPickNotesTitle
+            ExportItemKind.TASKS -> S.backupPickTasksTitle
+            ExportItemKind.CHATS -> S.backupPickChatsTitle
+            ExportItemKind.API -> S.backupPickApiTitle
+        }
         ExportItemPickerDialog(
-            title = if (isNotes) S.backupPickNotesTitle else S.backupPickTasksTitle,
+            title = title,
             items = ids,
             selected = current,
             onDone = { picked ->
-                // A full selection is stored back as null ("everything"), not as an explicit set of
-                // every id. That keeps the manifest honest if items are added between choosing and
-                // exporting, and it is what makes the "12 of 40" sub-label disappear again when the
-                // user re-ticks everything.
-                val collapsed = if (picked.size == ids.size) null else picked
-                if (isNotes) exportNoteIds = collapsed else exportTaskIds = collapsed
+                val collapsed: Set<Long>? = if (picked.size == ids.size) null else picked
+                when (kind) {
+                    ExportItemKind.NOTES -> exportNoteIds = collapsed
+                    ExportItemKind.TASKS -> exportTaskIds = collapsed
+                    ExportItemKind.CHATS -> exportConversationIds = collapsed
+                    ExportItemKind.API -> exportApiProfileNames =
+                        collapsed?.let { idx -> idx.mapNotNull { realProfiles.getOrNull(it.toInt())?.name }.toSet() }
+                }
                 itemPicker = null
             },
             onDismiss = { itemPicker = null }
@@ -1047,7 +1149,11 @@ fun SettingsScreen(active: Boolean = true) {
                         // Start with everything the file has selected: restoring all of it is what
                         // the button used to do, so that stays the default and opting out is the
                         // deliberate act.
-                        LaunchedEffect(preview) { restoreModules = available }
+                        LaunchedEffect(preview) {
+                            restoreModules = available
+                            restoreConversationIds = null
+                            restoreApiProfileNames = null
+                        }
 
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(S.restoreChooseWhat, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -1059,11 +1165,29 @@ fun SettingsScreen(active: Boolean = true) {
                             BackupModuleRow(S.backupModTasks, BackupManager.BackupModule.TASKS, restoreModules) { restoreModules = it }
                         }
                         if (BackupManager.BackupModule.CHATS in available) {
-                            BackupModuleRow(S.backupModChats, BackupManager.BackupModule.CHATS, restoreModules) { restoreModules = it }
+                            BackupModuleRow(
+                                label = S.backupModChats,
+                                module = BackupManager.BackupModule.CHATS,
+                                selected = restoreModules,
+                                subLabel = restoreConversationIds?.let { S.backupNOfM(it.size, preview.conversationList.size) },
+                                onChooseItems = if (preview.conversationList.isNotEmpty()) {
+                                    { restoreItemPicker = ExportItemKind.CHATS }
+                                } else null,
+                                onChange = { restoreModules = it }
+                            )
                         }
                         if (BackupManager.BackupModule.SETTINGS in available) {
                             BackupModuleRow(S.backupModSettings, BackupManager.BackupModule.SETTINGS, restoreModules) { restoreModules = it }
-                            BackupModuleRow(S.backupModApi, BackupManager.BackupModule.API, restoreModules) { restoreModules = it }
+                            BackupModuleRow(
+                                label = S.backupModApi,
+                                module = BackupManager.BackupModule.API,
+                                selected = restoreModules,
+                                subLabel = restoreApiProfileNames?.let { S.backupNOfM(it.size, preview.apiProfileNames.size) },
+                                onChooseItems = if (preview.apiProfileNames.isNotEmpty()) {
+                                    { restoreItemPicker = ExportItemKind.API }
+                                } else null,
+                                onChange = { restoreModules = it }
+                            )
                             BackupModuleRow(S.backupModLocalAssistant, BackupManager.BackupModule.LOCAL_ASSISTANT, restoreModules) { restoreModules = it }
                         }
                         if (BackupManager.BackupModule.LOCAL_MODEL_FILES in available) {
@@ -1083,24 +1207,28 @@ fun SettingsScreen(active: Boolean = true) {
                 Button(
                     enabled = !preview.isEmpty && restoreModules.isNotEmpty(),
                     onClick = {
-                        importPreview = null
-                        val chosen = restoreModules
-                        scope.launch {
-                            backupStatus = withContext(Dispatchers.IO) {
-                                try {
-                                    BackupManager.commit(context, db, repo, preview, chosen)
-                                } catch (e: Exception) {
-                                    S.importFailed(e.message ?: "")
-                                }
-                            }
-                            // A restored backup can bring in tasks that want reminders, and alarms
-                            // aren't part of a backup file — they're OS state. BackupManager re-arms
-                            // them, but the channel has to exist before one can be posted.
-                            com.lucent.app.reminders.Notifications.ensureChannel(context)
-                            // If a database had been set aside as undecryptable, restoring is the
-                            // cure — retire the notice rather than leaving it frightening someone who
-                            // has already fixed the problem.
-                            com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
+                        // Which API profiles the restore should carry, and whether that would overflow
+                        // the device's cap. Only a MULTI-API backup (one that carries a named profile
+                        // list) merges; a legacy single-API backup keeps the whole-API replace by
+                        // handing null through. "All" (restoreApiProfileNames == null) is turned into
+                        // the explicit full set so it merges too, rather than replacing what's here.
+                        val apiSelected = BackupManager.BackupModule.API in restoreModules
+                        val isMultiApiBackup = preview.apiProfileNames.isNotEmpty()
+                        val effectiveApiNames: Set<String>? = when {
+                            !apiSelected -> null
+                            !isMultiApiBackup -> null
+                            else -> restoreApiProfileNames ?: preview.apiProfileNames.toSet()
+                        }
+                        // Only NEW names take a slot; a name already saved here is kept by the merge
+                        // and costs nothing. If the newcomers wouldn't fit, ask before writing any.
+                        val existingNames = com.lucent.app.data.ApiProfiles
+                            .parse(savedProfilesJson).map { it.name }.toHashSet()
+                        val incomingNew = effectiveApiNames?.count { it !in existingNames } ?: 0
+                        val room = com.lucent.app.data.ApiProfiles.MAX - existingNames.size
+                        if (incomingNew > room) {
+                            apiLimitPrompt = true
+                        } else {
+                            runRestore(preview, restoreModules, restoreConversationIds, effectiveApiNames)
                         }
                     }
                 ) { Text(S.actionRestore) }
@@ -1109,6 +1237,69 @@ fun SettingsScreen(active: Boolean = true) {
         )
     }
     importPreview?.let { ImportPreviewDialog(it) }
+
+    // Second-level picker for the restore dialog (task F2) — the import-side twin of the export one.
+    // Built from the preview's own lists (not the live database), so it offers exactly what the file
+    // contains. Chats key on the conversation id; API keys on the profile INDEX in the file carried as
+    // a Long, with the stored selection kept as names — same shape as the export picker.
+    restoreItemPicker?.let { kind ->
+        importPreview?.let { preview ->
+            val ids: List<Pair<Long, String>> = when (kind) {
+                ExportItemKind.CHATS -> preview.conversationList.map { it.first to it.second.ifBlank { S.untitled } }
+                ExportItemKind.API -> preview.apiProfileNames.mapIndexed { i, name -> i.toLong() to name.ifBlank { S.backupModApi } }
+                else -> emptyList()
+            }
+            val current: Set<Long> = when (kind) {
+                ExportItemKind.CHATS -> restoreConversationIds
+                ExportItemKind.API -> restoreApiProfileNames?.let { names ->
+                    preview.apiProfileNames.mapIndexedNotNull { i, n -> if (n in names) i.toLong() else null }.toSet()
+                }
+                else -> null
+            } ?: ids.map { it.first }.toSet()
+            val title = when (kind) {
+                ExportItemKind.CHATS -> S.backupPickChatsTitle
+                else -> S.backupPickApiTitle
+            }
+            ExportItemPickerDialog(
+                title = title,
+                items = ids,
+                selected = current,
+                onDone = { picked ->
+                    val collapsed: Set<Long>? = if (picked.size == ids.size) null else picked
+                    when (kind) {
+                        ExportItemKind.CHATS -> restoreConversationIds = collapsed
+                        ExportItemKind.API -> restoreApiProfileNames =
+                            collapsed?.let { idx -> idx.mapNotNull { preview.apiProfileNames.getOrNull(it.toInt()) }.toSet() }
+                        else -> {}
+                    }
+                    restoreItemPicker = null
+                },
+                onDismiss = { restoreItemPicker = null }
+            )
+        }
+    }
+
+    // API-limit prompt: shown when a confirmed restore's API profiles would exceed ApiProfiles.MAX.
+    // Rendered here (not nested inside the preview dialog) so a cancel leaves the preview and its
+    // selections intact — the same reason the item picker above lives at this level. The incoming
+    // list and remaining room are recomputed from the same inputs the confirm button used, so the two
+    // always agree on whether a prompt is warranted.
+    if (apiLimitPrompt) {
+        importPreview?.let { preview ->
+            val existingNames = com.lucent.app.data.ApiProfiles
+                .parse(savedProfilesJson).map { it.name }.toHashSet()
+            val chosenApi = restoreApiProfileNames ?: preview.apiProfileNames.toSet()
+            val incoming = chosenApi.filter { it !in existingNames }
+            val room = (com.lucent.app.data.ApiProfiles.MAX - existingNames.size).coerceAtLeast(0)
+            ApiImportLimitDialog(
+                incoming = incoming,
+                canAdd = room,
+                max = com.lucent.app.data.ApiProfiles.MAX,
+                onDone = { picked -> runRestore(preview, restoreModules, restoreConversationIds, picked) },
+                onDismiss = { apiLimitPrompt = false }
+            )
+        }
+    }
 
     // --- App Lock setup ---
     // Captures a password (twice) and, optionally, a security question and its answer, then turns the
@@ -3240,7 +3431,7 @@ private fun BackupModuleRow(
 }
 
 /** Which list the second-level backup picker is showing. */
-private enum class ExportItemKind { NOTES, TASKS }
+private enum class ExportItemKind { NOTES, TASKS, CHATS, API }
 
 /**
  * The second-level picker: every note (or task), each with a tick, plus all/none shortcuts.
@@ -3300,6 +3491,82 @@ private fun ExportItemPickerDialog(
             }
         },
         confirmButton = { TextButton(onClick = { onDone(draft) }) { Text(S.actionDone) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(S.actionCancel) } }
+    )
+}
+
+/**
+ * The import-time cap resolver: when the API profiles a restore would add don't all fit under
+ * [ApiProfiles.MAX], this asks which of the newcomers to keep rather than silently dropping the
+ * overflow. [incoming] is only the profiles that would actually take a new slot — a name already
+ * saved on the device is kept by the merge and never appears here. [canAdd] is how many slots are
+ * free; when it is zero there is nothing to choose and the dialog just explains why, returning an
+ * empty set so the rest of the restore still proceeds.
+ *
+ * Selection is held by NAME, the same handle the export and preview pickers use. The tick count can
+ * never exceed [canAdd]: at the cap an unticked row simply can't be ticked until another is freed,
+ * so the caller always receives a set that fits.
+ */
+@Composable
+private fun ApiImportLimitDialog(
+    incoming: List<String>,
+    canAdd: Int,
+    max: Int,
+    onDone: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Pre-fill up to the cap in file order, so tapping straight through still imports a full,
+    // valid batch rather than nothing.
+    var draft by remember(incoming, canAdd) {
+        mutableStateOf(incoming.take(canAdd.coerceAtLeast(0)).toSet())
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(S.backupPickApiTitle) },
+        text = {
+            Column {
+                if (canAdd <= 0) {
+                    Text(S.backupImportApiFull(max), fontSize = 13.sp)
+                } else {
+                    Text(S.backupImportApiLimit(canAdd, max), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.backupNOfM(draft.size, incoming.size), fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        items(incoming, key = { it }) { name ->
+                            val checked = name in draft
+                            // At the cap an unticked row is inert until a slot is freed; ticking it is
+                            // ignored so the selection can never exceed what will fit.
+                            val blocked = !checked && draft.size >= canAdd
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = checked || !blocked) {
+                                        draft = if (checked) draft - name else draft + name
+                                    }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Checkbox(checked = checked, enabled = checked || !blocked, onCheckedChange = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    name.ifBlank { S.backupModApi },
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        // With no room, the only honest action is to acknowledge and import none.
+        confirmButton = {
+            TextButton(onClick = { onDone(if (canAdd <= 0) emptySet() else draft) }) {
+                Text(if (canAdd <= 0) S.actionDone else S.actionRestore)
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(S.actionCancel) } }
     )
 }
