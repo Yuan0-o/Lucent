@@ -310,7 +310,15 @@ fun NotesScreen(active: Boolean = true) {
     }
 
     fun saveNote() {
-        if (newTitle.isBlank() && newBody.isBlank() && pendingAttachments.isEmpty() && checklistItems.isEmpty()) {
+        // A checklist item typed into the add field but never committed with "+" still counts
+        // (settings tasks B1/B4, checklist-note side): it is folded in here, so typing the last
+        // item and hitting Save directly never silently drops it. Only in checklist mode — that is
+        // the only mode in which the add field is even on screen.
+        val pendingItem = newChecklistItemText.trim()
+        val composedChecklist =
+            if (isChecklistMode && pendingItem.isNotEmpty()) checklistItems + Checklist.newItem(pendingItem)
+            else checklistItems
+        if (newTitle.isBlank() && newBody.isBlank() && pendingAttachments.isEmpty() && composedChecklist.isEmpty()) {
             composing = false
             return
         }
@@ -325,7 +333,7 @@ fun NotesScreen(active: Boolean = true) {
         val pinnedSnapshot = pinned
         val colorSnapshot = selectedColor.key
         val isChecklistSnapshot = isChecklistMode
-        val checklistJson = Checklist.serialize(checklistItems)
+        val checklistJson = Checklist.serialize(composedChecklist)
         val id = editingId
         val appContext = context.applicationContext
 
@@ -401,11 +409,14 @@ fun NotesScreen(active: Boolean = true) {
                 Attachments.serialize(pendingAttachments) != original.attachments ||
                 pinned != original.pinned || selectedColor.key != original.color ||
                 isChecklistMode != original.isChecklist ||
-                Checklist.serialize(checklistItems) != original.checklist
+                Checklist.serialize(checklistItems) != original.checklist ||
+                // Text sitting in the add field is work too (B4): losing it on exit because no "+"
+                // was pressed is exactly the bug this flag exists to prevent.
+                (isChecklistMode && newChecklistItemText.isNotBlank())
         } else {
             newTitle.isNotBlank() || newBody.isNotBlank() || pendingAttachments.isNotEmpty() ||
                 selectedTags.isNotEmpty() || pinned || selectedColor != NoteColor.DEFAULT ||
-                checklistItems.isNotEmpty()
+                checklistItems.isNotEmpty() || (isChecklistMode && newChecklistItemText.isNotBlank())
         }
     }
 
@@ -429,7 +440,8 @@ fun NotesScreen(active: Boolean = true) {
      */
     val noteContentDirty = composing && editingId == null && (
         newTitle.isNotBlank() || newBody.isNotBlank() ||
-            selectedTags.isNotEmpty() || checklistItems.isNotEmpty()
+            selectedTags.isNotEmpty() || checklistItems.isNotEmpty() ||
+            newChecklistItemText.isNotBlank()
         )
 
     fun discardComposer() {
@@ -774,6 +786,10 @@ fun NotesScreen(active: Boolean = true) {
                                 checklistItems = checklistItems.map { if (it.id == item.id) it.copy(done = !it.done) else it }
                             },
                             onRemove = { item -> checklistItems = checklistItems.filterNot { it.id == item.id } },
+                            // Items are editable in place after being added (settings task B3).
+                            onEditText = { item, text ->
+                                checklistItems = checklistItems.map { if (it.id == item.id) it.copy(text = text) else it }
+                            },
                             addLabel = com.lucent.app.i18n.S.addItem
                         )
                     } else {

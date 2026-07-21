@@ -15,6 +15,7 @@ import com.lucent.app.data.Task
 import com.lucent.app.data.TaskPriority
 import com.lucent.app.data.filterBySearch
 import com.lucent.app.network.ToolDefinition
+import com.lucent.app.ui.NoteColor
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import com.lucent.app.network.ToolParam
@@ -93,11 +94,18 @@ object AppTools {
             "update_note" -> com.lucent.app.i18n.S.ccEditNote(title) + newTitleSuffix(a)
             "delete_note" -> com.lucent.app.i18n.S.ccDeleteNote(title)
             "pin_note" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinNote(title) else com.lucent.app.i18n.S.ccUnpinNote(title)
+            "archive_note" -> if (a.optBoolean("archived", true)) com.lucent.app.i18n.S.ccArchiveNote(title) else com.lucent.app.i18n.S.ccUnarchiveNote(title)
+            "set_note_color" -> com.lucent.app.i18n.S.ccSetNoteColor(title, s("color", "colour"))
+            "add_note_checklist_item" -> com.lucent.app.i18n.S.ccAddNoteItem(s("item"), title)
+            "set_note_checklist_item_done" -> com.lucent.app.i18n.S.ccCheckNoteItem(s("item"), title)
+            "edit_note_checklist_item" -> com.lucent.app.i18n.S.ccEditNoteItem(s("item"), title)
+            "remove_note_checklist_item" -> com.lucent.app.i18n.S.ccRemoveNoteItem(s("item"), title)
             "set_note_attachment" -> com.lucent.app.i18n.S.ccSaveFileOnNote(s("file_name"), title)
             "remove_note_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromNote(s("file_name"), title)
             "attach_upload_to_note" -> com.lucent.app.i18n.S.ccAttachUploadToNote(title)
             "create_task" -> com.lucent.app.i18n.S.ccCreateTask(s("title")) + dueSuffix(s("due"))
             "complete_task" -> com.lucent.app.i18n.S.ccCompleteTask(title)
+            "reopen_task" -> com.lucent.app.i18n.S.ccReopenTask(title)
             "update_task" -> com.lucent.app.i18n.S.ccEditTask(title) + newTitleSuffix(a)
             "delete_task" -> com.lucent.app.i18n.S.ccDeleteTask(title)
             "pin_task" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinTask(title) else com.lucent.app.i18n.S.ccUnpinTask(title)
@@ -106,6 +114,7 @@ object AppTools {
             "add_subtask" -> com.lucent.app.i18n.S.ccAddSubtask(s("item"), title)
             "set_subtask_done" -> com.lucent.app.i18n.S.ccCheckSubtask(s("item"), title)
             "remove_subtask" -> com.lucent.app.i18n.S.ccRemoveSubtask(s("item"), title)
+            "edit_subtask" -> com.lucent.app.i18n.S.ccEditSubtask(s("item"), title)
             "set_task_attachment" -> com.lucent.app.i18n.S.ccSaveFileOnTask(s("file_name"), title)
             "remove_task_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromTask(s("file_name"), title)
             "attach_upload_to_task" -> com.lucent.app.i18n.S.ccAttachUploadToTask(title)
@@ -150,6 +159,10 @@ object AppTools {
             "update_task" -> of("new_title", com.lucent.app.i18n.S.confirmEditNewTitleLabel)
             // Subtask text is short, free-form, and just as easy for a model to slightly mishear.
             "add_subtask" -> of("item", com.lucent.app.i18n.S.confirmEditItemLabel)
+            "add_note_checklist_item" -> of("item", com.lucent.app.i18n.S.confirmEditItemLabel)
+            // Rewording an item: what it will SAY afterwards is the part under review.
+            "edit_subtask" -> of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel)
+            "edit_note_checklist_item" -> of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel)
             else -> null
         }
     }
@@ -179,11 +192,12 @@ object AppTools {
         // ---- Notes ----
         ToolDefinition(
             name = "create_note",
-            description = "Create a NOTE (a titled piece of written information with a body). Use this for information to remember, never for a to-do item. The body supports Markdown, and [[Note title]] creates a link to another note.",
+            description = "Create a NOTE (a titled piece of written information with a body). Use this for information to remember, never for a to-do item. The body supports Markdown, and [[Note title]] creates a link to another note. To create a CHECKLIST note (checkable items instead of a body), pass the checklist field.",
             params = listOf(
                 ToolParam("title", "string", "The title of the note"),
                 ToolParam("body", "string", "The body text of the note"),
-                ToolParam("tags", "string", "Optional comma-separated tags, e.g. \"Work,Ideas\"", required = false)
+                ToolParam("tags", "string", "Optional comma-separated tags, e.g. \"Work,Ideas\"", required = false),
+                ToolParam("checklist", "string", "Optional: item texts separated by a newline or a semicolon. When given, the note is created in checklist mode showing these checkable items instead of its body.", required = false)
             )
         ),
         ToolDefinition(
@@ -217,6 +231,58 @@ object AppTools {
             params = listOf(
                 ToolParam("title", "string", "The title (or part of it) of the note"),
                 ToolParam("pinned", "boolean", "true to pin, false to unpin")
+            )
+        ),
+        ToolDefinition(
+            name = "archive_note",
+            description = "Archive or unarchive a NOTE, matched by its title text. An archived note is hidden from the notes home page and kept on the Archive screen; unarchiving brings it back home.",
+            params = listOf(
+                ToolParam("title", "string", "The title (or part of it) of the note"),
+                ToolParam("archived", "boolean", "true to archive, false to unarchive")
+            )
+        ),
+        ToolDefinition(
+            name = "set_note_color",
+            description = "Set a NOTE's accent colour, matched by its title text. Colours: default (no tint), red, orange, yellow, green, teal, blue, purple, pink.",
+            params = listOf(
+                ToolParam("title", "string", "The title (or part of it) of the note"),
+                ToolParam("color", "string", "One of: default, red, orange, yellow, green, teal, blue, purple, pink")
+            )
+        ),
+        // ---- Checklist-mode notes get the same item-level tools a task's checklist has, so the
+        // assistant can work a shopping list exactly like the user can (settings tasks C2/C3). ----
+        ToolDefinition(
+            name = "add_note_checklist_item",
+            description = "Add one checklist item to a NOTE, matched by its title text. If the note isn't a checklist yet it becomes one (its body text is kept, and comes back if the user switches the note back to plain text).",
+            params = listOf(
+                ToolParam("note_title", "string", "The title (or part of it) of the note"),
+                ToolParam("item", "string", "The text of the checklist item to add")
+            )
+        ),
+        ToolDefinition(
+            name = "set_note_checklist_item_done",
+            description = "Check or uncheck one checklist item on a checklist NOTE, matched by the note title and the item text (a close partial match is accepted). Read the note first if you need its exact item text.",
+            params = listOf(
+                ToolParam("note_title", "string", "The title (or part of it) of the note"),
+                ToolParam("item", "string", "The text (or part of it) of the checklist item"),
+                ToolParam("done", "boolean", "true to check it, false to uncheck it. Leave out to toggle its current state.", required = false)
+            )
+        ),
+        ToolDefinition(
+            name = "edit_note_checklist_item",
+            description = "Rewrite the text of one checklist item on a checklist NOTE, matched by the note title and the item's current text (a close partial match is accepted). The item keeps its checked state.",
+            params = listOf(
+                ToolParam("note_title", "string", "The title (or part of it) of the note"),
+                ToolParam("item", "string", "The current text (or part of it) of the checklist item"),
+                ToolParam("new_text", "string", "The new text for the item")
+            )
+        ),
+        ToolDefinition(
+            name = "remove_note_checklist_item",
+            description = "Remove one checklist item from a checklist NOTE, matched by the note title and the item text (a close partial match is accepted).",
+            params = listOf(
+                ToolParam("note_title", "string", "The title (or part of it) of the note"),
+                ToolParam("item", "string", "The text (or part of it) of the checklist item to remove")
             )
         ),
         ToolDefinition(
@@ -273,6 +339,11 @@ object AppTools {
             name = "complete_task",
             description = "Mark a TASK as done, matched by its title text. If the task repeats, the next occurrence is created automatically with its due date advanced and its checklist reset.",
             params = listOf(ToolParam("title", "string", "The title (or part of it) of the task to complete"))
+        ),
+        ToolDefinition(
+            name = "reopen_task",
+            description = "Send a completed TASK back to the active list (mark it NOT done), matched by its title text. Its reminder is re-armed if it still has a future due time. Use this when the user says something was ticked off by mistake or isn't actually finished.",
+            params = listOf(ToolParam("title", "string", "The title (or part of it) of the completed task to reopen"))
         ),
         ToolDefinition(
             name = "update_task",
@@ -333,6 +404,15 @@ object AppTools {
                 ToolParam("task_title", "string", "The title (or part of it) of the task"),
                 ToolParam("item", "string", "The text (or part of it) of the checklist item"),
                 ToolParam("done", "boolean", "true to check it, false to uncheck it. Leave out to toggle its current state.", required = false)
+            )
+        ),
+        ToolDefinition(
+            name = "edit_subtask",
+            description = "Rewrite the text of one of a TASK's checklist items, matched by the task title and the item's current text (a close partial match is accepted). The item keeps its checked state.",
+            params = listOf(
+                ToolParam("task_title", "string", "The title (or part of it) of the task"),
+                ToolParam("item", "string", "The current text (or part of it) of the checklist item"),
+                ToolParam("new_text", "string", "The new text for the item")
             )
         ),
         ToolDefinition(
@@ -555,8 +635,19 @@ object AppTools {
                 val title = args.optString("title", "Untitled")
                 val body = args.optString("body", "")
                 val tags = args.optString("tags", "")
-                db.noteDao().insert(Note(title = title, body = body, tags = tags))
-                ToolExecResult("Created note \"$title\".")
+                // Optional initial checklist, symmetric with create_task's subtasks argument: the
+                // note is created straight in checklist mode when items were given. The body is
+                // still stored — switching the note back to plain text brings it up, exactly like
+                // the composer's own mode toggle.
+                val checklistJson = Checklist.addAll("[]", args.optString("checklist", ""))
+                val isChecklist = checklistJson != "[]"
+                db.noteDao().insert(
+                    Note(title = title, body = body, tags = tags, isChecklist = isChecklist, checklist = checklistJson)
+                )
+                val suffix = Checklist.progress(checklistJson)?.let { (_, total) ->
+                    " as a checklist with $total item${if (total == 1) "" else "s"}"
+                } ?: ""
+                ToolExecResult("Created note \"$title\"$suffix.")
             }
 
             "list_notes" -> {
@@ -642,6 +733,130 @@ object AppTools {
                     val pinned = args.optBoolean("pinned", true)
                     db.noteDao().update(match.copy(pinned = pinned))
                     ToolExecResult("${if (pinned) "Pinned" else "Unpinned"} note \"${match.title}\".")
+                }
+            }
+
+            "archive_note" -> {
+                val titleQuery = args.optString("title", "")
+                val match = matchNote(activeNotes(db), titleQuery)
+                if (match == null) {
+                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else {
+                    val archived = args.optBoolean("archived", true)
+                    // The same two-field write the archive button makes, so both paths are
+                    // indistinguishable to the Archive screen's time-sorted list.
+                    db.noteDao().update(
+                        match.copy(archived = archived, archivedAt = if (archived) System.currentTimeMillis() else null)
+                    )
+                    ToolExecResult(
+                        if (archived) "Archived note \"${match.title}\" — it now lives on the Archive screen."
+                        else "Unarchived note \"${match.title}\" — it's back on the notes page."
+                    )
+                }
+            }
+
+            "set_note_color" -> {
+                val titleQuery = args.optString("title", "")
+                val match = matchNote(activeNotes(db), titleQuery)
+                if (match == null) {
+                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else {
+                    val raw = args.firstString("color", "colour").trim().lowercase()
+                    val color = when {
+                        raw.isBlank() || raw == "default" || raw == "none" -> NoteColor.DEFAULT
+                        else -> NoteColor.entries.firstOrNull { it.key == raw }
+                    }
+                    if (color == null) {
+                        ToolExecResult("Unknown colour \"$raw\". Use one of: default, red, orange, yellow, green, teal, blue, purple, pink.", success = false)
+                    } else {
+                        db.noteDao().update(match.copy(color = color.key))
+                        ToolExecResult(
+                            if (color == NoteColor.DEFAULT) "Cleared the colour on note \"${match.title}\"."
+                            else "Set note \"${match.title}\" to ${color.key}."
+                        )
+                    }
+                }
+            }
+
+            "add_note_checklist_item" -> {
+                val titleQuery = args.firstString("note_title", "title")
+                val item = args.firstString("item", "text")
+                val match = matchNote(activeNotes(db), titleQuery)
+                when {
+                    match == null -> ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    item.isBlank() -> ToolExecResult("No checklist item text was provided.", success = false)
+                    else -> {
+                        val becameChecklist = !match.isChecklist
+                        val updated = match.copy(isChecklist = true, checklist = Checklist.add(match.checklist, item))
+                        // Through the same history-capturing path as update_note, so a checklist
+                        // change made by asking is exactly as recoverable as one made by typing.
+                        TaskActions.updateNoteWithHistory(db, match, updated)
+                        val extra = if (becameChecklist) " (the note is now a checklist)" else ""
+                        ToolExecResult("Added \"$item\" to the checklist on note \"${match.title}\"$extra.")
+                    }
+                }
+            }
+
+            "set_note_checklist_item_done" -> {
+                val titleQuery = args.firstString("note_title", "title")
+                val itemQuery = args.firstString("item", "text")
+                val match = matchNote(activeNotes(db), titleQuery)
+                if (match == null) {
+                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else {
+                    val item = Checklist.findByText(match.checklist, itemQuery)
+                    if (item == null) {
+                        val names = Checklist.parse(match.checklist).joinToString(", ") { it.text }.ifBlank { "none" }
+                        ToolExecResult("No checklist item matching \"$itemQuery\" on note \"${match.title}\". It has: $names.", success = false)
+                    } else {
+                        // No explicit `done` means "toggle" — same convention as set_subtask_done.
+                        val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
+                        // A check-state flip records no history entry, matching the note page's own
+                        // checkbox, which doesn't either.
+                        db.noteDao().update(match.copy(checklist = Checklist.setDone(match.checklist, item.id, done)))
+                        ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on note \"${match.title}\".")
+                    }
+                }
+            }
+
+            "edit_note_checklist_item" -> {
+                val titleQuery = args.firstString("note_title", "title")
+                val itemQuery = args.firstString("item", "text")
+                val newText = args.firstString("new_text", "new_item")
+                val match = matchNote(activeNotes(db), titleQuery)
+                if (match == null) {
+                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else if (newText.isBlank()) {
+                    ToolExecResult("No new text was provided for the item.", success = false)
+                } else {
+                    val item = Checklist.findByText(match.checklist, itemQuery)
+                    if (item == null) {
+                        val names = Checklist.parse(match.checklist).joinToString(", ") { it.text }.ifBlank { "none" }
+                        ToolExecResult("No checklist item matching \"$itemQuery\" on note \"${match.title}\". It has: $names.", success = false)
+                    } else {
+                        val updated = match.copy(checklist = Checklist.updateText(match.checklist, item.id, newText))
+                        TaskActions.updateNoteWithHistory(db, match, updated)
+                        ToolExecResult("Changed \"${item.text}\" to \"$newText\" on note \"${match.title}\".")
+                    }
+                }
+            }
+
+            "remove_note_checklist_item" -> {
+                val titleQuery = args.firstString("note_title", "title")
+                val itemQuery = args.firstString("item", "text")
+                val match = matchNote(activeNotes(db), titleQuery)
+                if (match == null) {
+                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else {
+                    val item = Checklist.findByText(match.checklist, itemQuery)
+                    if (item == null) {
+                        val names = Checklist.parse(match.checklist).joinToString(", ") { it.text }.ifBlank { "none" }
+                        ToolExecResult("No checklist item matching \"$itemQuery\" on note \"${match.title}\". It has: $names.", success = false)
+                    } else {
+                        val updated = match.copy(checklist = Checklist.remove(match.checklist, item.id))
+                        TaskActions.updateNoteWithHistory(db, match, updated)
+                        ToolExecResult("Removed \"${item.text}\" from the checklist on note \"${match.title}\".")
+                    }
                 }
             }
 
@@ -810,6 +1025,21 @@ object AppTools {
                 }
             }
 
+            "reopen_task" -> {
+                val titleQuery = args.optString("title", "")
+                // Matched only against COMPLETED tasks, so "reopen the report" can never yank a
+                // similarly named pending task around.
+                val match = matchTask(activeTasks(db).filter { it.isDone }, titleQuery)
+                if (match == null) {
+                    ToolExecResult("No completed task found matching \"$titleQuery\".", success = false)
+                } else {
+                    // The same function the history page's "mark as not done" button calls: clears
+                    // the done state and re-evaluates the reminder.
+                    TaskActions.restore(appContext, db, match)
+                    ToolExecResult("Reopened \"${match.title}\" — it's back on the active list.")
+                }
+            }
+
             "update_task" -> {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
@@ -975,6 +1205,27 @@ object AppTools {
                         val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
                         db.taskDao().update(match.copy(subtasks = Checklist.setDone(match.subtasks, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on task \"${match.title}\".")
+                    }
+                }
+            }
+
+            "edit_subtask" -> {
+                val titleQuery = args.firstString("task_title", "title")
+                val itemQuery = args.firstString("item", "subtask_text", "text")
+                val newText = args.firstString("new_text", "new_item")
+                val match = matchTask(activeTasks(db), titleQuery)
+                if (match == null) {
+                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                } else if (newText.isBlank()) {
+                    ToolExecResult("No new text was provided for the item.", success = false)
+                } else {
+                    val item = Checklist.findByText(match.subtasks, itemQuery)
+                    if (item == null) {
+                        val names = Checklist.parse(match.subtasks).joinToString(", ") { it.text }.ifBlank { "none" }
+                        ToolExecResult("No checklist item matching \"$itemQuery\" on task \"${match.title}\". It has: $names.", success = false)
+                    } else {
+                        db.taskDao().update(match.copy(subtasks = Checklist.updateText(match.subtasks, item.id, newText)))
+                        ToolExecResult("Changed \"${item.text}\" to \"$newText\" on task \"${match.title}\".")
                     }
                 }
             }
