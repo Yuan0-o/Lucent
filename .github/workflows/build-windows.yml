@@ -90,20 +90,47 @@ jobs:
 
       # ---- Vulkan SDK, for the optional GPU-enabled engine build (task A4) ----
       # Pinned LunarG SDK, installed silently the same way llama.cpp's own Windows CI does it.
-      # continue-on-error: no SDK just means no GPU variant this round — never a failed workflow.
-      # The installer writes to C:\VulkanSDK\<version>; VULKAN_SDK is exported for later steps via
-      # GITHUB_ENV because the machine-wide variable the installer sets isn't visible to a job that
-      # is already running.
+      # Best-effort by design: no SDK just means no GPU variant this round. The whole install is
+      # wrapped in try/catch and the step ends with `exit 0`, so it can NEVER fail the job AND
+      # never leaves a red "Process completed with exit code 1" annotation on an otherwise-green
+      # run — even if the pinned version is unpublished and the download returns an error page.
+      # (continue-on-error stays as a second safety net.) On success the installer writes to
+      # C:\VulkanSDK\<version> and VULKAN_SDK is exported via GITHUB_ENV, because the machine-wide
+      # variable the installer sets isn't visible to a job that is already running; on any failure
+      # VULKAN_SDK is left unset and the GPU-engine build below skips itself (CPU engine still ships).
       - name: Install Vulkan SDK
         continue-on-error: true
         shell: pwsh
         env:
           VULKAN_VERSION: 1.4.321.1
         run: |
-          $installer = "$env:RUNNER_TEMP\VulkanSDK-Installer.exe"
-          curl.exe -sSL -o $installer "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/VulkanSDK-$env:VULKAN_VERSION-Installer.exe"
-          Start-Process -Wait -FilePath $installer -ArgumentList "--accept-licenses","--default-answer","--confirm-command","install"
-          "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # Every failure path here is caught and turned into a warning + `exit 0`, so this step
+          # never emits a red "exit code 1" annotation. When it can't install, VULKAN_SDK is left
+          # unset and the GPU-engine build below skips itself; the CPU engine still ships.
+          $ErrorActionPreference = 'Continue'
+          try {
+            $installer = "$env:RUNNER_TEMP\VulkanSDK-Installer.exe"
+            $url = "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/VulkanSDK-$env:VULKAN_VERSION-Installer.exe"
+            # -f makes curl FAIL on an HTTP error (e.g. the pinned version was unpublished -> 404)
+            # instead of silently saving the error page as the .exe. That bogus file was exactly why
+            # Start-Process reported "not a valid application for this OS platform" and exited 1.
+            curl.exe -fSL -o $installer $url
+            if ($LASTEXITCODE -ne 0) { throw "download failed (curl exit $LASTEXITCODE) - the pinned SDK version may no longer be published" }
+            # A real Windows installer is a PE binary and starts with the bytes 'MZ' (0x4D 0x5A);
+            # an HTML error page saved as .exe does not. Verify before we try to run it.
+            $magic = Get-Content -Path $installer -AsByteStream -TotalCount 2 -ErrorAction Stop
+            if ($magic.Count -lt 2 -or $magic[0] -ne 0x4D -or $magic[1] -ne 0x5A) {
+              throw "downloaded file is not a Windows executable (missing 'MZ' header)"
+            }
+            $proc = Start-Process -Wait -PassThru -FilePath $installer -ArgumentList "--accept-licenses","--default-answer","--confirm-command","install" -ErrorAction Stop
+            if ($proc.ExitCode -ne 0) { throw "installer exited with code $($proc.ExitCode)" }
+            "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Host "Vulkan SDK $env:VULKAN_VERSION installed."
+          } catch {
+            Write-Warning "Vulkan SDK unavailable ($($_.Exception.Message)); skipping the GPU engine build. The CPU engine still ships."
+          }
+          # A missing GPU SDK is an expected, harmless outcome - not a build failure.
+          exit 0
 
       # ---- lucent_llama_vk.dll (llama.cpp, Vulkan GPU backend) ----
       # A SECOND build of the same engine, in its own build directory, with the GPU backend
