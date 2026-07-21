@@ -833,17 +833,16 @@ fun TasksScreen(active: Boolean = true) {
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    // Enlarged so the primary action is the biggest control in this group. Its size
-                    // and the smaller "attach file" button above are the reverse of before, when the
-                    // optional attachment button was larger than the button that actually saves.
+                    // Enlarged so this primary action clearly outweighs the now-compact attachment
+                    // button above it (previously the attachment pill was the larger of the two).
                     Button(
                         onClick = { saveTask() },
-                        contentPadding = PaddingValues(horizontal = 26.dp, vertical = 14.dp)
+                        contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
                         Text(
                             if (editingTask != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addTaskBtn,
-                            fontSize = 16.sp
+                            fontSize = 17.sp
                         )
                     }
                 }
