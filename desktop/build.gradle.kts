@@ -52,9 +52,15 @@ dependencies {
     // The shared code (ApiProfiles, AppLock, BackupManager, …) uses org.json.JSONObject throughout.
     implementation("org.json:json:20240303")
 
-    // Encrypted database driver: SQLite with SQLite3MultipleCiphers (SQLCipher-compatible), so the
-    // desktop opens the very same encrypted schema/format the Android Room + SQLCipher build writes.
-    implementation("io.github.willena:sqlite-jdbc:3.45.1.6")
+    // SQLite JDBC driver. Was io.github.willena:sqlite-jdbc (bundles SQLite3MultipleCiphers, i.e.
+    // SQLCipher-compatible encryption) — but that exact version failed to resolve in CI, so this is
+    // pinned to the canonical org.xerial build, which is guaranteed on Maven Central. Db.kt's
+    // applyEncryption() already degrades gracefully to an UNENCRYPTED store when the cipher PRAGMAs
+    // aren't available (which is the case here), so the desktop DB works but is not encrypted at rest.
+    // To restore encryption parity with Android, swap this one line back to a *resolvable* willena
+    // release — check https://central.sonatype.com/artifact/io.github.willena/sqlite-jdbc for a
+    // current version — and no code change is needed.
+    implementation("org.xerial:sqlite-jdbc:3.45.1.0")
 
     // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
     implementation("org.apache.pdfbox:pdfbox:3.0.3")
