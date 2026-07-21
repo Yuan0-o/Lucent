@@ -919,6 +919,10 @@ private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
         }
     }
 
+    // The real, shared haze state that the top bar and bottom capsule sample. Captured once here so
+    // each inactive tab below can be handed a throwaway instead (task G).
+    val sharedHaze = LocalHazeState.current
+
     // Tabs are composed lazily — a tab enters the tree the first time it's shown and then stays.
     // Seeded with the initial tab so the first frame renders it directly; later tabs are appended
     // the first time they're opened.
@@ -929,6 +933,16 @@ private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
         visited.forEach { screen ->
             val isActive = screen == active
             key(screen) {
+                // Inactive tabs are laid out but never drawn (drawWithContent below). Their screens
+                // still call hazeSource(LocalHazeState.current), though, so sharing the real state
+                // would keep injecting a stale, undrawn rectangle into the blur that the top bar and
+                // bottom capsule sample — which surfaced as a colour band along the bottom while the
+                // top bar was partway through collapsing (task G). Hand each inactive tab a throwaway
+                // HazeState so its hazeSource goes nowhere; only the active tab feeds the real shared
+                // one. (rememberHazeState is called unconditionally to keep the composition stable
+                // as a tab flips between active and inactive.)
+                val dummyHaze = rememberHazeState()
+                val tabHaze = if (isActive) sharedHaze else dummyHaze
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -940,6 +954,7 @@ private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
                         .drawWithContent { if (isActive) drawContent() }
                 ) {
                     CompositionLocalProvider(
+                        LocalHazeState provides tabHaze,
                         LocalOnBackPressedDispatcherOwner provides
                             (if (isActive) realBackOwner!! else inertBackOwner)
                     ) {
