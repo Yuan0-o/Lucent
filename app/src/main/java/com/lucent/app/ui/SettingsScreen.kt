@@ -824,6 +824,10 @@ fun SettingsScreen(active: Boolean = true) {
         // on (re-)entry means it shows for the visit that produced it and is gone the next time
         // the page is opened; the moment-of-completion announcement now lives in the result sheet.
         if (route == SettingsRoute.Data) backupStatus = ""
+        // And the Language & type page's font-import error ("that file isn't a font"): it had no
+        // such reset, so once set it lingered across every later visit — the exact staleness the
+        // three lines above were added to end.
+        if (route == SettingsRoute.Language) fontError = ""
     }
 
     // Registers this screen's dirty state with the app-lifetime guard so switching bottom-nav
