@@ -121,10 +121,14 @@ class Db private constructor(private val connection: Connection) {
          *     — SQLite3MultipleCiphers encrypts an unencrypted database in place on rekey. Data is
          *     never copied out, exported, or set aside; a failed rekey degrades to the old unencrypted
          *     behaviour with a loud [StartupLog] line rather than stranding the store.
-         *  3. **No cipher core** (a plain driver swapped back in) — detected up front via
-         *     `PRAGMA cipher_version`, the one probe stock SQLite cannot fake (it silently ignores
-         *     unknown pragmas, so merely "accepting" the key statements proves nothing) — degrade to
-         *     unencrypted with a loud log line, exactly as before.
+         *  3. **Cipher-core diagnostics** — [probeCipherCore] tries to positively identify
+         *     SQLite3MultipleCiphers up front, but its verdict only shapes the LOG LINES, never the
+         *     behaviour: the keying statements are attempted regardless (on a plain driver they are
+         *     silent no-ops — stock SQLite ignores unknown pragmas — so attempting them is always
+         *     safe), and an unidentified core is announced loudly so nobody mistakes a plaintext
+         *     store for an encrypted one. The CI gate (CipherSelfCheck) shares this exact probe and
+         *     then proves the truth functionally: header scrambled, right key reads, wrong key
+         *     rejected.
          */
         private fun applyEncryption(context: Context, conn: Connection, file: File) {
             val passphrase = try {
@@ -134,21 +138,14 @@ class Db private constructor(private val connection: Connection) {
                 return
             }
             val legacyPlaintext = isPlaintextDatabase(file)
-            // Establish that the cipher core is actually present before claiming anything. Stock
-            // SQLite silently IGNORES unknown PRAGMAs, so a plain driver would "accept" every
-            // statement below while writing plaintext. The one probe a plain driver cannot fake is
-            // cipher_version, which only SQLite3MultipleCiphers answers with a value.
-            val cipherAvailable = try {
-                conn.createStatement().use { st ->
-                    st.executeQuery("PRAGMA cipher_version").use { rs -> rs.next() && !rs.getString(1).isNullOrBlank() }
-                }
-            } catch (t: Throwable) {
-                false
-            }
-            if (!cipherAvailable) {
-                StartupLog.event(context, "db: driver has no cipher core; opening UNENCRYPTED")
-                return
-            }
+            // Diagnostics only — see the KDoc. The 2026-07-22 08:36 CI run proved the previous
+            // version of this check wrong twice over: `PRAGMA cipher_version` is SQLCipher's word,
+            // not SQLite3MultipleCiphers', and this driver's executeQuery THROWS on a statement
+            // that returns no columns rather than handing back an empty result set — so the old
+            // probe condemned the real cipher driver as "no cipher core" and would have silently
+            // opened the store unencrypted. The multi-vocabulary probe lives in [probeCipherCore]
+            // and is shared with the CI self-check, so CI exercises exactly this code.
+            val core = probeCipherCore(conn)
             val cipherReady = try {
                 conn.createStatement().use { st ->
                     if (legacyPlaintext) {
@@ -174,7 +171,6 @@ class Db private constructor(private val connection: Connection) {
             if (!cipherReady) return
             try {
                 conn.createStatement().use { it.executeQuery("SELECT count(*) FROM sqlite_master").close() }
-                if (legacyPlaintext) StartupLog.event(context, "db: legacy unencrypted database encrypted in place")
             } catch (t: Throwable) {
                 if (legacyPlaintext) {
                     // The one-time in-place encryption didn't take on this driver. Never strand the
@@ -185,8 +181,24 @@ class Db private constructor(private val connection: Connection) {
                 throw IllegalStateException(
                     "The Lucent database at ${file.absolutePath} could not be unlocked with this " +
                         "machine's key. If the key files under ${File(context.filesDir, "keys")} were " +
-                        "deleted or replaced, restore from a .lcb backup.", t
+                        "deleted or replaced, restore from a .lcb backup." +
+                        (if (core == null) " (This build's SQLite driver also failed the cipher-core " +
+                            "probe - if the dependency in desktop/build.gradle.kts was ever swapped " +
+                            "off the willena build, that, not the key, is the culprit.)" else ""), t
                 )
+            }
+            // Truth-telling, in descending order of confidence. The header re-check is the belt:
+            // page 1 sits at the front of the file, so after a successful in-place rekey it must no
+            // longer read as plaintext. A brand-new file is still 0 bytes at this point (the schema
+            // lands after this returns), so the belt simply doesn't fire for fresh databases.
+            when {
+                core == null ->
+                    StartupLog.event(context, "db: cipher core NOT identified by any probe — at-rest encryption may not be active on this driver")
+                legacyPlaintext ->
+                    StartupLog.event(context, "db: legacy unencrypted database encrypted in place ($core)")
+            }
+            if (core != null && isPlaintextDatabase(file)) {
+                StartupLog.event(context, "db: WARNING — file header still plaintext after keying; encryption did NOT engage")
             }
         }
 
@@ -272,6 +284,46 @@ class Db private constructor(private val connection: Connection) {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cipher-core probe — shared by Db.applyEncryption (for its log lines) and the CI gate
+// (com.lucent.desktop.CipherSelfCheck), so the build verifies the exact probe the app runs.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Try to positively identify the SQLite3MultipleCiphers core behind [conn]; null when it can't be.
+ *
+ * Written the hard way after the 2026-07-22 08:36 CI red taught two lessons at once: the cipher
+ * core's vocabulary is not SQLCipher's (`PRAGMA cipher_version` goes unanswered), and this JDBC
+ * driver's `executeQuery` THROWS ("query does not return ResultSet") for any statement yielding
+ * zero columns instead of returning an empty set — which is also what every unknown pragma yields
+ * on stock SQLite. So: several vocabularies, most reliable first, each attempt individually
+ * caught, and "threw" and "no value" both simply mean "this probe didn't identify it". A null
+ * result is "unidentified", not proof of absence — callers treat it as a reason to WARN, never as
+ * a reason to skip the keying attempt (which is a harmless no-op on a plain driver).
+ */
+internal fun probeCipherCore(conn: Connection): String? {
+    val probes = arrayOf(
+        "SELECT sqlite3mc_version()", // the MC core's own SQL function
+        "PRAGMA cipher",              // MC answers with the current cipher's name
+        "PRAGMA cipher_version"       // SQLCipher's word, kept for compat builds that adopt it
+    )
+    for (sql in probes) {
+        try {
+            conn.createStatement().use { st ->
+                st.executeQuery(sql).use { rs ->
+                    if (rs.next()) {
+                        val value = rs.getString(1)
+                        if (!value.isNullOrBlank()) return "$sql -> $value"
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+            // Unanswered in this dialect, or the driver threw on a zero-column statement: try the next.
+        }
+    }
+    return null
 }
 
 // ---------------------------------------------------------------------------------------------
