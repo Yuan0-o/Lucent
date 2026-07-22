@@ -1577,13 +1577,22 @@ object AppTools {
 
                     // The same query engine the search boxes use — one syntax, one implementation, so
                     // an operator that works when the user types it also works when the model does.
+                    // rank() is computed once per hit (decorate-sort-undecorate); a bare
+                    // sortedByDescending { query.rank(it) } re-evaluates it per comparison,
+                    // O(n log n) times, and each evaluation lowercases the whole row.
                     val noteHits = if (wantNotes) {
-                        activeNotes(db).filterBySearch(query).sortedByDescending { query.rank(it) }.take(25)
+                        activeNotes(db).filterBySearch(query)
+                            .map { it to query.rank(it) }
+                            .sortedByDescending { it.second }
+                            .take(25).map { it.first }
                     } else {
                         emptyList()
                     }
                     val taskHits = if (wantTasks) {
-                        activeTasks(db).filterBySearch(query).sortedByDescending { query.rank(it) }.take(25)
+                        activeTasks(db).filterBySearch(query)
+                            .map { it to query.rank(it) }
+                            .sortedByDescending { it.second }
+                            .take(25).map { it.first }
                     } else {
                         emptyList()
                     }
