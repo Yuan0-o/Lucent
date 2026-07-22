@@ -1,30 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One row in the "Today's tasks" widget list: a task title with an optional subtitle line. The
-     root carries the fill-in intent (the task id) that merges into the list's PendingIntent template. -->
+<!-- One row in the tasks-list widget. TWO tap targets now (this round): the check on the left asks
+     to complete (or reopen) the task via the in-app confirmation dialog, and the rest of the row
+     opens it. Completed rows stay in the list — muted, struck through, check filled — so the list
+     shows done and not-done alike, exactly as asked. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_task_item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
 
-    <TextView
-        android:id="@+id/widget_task_item_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFFFF"
-        android:textSize="14sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
+    <FrameLayout
+        android:id="@+id/widget_task_item_check_area"
+        android:layout_width="40dp"
+        android:layout_height="40dp">
+        <ImageView
+            android:id="@+id/widget_task_item_check"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_widget_check_off"
+            android:contentDescription="@string/widget_a11y_mark_done" />
+    </FrameLayout>
 
-    <TextView
-        android:id="@+id/widget_task_item_subtitle"
-        android:layout_width="match_parent"
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textColor="#B3FFFFFF"
-        android:textSize="12sp"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:visibility="gone" />
+        android:layout_weight="1"
+        android:layout_marginStart="4dp"
+        android:orientation="vertical">
+        <TextView
+            android:id="@+id/widget_task_item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFFFF"
+            android:textSize="14sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/widget_task_item_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone" />
+    </LinearLayout>
 </LinearLayout>
