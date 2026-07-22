@@ -11,18 +11,21 @@ import java.sql.DriverManager
  *
  * Deliberately standalone: plain JDBC against a temp file, no app classes, no Context — so it
  * exercises exactly one thing, the driver Gradle resolved, and can never rot along with UI code.
- * It asserts the four claims that together mean "encrypted", in order of how they fail:
+ * It prints one diagnostic and asserts the three functional claims that together mean
+ * "encrypted", in order of how they fail:
  *
- *  1. `PRAGMA cipher_version` answers with a value. Stock SQLite silently ignores unknown
- *     pragmas, so merely "accepting" key statements proves nothing — this is the one probe a
- *     plain driver cannot fake. Fails -> the resolved sqlite-jdbc is not the
- *     SQLite3MultipleCiphers build (someone swapped org.xerial back in, or the rich version
- *     constraint resolved somewhere unexpected).
- *  2. A database created under `PRAGMA cipher='sqlcipher'; legacy=4; key=x'…'` does NOT carry
+ *  0. (Diagnostic, never a gate.) Identify the cipher core with the app's own
+ *     [com.lucent.app.data.probeCipherCore] — the same code Db.kt runs at startup, so CI
+ *     exercises exactly what ships. The first version of this check hard-required
+ *     `PRAGMA cipher_version` here and went red on 2026-07-22 08:36 for two stacked reasons:
+ *     that pragma is SQLCipher vocabulary the MC core doesn't answer, and this driver's
+ *     `executeQuery` THROWS on zero-column statements instead of returning an empty set.
+ *  1. A database created under `PRAGMA cipher='sqlcipher'; legacy=4; key=x'…'` does NOT carry
  *     the plaintext "SQLite format 3" file header. Fails -> the pragmas ran but encryption
- *     never engaged.
- *  3. Re-opening with the SAME key reads the row back.
- *  4. Re-opening with a DIFFERENT key fails. Fails (i.e. the wrong key reads happily) -> the
+ *     never engaged (this is also exactly how a swapped-in org.xerial driver dies here: stock
+ *     SQLite ignores the unknown pragmas and writes plaintext).
+ *  2. Re-opening with the SAME key reads the row back.
+ *  3. Re-opening with a DIFFERENT key fails. Fails (i.e. the wrong key reads happily) -> the
  *     "encryption" is decorative.
  *
  * Exits non-zero (via the uncaught exception) on the first broken claim, which is what turns the
@@ -42,16 +45,15 @@ fun main() {
     }
 
     try {
-        // 1 + 2: cipher core present; create a keyed database and check its header on disk.
+        // 0: diagnostics with the app's own probe, then create a keyed database. The probe's
+        // outcome is printed but never gates the check — the functional claims below decide.
         open().use { c ->
-            val version = c.createStatement().use { st ->
-                st.executeQuery("PRAGMA cipher_version").use { rs -> if (rs.next()) rs.getString(1) else null }
+            val core = com.lucent.app.data.probeCipherCore(c)
+            if (core == null) {
+                println("NOTE: no probe positively identified the cipher core; the functional checks below are the verdict.")
+            } else {
+                println("cipher core identified: $core")
             }
-            require(!version.isNullOrBlank()) {
-                "driver has no cipher core (PRAGMA cipher_version returned nothing) — the resolved " +
-                    "sqlite-jdbc is NOT the SQLite3MultipleCiphers build"
-            }
-            println("cipher core present: SQLite3MultipleCiphers $version")
             c.keyWith(rightKey)
             c.createStatement().use { st ->
                 st.executeUpdate("CREATE TABLE t(x TEXT)")
