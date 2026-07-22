@@ -119,6 +119,10 @@ jobs:
           rustup target add aarch64-linux-android armv7-linux-androideabi
           cargo install cargo-ndk --locked
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          # The runner image also exports ANDROID_NDK_ROOT, pointing at whatever NDK it happens to
+          # ship (27.3 today). cargo-ndk compares the two and prints a mismatch warning on every
+          # build; align ROOT with the pin above so both name the same toolchain and the noise stops.
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
 
       # ---- llama.cpp source, fetched up front with retries ----
       # The on-device model engine pins llama.cpp at a fixed tag (app/src/main/cpp/CMakeLists.txt).
