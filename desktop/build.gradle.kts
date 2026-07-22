@@ -56,19 +56,19 @@ dependencies {
     // core is SQLite3MultipleCiphers, i.e. it speaks the SQLCipher scheme Db.kt keys with. This is
     // what makes the desktop database encrypted at rest, restoring parity with Android.
     //
-    // The version is a RICH constraint on purpose: prefer a specific release, but accept anything
-    // in the 3.44+ line if that exact number was never published — so resolution cannot fail on a
-    // guessed digit, and the `cipherSelfCheck` step in CI then proves the resolved driver really
-    // encrypts before anything is packaged. Once the first green run reports the resolved version
-    // (visible in its dependency output), replace this block with a plain hard pin of that number.
+    // HARD PIN, on purpose. The previous "rich constraint" (strictly [3.44.0.0,4.0.0[ +
+    // prefer 3.45.1.6) is what broke the 2026-07-22 Windows run: when `prefer` names a version,
+    // Gradle resolves straight to that exact number and — if it was never published — fails with
+    // ModuleVersionNotFoundException instead of falling back to the range. 3.45.1.6 does not exist
+    // (the 3.45 line on Maven Central stops at 3.45.2.0), so :desktop:compileKotlin died before the
+    // self-check ever ran. 3.51.2.0 is a real Maven Central release (published 2026-01-16), and the
+    // `cipherSelfCheck` CI step still proves the driver Gradle resolves really encrypts before
+    // anything is packaged. When bumping, pick an EXACT version from
+    //   https://central.sonatype.com/artifact/io.github.willena/sqlite-jdbc/versions
+    // (latest as of 2026-07-22 is 3.53.2.0).
     // NEVER fall back to org.xerial here — that silently ships an unencrypted store, and the
     // self-check below will (rightly) fail the build in red if anyone tries.
-    implementation("io.github.willena:sqlite-jdbc") {
-        version {
-            strictly("[3.44.0.0,4.0.0[")
-            prefer("3.45.1.6")
-        }
-    }
+    implementation("io.github.willena:sqlite-jdbc:3.51.2.0")
 
     // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
     implementation("org.apache.pdfbox:pdfbox:3.0.3")
