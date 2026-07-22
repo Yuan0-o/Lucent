@@ -114,8 +114,9 @@ class Db private constructor(private val connection: Connection) {
          *  1. **Fresh or already-encrypted file** — set the cipher pragmas and the key; a probe that
          *     still fails means a genuinely wrong key (the header already ruled out "it's plaintext"),
          *     which is rethrown with a message a person can act on.
-         *  2. **Legacy plaintext file** — written by the earlier desktop builds that shipped the plain
-         *     org.xerial driver. Encrypted IN PLACE, once, silently: leave WAL (rekey refuses a WAL
+         *  2. **Plaintext file** — written by a pre-release build from the brief org.xerial era.
+         *     Nothing was ever published, so a plaintext file here can only be a developer's own
+         *     working data. Encrypted IN PLACE, once, silently: leave WAL (rekey refuses a WAL
          *     database, and every prior run left it in WAL), set the cipher shape, then `PRAGMA rekey`
          *     — SQLite3MultipleCiphers encrypts an unencrypted database in place on rekey. Data is
          *     never copied out, exported, or set aside; a failed rekey degrades to the old unencrypted
