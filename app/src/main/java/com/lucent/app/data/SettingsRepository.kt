@@ -81,6 +81,7 @@ private object SettingsKeys {
     // send. They describe how the assistant behaves, not anything the user wrote.
     val MEMORY_TIER = stringPreferencesKey("memory_tier")
     val WEB_SEARCH_ENABLED = booleanPreferencesKey("web_search_enabled")
+    val ASSISTANT_CONFIRM_TOOLS = booleanPreferencesKey("assistant_confirm_tools")
     // Whether the typewriter's per-character tick and finish pulse fire (assistant issue 11's
     // haptics, made optional by the second assistant variant). On by default.
     val TYPING_HAPTICS = booleanPreferencesKey("typing_haptics")
@@ -426,6 +427,19 @@ class SettingsRepository(private val context: Context) {
     /** Whether the typewriter haptics (per-character tick + finish pulse) fire. On by default. */
     val typingHapticsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[SettingsKeys.TYPING_HAPTICS] ?: true
+    }
+
+    /**
+     * Whether every assistant tool call — reads as well as writes, cloud and on-device alike — must
+     * be confirmed by the user in a dialog first. ON by default; turning it off removes the modal
+     * entirely and lets the assistant act directly.
+     */
+    val assistantConfirmToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+        it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] ?: true
+    }
+
+    suspend fun setAssistantConfirmTools(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] = value }
     }
 
     /** Whether Markdown formatting is on for notes and tasks. Defaults to OFF (plain text). */
