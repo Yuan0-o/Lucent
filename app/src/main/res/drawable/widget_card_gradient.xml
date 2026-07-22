@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The action widgets' card: the same lavender-to-pink sweep as the launcher icon, so the family
+     reads as Lucent at a glance without ever being the icon itself (this round's widget task). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:startColor="@color/widget_grad_start"
+        android:endColor="@color/widget_grad_end"
+        android:angle="315" />
+    <corners android:radius="24dp" />
+</shape>

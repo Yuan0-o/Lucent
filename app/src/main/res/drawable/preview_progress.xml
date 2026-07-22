@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview for the progress widget: fraction block over a part-filled bar. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/widget_bg" />
+    <item android:gravity="top|start" android:top="16dp" android:left="16dp"
+        android:width="52dp" android:height="18dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#E6FFFFFF" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <item android:gravity="top|start" android:top="42dp" android:left="16dp"
+        android:width="72dp" android:height="7dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/widget_text_muted" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <item android:gravity="bottom|center_horizontal" android:bottom="18dp"
+        android:left="16dp" android:right="16dp" android:height="10dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/widget_track" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <item android:gravity="bottom|start" android:bottom="18dp"
+        android:left="16dp" android:width="96dp" android:height="10dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFE9DFFB" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+</layer-list>
