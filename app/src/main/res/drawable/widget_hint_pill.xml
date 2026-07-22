@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The assistant widget's "ask" field look: a quiet pill, like a search bar waiting for words. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#2EFFFFFF" />
+    <corners android:radius="18dp" />
+</shape>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/widget_bg" />
+    <item android:gravity="top|start" android:top="14dp" android:left="16dp"
+        android:width="56dp" android:height="10dp">
+        <shape android:shape="rectangle"><solid android:color="#E6FFFFFF" /><corners android:radius="5dp" /></shape>
+    </item>
+    <item android:gravity="top|start" android:top="36dp" android:left="16dp" android:right="16dp" android:height="8dp">
+        <shape android:shape="rectangle"><solid android:color="@color/widget_text_muted" /><corners android:radius="4dp" /></shape>
+    </item>
+    <item android:gravity="top|start" android:top="54dp" android:left="16dp" android:right="40dp" android:height="8dp">
+        <shape android:shape="rectangle"><solid android:color="@color/widget_text_muted" /><corners android:radius="4dp" /></shape>
+    </item>
+    <item android:gravity="top|start" android:top="72dp" android:left="16dp" android:right="64dp" android:height="8dp">
+        <shape android:shape="rectangle"><solid android:color="@color/widget_track" /><corners android:radius="4dp" /></shape>
+    </item>
+</layer-list>
