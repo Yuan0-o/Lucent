@@ -12,4 +12,17 @@
     <string name="widget_no_pinned_note">固定されたメモはありません</string>
     <string name="widget_untitled">無題</string>
     <string name="widget_untitled_task">無題のタスク</string>
+
+    <string name="widget_label_new_task">タスク追加</string>
+    <string name="widget_label_new_note">メモ追加</string>
+    <string name="widget_label_assistant">アシスタント</string>
+    <string name="widget_label_progress">タスク進捗</string>
+    <string name="widget_label_quick">クイック操作</string>
+    <string name="widget_label_today">タスク一覧</string>
+    <string name="widget_label_pinned">ピン留めメモ</string>
+    <string name="widget_ask_hint">何でも聞いて…</string>
+    <string name="widget_all_done">すべて完了 ✨</string>
+    <string name="widget_next_fmt">次：%1$s</string>
+    <string name="widget_a11y_mark_done">完了にする</string>
+    <string name="widget_a11y_reopen">未完了に戻す</string>
 </resources>
