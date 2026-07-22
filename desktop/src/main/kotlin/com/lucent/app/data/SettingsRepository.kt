@@ -54,6 +54,7 @@ class SettingsRepository(private val context: Context) {
         const val TASKS_SORT = "tasks_sort"
         const val MEMORY_TIER = "memory_tier"
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
+        const val ASSISTANT_CONFIRM_TOOLS = "assistant_confirm_tools"
         const val TYPING_HAPTICS = "typing_haptics"
         const val MARKDOWN_ENABLED = "markdown_enabled"
         const val LINKS_ENABLED = "links_enabled"
@@ -297,6 +298,10 @@ class SettingsRepository(private val context: Context) {
 
     val webSearchEnabled: Flow<Boolean> = state.map { bool(it, K.WEB_SEARCH_ENABLED) ?: false }
     suspend fun setWebSearchEnabled(value: Boolean) { edit { it[K.WEB_SEARCH_ENABLED] = value } }
+
+    /** Confirm every assistant tool call in a dialog first (default ON). See the Android twin. */
+    val assistantConfirmToolsEnabled: Flow<Boolean> = state.map { bool(it, K.ASSISTANT_CONFIRM_TOOLS) ?: true }
+    suspend fun setAssistantConfirmTools(value: Boolean) { edit { it[K.ASSISTANT_CONFIRM_TOOLS] = value } }
 
     val typingHapticsEnabled: Flow<Boolean> = state.map { bool(it, K.TYPING_HAPTICS) ?: true }
     suspend fun setTypingHapticsEnabled(value: Boolean) { edit { it[K.TYPING_HAPTICS] = value } }
