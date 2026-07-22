@@ -12,4 +12,17 @@
     <string name="widget_no_pinned_note">没有置顶笔记</string>
     <string name="widget_untitled">无标题</string>
     <string name="widget_untitled_task">无标题任务</string>
+
+    <string name="widget_label_new_task">添加任务</string>
+    <string name="widget_label_new_note">添加笔记</string>
+    <string name="widget_label_assistant">助手聊天</string>
+    <string name="widget_label_progress">任务进度</string>
+    <string name="widget_label_quick">快捷操作</string>
+    <string name="widget_label_today">任务列表</string>
+    <string name="widget_label_pinned">置顶笔记</string>
+    <string name="widget_ask_hint">问点什么…</string>
+    <string name="widget_all_done">全部完成 ✨</string>
+    <string name="widget_next_fmt">下一项：%1$s</string>
+    <string name="widget_a11y_mark_done">标记为完成</string>
+    <string name="widget_a11y_reopen">标记为未完成</string>
 </resources>
