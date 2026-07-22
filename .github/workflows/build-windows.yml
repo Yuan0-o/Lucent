@@ -53,6 +53,35 @@ jobs:
           gradle-version: '8.13'
           cache-disabled: true
 
+      # ---- Resolve every Gradle plugin & dependency up front, with retries ----
+      # The 2026-07-22 08:12 run died at the ROOT plugins block: dl.google.com flaked, Gradle
+      # burned ~53 s of internal retries, marked the repository unavailable, and then reported the
+      # AGP plugin marker as "not found" — after the job had already spent ~13 minutes building the
+      # native DLLs. Gradle never retries a build it has already failed, so the only reliable
+      # counter is retrying the whole invocation; and doing it HERE, before the long native steps,
+      # turns a repository flake at minute 15 into one retried at minute 1.
+      #
+      # :desktop:compileKotlin is the warm-up task on purpose: it resolves the root plugins (AGP,
+      # Kotlin, Compose), every :desktop dependency (including the sqlite-jdbc cipher driver), and
+      # compiles the module — all of which lands in GRADLE_USER_HOME / build/ and is reused by the
+      # cipher-check and packaging steps below, leaving them almost nothing to fetch. A genuine
+      # compile error also surfaces here (after the retries, unavoidably — a script can't tell a
+      # flaky repository from a broken build) instead of a quarter hour later. Same red, earlier.
+      - name: Resolve Gradle plugins + dependencies, compile :desktop (retried)
+        shell: pwsh
+        run: |
+          $max = 4
+          for ($i = 1; $i -le $max; $i++) {
+            gradle :desktop:compileKotlin --no-daemon --stacktrace
+            if ($LASTEXITCODE -eq 0) { Write-Host "Gradle warm-up OK on attempt $i."; exit 0 }
+            if ($i -lt $max) {
+              Write-Warning "Gradle warm-up attempt $i failed (exit $LASTEXITCODE). Transient repository errors (like the dl.google.com flake of 2026-07-22) usually clear; retrying in 45 s."
+              Start-Sleep -Seconds 45
+            }
+          }
+          Write-Error "Gradle warm-up failed after $max attempts - see the last stacktrace above. If the same error repeats on every attempt, it is a real build problem, not a flake."
+          exit 1
+
       # ---- llama.cpp source, fetched up front with retries (pinned b9888) ----
       # Cloned into the directory desktop/native/CMakeLists.txt pre-seeds from, so the compile step
       # never has to hit the network mid-build. PowerShell here because the runner is Windows.
@@ -261,9 +290,19 @@ jobs:
       # desktop/src/main/kotlin/com/lucent/desktop/CipherSelfCheck.kt) and fails the job in red if
       # any of it is untrue. Encryption is a launch requirement, not best-effort: unlike the GPU
       # engine, this step is allowed to stop the build.
+      # One retry, 30 s apart: after the warm-up above almost everything is served from the local
+      # Gradle home, but a residual fetch can still flake. A GENUINE self-check failure (encryption
+      # not engaging) fails identically on both attempts and still stops the build in red.
       - name: Verify database encryption (cipher self-check)
         shell: pwsh
-        run: gradle :desktop:cipherSelfCheck --no-daemon --stacktrace
+        run: |
+          gradle :desktop:cipherSelfCheck --no-daemon --stacktrace
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "cipherSelfCheck attempt 1 failed (exit $LASTEXITCODE); retrying once in 30 s in case it was a transient fetch."
+            Start-Sleep -Seconds 30
+            gradle :desktop:cipherSelfCheck --no-daemon --stacktrace
+          }
+          exit $LASTEXITCODE
 
       # ---- Surface which engines actually made it into this build ----
       # A green run used to be silent about the one thing worth knowing here: whether the
@@ -306,7 +345,14 @@ jobs:
       # the installer under desktop/build/compose/binaries/main/exe/.
       - name: Package Windows .exe
         shell: pwsh
-        run: gradle :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+        run: |
+          gradle :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "packaging attempt 1 failed (exit $LASTEXITCODE); retrying once in 30 s in case it was a transient fetch."
+            Start-Sleep -Seconds 30
+            gradle :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+          }
+          exit $LASTEXITCODE
 
       # ---- Upload ONLY the one installer, as agreed ----
       - name: Upload installer
