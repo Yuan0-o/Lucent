@@ -139,7 +139,25 @@ if (EXISTS ${LUCENT_MTMD_DIR}/mtmd.cpp)
     file(GLOB_RECURSE LUCENT_MTMD_SOURCES CONFIGURE_DEPENDS ${LUCENT_MTMD_DIR}/*.cpp)
     list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "-cli\.cpp$")
     list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "/main\.cpp$")
-    list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "/(tests?|examples?|bench|deprecated)/")
+    list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "/(tests?|examples?|bench|deprecated|debug)/")
+    # Third CI pass (Android job 2026-07-26): the glob above worked — every models/*.cpp came in
+    # and all the missing vtables resolved — and then the linker met `duplicate symbol: main`,
+    # courtesy of debug/mtmd-debug.cpp and deprecation-warning.cpp: two EXECUTABLE stubs whose
+    # names none of the filters anticipated. Name-based filtering keeps losing to upstream's
+    # imagination, so the last word now goes to the sources themselves: anything that defines
+    # main() is a program, not library code, and is dropped no matter what it is called or where
+    # it lives. That ends the whole class, not just these two files.
+    set(LUCENT_MTMD_LIB_SOURCES "")
+    foreach(LUCENT_MTMD_SRC ${LUCENT_MTMD_SOURCES})
+        file(READ ${LUCENT_MTMD_SRC} LUCENT_MTMD_SRC_TEXT)
+        if (LUCENT_MTMD_SRC_TEXT MATCHES "int[ \t\r\n]+main[ \t]*\(")
+            message(STATUS "lucent: mtmd source excluded (defines main): ${LUCENT_MTMD_SRC}")
+        else()
+            list(APPEND LUCENT_MTMD_LIB_SOURCES ${LUCENT_MTMD_SRC})
+        endif()
+    endforeach()
+    set(LUCENT_MTMD_SOURCES ${LUCENT_MTMD_LIB_SOURCES})
+    unset(LUCENT_MTMD_SRC_TEXT)
     list(LENGTH LUCENT_MTMD_SOURCES LUCENT_MTMD_COUNT)
     message(STATUS "lucent: multimodal (mtmd) compiled in - ${LUCENT_MTMD_COUNT} source(s) under ${LUCENT_MTMD_DIR}")
     target_sources(lucent_llama PRIVATE ${LUCENT_MTMD_SOURCES})
