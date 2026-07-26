@@ -251,6 +251,68 @@ object RichText {
             else s.copy(end = minOf(s.end, length)).takeIf { !it.isEmpty }
         })
 
+    /** Which attributes cover EVERY character of [start, end) — what the toolbar lights up. */
+    fun kindsCovering(spans: List<RichSpan>, start: Int, end: Int): Set<RichSpan.Kind> =
+        RichSpan.Kind.entries.filter { it != RichSpan.Kind.HIGHLIGHT && covers(spans, start, end, it) }.toSet()
+
+    /** Which highlighter colour covers all of [start, end), or null. */
+    fun highlightCovering(spans: List<RichSpan>, start: Int, end: Int): Int? =
+        (0 until HIGHLIGHT_COLORS).firstOrNull { covers(spans, start, end, RichSpan.Kind.HIGHLIGHT, it) }
+
+    /**
+     * Follow a text edit, and apply the styles the user armed BEFORE typing (task 1).
+     *
+     * ### Why the diff is computed here rather than taken from the field
+     *
+     * The composers own a plain `String`; they are told the new text and nothing about how it got
+     * that way. A longest-common-prefix/suffix diff recovers the one thing the spans actually need —
+     * where characters were removed and where they were inserted — and it recovers it correctly for
+     * every writer, including the ones that never touch the keyboard (undo, a template, the
+     * assistant rewriting a note). Anything smarter would have to be told, and the writers that
+     * would have to do the telling are exactly the ones that do not know they are editing a styled
+     * document.
+     *
+     * ### Pending styles
+     *
+     * Before this existed, formatting could only be applied to text that already existed: select it,
+     * then style it. Every editor people actually use also works the other way round — press bold,
+     * then type — and that is what [pendingKinds] and [pendingHighlight] are. They are handed in by
+     * the composer, and any characters this edit INSERTED are given those attributes.
+     */
+    fun applyEdit(
+        spans: List<RichSpan>,
+        old: String,
+        new: String,
+        pendingKinds: Set<RichSpan.Kind> = emptySet(),
+        pendingHighlight: Int? = null
+    ): List<RichSpan> {
+        if (old == new) return reconcile(spans, new.length)
+        val limit = minOf(old.length, new.length)
+        var prefix = 0
+        while (prefix < limit && old[prefix] == new[prefix]) prefix++
+        var suffix = 0
+        while (suffix < limit - prefix && old[old.length - 1 - suffix] == new[new.length - 1 - suffix]) suffix++
+        val removed = old.length - prefix - suffix
+        val inserted = new.length - prefix - suffix
+        var out = afterEdit(spans, prefix, removed, inserted)
+        if (inserted > 0) {
+            pendingKinds.forEach { kind ->
+                // Same one-axis rule toggle() enforces: a weight replaces the other weight.
+                out = when (kind) {
+                    RichSpan.Kind.BOLD -> remove(out, prefix, prefix + inserted, RichSpan.Kind.LIGHT, null)
+                    RichSpan.Kind.LIGHT -> remove(out, prefix, prefix + inserted, RichSpan.Kind.BOLD, null)
+                    else -> out
+                }
+                out = normalise(out + RichSpan(prefix, prefix + inserted, kind, 0))
+            }
+            if (pendingHighlight != null) {
+                out = remove(out, prefix, prefix + inserted, RichSpan.Kind.HIGHLIGHT, null)
+                out = normalise(out + RichSpan(prefix, prefix + inserted, RichSpan.Kind.HIGHLIGHT, pendingHighlight))
+            }
+        }
+        return reconcile(out, new.length)
+    }
+
     /** Convenience for the read path: decode and clamp in one call. */
     fun load(json: String, body: String): List<RichSpan> = reconcile(decode(json), body.length)
 
