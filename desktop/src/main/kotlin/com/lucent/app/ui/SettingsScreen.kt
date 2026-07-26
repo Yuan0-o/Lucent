@@ -4399,7 +4399,7 @@ fun SettingsScreen(active: Boolean = true) {
                     initial = com.lucent.app.data.AutoBackup.State.EMPTY
                 )
                 fun pickBackupFolder() {
-                    val dir = com.lucent.desktop.platform.DesktopFiles.chooseFolder(S.autoBackupFolder)
+                    val dir = com.lucent.desktop.platform.DesktopFiles.chooseFolder(S.autoBackupChooseFolder)
                         ?: return
                     scope.launch { repo.setAutoBackup(autoState.copy(folderUri = dir.absolutePath)) }
                 }
@@ -4425,26 +4425,35 @@ fun SettingsScreen(active: Boolean = true) {
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+                Text(S.autoBackupFolder, color = onGradient, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    autoState.folderUri.ifBlank { S.autoBackupNoFolder },
+                    autoState.folderUri.ifBlank { S.autoBackupNeedsFolder },
                     color = onGradientMuted,
                     fontSize = 12.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                GlassButton(text = S.autoBackupFolder, compact = true, onClick = { pickBackupFolder() })
+                GlassButton(text = S.autoBackupChooseFolder, compact = true, onClick = { pickBackupFolder() })
 
                 Spacer(modifier = Modifier.height(12.dp))
                 // Fixed choices, not free entry: AutoBackup.MIN_INTERVAL_HOURS is a floor rather than
                 // a suggestion, and offering a number the feature would silently clamp is worse than
                 // not offering it.
-                Text(S.autoBackupEvery, color = onGradient, fontSize = 14.sp)
+                Text(S.autoBackupInterval, color = onGradient, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row {
                     com.lucent.app.data.AutoBackup.INTERVAL_CHOICES.forEach { hours ->
                         GlassButton(
-                            text = S.autoBackupHours(hours),
+                            // The catalogue already names the two round numbers ("Once a day",
+                            // "Once a week") and falls back to "Every N hours" for the rest, so the
+                            // chips read as language rather than as arithmetic.
+                            text = when (hours) {
+                                24 -> S.autoBackupEveryDay
+                                24 * 7 -> S.autoBackupEveryWeek
+                                else -> S.autoBackupEvery(hours)
+                            },
                             compact = true,
                             enabled = autoState.intervalHours != hours,
                             onClick = {
