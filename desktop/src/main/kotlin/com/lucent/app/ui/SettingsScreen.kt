@@ -254,6 +254,26 @@ fun SettingsScreen(active: Boolean = true) {
     var selfDestructTyped by remember { mutableStateOf("") }
     // Result of the on-demand at-rest encryption self-check (task 17). Null = not run yet.
     var encryptionCheckResult by remember { mutableStateOf<String?>(null) }
+    // Task 3.1 — the self-check result used to stay on screen forever. It is the answer to a
+    // question the user asked by pressing a button one second ago, not a property of the page, and
+    // once read it is just a line of stale text sitting under a control that now looks like it did
+    // something permanent. Clear it after a few seconds, exactly like a toast.
+    //
+    // A FAILURE is deliberately left up: that one is not "here is your answer", it is "something is
+    // wrong", and it should stay until the user leaves the page.
+    LaunchedEffect(encryptionCheckResult) {
+        if (encryptionCheckResult == "") {
+            kotlinx.coroutines.delay(6000)
+            encryptionCheckResult = null
+        }
+    }
+    // Same rule for the backup status line, which had the same problem for the same reason.
+    LaunchedEffect(backupStatus) {
+        if (backupStatus.isNotBlank()) {
+            kotlinx.coroutines.delay(8000)
+            backupStatus = ""
+        }
+    }
 
 
     // App Lock setup dialog (only shown while turning the lock ON, to capture the credentials).
@@ -3001,12 +3021,11 @@ fun SettingsScreen(active: Boolean = true) {
                             }
                         )
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // Task 16: say plainly what this assistant is not. A user who attaches a
-                    // photo and gets a reply that ignores it will conclude the model is stupid;
-                    // the truth is that local mode is text-only and nothing about a chat box
-                    // with a paperclip in it hints at that.
-                    Text(S.lmTextOnlyNote, color = onGradientMuted, fontSize = 12.sp)
+                    // The "local mode is text only" paragraph that used to sit here has been
+                    // removed: on-device multimodal is supported now (see the mmproj projector
+                    // setting below), so the note described a limitation that no longer exists.
+                    // A stale warning is worse than no warning — it talks a user out of a feature
+                    // that works.
                     if (!localModelEnabled) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(S.lmEnableToConfigureNote, color = onGradientMuted, fontSize = 12.sp)
@@ -4418,8 +4437,16 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(
                         checked = autoState.enabled,
+                        // Task 3.6 — turning this on without a folder used to be allowed, and it
+                        // produced a switch that read as ON while AutoBackup.State.runnable was
+                        // false, so nothing ever ran and nothing ever said why. The switch now
+                        // refuses and names the missing piece.
                         onCheckedChange = { on ->
-                            scope.launch { repo.setAutoBackup(autoState.copy(enabled = on)) }
+                            if (on && autoState.folderUri.isBlank()) {
+                                LucentToast.show(context, S.autoBackupNeedsFolder)
+                            } else {
+                                scope.launch { repo.setAutoBackup(autoState.copy(enabled = on)) }
+                            }
                         }
                     )
                 }

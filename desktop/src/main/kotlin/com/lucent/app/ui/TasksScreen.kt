@@ -269,8 +269,24 @@ fun TasksScreen(active: Boolean = true) {
     // Spans follow the text. Any writer that does NOT go through the field — undo, the assistant, a
     // version restore — lands here as a length change, and reconcile() drops whatever no longer
     // sits on real characters. See data/RichText.kt.
+    // ---- Task 1: styles armed BEFORE typing ----
+    //
+    // Formatting used to require text that already existed: select it, then style it. Every editor
+    // anyone actually uses also works the other way round — press bold, then type — and these two
+    // hold what has been armed. They are cleared with the composer session, like the spans they feed.
+    var pendingKinds by remember(composing) { mutableStateOf(emptySet<com.lucent.app.data.RichSpan.Kind>()) }
+    var pendingHighlight by remember(composing) { mutableStateOf<Int?>(null) }
+    // The text the span list currently describes. Kept beside the spans so an edit can be DIFFED
+    // rather than merely clamped: reconcile() only ever chopped spans back to the new length, which
+    // silently mis-styled every edit that inserted or deleted anywhere but the very end.
+    var spansText by remember(composing) { mutableStateOf(newNotes) }
     LaunchedEffect(newNotes) {
-        bodySpans = com.lucent.app.data.RichText.reconcile(bodySpans, newNotes.length)
+        if (spansText != newNotes) {
+            bodySpans = com.lucent.app.data.RichText.applyEdit(
+                bodySpans, spansText, newNotes, pendingKinds, pendingHighlight
+            )
+            spansText = newNotes
+        }
     }
     LaunchedEffect(newNotes) { bodyUndo.record(newNotes) }
     // Task A16 — reordering is only meaningful under the Custom sort; see ReorderDrag.kt.
@@ -576,8 +592,12 @@ fun TasksScreen(active: Boolean = true) {
     BackHandler(enabled = !composing && viewingId == null && showingHistory) { showingHistory = false }
     BackHandler(enabled = !composing && viewingId == null && !showingHistory && showTrash) { showTrash = false }
     BackHandler(enabled = !composing && viewingId == null && !showingHistory && !showTrash && showSearch) { showSearch = false }
+    // Task 3.4 — see the notes screen twin: Drafts and the hidden area are sub-pages, not the root.
+    BackHandler(enabled = !composing && viewingId == null && (showDrafts || showHidden)) {
+        if (showDrafts) showDrafts = false else showHidden = false
+    }
     // On the home list, back first exits multi-select rather than leaving the screen.
-    BackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch) { exitSelection() }
+    BackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
     // Leaving this tab folds it back to the task list (task 3). Sub-pages — a task's detail page,
     // the composer, history, trash, search — are places you *went*, not places you live, and coming
@@ -1120,16 +1140,44 @@ fun TasksScreen(active: Boolean = true) {
                 onRedo = { bodyUndo.redo()?.let { newNotes = it } },
                 richTextEnabled = richTextEnabled,
                 hasSelection = bodySelEnd > bodySelStart,
+                // With a selection the style is applied to it, exactly as before. WITHOUT one the
+                // same tap arms the style for whatever is typed next, which is what makes the
+                // toolbar usable on an empty note — previously it just said "select something first".
                 onToggleStyle = { kind, color ->
-                    bodySpans = com.lucent.app.data.RichText.toggle(
-                        bodySpans, bodySelStart, bodySelEnd, kind, color
-                    )
-                },
-                onClearStyle = {
-                    bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
-                        com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichText.toggle(
+                            bodySpans, bodySelStart, bodySelEnd, kind, color
+                        )
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
+                        pendingHighlight = if (pendingHighlight == color) null else color
+                    } else {
+                        // Light and bold are one axis: arming one disarms the other, the same rule
+                        // RichText.toggle() enforces on a selection.
+                        val opposite = when (kind) {
+                            com.lucent.app.data.RichSpan.Kind.BOLD -> com.lucent.app.data.RichSpan.Kind.LIGHT
+                            com.lucent.app.data.RichSpan.Kind.LIGHT -> com.lucent.app.data.RichSpan.Kind.BOLD
+                            else -> null
+                        }
+                        pendingKinds = if (kind in pendingKinds) pendingKinds - kind
+                        else (if (opposite != null) pendingKinds - opposite else pendingKinds) + kind
                     }
                 },
+                onClearStyle = {
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
+                            com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                        }
+                    } else {
+                        pendingKinds = emptySet()
+                        pendingHighlight = null
+                    }
+                },
+                activeKinds = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.kindsCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingKinds,
+                activeHighlight = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingHighlight,
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
                 // Task 1. The bottom offset was a hard-coded 96dp, but the floating nav capsule is
                 // taller than that (its own height plus the gap above it plus the system navigation
@@ -1564,7 +1612,9 @@ fun TasksScreen(active: Boolean = true) {
         else -> {
             // ---- Clean home list (active tasks only) ----
             // Sections apply only while browsing (no search/date filter); a search gets a flat list.
-            val browsing = searchText.isBlank() && dateRange == null
+            // Custom sort turns sectioning off — see the notes screen twin for the full reasoning.
+            // Recency buckets and a hand-made order cannot both decide where a card goes.
+            val browsing = searchText.isBlank() && dateRange == null && sortOption != TaskSort.CUSTOM
             val now = remember(sortedActive) { System.currentTimeMillis() }
             val sections = remember(sortedActive, taskUsage, browsing, now) {
                 if (!browsing) null else sectionHomeItems(
