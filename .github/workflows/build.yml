@@ -55,6 +55,13 @@ jobs:
         # v6 runs on Node 24 (v4 targeted the now-deprecated Node 20).
         uses: actions/checkout@v6
 
+      # ---- Twin-file drift guard (codebase review C-1) ----
+      # app/ and desktop/ share ~50 intentionally byte-identical files, synced by hand. This fails
+      # the build IN SECONDS (before any SDK install) when any pair in tools/twins.txt has drifted,
+      # printing the diff — a fix landing in one tree but not the other used to ship silently.
+      - name: Check twin files have not drifted
+        run: python3 tools/check_twins.py
+
       - name: Check signing secrets are configured
         # Fail in seconds with a plain-language message instead of ten minutes in with a Gradle
         # signing stack trace — a missing or misnamed secret is the most likely first-run mistake.
@@ -77,14 +84,15 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        # v6 runs on Node 24. Caching is disabled so a transient GitHub cache-service outage can't
-        # surface as a "Failed to save/restore cache" build warning; the trade-off is that
-        # dependencies are re-fetched each run. Set cache-disabled: false to trade those occasional
-        # warnings back for faster builds.
+        # v6 runs on Node 24. DECISION (backlog A-6, recorded 2026-07-26): the dependency cache is
+        # ON, in the shape the backlog recommends — main writes the cache, every other ref only
+        # reads it. Every Maven/Google artifact used to re-download on every run; the accepted
+        # trade-off is that a rare GitHub cache-service hiccup can now surface as a build warning
+        # (never a failure). Set cache-disabled: true to return to the old always-download mode.
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.13'
-          cache-disabled: true
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # ---- Android SDK components (pinned) ----
       # Versions here MUST match app/build.gradle.kts (compileSdk 36, ndkVersion) and the CMake the
@@ -113,11 +121,35 @@ jobs:
       # would still succeed — the app then runs on its Kotlin fallbacks. Only the two shipped ABIs
       # are built (aarch64 = arm64-v8a, armv7 = armeabi-v7a). ANDROID_NDK_HOME is pinned to the NDK
       # installed above so cargo-ndk and AGP use the very same toolchain.
+      # ---- Cargo cache (backlog A-2 + A-3) ----
+      # Covers three things at once: the cargo-ndk BINARY (~46 s compile-from-source per run), the
+      # crates.io registry + crate sources (the per-run "Downloading crates" block), and rust/target
+      # (dependency-crate objects). Keyed on the lockfile + the pinned cargo-ndk version; the
+      # restore-key lets a lockfile change start from the previous cache instead of cold.
+      - name: Cache Cargo (registry, cargo-ndk, rust/target)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-android-ndk4.1.2-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-android-ndk4.1.2-
+
       - name: Set up Rust for Android
         run: |
           set -eu
           rustup target add aarch64-linux-android armv7-linux-androideabi
-          cargo install cargo-ndk --locked
+          # Pinned (backlog A-2): "--locked" alone locks cargo-ndk's OWN lockfile but lets its
+          # version float; the explicit version keeps warm-cache runs honest (the cached binary and
+          # the requested tool are provably the same) and cold runs reproducible.
+          if cargo ndk --version 2>/dev/null | grep -q "4.1.2"; then
+            echo "cargo-ndk 4.1.2 already present (cache hit) - skipping install."
+          else
+            cargo install cargo-ndk --version 4.1.2 --locked
+          fi
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
           # The runner image also exports ANDROID_NDK_ROOT, pointing at whatever NDK it happens to
           # ship (27.3 today). cargo-ndk compares the two and prints a mismatch warning on every
