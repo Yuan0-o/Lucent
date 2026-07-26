@@ -77,6 +77,8 @@ fun main() {
         runBlocking { SettingsRepository(context).startupPrefsOnce() }
             // Seed the first-frame settings cache (B-group task 9) — see the Android twin.
             .also { com.lucent.app.data.SettingsCache.seed(it) }
+            // Round R1, task 5 — the previous run's recovery snapshot; see the Android twin.
+            .also { com.lucent.app.data.SessionRestore.hydrate(it.sessionSnapshot) }
     } catch (t: Throwable) {
         SettingsRepository.StartupPrefs(
             display = SettingsRepository.DisplayPrefs("system", "SUNSET", "system"),
