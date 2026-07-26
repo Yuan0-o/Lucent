@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.layout.Box
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -337,12 +338,17 @@ fun PendingAttachmentChips(
                     onClick = { Haptics.tick(context); viewing = att },
                     leading = if (onReorder == null) null else {
                         {
-                            Icon(
-                                Icons.Default.DragHandle,
-                                contentDescription = com.lucent.app.i18n.S.a11yDragToReorder,
-                                tint = tint.copy(alpha = 0.7f),
+                            // Task 5 — the handle was a 20dp icon, and the drag had to START on it.
+                            //
+                            // 20dp is well under the ~48dp a fingertip actually covers, so most
+                            // attempts landed on the row beside it, where the composer's own
+                            // vertical scroll took the gesture instead — which is why reordering
+                            // "was not implemented" from the outside. The touch target is a 44dp box
+                            // now with the same 20dp glyph drawn inside it: identical to look at,
+                            // more than twice as wide to hit.
+                            Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(44.dp)
                                     .pointerInput(att.data) {
                                         // Accumulate raw drag distance and commit one swap per row
                                         // crossed. `travelled` is a plain local, not Compose state:
@@ -365,8 +371,16 @@ fun PendingAttachmentChips(
                                                 }
                                             }
                                         )
-                                    }
-                            )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.DragHandle,
+                                    contentDescription = com.lucent.app.i18n.S.a11yDragToReorder,
+                                    tint = tint.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     },
                     trailing = {

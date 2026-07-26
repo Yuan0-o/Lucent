@@ -4476,9 +4476,18 @@ fun SettingsScreen(active: Boolean = true) {
             // AutoBackup.State.runnable is `enabled && folderUri.isNotBlank()`, and that is exactly
             // what starts the loop below.
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                val autoState by repo.autoBackup.collectAsState(
-                    initial = com.lucent.app.data.AutoBackup.State.EMPTY
-                )
+                // Task 7 — the retention and interval controls used to show the DEFAULTS for a
+                // beat and then snap to the stored values.
+                //
+                // `collectAsState(initial = EMPTY)` has to render something before DataStore has
+                // read anything back, and EMPTY is "12 hours, keep 5" — so every visit to this page
+                // displayed a number the user had not chosen, then corrected itself. Collecting into
+                // a nullable and drawing the numbers only once something real has arrived removes
+                // the wrong value entirely; there is nothing to flash back from.
+                var loadedAuto by remember { mutableStateOf<com.lucent.app.data.AutoBackup.State?>(null) }
+                LaunchedEffect(Unit) { repo.autoBackup.collect { loadedAuto = it } }
+                val autoState = loadedAuto ?: com.lucent.app.data.AutoBackup.State.EMPTY
+                val autoLoaded = loadedAuto != null
                 // The tree grant must be persisted, or the folder stops being writable the moment the
                 // process dies — which for a feature that runs on a schedule is every time it
                 // matters.
@@ -4546,6 +4555,7 @@ fun SettingsScreen(active: Boolean = true) {
                 Text(S.autoBackupInterval, color = onGradient, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row {
+                    if (!autoLoaded) return@Row
                     com.lucent.app.data.AutoBackup.INTERVAL_CHOICES.forEach { hours ->
                         GlassButton(
                             // The catalogue already names the two round numbers ("Once a day",
@@ -4567,11 +4577,13 @@ fun SettingsScreen(active: Boolean = true) {
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                StepperRow(
-                    label = S.autoBackupKeep,
-                    value = autoState.keep,
-                    range = com.lucent.app.data.AutoBackup.KEEP_RANGE
-                ) { v -> scope.launch { repo.setAutoBackup(autoState.copy(keep = v)) } }
+                if (autoLoaded) {
+                    StepperRow(
+                        label = S.autoBackupKeep,
+                        value = autoState.keep,
+                        range = com.lucent.app.data.AutoBackup.KEEP_RANGE
+                    ) { v -> scope.launch { repo.setAutoBackup(autoState.copy(keep = v)) } }
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(

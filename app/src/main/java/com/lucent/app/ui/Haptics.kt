@@ -38,9 +38,19 @@ object Haptics {
     // [typingTick] throttles itself to at most one pulse per [TYPING_MIN_GAP_MS]. In practice the
     // typewriter's own cadence is close to that anyway, so you feel one faint tap per character or
     // two, not a drill.
-    private const val TYPING_TICK_MS = 8L
-    private const val TYPING_AMPLITUDE = 1        // the floor; the gentlest a motor will do
-    private const val TYPING_MIN_GAP_MS = 16L
+    // Task 8 — every pulse now runs the motor at its ceiling.
+    //
+    // The per-character tick used to sit at amplitude 1, the documented floor, on the theory that a
+    // typewriter should whisper. The instruction is the opposite: full power throughout, and a
+    // distinctly harder hit the instant the last character lands.
+    //
+    // The throttle stays, and it is not a compromise on strength — a vibrator physically cannot
+    // restart faster than a few milliseconds, so firing one per character on a fast reply would fuse
+    // into one continuous drone and you would feel *less*, not more. One clean full-power hit per
+    // ~24ms reads as a hard staccato; anything faster reads as a buzz.
+    private const val TYPING_TICK_MS = 14L
+    private const val TYPING_AMPLITUDE = 255      // MAX_AMPLITUDE — the ceiling the platform accepts
+    private const val TYPING_MIN_GAP_MS = 24L
 
     // The strong pulse that marks "the reply is complete" (B-group task 1: the finish buzz was not
     // being felt at all).
@@ -62,12 +72,19 @@ object Haptics {
     //
     // The during-reply feedback (tick / typingTick) is deliberately untouched — the brief keeps it.
     private const val MAX_AMPLITUDE = 255
-    private val FINISH_TIMINGS = longArrayOf(0L, 55L, 45L, 160L)          // wait · on · gap · on
+    // Task 8 — the closing hit has to be unmistakably harder than the characters that preceded it,
+    // and now that those run at full power too, "louder" is no longer available: the only remaining
+    // dimensions are LENGTH and SHAPE. So the finish is a long full-power slam, a brief silence, and
+    // a second even longer one — a double thud no single typing tick can be confused with.
+    private val FINISH_TIMINGS = longArrayOf(0L, 120L, 55L, 260L)         // wait · on · gap · on
     private val FINISH_AMPLITUDES = intArrayOf(0, MAX_AMPLITUDE, 0, MAX_AMPLITUDE)
 
     // How long to leave the motor idle between cancelling whatever was playing and issuing the
     // finish buzz. Short enough to read as instant, long enough for an LRA to actually stop.
-    private const val SETTLE_MS = 24L
+    // "Immediately after the last character", so this is as short as an LRA can be trusted to come
+    // to rest in. Any longer and the finish reads as a separate event rather than the end of the one
+    // that was playing.
+    private const val SETTLE_MS = 10L
 
     @Volatile private var lastTypingTickAt = 0L
 
