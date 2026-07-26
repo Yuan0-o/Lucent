@@ -151,7 +151,36 @@ fun DoodleEditor(
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    var strokes by remember(value) { mutableStateOf(Doodle.parse(value)) }
+    // ---- Task 3.3: the toolbar has to be legible against ITS OWN backdrop ----
+    //
+    // In full screen the panel behind this toolbar is near-black, but the icons were tinted with the
+    // app's on-gradient colour — which on every light palette is near-black too. The result was a
+    // row of controls that were technically drawn and effectively invisible.
+    val toolTint = if (fullScreen) Color(0xFFEDEDF2) else onGradient
+    val toolMuted = if (fullScreen) Color(0xFFEDEDF2).copy(alpha = 0.60f) else onGradientMuted
+
+    // ---- Task 3.5: why the stroke list is NOT keyed on [value] ----
+    //
+    // It used to be `remember(value) { mutableStateOf(...) }`. Every commit changes `value`, which
+    // re-keys the remember and allocates a BRAND NEW MutableState — but the pointerInput block that
+    // owns the drawing gesture is keyed only on the pen settings, so its still-running coroutine
+    // keeps a reference to the OLD state object and the OLD `commit` closure.
+    //
+    // That is the "clear the canvas, draw one stroke, and everything comes back" bug, exactly: clear
+    // wrote an empty list to the *new* state, and the next stroke was committed by the *old* closure
+    // as `oldStrokes + newStroke`, resurrecting every stroke the user had just deleted.
+    //
+    // One state object for the composable's whole life fixes it at the root. External changes still
+    // arrive — an undo, a version restore, opening a different note — and are adopted below by
+    // comparing against the last value we ourselves wrote, so our own writes are never re-parsed and
+    // an external one is never ignored.
+    val strokesState = remember { mutableStateOf(Doodle.parse(value)) }
+    var strokes by strokesState
+    var lastKnownValue by remember { mutableStateOf(value) }
+    if (value != lastKnownValue) {
+        lastKnownValue = value
+        strokes = Doodle.parse(value)
+    }
     var colorIndex by remember { mutableStateOf(0) }
     var widthIndex by remember { mutableStateOf(1) }
     // The stroke currently under the finger, kept separate so it can be drawn live without
@@ -159,9 +188,14 @@ fun DoodleEditor(
     var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var canvasSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
 
+    val emitValue = androidx.compose.runtime.rememberUpdatedState(onValueChange)
     fun commit(updated: List<Doodle.Stroke>) {
         strokes = updated
-        onValueChange(Doodle.serialize(updated))
+        val json = Doodle.serialize(updated)
+        // Record what we wrote BEFORE emitting it, so the sync check above recognises the value
+        // coming back as our own and leaves the list alone.
+        lastKnownValue = json
+        emitValue.value(json)
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -174,7 +208,7 @@ fun DoodleEditor(
                 // the animated gradient showing through would change what a drawing looks like
                 // depending on where the background happened to be that second.
                 .background(Color.White)
-                .border(1.dp, onGradientMuted.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .border(1.dp, toolMuted.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
                 .pointerInput(colorIndex, widthIndex) {
                     detectDragGestures(
                         onDragStart = { start ->
@@ -261,7 +295,7 @@ fun DoodleEditor(
                         .background(c)
                         .border(
                             if (index == colorIndex) 2.dp else 1.dp,
-                            onGradient.copy(alpha = if (index == colorIndex) 0.9f else 0.3f),
+                            toolTint.copy(alpha = if (index == colorIndex) 0.9f else 0.3f),
                             CircleShape
                         )
                         .clickableNoRipple { colorIndex = index }
@@ -277,7 +311,7 @@ fun DoodleEditor(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(onGradient.copy(alpha = if (index == widthIndex) 0.20f else 0.06f))
+                        .background(toolTint.copy(alpha = if (index == widthIndex) 0.22f else 0.08f))
                         .clickableNoRipple { widthIndex = index },
                     contentAlignment = Alignment.Center
                 ) {
@@ -285,7 +319,7 @@ fun DoodleEditor(
                         modifier = Modifier
                             .size((4 + index * 5).dp)
                             .clip(CircleShape)
-                            .background(onGradient)
+                            .background(toolTint)
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
@@ -300,14 +334,14 @@ fun DoodleEditor(
                 Icon(
                     Icons.AutoMirrored.Filled.Undo,
                     contentDescription = com.lucent.app.i18n.S.doodleUndoStroke,
-                    tint = if (strokes.isEmpty()) onGradientMuted else onGradient
+                    tint = if (strokes.isEmpty()) toolMuted else toolTint
                 )
             }
             IconButton(onClick = { commit(emptyList()) }, modifier = Modifier.size(44.dp)) {
                 Icon(
                     Icons.Default.DeleteOutline,
                     contentDescription = com.lucent.app.i18n.S.doodleClear,
-                    tint = onGradientMuted
+                    tint = toolTint
                 )
             }
         }
