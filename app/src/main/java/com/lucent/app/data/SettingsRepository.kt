@@ -71,6 +71,11 @@ private object SettingsKeys {
 
     // Remembered sort choice for each home list (a NoteSort/TaskSort key — see ui/SortOptions.kt).
     val NOTES_SORT = stringPreferencesKey("notes_sort")
+    // Round R1, task 5 - the recovery snapshot (data/SessionRestore). A preferences entry rather
+    // than a file of its own: it is small, it is written on the same debounce as everything else
+    // here, and it inherits this store's atomic replace, so a process killed mid-write can never
+    // leave half a snapshot behind.
+    val SESSION_SNAPSHOT = stringPreferencesKey("session_snapshot")
     val TASKS_SORT = stringPreferencesKey("tasks_sort")
 
     // Task 14 — automatic backup. Stored as one JSON string rather than six separate keys because
@@ -342,7 +347,16 @@ class SettingsRepository(private val context: Context) {
         // same background, so if this were read asynchronously the splash of a user who turned the
         // effect off would open with drifting blobs and only go still a beat later — exactly the
         // splash/app mismatch this synchronous read exists to prevent.
-        val backgroundAnimationEnabled: Boolean = true
+        val backgroundAnimationEnabled: Boolean = true,
+        // Round R1, task 2. The home lists' sort keys. First-frame state in the strictest sense:
+        // reading them late did not merely show the wrong label, it laid the list out in the wrong
+        // ORDER and then animated it into the right one on every launch. See SettingsCache.
+        val notesSort: String = "recent",
+        val tasksSort: String = "recent",
+        // Round R1, task 5. The previous run's recovery snapshot, empty when it closed cleanly.
+        // Rides here because the "go back to where you were?" prompt is asked once per launch,
+        // before anything else can navigate, and this costs no extra I/O. See data/SessionRestore.
+        val sessionSnapshot: String = ""
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -358,7 +372,10 @@ class SettingsRepository(private val context: Context) {
             systemIntegrationEnabled = prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false,
             appLanguage = prefs[SettingsKeys.APP_LANGUAGE] ?: "system",
             assistantName = secret(prefs, SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, "Lucent"),
-            backgroundAnimationEnabled = prefs[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true
+            backgroundAnimationEnabled = prefs[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true,
+            notesSort = prefs[SettingsKeys.NOTES_SORT] ?: "recent",
+            tasksSort = prefs[SettingsKeys.TASKS_SORT] ?: "recent",
+            sessionSnapshot = prefs[SettingsKeys.SESSION_SNAPSHOT] ?: ""
         )
     }
 
@@ -847,6 +864,14 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setNotesSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value } }
+
+    // ---- Round R1, task 5: the crash-recovery snapshot ----
+    suspend fun setSessionSnapshot(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.SESSION_SNAPSHOT] = value }
+    }
+
+    suspend fun sessionSnapshotOnce(): String =
+        context.settingsDataStore.data.first()[SettingsKeys.SESSION_SNAPSHOT] ?: ""
     suspend fun setTasksSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value } }
     suspend fun setMarkdownEnabled(value: Boolean) {
         context.settingsDataStore.edit {

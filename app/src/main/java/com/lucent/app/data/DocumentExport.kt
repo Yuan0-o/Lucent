@@ -99,16 +99,25 @@ object DocumentExport {
         // INTEGRATION (C task 20): the sidecar for [body], carried through so the DOCX writer can
         // turn it into runs. Empty for every format that drops it — see docxRichPara.
         val bodySpans: String = "",
-        // INTEGRATION (phase 3): the doodle stroke JSON, non-empty only for doodle notes. Only the
-        // PDF writer renders it — PDF is the one export format here that can draw vector strokes.
-        // Every other format keeps exporting the caption text, exactly as before.
-        val doodle: String = "",
+        // Round R1, task 3 — the drawn canvases of a doodle note, one stroke array per canvas,
+        // plus the file name each one takes in the export archive (see data/DoodleExport).
+        //
+        // This was a single String holding the doodle COLUMN, handed straight to `Doodle.parse`.
+        // That parser understands one shape — a bare array of strokes — but the column has held a
+        // multi-canvas container (`{"pages":[...]}`) ever since doodle notes learned to have more
+        // than one page. So the parse threw, was swallowed into an empty list, and every note with
+        // two or more canvases exported with all of its drawings missing and no error anywhere.
+        // Unwrapping once, here, means no writer downstream has to know the column has two shapes.
+        val doodlePages: List<String> = emptyList(),
+        val doodleNames: List<String> = emptyList(),
         val checklist: List<Pair<Boolean, String>>,
         val checklistLabel: String,
         val attachments: List<String>
     )
 
     private fun noteBlock(note: Note): Block {
+        // Round R1, task 3 — resolved once and shared by the metadata line and the writers below.
+        val doodleCanvases = DoodleExport.canvasesOf(note)
         val meta = buildList {
             add(com.lucent.app.i18n.S.exportDocUpdated(formatTime(note.updatedAt)))
             if (note.pinned) add(com.lucent.app.i18n.S.exportDocPinned)
@@ -123,7 +132,8 @@ object DocumentExport {
             meta = meta,
             body = if (note.isChecklist) "" else note.body.trim(),
             bodySpans = if (note.isChecklist) "" else note.bodySpans,
-            doodle = if (note.isDoodle) note.doodle else "",
+            doodlePages = doodleCanvases.map { it.strokesJson },
+            doodleNames = doodleCanvases.map { it.fileName },
             checklist = checklist,
             checklistLabel = if (note.isChecklist) com.lucent.app.i18n.S.exportDocChecklist else "",
             attachments = Attachments.parse(note.attachments).map { it.name }
@@ -172,6 +182,13 @@ object DocumentExport {
                 body.append(docxPara(b.title, bold = true, sizeHalfPt = 30, spaceBeforeTwips = 240))
                 if (b.meta.isNotBlank()) body.append(docxPara(b.meta, italic = true, sizeHalfPt = 18))
                 if (b.body.isNotBlank()) body.append(docxRichPara(b.body, b.bodySpans))
+                if (b.doodleNames.isNotEmpty()) {
+                    // Round R1, task 3 — Word cannot hold the strokes, but naming the canvases makes
+                    // the document agree with the archive sitting next to it instead of implying the
+                    // note was empty.
+                    body.append(docxPara(com.lucent.app.i18n.S.exportDocDoodleCanvases(b.doodleNames.size), bold = true, sizeHalfPt = 20))
+                    body.append(docxPara(com.lucent.app.i18n.S.exportDocDoodleLine(b.doodleNames.joinToString(", ")), italic = true, sizeHalfPt = 18))
+                }
                 if (b.checklist.isNotEmpty()) {
                     body.append(docxPara("${b.checklistLabel}:", bold = true, sizeHalfPt = 20))
                     for ((done, text) in b.checklist) {
@@ -311,16 +328,27 @@ object DocumentExport {
     private fun notesXlsx(notes: List<Note>): ByteArray {
         val header = listOf(com.lucent.app.i18n.S.exportColTitle, com.lucent.app.i18n.S.exportColUpdated, com.lucent.app.i18n.S.exportColTags, com.lucent.app.i18n.S.exportColPinned, com.lucent.app.i18n.S.exportColArchived, com.lucent.app.i18n.S.exportColContent, com.lucent.app.i18n.S.exportColAttachments)
         val rows = notes.map { n ->
+            // Round R1, task 3 — a doodle note has no body text, so its row used to be blank in
+            // the spreadsheet. A spreadsheet cannot hold a drawing, but it can say there is one and
+            // name the file the archive carries it in, which is what every other format now does.
+            val canvases = DoodleExport.canvasesOf(n)
             val content = if (n.isChecklist) {
                 Checklist.parse(n.checklist).joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.text}" }
+            } else if (canvases.isNotEmpty()) {
+                listOf(
+                    com.lucent.app.i18n.S.exportDocDoodleCanvases(canvases.size),
+                    com.lucent.app.i18n.S.exportDocDoodleLine(canvases.joinToString(", ") { it.fileName })
+                ).plus(n.body.trim().takeIf { it.isNotBlank() } ?: "").filter { it.isNotBlank() }.joinToString("\n")
             } else n.body.trim()
             val tags = NoteTags.parse(n.tags).joinToString(" ") { "#" + NoteTags.label(it) }
             listOf(
                 n.title.ifBlank { com.lucent.app.i18n.S.untitled },
                 formatTime(n.updatedAt),
                 tags,
-                if (n.pinned) "Yes" else "",
-                if (n.archived) "Yes" else "",
+                // Round R1, task 3 — these two were the last English literals left in any
+                // export writer; a Chinese spreadsheet had a column of "Yes" in it.
+                if (n.pinned) com.lucent.app.i18n.S.exportDocYes else "",
+                if (n.archived) com.lucent.app.i18n.S.exportDocYes else "",
                 content,
                 Attachments.parse(n.attachments).joinToString(", ") { it.name }
             )
@@ -339,7 +367,7 @@ object DocumentExport {
                 t.dueAt?.let { formatTime(it) } ?: "",
                 TaskPriority.fromValue(t.priority).takeIf { it != TaskPriority.NONE }?.label ?: "",
                 RepeatRule.fromKey(t.repeatRule).takeIf { it != RepeatRule.NONE }?.label ?: "",
-                if (t.pinned) "Yes" else "",
+                if (t.pinned) com.lucent.app.i18n.S.exportDocYes else "",
                 t.notes.trim(),
                 subtasks,
                 Attachments.parse(t.attachments).joinToString(", ") { it.name }
@@ -444,8 +472,15 @@ object DocumentExport {
                     }
                 }
                 // Phase 3: doodle notes draw their strokes as real vector lines. See drawDoodle for
-                // the sizing reasoning.
-                if (b.doodle.isNotBlank()) state.drawDoodle(b.doodle)
+                // the sizing reasoning. Round R1, task 3: every canvas, not just the first — and no
+                // longer via a parse of the raw column, which silently produced nothing at all for
+                // any note with more than one canvas.
+                b.doodlePages.forEach { state.drawDoodle(it) }
+                if (b.doodleNames.isNotEmpty()) {
+                    // Named as well as drawn: the reader of a bundled export needs to know which
+                    // file in `attachments/` is which drawing. Same line the desktop twin writes.
+                    state.drawWrapped(com.lucent.app.i18n.S.exportDocDoodleLine(b.doodleNames.joinToString(", ")), metaPaint, 15f)
+                }
                 if (b.checklist.isNotEmpty()) {
                     state.drawWrapped("${b.checklistLabel}:", labelPaint, 15f)
                     for ((done, text) in b.checklist) state.drawWrapped("${if (done) "\u2611" else "\u2610"} $text", bodyPaint, 15f)
@@ -702,7 +737,13 @@ object DocumentExport {
         context: android.content.Context,
         documentName: String,
         documentBytes: ByteArray,
-        attachments: List<Attachment>
+        attachments: List<Attachment>,
+        // Round R1, task 3 — files that are GENERATED rather than read off disk: the doodle-canvas
+        // PDFs. They ride in the same `attachments/` folder and through the same de-duplicator,
+        // because to the person opening the archive there is no difference between a drawing they
+        // made and a file they attached, and inventing a second folder would insist there is.
+        // Defaulted, so the task export and every other existing caller is untouched.
+        extraFiles: List<Pair<String, ByteArray>> = emptyList()
     ): ByteArray {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zos ->
@@ -711,6 +752,12 @@ object DocumentExport {
             zos.closeEntry()
 
             val usedNames = hashSetOf(documentName)
+            for ((name, bytes) in extraFiles) {
+                val entryName = "attachments/" + uniqueEntryName(name.ifBlank { "canvas.pdf" }, usedNames)
+                zos.putNextEntry(ZipEntry(entryName))
+                zos.write(bytes)
+                zos.closeEntry()
+            }
             for (att in attachments) {
                 val bytes = Attachments.readBytes(context, att, maxBytes = 256L * 1024 * 1024) ?: continue
                 val entryName = "attachments/" + uniqueEntryName(att.name.ifBlank { "file" }, usedNames)
@@ -719,6 +766,32 @@ object DocumentExport {
                 zos.closeEntry()
             }
         }
+        return baos.toByteArray()
+    }
+
+    /**
+     * Round R1, task 3 — one doodle canvas, as a PDF of its own.
+     *
+     * This is what "a drawing is an attachment" means in practice: tick a canvas in the export
+     * picker and this is the file that lands in the archive beside the document. PDF rather than
+     * PNG because the strokes are vectors and stay vectors — the drawing prints and zooms at any
+     * size — and because it is the one format every phone, desktop and browser opens unprompted.
+     *
+     * [heading] is drawn above the canvas so a folder of exported drawings is still identifiable
+     * once the file names have been renamed by whatever received them. Pass blank for none.
+     */
+    fun doodlePdf(canvas: DoodleExport.Canvas, heading: String = ""): ByteArray {
+        val doc = PdfDocument()
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 13f; isFakeBoldText = true; isAntiAlias = true }
+        val state = PdfState(doc)
+        state.newPage()
+        if (heading.isNotBlank()) state.drawWrapped(heading, titlePaint, 20f)
+        state.space(4f)
+        state.drawDoodle(canvas.strokesJson)
+        state.finish()
+        val baos = ByteArrayOutputStream()
+        doc.writeTo(baos)
+        doc.close()
         return baos.toByteArray()
     }
 
