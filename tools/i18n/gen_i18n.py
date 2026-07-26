@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Generate app/src/main/java/com/lucent/app/i18n/I18n.kt from catalog.py.
+"""Generate BOTH I18n.kt files from the catalogs (codebase review C-1, step 2).
+
+  app/src/main/java/com/lucent/app/i18n/I18n.kt      <- catalog.py (all shared entries)
+  desktop/src/main/kotlin/com/lucent/app/i18n/I18n.kt <- catalog.py minus ANDROID_ONLY,
+                                                         plus catalog_desktop.py DESKTOP_ONLY
+
+The desktop file used to be a hand-maintained fork ("sync it by hand"), which is exactly the
+drift class the twin guard exists for. Now the ONE file that is supposed to differ does so by
+generation: shared translations are edited once in catalog.py; desktop-only strings live in
+catalog_desktop.py; nobody edits either output.
 
 Catalog entry forms:
   ("key", en, zh, ja, ko)                      -> open val key: String = "en" / override ...
@@ -23,6 +32,13 @@ spec.loader.exec_module(cat)
 
 ENTRIES = cat.ENTRIES
 
+spec_d = importlib.util.spec_from_file_location("catalog_desktop", os.path.join(_HERE, "catalog_desktop.py"))
+cat_d = importlib.util.module_from_spec(spec_d)
+spec_d.loader.exec_module(cat_d)
+
+ANDROID_ONLY = set(cat_d.ANDROID_ONLY)
+DESKTOP_ONLY = cat_d.DESKTOP_ONLY
+
 def esc(s: str) -> str:
     s = s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
     s = s.replace("\n", "\\n")
@@ -36,13 +52,16 @@ def fn_name(key: str) -> str:
     return key.split("(")[0]
 
 seen = set()
-for e in ENTRIES:
+for e in list(ENTRIES) + list(DESKTOP_ONLY):
     if isinstance(e, str):
         continue  # a comment line, not a key
     k = fn_name(e[0]) if is_fn(e[0]) else e[0]
     if k in seen:
         sys.exit(f"DUPLICATE KEY: {k}")
     seen.add(k)
+for k in ANDROID_ONLY:
+    if k not in seen:
+        sys.exit(f"ANDROID_ONLY names a key that is not in catalog.py: {k}")
 
 def base_decl(key, en):
     if is_fn(key):
@@ -177,25 +196,49 @@ object LDates {
 
 '''
 
-out = [header]
-out.append("open class Tr {")
-for e in ENTRIES:
-    if isinstance(e, str):
-        out.append("    " + e if e else "")
-    else:
-        out.append(base_decl(e[0], e[1]))
-out.append("}")
-out.append("")
-out.append("object En : Tr()")
-out.append("")
-out.append(lang_object("Zh", 2))
-out.append("")
-out.append(lang_object("Ja", 3))
-out.append("")
-out.append(lang_object("Ko", 4))
-out.append("")
+def lang_object_for(entries, name, idx):
+    lines = [f"object {name} : Tr() {{"]
+    for e in entries:
+        if isinstance(e, str):
+            continue  # comments are emitted into Tr only
+        d = override_decl(e[0], e[idx])
+        if d:
+            lines.append(d)
+    lines.append("}")
+    return "\n".join(lines)
 
-path = os.path.join(_REPO, "app", "src", "main", "java", "com", "lucent", "app", "i18n", "I18n.kt")
-with open(path, "w", encoding="utf-8") as f:
-    f.write("\n".join(out))
-print(f"Wrote {path}: {len(ENTRIES)} entries")
+def emit(entries, path):
+    out = [header]
+    out.append("open class Tr {")
+    for e in entries:
+        if isinstance(e, str):
+            out.append("    " + e if e else "")
+        else:
+            out.append(base_decl(e[0], e[1]))
+    out.append("}")
+    out.append("")
+    out.append("object En : Tr()")
+    out.append("")
+    out.append(lang_object_for(entries, "Zh", 2))
+    out.append("")
+    out.append(lang_object_for(entries, "Ja", 3))
+    out.append("")
+    out.append(lang_object_for(entries, "Ko", 4))
+    out.append("")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(out))
+    n = sum(1 for e in entries if not isinstance(e, str))
+    print(f"Wrote {path}: {n} entries")
+
+# Android: every shared entry.
+emit(ENTRIES, os.path.join(_REPO, "app", "src", "main", "java", "com", "lucent", "app", "i18n", "I18n.kt"))
+
+# Desktop: shared minus Android-only, plus the desktop-only section.
+desktop_entries = [
+    e for e in ENTRIES
+    if isinstance(e, str) or (fn_name(e[0]) if is_fn(e[0]) else e[0]) not in ANDROID_ONLY
+]
+desktop_entries.append("")
+desktop_entries.append("// ---- Desktop-only entries (catalog_desktop.py) ----")
+desktop_entries.extend(DESKTOP_ONLY)
+emit(desktop_entries, os.path.join(_REPO, "desktop", "src", "main", "kotlin", "com", "lucent", "app", "i18n", "I18n.kt"))

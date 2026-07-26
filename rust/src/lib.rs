@@ -320,3 +320,32 @@ mod tests {
         assert!((0.44..=1.0).contains(&(CORNER_SQUARE)));
     }
 }
+
+// ------------------------------------------------------------------------------------------------
+// CPU capability probe (Windows backlog W-1)
+//
+// The desktop LLM engine DLLs are compiled /arch:AVX2 (see desktop/native/CMakeLists.txt): on a
+// CPU without AVX2 the DLL LOADS fine — no AVX instruction runs at load — and the first inference
+// call then dies with an illegal-instruction fault that takes the whole JVM down. Not an
+// exception; a process death. This export lets Kotlin ask the question BEFORE loading the engine,
+// from the one native library that is safe to call anywhere: lucent_native itself is built for
+// plain x86-64, so running this probe can never be the thing that faults.
+//
+// On non-x86_64 targets (the Android ABIs of this same crate) the question is meaningless — those
+// engine builds are compiled per-ABI correctly — so the probe answers "fine" and gates nothing.
+// ------------------------------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeCpuHasAvx2(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jboolean {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("avx2") { JNI_TRUE } else { JNI_FALSE }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        JNI_TRUE
+    }
+}

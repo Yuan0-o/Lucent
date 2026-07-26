@@ -1,0 +1,82 @@
+# Twin-file manifest (codebase review C-1). Each line names one file that exists at BOTH
+#   app/src/main/java/<line>   and   desktop/src/main/kotlin/<line>
+# and is REQUIRED to be byte-identical. tools/check_twins.py enforces it; both CI workflows run it
+# right after checkout, so a fix landing in one tree but not the other fails the build in seconds.
+#
+# Generated against the full tree at phase 3. Files NOT listed are allowed to differ (platform
+# seams: Db/NativeLoader/LocalLlm/ReminderScheduler/the android.* shims/I18n.kt, which is now
+# produced per-platform by the generator). Adding a line is a promise; removing one is a decision.
+com/lucent/app/AppNavigation.kt
+com/lucent/app/AppScope.kt
+com/lucent/app/data/ApiProfile.kt
+com/lucent/app/data/AppLock.kt
+com/lucent/app/data/AssistantDraftBridge.kt
+com/lucent/app/data/Attachment.kt
+com/lucent/app/data/AttachmentLimits.kt
+com/lucent/app/data/AttachmentMigration.kt
+com/lucent/app/data/AutoBackup.kt
+com/lucent/app/data/BackupCrypto.kt
+com/lucent/app/data/BackupRecovery.kt
+com/lucent/app/data/BlackoutMode.kt
+com/lucent/app/data/ChatSearch.kt
+com/lucent/app/data/Checklist.kt
+com/lucent/app/data/CryptoUtil.kt
+com/lucent/app/data/DataCache.kt
+com/lucent/app/data/DocumentTextPreview.kt
+com/lucent/app/data/DueParsing.kt
+com/lucent/app/data/EncryptionStatus.kt
+com/lucent/app/data/FileCrypto.kt
+com/lucent/app/data/ImportMode.kt
+com/lucent/app/data/MarkdownExport.kt
+com/lucent/app/data/MemoryTier.kt
+com/lucent/app/data/ModelRecents.kt
+com/lucent/app/data/NoteHistory.kt
+com/lucent/app/data/NoteLinks.kt
+com/lucent/app/data/NoteStats.kt
+com/lucent/app/data/NoteTemplates.kt
+com/lucent/app/data/PasswordAttempts.kt
+com/lucent/app/data/Recurrence.kt
+com/lucent/app/data/ReplyFiles.kt
+com/lucent/app/data/RichText.kt
+com/lucent/app/data/SavedSearches.kt
+com/lucent/app/data/SearchQuery.kt
+com/lucent/app/data/SettingsCache.kt
+com/lucent/app/data/TaskHistory.kt
+com/lucent/app/data/TaskInsights.kt
+com/lucent/app/data/TaskPriority.kt
+com/lucent/app/data/TokenEstimator.kt
+com/lucent/app/data/TrashCleanup.kt
+com/lucent/app/i18n/ReplyLanguage.kt
+com/lucent/app/network/ApiModels.kt
+com/lucent/app/network/LlmClient.kt
+com/lucent/app/network/WebSearchClient.kt
+com/lucent/app/tools/AppTools.kt
+com/lucent/app/tools/TaskActions.kt
+com/lucent/app/ui/AndroidRobotIcon.kt
+com/lucent/app/ui/ArchivedNotesScreen.kt
+com/lucent/app/ui/AssistantConfirmDialog.kt
+com/lucent/app/ui/AssistantController.kt
+com/lucent/app/ui/ChecklistEditor.kt
+com/lucent/app/ui/CompletedTasksScreen.kt
+com/lucent/app/ui/DoodleCanvas.kt
+com/lucent/app/ui/DraftsScreen.kt
+com/lucent/app/ui/FluidGlassBackground.kt
+com/lucent/app/ui/Glass.kt
+com/lucent/app/ui/HiddenScreen.kt
+com/lucent/app/ui/HomeSections.kt
+com/lucent/app/ui/LastScreen.kt
+com/lucent/app/ui/LinkStyling.kt
+com/lucent/app/ui/Markdown.kt
+com/lucent/app/ui/NoteColors.kt
+com/lucent/app/ui/NoteHistoryScreen.kt
+com/lucent/app/ui/QuickActionFab.kt
+com/lucent/app/ui/QuickModelSwitcher.kt
+com/lucent/app/ui/ReorderDrag.kt
+com/lucent/app/ui/SearchScreen.kt
+com/lucent/app/ui/SortOptions.kt
+com/lucent/app/ui/TaskHistoryScreen.kt
+com/lucent/app/ui/TaskStyling.kt
+com/lucent/app/ui/ThemeModes.kt
+com/lucent/app/ui/TrashNotesScreen.kt
+com/lucent/app/ui/TrashTasksScreen.kt
+com/lucent/app/ui/UnsavedChangesGuard.kt
