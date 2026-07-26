@@ -2,7 +2,6 @@ package com.lucent.app.data
 
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * Exports every note as one plain Markdown document.
@@ -17,14 +16,39 @@ import java.time.format.DateTimeFormatter
  * So: no app-specific wrapper, no base64, no schema. Headings, tags, checkboxes, and a horizontal
  * rule between notes. Attachments are named but not embedded — a Markdown file cannot carry bytes,
  * and silently dropping them would be dishonest, so each note lists the files it had and the export
- * says plainly where to get them (the JSON backup, which does carry them).
+ * says plainly where to get them.
+ *
+ * ### Round R1, task 3 — this writer now speaks the user's language
+ *
+ * Every label below used to be an English literal. The DOCX, PDF and XLSX writers had already been
+ * moved onto the shared catalog; Markdown — the *default* format, and therefore the one most people
+ * actually receive — had been left behind, so a Chinese user exporting Chinese notes got a file
+ * headed "Lucent notes" whose every row said "Updated", "Pinned" and "Attachments". It reads from
+ * the same catalog as the rest of the app now, so an export matches the language on screen.
+ *
+ * Two things are deliberately NOT localized, and the distinction is worth stating because it is the
+ * one that decides these cases: **Markdown syntax** (`#`, `---`, `- [x]`) is not prose, it is the
+ * file format, and translating it would produce a file no parser can read. And **date/time
+ * formatting** follows the app language through [com.lucent.app.i18n.LDates], not a hardcoded
+ * pattern, so a Japanese export is stamped the way a Japanese reader expects.
+ *
+ * ### Doodles
+ *
+ * A drawing cannot be written into a text file, but pretending it does not exist is how a note made
+ * of drawings came out of here as an empty heading. Each doodle note now states how many canvases
+ * it has and names them, exactly as it does for attachments — and those names are real: tick the
+ * canvas in the export picker and a PDF of that exact name lands beside this file in the archive.
+ * See [DoodleExport].
  */
 object MarkdownExport {
 
-    private val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-
+    // The timestamp pattern is a catalog entry, and the formatter is rebuilt when the language
+    // changes (see LDates), so this is not a per-call cost and not a stale one either.
     private fun formatTime(millis: Long): String =
-        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(stamp)
+        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+            .format(com.lucent.app.i18n.LDates.of("yyyy-MM-dd HH:mm"))
+
+    private val S get() = com.lucent.app.i18n.S
 
     /**
      * Render [notes] as a single Markdown document.
@@ -39,31 +63,30 @@ object MarkdownExport {
             .sortedWith(compareByDescending<Note> { it.pinned }.thenByDescending { it.updatedAt })
 
         val sb = StringBuilder()
-        sb.appendLine("# Lucent notes")
+        sb.appendLine("# ${S.exportDocNotesTitle}")
         sb.appendLine()
-        sb.appendLine("_${live.size} note${if (live.size == 1) "" else "s"}, exported ${formatTime(System.currentTimeMillis())}._")
+        sb.appendLine("_${S.exportDocNoteCount(live.size)}, ${S.exportDocExportedAt(formatTime(System.currentTimeMillis()))}_")
         sb.appendLine()
-        sb.appendLine("Attachments are listed by name but not embedded — Markdown can't carry files.")
-        sb.appendLine("Use the `.json` backup if you need the attachment bytes as well.")
+        sb.appendLine(S.exportDocAttachmentsNote)
         sb.appendLine()
 
         if (live.isEmpty()) {
             sb.appendLine("---")
             sb.appendLine()
-            sb.appendLine("_No notes yet._")
+            sb.appendLine("_${S.exportDocNoNotes}_")
             return sb.toString()
         }
 
         live.forEach { note ->
             sb.appendLine("---")
             sb.appendLine()
-            sb.appendLine("## ${note.title.ifBlank { "Untitled" }}")
+            sb.appendLine("## ${note.title.ifBlank { S.untitled }}")
             sb.appendLine()
 
             val meta = buildList {
-                add("Updated ${formatTime(note.updatedAt)}")
-                if (note.pinned) add("Pinned")
-                if (note.archived) add("Archived")
+                add(S.exportDocUpdated(formatTime(note.updatedAt)))
+                if (note.pinned) add(S.exportDocPinned)
+                if (note.archived) add(S.exportDocArchived)
                 // Task 3.2 — exported in the reader's language, not in the canonical form the
                 // column stores. The canonical value exists so a tag keeps its identity across a
                 // language switch; it was never meant to be the thing a person reads.
@@ -76,7 +99,7 @@ object MarkdownExport {
             if (note.isChecklist) {
                 val items = Checklist.parse(note.checklist)
                 if (items.isEmpty()) {
-                    sb.appendLine("_(empty checklist)_")
+                    sb.appendLine("_${S.exportDocEmptyChecklist}_")
                 } else {
                     sb.appendLine(Checklist.toMarkdown(note.checklist))
                 }
@@ -89,9 +112,19 @@ object MarkdownExport {
                 sb.appendLine()
             }
 
+            // Round R1, task 3 — drawings are named here for the same reason files are: a note whose
+            // content is a drawing must not export as a heading with nothing beneath it.
+            val canvases = DoodleExport.canvasesOf(note)
+            if (canvases.isNotEmpty()) {
+                sb.appendLine("**${S.exportDocDoodleCanvases(canvases.size)}**")
+                sb.appendLine()
+                sb.appendLine(S.exportDocDoodleLine(canvases.joinToString(", ") { it.fileName }))
+                sb.appendLine()
+            }
+
             val attachments = Attachments.parse(note.attachments)
             if (attachments.isNotEmpty()) {
-                sb.appendLine("**Attachments:** ${attachments.joinToString(", ") { it.name }}")
+                sb.appendLine("**${S.exportDocAttachmentsLine(attachments.joinToString(", ") { it.name })}**")
                 sb.appendLine()
             }
         }
@@ -116,18 +149,17 @@ object MarkdownExport {
             )
 
         val sb = StringBuilder()
-        sb.appendLine("# Lucent tasks")
+        sb.appendLine("# ${S.exportDocTasksTitle}")
         sb.appendLine()
-        sb.appendLine("_${live.size} task${if (live.size == 1) "" else "s"}, exported ${formatTime(System.currentTimeMillis())}._")
+        sb.appendLine("_${S.exportDocTaskCount(live.size)}, ${S.exportDocExportedAt(formatTime(System.currentTimeMillis()))}_")
         sb.appendLine()
-        sb.appendLine("Attachments are listed by name but not embedded — Markdown can't carry files.")
-        sb.appendLine("Use the `.json` backup if you need the attachment bytes as well.")
+        sb.appendLine(S.exportDocAttachmentsNote)
         sb.appendLine()
 
         if (live.isEmpty()) {
             sb.appendLine("---")
             sb.appendLine()
-            sb.appendLine("_No tasks yet._")
+            sb.appendLine("_${S.exportDocNoTasks}_")
             return sb.toString()
         }
 
@@ -135,16 +167,16 @@ object MarkdownExport {
             sb.appendLine("---")
             sb.appendLine()
             val box = if (task.isDone) "[x]" else "[ ]"
-            sb.appendLine("## $box ${task.title.ifBlank { "Untitled task" }}")
+            sb.appendLine("## $box ${task.title.ifBlank { S.exportDocUntitledTask }}")
             sb.appendLine()
 
             val meta = buildList {
-                add("Created ${formatTime(task.createdAt)}")
-                task.dueAt?.let { add("Due ${formatTime(it)}") }
-                if (task.pinned) add("Pinned")
-                TaskPriority.fromValue(task.priority).takeIf { it != TaskPriority.NONE }?.let { add("Priority: ${it.label}") }
-                RepeatRule.fromKey(task.repeatRule).takeIf { it != RepeatRule.NONE }?.let { add("Repeats: ${it.label}") }
-                if (task.isDone) add("Done")
+                add(S.exportDocCreated(formatTime(task.createdAt)))
+                task.dueAt?.let { add(S.exportDocDue(formatTime(it))) }
+                if (task.pinned) add(S.exportDocPinned)
+                TaskPriority.fromValue(task.priority).takeIf { it != TaskPriority.NONE }?.let { add(S.exportDocPriority(it.label)) }
+                RepeatRule.fromKey(task.repeatRule).takeIf { it != RepeatRule.NONE }?.let { add(S.exportDocRepeats(it.label)) }
+                add(if (task.isDone) S.exportDocDone else S.exportDocOpen)
             }
             sb.appendLine("_${meta.joinToString(" · ")}_")
             sb.appendLine()
@@ -156,14 +188,14 @@ object MarkdownExport {
 
             val subtasks = Checklist.parse(task.subtasks)
             if (subtasks.isNotEmpty()) {
-                sb.appendLine("**Subtasks:**")
+                sb.appendLine("**${S.exportDocSubtasks}:**")
                 sb.appendLine(Checklist.toMarkdown(task.subtasks))
                 sb.appendLine()
             }
 
             val attachments = Attachments.parse(task.attachments)
             if (attachments.isNotEmpty()) {
-                sb.appendLine("**Attachments:** ${attachments.joinToString(", ") { it.name }}")
+                sb.appendLine("**${S.exportDocAttachmentsLine(attachments.joinToString(", ") { it.name })}**")
                 sb.appendLine()
             }
         }
