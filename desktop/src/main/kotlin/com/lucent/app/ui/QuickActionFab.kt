@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatClear
+import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.TextFormat
@@ -186,7 +187,8 @@ fun QuickActionFab(
     // lights its buttons from these, which is the only way "press bold, then type" is discoverable:
     // without it the button would look identical before and after being pressed.
     activeKinds: Set<RichSpan.Kind> = emptySet(),
-    activeHighlight: Int? = null
+    activeHighlight: Int? = null,
+    activeColor: Int? = null
 ) {
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
@@ -198,10 +200,12 @@ fun QuickActionFab(
     // arithmetic that rules the ring out past about three controls.
     var formatPage by remember { mutableStateOf(false) }
     var highlightOpen by remember { mutableStateOf(false) }
+    var colorOpen by remember { mutableStateOf(false) }
     // Collapsing the ring resets it, so re-opening never lands on a page the user did not choose.
-    if (!expanded && (formatPage || highlightOpen)) {
+    if (!expanded && (formatPage || highlightOpen || colorOpen)) {
         formatPage = false
         highlightOpen = false
+        colorOpen = false
     }
 
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
@@ -219,9 +223,13 @@ fun QuickActionFab(
         // top-right, every cell a full 52dp with room to spare between them. It also solves the
         // *other* half of the report ("two of them, I don't know what they do"): a grid has room for
         // a label under each icon, and the ring never did.
-        if (reveal > 0.01f && (formatPage || highlightOpen)) {
+        if (reveal > 0.01f && (formatPage || highlightOpen || colorOpen)) {
             FormatPanel(
                 highlightOpen = highlightOpen,
+                colorOpen = colorOpen,
+                activeColor = activeColor,
+                onOpenColors = { colorOpen = true },
+                onCloseColors = { colorOpen = false },
                 canUndo = canUndo,
                 canRedo = canRedo,
                 activeKinds = activeKinds,
@@ -239,7 +247,7 @@ fun QuickActionFab(
         Box(modifier = Modifier.size(RING_DIAMETER), contentAlignment = Alignment.BottomEnd) {
             // Page 1 keeps the ring: three satellites at 45° apart are 55dp between centres, which
             // is the one case the arc genuinely fits.
-            if (reveal > 0.01f && !formatPage && !highlightOpen) {
+            if (reveal > 0.01f && !formatPage && !highlightOpen && !colorOpen) {
                 // Laid out on an arc that opens up and to the left — the only quadrant that is
                 // free when the control sits in the bottom-right corner. See [RING_ANGLES_5].
                 RingAction(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, RING_ANGLES_3[0], reveal, canUndo, onUndo)
@@ -281,6 +289,7 @@ fun QuickActionFab(
                             // ends the edit and sometimes closes a submenu, depending on a state the
                             // user cannot see from the button itself.
                             highlightOpen -> highlightOpen = false
+                            colorOpen -> colorOpen = false
                             formatPage -> formatPage = false
                             expanded -> onToggleExpanded()
                             scrollingUp -> onScrollTop()
@@ -342,6 +351,24 @@ private fun RingAction(
 val RichHighlightColors: List<Color> = com.lucent.app.data.RichText.HIGHLIGHT_ARGB.map { Color(it) }
 
 /**
+ * The five text colours, with index 0 resolved to whatever the current theme uses for text.
+ *
+ * Composable rather than a plain `val` precisely because of that first entry: the "default" colour
+ * is not a number, it is the ambient one, and it changes with the palette and the light/dark theme.
+ * Every consumer — the toolbar swatches and the field's own transformation — reads this same list,
+ * so a colour cannot mean one thing in the picker and another on screen.
+ */
+@Composable
+fun richTextColors(): List<Color> {
+    val onGradient = LocalOnGradient.current
+    return remember(onGradient) {
+        com.lucent.app.data.RichText.TEXT_COLOR_ARGB.mapIndexed { index, argb ->
+            if (index == com.lucent.app.data.RichText.TEXT_COLOR_DEFAULT) onGradient else Color(argb)
+        }
+    }
+}
+
+/**
  * Where the satellites sit, measured in SCREEN space: 180° is straight to the left of the centre
  * button, 270° is straight above it, and the values between sweep the up-and-left quadrant.
  *
@@ -382,6 +409,10 @@ private val RING_RADIUS = 72.dp
 @Composable
 private fun FormatPanel(
     highlightOpen: Boolean,
+    colorOpen: Boolean,
+    activeColor: Int?,
+    onOpenColors: () -> Unit,
+    onCloseColors: () -> Unit,
     canUndo: Boolean,
     canRedo: Boolean,
     activeKinds: Set<RichSpan.Kind>,
@@ -400,6 +431,40 @@ private fun FormatPanel(
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.End
     ) {
+        if (colorOpen) {
+            // Task 10 — the five text colours. The first swatch is the theme's own colour, i.e.
+            // "back to normal", which is why it is drawn from LocalOnGradient rather than from a
+            // stored number: on a dark palette the default IS white and on a light one it is black.
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                richTextColors().forEachIndexed { index, swatch ->
+                    PanelCell(
+                        label = com.lucent.app.i18n.S.richTextColor,
+                        enabled = true,
+                        active = activeColor == index,
+                        onClick = { onToggleStyle(RichSpan.Kind.COLOR, index); onCloseColors() }
+                    ) {
+                        Box(
+                            modifier = Modifier.size(22.dp).clip(CircleShape).background(swatch)
+                        )
+                    }
+                }
+                PanelCell(
+                    label = com.lucent.app.i18n.S.actionBack,
+                    enabled = true,
+                    active = false,
+                    onClick = onCloseColors
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            return@Column
+        }
+
         if (highlightOpen) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 RichHighlightColors.forEachIndexed { index, swatch ->
@@ -442,7 +507,10 @@ private fun FormatPanel(
                 activeHighlight != null) { onOpenHighlights() },
             PanelItem(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, canUndo, false) { onUndo() },
             PanelItem(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, canRedo, false) { onRedo() },
-            PanelItem(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, true, false) { onClearStyle() }
+            PanelItem(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, true, false) { onClearStyle() },
+            // The eighth slot the grid always had spare.
+            PanelItem(Icons.Default.FormatColorText, com.lucent.app.i18n.S.richTextColor, true,
+                activeColor != null && activeColor != com.lucent.app.data.RichText.TEXT_COLOR_DEFAULT) { onOpenColors() }
         )
         cells.chunked(4).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -21,8 +21,10 @@ package com.lucent.app.ui
  * Older keep whatever order the caller already sorted them into (the user's chosen sort), so picking
  * "Title A–Z" still orders those sections alphabetically.
  */
+private const val THREE_DAYS_MS = 3L * 24L * 60L * 60L * 1000L
+
 enum class HomeSection {
-    PINNED, RECENT, TODAY, OLDER;
+    PINNED, RECENT, TODAY, THREE_DAYS, OLDER;
 
     // Live i18n lookup (localization task); call sites keep reading `section.label`.
     val label: String
@@ -30,6 +32,7 @@ enum class HomeSection {
             PINNED -> com.lucent.app.i18n.S.sectionPinned
             RECENT -> com.lucent.app.i18n.S.sectionRecent
             TODAY -> com.lucent.app.i18n.S.sectionToday
+            THREE_DAYS -> com.lucent.app.i18n.S.sectionThreeDays
             OLDER -> com.lucent.app.i18n.S.sectionOlder
         }
 }
@@ -38,6 +41,7 @@ data class Sectioned<T>(
     val pinned: List<T>,
     val recent: List<T>,
     val today: List<T>,
+    val threeDays: List<T>,
     val older: List<T>
 ) {
     /** Section/list pairs in display order, skipping any that are empty. */
@@ -45,6 +49,7 @@ data class Sectioned<T>(
         if (pinned.isNotEmpty()) add(HomeSection.PINNED to pinned)
         if (recent.isNotEmpty()) add(HomeSection.RECENT to recent)
         if (today.isNotEmpty()) add(HomeSection.TODAY to today)
+        if (threeDays.isNotEmpty()) add(HomeSection.THREE_DAYS to threeDays)
         if (older.isNotEmpty()) add(HomeSection.OLDER to older)
     }
 }
@@ -67,7 +72,7 @@ fun <T> sectionHomeItems(
      */
     orderWithinSections: Boolean = false
 ): Sectioned<T> {
-    if (items.isEmpty()) return Sectioned(emptyList(), emptyList(), emptyList(), emptyList())
+    if (items.isEmpty()) return Sectioned(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
 
     // Task A13: pinned first, and removed from consideration for every later bucket — the four
     // sections stay disjoint, so a pinned item is shown once, at the top, and never again further
@@ -90,7 +95,12 @@ fun <T> sectionHomeItems(
 
     val remaining = unpinned.filter { id(it) !in recentIds }
     val today = remaining.filter { sameLocalDay(timestamp(it), now) }
-    val older = remaining.filter { !sameLocalDay(timestamp(it), now) }
+    val notToday = remaining.filter { !sameLocalDay(timestamp(it), now) }
+    // Task 9 — a "last three days" bucket between Today and Older. Measured from `now` rather than
+    // by counting calendar days, so an item from late last night lands in it rather than being
+    // rounded away, and it deliberately excludes anything already claimed by Today.
+    val threeDays = notToday.filter { now - timestamp(it) <= THREE_DAYS_MS }
+    val older = notToday.filter { now - timestamp(it) > THREE_DAYS_MS }
 
-    return Sectioned(pinned = pinned, recent = recent, today = today, older = older)
+    return Sectioned(pinned = pinned, recent = recent, today = today, threeDays = threeDays, older = older)
 }

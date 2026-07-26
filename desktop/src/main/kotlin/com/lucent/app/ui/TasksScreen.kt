@@ -235,6 +235,15 @@ fun TasksScreen(active: Boolean = true) {
     // Long-press multi-select for batch delete (see feature: batch operations).
     // ---- Task A7 state ----------------------------------------------------------------------
     // Hoisted so the floating control can drive it; the column below still owns the scrolling.
+    // Task 4 — keep the history mirrors in step with the stored switches. Done from both list
+    // screens because either one may be the tab the app opens on, and NoteHistory.recordIfChanged
+    // has no Context of its own to read the setting with. Idempotent, so doing it twice is free.
+    LaunchedEffect(Unit) {
+        settingsRepo.noteHistoryEnabled.collect { com.lucent.app.data.NoteHistory.enabled = it }
+    }
+    LaunchedEffect(Unit) {
+        settingsRepo.taskHistoryEnabled.collect { com.lucent.app.data.TaskHistory.enabled = it }
+    }
     val composerScroll = rememberScrollState()
     // Which way the finger last moved the page. Derived from the scroll value rather than from the
     // gesture, so it is correct however the page moved — flung, dragged, or brought into view by a
@@ -276,6 +285,12 @@ fun TasksScreen(active: Boolean = true) {
     // hold what has been armed. They are cleared with the composer session, like the spans they feed.
     var pendingKinds by remember(composing) { mutableStateOf(emptySet<com.lucent.app.data.RichSpan.Kind>()) }
     var pendingHighlight by remember(composing) { mutableStateOf<Int?>(null) }
+    // Task 5 — set the moment the toolbar is used with no selection. From then on what was armed is
+    // the whole truth about the next characters, which is what makes "clear formatting" actually
+    // clear: without it the boundary-extension rule re-inherited the style from the character in
+    // front of the caret and the button looked broken. See RichText.applyEdit.
+    var pendingExplicit by remember(composing) { mutableStateOf(false) }
+    var pendingColor by remember(composing) { mutableStateOf<Int?>(null) }
     // The text the span list currently describes. Kept beside the spans so an edit can be DIFFED
     // rather than merely clamped: reconcile() only ever chopped spans back to the new length, which
     // silently mis-styled every edit that inserted or deleted anywhere but the very end.
@@ -283,7 +298,7 @@ fun TasksScreen(active: Boolean = true) {
     LaunchedEffect(newNotes) {
         if (spansText != newNotes) {
             bodySpans = com.lucent.app.data.RichText.applyEdit(
-                bodySpans, spansText, newNotes, pendingKinds, pendingHighlight
+                bodySpans, spansText, newNotes, pendingKinds, pendingHighlight, pendingColor, pendingExplicit
             )
             spansText = newNotes
         }
@@ -1032,6 +1047,7 @@ fun TasksScreen(active: Boolean = true) {
                         spans = if (richTextEnabled) bodySpans else emptyList(),
                         onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
                         highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
                         placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                         expandedTitle = if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask,
                         collapsedMinHeight = 120.dp,
@@ -1194,8 +1210,13 @@ fun TasksScreen(active: Boolean = true) {
                             bodySpans, bodySelStart, bodySelEnd, kind, color
                         )
                     } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
+                        pendingExplicit = true
                         pendingHighlight = if (pendingHighlight == color) null else color
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
+                        pendingExplicit = true
+                        pendingColor = if (pendingColor == color) null else color
                     } else {
+                        pendingExplicit = true
                         // Light and bold are one axis: arming one disarms the other, the same rule
                         // RichText.toggle() enforces on a selection.
                         val opposite = when (kind) {
@@ -1213,8 +1234,10 @@ fun TasksScreen(active: Boolean = true) {
                             com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
                         }
                     } else {
+                        pendingExplicit = true
                         pendingKinds = emptySet()
                         pendingHighlight = null
+                        pendingColor = null
                     }
                 },
                 activeKinds = if (bodySelEnd > bodySelStart)
@@ -1223,6 +1246,9 @@ fun TasksScreen(active: Boolean = true) {
                 activeHighlight = if (bodySelEnd > bodySelStart)
                     com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
                 else pendingHighlight,
+                activeColor = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingColor,
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
                 // Task 1. The bottom offset was a hard-coded 96dp, but the floating nav capsule is
                 // taller than that (its own height plus the gap above it plus the system navigation
@@ -1246,6 +1272,8 @@ fun TasksScreen(active: Boolean = true) {
         }
 
         viewingTask != null -> {
+            // Hoisted so the jump-to-edge buttons below can drive it (task 8).
+            val detailScroll = rememberScrollState()
             // ---- Read-only detail page ----
             val task = viewingTask
             val attachments = remember(task.attachments) { Attachments.parse(task.attachments) }
@@ -1369,7 +1397,7 @@ fun TasksScreen(active: Boolean = true) {
                             .coerceIn(0f, 1f) * 0.35f
                     }
                     .padding(16.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(detailScroll)
                     .padding(bottom = LocalBottomBarInset.current)
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1603,6 +1631,22 @@ fun TasksScreen(active: Boolean = true) {
                     )
                 }
             }
+                // Task 8 — the same jump-to-edge control the home lists carry. A detail page can be
+                // far longer than the editor that produced it (body, checklist, attachments, links,
+                // backlinks, version count), and it was the one long scrolling surface in the app
+                // with no way to get to the other end of it without dragging.
+                //
+                // Placed as the Box's second child, after the scrolling Column, so it floats over the
+                // page instead of scrolling away with it — the same arrangement the home grid uses.
+                ScrollEdgeJumpButtons(
+                    canUp = detailScroll.value > 0,
+                    canDown = detailScroll.value < detailScroll.maxValue,
+                    tint = onGradient,
+                    onUp = { scope.launch { detailScroll.animateScrollTo(0) } },
+                    onDown = { scope.launch { detailScroll.animateScrollTo(detailScroll.maxValue) } },
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                        .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
+                )
             }
         }
 
