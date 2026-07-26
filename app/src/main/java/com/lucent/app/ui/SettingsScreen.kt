@@ -124,6 +124,15 @@ private enum class ExportKind { NOTES, TASKS }
 /** Sentinel distinguishing "wrong password, try again" from "this file is damaged". */
 private const val WRONG_PASSWORD = "__wrong_password__"
 
+/**
+ * The vertical gap between two frosted cards on a settings page (round R2, task 1).
+ *
+ * Named rather than repeated as a literal because the bug it fixes was a *missing* gap:
+ * spacing that lives in one place can be forgotten in one place, and a card boundary with
+ * no space around it does not look like a mistake, it looks like one taller card.
+ */
+private val CARD_GAP = 24.dp
+
 // ModalBottomSheet (the post-restore result sheet) is still experimental in Material 3.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -4366,9 +4375,10 @@ fun SettingsScreen(active: Boolean = true) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Spacer(modifier = Modifier.height(12.dp))
+            // Round R2, task 1: one gap, stated once. This was two consecutive 12dp spacers with
+            // nothing between them — a leftover of something removed — which is why the gap ABOVE
+            // this card was 24dp while the gap below it was zero.
+            Spacer(modifier = Modifier.height(CARD_GAP))
 
             // ================================================================================
             //  Task 4 — version history ("flash records")
@@ -4412,6 +4422,11 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
             }
+
+            // Round R2, task 1: the history card and the hidden-area card below it had NO spacer
+            // between them at all, so the two frosted panels met edge to edge and read as one
+            // card with a rule through it. Same gap as every other pair on this page.
+            Spacer(modifier = Modifier.height(CARD_GAP))
 
             // ================================================================================
             //  Task 10 — "Show hidden area" is its own module, and it is the last thing on

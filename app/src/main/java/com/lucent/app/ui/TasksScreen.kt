@@ -468,8 +468,11 @@ fun TasksScreen(active: Boolean = true) {
         // tasks B1/B4): it is folded in here, so typing the last item and hitting Save directly
         // never silently drops it.
         val pendingSubtask = newSubtaskText.trim()
+        // Round R2, task 2 — a subtask with nothing written on it is not a subtask. Same rule and
+        // same reasoning as the note checklist; see NotesScreen.saveNote.
         val composedSubtasks =
-            if (pendingSubtask.isNotEmpty()) subtasks + Checklist.newItem(pendingSubtask) else subtasks
+            (if (pendingSubtask.isNotEmpty()) subtasks + Checklist.newItem(pendingSubtask) else subtasks)
+                .filter { it.text.isNotBlank() }
         // With the subtasks switch off, the task has no subtasks even if the editor still holds some
         // from before it was toggled off — so an off switch means "no checklist" both for the
         // "nothing to save" check and for what actually gets written.
@@ -1173,8 +1176,8 @@ fun TasksScreen(active: Boolean = true) {
                         placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                         expandedTitle = if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask,
                         // Round R1, task 1: doubled - see ExpandableGlassTextField.
-                        collapsedMinHeight = 240.dp,
-                        collapsedMaxHeight = 640.dp
+                        collapsedMinHeight = 360.dp,
+                        collapsedMaxHeight = 960.dp
                     )
                     // Task A12 anchor: the bottom of the Details box, above priority / due date /
                     // attachments. Scrolling to the true bottom of the form would land on the
