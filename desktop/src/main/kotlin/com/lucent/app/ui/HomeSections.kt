@@ -56,7 +56,16 @@ fun <T> sectionHomeItems(
     id: (T) -> Long,
     timestamp: (T) -> Long,
     activityScore: (T) -> Double,
-    isPinned: (T) -> Boolean = { false }
+    isPinned: (T) -> Boolean = { false },
+    /**
+     * When true, Recent is *displayed* in the caller's order rather than by activity score.
+     *
+     * Which items belong in Recent is still decided by how much they have been used — that is what
+     * makes the section mean anything. But under the Custom sort the caller's order IS the user's
+     * hand-made arrangement, and re-sorting the bucket by activity would throw away every drag they
+     * performed inside it. Membership by activity, sequence by the user.
+     */
+    orderWithinSections: Boolean = false
 ): Sectioned<T> {
     if (items.isEmpty()) return Sectioned(emptyList(), emptyList(), emptyList(), emptyList())
 
@@ -68,12 +77,16 @@ fun <T> sectionHomeItems(
 
     // Pick the most active items for Recent. Ties fall back to the newer timestamp so the choice is
     // stable and sensible rather than arbitrary.
-    val recent = unpinned
+    val recentPicked = unpinned
         .sortedWith(
             compareByDescending<T> { activityScore(it) }.thenByDescending { timestamp(it) }
         )
         .take(maxRecent.coerceAtLeast(0))
-    val recentIds = recent.map(id).toHashSet()
+    val recentIds = recentPicked.map(id).toHashSet()
+    // Chosen by activity, then put back into the caller's sequence when asked. Every other bucket
+    // already preserves it — Recent was the only one that re-sorted, and therefore the only one
+    // where dragging a card had no lasting effect.
+    val recent = if (orderWithinSections) unpinned.filter { id(it) in recentIds } else recentPicked
 
     val remaining = unpinned.filter { id(it) !in recentIds }
     val today = remaining.filter { sameLocalDay(timestamp(it), now) }

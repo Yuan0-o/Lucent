@@ -1,5 +1,9 @@
 package com.lucent.app.ui
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -14,6 +18,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 
 /**
@@ -107,19 +112,7 @@ fun Modifier.reorderableItem(
 ): Modifier = composed {
     val press by rememberUpdatedState(onLongPress)
     val drop by rememberUpdatedState(onDrop)
-    val lifted = state.draggingId == id
     this
-        .zIndex(if (lifted) 1f else 0f)
-        .graphicsLayer {
-            if (state.draggingId == id) {
-                translationY = state.dragOffset.y
-                translationX = state.dragOffset.x
-                scaleX = LIFT_SCALE
-                scaleY = LIFT_SCALE
-                alpha = LIFT_ALPHA
-                shadowElevation = LIFT_ELEVATION
-            }
-        }
         .pointerInput(id, enabled) {
             if (!enabled) return@pointerInput
             var grabbedAt = Offset.Zero
@@ -157,19 +150,7 @@ fun Modifier.reorderableGridItem(
 ): Modifier = composed {
     val press by rememberUpdatedState(onLongPress)
     val drop by rememberUpdatedState(onDrop)
-    val lifted = state.draggingId == id
     this
-        .zIndex(if (lifted) 1f else 0f)
-        .graphicsLayer {
-            if (state.draggingId == id) {
-                translationX = state.dragOffset.x
-                translationY = state.dragOffset.y
-                scaleX = LIFT_SCALE
-                scaleY = LIFT_SCALE
-                alpha = LIFT_ALPHA
-                shadowElevation = LIFT_ELEVATION
-            }
-        }
         .pointerInput(id, enabled) {
             if (!enabled) return@pointerInput
             var grabbedAt = Offset.Zero
@@ -193,9 +174,67 @@ fun Modifier.reorderableGridItem(
         }
 }
 
+/**
+ * The **look** of a drag, kept separate from the gesture that drives it — and applied at the very
+ * top of a card's modifier chain, which is the entire fix for "it leaves an empty frame behind".
+ *
+ * A `graphicsLayer` only transforms what is drawn *inside* it. Sitting where it used to — after
+ * `frostedGlass()` — it moved the card's contents and left the glass panel itself standing in the
+ * old slot, so a drag produced a travelling block of text and an abandoned empty box. Declared
+ * first, it wraps the whole card: the panel, its blur, its border and its contents all leave
+ * together, and nothing is left in the original position.
+ *
+ * `zIndex` here for the same reason: the lifted card has to be drawn above its neighbours or it
+ * slides *under* them and disappears the moment it overlaps one.
+ *
+ * The card the finger is hovering over squeezes — shorter and a touch wider, on an underdamped
+ * spring, so it compresses and rebounds like something soft being leaned on. That is the position
+ * preview: the gap that is about to open is shown by the card that is about to move, rather than by
+ * a separate placeholder that would need its own layout pass.
+ */
+fun Modifier.reorderVisuals(id: Long, state: ReorderDragState): Modifier = composed {
+    val lifted = state.draggingId == id
+    val hovered = state.dragging && !lifted && state.targetId == id
+    // Underdamped on purpose: dampingRatio below 1 overshoots and settles back, which is the
+    // "microbounce" the squeeze needs. A critically damped spring would just deflate.
+    val squeeze by animateFloatAsState(
+        targetValue = if (hovered) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMediumLow),
+        label = "reorderSqueeze"
+    )
+    this
+        .zIndex(if (lifted) 2f else if (squeeze > 0.001f) 1f else 0f)
+        .graphicsLayer {
+            if (state.draggingId == id) {
+                translationX = state.dragOffset.x
+                translationY = state.dragOffset.y
+                scaleX = LIFT_SCALE
+                scaleY = LIFT_SCALE
+                alpha = LIFT_ALPHA
+                shadowElevation = LIFT_ELEVATION
+            } else if (squeeze > 0.001f) {
+                // Volume roughly preserved: what it loses in height it gains in width, which is what
+                // makes it read as compression rather than as simply shrinking.
+                scaleY = 1f - SQUEEZE_AMOUNT * squeeze
+                scaleX = 1f + SQUEEZE_AMOUNT * 0.5f * squeeze
+            }
+        }
+}
+
+/**
+ * How a card that was displaced by a drop travels to its new slot.
+ *
+ * Handed to `Modifier.animateItem` by both home lists. Underdamped, so a card that has to move
+ * overshoots very slightly and settles — the "micro-bounce". Without this the list simply redraws in
+ * the new order and the reordering is over before the eye can follow what moved where.
+ */
+val REORDER_SETTLE: FiniteAnimationSpec<IntOffset> =
+    spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset(1, 1))
+
 private const val LIFT_SCALE = 1.05f
 private const val LIFT_ALPHA = 0.93f
 private const val LIFT_ELEVATION = 16f
+private const val SQUEEZE_AMOUNT = 0.09f
 
 /** This card's current top edge in the list's own viewport coordinates. */
 private fun LazyListState.topOf(id: Long): Float =
