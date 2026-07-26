@@ -44,6 +44,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -57,7 +58,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -1336,7 +1336,7 @@ fun AssistantScreen(active: Boolean = true) {
                                             .padding(horizontal = 10.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = onGradient)
+                                        Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = onGradient)
                                         Text(fileName, color = onGradient, fontSize = 13.sp, modifier = Modifier.weight(1f, fill = false).padding(start = 6.dp))
                                         IconButton(
                                             onClick = {
@@ -1647,7 +1647,7 @@ fun AssistantScreen(active: Boolean = true) {
                 DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
                     DropdownMenuItem(
                         text = { Text(com.lucent.app.i18n.S.attachFromFiles) },
-                        leadingIcon = { Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         onClick = { attachMenuOpen = false; pickAttachment() }
                     )
                     DropdownMenuItem(

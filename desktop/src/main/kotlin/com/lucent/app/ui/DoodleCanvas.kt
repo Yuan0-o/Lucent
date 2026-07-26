@@ -313,7 +313,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDoodleStroke(
         val cur = points[i]
         val midX = (prev.x + cur.x) / 2f * w
         val midY = (prev.y + cur.y) / 2f * h
-        path.quadraticBezierTo(prev.x * w, prev.y * h, midX, midY)
+        path.quadraticTo(prev.x * w, prev.y * h, midX, midY)
     }
     drawPath(
         path = path,
