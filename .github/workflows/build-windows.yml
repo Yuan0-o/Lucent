@@ -434,8 +434,8 @@ jobs:
       # ---- PHASE 4: Authenticode-sign the installer (optional, secrets-gated) ----
       # Runs ONLY when both signing secrets exist; a fork or a build without them still produces a
       # working (unsigned) installer, so signing can never be the reason a build fails to exist.
-      # The certificate is a self-signed code-signing cert the maintainer generates locally (see
-      # docs/CODE_SIGNING.md for the beginner walkthrough): it gives the exe a verifiable,
+      # The certificate is a self-signed code-signing cert the maintainer generated: it gives the
+      # exe a verifiable,
       # tamper-evident publisher identity and stable upgrade continuity. It does NOT by itself
       # remove the SmartScreen "unknown publisher" prompt — only a paid OV/EV certificate from a
       # public CA does that; the doc spells out the difference honestly.
@@ -448,7 +448,7 @@ jobs:
           LUCENT_SIGN_PFX_PASSWORD: ${{ secrets.LUCENT_SIGN_PFX_PASSWORD }}
         run: |
           if (-not $env:LUCENT_SIGN_PFX_BASE64 -or -not $env:LUCENT_SIGN_PFX_PASSWORD) {
-            Write-Host "::notice title=Installer not signed::LUCENT_SIGN_PFX_BASE64 / LUCENT_SIGN_PFX_PASSWORD are not set - uploading an unsigned installer. See docs/CODE_SIGNING.md to set up signing."
+            Write-Host "::notice title=Installer not signed::LUCENT_SIGN_PFX_BASE64 / LUCENT_SIGN_PFX_PASSWORD are not set - uploading an unsigned installer. Add both under Settings -> Secrets and variables -> Actions to enable signing."
             exit 0
           }
           $ErrorActionPreference = 'Stop'
@@ -475,12 +475,25 @@ jobs:
                 & $signtool.FullName sign /f $pfx /p $env:LUCENT_SIGN_PFX_PASSWORD /fd SHA256 $exe.FullName
                 if ($LASTEXITCODE -ne 0) { Write-Error "signtool failed on $($exe.Name)"; exit 1 }
               }
-              # /pa = Default Authenticode policy verification: proves the file is signed and the
-              # signature is internally valid. (Full-chain /v verification would fail for a
-              # self-signed cert on a machine that hasn't imported it - that is expected and fine.)
-              & $signtool.FullName verify /pa $exe.FullName
-              if ($LASTEXITCODE -ne 0) { Write-Error "signature verification failed on $($exe.Name)"; exit 1 }
-              Write-Host "::notice title=Installer signed::$($exe.Name) is Authenticode-signed."
+              # Verification, corrected after the first real signing run (2026-07-26): signtool's
+              # /pa ALSO walks the chain to a trusted root, so it must fail for a self-signed
+              # certificate on a machine that never imported it - the run proved exactly that,
+              # one line after "Successfully signed". What we can honestly assert is: the file
+              # now CARRIES an Authenticode signature and it is OURS. Get-AuthenticodeSignature
+              # gives both: HashMismatch would mean a corrupt signature; UnknownError is the
+              # documented status for "valid signature, untrusted (self-signed) root" and becomes
+              # Valid the day a CA-issued certificate replaces this one - both pass here.
+              $sig = Get-AuthenticodeSignature $exe.FullName
+              if (-not $sig.SignerCertificate) {
+                Write-Error "no Authenticode signature found on $($exe.Name) after signing"; exit 1
+              }
+              if ($sig.SignerCertificate.Subject -notlike "*Z-ERA*") {
+                Write-Error "unexpected signer on $($exe.Name): $($sig.SignerCertificate.Subject)"; exit 1
+              }
+              if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'UnknownError') {
+                Write-Error "signature check failed on $($exe.Name): $($sig.Status) - $($sig.StatusMessage)"; exit 1
+              }
+              Write-Host "::notice title=Installer signed::$($exe.Name) is Authenticode-signed by $($sig.SignerCertificate.Subject) (status: $($sig.Status); UnknownError = self-signed root, expected)."
             }
           } finally {
             Remove-Item $pfx -ErrorAction SilentlyContinue
