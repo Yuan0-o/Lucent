@@ -54,7 +54,10 @@ object AutoBackup {
 
     /** How many generated files to keep. */
     const val DEFAULT_KEEP = 5
-    val KEEP_RANGE = 1..30
+    // Task 3.6 — capped at twenty. Thirty full backups of a database with attachments is a folder
+    // nobody audits and a disk that fills quietly; twenty is already far past the point where an
+    // older copy is useful.
+    val KEEP_RANGE = 1..20
 
     /** File name prefix, so the retention sweep can recognise its own output and nothing else's. */
     const val FILE_PREFIX = "lucent-auto-"
