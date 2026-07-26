@@ -39,6 +39,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6
 
+      # ---- Twin-file drift guard (codebase review C-1); same step as the Android pipeline ----
+      - name: Check twin files have not drifted
+        shell: pwsh
+        run: python tools/check_twins.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -47,11 +52,28 @@ jobs:
 
       - name: Setup Gradle
         # Same approach as build.yml: the wrapper isn't committed, so the action provides Gradle
-        # 8.13 directly. Caching disabled so a GitHub cache-service hiccup can't surface as a warning.
+        # 8.13 directly. DECISION (backlog A-6/W-2 preamble, recorded 2026-07-26): dependency cache
+        # ON — main writes, other refs read; a rare cache-service hiccup degrades to a warning,
+        # never a failure. This removes most of the ~3.5 min per-run Maven re-download.
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.13'
-          cache-disabled: true
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # ---- MSVC developer environment + compiler cache (backlog W-2) ----
+      # The two llama.cpp engine builds are ~11 min of MSVC compile per run of the SAME pinned
+      # b9888 sources. The Visual Studio generator ignores compiler launchers, so the fix is
+      # structural: put cl.exe on PATH (vcvars64), switch the builds below to Ninja, and route
+      # compiles through sccache backed by the Actions cache. ggml's "ccache found" line under the
+      # VS generator was a false comfort — nothing was ever written or restored.
+      - name: Set up MSVC developer environment (for Ninja builds)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up sccache (compiler cache for the engine builds)
+        uses: mozilla-actions/sccache-action@v0.0.9
+
 
       # ---- Resolve every Gradle plugin & dependency up front, with retries ----
       # The 2026-07-22 08:12 run died at the ROOT plugins block: dl.google.com flaked, Gradle
@@ -106,8 +128,14 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          cmake -S desktop/native -B desktop/native/build -A x64 -DCMAKE_BUILD_TYPE=Release
-          cmake --build desktop/native/build --config Release --parallel
+          # Ninja + sccache (backlog W-2): the VS generator ignored compiler launchers, so these
+          # builds compiled cold every run. cl.exe comes from the msvc-dev-cmd step above. The two
+          # engine builds share one cache — they compile mostly identical objects, so the Vulkan
+          # build below warms itself from this one even on a cold day.
+          cmake -S desktop/native -B desktop/native/build -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          cmake --build desktop/native/build --parallel
           New-Item -ItemType Directory -Force -Path desktop/src/main/resources/native | Out-Null
           $dll = Get-ChildItem -Recurse -Path desktop/native/build -Filter lucent_llama.dll | Select-Object -First 1
           if ($dll) {
@@ -127,6 +155,14 @@ jobs:
       # C:\VulkanSDK\<version> and VULKAN_SDK is exported via GITHUB_ENV, because the machine-wide
       # variable the installer sets isn't visible to a job that is already running; on any failure
       # VULKAN_SDK is left unset and the GPU-engine build below skips itself (CPU engine still ships).
+      # W-3: the 244 MB installer is cached across runs, keyed on the pinned version — a warm run
+      # skips LunarG entirely, removing an external download dependency from every build.
+      - name: Cache Vulkan SDK installer
+        uses: actions/cache@v4
+        with:
+          path: .vulkan-installer
+          key: vulkan-installer-1.4.321.1
+
       - name: Install Vulkan SDK
         continue-on-error: true
         shell: pwsh
@@ -161,6 +197,9 @@ jobs:
             # they've used, for the pinned version first (reproducibility), then the current
             # latest, then the version-independent "latest" alias URLs as the final net.
             $installer = "$env:RUNNER_TEMP\VulkanSDK-Installer.exe"
+            # W-3: a previously cached installer skips the download entirely (MZ-checked, same as
+            # a fresh fetch, so a corrupt cache entry can never be executed).
+            $cached = ".vulkan-installer\vulkan_sdk-$env:VULKAN_VERSION.exe"
             $versions = @($env:VULKAN_VERSION)
             $latest = (curl.exe -fsSL "https://vulkan.lunarg.com/sdk/latest/windows.txt")
             if ($LASTEXITCODE -eq 0 -and $latest) {
@@ -175,11 +214,28 @@ jobs:
               Write-Host "could not query latest/windows.txt (curl exit $LASTEXITCODE)."
             }
             $got = $false
-            foreach ($ver in $versions) {
-              foreach ($name in "VulkanSDK-$ver-Installer.exe", "vulkan_sdk.exe", "vulkansdk-windows-X64-$ver.exe", "vulkan-sdk.exe") {
-                if (Get-Installer "https://sdk.lunarg.com/sdk/download/$ver/windows/$name" $installer) { $got = $true; break }
+            if (Test-Path $cached) {
+              $magic = Get-Content -Path $cached -AsByteStream -TotalCount 2 -ErrorAction SilentlyContinue
+              if ($magic.Count -eq 2 -and $magic[0] -eq 0x4D -and $magic[1] -eq 0x5A) {
+                Copy-Item $cached $installer -Force
+                Write-Host "using cached installer ($([math]::Round((Get-Item $installer).Length / 1mb)) MB) - no download needed."
+                $got = $true
               }
-              if ($got) { break }
+            }
+            if (-not $got) {
+              foreach ($ver in $versions) {
+                # W-3: "vulkan_sdk.exe" FIRST — the 2026-07-22 runs proved the classic
+                # VulkanSDK-<ver>-Installer.exe now 404s for every version, so leading with it
+                # guaranteed one red curl line per run. The old candidates stay as the safety net.
+                foreach ($name in "vulkan_sdk.exe", "VulkanSDK-$ver-Installer.exe", "vulkansdk-windows-X64-$ver.exe", "vulkan-sdk.exe") {
+                  if (Get-Installer "https://sdk.lunarg.com/sdk/download/$ver/windows/$name" $installer) { $got = $true; break }
+                }
+                if ($got) { break }
+              }
+              if ($got) {
+                New-Item -ItemType Directory -Force -Path .vulkan-installer | Out-Null
+                Copy-Item $installer $cached -Force
+              }
             }
             if (-not $got) {
               foreach ($name in "vulkan_sdk.exe", "vulkan-sdk.exe") {
@@ -250,8 +306,10 @@ jobs:
             Write-Warning "Vulkan SDK unavailable; skipping the GPU engine build (the CPU engine above still ships)."
             exit 0
           }
-          cmake -S desktop/native -B desktop/native/build-vk -A x64 -DCMAKE_BUILD_TYPE=Release -DLUCENT_ENABLE_VULKAN=ON
-          cmake --build desktop/native/build-vk --config Release --parallel
+          cmake -S desktop/native -B desktop/native/build-vk -G Ninja -DCMAKE_BUILD_TYPE=Release -DLUCENT_ENABLE_VULKAN=ON `
+            -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          cmake --build desktop/native/build-vk --parallel
           $dll = Get-ChildItem -Recurse -Path desktop/native/build-vk -Filter lucent_llama.dll | Select-Object -First 1
           if ($dll) {
             New-Item -ItemType Directory -Force -Path desktop/src/main/resources/native | Out-Null
@@ -263,6 +321,19 @@ jobs:
 
       # ---- lucent_native.dll (Rust accelerator) ----
       # Also optional: nativebridge/LucentNative has a Kotlin/JCE fallback for every function.
+      # W-5: the Windows twin of Android's A-2/A-3 — registry, git checkouts and target/ cached on
+      # the lockfile, so warm runs compile only lucent_native itself (no "Downloading crates").
+      - name: Cache Cargo (registry + rust/target)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-win-msvc-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-win-msvc-
+
       - name: Set up Rust (MSVC target)
         continue-on-error: true
         shell: pwsh
@@ -336,9 +407,15 @@ jobs:
             Write-Host "::warning title=CPU engine missing::lucent_llama.dll was NOT produced - local models will be unavailable in this build."
           }
 
-      - name: Install WiX
-        shell: pwsh
-        run: choco install wixtoolset -y --no-progress
+      # W-4: the choco WiX step is GONE — it spent ~20 s installing a toolset nothing consumes
+      # (packaging uses the WiX 3.11 that Compose's own :desktop:downloadWix task fetches). That
+      # Gradle download (~27 s from GitHub) is cached below instead, keyed on the WiX version, so
+      # warm runs package with zero WiX network fetches.
+      - name: Cache WiX (Compose downloadWix output)
+        uses: actions/cache@v4
+        with:
+          path: desktop/build/wixToolset
+          key: wix311-compose
 
       # ---- Package the installer ----
       # packageDistributionForCurrentOS honours desktop/build.gradle.kts's TargetFormat.Exe and emits
@@ -353,6 +430,61 @@ jobs:
             gradle :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
           }
           exit $LASTEXITCODE
+
+      # ---- PHASE 4: Authenticode-sign the installer (optional, secrets-gated) ----
+      # Runs ONLY when both signing secrets exist; a fork or a build without them still produces a
+      # working (unsigned) installer, so signing can never be the reason a build fails to exist.
+      # The certificate is a self-signed code-signing cert the maintainer generates locally (see
+      # docs/CODE_SIGNING.md for the beginner walkthrough): it gives the exe a verifiable,
+      # tamper-evident publisher identity and stable upgrade continuity. It does NOT by itself
+      # remove the SmartScreen "unknown publisher" prompt — only a paid OV/EV certificate from a
+      # public CA does that; the doc spells out the difference honestly.
+      #   LUCENT_SIGN_PFX_BASE64    the .pfx certificate file, base64-encoded to text
+      #   LUCENT_SIGN_PFX_PASSWORD  the password chosen when exporting the .pfx
+      - name: Sign installer (runs only when signing secrets are configured)
+        shell: pwsh
+        env:
+          LUCENT_SIGN_PFX_BASE64: ${{ secrets.LUCENT_SIGN_PFX_BASE64 }}
+          LUCENT_SIGN_PFX_PASSWORD: ${{ secrets.LUCENT_SIGN_PFX_PASSWORD }}
+        run: |
+          if (-not $env:LUCENT_SIGN_PFX_BASE64 -or -not $env:LUCENT_SIGN_PFX_PASSWORD) {
+            Write-Host "::notice title=Installer not signed::LUCENT_SIGN_PFX_BASE64 / LUCENT_SIGN_PFX_PASSWORD are not set - uploading an unsigned installer. See docs/CODE_SIGNING.md to set up signing."
+            exit 0
+          }
+          $ErrorActionPreference = 'Stop'
+          # signtool ships in the Windows SDK already on the runner image; take the newest x64 copy.
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { Write-Error "signtool.exe not found on this runner image."; exit 1 }
+          Write-Host "using $($signtool.FullName)"
+          # Decode the certificate to the runner's temp dir for this one job; the runner VM is
+          # destroyed afterwards, and we delete the file anyway out of habit, not necessity.
+          $pfx = Join-Path $env:RUNNER_TEMP "lucent-sign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:LUCENT_SIGN_PFX_BASE64))
+          try {
+            $exes = Get-ChildItem "desktop/build/compose/binaries/main/exe/*.exe"
+            if (-not $exes) { Write-Error "no installer .exe found to sign"; exit 1 }
+            foreach ($exe in $exes) {
+              # RFC-3161 timestamp first: with it, the signature stays valid after the cert itself
+              # expires (and lets a future shorter-lived cert make sense). If the timestamp server
+              # is unreachable, sign WITHOUT it rather than fail the build - an untimestamped
+              # signature is still a signature.
+              & $signtool.FullName sign /f $pfx /p $env:LUCENT_SIGN_PFX_PASSWORD /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $exe.FullName
+              if ($LASTEXITCODE -ne 0) {
+                Write-Warning "signing with timestamp failed (server hiccup?); retrying without a timestamp."
+                & $signtool.FullName sign /f $pfx /p $env:LUCENT_SIGN_PFX_PASSWORD /fd SHA256 $exe.FullName
+                if ($LASTEXITCODE -ne 0) { Write-Error "signtool failed on $($exe.Name)"; exit 1 }
+              }
+              # /pa = Default Authenticode policy verification: proves the file is signed and the
+              # signature is internally valid. (Full-chain /v verification would fail for a
+              # self-signed cert on a machine that hasn't imported it - that is expected and fine.)
+              & $signtool.FullName verify /pa $exe.FullName
+              if ($LASTEXITCODE -ne 0) { Write-Error "signature verification failed on $($exe.Name)"; exit 1 }
+              Write-Host "::notice title=Installer signed::$($exe.Name) is Authenticode-signed."
+            }
+          } finally {
+            Remove-Item $pfx -ErrorAction SilentlyContinue
+          }
 
       # ---- Upload ONLY the one installer, as agreed ----
       - name: Upload installer
