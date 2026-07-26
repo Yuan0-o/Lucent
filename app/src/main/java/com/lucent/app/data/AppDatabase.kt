@@ -306,11 +306,18 @@ abstract class AppDatabase : RoomDatabase() {
                 appContext,
                 AppDatabase::class.java,
                 DatabaseEncryption.DB_NAME
-            ).addMigrations(
-                MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                MIGRATION_13_14
             )
+                // EVERY MIGRATION_x_y declared above must appear here, up to and including the one
+                // that lands on the @Database(version = …) below. A migration that is written but
+                // not registered is worse than one that was never written: Room finds no path for
+                // that step, falls through to fallbackToDestructiveMigration, and silently drops
+                // every table the user owns. MIGRATION_14_15 was missing here while the schema was
+                // already stamped 15 — the chain now runs to the declared version.
+                .addMigrations(
+                    MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+                    MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                    MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
+                )
                 // dropAllTables = true preserves the old no-arg behaviour (every table is
                 // recreated) while using the non-deprecated overload.
                 .fallbackToDestructiveMigration(dropAllTables = true)
