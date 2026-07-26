@@ -309,13 +309,9 @@ fun NotesScreen(active: Boolean = true) {
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNoteIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
-    // Task 1 — pin/unpin straight from the card, and it asks first.
-    //
-    // Pinning is not destructive, so the prompt is not there to protect the data; it is there
-    // because the card jumps to the top of the page the instant it happens, and a control that
-    // silently rearranges the list under the thumb that touched it reads as a bug. The task list has
-    // asked this question since it grew the same button, and the two home screens must not disagree.
-    var noteToTogglePin by remember { mutableStateOf<Note?>(null) }
+    // Task 1 — the card's new pin control reuses the screen's EXISTING `noteToTogglePin` state and
+    // its confirmation dialog (both declared above, where the detail page's pin action already used
+    // them). Adding a second copy is what broke the build: two `var noteToTogglePin` in one scope.
     fun exitSelection() { selectionMode = false; selectedNoteIds = emptySet() }
 
     // A note asked for from elsewhere — a unified-search result tapped while on another tab. Consumed
@@ -899,28 +895,6 @@ fun NotesScreen(active: Boolean = true) {
     // Deleting is now a *move to Trash*, not an erasure — the row, its files, and its history stay
     // put for 30 days. The dialog says exactly that, because a confirmation that threatens
     // permanent loss when nothing of the sort is happening trains people to ignore confirmations.
-    noteToTogglePin?.let { note ->
-        val willPin = !note.pinned
-        AlertDialog(
-            onDismissRequest = { noteToTogglePin = null },
-            title = { Text(if (willPin) com.lucent.app.i18n.S.pinNoteTitle else com.lucent.app.i18n.S.unpinNoteTitle) },
-            text = {
-                Text(
-                    if (willPin) com.lucent.app.i18n.S.pinNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitled })
-                    else com.lucent.app.i18n.S.unpinNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitled })
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val target = note
-                    noteToTogglePin = null
-                    AppScope.io.launch { db.noteDao().update(target.copy(pinned = !target.pinned)) }
-                }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
-            },
-            dismissButton = { TextButton(onClick = { noteToTogglePin = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
-        )
-    }
-
     noteToDelete?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToDelete = null },
