@@ -880,19 +880,11 @@ fun LucentExpandedInput(
     val onGradientMuted = LocalOnGradientMuted.current
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onCollapse,
-        // Task 7 — `decorFitsSystemWindows = false` is what stops the panel dropping in from
-        // nowhere when the keyboard appears.
-        //
-        // Left at its default (true) the platform ALSO resizes the dialog's own window for the IME,
-        // on top of the imePadding below — so for one frame the panel is laid out at full height,
-        // then shrunk twice over, and what you see is it falling into place. With decor fitting
-        // switched off the window stays edge to edge and the inset is consumed exactly once, by the
-        // padding. This is the same combination the note and task editors already use, which is why
-        // they never had the flicker.
-        properties = androidx.compose.ui.window.DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+        // Desktop has no IME insets and no window decor fitting to switch off — Compose
+        // Multiplatform's DialogProperties has no `decorFitsSystemWindows` field at all, which is
+        // why the Android copy of this file carries it and this one does not. The flicker it fixes
+        // is an Android-only symptom of the platform resizing the dialog window for the keyboard.
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
