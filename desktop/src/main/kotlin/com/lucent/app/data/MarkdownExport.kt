@@ -96,6 +96,10 @@ object MarkdownExport {
             sb.appendLine("_${meta.joinToString(" · ")}_")
             sb.appendLine()
 
+            // Round R2, task 2 — the items and the body are both content, and a note may now carry
+            // items, a drawing and a body at once. This was an `else if`, so a checklist note's
+            // remarks never reached the file: the export silently disagreed with the page the user
+            // had been reading.
             if (note.isChecklist) {
                 val items = Checklist.parse(note.checklist)
                 if (items.isEmpty()) {
@@ -104,7 +108,8 @@ object MarkdownExport {
                     sb.appendLine(Checklist.toMarkdown(note.checklist))
                 }
                 sb.appendLine()
-            } else if (note.body.isNotBlank()) {
+            }
+            if (note.body.isNotBlank()) {
                 // The body is already Markdown as far as the app is concerned (the detail page
                 // renders it as such), so it goes out verbatim rather than being escaped — escaping
                 // it would turn every heading the user wrote into a literal '#'.

@@ -136,8 +136,11 @@ object DocumentExport {
         return Block(
             title = note.title.ifBlank { com.lucent.app.i18n.S.untitled },
             meta = meta,
-            body = if (note.isChecklist) "" else note.body.trim(),
-            bodySpans = if (note.isChecklist) "" else note.bodySpans,
+            // Round R2, task 2 — the body is exported whatever else the note carries. Blanking it
+            // for checklist notes dropped the remarks field from every DOCX, PDF and XLSX export,
+            // and with the kinds now free to combine there is no longer even a mode to justify it.
+            body = note.body.trim(),
+            bodySpans = note.bodySpans,
             doodlePages = doodleCanvases.map { it.strokesJson },
             doodleNames = doodleCanvases.map { it.fileName },
             checklist = checklist,
