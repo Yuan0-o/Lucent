@@ -25,7 +25,11 @@ package com.lucent.app.data
 object TaskHistory {
 
     /** Same cap and same reasoning as [NoteHistory.MAX_VERSIONS_PER_NOTE]. */
-    const val MAX_VERSIONS_PER_TASK = 20
+    const val MAX_VERSIONS_PER_TASK = 35
+
+    /** Same switch, same reasoning as [NoteHistory.enabled]. */
+    @Volatile
+    var enabled: Boolean = true
 
     /**
      * Snapshot [existing] as it stands right now, but only if the incoming content actually differs.
@@ -50,6 +54,8 @@ object TaskHistory {
         newPriority: Int,
         newDueAt: Long?
     ) {
+        if (!enabled) return
+
         val unchanged = existing.title == newTitle &&
             existing.notes == newNotes &&
             existing.subtasks == newSubtasks &&

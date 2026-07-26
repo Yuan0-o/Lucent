@@ -44,7 +44,9 @@ data class RichSpan(
         LIGHT,
         BOLD,
         ITALIC,
-        HIGHLIGHT;
+        HIGHLIGHT,
+        /** Task 10 — the letters' own colour, as an index into [RichText.TEXT_COLOR_ARGB]. */
+        COLOR;
 
         companion object {
             fun fromName(name: String): Kind? = entries.firstOrNull { it.name == name }
@@ -61,6 +63,27 @@ object RichText {
 
     /** How many highlighter colours the toolbar offers (task 20 specifies five). */
     const val HIGHLIGHT_COLORS = 5
+
+    /** How many text colours the toolbar offers (task 10). */
+    const val TEXT_COLORS = 5
+
+    /**
+     * The five text colours, as ARGB.
+     *
+     * Index 0 is the SENTINEL for "whatever the theme's own text colour is" and is deliberately not
+     * a real colour: a fixed black would be invisible on a dark palette and a fixed white invisible
+     * on a light one, and the option the user asked for is literally "black (or white)" — i.e. the
+     * default, whichever that currently means. Every renderer resolves index 0 to the ambient text
+     * colour and 1..4 to the numbers below.
+     */
+    const val TEXT_COLOR_DEFAULT = 0
+    val TEXT_COLOR_ARGB = intArrayOf(
+        0,                  // sentinel: follow the theme
+        0xFF43A047.toInt(), // green
+        0xFFF9A825.toInt(), // yellow
+        0xFF1E88E5.toInt(), // blue
+        0xFFE53935.toInt()  // red
+    )
 
     /** The empty sidecar value. Stored rather than null so the column can be NOT NULL. */
     const val EMPTY = ""
@@ -177,6 +200,9 @@ object RichText {
                 RichSpan.Kind.BOLD -> remove(spans, start, end, RichSpan.Kind.LIGHT, null)
                 // Only one highlighter colour can win over a character, so clear all five first.
                 RichSpan.Kind.HIGHLIGHT -> remove(spans, start, end, RichSpan.Kind.HIGHLIGHT, null)
+                // One colour per character, exactly like the highlighter: clear all of them first,
+                // or a range could end up carrying two and the renderer would have to invent a rule.
+                RichSpan.Kind.COLOR -> remove(spans, start, end, RichSpan.Kind.COLOR, null)
                 RichSpan.Kind.ITALIC -> spans
             }
             normalise(cleared + RichSpan(start, end, kind, color))
@@ -253,7 +279,13 @@ object RichText {
 
     /** Which attributes cover EVERY character of [start, end) — what the toolbar lights up. */
     fun kindsCovering(spans: List<RichSpan>, start: Int, end: Int): Set<RichSpan.Kind> =
-        RichSpan.Kind.entries.filter { it != RichSpan.Kind.HIGHLIGHT && covers(spans, start, end, it) }.toSet()
+        RichSpan.Kind.entries
+            .filter { it != RichSpan.Kind.HIGHLIGHT && it != RichSpan.Kind.COLOR && covers(spans, start, end, it) }
+            .toSet()
+
+    /** Which text colour covers all of [start, end), or null. */
+    fun colorCovering(spans: List<RichSpan>, start: Int, end: Int): Int? =
+        (0 until TEXT_COLORS).firstOrNull { covers(spans, start, end, RichSpan.Kind.COLOR, it) }
 
     /** Which highlighter colour covers all of [start, end), or null. */
     fun highlightCovering(spans: List<RichSpan>, start: Int, end: Int): Int? =
@@ -284,7 +316,20 @@ object RichText {
         old: String,
         new: String,
         pendingKinds: Set<RichSpan.Kind> = emptySet(),
-        pendingHighlight: Int? = null
+        pendingHighlight: Int? = null,
+        pendingColor: Int? = null,
+        /**
+         * True once the user has pressed something on the toolbar with no selection — at which point
+         * what they armed is the WHOLE truth about the characters they type next.
+         *
+         * This exists because of [afterEdit]'s boundary rule: type at the end of a bold word and the
+         * new letters are bold too, which is what every editor does and what people expect. But it is
+         * also why "clear formatting" appeared to do nothing — the pending set was emptied correctly
+         * and then the very next keystroke inherited the bold from the character in front of it. When
+         * this flag is set the inserted range is stripped to exactly what was armed, so clearing
+         * really does return the text to plain.
+         */
+        pendingExplicit: Boolean = false
     ): List<RichSpan> {
         if (old == new) return reconcile(spans, new.length)
         val limit = minOf(old.length, new.length)
@@ -295,6 +340,20 @@ object RichText {
         val removed = old.length - prefix - suffix
         val inserted = new.length - prefix - suffix
         var out = afterEdit(spans, prefix, removed, inserted)
+        if (inserted > 0 && pendingExplicit) {
+            // Everything the user did not arm comes off the new characters first.
+            RichSpan.Kind.entries.forEach { kind ->
+                if (kind !in pendingKinds && kind != RichSpan.Kind.HIGHLIGHT) {
+                    out = remove(out, prefix, prefix + inserted, kind, null)
+                }
+            }
+            if (pendingHighlight == null) {
+                out = remove(out, prefix, prefix + inserted, RichSpan.Kind.HIGHLIGHT, null)
+            }
+            if (pendingColor == null) {
+                out = remove(out, prefix, prefix + inserted, RichSpan.Kind.COLOR, null)
+            }
+        }
         if (inserted > 0) {
             pendingKinds.forEach { kind ->
                 // Same one-axis rule toggle() enforces: a weight replaces the other weight.
@@ -308,6 +367,10 @@ object RichText {
             if (pendingHighlight != null) {
                 out = remove(out, prefix, prefix + inserted, RichSpan.Kind.HIGHLIGHT, null)
                 out = normalise(out + RichSpan(prefix, prefix + inserted, RichSpan.Kind.HIGHLIGHT, pendingHighlight))
+            }
+            if (pendingColor != null) {
+                out = remove(out, prefix, prefix + inserted, RichSpan.Kind.COLOR, null)
+                out = normalise(out + RichSpan(prefix, prefix + inserted, RichSpan.Kind.COLOR, pendingColor))
             }
         }
         return reconcile(out, new.length)
@@ -345,10 +408,28 @@ object RichText {
         val light: Boolean,
         val italic: Boolean,
         /** Index into [HIGHLIGHT_ARGB], or -1 for no highlight. */
-        val highlight: Int
+        val highlight: Int,
+        /**
+         * Index into [TEXT_COLOR_ARGB]. [TEXT_COLOR_DEFAULT] means "whatever the document's own body
+         * colour is" — the writers leave it alone rather than substituting a black of their own.
+         */
+        val color: Int = TEXT_COLOR_DEFAULT
     ) {
-        val plain: Boolean get() = !bold && !light && !italic && highlight < 0
+        val plain: Boolean
+            get() = !bold && !light && !italic && highlight < 0 && color == TEXT_COLOR_DEFAULT
     }
+
+    /**
+     * The ARGB for a [StyledRun.color], or null when it is the default and the writer should not
+     * set a colour at all.
+     *
+     * Null rather than a black constant on purpose: a PDF or a Word document has its own idea of
+     * body text colour, and forcing #000000 onto every unstyled run would be a change no one asked
+     * for — and would fight any future dark export theme.
+     */
+    fun textColorArgb(index: Int): Int? =
+        if (index <= TEXT_COLOR_DEFAULT || index >= TEXT_COLOR_ARGB.size) null
+        else TEXT_COLOR_ARGB[index]
 
     /**
      * Split [line] into runs of constant style. [lineStart] is the line's offset within the whole
@@ -363,22 +444,33 @@ object RichText {
     fun runsFor(line: String, lineStart: Int, spans: List<RichSpan>): List<StyledRun> {
         if (line.isEmpty()) return listOf(StyledRun("", false, false, false, -1))
         if (spans.isEmpty()) return listOf(StyledRun(line, false, false, false, -1))
+        // (both shortcuts leave `color` at its default, which is what "no styling" means)
 
-        fun styleAt(abs: Int): Triple<Pair<Boolean, Boolean>, Boolean, Int> {
+        data class CharStyle(
+            val bold: Boolean,
+            val light: Boolean,
+            val italic: Boolean,
+            val highlight: Int,
+            val color: Int
+        )
+
+        fun styleAt(abs: Int): CharStyle {
             var bold = false; var light = false; var italic = false; var hl = -1
+            var col = TEXT_COLOR_DEFAULT
             spans.forEach { s ->
                 if (abs >= s.start && abs < s.end) when (s.kind) {
                     RichSpan.Kind.BOLD -> bold = true
                     RichSpan.Kind.LIGHT -> light = true
                     RichSpan.Kind.ITALIC -> italic = true
                     RichSpan.Kind.HIGHLIGHT -> hl = s.color
+                    RichSpan.Kind.COLOR -> col = s.color
                 }
             }
             // LIGHT and BOLD are one axis and toggle() already clears the other, but a hand-edited
             // or restored sidecar can still carry both. Bold wins, so the text is never rendered in
             // a weight nobody asked for.
             if (bold) light = false
-            return Triple(bold to light, italic, hl)
+            return CharStyle(bold, light, italic, hl, col)
         }
 
         val out = ArrayList<StyledRun>()
@@ -387,8 +479,7 @@ object RichText {
             val style = styleAt(lineStart + i)
             var j = i + 1
             while (j < line.length && styleAt(lineStart + j) == style) j++
-            val (weight, italic, hl) = style
-            out.add(StyledRun(line.substring(i, j), weight.first, weight.second, italic, hl))
+            out.add(StyledRun(line.substring(i, j), style.bold, style.light, style.italic, style.highlight, style.color))
             i = j
         }
         return out
