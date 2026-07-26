@@ -59,6 +59,15 @@ import androidx.compose.ui.window.DialogWindowProvider
 /**
  * A multi-line text field with an expand toggle in its bottom-right corner. Collapsed, it behaves
  * like an ordinary [OutlinedTextField] bounded by [collapsedMinHeight]/[collapsedMaxHeight].
+ *
+ * ### Round R1, task 1 - the collapsed box is twice as tall
+ *
+ * The defaults below (and every call site's explicit values) were doubled. The old 120..320dp box
+ * showed about six lines of a note before it started scrolling inside itself, which is the point at
+ * which writing turns into peering through a slot: you lose sight of the sentence you just wrote.
+ * Doubling is deliberately a change to the COLLAPSED size only - the expanded editor already filled
+ * the screen and needed nothing - so the composer keeps its shape and the tags, attachments and
+ * save controls below stay exactly where the user's thumb expects them, just further down.
  * Tapping the expand icon opens a modal editor that fills **almost the entire screen** (edge to
  * edge inside the status/navigation bars) so long notes are comfortable to read and edit.
  *
@@ -81,8 +90,8 @@ fun ExpandableGlassTextField(
     placeholder: String,
     expandedTitle: String,
     modifier: Modifier = Modifier,
-    collapsedMinHeight: Dp = 120.dp,
-    collapsedMaxHeight: Dp = 320.dp,
+    collapsedMinHeight: Dp = 240.dp,
+    collapsedMaxHeight: Dp = 640.dp,
     // ---- INTEGRATION: C-group task 20 ----
     // All optional, all inert by default, so every existing call site is untouched and a user who
     // never turns rich text on gets byte-identical behaviour to before.
