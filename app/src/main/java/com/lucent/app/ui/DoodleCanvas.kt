@@ -470,6 +470,14 @@ fun ExpandableDoodleEditor(
     var expanded by remember { mutableStateOf(false) }
     var activeIndex by remember { mutableStateOf(0) }
     var previewIndex by remember { mutableStateOf<Int?>(null) }
+    // Task 3 — whether the drawing surface is out.
+    //
+    // A live canvas sitting in the middle of a scrolling form is a target for every stray thumb, and
+    // a stray thumb on a canvas leaves a mark. "Save" puts it away: the drawing is already stored
+    // (every stroke commits as it is finished, which is why there is no save-to-disk step here), so
+    // this button only decides whether the surface is exposed. Getting back in is a tap on the bar
+    // and then Edit — two deliberate actions, which is exactly one more than an accident performs.
+    var editingOpen by remember { mutableStateOf(true) }
 
     val pages = remember(value) { DoodlePages.parse(value) }
     val index = activeIndex.coerceIn(0, pages.lastIndex)
@@ -481,6 +489,16 @@ fun ExpandableDoodleEditor(
     fun addPage() {
         writePages(pages + "")
         activeIndex = pages.size
+        editingOpen = true
+    }
+    fun deletePage(at: Int) {
+        if (at !in pages.indices) return
+        val left = pages.toMutableList().also { it.removeAt(at) }
+        // Never leave the note with no canvas at all: a doodle note with zero pages has nothing to
+        // draw on and no way to get one back. Deleting the last one empties it instead.
+        writePages(if (left.isEmpty()) listOf("") else left)
+        activeIndex = activeIndex.coerceAtMost((if (left.isEmpty()) 1 else left.size) - 1)
+        previewIndex = null
     }
 
     // The board takes its Modifier from the call site rather than building one: the full-screen copy
@@ -498,33 +516,51 @@ fun ExpandableDoodleEditor(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        board(false, modifier)
+        if (editingOpen) {
+            board(false, modifier)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                GlassButton(
+                    text = com.lucent.app.i18n.S.doodleSaveCanvas,
+                    compact = true,
+                    onClick = { editingOpen = false }
+                )
+            }
+        }
 
         // ---- The canvas bars ----
-        if (pages.size > 1) {
-            Spacer(modifier = Modifier.height(10.dp))
-            pages.forEachIndexed { i, page ->
-                val current = i == index
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(onGradient.copy(alpha = if (current) 0.16f else 0.07f))
-                        .clickable { previewIndex = i }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        com.lucent.app.i18n.S.doodlePageName(i + 1),
-                        color = onGradient,
-                        fontSize = 13.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        if (Doodle.isEmpty(page)) com.lucent.app.i18n.S.doodleEmpty else "",
-                        color = onGradientMuted,
-                        fontSize = 11.sp
+        //
+        // Always listed, not only once there are two: after Save the bar is the ONLY handle on the
+        // drawing, so hiding it for a single-page note would leave the canvas unreachable.
+        Spacer(modifier = Modifier.height(10.dp))
+        pages.forEachIndexed { i, page ->
+            val current = i == index && editingOpen
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(onGradient.copy(alpha = if (current) 0.16f else 0.07f))
+                    .clickable { previewIndex = i }
+                    .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    com.lucent.app.i18n.S.doodlePageName(i + 1),
+                    color = onGradient,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (Doodle.isEmpty(page)) {
+                    Text(com.lucent.app.i18n.S.doodleEmpty, color = onGradientMuted, fontSize = 11.sp)
+                }
+                // Task 2 — "+" had no counterpart, so a canvas added by mistake was permanent.
+                IconButton(onClick = { deletePage(i) }, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Default.DeleteOutline,
+                        contentDescription = com.lucent.app.i18n.S.doodleDeletePage,
+                        tint = onGradientMuted,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -562,7 +598,7 @@ fun ExpandableDoodleEditor(
                             fontSize = 18.sp,
                             modifier = Modifier.weight(1f)
                         )
-                        IconButton(onClick = { previewIndex = null; activeIndex = i }) {
+                        IconButton(onClick = { previewIndex = null; activeIndex = i; editingOpen = true }) {
                             Icon(
                                 Icons.Default.Edit,
                                 contentDescription = com.lucent.app.i18n.S.actionEdit,

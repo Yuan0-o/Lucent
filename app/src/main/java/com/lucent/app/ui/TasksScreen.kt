@@ -750,18 +750,21 @@ fun TasksScreen(active: Boolean = true) {
         m
     }
 
-    fun dropSelection(targetId: Long?) {
+    fun dropSelection(beforeId: Long?, afterId: Long?) {
         // Selection order, not list order: `Set.plus` returns a LinkedHashSet, so this is the
         // sequence the user ticked them in — the only arrival order they could have predicted.
         val moving = selectedTaskIds.toList().mapNotNull { id -> sortedActive.firstOrNull { it.id == id } }
-        // One section at a time. A drop onto a card in a different bucket is refused rather than
-        // silently relocating the card, because the buckets are computed from pinned/recency and a
-        // move between them would be undone by the next recomposition anyway.
-        if (sections != null && targetId != null) {
-            val to = sectionOfId[targetId]
-            if (moving.any { sectionOfId[it.id] != to }) return
-        }
-        val reordered = reorderedBy(sortedActive, moving, targetId) { it.id }
+        if (moving.isEmpty()) return
+        // One section at a time — see the notes screen twin for the full reasoning. The gap is named
+        // by the cards on either side of it, so the ends of the list need no special case: the top
+        // gap simply has no card above it and the bottom gap none below.
+        val home = sectionOfId[moving.first().id]
+        val sameSection = { id: Long? -> sections == null || id == null || sectionOfId[id] == home }
+        val usableAfter = if (sameSection(afterId)) afterId else null
+        val usableBefore = if (sameSection(beforeId)) beforeId else null
+        if (usableAfter == null && usableBefore == null) return
+        if (moving.any { sectionOfId[it.id] != home }) return
+        val reordered = reorderedAround(sortedActive, moving, usableBefore, usableAfter) { it.id }
         if (reordered === sortedActive) return
         // Renumber the whole visible sequence rather than patching two rows: a position only means
         // anything relative to its neighbours, so a move is a renumbering by definition. Rows whose
@@ -1867,7 +1870,7 @@ fun TasksScreen(active: Boolean = true) {
                                         selectionMode = true
                                         if (task.id !in selectedTaskIds) selectedTaskIds = selectedTaskIds + task.id
                                     },
-                                    onDrop = { targetId -> dropSelection(targetId) }
+                                    onDrop = { beforeId, afterId -> dropSelection(beforeId, afterId) }
                                 ),
                                 onToggleSelect = {
                                     selectedTaskIds = if (task.id in selectedTaskIds) selectedTaskIds - task.id else selectedTaskIds + task.id

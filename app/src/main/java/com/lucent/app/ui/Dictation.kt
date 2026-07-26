@@ -57,6 +57,27 @@ fun DictationButton(onText: (String) -> Unit, modifier: Modifier = Modifier) {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, lucentLocale().toLanguageTag())
+                // Task 1 — dictate in more than one language without changing a setting first.
+                //
+                // EXTRA_LANGUAGE alone pins the recogniser to exactly one language, which is why a
+                // sentence that mixed Chinese and English came back as nonsense in whichever of the
+                // two was configured. EXTRA_SUPPORTED_LANGUAGES hands the engine the whole set it may
+                // choose from; engines that support multilingual recognition (Google's does) then
+                // switch between them mid-utterance, and engines that don't simply ignore the extra
+                // and fall back to EXTRA_LANGUAGE above — so this is safe everywhere.
+                //
+                // The set is the app's four languages plus whatever the device itself is set to,
+                // because someone running Lucent in English on a Japanese phone will dictate in both.
+                putStringArrayListExtra(
+                    RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES,
+                    ArrayList(
+                        (listOf(lucentLocale().toLanguageTag()) +
+                            listOf("en-US", "zh-CN", "ja-JP", "ko-KR") +
+                            listOf(java.util.Locale.getDefault().toLanguageTag())).distinct()
+                    )
+                )
+                // Preferred when the engine has to pick one: the language the interface is in.
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lucentLocale().toLanguageTag())
                 putExtra(RecognizerIntent.EXTRA_PROMPT, S.dictateStart)
             }
             try {
