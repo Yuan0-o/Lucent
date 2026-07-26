@@ -8,11 +8,13 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
@@ -260,6 +262,40 @@ fun Modifier.reorderVisuals(id: Long, state: ReorderDragState): Modifier = compo
  */
 val REORDER_SETTLE: FiniteAnimationSpec<IntOffset> =
     spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset(1, 1))
+
+
+/**
+ * The placement spec the home lists hand to `Modifier.animateItem`, **withheld for the first
+ * frames of a screen's life** (round R1, task 2).
+ *
+ * ### The bug this closes, and why seeding the sort was not quite enough on its own
+ *
+ * `animateItem` animates any item whose slot changes between two compositions. It cannot know
+ * *why* the slot changed, so a list that is laid out once from a placeholder value and then again
+ * from the real one is indistinguishable, to it, from a user reordering the list — and it animates
+ * accordingly. That is exactly what a launch looked like: the sort key arrived late, the list
+ * re-sorted, and the app replayed the user's own drag-and-drop back at them, one card at a time,
+ * on the first interactive frame.
+ *
+ * [SettingsCache] fixes the cause by making the first frame already correct. This closes the class:
+ * *any* late-arriving input — the sort, the note list itself, a usage-score map that decides the
+ * Recent section — lands during the unarmed window and simply appears in place. After that the
+ * spec is live and a real drop still settles with the micro-bounce it always had.
+ *
+ * Two frames rather than one because the first composition and the first *layout* are not the same
+ * moment: measuring happens after composition, so arming on frame one can still catch the pass in
+ * which the list learns its real contents.
+ */
+@Composable
+fun rememberReorderPlacementSpec(): FiniteAnimationSpec<IntOffset>? {
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        withFrameNanos { }
+        armed = true
+    }
+    return if (armed) REORDER_SETTLE else null
+}
 
 private const val LIFT_SCALE = 1.05f
 private const val LIFT_ALPHA = 0.93f
