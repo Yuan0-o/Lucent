@@ -10,6 +10,11 @@ import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -28,6 +33,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -50,7 +56,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
@@ -114,6 +125,7 @@ import com.lucent.app.data.RepeatRule
 import com.lucent.app.data.SearchQuery
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.Task
+import com.lucent.app.data.TaskHistory
 import com.lucent.app.data.TaskPriority
 import com.lucent.app.data.TrashCleanup
 import com.lucent.app.data.filterBySearch
@@ -161,7 +173,17 @@ fun TasksScreen(active: Boolean = true) {
     var composing by remember { mutableStateOf(false) }
     var showingHistory by remember { mutableStateOf(false) }
     var showTrash by remember { mutableStateOf(false) }
+    // Task A10 — the draft area, reached from the same overflow menu as the trash.
+    var showDrafts by remember { mutableStateOf(false) }
+    // Task A21 — the hidden area. Only offered while HiddenArea.visible, which the Privacy switch
+    // sets and which resets itself on every launch.
+    var showHidden by remember { mutableStateOf(false) }
+    // Task A10 — how many drafts are waiting, for the once-per-launch restore prompt below.
+    val draftCount by db.taskDao().getDrafts().collectAsState(initial = emptyList())
+    DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
     var showOverflowMenu by remember { mutableStateOf(false) }
+    // Task A19: which task's revision history is open, if any.
+    var historyForTaskId by remember { mutableStateOf<Long?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     // Whether the header's secondary-action cluster (date filter, sort, overflow) is expanded.
     // Collapsed by default; survives config changes (task 16).
@@ -217,6 +239,41 @@ fun TasksScreen(active: Boolean = true) {
     val listState = rememberLazyListState()
 
     // Long-press multi-select for batch delete (see feature: batch operations).
+    // ---- Task A7 state ----------------------------------------------------------------------
+    // Hoisted so the floating control can drive it; the column below still owns the scrolling.
+    val composerScroll = rememberScrollState()
+    // Which way the finger last moved the page. Derived from the scroll value rather than from the
+    // gesture, so it is correct however the page moved — flung, dragged, or brought into view by a
+    // focused text field.
+    var lastScrollValue by remember { mutableStateOf(0) }
+    val composerScrollingUp = composerScroll.value < lastScrollValue
+    val composerScrollingDown = composerScroll.value > lastScrollValue
+    LaunchedEffect(composerScroll.value) {
+        kotlinx.coroutines.delay(700)
+        lastScrollValue = composerScroll.value
+    }
+    var quickActionsOpen by remember { mutableStateOf(false) }
+    // One undo stack per composer session, following the body/details field. Seeded from whatever
+    // the field holds when the editor opens, so the first undo returns to the text as it was found
+    // rather than to an empty string.
+    val bodyUndo = remember(composing) { TextUndoStack(newNotes) }
+    // ---- INTEGRATION: C-group task 20, rich text ----
+    // The spans for the field above, plus the current selection. Both are plain composer state, in
+    // the same place and with the same lifetime as the text they describe — a span list that
+    // outlived its body would style whatever text happened to be there next.
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
+    var bodySpans by remember(composing) { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
+    var bodySelStart by remember(composing) { mutableStateOf(0) }
+    var bodySelEnd by remember(composing) { mutableStateOf(0) }
+    // Spans follow the text. Any writer that does NOT go through the field — undo, the assistant, a
+    // version restore — lands here as a length change, and reconcile() drops whatever no longer
+    // sits on real characters. See data/RichText.kt.
+    LaunchedEffect(newNotes) {
+        bodySpans = com.lucent.app.data.RichText.reconcile(bodySpans, newNotes.length)
+    }
+    LaunchedEffect(newNotes) { bodyUndo.record(newNotes) }
+    // Task A16 — reordering is only meaningful under the Custom sort; see ReorderDrag.kt.
+    val reorderState = rememberReorderDragState()
     var selectionMode by remember { mutableStateOf(false) }
     var selectedTaskIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -260,6 +317,7 @@ fun TasksScreen(active: Boolean = true) {
         editingTask = null
         newTitle = TextFieldValue("")
         newNotes = ""
+        bodySpans = emptyList()
         pendingAttachments = emptyList()
         dueAt = null
         priority = TaskPriority.NONE
@@ -315,6 +373,8 @@ fun TasksScreen(active: Boolean = true) {
         editingTask = task
         newTitle = TextFieldValue(task.title, selection = TextRange(task.title.length))
         newNotes = task.notes
+        // INTEGRATION (C task 20): load the sidecar, clamped to the text it describes.
+        bodySpans = com.lucent.app.data.RichText.load(task.notesSpans, task.notes)
         pendingAttachments = Attachments.parse(task.attachments)
         dueAt = task.dueAt
         priority = TaskPriority.fromValue(task.priority)
@@ -330,7 +390,18 @@ fun TasksScreen(active: Boolean = true) {
         composing = true
     }
 
-    fun saveTask() {
+    // Task A10: which drafts row this composer session owns, if it has parked anything yet.
+    // Keyed on the session (composing/editingId) so a fresh composer never adopts the previous
+    // one's row and starts silently overwriting a draft the user meant to keep.
+    var draftRowId by remember(composing, editingTask) { mutableStateOf<Long?>(null) }
+    fun saveTask(
+        // Task A10. `closeAfter` defaults to the opposite of `asDraft` because the two callers want
+        // opposite things: the explicit "Save to drafts" button is the user finishing with this
+        // screen, while the automatic park on backgrounding must leave the editor exactly as it
+        // was — still open, still dirty, still able to save properly if they come straight back.
+        asDraft: Boolean = false,
+        closeAfter: Boolean = !asDraft
+    ) {
         // A subtask typed into the add field but never committed with "+" still counts (settings
         // tasks B1/B4): it is folded in here, so typing the last item and hitting Save directly
         // never silently drops it.
@@ -359,6 +430,52 @@ fun TasksScreen(active: Boolean = true) {
         val reminderSnapshot = reminderEnabled
         val original = editingTask
         val createdAt = composerMinMillis
+        // ---- Task A10: park this edit in the draft area instead of committing it ----------
+        //
+        // Deliberately an early return over the *already snapshotted* fields rather than a branch
+        // threaded through the write below. Two reasons, and the second is the important one:
+        //
+        //  1. It reuses the snapshot block above verbatim, so the draft can never disagree with
+        //     what a real save would have written — the drift NoteHistory's comments warn about.
+        //  2. It cannot touch the live row. Everything after this point is the committing path;
+        //     by returning here, "save a draft" is structurally incapable of overwriting the note
+        //     or task being edited, which is the one failure that would be worse than losing the
+        //     edit in the first place.
+        //
+        // [draftRowId] keys the session, not the item: the first draft inserts, every later one
+        // updates the same row. Without it, a phone that backgrounds the app five times would
+        // leave five copies of the same half-finished note in the drafts list.
+        if (asDraft) {
+            AppScope.io.launch {
+                val row = Task(
+                    title = title,
+                    createdAt = createdAt,
+                    notes = notesText,
+                    notesSpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)),
+                    attachments = attachmentsJson,
+                    dueAt = due,
+                    priority = prioritySnapshot,
+                    pinned = pinnedSnapshot,
+                    subtasks = subtasksJson,
+                    repeatRule = repeatSnapshot,
+                    reminderEnabled = reminderSnapshot,
+                    isDraft = true,
+                    draftSavedAt = System.currentTimeMillis()
+                )
+                val existing = draftRowId
+                if (existing == null) draftRowId = db.taskDao().insert(row)
+                else db.taskDao().update(row.copy(id = existing))
+                withContext(Dispatchers.Main) {
+                    LucentToast.show(appContext, com.lucent.app.i18n.S.draftSavedToast)
+                }
+            }
+            if (closeAfter) {
+                composing = false
+                resetComposer()
+            }
+            return
+        }
+
         val appContext = context.applicationContext
 
         // App-lifetime scope so saving-then-navigating (e.g. the unsaved-changes dialog) can't
@@ -368,6 +485,7 @@ fun TasksScreen(active: Boolean = true) {
                 val updated = original.copy(
                     title = title,
                     notes = notesText,
+                    notesSpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)),
                     attachments = attachmentsJson,
                     dueAt = due,
                     priority = prioritySnapshot,
@@ -375,6 +493,18 @@ fun TasksScreen(active: Boolean = true) {
                     subtasks = subtasksJson,
                     repeatRule = repeatSnapshot,
                     reminderEnabled = reminderSnapshot
+                )
+                // Task A19: snapshot the old content *before* it is overwritten, exactly as the
+                // note editor does. recordIfChanged is a no-op when nothing textual actually
+                // changed, so re-saving without editing cannot evict a real revision.
+                TaskHistory.recordIfChanged(
+                    db = db,
+                    existing = original,
+                    newTitle = title,
+                    newNotes = notesText,
+                    newSubtasks = subtasksJson,
+                    newPriority = prioritySnapshot,
+                    newDueAt = due
                 )
                 db.taskDao().update(updated)
                 updated
@@ -385,6 +515,7 @@ fun TasksScreen(active: Boolean = true) {
                     title = title,
                     createdAt = createdAt,
                     notes = notesText,
+                    notesSpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)),
                     attachments = attachmentsJson,
                     dueAt = due,
                     priority = prioritySnapshot,
@@ -483,7 +614,13 @@ fun TasksScreen(active: Boolean = true) {
 
     SideEffect {
         if (taskDirty) {
-            UnsavedChangesGuard.register("tasks", ::saveTask, ::discardComposer)
+            UnsavedChangesGuard.register(
+                owner = "tasks",
+                onSave = { saveTask() },
+                onDiscard = { discardComposer() },
+                // Task A10 — parks a copy without closing or committing anything.
+                onAutoDraft = { saveTask(asDraft = true, closeAfter = false) }
+            )
         } else {
             UnsavedChangesGuard.clear("tasks")
         }
@@ -529,6 +666,29 @@ fun TasksScreen(active: Boolean = true) {
     }
     val sortedActive = remember(filteredActive, sortOption, query) {
         filteredActive.sortedForDisplay(sortOption, query)
+    }
+
+    // ---- Task A16: what a drop actually does -------------------------------------------------
+    //
+    // Reordering is offered only under the Custom sort. Under any other one the list's order is a
+    // computed result, and honouring a drag would mean writing a position the next recomposition
+    // is obliged to throw away — a control that appears to work and silently doesn't.
+    val reorderEnabled = sortOption == TaskSort.CUSTOM
+    fun dropSelection(targetId: Long?) {
+        // Selection order, not list order: `Set.plus` returns a LinkedHashSet, so this is the
+        // sequence the user ticked them in — the only arrival order they could have predicted.
+        val moving = selectedTaskIds.toList().mapNotNull { id -> sortedActive.firstOrNull { it.id == id } }
+        val reordered = reorderedBy(sortedActive, moving, targetId) { it.id }
+        if (reordered === sortedActive) return
+        // Renumber the whole visible sequence rather than patching two rows: a position only means
+        // anything relative to its neighbours, so a move is a renumbering by definition. Rows whose
+        // number is already right are skipped, so a drag near the top doesn't rewrite the tail.
+        AppScope.io.launch {
+            reordered.forEachIndexed { index, t ->
+                if (t.manualOrder != index) db.taskDao().update(t.copy(manualOrder = index))
+            }
+        }
+        exitSelection()
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
@@ -694,15 +854,38 @@ fun TasksScreen(active: Boolean = true) {
             // later add/remove edits never re-trigger the jump.
             val jumpToLastSubtask = remember { editingTask != null && subtasks.isNotEmpty() }
             val subtaskEndRequester = remember { BringIntoViewRequester() }
-            if (jumpToLastSubtask) {
+            /**
+             * Task A12, the task side. A task with no subtasks got no jump at all, so editing one
+             * with a long Details body opened at the top exactly as notes did. Same one-shot
+             * `remember { }` capture, same threshold, and deliberately *second* in priority: when
+             * there are subtasks the add-subtask row is the better landing spot and keeps the
+             * behaviour B7 introduced.
+             */
+            val jumpToDetailsEnd = remember {
+                editingTask != null && subtasks.isEmpty() && newNotes.length > DETAILS_JUMP_THRESHOLD
+            }
+            val detailsEndRequester = remember { BringIntoViewRequester() }
+            if (jumpToLastSubtask || jumpToDetailsEnd) {
                 LaunchedEffect(Unit) {
                     // Two frames so the scrollable column has laid out before it is asked to move.
                     withFrameNanos { }
                     withFrameNanos { }
-                    subtaskEndRequester.bringIntoView()
+                    if (jumpToLastSubtask) subtaskEndRequester.bringIntoView()
+                    else detailsEndRequester.bringIntoView()
                 }
             }
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()).padding(bottom = LocalBottomBarInset.current)) {
+            // Task A15. Without this the composer's scroll area keeps the full screen height while the
+            // keyboard covers its lower half, so the field being typed into can sit *under* the
+            // keyboard — and a subtask that grows a line as you type walks further under it with
+            // every wrap, forcing a manual scroll mid-sentence. imePadding() shrinks the scrollable
+            // area to the space that is actually visible, which is also what lets Compose's built-in
+            // "keep the focused field in view" do its job: it can only scroll to something that has
+            // somewhere to be scrolled to.
+            //
+            // On desktop WindowInsets.ime is empty, so this is a no-op there and the two files stay
+            // in step.
+            Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(composerScroll).imePadding().padding(bottom = LocalBottomBarInset.current)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
@@ -749,7 +932,14 @@ fun TasksScreen(active: Boolean = true) {
                             // Items are editable in place after being added (settings task B2).
                             onEditText = { item, text -> subtasks = subtasks.map { if (it.id == item.id) it.copy(text = text) else it } },
                             addLabel = com.lucent.app.i18n.S.addSubtask,
-                            addRowModifier = Modifier.bringIntoViewRequester(subtaskEndRequester)
+                            addRowModifier = Modifier.bringIntoViewRequester(subtaskEndRequester),
+                            // Task A18: a blank step opens directly under the one you were on,
+                            // instead of every new step landing at the very bottom.
+                            onInsertAfter = { item ->
+                                val at = subtasks.indexOfFirst { it.id == item.id }
+                                subtasks = if (at < 0) subtasks + Checklist.newItem("")
+                                else subtasks.toMutableList().also { it.add(at + 1, Checklist.newItem("")) }
+                            }
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -760,12 +950,24 @@ fun TasksScreen(active: Boolean = true) {
                     ExpandableGlassTextField(
                         value = newNotes,
                         onValueChange = { newNotes = it },
+                        // PHASE 4: dictation — recognized speech appends to whatever is already
+                        // written, joined with a single space, never replacing it.
+                        extraAction = { DictationButton(onText = { spoken ->
+                            newNotes = if (newNotes.isBlank()) spoken
+                            else newNotes + (if (newNotes.endsWith(" ") || newNotes.endsWith("\n")) "" else " ") + spoken
+                        }) },
+                        spans = if (richTextEnabled) bodySpans else emptyList(),
+                        onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
+                        highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
                         placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                         expandedTitle = if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask,
                         collapsedMinHeight = 120.dp,
                         collapsedMaxHeight = 320.dp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    // Task A12 anchor: the bottom of the Details box, above priority / due date /
+                    // attachments. Scrolling to the true bottom of the form would land on the
+                    // attachment rows rather than the text being edited.
+                    Spacer(modifier = Modifier.height(12.dp).bringIntoViewRequester(detailsEndRequester))
 
                     // Priority sits directly under the details box: how important a task is gets
                     // decided while it is still being described, so the chips moved up here from
@@ -830,24 +1032,97 @@ fun TasksScreen(active: Boolean = true) {
                         onPick = { filePicker.launch("*/*") },
                         onRemove = { att ->
                             pendingAttachments = Attachments.removeByName(context, pendingAttachments, att.name)
+                        },
+                        // Task A4. Only the display name changes — the row still points at the same
+                        // bytes, so nothing is re-encrypted, re-imported, or copied. Uniqueness is
+                        // enforced in the dialog because Attachments.upsert/removeByName match on it.
+                        onRename = { att, newName ->
+                            pendingAttachments = pendingAttachments.map {
+                                if (it.data == att.data) it.copy(name = newName) else it
+                            }
+                        },
+                        // Task A11. Attachments are stored as an ordered JSON array, so "sorted by
+                        // when it was added" is simply the order they were appended in, and a custom
+                        // order needs no extra column — it IS the array, saved with everything else.
+                        onReorder = { from, to ->
+                            pendingAttachments = pendingAttachments.toMutableList().also {
+                                if (from in it.indices && to in it.indices) it.add(to, it.removeAt(from))
+                            }
                         }
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
                     // Enlarged so this primary action clearly outweighs the slim attachment row
                     // above it.
-                    Button(
-                        onClick = { saveTask() },
-                        contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
-                        Text(
-                            if (editingTask != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addTaskBtn,
-                            fontSize = 17.sp
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { saveTask() },
+                            contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Text(
+                                if (editingTask != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addTaskBtn,
+                                fontSize = 17.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        // Task A10 — "parallel to Save", as asked, and secondary on purpose: it is
+                        // the same commitment in a lower gear ("keep this, I'm not done"), so it
+                        // sits beside the primary action in the quieter glass style rather than
+                        // competing with it as a second filled button.
+                        GlassButton(
+                            text = com.lucent.app.i18n.S.saveToDraft,
+                            onClick = { saveTask(asDraft = true) },
+                            compact = true
                         )
                     }
                 }
             }
+            // ---- Task A7: the floating scroll / quick-edit control ---------------------------
+            //
+            // Placed in a Box *over* the scrolling column rather than inside it, because a control
+            // that scrolls away with the content is exactly the control you cannot reach when you
+            // need it — the point of it is to get you somewhere the current scroll position isn't.
+            //
+            // "Fast scroll, not jump" (the task is explicit) is why these animate: animateScrollTo
+            // travels the distance so the reader keeps their bearings, where scrollTo would
+            // teleport them somewhere unfamiliar.
+            QuickActionFab(
+                scrollingUp = composerScrollingUp,
+                scrollingDown = composerScrollingDown,
+                expanded = quickActionsOpen,
+                canUndo = bodyUndo.canUndo,
+                canRedo = bodyUndo.canRedo,
+                onScrollTop = { scope.launch { composerScroll.animateScrollTo(0) } },
+                onScrollBottom = { scope.launch { composerScroll.animateScrollTo(composerScroll.maxValue) } },
+                onToggleExpanded = { quickActionsOpen = !quickActionsOpen },
+                onUndo = { bodyUndo.undo()?.let { newNotes = it } },
+                onRedo = { bodyUndo.redo()?.let { newNotes = it } },
+                richTextEnabled = richTextEnabled,
+                hasSelection = bodySelEnd > bodySelStart,
+                onToggleStyle = { kind, color ->
+                    bodySpans = com.lucent.app.data.RichText.toggle(
+                        bodySpans, bodySelStart, bodySelEnd, kind, color
+                    )
+                },
+                onClearStyle = {
+                    bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
+                        com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                    }
+                },
+                onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 96.dp)
+            )
+        }
+        }
+
+        historyForTaskId != null && viewingTask != null -> {
+            // Task A19 — same route shape the notes screen uses for its history.
+            TaskHistoryScreen(
+                task = viewingTask,
+                onBack = { historyForTaskId = null },
+                onRestored = { historyForTaskId = null }
+            )
         }
 
         viewingTask != null -> {
@@ -990,11 +1265,38 @@ fun TasksScreen(active: Boolean = true) {
                     // tick it off — were the two that weren't here. Both are now in the strip, which
                     // scrolls horizontally exactly like the note page's so nothing is clipped on a
                     // narrow screen.
+                    // ---- Task A6: the action strip folds away, and copy is explicit ----
+                    //
+                    // Two changes that belong together. Long-pressing this page used to copy the
+                    // *entire* item — useful once, useless whenever what you wanted was one line,
+                    // and silent either way, so there was no way to tell it had happened. A long
+                    // press now starts an ordinary text selection, and "copy the whole thing"
+                    // becomes a button that says so and confirms itself.
+                    //
+                    // The strip follows the home page's collapse control: six icons across the top
+                    // of a page whose job is *reading* are six things competing with the text.
+                    // Collapsed by default for the same reason the home bar is — the actions are
+                    // one tap away, and the item is what you came for.
+                    var actionsExpanded by remember(task.id) { mutableStateOf(false) }
+                    val taskVersions by db.taskVersionDao().getForTask(task.id).collectAsState(initial = emptyList())
+                    val taskVersionCount = taskVersions.size
                     Row(
                         modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        AnimatedVisibility(
+                            visible = actionsExpanded,
+                            enter = expandHorizontally(expandFrom = Alignment.End) + fadeIn(),
+                            exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut()
+                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = {
+                            copyToClipboard(context, copyTextForTask(task))
+                            LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.copiedAllToast)
+                        }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = com.lucent.app.i18n.S.copyAll, tint = onGradient)
+                        }
                         // Pinning only affects the active list, so it's hidden for a completed task —
                         // which lives in history, where pinning would mean nothing.
                         if (!task.isDone) {
@@ -1031,8 +1333,31 @@ fun TasksScreen(active: Boolean = true) {
                         }) {
                             Icon(Icons.Default.Share, contentDescription = com.lucent.app.i18n.S.actionShare, tint = onGradient)
                         }
+                        // Task A19 — offered only once there is something in it, so a task that has
+                        // never been edited doesn't advertise an empty screen.
+                        if (taskVersionCount > 0) {
+                            IconButton(onClick = { historyForTaskId = task.id }) {
+                                Icon(
+                                    Icons.Default.History,
+                                    contentDescription = com.lucent.app.i18n.S.a11yVersionHistory(taskVersionCount),
+                                    tint = onGradient
+                                )
+                            }
+                        }
                         IconButton(onClick = { taskToDelete = task }) {
                             Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
+                        }
+                        }
+                        }
+                        // The fold toggle: same chevron, same direction as the home bar's, so the
+                        // control means one thing everywhere in the app.
+                        IconButton(onClick = { actionsExpanded = !actionsExpanded }) {
+                            Icon(
+                                if (actionsExpanded) Icons.Default.ChevronRight else Icons.Default.ChevronLeft,
+                                contentDescription = if (actionsExpanded) com.lucent.app.i18n.S.a11yHideActions
+                                                     else com.lucent.app.i18n.S.a11yShowMoreActions,
+                                tint = onGradient
+                            )
                         }
                     }
                 }
@@ -1044,7 +1369,6 @@ fun TasksScreen(active: Boolean = true) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .longPressCopy(context, copyTextForTask(task))
                         .frostedGlass()
                         .padding(16.dp)
                 ) {
@@ -1117,7 +1441,23 @@ fun TasksScreen(active: Boolean = true) {
                         )
                     }
 
-                    CardAttachments(attachments, onGradient, onGradientMuted)
+                    CardAttachments(
+                        attachments, onGradient, onGradientMuted,
+                        // Task A4: renaming touches only the display name in this row's JSON — the
+                        // bytes stay where they are, keyed by the same store id. Written straight to
+                        // the row because the detail page has no draft to fold it into.
+                        onRename = { att, newName ->
+                            AppScope.io.launch {
+                                db.taskDao().update(
+                                    task.copy(
+                                        attachments = Attachments.serialize(
+                                            attachments.map { if (it.data == att.data) it.copy(name = newName) else it }
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1157,6 +1497,25 @@ fun TasksScreen(active: Boolean = true) {
             TrashTasksScreen(onBack = { showTrash = false })
         }
 
+        showHidden && HiddenArea.visible -> {
+            // ---- Hidden area (task A21) ----
+            HiddenTasksScreen(
+                onBack = { showHidden = false },
+                onOpen = { showHidden = false; openDetail(it) }
+            )
+        }
+
+        showDrafts -> {
+            // ---- Draft area (task A10) ----
+            DraftTasksScreen(
+                onBack = { showDrafts = false },
+                // Opening a draft puts it straight back in the editor — the list exists to get you
+                // back to unfinished work, not to display it. It stays flagged as a draft until the
+                // user either saves it properly or moves it out explicitly.
+                onOpen = { showDrafts = false; startEdit(it) }
+            )
+        }
+
         showSearch -> {
             // The same unified search the Notes tab hosts — one screen, reachable from either side,
             // because "where did I put that" is not a question that knows which tab it belongs to.
@@ -1187,7 +1546,9 @@ fun TasksScreen(active: Boolean = true) {
                     id = { it.id },
                     // A task's own time for the Today bucket is its creation time.
                     timestamp = { it.createdAt },
-                    activityScore = { com.lucent.app.data.UsageTracker.score(taskUsage[it.id] ?: 0.0, it.createdAt, now) }
+                    activityScore = { com.lucent.app.data.UsageTracker.score(taskUsage[it.id] ?: 0.0, it.createdAt, now) },
+                    // Task A13 — same rule as notes; the two home lists must not disagree here.
+                    isPinned = { it.pinned }
                 )
             }
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -1197,11 +1558,36 @@ fun TasksScreen(active: Boolean = true) {
                             Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yCancelSelection, tint = onGradient)
                         }
                         Text(
-                            "${selectedTaskIds.size} selected",
+                            com.lucent.app.i18n.S.nSelected(selectedTaskIds.size),
                             color = onGradient,
                             fontSize = 18.sp,
                             modifier = Modifier.weight(1f)
                         )
+                        // Task A21 — hide (or un-hide) everything ticked. Offered whenever the
+                        // hidden area is open; while it is closed the action would move items
+                        // somewhere the user currently has no way to reach, which is a trap
+                        // rather than a feature.
+                        if (HiddenArea.visible) {
+                            IconButton(onClick = {
+                                val ids = selectedTaskIds
+                                val target = showHidden
+                                AppScope.io.launch {
+                                    ids.forEach { id ->
+                                        db.taskDao().getByIdOnce(id)?.let { row ->
+                                            db.taskDao().update(row.copy(hidden = !target))
+                                        }
+                                    }
+                                }
+                                exitSelection()
+                            }) {
+                                Icon(
+                                    Icons.Default.VisibilityOff,
+                                    contentDescription = if (showHidden) com.lucent.app.i18n.S.hiddenRemove
+                                                         else com.lucent.app.i18n.S.hiddenAdd,
+                                    tint = onGradient
+                                )
+                            }
+                        }
                         TextButton(onClick = {
                             val allIds = sortedActive.map { it.id }.toSet()
                             selectedTaskIds = if (selectedTaskIds.containsAll(allIds)) emptySet() else allIds
@@ -1276,6 +1662,21 @@ fun TasksScreen(active: Boolean = true) {
                                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showTrash = true }
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(com.lucent.app.i18n.S.screenDrafts) },
+                                        leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
+                                        onClick = { showOverflowMenu = false; showDrafts = true }
+                                    )
+                                    // Task A21: absent, not disabled. A greyed-out "Hidden" entry
+                                    // would announce that a hidden area exists to anyone holding
+                                    // the phone, which is the one thing it must not do.
+                                    if (HiddenArea.visible) {
+                                        DropdownMenuItem(
+                                            text = { Text(com.lucent.app.i18n.S.screenHidden) },
+                                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
+                                            onClick = { showOverflowMenu = false; showHidden = true }
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -1336,6 +1737,21 @@ fun TasksScreen(active: Boolean = true) {
                                 selected = task.id in selectedTaskIds,
                                 onOpen = { openDetail(task) },
                                 onLongPress = { selectionMode = true; selectedTaskIds = setOf(task.id) },
+                                reorderEnabled = reorderEnabled,
+                                reorderModifier = Modifier.reorderableItem(
+                                    id = task.id,
+                                    enabled = reorderEnabled,
+                                    listState = listState,
+                                    state = reorderState,
+                                    onLongPress = {
+                                        // Same entry as before: the press selects. Adding to an
+                                        // existing selection rather than replacing it is what lets
+                                        // several ticked cards travel together.
+                                        selectionMode = true
+                                        if (task.id !in selectedTaskIds) selectedTaskIds = selectedTaskIds + task.id
+                                    },
+                                    onDrop = { targetId -> dropSelection(targetId) }
+                                ),
                                 onToggleSelect = {
                                     selectedTaskIds = if (task.id in selectedTaskIds) selectedTaskIds - task.id else selectedTaskIds + task.id
                                 },
@@ -1387,6 +1803,12 @@ private fun TaskCard(
     selected: Boolean,
     onOpen: () -> Unit,
     onLongPress: () -> Unit,
+    // Task A16. When reordering is live the long press belongs to [reorderModifier] instead — it
+    // starts the same selection *and* keeps following the finger. Two detectors both claiming the
+    // long press on one card is the classic way to end up with neither working, so exactly one is
+    // installed at a time.
+    reorderEnabled: Boolean = false,
+    reorderModifier: Modifier = Modifier,
     onToggleSelect: () -> Unit,
     onArmComplete: () -> Unit,
     onTogglePin: () -> Unit,
@@ -1410,8 +1832,9 @@ private fun TaskCard(
             // Long press enters multi-select and grabs this card; in select mode a tap toggles it.
             .combinedClickable(
                 onClick = { if (selectionMode) onToggleSelect() else onOpen() },
-                onLongClick = { if (!selectionMode) onLongPress() }
+                onLongClick = if (reorderEnabled) null else { { if (!selectionMode) onLongPress() } }
             )
+            .then(reorderModifier)
             .then(if (selected) Modifier.border(2.dp, onGradient, selShape) else Modifier)
             .padding(12.dp)
     ) {
@@ -1606,3 +2029,6 @@ private fun DueDateRow(dueAt: Long?, minMillis: Long, onChange: (Long?) -> Unit)
         }
     }
 }
+
+/** Task A12 — see NotesScreen's BODY_JUMP_THRESHOLD; the two composers use the same rule. */
+private const val DETAILS_JUMP_THRESHOLD = 400

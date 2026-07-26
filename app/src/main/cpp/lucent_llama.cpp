@@ -24,6 +24,16 @@
 
 #include "llama.h"
 
+// PHASE 4 — multimodal (llama.cpp's official mtmd, tools/mtmd at the pinned b9888). The whole
+// feature is compile-time optional: when the mtmd sources aren't wired in (LUCENT_NO_MTMD,
+// see CMakeLists.txt), every entry point below degrades to "vision unavailable" and the text
+// engine is byte-for-byte what it was — multimodal must never be the reason the engine fails
+// to build or a text chat fails to run.
+#ifndef LUCENT_NO_MTMD
+#include "mtmd.h"
+#include "mtmd-helper.h"
+#endif
+
 #define TAG "LucentLlama"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
@@ -39,6 +49,9 @@ struct Session {
     std::mutex      mutex;              // serializes generate/unload on this session
     std::atomic<bool> stop{false};      // set by nativeStop(); checked every token
     std::atomic<bool> busy{false};      // a generation is in flight
+    // PHASE 4: the multimodal projector context (mtmd_context*), or null when this model has no
+    // mmproj loaded. Owned by the session; freed in unload before the model it references.
+    void *          mtmd    = nullptr;
 };
 
 std::once_flag g_backend_once;
@@ -395,12 +408,202 @@ Java_com_lucent_app_local_LocalLlm_nativeUnload(JNIEnv *, jobject, jlong handle)
         // Wait for any in-flight generation to observe the stop flag and release the mutex, so
         // the context is never freed under a running decode.
         std::lock_guard<std::mutex> guard(s->mutex);
+#ifndef LUCENT_NO_MTMD
+        if (s->mtmd)    { mtmd_free((mtmd_context *) s->mtmd); s->mtmd = nullptr; }
+#endif
         if (s->sampler) { llama_sampler_free(s->sampler); s->sampler = nullptr; }
         if (s->ctx)     { llama_free(s->ctx);             s->ctx = nullptr; }
         if (s->model)   { llama_model_free(s->model);     s->model = nullptr; }
     }
     delete s;
     LOGI("unloaded — model memory released");
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// PHASE 4 — multimodal entry points (all no-ops / graceful failures when LUCENT_NO_MTMD)
+// ---------------------------------------------------------------------------------------------
+
+// nativeMtmdLoad(handle, mmprojPath, nThreads) -> true when the projector is ready.
+// The projector runs on CPU on purpose (use_gpu = false): on Android, GPU clip encoders are the
+// crash-prone half of every multimodal report upstream, and encoding one image takes well under a
+// second on CPU — the safe choice costs nothing a user can feel.
+JNIEXPORT jboolean JNICALL
+Java_com_lucent_app_local_LocalLlm_nativeMtmdLoad(JNIEnv * env, jobject, jlong handle, jstring jpath, jint n_threads) {
+#ifdef LUCENT_NO_MTMD
+    (void) env; (void) handle; (void) jpath; (void) n_threads;
+    LOGE("mtmd: engine built without multimodal support");
+    return JNI_FALSE;
+#else
+    auto * s = (Session *) (intptr_t) handle;
+    if (!s || !s->model) return JNI_FALSE;
+    std::lock_guard<std::mutex> guard(s->mutex);
+    if (s->mtmd) { mtmd_free((mtmd_context *) s->mtmd); s->mtmd = nullptr; }
+    const std::string path = from_jstring(env, jpath);
+    try {
+        mtmd_context_params mparams = mtmd_context_params_default();
+        mparams.use_gpu    = false;
+        mparams.n_threads  = n_threads > 0 ? n_threads : 4;
+        mparams.print_timings = false;
+        mtmd_context * mc = mtmd_init_from_file(path.c_str(), s->model, mparams);
+        if (!mc) { LOGE("mtmd: projector load failed: %s", path.c_str()); return JNI_FALSE; }
+        s->mtmd = mc;
+        LOGI("mtmd: projector loaded (%s), vision=%d audio=%d",
+             path.c_str(), (int) mtmd_support_vision(mc), (int) mtmd_support_audio(mc));
+        return JNI_TRUE;
+    } catch (...) {
+        LOGE("mtmd: exception during projector load");
+        return JNI_FALSE;
+    }
+#endif
+}
+
+// nativeMediaMarker() -> the marker string mtmd_tokenize expects at each media position in the
+// prompt text. Kotlin splices it into the *user* message before templating, so the media lands
+// inside the user turn where every multimodal chat template expects it.
+JNIEXPORT jstring JNICALL
+Java_com_lucent_app_local_LocalLlm_nativeMediaMarker(JNIEnv * env, jobject) {
+#ifdef LUCENT_NO_MTMD
+    return to_jstring(env, "");
+#else
+    return to_jstring(env, mtmd_default_marker());
+#endif
+}
+
+// nativeGenerateWithImages(handle, prompt, images[][], maxNew, callback) -> same codes as
+// nativeGenerate, plus -30 (no projector) and -31 (image decode/tokenize failed).
+//
+// A deliberate near-duplicate of nativeGenerate rather than a shared core: the text path is the
+// proven, shipping path, and threading multimodal branches through it would put every text chat
+// behind new code. The prefill differs (mtmd_helper_eval_chunks evaluates text AND image chunks,
+// including the image's encoder pass); the sampling loop after it is the same shape on purpose.
+JNIEXPORT jint JNICALL
+Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobject, jlong handle,
+                                                            jstring jprompt, jobjectArray jimages,
+                                                            jint max_new, jobject callback) {
+#ifdef LUCENT_NO_MTMD
+    (void) env; (void) handle; (void) jprompt; (void) jimages; (void) max_new; (void) callback;
+    return -30;
+#else
+    auto * s = (Session *) (intptr_t) handle;
+    if (!s || !s->ctx) return -1;
+    if (!s->mtmd) return -30;
+
+    std::lock_guard<std::mutex> guard(s->mutex);
+    s->busy.store(true);
+    s->stop.store(false);
+    auto * mctx = (mtmd_context *) s->mtmd;
+
+    jclass cbClass = env->GetObjectClass(callback);
+    jmethodID onPiece = env->GetMethodID(cbClass, "onPiece", "(Ljava/lang/String;)V");
+    env->DeleteLocalRef(cbClass);
+    if (!onPiece) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        s->busy.store(false);
+        return -2;
+    }
+
+    int rc = 0;
+    std::vector<mtmd_bitmap *> bitmaps;
+    mtmd_input_chunks * chunks = nullptr;
+    try {
+        const std::string prompt = from_jstring(env, jprompt);
+
+        // Decode every image byte[] (png/jpeg/webp/bmp — stb does the decoding inside the helper).
+        const jsize n_img = env->GetArrayLength(jimages);
+        for (jsize i = 0; i < n_img; ++i) {
+            auto jarr = (jbyteArray) env->GetObjectArrayElement(jimages, i);
+            if (!jarr) continue;
+            const jsize len = env->GetArrayLength(jarr);
+            std::vector<unsigned char> buf((size_t) len);
+            env->GetByteArrayRegion(jarr, 0, len, (jbyte *) buf.data());
+            env->DeleteLocalRef(jarr);
+            mtmd_bitmap * bmp = mtmd_helper_bitmap_init_from_buf(mctx, buf.data(), buf.size());
+            if (!bmp) { LOGE("mtmd: image %d failed to decode (%d bytes)", (int) i, (int) len); rc = -31; break; }
+            bitmaps.push_back(bmp);
+        }
+        if (rc == 0 && bitmaps.empty()) rc = -31; // called with images, none usable
+
+        if (rc == 0) {
+            chunks = mtmd_input_chunks_init();
+            mtmd_input_text text;
+            text.text          = prompt.c_str();
+            text.add_special   = true;
+            text.parse_special = true;
+            int32_t tok = mtmd_tokenize(mctx, chunks, &text,
+                                        bitmaps.data(), bitmaps.size());
+            if (tok != 0) { LOGE("mtmd: tokenize failed rc=%d", (int) tok); rc = -31; }
+        }
+
+        if (rc == 0) {
+            // Stateless, like the text path: clean memory, replay everything this turn needs.
+            llama_memory_clear(llama_get_memory(s->ctx), true);
+            llama_sampler_reset(s->sampler);
+
+            llama_pos n_past = 0;
+            int32_t ev = mtmd_helper_eval_chunks(mctx, s->ctx, chunks,
+                                                 /*n_past*/ 0, /*seq_id*/ 0,
+                                                 /*n_batch*/ 512, /*logits_last*/ true,
+                                                 &n_past);
+            if (ev != 0) {
+                LOGE("mtmd: eval_chunks failed rc=%d", (int) ev);
+                rc = -4;
+            } else {
+                const int budget = max_new > 0 ? max_new : 512;
+                const int n_batch = 512;
+                llama_batch batch = llama_batch_init(n_batch, 0, 1);
+                auto put = [&](llama_token id, llama_pos pos, bool want_logits) {
+                    const int k = batch.n_tokens;
+                    batch.token[k]     = id;
+                    batch.pos[k]       = pos;
+                    batch.n_seq_id[k]  = 1;
+                    batch.seq_id[k][0] = 0;
+                    batch.logits[k]    = want_logits ? 1 : 0;
+                    batch.n_tokens++;
+                };
+
+                std::string pending;
+                int produced = 0;
+                llama_token tok2;
+                while (produced < budget && !s->stop.load()) {
+                    tok2 = llama_sampler_sample(s->sampler, s->ctx, -1);
+                    if (llama_vocab_is_eog(s->vocab, tok2)) break;
+
+                    pending += piece_of(s->vocab, tok2);
+                    size_t hold = utf8_incomplete_tail(pending);
+                    if (pending.size() > hold) {
+                        std::string ready = pending.substr(0, pending.size() - hold);
+                        pending.erase(0, pending.size() - hold);
+                        jstring jpiece = to_jstring(env, ready);
+                        if (jpiece) {
+                            env->CallVoidMethod(callback, onPiece, jpiece);
+                            env->DeleteLocalRef(jpiece);
+                            if (env->ExceptionCheck()) { env->ExceptionClear(); s->stop.store(true); }
+                        }
+                    }
+
+                    batch.n_tokens = 0;
+                    put(tok2, n_past++, true);
+                    int dec = llama_decode(s->ctx, batch);
+                    if (dec != 0) { LOGE("mtmd: gen decode failed rc=%d at pos=%d", dec, (int) n_past); rc = -5; break; }
+                    ++produced;
+                }
+                llama_batch_free(batch);
+
+                if (s->stop.load() && rc == 0) rc = 1;
+                if (rc == 0 && produced == 0) rc = -7;
+            }
+        }
+    } catch (...) {
+        LOGE("mtmd: exception during multimodal generate");
+        rc = -6;
+    }
+
+    if (chunks) mtmd_input_chunks_free(chunks);
+    for (auto * b : bitmaps) mtmd_bitmap_free(b);
+    s->busy.store(false);
+    return rc;
+#endif
 }
 
 } // extern "C"

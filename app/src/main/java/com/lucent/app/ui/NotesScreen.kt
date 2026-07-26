@@ -5,6 +5,11 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -24,6 +29,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,6 +40,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -46,7 +54,13 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
@@ -81,6 +95,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -172,6 +187,10 @@ fun NotesScreen(active: Boolean = true) {
     var pinned by remember { mutableStateOf(false) }
     var selectedColor by remember { mutableStateOf(NoteColor.DEFAULT) }
     var isChecklistMode by remember { mutableStateOf(false) }
+    // Task A22 — the third note kind. A second flag rather than an enum for the same reason the
+    // column is (see Note.isDoodle): the two existing kinds keep working untouched.
+    var isDoodleMode by remember { mutableStateOf(false) }
+    var doodleData by remember { mutableStateOf("") }
     var checklistItems by remember { mutableStateOf<List<ChecklistItem>>(emptyList()) }
     var newChecklistItemText by remember { mutableStateOf("") }
     var searchText by remember { mutableStateOf("") }
@@ -190,6 +209,14 @@ fun NotesScreen(active: Boolean = true) {
     var noteToToggleArchive by remember { mutableStateOf<Note?>(null) }
     var showArchive by remember { mutableStateOf(false) }
     var showTrash by remember { mutableStateOf(false) }
+    // Task A10 — the draft area, reached from the same overflow menu as the trash.
+    var showDrafts by remember { mutableStateOf(false) }
+    // Task A21 — the hidden area. Only offered while HiddenArea.visible, which the Privacy switch
+    // sets and which resets itself on every launch.
+    var showHidden by remember { mutableStateOf(false) }
+    // Task A10 — how many drafts are waiting, for the once-per-launch restore prompt below.
+    val draftCount by db.noteDao().getDrafts().collectAsState(initial = emptyList())
+    DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     // Whether the header's secondary-action cluster (date filter, sort, overflow) is expanded.
@@ -206,6 +233,41 @@ fun NotesScreen(active: Boolean = true) {
 
     // Long-press multi-select for batch actions (see feature: batch operations). When active, cards
     // show a checkbox and tapping toggles selection instead of opening.
+    // ---- Task A7 state ----------------------------------------------------------------------
+    // Hoisted so the floating control can drive it; the column below still owns the scrolling.
+    val composerScroll = rememberScrollState()
+    // Which way the finger last moved the page. Derived from the scroll value rather than from the
+    // gesture, so it is correct however the page moved — flung, dragged, or brought into view by a
+    // focused text field.
+    var lastScrollValue by remember { mutableStateOf(0) }
+    val composerScrollingUp = composerScroll.value < lastScrollValue
+    val composerScrollingDown = composerScroll.value > lastScrollValue
+    LaunchedEffect(composerScroll.value) {
+        kotlinx.coroutines.delay(700)
+        lastScrollValue = composerScroll.value
+    }
+    var quickActionsOpen by remember { mutableStateOf(false) }
+    // One undo stack per composer session, following the body/details field. Seeded from whatever
+    // the field holds when the editor opens, so the first undo returns to the text as it was found
+    // rather than to an empty string.
+    val bodyUndo = remember(composing) { TextUndoStack(newBody) }
+    // ---- INTEGRATION: C-group task 20, rich text ----
+    // The spans for the field above, plus the current selection. Both are plain composer state, in
+    // the same place and with the same lifetime as the text they describe — a span list that
+    // outlived its body would style whatever text happened to be there next.
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
+    var bodySpans by remember(composing) { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
+    var bodySelStart by remember(composing) { mutableStateOf(0) }
+    var bodySelEnd by remember(composing) { mutableStateOf(0) }
+    // Spans follow the text. Any writer that does NOT go through the field — undo, the assistant, a
+    // version restore — lands here as a length change, and reconcile() drops whatever no longer
+    // sits on real characters. See data/RichText.kt.
+    LaunchedEffect(newBody) {
+        bodySpans = com.lucent.app.data.RichText.reconcile(bodySpans, newBody.length)
+    }
+    LaunchedEffect(newBody) { bodyUndo.record(newBody) }
+    // Task A16 — see ReorderDrag.kt; enabled only under the Custom sort.
+    val reorderState = rememberReorderDragState()
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNoteIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -234,12 +296,15 @@ fun NotesScreen(active: Boolean = true) {
         editingId = null
         newTitle = ""
         newBody = ""
+        bodySpans = emptyList()
         selectedTags = emptySet()
         newCustomTag = ""
         pendingAttachments = emptyList()
         pinned = false
         selectedColor = NoteColor.DEFAULT
         isChecklistMode = false
+        isDoodleMode = false
+        doodleData = ""
         checklistItems = emptyList()
         newChecklistItemText = ""
     }
@@ -298,18 +363,33 @@ fun NotesScreen(active: Boolean = true) {
         editingId = note.id
         newTitle = note.title
         newBody = note.body
+        // INTEGRATION (C task 20): load the sidecar, clamped to the body it describes.
+        bodySpans = com.lucent.app.data.RichText.load(note.bodySpans, note.body)
         selectedTags = note.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
         newCustomTag = ""
         pendingAttachments = Attachments.parse(note.attachments)
         pinned = note.pinned
         selectedColor = NoteColor.fromKey(note.color)
         isChecklistMode = note.isChecklist
+        isDoodleMode = note.isDoodle
+        doodleData = note.doodle
         checklistItems = Checklist.parse(note.checklist)
         newChecklistItemText = ""
         composing = true
     }
 
-    fun saveNote() {
+    // Task A10: which drafts row this composer session owns, if it has parked anything yet.
+    // Keyed on the session (composing/editingId) so a fresh composer never adopts the previous
+    // one's row and starts silently overwriting a draft the user meant to keep.
+    var draftRowId by remember(composing, editingId) { mutableStateOf<Long?>(null) }
+    fun saveNote(
+        // Task A10. `closeAfter` defaults to the opposite of `asDraft` because the two callers want
+        // opposite things: the explicit "Save to drafts" button is the user finishing with this
+        // screen, while the automatic park on backgrounding must leave the editor exactly as it
+        // was — still open, still dirty, still able to save properly if they come straight back.
+        asDraft: Boolean = false,
+        closeAfter: Boolean = !asDraft
+    ) {
         // A checklist item typed into the add field but never committed with "+" still counts
         // (settings tasks B1/B4, checklist-note side): it is folded in here, so typing the last
         // item and hitting Save directly never silently drops it. Only in checklist mode — that is
@@ -333,8 +413,54 @@ fun NotesScreen(active: Boolean = true) {
         val pinnedSnapshot = pinned
         val colorSnapshot = selectedColor.key
         val isChecklistSnapshot = isChecklistMode
+        val isDoodleSnapshot = isDoodleMode
+        val doodleSnapshot = doodleData
         val checklistJson = Checklist.serialize(composedChecklist)
         val id = editingId
+        // ---- Task A10: park this edit in the draft area instead of committing it ----------
+        //
+        // Deliberately an early return over the *already snapshotted* fields rather than a branch
+        // threaded through the write below. Two reasons, and the second is the important one:
+        //
+        //  1. It reuses the snapshot block above verbatim, so the draft can never disagree with
+        //     what a real save would have written — the drift NoteHistory's comments warn about.
+        //  2. It cannot touch the live row. Everything after this point is the committing path;
+        //     by returning here, "save a draft" is structurally incapable of overwriting the note
+        //     or task being edited, which is the one failure that would be worse than losing the
+        //     edit in the first place.
+        //
+        // [draftRowId] keys the session, not the item: the first draft inserts, every later one
+        // updates the same row. Without it, a phone that backgrounds the app five times would
+        // leave five copies of the same half-finished note in the drafts list.
+        if (asDraft) {
+            AppScope.io.launch {
+                val row = Note(
+                    title = title,
+                    body = body,
+                    bodySpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, body.length)),
+                    tags = tags,
+                    attachments = attachmentsJson,
+                    pinned = pinnedSnapshot,
+                    color = colorSnapshot,
+                    isChecklist = isChecklistSnapshot,
+                    checklist = checklistJson,
+                    isDraft = true,
+                    draftSavedAt = System.currentTimeMillis()
+                )
+                val existing = draftRowId
+                if (existing == null) draftRowId = db.noteDao().insert(row)
+                else db.noteDao().update(row.copy(id = existing))
+                withContext(Dispatchers.Main) {
+                    LucentToast.show(appContext, com.lucent.app.i18n.S.draftSavedToast)
+                }
+            }
+            if (closeAfter) {
+                composing = false
+                resetComposer()
+            }
+            return
+        }
+
         val appContext = context.applicationContext
 
         // Run on the app-lifetime scope, not the composable's scope: saving from the
@@ -365,13 +491,16 @@ fun NotesScreen(active: Boolean = true) {
                 val updated = (existing ?: Note(id = id, title = title, body = body)).copy(
                     title = title,
                     body = body,
+                    bodySpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, body.length)),
                     updatedAt = System.currentTimeMillis(),
                     tags = tags,
                     attachments = attachmentsJson,
                     pinned = pinnedSnapshot,
                     color = colorSnapshot,
                     isChecklist = isChecklistSnapshot,
-                    checklist = checklistJson
+                    checklist = checklistJson,
+                    isDoodle = isDoodleSnapshot,
+                    doodle = doodleSnapshot
                 )
                 db.noteDao().update(updated)
             } else {
@@ -379,12 +508,15 @@ fun NotesScreen(active: Boolean = true) {
                     Note(
                         title = title,
                         body = body,
+                        bodySpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, body.length)),
                         tags = tags,
                         attachments = attachmentsJson,
                         pinned = pinnedSnapshot,
                         color = colorSnapshot,
                         isChecklist = isChecklistSnapshot,
-                        checklist = checklistJson
+                        checklist = checklistJson,
+                        isDoodle = isDoodleSnapshot,
+                        doodle = doodleSnapshot
                     )
                 )
             }
@@ -504,7 +636,13 @@ fun NotesScreen(active: Boolean = true) {
     // button closing the app, also asks before losing an in-progress note.
     SideEffect {
         if (noteDirty) {
-            UnsavedChangesGuard.register("notes", ::saveNote, ::discardComposer)
+            UnsavedChangesGuard.register(
+                owner = "notes",
+                onSave = { saveNote() },
+                onDiscard = { discardComposer() },
+                // Task A10 — parks a copy without closing or committing anything.
+                onAutoDraft = { saveNote(asDraft = true, closeAfter = false) }
+            )
         } else {
             UnsavedChangesGuard.clear("notes")
         }
@@ -560,6 +698,21 @@ fun NotesScreen(active: Boolean = true) {
     // Pinned first, then relevance when the user is actually searching, then their chosen sort.
     val sortedNotes = remember(filteredNotes, sortOption, query) {
         filteredNotes.sortedForDisplay(sortOption, query)
+    }
+
+    // ---- Task A16 ----------------------------------------------------------------------------
+    // Same rule as the task list: a drag is only honoured where the order is the user's to own.
+    val reorderEnabled = sortOption == NoteSort.CUSTOM
+    fun dropSelection(targetId: Long?) {
+        val moving = selectedNoteIds.toList().mapNotNull { id -> sortedNotes.firstOrNull { it.id == id } }
+        val reordered = reorderedBy(sortedNotes, moving, targetId) { it.id }
+        if (reordered === sortedNotes) return
+        AppScope.io.launch {
+            reordered.forEachIndexed { index, n ->
+                if (n.manualOrder != index) db.noteDao().update(n.copy(manualOrder = index))
+            }
+        }
+        exitSelection()
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
@@ -710,7 +863,41 @@ fun NotesScreen(active: Boolean = true) {
     when {
         composing -> {
             // ---- Create / edit page ----
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()).padding(bottom = LocalBottomBarInset.current)) {
+            /**
+             * Task A12 — open an existing, long note straight at the *end* of its text.
+             *
+             * Editing a note you have been keeping for months means adding to the bottom of it, and
+             * the composer opened at the top: every session started with a scroll. This is the same
+             * device the task composer already uses for its subtask list, pointed at the bottom of
+             * the text instead.
+             *
+             * `remember` with no keys is what makes it a one-shot: the flag is captured when the
+             * composer opens and never recomputed, so typing (which changes newBody, and therefore
+             * this condition) can't yank the page back down mid-edit. The threshold means a short
+             * note — already fully visible — is left alone rather than scrolled for no reason.
+             */
+            val jumpToBodyEnd = remember { editingId != null && newBody.length > BODY_JUMP_THRESHOLD }
+            val bodyEndRequester = remember { BringIntoViewRequester() }
+            if (jumpToBodyEnd) {
+                LaunchedEffect(Unit) {
+                    // Two frames so the scrollable column has laid out before it is asked to move.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    bodyEndRequester.bringIntoView()
+                }
+            }
+            // Task A15. Without this the composer's scroll area keeps the full screen height while the
+            // keyboard covers its lower half, so the field being typed into can sit *under* the
+            // keyboard — and a subtask that grows a line as you type walks further under it with
+            // every wrap, forcing a manual scroll mid-sentence. imePadding() shrinks the scrollable
+            // area to the space that is actually visible, which is also what lets Compose's built-in
+            // "keep the focused field in view" do its job: it can only scroll to something that has
+            // somewhere to be scrolled to.
+            //
+            // On desktop WindowInsets.ime is empty, so this is a no-op there and the two files stay
+            // in step.
+            Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(composerScroll).imePadding().padding(bottom = LocalBottomBarInset.current)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
@@ -769,11 +956,54 @@ fun NotesScreen(active: Boolean = true) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(com.lucent.app.i18n.S.checklistNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Switch(checked = isChecklistMode, onCheckedChange = { isChecklistMode = it })
+                        Switch(
+                            checked = isChecklistMode,
+                            onCheckedChange = { isChecklistMode = it; if (it) isDoodleMode = false }
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Brush,
+                            contentDescription = null,
+                            tint = if (isDoodleMode) onGradient else onGradientMuted
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(com.lucent.app.i18n.S.doodleNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        // The two kinds are mutually exclusive, so each switch turns the other off
+                        // rather than leaving an undefined "both" state the save path would have to
+                        // pick a winner for.
+                        Switch(
+                            checked = isDoodleMode,
+                            onCheckedChange = { isDoodleMode = it; if (it) isChecklistMode = false }
+                        )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    if (isChecklistMode) {
+                    if (isDoodleMode) {
+                        // Task A22 — the whiteboard, plus the ordinary details box underneath so a
+                        // sketch can still be captioned. Same reasoning as A20 gave checklist notes
+                        // their remarks field: a note kind that can hold *only* one form of content
+                        // forces the user to open a second note to say what the first one is.
+                        DoodleEditor(value = doodleData, onValueChange = { doodleData = it })
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ExpandableGlassTextField(
+                            value = newBody,
+                            onValueChange = { newBody = it },
+                            // PHASE 4: dictation — recognized speech appends to whatever is already
+                            // written, joined with a single space, never replacing it.
+                            extraAction = { DictationButton(onText = { spoken ->
+                                newBody = if (newBody.isBlank()) spoken
+                                else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
+                            }) },
+                            spans = if (richTextEnabled) bodySpans else emptyList(),
+                            onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
+                            highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                            placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
+                            expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
+                            collapsedMinHeight = 90.dp,
+                            collapsedMaxHeight = 220.dp
+                        )
+                    } else if (isChecklistMode) {
                         ChecklistEditorSection(
                             items = checklistItems,
                             newItemText = newChecklistItemText,
@@ -790,7 +1020,44 @@ fun NotesScreen(active: Boolean = true) {
                             onEditText = { item, text ->
                                 checklistItems = checklistItems.map { if (it.id == item.id) it.copy(text = text) else it }
                             },
-                            addLabel = com.lucent.app.i18n.S.addItem
+                            addLabel = com.lucent.app.i18n.S.addItem,
+                            // Task A18, checklist notes — same rule as a task's subtasks, because
+                            // the two share this editor and a change to one that fits the other
+                            // should never be made to only one of them.
+                            onInsertAfter = { item ->
+                                val at = checklistItems.indexOfFirst { it.id == item.id }
+                                checklistItems = if (at < 0) checklistItems + Checklist.newItem("")
+                                else checklistItems.toMutableList().also { it.add(at + 1, Checklist.newItem("")) }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // Task A20. A checklist note could hold nothing but its items — there was
+                        // nowhere to write down *why* the list exists, what it's for, or anything
+                        // that isn't itself a tickable step, which a task has always had. The column
+                        // was never the obstacle: Note.body is kept even in checklist mode
+                        // (deliberately, so switching modes back and forth loses nothing), it simply
+                        // wasn't rendered here. So this is the same field the plain-text branch uses,
+                        // shown alongside the items rather than instead of them, and saved by the
+                        // same code path with no migration and no new column.
+                        ExpandableGlassTextField(
+                            value = newBody,
+                            onValueChange = { newBody = it },
+                            // PHASE 4: dictation — recognized speech appends to whatever is already
+                            // written, joined with a single space, never replacing it.
+                            extraAction = { DictationButton(onText = { spoken ->
+                                newBody = if (newBody.isBlank()) spoken
+                                else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
+                            }) },
+                            spans = if (richTextEnabled) bodySpans else emptyList(),
+                            onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
+                            highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                            placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
+                            expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
+                            // Shorter than the plain-text branch's box: here the items are the
+                            // content and this is an aside, so it should not out-weigh them on
+                            // first sight. It still expands to full screen on demand.
+                            collapsedMinHeight = 90.dp,
+                            collapsedMaxHeight = 220.dp
                         )
                     } else {
                         // Body field with an expand toggle in its bottom-right corner. Expanding
@@ -800,6 +1067,15 @@ fun NotesScreen(active: Boolean = true) {
                         ExpandableGlassTextField(
                             value = newBody,
                             onValueChange = { newBody = it },
+                            // PHASE 4: dictation — recognized speech appends to whatever is already
+                            // written, joined with a single space, never replacing it.
+                            extraAction = { DictationButton(onText = { spoken ->
+                                newBody = if (newBody.isBlank()) spoken
+                                else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
+                            }) },
+                            spans = if (richTextEnabled) bodySpans else emptyList(),
+                            onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
+                            highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
                             // The body field now names itself "Details", matching the task composer so
                             // notes and tasks read consistently (task 7). When Markdown is on we also
                             // remind the user what's supported here; the [[links]] part of that hint is
@@ -831,7 +1107,10 @@ fun NotesScreen(active: Boolean = true) {
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    // Task A12 anchor. Deliberately *here* — after the body/items, before the pin,
+                    // tags and attachment rows. Scrolling to the true bottom of the form would put
+                    // the attachment list on screen and the text the user came to edit off it.
+                    Spacer(modifier = Modifier.height(12.dp).bringIntoViewRequester(bodyEndRequester))
 
                     // Pin toggle: pinned notes float to the top of the home grid, ahead of sort.
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -897,24 +1176,88 @@ fun NotesScreen(active: Boolean = true) {
                         onPick = { filePicker.launch("*/*") },
                         onRemove = { att ->
                             pendingAttachments = Attachments.removeByName(context, pendingAttachments, att.name)
+                        },
+                        // Task A4. Only the display name changes — the row still points at the same
+                        // bytes, so nothing is re-encrypted, re-imported, or copied. Uniqueness is
+                        // enforced in the dialog because Attachments.upsert/removeByName match on it.
+                        onRename = { att, newName ->
+                            pendingAttachments = pendingAttachments.map {
+                                if (it.data == att.data) it.copy(name = newName) else it
+                            }
+                        },
+                        // Task A11. Attachments are stored as an ordered JSON array, so "sorted by
+                        // when it was added" is simply the order they were appended in, and a custom
+                        // order needs no extra column — it IS the array, saved with everything else.
+                        onReorder = { from, to ->
+                            pendingAttachments = pendingAttachments.toMutableList().also {
+                                if (from in it.indices && to in it.indices) it.add(to, it.removeAt(from))
+                            }
                         }
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
                     // Enlarged so this primary action clearly outweighs the slim attachment row
                     // above it.
-                    Button(
-                        onClick = { saveNote() },
-                        contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
-                        Text(
-                            if (editingId != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addNoteBtn,
-                            fontSize = 17.sp
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { saveNote() },
+                            contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Text(
+                                if (editingId != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addNoteBtn,
+                                fontSize = 17.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        // Task A10 — "parallel to Save", as asked, and secondary on purpose: it is
+                        // the same commitment in a lower gear ("keep this, I'm not done"), so it
+                        // sits beside the primary action in the quieter glass style rather than
+                        // competing with it as a second filled button.
+                        GlassButton(
+                            text = com.lucent.app.i18n.S.saveToDraft,
+                            onClick = { saveNote(asDraft = true) },
+                            compact = true
                         )
                     }
                 }
             }
+            // ---- Task A7: the floating scroll / quick-edit control ---------------------------
+            //
+            // Placed in a Box *over* the scrolling column rather than inside it, because a control
+            // that scrolls away with the content is exactly the control you cannot reach when you
+            // need it — the point of it is to get you somewhere the current scroll position isn't.
+            //
+            // "Fast scroll, not jump" (the task is explicit) is why these animate: animateScrollTo
+            // travels the distance so the reader keeps their bearings, where scrollTo would
+            // teleport them somewhere unfamiliar.
+            QuickActionFab(
+                scrollingUp = composerScrollingUp,
+                scrollingDown = composerScrollingDown,
+                expanded = quickActionsOpen,
+                canUndo = bodyUndo.canUndo,
+                canRedo = bodyUndo.canRedo,
+                onScrollTop = { scope.launch { composerScroll.animateScrollTo(0) } },
+                onScrollBottom = { scope.launch { composerScroll.animateScrollTo(composerScroll.maxValue) } },
+                onToggleExpanded = { quickActionsOpen = !quickActionsOpen },
+                onUndo = { bodyUndo.undo()?.let { newBody = it } },
+                onRedo = { bodyUndo.redo()?.let { newBody = it } },
+                richTextEnabled = richTextEnabled,
+                hasSelection = bodySelEnd > bodySelStart,
+                onToggleStyle = { kind, color ->
+                    bodySpans = com.lucent.app.data.RichText.toggle(
+                        bodySpans, bodySelStart, bodySelEnd, kind, color
+                    )
+                },
+                onClearStyle = {
+                    bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
+                        com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                    }
+                },
+                onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 96.dp)
+            )
+        }
         }
 
         historyForId != null && viewingNote != null -> {
@@ -1072,11 +1415,36 @@ fun NotesScreen(active: Boolean = true) {
                     // Edit and Archive are now duplicated up here so they're reachable without scrolling
                     // to the bottom of a long note. The strip takes the remaining width and scrolls if
                     // every icon can't fit at once, so nothing is ever clipped on a narrow screen.
+                    // ---- Task A6: the action strip folds away, and copy is explicit ----
+                    //
+                    // Two changes that belong together. Long-pressing this page used to copy the
+                    // *entire* item — useful once, useless whenever what you wanted was one line,
+                    // and silent either way, so there was no way to tell it had happened. A long
+                    // press now starts an ordinary text selection, and "copy the whole thing"
+                    // becomes a button that says so and confirms itself.
+                    //
+                    // The strip follows the home page's collapse control: six icons across the top
+                    // of a page whose job is *reading* are six things competing with the text.
+                    // Collapsed by default for the same reason the home bar is — the actions are
+                    // one tap away, and the item is what you came for.
+                    var actionsExpanded by remember(note.id) { mutableStateOf(false) }
                     Row(
                         modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        AnimatedVisibility(
+                            visible = actionsExpanded,
+                            enter = expandHorizontally(expandFrom = Alignment.End) + fadeIn(),
+                            exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut()
+                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = {
+                            copyToClipboard(context, copyTextForNote(note))
+                            LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.copiedAllToast)
+                        }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = com.lucent.app.i18n.S.copyAll, tint = onGradient)
+                        }
                         // Pin/unpin sits at the very front of the strip (task 10) — it's the most-used
                         // quick action, so it's the first thing the thumb reaches. Confirmation is asked
                         // first (the dialog does the write).
@@ -1128,6 +1496,18 @@ fun NotesScreen(active: Boolean = true) {
                         IconButton(onClick = { noteToDelete = note }) {
                             Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
                         }
+                        }
+                        }
+                        // The fold toggle: same chevron, same direction as the home bar's, so the
+                        // control means one thing everywhere in the app.
+                        IconButton(onClick = { actionsExpanded = !actionsExpanded }) {
+                            Icon(
+                                if (actionsExpanded) Icons.Default.ChevronRight else Icons.Default.ChevronLeft,
+                                contentDescription = if (actionsExpanded) com.lucent.app.i18n.S.a11yHideActions
+                                                     else com.lucent.app.i18n.S.a11yShowMoreActions,
+                                tint = onGradient
+                            )
+                        }
                     }
                 }
 
@@ -1141,7 +1521,6 @@ fun NotesScreen(active: Boolean = true) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .longPressCopy(context, copyTextForNote(note))
                         .frostedGlass(tint = NoteColor.fromKey(note.color).swatch)
                         .padding(16.dp)
                 ) {
@@ -1161,6 +1540,10 @@ fun NotesScreen(active: Boolean = true) {
                         }
                     }
 
+                    if (note.isDoodle) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DoodleView(value = note.doodle)
+                    }
                     if (note.isChecklist) {
                         Spacer(modifier = Modifier.height(12.dp))
                         ChecklistView(
@@ -1174,7 +1557,13 @@ fun NotesScreen(active: Boolean = true) {
                                 }
                             }
                         )
-                    } else if (note.body.isNotBlank()) {
+                    }
+                    // Task A20: no longer an `else`. A checklist note's remarks and its items are
+                    // both content and both belong on the page — the old branch showed the body
+                    // *instead of* the list, so for a checklist note the remarks were invisible
+                    // even once they existed. Rendering is otherwise untouched: Markdown, [[links]]
+                    // and plain text all behave exactly as they do on a plain note.
+                    if (note.body.isNotBlank()) {
                         Spacer(modifier = Modifier.height(12.dp))
                         val openLink: (String) -> Unit = { target ->
                             val hit = NoteLinks.resolve(target, linkPool)
@@ -1204,7 +1593,23 @@ fun NotesScreen(active: Boolean = true) {
                     }
 
                     // Attachments live only on the detail page, never on the home cards.
-                    CardAttachments(attachments, onGradient, onGradientMuted)
+                    CardAttachments(
+                        attachments, onGradient, onGradientMuted,
+                        // Task A4: renaming touches only the display name in this row's JSON — the
+                        // bytes stay where they are, keyed by the same store id. Written straight to
+                        // the row because the detail page has no draft to fold it into.
+                        onRename = { att, newName ->
+                            AppScope.io.launch {
+                                db.noteDao().update(
+                                    note.copy(
+                                        attachments = Attachments.serialize(
+                                            attachments.map { if (it.data == att.data) it.copy(name = newName) else it }
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    )
                 }
 
                 // The link graph (outgoing/broken/backlinks) is part of the [[links]] feature, so it
@@ -1272,6 +1677,25 @@ fun NotesScreen(active: Boolean = true) {
             TrashNotesScreen(onBack = { showTrash = false })
         }
 
+        showHidden && HiddenArea.visible -> {
+            // ---- Hidden area (task A21) ----
+            HiddenNotesScreen(
+                onBack = { showHidden = false },
+                onOpen = { showHidden = false; openDetail(it) }
+            )
+        }
+
+        showDrafts -> {
+            // ---- Draft area (task A10) ----
+            DraftNotesScreen(
+                onBack = { showDrafts = false },
+                // Opening a draft puts it straight back in the editor — the list exists to get you
+                // back to unfinished work, not to display it. It stays flagged as a draft until the
+                // user either saves it properly or moves it out explicitly.
+                onOpen = { showDrafts = false; startEdit(it) }
+            )
+        }
+
         showSearch -> {
             // ---- Unified search ----
             // Notes *and* tasks in one pass, archived/completed/trashed included. A task result routes
@@ -1305,7 +1729,9 @@ fun NotesScreen(active: Boolean = true) {
                     maxRecent = 6,
                     id = { it.id },
                     timestamp = { it.updatedAt },
-                    activityScore = { com.lucent.app.data.UsageTracker.score(noteUsage[it.id] ?: 0.0, it.updatedAt, now) }
+                    activityScore = { com.lucent.app.data.UsageTracker.score(noteUsage[it.id] ?: 0.0, it.updatedAt, now) },
+                    // Task A13 — pinned notes lead the page instead of being scattered by date.
+                    isPinned = { it.pinned }
                 )
             }
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -1317,11 +1743,36 @@ fun NotesScreen(active: Boolean = true) {
                             Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yCancelSelection, tint = onGradient)
                         }
                         Text(
-                            "${selectedNoteIds.size} selected",
+                            com.lucent.app.i18n.S.nSelected(selectedNoteIds.size),
                             color = onGradient,
                             fontSize = 18.sp,
                             modifier = Modifier.weight(1f)
                         )
+                        // Task A21 — hide (or un-hide) everything ticked. Offered whenever the
+                        // hidden area is open; while it is closed the action would move items
+                        // somewhere the user currently has no way to reach, which is a trap
+                        // rather than a feature.
+                        if (HiddenArea.visible) {
+                            IconButton(onClick = {
+                                val ids = selectedNoteIds
+                                val target = showHidden
+                                AppScope.io.launch {
+                                    ids.forEach { id ->
+                                        db.noteDao().getByIdOnce(id)?.let { row ->
+                                            db.noteDao().update(row.copy(hidden = !target))
+                                        }
+                                    }
+                                }
+                                exitSelection()
+                            }) {
+                                Icon(
+                                    Icons.Default.VisibilityOff,
+                                    contentDescription = if (showHidden) com.lucent.app.i18n.S.hiddenRemove
+                                                         else com.lucent.app.i18n.S.hiddenAdd,
+                                    tint = onGradient
+                                )
+                            }
+                        }
                         // Select-all / clear-all toggle for the notes currently in view.
                         TextButton(onClick = {
                             val allIds = sortedNotes.map { it.id }.toSet()
@@ -1399,6 +1850,21 @@ fun NotesScreen(active: Boolean = true) {
                                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showTrash = true }
                                     )
+                                    DropdownMenuItem(
+                                        text = { Text(com.lucent.app.i18n.S.screenDrafts) },
+                                        leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
+                                        onClick = { showOverflowMenu = false; showDrafts = true }
+                                    )
+                                    // Task A21: absent, not disabled. A greyed-out "Hidden" entry
+                                    // would announce that a hidden area exists to anyone holding
+                                    // the phone, which is the one thing it must not do.
+                                    if (HiddenArea.visible) {
+                                        DropdownMenuItem(
+                                            text = { Text(com.lucent.app.i18n.S.screenHidden) },
+                                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
+                                            onClick = { showOverflowMenu = false; showHidden = true }
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -1452,6 +1918,18 @@ fun NotesScreen(active: Boolean = true) {
                                 selected = note.id in selectedNoteIds,
                                 onOpen = { openDetail(note) },
                                 onLongPress = { selectionMode = true; selectedNoteIds = setOf(note.id) },
+                                reorderEnabled = reorderEnabled,
+                                reorderModifier = Modifier.reorderableGridItem(
+                                    id = note.id,
+                                    enabled = reorderEnabled,
+                                    gridState = gridState,
+                                    state = reorderState,
+                                    onLongPress = {
+                                        selectionMode = true
+                                        if (note.id !in selectedNoteIds) selectedNoteIds = selectedNoteIds + note.id
+                                    },
+                                    onDrop = { targetId -> dropSelection(targetId) }
+                                ),
                                 onToggleSelect = {
                                     selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
                                 },
@@ -1521,6 +1999,9 @@ private fun NoteCard(
     selected: Boolean,
     onOpen: () -> Unit,
     onLongPress: () -> Unit,
+    // Task A16 — see the identical pair on TaskCard: exactly one long-press detector at a time.
+    reorderEnabled: Boolean = false,
+    reorderModifier: Modifier = Modifier,
     onToggleSelect: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -1538,9 +2019,10 @@ private fun NoteCard(
             .frostedGlass(tint = NoteColor.fromKey(note.color).swatch)
             // A long press enters multi-select and grabs this card; once in select mode a tap toggles
             // this card instead of opening it. Outside select mode a tap opens as before.
+            .then(reorderModifier)
             .combinedClickable(
                 onClick = { if (selectionMode) onToggleSelect() else onOpen() },
-                onLongClick = { if (!selectionMode) onLongPress() }
+                onLongClick = if (reorderEnabled) null else { { if (!selectionMode) onLongPress() } }
             )
             .then(
                 if (selected) Modifier.border(2.dp, onGradient, selShape) else Modifier
@@ -1649,3 +2131,11 @@ private fun templateIcon(template: NoteTemplate) = when (template.iconName) {
     com.lucent.app.data.TemplateIcon.IDEA -> Icons.Default.Lightbulb
     com.lucent.app.data.TemplateIcon.CHECKLIST -> Icons.AutoMirrored.Filled.FormatListBulleted
 }
+
+/**
+ * Task A12. Below this many characters a note's body fits on screen without scrolling on any
+ * reasonable device, so jumping to its end would move the page for no visible benefit — and moving
+ * a page the user did not ask to move is its own small annoyance. Above it, the end is off-screen
+ * and landing there is the whole point.
+ */
+private const val BODY_JUMP_THRESHOLD = 400

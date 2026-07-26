@@ -42,14 +42,32 @@ object Haptics {
     private const val TYPING_AMPLITUDE = 1        // the floor; the gentlest a motor will do
     private const val TYPING_MIN_GAP_MS = 16L
 
-    // The strong pulse that marks "the reply is complete". This is a short two-step waveform — a
-    // medium tap, a brief gap, then a firm pulse — rather than a single 42ms one-shot. On some OEM
-    // motors (notably Huawei/EMUI) a single short one-shot either isn't rendered at all or is
-    // silently dropped, whereas a slightly longer waveform carrying a notification usage hint (see
-    // [vibrateStrong]) fires reliably. On devices that were already fine it simply reads as one
-    // firm "done" buzz.
-    private val FINISH_TIMINGS = longArrayOf(0L, 40L, 40L, 100L)   // wait · on · gap · on
-    private val FINISH_AMPLITUDES = intArrayOf(0, 180, 0, 255)     // matching amplitudes (0 = gap)
+    // The strong pulse that marks "the reply is complete" (B-group task 1: the finish buzz was not
+    // being felt at all).
+    //
+    // Three things were wrong and all three are fixed here rather than one of them:
+    //
+    //  1. AMPLITUDE. The old waveform opened at 180/255 and only reached full power in its second
+    //     step. The brief is explicitly "run the motor at maximum power once", so both active steps
+    //     now sit at MAX_AMPLITUDE (255) — the literal ceiling the platform accepts.
+    //  2. DURATION. A 40ms pulse is near the floor of what an LRA can spin up and be *felt* as
+    //     anything more than the per-character tick. The main pulse is now long enough (160ms) to
+    //     read as a distinct "done", which is the whole point of it existing.
+    //  3. RACE. The per-character typewriter tick and this buzz could be issued within a few ms of
+    //     each other. Many OEM vibrators do not queue effects — a new one issued while another is
+    //     still playing is dropped rather than replacing it — so the finish buzz was being eaten by
+    //     the last typing tick. [SETTLE_MS] below is the guard: cancel, let the motor come to rest,
+    //     then fire. AssistantController additionally stops the typewriter before calling this, so
+    //     no tick can even be issued inside that window.
+    //
+    // The during-reply feedback (tick / typingTick) is deliberately untouched — the brief keeps it.
+    private const val MAX_AMPLITUDE = 255
+    private val FINISH_TIMINGS = longArrayOf(0L, 55L, 45L, 160L)          // wait · on · gap · on
+    private val FINISH_AMPLITUDES = intArrayOf(0, MAX_AMPLITUDE, 0, MAX_AMPLITUDE)
+
+    // How long to leave the motor idle between cancelling whatever was playing and issuing the
+    // finish buzz. Short enough to read as instant, long enough for an LRA to actually stop.
+    private const val SETTLE_MS = 24L
 
     @Volatile private var lastTypingTickAt = 0L
 
@@ -117,15 +135,23 @@ object Haptics {
         }
     }
 
-    /** The single, firm "reply finished" buzz. Any-thread safe. */
+    /**
+     * The single, full-power "reply finished" buzz (B-group task 1). Any-thread safe.
+     *
+     * Blocks its calling thread for [SETTLE_MS] only — see the constant for why that pause is what
+     * makes the buzz land on OEM motors that drop overlapping effects. Callers run it off the main
+     * thread (the generation coroutine), so the pause is never on a frame path.
+     */
     fun finishBuzz(context: Context) {
         val vib = vibrator(context.applicationContext) ?: return
         if (!vib.hasVibrator()) return
         try {
-            // Clear any still-running typewriter tick first: some OEM vibrators drop a new effect
-            // that arrives while another is playing instead of replacing it, which is one way the
-            // finish buzz can go missing on those devices.
+            // Clear any still-running typewriter tick first, then let the motor come to rest: some
+            // OEM vibrators drop a new effect that arrives while another is playing instead of
+            // replacing it, which is how the finish buzz went missing entirely.
             vib.cancel()
+            lastTypingTickAt = 0L
+            try { Thread.sleep(SETTLE_MS) } catch (_: InterruptedException) { }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 // createWaveform with amplitudes degrades to on/off on motors without amplitude
                 // control (non-zero = on), so this one call is correct on every API-26+ device.

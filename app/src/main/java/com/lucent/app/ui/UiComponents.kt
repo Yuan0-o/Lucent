@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +63,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
@@ -88,6 +90,32 @@ const val SWIPE_ENTER_MS = 220
  * the end of the list, which is what it is.
  */
 const val SWIPE_RESIST = 0.33f
+
+/**
+ * Task A8 — the label inside a capsule button sat off-centre: the whitespace above "保存" was
+ * visibly larger than the whitespace below it.
+ *
+ * The padding was symmetric all along (`vertical = 13.dp` / `16.dp`), so the button box was never
+ * the problem. What is off-centre is the *line box* the glyphs are painted into. A line reserves
+ * `lineHeight`, and the theme's body style asks for more of it (24sp) than a 15–16sp label needs;
+ * the surplus — the "leading" — is distributed by the default [LineHeightStyle.Alignment.Proportional],
+ * i.e. split in the ratio of the font's ascent to its descent. CJK faces are strongly
+ * ascent-heavy, so most of that surplus lands *above* the glyphs. Centring the box therefore does
+ * not centre what the eye actually sees, and the taller the label's script, the worse it reads.
+ *
+ * [LineHeightStyle.Trim.Both] drops the leading above the first line and below the last one, and
+ * [LineHeightStyle.Alignment.Center] splits whatever remains evenly instead of proportionally. The
+ * visible glyphs end up centred in the capsule, which is what the symmetric padding was asking for.
+ *
+ * Deliberately built from the common `ui-text` API (no `PlatformTextStyle`, which takes an
+ * Android-only `includeFontPadding` argument), so the Android file and the desktop fork stay in
+ * step. A style whose `lineHeight` is unspecified simply has no leading to trim, making this a
+ * no-op there rather than a surprise.
+ */
+private val CapsuleLabelLineHeight = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Center,
+    trim = LineHeightStyle.Trim.Both
+)
 
 /**
  * The primary pill button used for "Edit note" / "Edit task" / "Archive".
@@ -140,7 +168,13 @@ fun GlassCapsuleButton(
     ) {
         Icon(icon, contentDescription = null, tint = onGradient)
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text, color = onGradient, fontSize = 16.sp)
+        Text(
+            text,
+            color = onGradient,
+            fontSize = 16.sp,
+            // Task A8: centre the glyphs, not the metrics box around them.
+            style = LocalTextStyle.current.copy(lineHeightStyle = CapsuleLabelLineHeight)
+        )
     }
 }
 
@@ -242,7 +276,13 @@ fun GlassButton(
             Icon(icon, contentDescription = null, tint = label.copy(alpha = label.alpha * fade), modifier = Modifier.size(iconSize))
             Spacer(modifier = Modifier.width(iconGap))
         }
-        Text(text, color = label.copy(alpha = label.alpha * fade), fontSize = labelSize)
+        Text(
+            text,
+            color = label.copy(alpha = label.alpha * fade),
+            fontSize = labelSize,
+            // Task A8: see [CapsuleLabelLineHeight].
+            style = LocalTextStyle.current.copy(lineHeightStyle = CapsuleLabelLineHeight)
+        )
     }
 }
 
@@ -261,7 +301,11 @@ fun AttachmentSection(
     attachments: List<com.lucent.app.data.Attachment>,
     onPick: () -> Unit,
     onRemove: (com.lucent.app.data.Attachment) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Tasks A4 and A11. Optional so the section stays usable anywhere renaming or ordering has no
+    // meaning; the corresponding control simply isn't drawn.
+    onRename: ((com.lucent.app.data.Attachment, String) -> Unit)? = null,
+    onReorder: ((Int, Int) -> Unit)? = null
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -282,7 +326,7 @@ fun AttachmentSection(
         }
         if (attachments.isNotEmpty()) {
             // The chips carry their own top padding, so no extra spacer is needed here.
-            PendingAttachmentChips(attachments, onGradientMuted, onRemove)
+            PendingAttachmentChips(attachments, onGradientMuted, onRemove, onRename, onReorder)
         }
     }
 }

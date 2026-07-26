@@ -117,3 +117,29 @@ find_library(log-lib log)
 target_link_libraries(lucent_llama
     llama
     ${log-lib})
+
+# ---- PHASE 4: multimodal (llama.cpp's official mtmd) ----
+# The mtmd library lives in the llama.cpp tree at tools/mtmd but is only built as a target when
+# LLAMA_BUILD_TOOLS is ON — which would drag every CLI tool into this build. So its sources are
+# compiled straight into lucent_llama instead: they depend only on ggml + llama (already linked)
+# and the vendored stb/miniaudio headers. Guarded by an existence check so a future llama.cpp pin
+# that moves these files degrades to a text-only engine WITH A WARNING instead of a broken build —
+# multimodal must never be the reason the engine fails to exist.
+set(LUCENT_MTMD_DIR ${llama_cpp_SOURCE_DIR}/tools/mtmd)
+if (EXISTS ${LUCENT_MTMD_DIR}/mtmd.cpp)
+    target_sources(lucent_llama PRIVATE
+        ${LUCENT_MTMD_DIR}/mtmd.cpp
+        ${LUCENT_MTMD_DIR}/mtmd-helper.cpp
+        ${LUCENT_MTMD_DIR}/mtmd-audio.cpp
+        ${LUCENT_MTMD_DIR}/clip.cpp
+    )
+    target_include_directories(lucent_llama PRIVATE
+        ${LUCENT_MTMD_DIR}
+        ${llama_cpp_SOURCE_DIR}/vendor
+        ${llama_cpp_SOURCE_DIR}/common
+    )
+    message(STATUS "lucent: multimodal (mtmd) compiled in from ${LUCENT_MTMD_DIR}")
+else()
+    target_compile_definitions(lucent_llama PRIVATE LUCENT_NO_MTMD)
+    message(WARNING "lucent: tools/mtmd not found in the llama.cpp checkout - building a TEXT-ONLY engine (local multimodal will be unavailable)")
+endif()

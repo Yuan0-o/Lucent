@@ -3,6 +3,11 @@
      maxResize caps the ceiling on launchers that honour it, targetCell is the default drop size,
      and previewImage is what EVERY launcher (including ones that ignore previewLayout) shows in
      the picker — a miniature of the widget itself, never the app icon. -->
+    <!-- C-group task 9: previewLayout points at a DEDICATED preview layout, not at the real
+         one. From Android 12 the picker renders previewLayout into a fixed cell much smaller
+         than this widget's targetCell, and the real layout's fixed dp sizes do not shrink with
+         it, so its content overlapped and clipped there while being correct on the home
+         screen. previewImage is kept for launchers that ignore previewLayout entirely. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="40dp"
     android:minHeight="40dp"
@@ -16,5 +21,5 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:previewImage="@drawable/preview_today"
-    android:previewLayout="@layout/widget_today_tasks"
+    android:previewLayout="@layout/widget_today_tasks_preview"
     android:initialLayout="@layout/widget_today_tasks" />

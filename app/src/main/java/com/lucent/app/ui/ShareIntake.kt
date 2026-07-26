@@ -3,7 +3,6 @@ package com.lucent.app.ui
 import android.content.Context
 import android.provider.OpenableColumns
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -121,8 +120,16 @@ fun ShareIntakeDialog() {
                 }
             )
         },
+        // C-group task 19: both buttons are TextButtons.
+        //
+        // "New note" was a filled Button and "New task" a TextButton, which is Material's grammar
+        // for "one of these is the recommended action". That is not true here: an inbound share is
+        // equally plausibly a note or a task, and only the user knows which. A filled button reads
+        // as the default and gets tapped by reflex, so the styling was quietly steering the choice
+        // — and steering it identically every time, which is how a shared link ends up in the wrong
+        // place. Two peer actions, two identical affordances.
         confirmButton = {
-            Button(onClick = {
+            TextButton(onClick = {
                 val payload = shared
                 ShareIntake.clear()
                 scope.launch {

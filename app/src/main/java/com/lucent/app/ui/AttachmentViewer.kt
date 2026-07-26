@@ -13,7 +13,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,9 +30,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Launch
+import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -58,20 +65,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.lucent.app.data.Attachment
 import com.lucent.app.data.AttachmentAccess
 import com.lucent.app.data.Attachments
+import com.lucent.app.data.DocumentText
 import com.lucent.app.AppScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Everything a user can do with a saved attachment beyond seeing it on the card: open it full-screen
@@ -113,6 +127,73 @@ fun openAttachmentExternally(context: Context, att: Attachment) {
     }
 }
 
+/**
+ * Task A25, replacement scope.
+ *
+ * The original ask — "after sending to another app, offer a way back to Lucent" — is not something
+ * Lucent can deliver. `ACTION_SEND` hands control to the *target app's* task, and whether Back
+ * returns here depends on how that app declared its launch mode. No flag, notification or chooser
+ * extra makes that reliable across WeChat, Gmail, a gallery and a file manager.
+ *
+ * What is reliable, and what this does instead, is **confirming the send once the user is back**:
+ * the file name is armed when the share sheet opens and reported the next time a Lucent screen
+ * resumes. No permission, no notification, no manifest change, and nothing that alters what
+ * sharing means.
+ *
+ * ### The one heuristic, stated plainly
+ *
+ * Lucent is paused by the chooser itself, so "we resumed" cannot by itself distinguish *sent* from
+ * *dismissed the chooser*. [MIN_AWAY_MS] is the discriminator: choosing a target and coming back
+ * involves at least another app drawing a screen, which does not happen in under a second, whereas
+ * backing out of the chooser returns immediately. A misfire costs one wrong toast, so the trade is
+ * a cheap one — but it is a heuristic and not a guarantee, which is why it is written down here.
+ */
+private object ShareReturnNotice {
+
+    private const val MIN_AWAY_MS = 1200L
+
+    /** Set while a share is in flight; the name is what the toast reports. */
+    private var pendingName: String? = null
+    private var armedAt = 0L
+    private var callbacks: android.app.Application.ActivityLifecycleCallbacks? = null
+
+    fun arm(context: Context, name: String) {
+        val app = context.applicationContext as? android.app.Application ?: return
+        pendingName = name
+        armedAt = System.currentTimeMillis()
+        if (callbacks != null) return
+        val cb = object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: android.app.Activity) {
+                val name = pendingName ?: return
+                if (System.currentTimeMillis() - armedAt < MIN_AWAY_MS) {
+                    // Straight back = the chooser was dismissed. Disarm silently; claiming a file
+                    // was sent when it wasn't is worse than saying nothing.
+                    pendingName = null
+                    detach(activity.application)
+                    return
+                }
+                pendingName = null
+                detach(activity.application)
+                LucentToast.show(activity.applicationContext, com.lucent.app.i18n.S.sharedToast(name))
+            }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityStarted(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivityStopped(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        }
+        callbacks = cb
+        app.registerActivityLifecycleCallbacks(cb)
+    }
+
+    /** Unregister as soon as the one resume we care about has happened — no permanent listener. */
+    private fun detach(app: android.app.Application) {
+        callbacks?.let { app.unregisterActivityLifecycleCallbacks(it) }
+        callbacks = null
+    }
+}
+
 /** Share the attachment out through the system share sheet (ACTION_SEND, with the real bytes). */
 fun shareAttachment(context: Context, att: Attachment) {
     AppScope.io.launch {
@@ -129,6 +210,8 @@ fun shareAttachment(context: Context, att: Attachment) {
             }
             try {
                 context.startActivity(Intent.createChooser(intent, com.lucent.app.i18n.S.shareFileChooser))
+                // Task A25 (replacement): report the send when the user comes back.
+                ShareReturnNotice.arm(context, att.name)
             } catch (t: Throwable) {
                 toast(context, com.lucent.app.i18n.S.cantShareFile)
             }
@@ -237,6 +320,10 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                                 onToggleChrome = { chromeVisible = !chromeVisible }
                             )
                             a.isPdf -> PdfViewer(a)
+                            // Task A1: Markdown, Word, PowerPoint, Excel, RTF and every code
+                            // format now preview as text instead of falling through to
+                            // "no preview available". See [DocumentText].
+                            DocumentText.canExtract(a) -> TextPreview(a)
                             else -> NonPreviewableInfo(a)
                         }
                     }
@@ -284,7 +371,7 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                 }
                 ViewerAction(Icons.Default.Download, com.lucent.app.i18n.S.actionSave) { save(att) }
                 ViewerAction(Icons.Default.Share, com.lucent.app.i18n.S.actionShare) { shareAttachment(context, att) }
-                ViewerAction(Icons.Default.Launch, com.lucent.app.i18n.S.openWith) {
+                ViewerAction(Icons.AutoMirrored.Filled.Launch, com.lucent.app.i18n.S.openWith) {
                     openAttachmentExternally(context, att)
                 }
             }
@@ -335,10 +422,34 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+
+    /**
+     * Task A3. How far the picture may be dragged before its own edge would leave the screen:
+     * half of whatever the scaled image overflows the viewport by, per axis. At fit scale the
+     * overflow is zero, so the limit is zero and the image simply cannot be moved.
+     *
+     * The drawn size is derived the way ContentScale.Fit derives it (the smaller of the two
+     * ratios), not from the viewport — clamping against the viewport would allow a landscape photo
+     * to be dragged up and down through its own letterboxing, which is precisely the "the picture
+     * wandered off" complaint.
+     */
+    fun panLimits(): Pair<Float, Float> {
+        val bmp = bitmap ?: return 0f to 0f
+        if (viewport.width == 0 || viewport.height == 0) return 0f to 0f
+        val vw = viewport.width.toFloat()
+        val vh = viewport.height.toFloat()
+        val fit = minOf(vw / bmp.width.toFloat(), vh / bmp.height.toFloat())
+        val drawnW = bmp.width * fit * scale
+        val drawnH = bmp.height * fit * scale
+        return ((drawnW - vw).coerceAtLeast(0f) / 2f) to ((drawnH - vh).coerceAtLeast(0f) / 2f)
+    }
+
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceIn(1f, 6f)
-        offsetX += panChange.x
-        offsetY += panChange.y
+        val (maxX, maxY) = panLimits()
+        offsetX = (offsetX + panChange.x).coerceIn(-maxX, maxX)
+        offsetY = (offsetY + panChange.y).coerceIn(-maxY, maxY)
     }
 
     when {
@@ -347,13 +458,18 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
             contentDescription = att.name,
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged { viewport = it }
                 .graphicsLayer(
                     scaleX = scale,
                     scaleY = scale,
                     translationX = offsetX,
                     translationY = offsetY
                 )
-                .transformable(transformState)
+                // Task A3, the other half: while the image is at fit scale there is nothing to pan,
+                // so panning must not be *claimed* either — canPan lets the drag fall through to the
+                // pager and swiping to the next attachment works again. Zoomed in, the gesture is
+                // the image's and stays clamped by panLimits().
+                .transformable(state = transformState, canPan = { scale > 1f })
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
                         // Snap between fit and 2x, recentring on reset.
@@ -423,6 +539,27 @@ private fun InlineMediaPlayer(
     var scrubbing by remember(att.data) { mutableStateOf(false) }
     var scrubMs by remember(att.data) { mutableStateOf(0f) }
 
+    // ---- Task A23 gesture state ------------------------------------------------------------
+    // True while a finger is held down and playback is temporarily doubled.
+    var boosting by remember(att.data) { mutableStateOf(false) }
+    // A long press ends in a pointer-up, which the tap detector would otherwise read as a tap and
+    // use to toggle the chrome. This swallows exactly that one tap.
+    var swallowNextTap by remember(att.data) { mutableStateOf(false) }
+    // Transient readout for the brightness / volume slides: label to 0..1, null when idle.
+    var slideReadout by remember(att.data) { mutableStateOf<Pair<String, Float>?>(null) }
+
+    // Brightness belongs to the *dialog's* window, not the Activity's: the viewer is a Compose
+    // Dialog, so it has a window of its own and dimming the Activity behind it would change
+    // nothing the user can see. Volume is a device-wide stream and goes through AudioManager.
+    val androidView = LocalView.current
+    val dialogWindow = remember(androidView) { (androidView.parent as? DialogWindowProvider)?.window }
+    val audio = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+    }
+    val maxVolume = remember(audio) {
+        (audio?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: 1).coerceAtLeast(1)
+    }
+
     LaunchedEffect(att.data) {
         val u = withContext(Dispatchers.IO) { AttachmentAccess.contentUri(context, att) }
         if (u != null) uri = u else failed = true
@@ -467,6 +604,59 @@ private fun InlineMediaPlayer(
             if (!wasPlaying) mp.pause()
         } catch (_: Throwable) {
             // Some codecs refuse a rate change; playback simply keeps its current speed.
+        }
+    }
+
+    /**
+     * Task A23. Screen brightness is a window attribute in 0..1, with -1 meaning "follow the
+     * system". The floor is deliberately just above zero: a video player that can be dragged to a
+     * genuinely black screen leaves the user with no visible way back to the slider that did it.
+     */
+    fun applyBrightness(fraction: Float) {
+        val w = dialogWindow ?: return
+        try {
+            w.attributes = w.attributes.apply { screenBrightness = fraction.coerceIn(0.02f, 1f) }
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun currentBrightness(): Float {
+        val v = dialogWindow?.attributes?.screenBrightness ?: -1f
+        // -1 means "inherit"; there is no way to read the inherited value, so start from the middle
+        // rather than guessing — the first drag then moves relative to something predictable.
+        return if (v < 0f) 0.5f else v
+    }
+
+    fun applyVolume(fraction: Float) {
+        val am = audio ?: return
+        try {
+            am.setStreamVolume(
+                android.media.AudioManager.STREAM_MUSIC,
+                (fraction.coerceIn(0f, 1f) * maxVolume).toInt(),
+                0
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun currentVolume(): Float {
+        val am = audio ?: return 0.5f
+        return try {
+            am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+        } catch (_: Throwable) {
+            0.5f
+        }
+    }
+
+    fun replay() {
+        val vv = view ?: return
+        try {
+            vv.seekTo(0)
+            vv.start()
+            playing = true
+            completed = false
+            positionMs = 0
+        } catch (_: Throwable) {
         }
     }
 
@@ -539,14 +729,130 @@ private fun InlineMediaPlayer(
                     }
                 }
 
-                // The whole surface is the show/hide tap target.
+                // ---- Task A23: the gesture surface -------------------------------------
+                //
+                // Four gestures share one surface, split across separate pointerInput nodes so
+                // each detector keeps its own state machine instead of one hand-rolled block
+                // trying to be all four at once:
+                //
+                //   single tap    show / hide the chrome (unchanged)
+                //   double tap    play / pause — the thing you want most often, without hunting
+                //                 for a button that may have faded out
+                //   press & hold  2x while held, back to the previous rate on release
+                //   vertical drag brightness on the left half, volume on the right half
+                //
+                // Only the drag detector consumes events. The hold detector deliberately does
+                // not — it observes the same pointer the tap detector is watching, which is what
+                // lets a quick tap still register as a tap while a long one becomes a boost.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = { onToggleChrome() })
+                        .pointerInput(att.data) {
+                            detectTapGestures(
+                                onTap = {
+                                    if (swallowNextTap) swallowNextTap = false else onToggleChrome()
+                                },
+                                onDoubleTap = { togglePlay() }
+                            )
+                        }
+                        .pointerInput(att.data) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                // Still down when the timeout expires => a hold, not a tap.
+                                val held = withTimeoutOrNull(HOLD_TO_BOOST_MS) {
+                                    waitForUpOrCancellation()
+                                } == null
+                                if (held) {
+                                    val previous = speed
+                                    swallowNextTap = true
+                                    boosting = true
+                                    applySpeed(2f)
+                                    waitForUpOrCancellation()
+                                    boosting = false
+                                    applySpeed(previous)
+                                }
+                            }
+                        }
+                        .pointerInput(att.data, maxVolume) {
+                            var onLeftHalf = false
+                            var value = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { pos ->
+                                    onLeftHalf = pos.x < size.width / 2f
+                                    value = if (onLeftHalf) currentBrightness() else currentVolume()
+                                },
+                                onDragEnd = { slideReadout = null },
+                                onDragCancel = { slideReadout = null },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    // A full-height swipe covers the full range, and up means more,
+                                    // which is why the sign is flipped (y grows downward).
+                                    val height = size.height.toFloat().coerceAtLeast(1f)
+                                    value = (value - dragAmount / height).coerceIn(0f, 1f)
+                                    if (onLeftHalf) {
+                                        applyBrightness(value)
+                                        slideReadout = com.lucent.app.i18n.S.a11yBrightness to value
+                                    } else {
+                                        applyVolume(value)
+                                        slideReadout = com.lucent.app.i18n.S.a11yVolume to value
+                                    }
+                                }
+                            )
                         }
                 )
+
+                // Task A23: the replay button. Playback used to end on a still frame with no
+                // control on it — you had to tap to summon the chrome, then find the transport,
+                // then press play. This is the one action anybody wants at the end of a clip, so
+                // it sits where the eye already is, and it deliberately does NOT toggle the
+                // chrome: it is a button in its own right, above the gesture surface, so its tap
+                // never reaches the detector underneath.
+                if (completed && !att.isAudio) {
+                    IconButton(
+                        onClick = { Haptics.tick(context); replay() },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(66.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
+                    ) {
+                        Icon(
+                            Icons.Default.Replay,
+                            contentDescription = com.lucent.app.i18n.S.a11yReplay,
+                            tint = Color.White,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+
+                // Transient readouts for hold-to-boost and the brightness / volume slides. Both
+                // sit above the gesture surface but are non-interactive, so they never intercept
+                // the gesture that is currently producing them.
+                if (boosting) {
+                    Text(
+                        com.lucent.app.i18n.S.videoSpeedBoost,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 28.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+                }
+                slideReadout?.let { (label, value) ->
+                    Text(
+                        "$label  ${(value * 100).toInt()}%",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(horizontal = 18.dp, vertical = 10.dp)
+                    )
+                }
 
                 if (chromeVisible) {
                     Column(
@@ -580,7 +886,7 @@ private fun InlineMediaPlayer(
                             )
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { togglePlay() }) {
+                            IconButton(onClick = { if (completed) replay() else togglePlay() }) {
                                 Icon(
                                     when {
                                         playing -> Icons.Default.Pause
@@ -648,7 +954,7 @@ private fun NonPreviewableInfo(att: Attachment) {
         modifier = Modifier.padding(24.dp)
     ) {
         Icon(
-            Icons.Default.Launch,
+            Icons.AutoMirrored.Filled.Launch,
             contentDescription = null,
             tint = Color.White,
             modifier = Modifier.size(48.dp)
@@ -663,3 +969,70 @@ private fun NonPreviewableInfo(att: Attachment) {
         )
     }
 }
+
+/**
+ * The in-app text preview for documents and code (task A1).
+ *
+ * Extraction happens off the main thread through [DocumentText] and the result is shown
+ * monospaced, because most of what lands here — Markdown, JSON, source files, a spreadsheet dumped
+ * as tab-separated rows — is written expecting a fixed pitch, and a proportional font turns the
+ * alignment those formats rely on into noise.
+ *
+ * The header line is not decoration. A Word file previewed here has lost its layout, its images
+ * and its styling, and a preview that quietly implies otherwise is worse than none: it invites the
+ * user to believe they have checked the document when they have only read its words. Saying so
+ * costs one line and keeps "Open with" an obviously useful button rather than a redundant one.
+ */
+@Composable
+private fun TextPreview(att: Attachment) {
+    val context = LocalContext.current
+    var result by remember(att.data) { mutableStateOf<DocumentText.Result?>(null) }
+    var failed by remember(att.data) { mutableStateOf(false) }
+
+    LaunchedEffect(att.data) {
+        val extracted = withContext(Dispatchers.IO) { DocumentText.extract(context, att) }
+        if (extracted != null) result = extracted else failed = true
+    }
+
+    when {
+        result != null -> {
+            val text = result!!.text
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    com.lucent.app.i18n.S.previewTextOnly,
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 11.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                if (text.isEmpty()) {
+                    Text(com.lucent.app.i18n.S.previewEmptyDocument, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                } else {
+                    Text(text, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                }
+                if (result!!.truncated) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        com.lucent.app.i18n.S.previewTextTruncated,
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 11.sp
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+        failed -> Text(com.lucent.app.i18n.S.cantLoadText, color = Color.White)
+        else -> CircularProgressIndicator(color = Color.White)
+    }
+}
+
+/**
+ * Task A23. How long a finger must stay down before it means "run at 2x" rather than "tap".
+ * Android's own long-press threshold is 500ms; a shade under that feels responsive on a video
+ * surface without firing on the way to an ordinary tap.
+ */
+private const val HOLD_TO_BOOST_MS = 400L

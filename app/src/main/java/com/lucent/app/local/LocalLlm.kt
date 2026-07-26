@@ -60,6 +60,19 @@ object LocalLlm {
     /** Whether the native engine was packaged for this ABI at all. */
     fun isSupported(): Boolean = available
 
+    /**
+     * PHASE 4: whether the resident model can see images — i.e. an mmproj was imported for the
+     * active slot AND the projector loaded successfully. False whenever no model is resident.
+     */
+    fun supportsVision(): Boolean = handle != 0L && visionReady
+
+    /**
+     * W-1 (desktop): whether "unsupported" specifically means the CPU lacks AVX2. On Android the
+     * engine ships per-ABI, so this reason cannot occur — the constant keeps the shared UI files
+     * (AssistantController is a twin) identical across trees while each platform answers truthfully.
+     */
+    fun unsupportedBecauseCpuLacksAvx2(): Boolean = false
+
     // One thread for every native call, for the model's whole lifetime.
     private val llmDispatcher: CoroutineDispatcher =
         Executors.newSingleThreadExecutor { r -> Thread(r, "LucentLocalLlm") }.asCoroutineDispatcher()
@@ -70,6 +83,8 @@ object LocalLlm {
     // The slot id of the resident model, so a switch to a different slot forces a clean reload even
     // if two slots ever shared a path (they don't today, but tracking the id makes the intent exact).
     @Volatile private var loadedSlotId: String? = null
+    // PHASE 4: whether the ACTIVE model has a working multimodal projector loaded next to it.
+    @Volatile private var visionReady: Boolean = false
     private val generating = AtomicBoolean(false)
     // True only while a model is actually being loaded into memory (the slow, multi-second first
     // load). The assistant reads this to show a distinct "loading the model…" line, so the wait is
@@ -116,11 +131,78 @@ object LocalLlm {
     fun isGenerating(): Boolean = generating.get()
 
     /**
-     * Threads for token generation: half the cores, clamped to 2..4. More threads than that hurts
-     * on big.LITTLE phones (little cores drag the pace) and cooks the battery; fewer starves it.
+     * Threads for token generation (B-group task 10: "squeeze the processor").
+     *
+     * ### What was wrong with half-the-cores-capped-at-4
+     *
+     * The old rule was written for a phone and it is genuinely right about one thing: on a
+     * big.LITTLE SoC, handing work to the little cores makes generation SLOWER, not faster, because
+     * llama.cpp splits a matrix row-wise and then waits for the slowest thread. A little core
+     * finishing last sets the pace for every token. So oversubscribing is a real trap and the cap
+     * existed for a reason.
+     *
+     * But "half the cores" is a poor proxy for "the big cores", and the hard ceiling of 4 left
+     * performance on the table everywhere the proxy was wrong:
+     *
+     *  - An 8-core phone with 4 big + 4 little cores got 4 threads: correct by accident.
+     *  - A modern 8-core phone with 1 prime + 3 big + 4 little got 4: also fine.
+     *  - A 12-core phone (2+4+6) got 4 when 6 would have been right.
+     *  - A desktop with 16 identical performance cores got FOUR. That is not a big.LITTLE machine
+     *    at all — there are no little cores to drag anything — and the app was using a quarter of
+     *    a machine that could have used all of it. The Windows build shares this file, so the
+     *    phone's safety rule was quietly throttling desktops.
+     *
+     * ### The rule now
+     *
+     * Count the cores that are actually FAST ([performanceCores]) and use those, floored at 2 and
+     * capped at 8. The floor keeps a weak device usable; the cap is not about cores but about
+     * diminishing returns — past ~8 threads llama.cpp spends more time synchronising per token
+     * than it saves, and on a phone the extra heat throttles the whole SoC within a minute, which
+     * makes sustained generation slower than a lower thread count would have been. Squeezing the
+     * processor means running the fast cores flat out, not spawning threads that fight each other.
      */
-    private fun threadCount(): Int =
-        (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4)
+    private fun threadCount(): Int = performanceCores().coerceIn(2, 8)
+
+    /**
+     * How many of this device's cores are "fast", i.e. worth giving a generation thread to.
+     *
+     * On Linux (which Android is) each CPU exposes its maximum clock through
+     * `/sys/devices/system/cpu/cpuN/cpufreq/cpuinfo_max_freq`. Cores within 15% of the highest
+     * value found are counted as the performance cluster — 15% because a prime core is typically
+     * ~10% above the other big cores and must not split them off into a cluster of one, while a
+     * little core sits 40-60% below and is never mistaken for a big one.
+     *
+     * Falls back to half the cores (the previous rule, which was a safe-if-pessimistic guess) when
+     * the sysfs files are unreadable, which is the case on some hardened kernels and on every
+     * non-Linux desktop. Cached: the topology cannot change while the process lives, and this is
+     * called on the model-load path where an extra file walk is pure waste.
+     */
+    @Volatile private var cachedPerfCores: Int = 0
+
+    private fun performanceCores(): Int {
+        cachedPerfCores.takeIf { it > 0 }?.let { return it }
+        val total = Runtime.getRuntime().availableProcessors()
+        val result = try {
+            val freqs = (0 until total).mapNotNull { i ->
+                java.io.File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq")
+                    .takeIf { it.canRead() }
+                    ?.readText()
+                    ?.trim()
+                    ?.toLongOrNull()
+            }
+            if (freqs.isEmpty()) {
+                (total / 2)
+            } else {
+                val top = freqs.max()
+                freqs.count { it >= top * 85 / 100 }
+            }
+        } catch (t: Throwable) {
+            total / 2
+        }
+        val safe = result.coerceAtLeast(1)
+        cachedPerfCores = safe
+        return safe
+    }
 
     /**
      * Make sure the imported model is loaded, loading it if needed. Safe to call every send:
@@ -147,6 +229,7 @@ object LocalLlm {
             // the new one loads so the peak footprint is one model, not two.
             nativeUnload(handle)
             handle = 0L
+            visionReady = false
             loadedPath = null
             loadedSlotId = null
         }
@@ -172,6 +255,16 @@ object LocalLlm {
                 loadedPath = file.absolutePath
                 loadedSlotId = activeSlot.id
                 loadedGpuLayers = used
+                // PHASE 4: if this slot has a projector, load it beside the model. Best-effort in
+                // the strictest sense — a failed projector leaves a perfectly good TEXT model
+                // resident, so the flag is the only thing that changes.
+                visionReady = try {
+                    val mmproj = LocalModelStore.activeMmprojFile(context)
+                    mmproj != null && nativeMtmdLoad(h, mmproj.absolutePath, threadCount())
+                } catch (t: Throwable) {
+                    Log.e("LocalLlm", "mmproj load failed", t)
+                    false
+                }
             }
             h != 0L
         } finally {
@@ -193,14 +286,32 @@ object LocalLlm {
      */
     suspend fun generate(
         messages: List<Pair<String, String>>,
+        // PHASE 4: raw encoded image bytes (png/jpeg/webp) for THIS turn. Used only when the
+        // resident model has a projector (see supportsVision); otherwise silently ignored so the
+        // reply still happens as text — a missing mmproj must degrade, never dead-end.
+        images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
     ): Int = withContext(llmDispatcher) {
         val h = handle
         if (h == 0L) return@withContext -1
         generating.set(true)
         try {
-            val roles = Array(messages.size) { messages[it].first }
-            val texts = Array(messages.size) { messages[it].second }
+            val useVision = images.isNotEmpty() && visionReady
+            val marker = if (useVision) {
+                try { nativeMediaMarker() } catch (t: Throwable) { "" }
+            } else ""
+            // The media markers go INSIDE the last user message, before its text, so after
+            // templating each image lands exactly where every multimodal chat template expects
+            // media: in the user turn. mtmd_tokenize then replaces each marker with that image's
+            // embedding chunks, in order.
+            val effective = if (useVision && marker.isNotEmpty()) {
+                val lastUser = messages.indexOfLast { it.first == "user" }
+                messages.mapIndexed { i, m ->
+                    if (i == lastUser) m.first to (marker.repeat(images.size) + "\n" + m.second) else m
+                }
+            } else messages
+            val roles = Array(effective.size) { effective[it].first }
+            val texts = Array(effective.size) { effective[it].second }
             val prompt = try {
                 nativeChatPrompt(h, roles, texts, true)
             } catch (t: Throwable) {
@@ -214,7 +325,15 @@ object LocalLlm {
                 }
             }
             try {
-                nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb)
+                if (useVision && marker.isNotEmpty()) {
+                    val rc = nativeGenerateWithImages(h, prompt, images.toTypedArray(), MAX_NEW_TOKENS, cb)
+                    // -30/-31 = projector missing at native level or the image didn't decode.
+                    // Retry the same turn as plain text rather than failing it: the words the
+                    // user typed still deserve an answer.
+                    if (rc == -30 || rc == -31) nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb) else rc
+                } else {
+                    nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb)
+                }
             } catch (t: Throwable) {
                 // Distinct from the native side's own -3 (empty tokens): -20 means the native call
                 // itself threw into Java (e.g. a missing symbol), which is a different problem to chase.
@@ -246,6 +365,7 @@ object LocalLlm {
         llmScope.launch {
             val h = handle
             handle = 0L
+            visionReady = false
             loadedPath = null
             loadedSlotId = null
             if (h != 0L) try {
@@ -258,6 +378,10 @@ object LocalLlm {
 
     // ---- Native surface (lucent_llama.cpp) ----
     private external fun nativeLoad(path: String, nCtx: Int, nThreads: Int, nGpuLayers: Int): Long
+    // PHASE 4 — multimodal. All three degrade gracefully when the engine was built text-only.
+    private external fun nativeMtmdLoad(handle: Long, mmprojPath: String, nThreads: Int): Boolean
+    private external fun nativeMediaMarker(): String
+    private external fun nativeGenerateWithImages(handle: Long, prompt: String, images: Array<ByteArray>, maxNew: Int, callback: PieceCallback): Int
     private external fun nativeChatPrompt(handle: Long, roles: Array<String>, texts: Array<String>, addAssistant: Boolean): String
     private external fun nativeGenerate(handle: Long, prompt: String, maxNew: Int, callback: PieceCallback): Int
     private external fun nativeStop(handle: Long)
