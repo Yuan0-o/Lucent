@@ -231,6 +231,15 @@ fun NotesScreen(active: Boolean = true) {
     // and coming back — the grid composable is disposed while the detail page is up, but this state
     // object lives on with the screen, so returning restores the exact scroll offset instead of
     // snapping to the top (see feature: preserve scroll position).
+    // Task 4 — keep the history mirrors in step with the stored switches. Done from both list
+    // screens because either one may be the tab the app opens on, and NoteHistory.recordIfChanged
+    // has no Context of its own to read the setting with. Idempotent, so doing it twice is free.
+    LaunchedEffect(Unit) {
+        settingsRepo.noteHistoryEnabled.collect { com.lucent.app.data.NoteHistory.enabled = it }
+    }
+    LaunchedEffect(Unit) {
+        settingsRepo.taskHistoryEnabled.collect { com.lucent.app.data.TaskHistory.enabled = it }
+    }
     val gridState = rememberLazyGridState()
 
     // Long-press multi-select for batch actions (see feature: batch operations). When active, cards
@@ -278,6 +287,12 @@ fun NotesScreen(active: Boolean = true) {
     // hold what has been armed. They are cleared with the composer session, like the spans they feed.
     var pendingKinds by remember(composing) { mutableStateOf(emptySet<com.lucent.app.data.RichSpan.Kind>()) }
     var pendingHighlight by remember(composing) { mutableStateOf<Int?>(null) }
+    // Task 5 — set the moment the toolbar is used with no selection. From then on what was armed is
+    // the whole truth about the next characters, which is what makes "clear formatting" actually
+    // clear: without it the boundary-extension rule re-inherited the style from the character in
+    // front of the caret and the button looked broken. See RichText.applyEdit.
+    var pendingExplicit by remember(composing) { mutableStateOf(false) }
+    var pendingColor by remember(composing) { mutableStateOf<Int?>(null) }
     // The text the span list currently describes. Kept beside the spans so an edit can be DIFFED
     // rather than merely clamped: reconcile() only ever chopped spans back to the new length, which
     // silently mis-styled every edit that inserted or deleted anywhere but the very end.
@@ -285,7 +300,7 @@ fun NotesScreen(active: Boolean = true) {
     LaunchedEffect(newBody) {
         if (spansText != newBody) {
             bodySpans = com.lucent.app.data.RichText.applyEdit(
-                bodySpans, spansText, newBody, pendingKinds, pendingHighlight
+                bodySpans, spansText, newBody, pendingKinds, pendingHighlight, pendingColor, pendingExplicit
             )
             spansText = newBody
         }
@@ -296,6 +311,13 @@ fun NotesScreen(active: Boolean = true) {
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNoteIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+    // Task 1 — pin/unpin straight from the card, and it asks first.
+    //
+    // Pinning is not destructive, so the prompt is not there to protect the data; it is there
+    // because the card jumps to the top of the page the instant it happens, and a control that
+    // silently rearranges the list under the thumb that touched it reads as a bug. The task list has
+    // asked this question since it grew the same button, and the two home screens must not disagree.
+    var noteToTogglePin by remember { mutableStateOf<Note?>(null) }
     fun exitSelection() { selectionMode = false; selectedNoteIds = emptySet() }
 
     // A note asked for from elsewhere — a unified-search result tapped while on another tab. Consumed
@@ -423,7 +445,17 @@ fun NotesScreen(active: Boolean = true) {
         val composedChecklist =
             if (isChecklistMode && pendingItem.isNotEmpty()) checklistItems + Checklist.newItem(pendingItem)
             else checklistItems
-        if (newTitle.isBlank() && newBody.isBlank() && pendingAttachments.isEmpty() && composedChecklist.isEmpty()) {
+        // Task 2 — a doodle counts as content.
+        //
+        // This guard decides "there is nothing here, close without saving", and it asked about the
+        // title, the body, the attachments and the checklist — every kind of content the note can
+        // hold EXCEPT the drawing. So a note whose only content was a drawing matched "empty" and
+        // was discarded on save, silently, every time. Checklist-only notes were already covered by
+        // `composedChecklist`, which is why only the doodle case failed.
+        val hasDoodle = isDoodleMode && !com.lucent.app.ui.Doodle.isEmpty(doodleData)
+        if (newTitle.isBlank() && newBody.isBlank() && pendingAttachments.isEmpty() &&
+            composedChecklist.isEmpty() && !hasDoodle
+        ) {
             composing = false
             return
         }
@@ -870,6 +902,28 @@ fun NotesScreen(active: Boolean = true) {
     // Deleting is now a *move to Trash*, not an erasure — the row, its files, and its history stay
     // put for 30 days. The dialog says exactly that, because a confirmation that threatens
     // permanent loss when nothing of the sort is happening trains people to ignore confirmations.
+    noteToTogglePin?.let { note ->
+        val willPin = !note.pinned
+        AlertDialog(
+            onDismissRequest = { noteToTogglePin = null },
+            title = { Text(if (willPin) com.lucent.app.i18n.S.pinNoteTitle else com.lucent.app.i18n.S.unpinNoteTitle) },
+            text = {
+                Text(
+                    if (willPin) com.lucent.app.i18n.S.pinNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitled })
+                    else com.lucent.app.i18n.S.unpinNoteBody(note.title.ifBlank { com.lucent.app.i18n.S.untitled })
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = note
+                    noteToTogglePin = null
+                    AppScope.io.launch { db.noteDao().update(target.copy(pinned = !target.pinned)) }
+                }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
+            },
+            dismissButton = { TextButton(onClick = { noteToTogglePin = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
+        )
+    }
+
     noteToDelete?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToDelete = null },
@@ -1116,6 +1170,7 @@ fun NotesScreen(active: Boolean = true) {
                             spans = if (richTextEnabled) bodySpans else emptyList(),
                             onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
                             highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
                             placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                             expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
                             collapsedMinHeight = 90.dp,
@@ -1169,6 +1224,7 @@ fun NotesScreen(active: Boolean = true) {
                             spans = if (richTextEnabled) bodySpans else emptyList(),
                             onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
                             highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
                             placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                             expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
                             // Shorter than the plain-text branch's box: here the items are the
@@ -1194,6 +1250,7 @@ fun NotesScreen(active: Boolean = true) {
                             spans = if (richTextEnabled) bodySpans else emptyList(),
                             onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
                             highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
                             // Task 11. This used to swap in a longer hint when Markdown and/or links
                             // were on ("Details — supports Markdown and [[links]]"). Placeholder text
                             // is a single line that cannot wrap, and the field carries the dictation
@@ -1382,8 +1439,13 @@ fun NotesScreen(active: Boolean = true) {
                             bodySpans, bodySelStart, bodySelEnd, kind, color
                         )
                     } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
+                        pendingExplicit = true
                         pendingHighlight = if (pendingHighlight == color) null else color
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
+                        pendingExplicit = true
+                        pendingColor = if (pendingColor == color) null else color
                     } else {
+                        pendingExplicit = true
                         // Light and bold are one axis: arming one disarms the other, the same rule
                         // RichText.toggle() enforces on a selection.
                         val opposite = when (kind) {
@@ -1401,8 +1463,10 @@ fun NotesScreen(active: Boolean = true) {
                             com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
                         }
                     } else {
+                        pendingExplicit = true
                         pendingKinds = emptySet()
                         pendingHighlight = null
+                        pendingColor = null
                     }
                 },
                 activeKinds = if (bodySelEnd > bodySelStart)
@@ -1411,6 +1475,9 @@ fun NotesScreen(active: Boolean = true) {
                 activeHighlight = if (bodySelEnd > bodySelStart)
                     com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
                 else pendingHighlight,
+                activeColor = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingColor,
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
                 // Task 1. The bottom offset was a hard-coded 96dp, but the floating nav capsule is
                 // taller than that (its own height plus the gap above it plus the system navigation
@@ -1434,6 +1501,8 @@ fun NotesScreen(active: Boolean = true) {
         }
 
         viewingNote != null -> {
+            // Hoisted so the jump-to-edge buttons below can drive it (task 8).
+            val detailScroll = rememberScrollState()
             // ---- Read-only detail page ----
             val note = viewingNote
             val attachments = remember(note.attachments) { Attachments.parse(note.attachments) }
@@ -1565,7 +1634,7 @@ fun NotesScreen(active: Boolean = true) {
                             .coerceIn(0f, 1f) * 0.35f
                     }
                     .padding(16.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(detailScroll)
                     .padding(bottom = LocalBottomBarInset.current)
             ) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1819,6 +1888,22 @@ fun NotesScreen(active: Boolean = true) {
                     )
                 }
             }
+                // Task 8 — the same jump-to-edge control the home lists carry. A detail page can be
+                // far longer than the editor that produced it (body, checklist, attachments, links,
+                // backlinks, version count), and it was the one long scrolling surface in the app
+                // with no way to get to the other end of it without dragging.
+                //
+                // Placed as the Box's second child, after the scrolling Column, so it floats over the
+                // page instead of scrolling away with it — the same arrangement the home grid uses.
+                ScrollEdgeJumpButtons(
+                    canUp = detailScroll.value > 0,
+                    canDown = detailScroll.value < detailScroll.maxValue,
+                    tint = onGradient,
+                    onUp = { scope.launch { detailScroll.animateScrollTo(0) } },
+                    onDown = { scope.launch { detailScroll.animateScrollTo(detailScroll.maxValue) } },
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                        .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
+                )
             }
         }
 
@@ -2083,6 +2168,7 @@ fun NotesScreen(active: Boolean = true) {
                                 onToggleSelect = {
                                     selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
                                 },
+                                onTogglePin = { noteToTogglePin = note },
                                 onDelete = { noteToDelete = note }
                             )
                         }
@@ -2160,6 +2246,7 @@ private fun NoteCard(
     // the lifted card is drawn above its neighbours. See [reorderVisuals].
     reorderVisualModifier: Modifier = Modifier,
     onToggleSelect: () -> Unit,
+    onTogglePin: () -> Unit,
     onDelete: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
@@ -2215,6 +2302,16 @@ private fun NoteCard(
                     modifier = Modifier.padding(start = 6.dp).size(20.dp)
                 )
             } else {
+                Icon(
+                    Icons.Default.PushPin,
+                    contentDescription = if (note.pinned) com.lucent.app.i18n.S.actionUnpin
+                                         else com.lucent.app.i18n.S.actionPin,
+                    tint = if (note.pinned) onGradient else onGradientMuted,
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .size(18.dp)
+                        .clickable { onTogglePin() }
+                )
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = com.lucent.app.i18n.S.actionDelete,

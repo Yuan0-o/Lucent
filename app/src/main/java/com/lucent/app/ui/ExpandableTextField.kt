@@ -89,6 +89,7 @@ fun ExpandableGlassTextField(
     spans: List<RichSpan> = emptyList(),
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
+    textColors: List<Color> = emptyList(),
     // PHASE 4: an optional action rendered in the field's top-right corner (the expand toggle owns
     // the bottom-right). Used for the dictation mic; default null keeps every existing call site
     // byte-compatible.
@@ -108,9 +109,9 @@ fun ExpandableGlassTextField(
                                   fieldValue.selection.end.coerceIn(0, value.length))
         )
     }
-    val transformation = remember(spans, highlightColors) {
+    val transformation = remember(spans, highlightColors, textColors) {
         if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
-        else RichSpanTransformation(spans, highlightColors)
+        else RichSpanTransformation(spans, highlightColors, textColors)
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
@@ -155,7 +156,8 @@ fun ExpandableGlassTextField(
             onCollapse = { expanded = false },
             spans = spans,
             onSelectionChange = onSelectionChange,
-            highlightColors = highlightColors
+            highlightColors = highlightColors,
+            textColors = textColors
         )
     }
 }
@@ -181,6 +183,7 @@ private fun ExpandedEditor(
     spans: List<RichSpan> = emptyList(),
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
+    textColors: List<Color> = emptyList(),
 ) {
     // Same treatment as the collapsed field — see the comments there. The expanded editor is where
     // long-form writing actually happens, so it would be the wrong one to leave unstyled.
@@ -192,9 +195,9 @@ private fun ExpandedEditor(
                                   expandedField.selection.end.coerceIn(0, value.length))
         )
     }
-    val expandedTransformation = remember(spans, highlightColors) {
+    val expandedTransformation = remember(spans, highlightColors, textColors) {
         if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
-        else RichSpanTransformation(spans, highlightColors)
+        else RichSpanTransformation(spans, highlightColors, textColors)
     }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -331,7 +334,8 @@ private fun panelSurfaceColor(onGradient: Color): Color =
  */
 private class RichSpanTransformation(
     private val spans: List<RichSpan>,
-    private val highlightColors: List<Color>
+    private val highlightColors: List<Color>,
+    private val textColors: List<Color>
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         if (spans.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
@@ -349,6 +353,11 @@ private class RichSpanTransformation(
                         background = highlightColors[s.color.coerceIn(0, highlightColors.lastIndex)]
                             .copy(alpha = 0.45f)
                     )
+                    // Index 0 is the "follow the theme" sentinel, and the caller has already
+                    // resolved it to the ambient text colour, so nothing special is needed here.
+                    RichSpan.Kind.COLOR ->
+                        if (textColors.isEmpty()) SpanStyle()
+                        else SpanStyle(color = textColors[s.color.coerceIn(0, textColors.lastIndex)])
                 }
                 addStyle(style, s.start, s.end)
             }

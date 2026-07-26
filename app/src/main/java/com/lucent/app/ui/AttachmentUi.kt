@@ -1,5 +1,7 @@
 package com.lucent.app.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
 import android.content.Context
 import android.graphics.Bitmap
@@ -324,6 +326,12 @@ fun PendingAttachmentChips(
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     var renaming by remember { mutableStateOf<Attachment?>(null) }
     val rowHeightPx = with(LocalDensity.current) { ATTACHMENT_ROW_HEIGHT.toPx() }
+    // Task 6 — the gesture below runs in a coroutine keyed on the row's identity, so it outlives
+    // every recomposition and kept whichever `attachments` list it was created with. After the first
+    // swap that list was stale, `indexOfFirst` returned the row's OLD position, and every further
+    // step was computed from the wrong base — which is why dragging one way appeared to work and the
+    // other did not. Read through a state holder so it always sees the current order.
+    val liveAttachments = androidx.compose.runtime.rememberUpdatedState(attachments)
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         attachments.forEach { att ->
@@ -332,7 +340,28 @@ fun PendingAttachmentChips(
             // reuses slots positionally, the row's data changes mid-drag, and the drag dies on the
             // first swap.
             key(att.data) {
+                // Task 6 — motion. These rows live in a plain Column, so there is no animateItem to
+                // lean on: when the order changes a row simply appears somewhere else. This is the
+                // FLIP trick done by hand — the moment the index changes, jump back to where the row
+                // used to be and spring to zero, so the eye sees it travel.
+                val position = liveAttachments.value.indexOfFirst { it.data == att.data }
+                var lastPosition by remember { mutableStateOf(position) }
+                val slide = remember { androidx.compose.animation.core.Animatable(0f) }
+                LaunchedEffect(position) {
+                    if (position >= 0 && position != lastPosition) {
+                        slide.snapTo((lastPosition - position) * rowHeightPx)
+                        lastPosition = position
+                        slide.animateTo(
+                            0f,
+                            androidx.compose.animation.core.spring(
+                                dampingRatio = 0.62f,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
                 AttachmentRow(
+                    modifier = Modifier.graphicsLayer { translationY = slide.value },
                     att = att,
                     tint = tint,
                     onClick = { Haptics.tick(context); viewing = att },
@@ -363,11 +392,11 @@ fun PendingAttachmentChips(
                                                 travelled += delta.y
                                                 while (travelled >= rowHeightPx) {
                                                     travelled -= rowHeightPx
-                                                    moveAttachment(attachments, att, +1, onReorder)
+                                                    moveAttachment(liveAttachments.value, att, +1, onReorder)
                                                 }
                                                 while (travelled <= -rowHeightPx) {
                                                     travelled += rowHeightPx
-                                                    moveAttachment(attachments, att, -1, onReorder)
+                                                    moveAttachment(liveAttachments.value, att, -1, onReorder)
                                                 }
                                             }
                                         )
@@ -450,11 +479,12 @@ private fun AttachmentRow(
     att: Attachment,
     tint: Color,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable RowScope.() -> Unit)? = null
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(10.dp))
