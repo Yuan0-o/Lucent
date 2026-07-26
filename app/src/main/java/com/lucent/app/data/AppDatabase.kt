@@ -152,21 +152,130 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+/**
+ * One combined 11 → 12 step for the whole 1.1.0 group-A delivery. Four features share it on
+ * purpose: each needs a schema change, and four separate migrations would mean four version bumps,
+ * four chances for a partially-migrated database, and four rounds of backup-format adaptation for
+ * changes that ship together anyway.
+ *
+ *  1. **Manual order (task A16).** `manualOrder` on both tables, defaulting to 0. Every existing
+ *     row therefore ties, and the sort falls through to its usual secondary key — so switching to
+ *     "custom" order shows the list exactly as it already looked instead of scrambling it. Real
+ *     values are written on the first drag.
+ *  2. **Drafts (task A10).** `isDraft` + `draftSavedAt`. A draft is the note/task itself at an
+ *     earlier moment, so it stays in its own table and is excluded by the list queries — the same
+ *     shape `trashedAt` already uses, rather than a parallel table that would have to be kept in
+ *     step with every future column.
+ *  3. **Hidden items (task A21).** `hidden`, excluded from every list until the user turns the
+ *     hidden area on.
+ *  4. **Task revision history (task A19).** The `task_versions` table, mirroring `note_versions`.
+ *
+ * All of it is additive: new columns carry NOT NULL defaults, the new table is created empty, and
+ * no existing row is read or rewritten. A database at version 11 upgrades without touching a
+ * single byte of user content, and every pre-existing row reads back as "not a draft, not hidden,
+ * no manual position, no history yet" — which is exactly what it was.
+ */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // ---- Notes ----
+        db.execSQL("ALTER TABLE notes ADD COLUMN manualOrder INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE notes ADD COLUMN isDraft INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE notes ADD COLUMN draftSavedAt INTEGER")
+        db.execSQL("ALTER TABLE notes ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+
+        // ---- Tasks ----
+        db.execSQL("ALTER TABLE tasks ADD COLUMN manualOrder INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN isDraft INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN draftSavedAt INTEGER")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+
+        // ---- Task revision history (task A19) ----
+        // Column order, types and nullability match the TaskVersion entity exactly; Room validates
+        // a migrated schema against the generated one on first open, and a mismatch here is what
+        // turns an upgrade into a crash on launch.
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `task_versions` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`taskId` INTEGER NOT NULL, " +
+                "`title` TEXT NOT NULL, " +
+                "`notes` TEXT NOT NULL, " +
+                "`subtasks` TEXT NOT NULL, " +
+                "`priority` INTEGER NOT NULL, " +
+                "`dueAt` INTEGER, " +
+                "`savedAt` INTEGER NOT NULL)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_task_versions_taskId` ON `task_versions` (`taskId`)")
+
+        // The new list queries filter on these, so index them for the same reason MIGRATION_10_11
+        // indexed archived/trashedAt. Creating an index is pure metadata — no row is touched.
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_notes_isDraft` ON `notes` (`isDraft`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_notes_hidden` ON `notes` (`hidden`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_isDraft` ON `tasks` (`isDraft`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_hidden` ON `tasks` (`hidden`)")
+    }
+}
+
+/**
+ * 12 → 13: doodle notes (task A22). Two additive columns whose defaults read a pre-existing row
+ * back as exactly what it was — not a doodle, nothing drawn. No row is read or rewritten.
+ */
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE notes ADD COLUMN isDoodle INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE notes ADD COLUMN doodle TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+/**
+ * 13 → 14: `chat_messages.replyToId` (B-group task 12).
+ *
+ * INTEGRATION NOTE: group B originally shipped this as MIGRATION_11_12. Group A had already
+ * claimed 11 → 12 and 12 → 13 for drafts/hidden/manual-order/task-history/doodle, so the same
+ * version number carried two different schema changes. Renumbered to 13 → 14 during integration;
+ * the SQL itself is unchanged. Any database that had already run B's build in isolation is a
+ * pre-release state and is not supported for in-place upgrade.
+ *
+ * Every existing reply keeps 0, which reads as "not part of a variant group" — so old
+ * conversations render exactly as they did, with no switcher and no backfill pass over the user's
+ * history.
+ */
+val MIGRATION_13_14, MIGRATION_14_15 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE chat_messages ADD COLUMN replyToId INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
+ * 15: rich-text spans (C-group task 20, wired up during integration).
+ *
+ * Two sidecar columns, both defaulting to the empty string — which decodes to "no formatting", so
+ * every existing note and task reads back exactly as it is today. `body` and `notes` themselves are
+ * untouched and stay plain text; see data/RichText.kt for why that is the whole point.
+ */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE notes ADD COLUMN bodySpans TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN notesSpans TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 @Database(
     entities = [
         Note::class,
         Task::class,
         NoteVersion::class,
+        TaskVersion::class,
         ChatMessage::class,
         ChatConversation::class
     ],
-    version = 11,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun taskDao(): TaskDao
     abstract fun noteVersionDao(): NoteVersionDao
+    abstract fun taskVersionDao(): TaskVersionDao
     abstract fun chatDao(): ChatDao
     abstract fun chatConversationDao(): ChatConversationDao
 
@@ -199,7 +308,8 @@ abstract class AppDatabase : RoomDatabase() {
                 DatabaseEncryption.DB_NAME
             ).addMigrations(
                 MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
+                MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                MIGRATION_13_14
             )
                 // dropAllTables = true preserves the old no-arg behaviour (every table is
                 // recreated) while using the non-deprecated overload.

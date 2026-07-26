@@ -7,6 +7,18 @@ import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * ### 1.1.0 filtering rule, applied to every "what should the user see" query below
+ *
+ * Three new columns hide a row from normal life (tasks A10, A21): `isDraft`, `hidden`, and the
+ * `trashedAt` that was already there. Each list query therefore excludes drafts and hidden notes,
+ * and each gets a dedicated counterpart ([getDrafts], [getHidden]) that shows *only* them.
+ *
+ * The unfiltered queries — [getAllOnce], [getByIdOnce] — stay unfiltered on purpose, and that is
+ * load-bearing rather than an oversight: backups, the attachment orphan sweep and the trash sweep
+ * maintain invariants across the whole table, and a sweep that cannot see a draft would treat the
+ * draft's attachment as an orphan and delete a file the user is still writing against.
+ */
 @Dao
 interface NoteDao {
     /**
@@ -15,7 +27,7 @@ interface NoteDao {
      * first; the UI then applies the user's chosen sort on top (see ui/SortOptions.kt), with
      * pinned notes floating above it.
      */
-    @Query("SELECT * FROM notes WHERE archived = 0 AND trashedAt IS NULL ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM notes WHERE archived = 0 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 ORDER BY updatedAt DESC")
     fun getAll(): Flow<List<Note>>
 
     /**
@@ -23,11 +35,11 @@ interface NoteDao {
      * were archived (most recent first); falls back to updatedAt for any row archived before we
      * started recording archivedAt.
      */
-    @Query("SELECT * FROM notes WHERE archived = 1 AND trashedAt IS NULL ORDER BY COALESCE(archivedAt, updatedAt) DESC")
+    @Query("SELECT * FROM notes WHERE archived = 1 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 ORDER BY COALESCE(archivedAt, updatedAt) DESC")
     fun getArchived(): Flow<List<Note>>
 
     /** Trashed notes only — powers the Trash screen. Most-recently-trashed first. */
-    @Query("SELECT * FROM notes WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+    @Query("SELECT * FROM notes WHERE trashedAt IS NOT NULL AND isDraft = 0 ORDER BY trashedAt DESC")
     fun getTrashed(): Flow<List<Note>>
 
     /**
@@ -78,6 +90,8 @@ interface NoteDao {
                 OR tags LIKE '%' || :text || '%'
                 OR checklist LIKE '%' || :text || '%')
           AND (:tag = '' OR tags LIKE '%' || :tag || '%')
+          AND isDraft = 0
+          AND hidden = 0
           AND (:archived = -1 OR archived = :archived)
           AND (:trashed = -1
                 OR (:trashed = 1 AND trashedAt IS NOT NULL)
@@ -93,6 +107,25 @@ interface NoteDao {
         trashed: Int,
         limit: Int
     ): List<Note>
+
+    /** Task A10 — the draft area, a sibling of the trash. Most recently saved first. */
+    @Query("SELECT * FROM notes WHERE isDraft = 1 AND trashedAt IS NULL ORDER BY COALESCE(draftSavedAt, updatedAt) DESC")
+    fun getDrafts(): Flow<List<Note>>
+
+    /** Task A21 — the hidden area. Only ever read once the user has unlocked it in Settings. */
+    @Query("SELECT * FROM notes WHERE hidden = 1 AND isDraft = 0 AND trashedAt IS NULL ORDER BY updatedAt DESC")
+    fun getHidden(): Flow<List<Note>>
+
+    /** Task A10 — is there anything to offer to restore on the next launch? */
+    @Query("SELECT COUNT(*) FROM notes WHERE isDraft = 1 AND trashedAt IS NULL")
+    suspend fun draftCountOnce(): Int
+
+    /**
+     * Task A16 — the highest manual order in use, so a newly dragged row can be given a value past
+     * the end of the list without renumbering every other row.
+     */
+    @Query("SELECT COALESCE(MAX(manualOrder), 0) FROM notes")
+    suspend fun maxManualOrderOnce(): Int
 
     @Insert
     suspend fun insert(note: Note): Long
@@ -139,6 +172,14 @@ interface NoteVersionDao {
     suspend fun deleteForNote(noteId: Long)
 
     /**
+     * Task A19 — delete one revision by id, on the user's explicit instruction. History is trimmed
+     * automatically by [trimTo], but automatic trimming answers "don't grow forever"; it does not
+     * answer "I don't want *that* one kept", which is a different and entirely reasonable request.
+     */
+    @Query("DELETE FROM note_versions WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    /**
      * Keep only the [keep] most recent revisions of a note and delete the rest. Written as a single
      * statement so it stays atomic and can't leave history half-trimmed if the process dies partway.
      */
@@ -157,6 +198,56 @@ interface NoteVersionDao {
     suspend fun pruneOrphaned()
 
     @Query("DELETE FROM note_versions")
+    suspend fun clearAll()
+}
+
+/**
+ * Task A19 — local, on-device revision history for tasks. A field-for-field mirror of
+ * [NoteVersionDao], including the per-task cap ([trimTo]) and the orphan sweep, so the two
+ * histories cannot drift in behaviour: whatever notes do about trimming, deletion and orphans,
+ * tasks now do identically.
+ */
+@Dao
+interface TaskVersionDao {
+    /** Newest revision first — the order the history screen renders. */
+    @Query("SELECT * FROM task_versions WHERE taskId = :taskId ORDER BY savedAt DESC")
+    fun getForTask(taskId: Long): Flow<List<TaskVersion>>
+
+    @Query("SELECT * FROM task_versions WHERE taskId = :taskId ORDER BY savedAt DESC")
+    suspend fun getForTaskOnce(taskId: Long): List<TaskVersion>
+
+    @Query("SELECT * FROM task_versions ORDER BY savedAt DESC")
+    suspend fun getAllOnce(): List<TaskVersion>
+
+    @Query("SELECT COUNT(*) FROM task_versions WHERE taskId = :taskId")
+    suspend fun countForTask(taskId: Long): Int
+
+    @Insert
+    suspend fun insert(version: TaskVersion): Long
+
+    @Delete
+    suspend fun delete(version: TaskVersion)
+
+    /** Drop every revision of one task — used when the task is permanently deleted. */
+    @Query("DELETE FROM task_versions WHERE taskId = :taskId")
+    suspend fun deleteForTask(taskId: Long)
+
+    /** Task A19 — delete one revision on the user's explicit instruction. */
+    @Query("DELETE FROM task_versions WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    /** Keep only the [keep] most recent revisions; single statement, so it cannot half-trim. */
+    @Query(
+        "DELETE FROM task_versions WHERE taskId = :taskId AND id NOT IN (" +
+            "SELECT id FROM task_versions WHERE taskId = :taskId ORDER BY savedAt DESC LIMIT :keep)"
+    )
+    suspend fun trimTo(taskId: Long, keep: Int)
+
+    /** Safety sweep for revisions whose task no longer exists. */
+    @Query("DELETE FROM task_versions WHERE taskId NOT IN (SELECT id FROM tasks)")
+    suspend fun pruneOrphaned()
+
+    @Query("DELETE FROM task_versions")
     suspend fun clearAll()
 }
 
@@ -200,6 +291,8 @@ interface TaskDao {
                 OR title LIKE '%' || :text || '%'
                 OR notes LIKE '%' || :text || '%'
                 OR subtasks LIKE '%' || :text || '%')
+          AND isDraft = 0
+          AND hidden = 0
           AND (:done = -1 OR isDone = :done)
           AND (:trashed = -1
                 OR (:trashed = 1 AND trashedAt IS NOT NULL)
@@ -226,12 +319,12 @@ interface TaskDao {
      * split (and now the Trash split too). Ordered newest-first here; the UI applies the user's
      * chosen sort on top, with pinned tasks floating above it.
      */
-    @Query("SELECT * FROM tasks WHERE isDone = 0 AND trashedAt IS NULL ORDER BY createdAt DESC")
+    @Query("SELECT * FROM tasks WHERE isDone = 0 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 ORDER BY createdAt DESC")
     fun getActive(): Flow<List<Task>>
 
     // A cheap count of active (not done, not trashed) tasks — used by the home-screen summary widget
     // (task 9) so it can show a number without loading every row.
-    @Query("SELECT COUNT(*) FROM tasks WHERE isDone = 0 AND trashedAt IS NULL")
+    @Query("SELECT COUNT(*) FROM tasks WHERE isDone = 0 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0")
     suspend fun activeCountOnce(): Int
 
     /**
@@ -239,12 +332,27 @@ interface TaskDao {
      * completion time so the most recently finished tasks sit at the top; falls back to createdAt
      * for older rows that were completed before we started recording completedAt.
      */
-    @Query("SELECT * FROM tasks WHERE isDone = 1 AND trashedAt IS NULL ORDER BY COALESCE(completedAt, createdAt) DESC")
+    @Query("SELECT * FROM tasks WHERE isDone = 1 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 ORDER BY COALESCE(completedAt, createdAt) DESC")
     fun getCompleted(): Flow<List<Task>>
 
     /** Trashed tasks only (done or pending) — powers the Trash screen. Most-recently-trashed first. */
-    @Query("SELECT * FROM tasks WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+    @Query("SELECT * FROM tasks WHERE trashedAt IS NOT NULL AND isDraft = 0 ORDER BY trashedAt DESC")
     fun getTrashed(): Flow<List<Task>>
+
+    /** Task A10 — the draft area for tasks; mirrors [NoteDao.getDrafts] exactly. */
+    @Query("SELECT * FROM tasks WHERE isDraft = 1 AND trashedAt IS NULL ORDER BY COALESCE(draftSavedAt, createdAt) DESC")
+    fun getDrafts(): Flow<List<Task>>
+
+    /** Task A21 — the hidden area for tasks. */
+    @Query("SELECT * FROM tasks WHERE hidden = 1 AND isDraft = 0 AND trashedAt IS NULL ORDER BY createdAt DESC")
+    fun getHidden(): Flow<List<Task>>
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE isDraft = 1 AND trashedAt IS NULL")
+    suspend fun draftCountOnce(): Int
+
+    /** Task A16 — see [NoteDao.maxManualOrderOnce]. */
+    @Query("SELECT COALESCE(MAX(manualOrder), 0) FROM tasks")
+    suspend fun maxManualOrderOnce(): Int
 
     @Insert
     suspend fun insert(task: Task): Long
@@ -309,8 +417,21 @@ interface ChatDao {
     @Query("SELECT conversationId AS conversationId, GROUP_CONCAT(content, ' ') AS content FROM chat_messages GROUP BY conversationId")
     suspend fun conversationContents(): List<ConversationContent>
 
+    /**
+     * Insert one message, returning its new row id. The id is what pairs a reply to the question it
+     * answers (B-group task 12) — the send path needs the USER message's id before it can write the
+     * assistant reply that carries it in replyToId.
+     */
     @Insert
-    suspend fun insert(message: ChatMessage)
+    suspend fun insert(message: ChatMessage): Long
+
+    /**
+     * Delete a specific set of messages (B-group task 11: batch delete from the chat's selection
+     * mode). One statement rather than a loop, so a multi-message delete is a single transaction
+     * and a single invalidation — the list redraws once instead of flickering per row.
+     */
+    @Query("DELETE FROM chat_messages WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
 
     /** Delete just one conversation's messages (used when clearing / deleting that conversation). */
     @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId")

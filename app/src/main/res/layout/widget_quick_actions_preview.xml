@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- C-group task 9 — picker preview for the "quick actions" widget.
+
+     WHY THIS FILE EXISTS, rather than pointing previewLayout at widget_quick_actions.xml:
+
+     From Android 12 the launcher's widget picker renders `previewLayout` into a FIXED preview
+     cell that is considerably smaller than the widget's own targetCell (3x1 here). The full layout
+     is built for that 3x1 space — three weighted cells, each with a 26dp icon, 8dp padding and a
+     4dp margin. Scaled into the picker's cell those fixed dimensions do not shrink with the
+     weights, so the three chips overlap and their captions are clipped. That is exactly the
+     reported symptom: broken in the picker, correct once dropped on the home screen and resized.
+
+     A preview is a PICTURE of the widget, not the widget. So this is the same design drawn to fit
+     the picker: smaller glyphs, tighter spacing, no captions (they are the first thing that stops
+     fitting, and the icons already say what the three actions are). Nothing here is interactive
+     and nothing carries an id, because the picker never binds it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_bg"
+    android:padding="4dp"
+    android:baselineAligned="false">
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_margin="2dp"
+        android:background="@drawable/widget_cell_bg">
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_widget_note"
+            android:contentDescription="@string/widget_note" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_margin="2dp"
+        android:background="@drawable/widget_cell_bg">
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_widget_task"
+            android:contentDescription="@string/widget_task" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_margin="2dp"
+        android:background="@drawable/widget_cell_bg">
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_widget_assistant"
+            android:contentDescription="@string/widget_ask" />
+    </FrameLayout>
+</LinearLayout>

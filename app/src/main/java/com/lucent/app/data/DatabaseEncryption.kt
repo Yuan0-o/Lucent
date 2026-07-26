@@ -142,18 +142,32 @@ object DatabaseEncryption {
             loadLibraries()
             DataKeys.databasePassphrase(appContext)
         } catch (t: Throwable) {
+            // C-group task 17. This path made the database plaintext and said so ONLY to logcat
+            // — a ring buffer cleared on reboot and absent from the exported log. That is why the
+            // attached three-day log could not answer "is encryption working". It now reports.
+            EncryptionStatus.reportDatabase(
+                EncryptionStatus.State.PLAINTEXT, "SQLCipher unavailable: ${t.message}"
+            )
+            StartupLog.event(appContext, "db: SQLCipher unavailable; opening unencrypted")
             Log.e(TAG, "SQLCipher unavailable; the database will stay unencrypted", t)
             return null
         }
 
         // Fresh install: nothing to migrate. Room will create the file already encrypted.
-        if (!dbFile.exists()) return passphrase
+        if (!dbFile.exists()) {
+            EncryptionStatus.reportDatabase(EncryptionStatus.State.ENCRYPTED, "sqlcipher (new file)")
+            return passphrase
+        }
 
         if (isPlaintextSqlite(dbFile)) {
             val migrated = migrateToEncrypted(appContext, dbFile, passphrase)
             if (!migrated) {
                 // The original is untouched and still plaintext. Run unencrypted this launch rather
                 // than refusing to start, and try again next time.
+                EncryptionStatus.reportDatabase(
+                    EncryptionStatus.State.PLAINTEXT, "plaintext -> encrypted migration failed"
+                )
+                StartupLog.event(appContext, "db: encryption migration failed; opening unencrypted")
                 Log.e(TAG, "Could not encrypt the database; continuing unencrypted")
                 return null
             }
@@ -161,8 +175,14 @@ object DatabaseEncryption {
 
         // The file should now be encrypted with our key. Prove it *here*, where a failure is
         // survivable, rather than letting Room discover it somewhere a failure is destructive.
-        if (canOpen(dbFile, passphrase)) return passphrase
+        if (canOpen(dbFile, passphrase)) {
+            EncryptionStatus.reportDatabase(EncryptionStatus.State.ENCRYPTED, "sqlcipher")
+            return passphrase
+        }
 
+        EncryptionStatus.reportDatabase(
+            EncryptionStatus.State.LOCKED_OUT, "existing database rejected the stored key"
+        )
         setAside(appContext, dbFile)
         return passphrase
     }

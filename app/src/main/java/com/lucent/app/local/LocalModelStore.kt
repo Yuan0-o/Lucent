@@ -323,6 +323,8 @@ object LocalModelStore {
         val slot = idx.slots.firstOrNull { it.id == id } ?: return
         File(dir(context), slot.fileName).delete()
         File(dir(context), "${slot.fileName}.tmp").delete()
+        // PHASE 4: the projector belongs to its slot and dies with it.
+        deleteMmproj(context, id)
         val remaining = idx.slots.filter { it.id != id }
         val newActive = if (idx.activeId == id) remaining.firstOrNull()?.id else idx.activeId
         writeIndex(context, ModelIndex(remaining, newActive))
@@ -507,5 +509,52 @@ object LocalModelStore {
             }
             return rest.read(b, off, len)
         }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // PHASE 4 — multimodal projector (mmproj) sidecar, one per slot
+    // ---------------------------------------------------------------------------------------
+    //
+    // A multimodal model is TWO gguf files: the main LLM (the slot's model file) and a projector
+    // ("mmproj") that encodes images into embeddings the LLM can read. The projector must match
+    // the main model's family — a Qwen mmproj cannot serve a Gemma model — which is why it is
+    // stored PER SLOT and dies with its slot. Same import pipeline as the model itself: GGUF
+    // magic verified, streamed to a temp file, atomic rename.
+
+    private fun mmprojFileName(id: String) = "mmproj_$id.gguf"
+
+    /** The projector file for a slot, or null when none has been imported (or it is empty). */
+    fun mmprojFile(context: Context, id: String): File? =
+        File(dir(context), mmprojFileName(id)).takeIf { it.exists() && it.length() > 0L }
+
+    /** The active slot's projector — what the engine loads next to the model. */
+    fun activeMmprojFile(context: Context): File? =
+        activeSlot(context)?.let { mmprojFile(context, it.id) }
+
+    /** Import (or replace) the projector for [id]. Throws [NotGgufException] on a non-GGUF pick. */
+    fun importMmproj(context: Context, id: String, uri: Uri): File {
+        val dir = dir(context)
+        if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create model directory")
+        val target = File(dir, mmprojFileName(id))
+        val tmp = File(dir, "${mmprojFileName(id)}.tmp")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { raw ->
+                val head = ByteArray(4)
+                val headRead = readUpTo(raw, head)
+                if (headRead < 4 || !head.contentEquals(GGUF_MAGIC)) throw NotGgufException()
+                copyPrefixed(head, headRead, raw, tmp)
+            } ?: throw IOException("Could not open the selected file")
+            if (target.exists()) target.delete()
+            if (!tmp.renameTo(target)) throw IOException("Could not finalize the projector file")
+            return target
+        } finally {
+            if (tmp.exists()) tmp.delete()
+        }
+    }
+
+    /** Remove a slot's projector. The model itself is untouched — it just goes back to text-only. */
+    fun deleteMmproj(context: Context, id: String) {
+        File(dir(context), mmprojFileName(id)).delete()
+        File(dir(context), "${mmprojFileName(id)}.tmp").delete()
     }
 }

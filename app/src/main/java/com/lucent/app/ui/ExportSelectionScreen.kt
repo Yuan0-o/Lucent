@@ -98,6 +98,20 @@ fun <T> ExportSelectionScreen(
     val visibleIds = visible.map(id).toSet()
     val allVisibleSelected = visibleIds.isNotEmpty() && selectedIds.containsAll(visibleIds)
 
+    // ---- C-group task 12: select every attachment of every ticked item ----
+    //
+    // Ticking attachments one at a time is fine for a note with two files and unusable for an
+    // export of forty notes, which is exactly when someone reaches for this screen. The keys are
+    // derived from the CURRENTLY SELECTED items only, so this never quietly embeds a file belonging
+    // to an item the user did not ask to export.
+    val selectableAttachmentKeys: Set<String> = ordered
+        .filter { id(it) in selectedIds }
+        .flatMap { item -> attachmentsOf(item).map { attKey(id(item), it.name) } }
+        .toSet()
+    val allAttachmentsSelected =
+        selectableAttachmentKeys.isNotEmpty() &&
+            selectedAttachmentKeys.containsAll(selectableAttachmentKeys)
+
     // Untick an item and forget any attachment ticks that belonged to it.
     fun deselectItem(itemId: Long) {
         selectedIds = selectedIds - itemId
@@ -165,6 +179,44 @@ fun <T> ExportSelectionScreen(
                 modifier = Modifier.weight(1f).padding(start = 4.dp)
             )
             Text(com.lucent.app.i18n.S.nSelected(selectedIds.size), color = onGradientMuted, fontSize = 13.sp)
+        }
+
+        // C-group task 12 — the attachment select-all.
+        //
+        // Shown only when at least one ticked item actually HAS an attachment. A control that is
+        // permanently present but inert for most exports teaches people to stop reading this area,
+        // and the row directly above it is the one that must stay noticed.
+        if (selectableAttachmentKeys.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable {
+                        selectedAttachmentKeys =
+                            if (allAttachmentsSelected) selectedAttachmentKeys - selectableAttachmentKeys
+                            else selectedAttachmentKeys + selectableAttachmentKeys
+                    }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = allAttachmentsSelected, onCheckedChange = {
+                    selectedAttachmentKeys =
+                        if (allAttachmentsSelected) selectedAttachmentKeys - selectableAttachmentKeys
+                        else selectedAttachmentKeys + selectableAttachmentKeys
+                })
+                Text(
+                    com.lucent.app.i18n.S.selectAllAttachments,
+                    color = onGradient,
+                    modifier = Modifier.weight(1f).padding(start = 4.dp)
+                )
+                Text(
+                    com.lucent.app.i18n.S.nAttachmentsSelected(
+                        selectedAttachmentKeys.count { it in selectableAttachmentKeys }
+                    ),
+                    color = onGradientMuted,
+                    fontSize = 13.sp
+                )
+            }
         }
 
         LazyColumn(

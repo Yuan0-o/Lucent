@@ -13,14 +13,18 @@ plugins {
 //                Users never see it. It must never go backwards, so CI passes the workflow run
 //                number: it increases by one on every run, which is exactly what this field wants.
 //
-//   versionName  The string people actually read ("1.0.0"). It is NOT tied to the run number any
+//   versionName  The string people actually read ("2.0.0"). It is NOT tied to the run number any
 //                more. It comes from MARKETING_VERSION below, or from -PversionName=... which the
 //                workflow's optional "Version name" box supplies. Build ten times in a row and it
-//                stays 1.0.0; change it only when you decide a release deserves a new number.
+//                stays 2.0.0; change it only when you decide a release deserves a new number.
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
 
 // The user-facing version. Edit this line (or type a value into the workflow box) to change it.
-val MARKETING_VERSION = "1.0.0"
+//
+// 2.0.0 — the three-group 1.x delivery, integrated. A major bump rather than 1.1.0 because the
+// database moves from schema 11 to 15 across four migrations and the on-disk shape is no longer
+// readable by a 1.0.0 build. The version people read should say that.
+val MARKETING_VERSION = "2.0.0"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
@@ -193,14 +197,19 @@ val cargoNdkBuild = tasks.register<Exec>("cargoNdkBuild") {
     group = "build"
     description = "Compile rust/ into liblucent_native.so for every packaged ABI"
     workingDir = rustProjectDir
+    // PHASE 3 (Android backlog A-4): derive the target list from the SAME predicate as abiFilters,
+    // so the two can no longer drift. The default (GPU) APK packages arm64-v8a only, and building
+    // the Rust crate graph for an ABI the APK then filters out was a full extra compile per run —
+    // harmless for correctness, pure cost in CI time and failure surface.
+    val rustTargets = if (project.hasProperty("cpuOnly"))
+        listOf("arm64-v8a", "armeabi-v7a") else listOf("arm64-v8a")
     commandLine(
-        "cargo", "ndk",
-        // Must stay in lockstep with abiFilters above. To add the x86_64 emulator, add
-        // "-t", "x86_64" here and re-add it to abiFilters.
-        "-t", "arm64-v8a",
-        "-t", "armeabi-v7a",
-        "-o", rustOutDir.get().asFile.absolutePath,
-        "build", "--release"
+        buildList {
+            add("cargo"); add("ndk")
+            rustTargets.forEach { add("-t"); add(it) }
+            add("-o"); add(rustOutDir.get().asFile.absolutePath)
+            add("build"); add("--release")
+        }
     )
 }
 
@@ -208,9 +217,13 @@ if (cargoNdkReady) {
     tasks.named("preBuild") { dependsOn(cargoNdkBuild) }
 } else {
     logger.lifecycle(
-        "lucent: cargo-ndk not found — building WITHOUT liblucent_native.so " +
-            "(the app falls back to its Kotlin implementations; install rustup + `cargo install cargo-ndk` " +
-            "and the Android targets to enable the Rust fast paths)"
+        // PHASE 3 (W-8 / C-11): ASCII only (the em-dash rendered as mojibake in Windows CI logs)
+        // and self-locating — this line prints during CONFIGURATION of every Gradle invocation,
+        // including desktop-only ones, where it used to read as if the Windows build had just lost
+        // its Rust library.
+        "lucent(:app, config): cargo-ndk not found - the ANDROID build would fall back to its " +
+            "Kotlin implementations (irrelevant to :desktop tasks). To enable the Rust fast paths: " +
+            "install rustup, run `cargo install cargo-ndk`, and add the Android targets."
     )
 }
 

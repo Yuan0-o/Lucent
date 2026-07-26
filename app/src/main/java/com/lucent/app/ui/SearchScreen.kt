@@ -24,6 +24,15 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.lucent.app.data.SavedSearches
+import com.lucent.app.data.SettingsRepository
+import kotlinx.coroutines.launch
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,6 +102,16 @@ fun SearchScreen(
     val hazeState = LocalHazeState.current
 
     var raw by remember { mutableStateOf("") }
+    // ---- PHASE 3 (review F-1): saved searches ----
+    // The parser already speaks a real filter language; these chips make a good query a one-tap
+    // view instead of something to retype. Stored as settings JSON (data/SavedSearches.kt) — no
+    // schema, and the same store on both platforms.
+    val repo = remember { SettingsRepository(context) }
+    val scope = rememberCoroutineScope()
+    val savedJson by repo.savedSearches.collectAsState(initial = "")
+    val savedList = remember(savedJson) { SavedSearches.parse(savedJson) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var saveName by remember { mutableStateOf("") }
     var noteResults by remember { mutableStateOf<List<Note>>(emptyList()) }
     var taskResults by remember { mutableStateOf<List<Task>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -170,6 +189,20 @@ fun SearchScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
             Text(com.lucent.app.i18n.S.searchEverything, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            // F-1: only offered once there is something to save — an always-on bookmark button
+            // that opens a dialog to save an empty query would be a button that manufactures work.
+            if (raw.isNotBlank()) {
+                IconButton(onClick = {
+                    saveName = raw.trim().take(24)
+                    showSaveDialog = true
+                }) {
+                    Icon(
+                        Icons.Default.BookmarkAdd,
+                        contentDescription = com.lucent.app.i18n.S.saveSearchAction,
+                        tint = onGradientMuted
+                    )
+                }
+            }
             SearchHelpButton()
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -183,6 +216,42 @@ fun SearchScreen(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(10.dp))
+
+        // F-1: the saved views. Tapping applies the whole stored query (replacing, not appending —
+        // a saved view IS the query, and merging it into whatever was half-typed would produce a
+        // search nobody asked for). The trailing x removes just that entry; a saved search is a
+        // one-line string, so deletion needs no confirmation ceremony.
+        if (savedList.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                savedList.forEach { entry ->
+                    FilterChip(
+                        selected = raw == entry.query,
+                        onClick = { raw = entry.query },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(entry.name, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = com.lucent.app.i18n.S.savedSearchRemove(entry.name),
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clickable {
+                                            scope.launch {
+                                                repo.setSavedSearches(SavedSearches.remove(savedJson, entry.name))
+                                            }
+                                        }
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // The operator chips double as toggles: tapping an inactive one adds it to the query, and
         // tapping an *active* one removes it again — the same tap-to-select/tap-to-deselect
@@ -259,9 +328,43 @@ fun SearchScreen(
             }
         }
     }
-}
 
-/** Compiled once — the query is re-tokenised on every keystroke and every chip tap. */
+    // F-1: name-and-save. The query is shown verbatim so the user confirms WHAT gets saved, not
+    // just what it will be called; saving under an existing name replaces that entry (the name is
+    // the identity — see SavedSearches.add).
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text(com.lucent.app.i18n.S.saveSearchAction) },
+            text = {
+                Column {
+                    Text(raw.trim(), fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = saveName,
+                        onValueChange = { saveName = it },
+                        placeholder = { Text(com.lucent.app.i18n.S.saveSearchNamePlaceholder) },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = saveName.isNotBlank(),
+                    onClick = {
+                        scope.launch {
+                            repo.setSavedSearches(SavedSearches.add(savedJson, saveName, raw))
+                        }
+                        showSaveDialog = false
+                    }
+                ) { Text(com.lucent.app.i18n.S.actionSave) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveDialog = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
+            }
+        )
+    }
+}
 private val WHITESPACE = Regex("\\s+")
 
 /**

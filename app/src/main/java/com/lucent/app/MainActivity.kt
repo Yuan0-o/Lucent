@@ -46,6 +46,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import com.lucent.app.ui.LastScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -180,6 +181,10 @@ class MainActivity : FragmentActivity() {
         // access. Everything else that used to be read here has moved off the critical path entirely.
         val startup = try {
             runBlocking { settingsRepo.startupPrefsOnce() }
+                // Seed the first-frame settings cache from this same read (B-group task 9), so the
+                // Assistant screen's very first composition already knows the user's assistant name
+                // instead of showing "Lucent" and snapping to it. Costs nothing: no extra I/O.
+                .also { com.lucent.app.data.SettingsCache.seed(it) }
         } catch (t: Throwable) {
             SettingsRepository.StartupPrefs(
                 display = SettingsRepository.DisplayPrefs("system", "SUNSET", "system"),
@@ -406,6 +411,16 @@ class MainActivity : FragmentActivity() {
             }
         }
         AppLockController.onStop()
+        // Task A10 — park any open, unsaved editor in the draft area as the app leaves the
+        // foreground. This is the "abnormal close" case in the task list, and onStop is the last
+        // callback the platform guarantees: a stopped process can be killed at any moment without
+        // another line of our code running, and the app lock re-locking on resume tears the
+        // composer down as well. Both used to lose the edit outright.
+        //
+        // It does NOT clear the guard (see UnsavedChangesGuard.autoDraft): the editor is still
+        // open, and coming straight back must find it exactly as it was, still able to save
+        // properly. The draft is a copy left behind, not a handover.
+        UnsavedChangesGuard.autoDraft()
         // Refresh the content widgets as the app leaves the foreground, so the home screen shows
         // current data the moment the launcher reappears (ported from the first settings variant).
         try { com.lucent.app.widget.WidgetUpdater.refreshContent(applicationContext) } catch (t: Throwable) { }
@@ -487,10 +502,27 @@ class MainActivity : FragmentActivity() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
-    // The app opens on Tasks — the leftmost tab and the requested default landing screen. Saved
-    // across process death by name (rememberSaveable), so a config change or a return from the
-    // background restores whatever tab the user was actually on rather than snapping back here.
-    var currentScreen by rememberSaveable { mutableStateOf(Screen.Tasks) }
+    // C-group task 8 — start on the tab the user was last on, not always on the home tab.
+    //
+    // The initial value comes from [LastScreen], a process-level holder, because the lock gate
+    // DISPOSES this whole composition (see LastScreen's own comment for why rememberSaveable
+    // cannot cover that case). `rememberSaveable` is kept on top of it so a configuration change
+    // still restores instantly without a round-trip through the holder.
+    //
+    // A-GROUP HOOK: restoring the *tab* is all this does. Restoring an open editor with unsaved
+    // text belongs to the draft-area work — when that lands, the draft should be re-opened here,
+    // after the tab is restored.
+    var currentScreen by rememberSaveable { mutableStateOf(LastScreen.current) }
+    // Record every change so the holder always carries the latest choice, including the change
+    // that happens moments before the app is backgrounded and the lock re-arms.
+    val lastScreenContext = LocalContext.current
+    val lastScreenRepo = remember(lastScreenContext) {
+        com.lucent.app.data.SettingsRepository(lastScreenContext.applicationContext)
+    }
+    LaunchedEffect(currentScreen) {
+        LastScreen.remember(currentScreen)
+        lastScreenRepo.setLastScreen(LastScreen.persistedName())
+    }
     val hazeState = rememberHazeState()
     val onGradient = LocalOnGradient.current
     val context = LocalContext.current
@@ -657,7 +689,27 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                 topBar = {
                     TopAppBar(
                         title = { Text(currentScreen.label, color = onGradient, fontSize = 30.sp) },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        // C-group task 14 — the "top bar changes colour while scrolled" bug.
+                        //
+                        // Only `containerColor` was set. Material 3's TopAppBar does not paint that
+                        // colour unconditionally: it CROSS-FADES between `containerColor` and
+                        // `scrolledContainerColor` as `scrollBehavior.state.overlappedFraction`
+                        // goes 0 -> 1, i.e. as content slides underneath it. `scrolledContainerColor`
+                        // was left at its default, `surfaceContainer` — an OPAQUE theme colour.
+                        //
+                        // So the bar was transparent only at the exact top of the list. Scroll a
+                        // long note or task even slightly and the fraction leaves zero, the fade
+                        // starts, and the bar becomes a solid slab in a colour that belongs to
+                        // neither the theme gradient nor the glass. Scroll all the way back up and
+                        // the fraction returns to zero and it "fixes itself" — precisely the
+                        // reported symptom, including the part that made it look intermittent.
+                        //
+                        // Both colours are transparent now, so the only thing painting this bar is
+                        // its Haze blur (below), at every scroll position.
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent
+                        ),
                         // The scroll behaviour only actually moves the bar on Notes/Tasks: those are
                         // the screens whose lists dispatch the nested scroll it listens to. On the
                         // other tabs nothing scrolls into it, so it stays put.

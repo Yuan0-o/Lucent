@@ -1,3 +1,13 @@
+// Backlog A-5, widget cluster — DECISION (option c, recorded 2026-07-26): the Intent-based
+// RemoteViewsService collection API used below was deprecated in API 31 in favour of
+// RemoteViews.setRemoteAdapter(int, RemoteCollectionItems) — which does not exist below 31, and
+// minSdk is 26 (cpuOnly) / 28. A branch would mean two data paths for the same widget list, and a
+// Glance migration is a rewrite; both are out of proportion to a deprecation that Android still
+// fully supports on every OS this app runs on. So the deprecation is SUPPRESSED here, file-wide,
+// as a decision rather than an accident. Revisit when minSdk reaches 31 (then the modern overload
+// can simply replace the calls) or if these widgets are ever rebuilt on Glance.
+@file:Suppress("DEPRECATION")
+
 package com.lucent.app.widget
 
 import android.appwidget.AppWidgetManager

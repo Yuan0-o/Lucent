@@ -43,7 +43,21 @@ enum class LucentThemeMode(val key: String) {
     MONET_NIGHT("monet_night"),
     MONET_PINE("monet_pine"),
     MONET_PLUM("monet_plum"),
-    MONET_EMBER("monet_ember");
+    MONET_EMBER("monet_ember"),
+
+    // ---- C-group task 15: four further appearances ----
+    //
+    // The existing eight tints cover yellow, green, blue and purple, each with a light and a dark
+    // member. Two hue families were missing entirely from BOTH halves — rose and teal — so the
+    // four added here are those two, again as a light/dark pair each. That keeps the set balanced
+    // (six light, six dark) rather than growing one side of it.
+    //
+    // "No overlap" is the binding constraint, and the near-misses are called out at each colour
+    // below rather than left for someone to discover on a phone screen in daylight.
+    MONET_ROSE("monet_rose"),
+    MONET_LAGOON("monet_lagoon"),
+    MONET_INK("monet_ink"),
+    MONET_GARNET("monet_garnet");
 
     // Live i18n lookups (localization task); `label`/`detail` call sites are unchanged.
     val label: String
@@ -59,6 +73,10 @@ enum class LucentThemeMode(val key: String) {
             MONET_PINE -> com.lucent.app.i18n.S.themeMonetPine
             MONET_PLUM -> com.lucent.app.i18n.S.themeMonetPlum
             MONET_EMBER -> com.lucent.app.i18n.S.themeMonetEmber
+            MONET_ROSE -> com.lucent.app.i18n.S.themeMonetRose
+            MONET_LAGOON -> com.lucent.app.i18n.S.themeMonetLagoon
+            MONET_INK -> com.lucent.app.i18n.S.themeMonetInk
+            MONET_GARNET -> com.lucent.app.i18n.S.themeMonetGarnet
         }
 
     val detail: String
@@ -74,6 +92,10 @@ enum class LucentThemeMode(val key: String) {
             MONET_PINE -> com.lucent.app.i18n.S.themeMonetPineDesc
             MONET_PLUM -> com.lucent.app.i18n.S.themeMonetPlumDesc
             MONET_EMBER -> com.lucent.app.i18n.S.themeMonetEmberDesc
+            MONET_ROSE -> com.lucent.app.i18n.S.themeMonetRoseDesc
+            MONET_LAGOON -> com.lucent.app.i18n.S.themeMonetLagoonDesc
+            MONET_INK -> com.lucent.app.i18n.S.themeMonetInkDesc
+            MONET_GARNET -> com.lucent.app.i18n.S.themeMonetGarnetDesc
         }
 
     /**
@@ -83,7 +105,14 @@ enum class LucentThemeMode(val key: String) {
     fun isDark(systemDark: Boolean): Boolean = when (this) {
         SYSTEM -> systemDark
         DARK -> true
-        MONET_NIGHT, MONET_PINE, MONET_PLUM, MONET_EMBER -> true
+        // C-group task 15: MONET_INK and MONET_GARNET are dark tints and MUST be listed here.
+        //
+        // This branch is `else -> false`, so a new dark appearance that is not named would compile
+        // cleanly and then render dark text on a dark backdrop — a silent, unreadable failure with
+        // no compiler help at all. Any future dark tint goes in this list at the same time as it
+        // goes in the enum; the two are not independent.
+        MONET_NIGHT, MONET_PINE, MONET_PLUM, MONET_EMBER,
+        MONET_INK, MONET_GARNET -> true
         else -> false
     }
 
@@ -100,6 +129,18 @@ enum class LucentThemeMode(val key: String) {
         MONET_PINE -> Color(0xFF16241C)
         MONET_PLUM -> Color(0xFF241A2E)
         MONET_EMBER -> Color(0xFF2A1E19)
+        // Light rose. No light pink existed; the nearest was MONET_WISTERIA (0xFFEEE9F7), which
+        // is violet — this sits ~40 degrees round the wheel from it.
+        MONET_ROSE -> Color(0xFFF9EEF0)
+        // Light teal. MONET_GARDEN is green and MONET_MORNING is blue; teal is the gap between
+        // them and reads as neither.
+        MONET_LAGOON -> Color(0xFFE4F1EF)
+        // Dark teal, against MONET_PINE's dark green and MONET_NIGHT's navy.
+        MONET_INK -> Color(0xFF0F262A)
+        // Dark crimson. MONET_EMBER (0xFF2A1E19) is a warm BROWN — hue ~18; this is ~345, i.e. on
+        // the blue side of red rather than the yellow side. Side by side they are plainly two
+        // different colours, which is the test that matters.
+        MONET_GARNET -> Color(0xFF2E161C)
     }
 
     /**
@@ -119,6 +160,10 @@ enum class LucentThemeMode(val key: String) {
         MONET_PINE -> listOf(Color(0xFF25392E), Color(0xFF101B15))
         MONET_PLUM -> listOf(Color(0xFF3A2B48), Color(0xFF1A121F))
         MONET_EMBER -> listOf(Color(0xFF43302A), Color(0xFF1E1512))
+        MONET_ROSE -> listOf(Color(0xFFFDF5F6), Color(0xFFEECDD4))
+        MONET_LAGOON -> listOf(Color(0xFFEFF7F6), Color(0xFFBFDEDA))
+        MONET_INK -> listOf(Color(0xFF1B3A40), Color(0xFF0A1B1E))
+        MONET_GARNET -> listOf(Color(0xFF46242C), Color(0xFF1F0F13))
     }
 
     companion object {

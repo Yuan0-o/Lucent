@@ -25,7 +25,11 @@ import com.lucent.app.data.Task
 enum class NoteSort(val key: String) {
     RECENT("recent"),
     OLDEST("oldest"),
-    TITLE_AZ("title_az");
+    TITLE_AZ("title_az"),
+    // Task A16. Dragging only means something in an order the user owns: in "Title A–Z", moving a
+    // note somewhere else is a contradiction the next recomposition would undo. So reordering is
+    // enabled by *this* option and only this one, and picking it is what turns the gesture on.
+    CUSTOM("custom");
 
     // Live i18n lookup (localization task): reading S inside composition re-renders the sort
     // menu the moment the language switches, while call sites keep using `sort.label` unchanged.
@@ -34,6 +38,7 @@ enum class NoteSort(val key: String) {
             RECENT -> com.lucent.app.i18n.S.sortLastEdited
             OLDEST -> com.lucent.app.i18n.S.sortOldestFirst
             TITLE_AZ -> com.lucent.app.i18n.S.sortTitleAz
+            CUSTOM -> com.lucent.app.i18n.S.sortCustom
         }
 
     companion object {
@@ -47,7 +52,9 @@ enum class TaskSort(val key: String) {
     OLDEST("oldest"),
     TITLE_AZ("title_az"),
     PRIORITY("priority"),
-    DUE_DATE("due");
+    DUE_DATE("due"),
+    /** Task A16 — see [NoteSort.CUSTOM]. */
+    CUSTOM("custom");
 
     val label: String
         get() = when (this) {
@@ -56,6 +63,7 @@ enum class TaskSort(val key: String) {
             TITLE_AZ -> com.lucent.app.i18n.S.sortTitleAz
             PRIORITY -> com.lucent.app.i18n.S.sortPriority
             DUE_DATE -> com.lucent.app.i18n.S.sortDueDate
+            CUSTOM -> com.lucent.app.i18n.S.sortCustom
         }
 
     companion object {
@@ -83,6 +91,11 @@ fun List<Note>.sortedForDisplay(sort: NoteSort, query: SearchQuery = SearchQuery
         NoteSort.RECENT -> compareByDescending { it.updatedAt }
         NoteSort.OLDEST -> compareBy { it.updatedAt }
         NoteSort.TITLE_AZ -> compareBy { it.title.lowercase() }
+        // Task A16. Every row migrates in at manualOrder 0, so before the first drag they all tie
+        // and this falls through to the recency tiebreak — i.e. choosing "Custom order" shows the
+        // list exactly as it already looked, rather than scrambling it and making the user rebuild
+        // an order they never asked to lose.
+        NoteSort.CUSTOM -> compareBy<Note> { it.manualOrder }.thenByDescending { it.updatedAt }
     }
     val ranked = query.terms.isNotEmpty() || query.phrases.isNotEmpty()
     if (!ranked) {
@@ -114,6 +127,8 @@ fun List<Task>.sortedForDisplay(sort: TaskSort, query: SearchQuery = SearchQuery
         TaskSort.DUE_DATE -> compareBy<Task> { it.dueAt == null }
             .thenBy { it.dueAt ?: Long.MAX_VALUE }
             .thenByDescending { it.createdAt }
+        /** Task A16 — see the note version above. */
+        TaskSort.CUSTOM -> compareBy<Task> { it.manualOrder }.thenByDescending { it.createdAt }
     }
     val ranked = query.terms.isNotEmpty() || query.phrases.isNotEmpty()
     if (!ranked) {

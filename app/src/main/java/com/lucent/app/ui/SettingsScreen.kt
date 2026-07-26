@@ -94,6 +94,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.ui.text.style.TextAlign
 
 // Memory and Web are recombined into a single "Memory & web" page (task 10 of the earlier round),
 // reached via the Memory route; there is no separate Web route.
@@ -144,8 +147,12 @@ fun SettingsScreen(active: Boolean = true) {
     val savedWebSearch by repo.webSearchEnabled.collectAsState(initial = false)
     val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = true)
     val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(initial = true)
+    // Small-model mode (B-group task 4), plus the one-shot warning shown when switching it ON.
+    val savedSmallModelMode by repo.smallModelModeEnabled.collectAsState(initial = false)
+    var showSmallModelWarn by remember { mutableStateOf(false) }
     // Editor: whether note bodies are treated as Markdown. Off by default. See SettingsRepository.
     val markdownEnabled by repo.markdownEnabled.collectAsState(initial = false)
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
     // Editor: whether links are active (task 8). A sub-toggle of Markdown — only live when both are
     // on. Defaults to OFF (opt-in).
     val linksEnabled by repo.linksEnabled.collectAsState(initial = false)
@@ -213,6 +220,33 @@ fun SettingsScreen(active: Boolean = true) {
     val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = false)
     val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(initial = false)
     val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = false)
+
+    // ---- C-group tasks 1, 3, 6, 18 ----
+    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = false)
+    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = false)
+    val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = false)
+    val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
+        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
+    )
+    val pwLaterRound by repo.pwLaterRoundLimit.collectAsState(
+        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT
+    )
+    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = false)
+    val selfDestructThreshold by repo.pwSelfDestructThreshold.collectAsState(
+        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
+    )
+
+    // Confirmation dialogs for the three switches that change what the app is allowed to do.
+    var showBlackoutWarning by remember { mutableStateOf(false) }
+    var showCrashShieldInfo by remember { mutableStateOf(false) }
+    var showOpenLinksWarning by remember { mutableStateOf(false) }
+    // Self-destruct is the only irreversible switch in the app, so it is gated by a TYPED phrase
+    // rather than a tap: a destructive action reached by muscle memory is a destructive action
+    // taken by accident.
+    var showSelfDestructWarning by remember { mutableStateOf(false) }
+    var selfDestructTyped by remember { mutableStateOf("") }
+    // Result of the on-demand at-rest encryption self-check (task 17). Null = not run yet.
+    var encryptionCheckResult by remember { mutableStateOf<String?>(null) }
 
     // App Lock setup dialog (only shown while turning the lock ON, to capture the credentials).
     var showAppLockSetup by remember { mutableStateOf(false) }
@@ -536,6 +570,48 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
+
+    // PHASE 4 — multimodal projector (mmproj) import for the ACTIVE slot. Unlike the model import
+    // there is no naming step: the projector has no user-facing name — it is a property of the
+    // model it serves — so the pick imports directly. The resident model is freed first because
+    // ensureLoaded attaches the projector at model-load time; the next send reloads the pair.
+    val lmMmprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val mmprojSlotId = lmActiveId
+        if (uri != null && !lmImporting && mmprojSlotId != null) {
+            lmError = ""
+            scope.launch {
+                val error = withContext(Dispatchers.IO) {
+                    try {
+                        LocalLlm.shutdown()
+                        LocalModelStore.importMmproj(context, mmprojSlotId, uri)
+                        null
+                    } catch (e: LocalModelStore.NotGgufException) {
+                        S.lmImportFailedNotGguf
+                    } catch (e: Exception) {
+                        S.lmImportFailedGeneric(e.message ?: "")
+                    }
+                }
+                if (error == null) {
+                    lmRefresh++
+                    LucentToast.show(context.applicationContext, S.lmMmprojImported)
+                } else {
+                    lmError = error
+                }
+            }
+        }
+    }
+
+    fun removeMmproj() {
+        val mmprojSlotId = lmActiveId ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                LocalLlm.shutdown()
+                LocalModelStore.deleteMmproj(context, mmprojSlotId)
+            }
+            lmRefresh++
+        }
+    }
+
     // Run the staged import under the chosen name. Frees the resident model first so the peak
     // footprint stays at one model, then adds the new slot (which becomes active) and refreshes.
     fun startLocalImport(uri: Uri, name: String) {
@@ -840,6 +916,27 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
     DisposableEffect(Unit) { onDispose { UnsavedChangesGuard.clear("settings") } }
+
+
+    // The opt-in warning for small-model mode (B-group task 4). Confirming applies the setting;
+    // dismissing leaves the switch as it was, because the switch is driven by the stored value and
+    // never by local state, so a cancelled dialog cannot leave the UI out of step with reality.
+    if (showSmallModelWarn) {
+        AlertDialog(
+            onDismissRequest = { showSmallModelWarn = false },
+            title = { Text(S.smallModelModeTitle) },
+            text = { Text(S.smallModelModeWarn) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSmallModelWarn = false
+                    AppScope.io.launch { repo.setSmallModelModeEnabled(true) }
+                }) { Text(S.actionConfirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSmallModelWarn = false }) { Text(S.actionCancel) }
+            }
+        )
+    }
 
     @Composable
     @NonRestartableComposable
@@ -1891,6 +1988,156 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showShareWarning) { ShareWarningDialog() }
 
+    // ==============================================================================================
+    //  C-GROUP dialogs — every switch that changes what the app is ALLOWED to do explains itself
+    //  first, and every one of them states the cost, not just the benefit.
+    // ==============================================================================================
+
+    // --- Task 1: Blackout Mode ---
+    @Composable
+    @NonRestartableComposable
+    fun BlackoutWarningDialog() {
+        AlertDialog(
+            onDismissRequest = { showBlackoutWarning = false },
+            title = { Text(S.blackoutWarnTitle) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(S.blackoutWarnBody)
+                    // Blackout requires a password. If there is no lock yet, say so HERE rather
+                    // than letting the user confirm and then bounce off a second dialog.
+                    if (!appLockOn) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(S.blackoutNeedsPassword, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showBlackoutWarning = false
+                    if (!appLockOn) {
+                        // No lock yet: send the user through the existing lock-setup dialog, which
+                        // already collects a password AND an optional security question. Blackout
+                        // is switched on by that flow's completion, not here — turning it on with
+                        // no password would produce an app nobody can open.
+                        lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
+                        lockSetupError = ""
+                        showAppLockSetup = true
+                    } else {
+                        scope.launch {
+                            repo.setBlackoutEnabled(true)
+                            com.lucent.app.data.BlackoutMode.hydrate(true)
+                            ShareIntegration.setEnabled(context, false)
+                        }
+                    }
+                }) { Text(S.blackoutWarnConfirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBlackoutWarning = false }) { Text(S.actionCancel) }
+            }
+        )
+    }
+    if (showBlackoutWarning) { BlackoutWarningDialog() }
+
+    // --- Task 3: Crash Shield ---
+    @Composable
+    @NonRestartableComposable
+    fun CrashShieldInfoDialog() {
+        AlertDialog(
+            onDismissRequest = { showCrashShieldInfo = false },
+            title = { Text(S.crashShieldLimitsTitle) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(S.crashShieldLimitsBody)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showCrashShieldInfo = false
+                    scope.launch {
+                        // setCrashShieldEnabled forces logging on in the same edit, so the two can
+                        // never end up disagreeing.
+                        repo.setCrashShieldEnabled(true)
+                        StartupLog.setEnabled(true)
+                        StartupLog.event(context, "crash shield: enabled from Settings")
+                    }
+                }) { Text(S.turnOn) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCrashShieldInfo = false }) { Text(S.actionCancel) }
+            }
+        )
+    }
+    if (showCrashShieldInfo) { CrashShieldInfoDialog() }
+
+    // --- Task 6: opening links in another app ---
+    @Composable
+    @NonRestartableComposable
+    fun OpenLinksWarningDialog() {
+        AlertDialog(
+            onDismissRequest = { showOpenLinksWarning = false },
+            title = { Text(S.openLinksWarnTitle) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(S.openLinksWarnBody)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showOpenLinksWarning = false
+                    scope.launch { repo.setOpenLinksExternally(true) }
+                }) { Text(S.turnOn) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOpenLinksWarning = false }) { Text(S.actionCancel) }
+            }
+        )
+    }
+    if (showOpenLinksWarning) { OpenLinksWarningDialog() }
+
+    // --- Task 18: self-destruct ---
+    //
+    // The one dialog in the app whose confirm button is disabled until the user TYPES a word. Every
+    // other destructive action here is undoable or recoverable from a backup; this one is neither,
+    // and a tap is too cheap a gesture for a decision that cannot be revisited.
+    @Composable
+    @NonRestartableComposable
+    fun SelfDestructWarningDialog() {
+        val phrase = S.selfDestructConfirmPhrase
+        AlertDialog(
+            onDismissRequest = { showSelfDestructWarning = false },
+            title = { Text(S.selfDestructWarnTitle) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(S.selfDestructWarnBody)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = selfDestructTyped,
+                        onValueChange = { selfDestructTyped = it },
+                        singleLine = true,
+                        label = { Text(S.selfDestructConfirmHint(phrase)) }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = selfDestructTyped.trim().equals(phrase, ignoreCase = true),
+                    onClick = {
+                        showSelfDestructWarning = false
+                        selfDestructTyped = ""
+                        scope.launch { repo.setPwSelfDestructEnabled(true) }
+                    }
+                ) { Text(S.turnOn) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSelfDestructWarning = false
+                    selfDestructTyped = ""
+                }) { Text(S.actionCancel) }
+            }
+        )
+    }
+    if (showSelfDestructWarning) { SelfDestructWarningDialog() }
+
     // --- App-Lock gate for the danger zone ---
     //
     // When App Lock is on, the four destructive clears (all data / notes / tasks / chats) must be
@@ -2896,6 +3143,36 @@ fun SettingsScreen(active: Boolean = true) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(lmError, color = Color(0xFFFFC1C1), fontSize = 13.sp)
                         }
+
+                        // ---- PHASE 4: multimodal projector (mmproj) for the active model ----
+                        // Two files make a vision-capable local model: the model .gguf above and a
+                        // projector .gguf from the SAME model family (a Qwen projector cannot serve
+                        // a Gemma model). The description string carries that rule to the user; the
+                        // status line says which state the active slot is in.
+                        if (lmActiveId != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(S.lmMmprojTitle, color = onGradient, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(S.lmMmprojDesc, color = onGradientMuted, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val lmMmprojFile = remember(lmRefresh, lmActiveId) { LocalModelStore.activeMmprojFile(context) }
+                            Text(
+                                lmMmprojFile?.let { "${it.length() / (1024 * 1024)} MB" } ?: S.lmMmprojMissing,
+                                color = onGradientMuted, fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                GlassButton(
+                                    text = S.lmMmprojImport,
+                                    icon = Icons.Default.Add,
+                                    onClick = { lmMmprojLauncher.launch(arrayOf("*/*")) }
+                                )
+                                if (lmMmprojFile != null) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    GlassButton(text = S.lmMmprojRemove, onClick = { removeMmproj() })
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -3045,6 +3322,33 @@ fun SettingsScreen(active: Boolean = true) {
                     Switch(
                         checked = savedConfirmTools,
                         onCheckedChange = { on -> AppScope.io.launch { repo.setAssistantConfirmTools(on) } }
+                    )
+                }
+            }
+
+            // ---- Optimize for small models (B-group task 4) ----
+            //
+            // Default OFF, and opt-in behind an explicit warning, because it is a genuine trade
+            // rather than a strict improvement: the assistant gets faster and far less likely to
+            // stall on a weak model, and in exchange it reads plainer and follows the user's own
+            // personality/style settings less closely. Nobody should discover that by accident,
+            // so the warning is shown when turning it ON and the subtitle states the trade too.
+            Spacer(modifier = Modifier.height(12.dp))
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
+                        Text(S.smallModelModeSub, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = savedSmallModelMode,
+                        onCheckedChange = { on ->
+                            // Only turning it ON warns. Turning it off restores the full prompt,
+                            // which needs no explanation and no permission.
+                            if (on) showSmallModelWarn = true
+                            else AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
+                        }
                     )
                 }
             }
@@ -3545,6 +3849,28 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+                // ---- INTEGRATION: rich text (C-group task 20) ----
+                // Placed directly under Markdown because the two are alternatives, and adjacency is
+                // how a settings page says "pick one of these" without a radio group. The exclusivity
+                // is enforced in SettingsRepository rather than here, so it holds no matter which
+                // surface flips the flag.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.richTextTitle, color = onGradient)
+                        Text(S.richTextSub, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
+                        // Both consequences are stated up front, per the brief's "tell the user the
+                        // upside and the downside": what it costs them (Markdown goes off) and what
+                        // survives an export (highlights in PDF/DOCX, not in Markdown/plain text).
+                        Text(S.richTextExclusiveHint, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
+                        Text(S.richTextExportNote, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = richTextEnabled,
+                        onCheckedChange = { checked -> scope.launch { repo.setRichTextEnabled(checked) } }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
                 // Links is a fully independent switch now (task 8). It used to be a sub-toggle:
                 // greyed out and forced off whenever Markdown was off, on the theory that links
                 // are a Markdown feature. They aren't. Markdown decides whether text is
@@ -3579,10 +3905,30 @@ fun SettingsScreen(active: Boolean = true) {
         fun SecurityPage() {
             BackHeader(S.settingsSecurityTitle) { route = SettingsRoute.Root }
 
-            // Security is "who can get into this app", and right now that is exactly one control
-            // — the app lock, moved here by task 10. It is the page's only occupant on purpose:
-            // a page with one clear job is easier to trust than a page with a heading that
-            // covers two.
+            // ================================================================================
+            //  C-GROUP TASK 2 — the Security / Privacy split, restated
+            // ================================================================================
+            //
+            // The two pages had drifted into overlap: "app lock" sat in Security while "startup
+            // logging" sat in Privacy, and neither heading explained why. The line that actually
+            // separates them, and that both pages are now organised around, is:
+            //
+            //   SECURITY  = keeping other people OUT of data that stays here.
+            //               (app lock, biometrics, unlock attempt limits, self-destruct,
+            //                crash shield, at-rest encryption status)
+            //
+            //   PRIVACY   = controlling what LEAVES this device, or gets written down about you.
+            //               (Blackout Mode, system share integration, diagnostic logging,
+            //                opening links in another app)
+            //
+            // Read that way every control has exactly one home, and the two questions a worried
+            // user actually asks — "can someone else get in?" and "where does my stuff go?" — each
+            // have a page that answers them completely.
+            //
+            // Blackout Mode is filed under Privacy despite forcing the app lock on, because the
+            // lock is a MEANS for it, not its purpose: it exists to stop data leaving.
+            //
+            // Sections within the page are ordered by how much damage getting them wrong does.
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
                 // ---- App Lock ----
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -3642,6 +3988,153 @@ fun SettingsScreen(active: Boolean = true) {
                     }
                 }
 
+                // ---- C-group task 18: unlock attempt limits ----
+                //
+                // Shown only while the lock is on. A throttle for a password that does not exist is
+                // a setting with nothing to configure, and a page full of inert controls is how
+                // people learn to skim past the ones that matter.
+                if (appLockOn) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(S.attemptLimitsTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.attemptLimitsDesc, color = onGradientMuted, fontSize = 13.sp)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    StepperRow(
+                        label = S.attemptFirstRound,
+                        value = pwFirstRound,
+                        range = com.lucent.app.data.PasswordAttempts.ROUND_LIMIT_RANGE,
+                        onChange = { scope.launch { repo.setPwFirstRoundLimit(it) } }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    StepperRow(
+                        label = S.attemptLaterRounds,
+                        value = pwLaterRound,
+                        range = com.lucent.app.data.PasswordAttempts.ROUND_LIMIT_RANGE,
+                        onChange = { scope.launch { repo.setPwLaterRoundLimit(it) } }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // The escalation ladder itself is fixed, not configurable. A user-editable
+                    // backoff curve is a backoff curve that whoever reaches this screen can flatten.
+                    Text(S.attemptLadderNote, color = onGradientMuted, fontSize = 12.sp)
+
+                    // ---- Self-destruct: OFF by default, typed confirmation to turn on ----
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(S.selfDestructTitle, color = onGradient)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(S.selfDestructDesc, color = onGradientMuted, fontSize = 13.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = selfDestructOn,
+                            onCheckedChange = { turnOn ->
+                                if (turnOn) {
+                                    selfDestructTyped = ""
+                                    showSelfDestructWarning = true
+                                } else {
+                                    // Turning a destructive feature OFF needs no ceremony. Only
+                                    // arming it does.
+                                    scope.launch { repo.setPwSelfDestructEnabled(false) }
+                                }
+                            }
+                        )
+                    }
+                    if (selfDestructOn) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        StepperRow(
+                            label = S.selfDestructThreshold,
+                            value = selfDestructThreshold,
+                            range = com.lucent.app.data.PasswordAttempts.SELF_DESTRUCT_RANGE,
+                            step = 5,
+                            onChange = { scope.launch { repo.setPwSelfDestructThreshold(it) } }
+                        )
+                    }
+                }
+
+                // ---- C-group task 3: Crash Shield ----
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.crashShieldTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.crashShieldDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = crashShieldOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) showCrashShieldInfo = true
+                            else scope.launch { repo.setCrashShieldEnabled(false) }
+                        }
+                    )
+                }
+                if (crashShieldOn) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Two honest notes rather than one reassuring one: the switch does not take
+                    // effect until relaunch, and logging is now held on and cannot be turned off
+                    // from the Privacy page while this is running.
+                    Text(S.crashShieldNextLaunch, color = onGradientMuted, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(S.crashShieldLoggingLocked, color = onGradientMuted, fontSize = 12.sp)
+                    if (com.lucent.app.data.CrashShield.isInstalled() &&
+                        com.lucent.app.data.CrashShield.caughtCount > 0
+                    ) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            S.crashShieldCaught(com.lucent.app.data.CrashShield.caughtCount),
+                            color = onGradientMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                // ---- C-group task 17: at-rest encryption readout ----
+                //
+                // Placed last because it is a STATUS, not a switch — nothing here is configurable,
+                // and mixing a readout in among controls invites people to look for the toggle that
+                // isn't there. It is on this page rather than Privacy because encryption is about
+                // keeping others out of data that stays here, which is exactly this page's job.
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(S.encryptionStatusTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    when {
+                        com.lucent.app.data.EncryptionStatus.lockedOut -> S.encryptionStatusLockedOut
+                        com.lucent.app.data.EncryptionStatus.degraded -> S.encryptionStatusDegraded
+                        else -> S.encryptionStatusHealthy
+                    },
+                    color = if (com.lucent.app.data.EncryptionStatus.degraded ||
+                        com.lucent.app.data.EncryptionStatus.lockedOut
+                    ) OverdueColor else onGradientMuted,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // The machine-readable summary, verbatim. It is the same line written to the
+                // startup log, so what a user reads here and what they send in a bug report cannot
+                // disagree.
+                Text(
+                    com.lucent.app.data.EncryptionStatus.summaryLine(),
+                    color = onGradientMuted,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassButton(text = S.encryptionRunCheck, onClick = {
+                        // A status flag records what a code path BELIEVED. This does the work.
+                        val failure = com.lucent.app.data.EncryptionStatus.probeSecrets()
+                        encryptionCheckResult = failure ?: ""
+                    })
+                }
+                encryptionCheckResult?.let { result ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        if (result.isEmpty()) S.encryptionCheckPassed else S.encryptionCheckFailed(result),
+                        color = if (result.isEmpty()) onGradientMuted else OverdueColor,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
 
@@ -3654,7 +4147,116 @@ fun SettingsScreen(active: Boolean = true) {
             // but "what gets out, or written down". Both switches here are off by default and
             // both are about visibility beyond this screen — one makes Lucent visible to other
             // apps, the other records a local file about what the app did.
+            // ---- Task A21: the hidden area switch ----
+            //
+            // It lives here, off by default, and closes itself on the next launch (see
+            // [HiddenArea]). When an app lock is set, turning it ON asks for that password first:
+            // the lock is the user's statement that reaching this data requires proof, and a switch
+            // that reveals a deliberately hidden area is exactly where that statement applies.
+            // Turning it OFF is never gated — closing something is not a privileged act.
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                var hiddenPw by remember { mutableStateOf("") }
+                var hiddenPwError by remember { mutableStateOf(false) }
+                var askingHiddenPw by remember { mutableStateOf(false) }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.hiddenSettingTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.hiddenSettingDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = HiddenArea.visible,
+                        onCheckedChange = { turnOn ->
+                            when {
+                                !turnOn -> HiddenArea.close()
+                                appLockCreds.isBlank() -> HiddenArea.open()
+                                else -> { hiddenPw = ""; hiddenPwError = false; askingHiddenPw = true }
+                            }
+                        }
+                    )
+                }
+
+                if (askingHiddenPw) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(S.hiddenUnlockPrompt, color = onGradientMuted, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = hiddenPw,
+                        onValueChange = { hiddenPw = it; hiddenPwError = false },
+                        singleLine = true,
+                        isError = hiddenPwError,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (hiddenPwError) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.hiddenWrongPassword, color = onGradientMuted, fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row {
+                        GlassButton(text = S.actionConfirm, compact = true, onClick = {
+                            if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
+                                HiddenArea.open()
+                                askingHiddenPw = false
+                                hiddenPw = ""
+                            } else {
+                                hiddenPwError = true
+                            }
+                        })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        GlassButton(text = S.actionCancel, compact = true, onClick = {
+                            askingHiddenPw = false; hiddenPw = ""
+                        })
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                // ---- C-group task 1: Blackout Mode ----
+                //
+                // First on the page, and deliberately so: it is the only control here that
+                // OUTRANKS the ones below it. Someone who turns it on has settled every question
+                // the rest of the page asks, and burying it under three lesser switches would mean
+                // the user configures each of them and only then discovers one switch did it all.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.blackoutTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.blackoutSub, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = blackoutOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) {
+                                showBlackoutWarning = true
+                            } else {
+                                scope.launch {
+                                    repo.setBlackoutEnabled(false)
+                                    com.lucent.app.data.BlackoutMode.hydrate(false)
+                                    LucentToast.show(context, S.blackoutOffToast)
+                                }
+                            }
+                        }
+                    )
+                }
+                if (blackoutOn) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        S.blackoutOverridesTitle,
+                        color = onGradient,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(S.blackoutDesc, color = onGradientMuted, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
                 // ---- System share / intent integration ----
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -3723,6 +4325,11 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(
                         checked = startupLoggingOn,
+                        // C-group task 3: Crash Shield holds logging ON. Frozen, not hidden — a
+                        // control that vanishes leaves the user wondering whether they imagined it,
+                        // while a visibly disabled one with a reason beside it teaches them which
+                        // other switch is responsible.
+                        enabled = !crashShieldOn,
                         onCheckedChange = { turnOn ->
                             if (turnOn) {
                                 showLoggingConsent = true          // enable only after consent
@@ -3732,6 +4339,41 @@ fun SettingsScreen(active: Boolean = true) {
                             }
                         }
                     )
+                }
+                // ---- C-group task 6: open web links in the system browser ----
+                //
+                // Filed under Privacy rather than Editor, even though the switch is about text
+                // rendering, because what it actually decides is whether a tap hands an address to
+                // ANOTHER APP. That is the same question every other control on this page asks.
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.openLinksTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.openLinksDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = openLinksExternallyOn,
+                        // Blackout overrides this outright, so while it is on the switch is shown
+                        // but inert — the frozen-UI treatment the rest of the app uses for a
+                        // control that a higher-ranking setting has taken over.
+                        enabled = !blackoutOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) showOpenLinksWarning = true
+                            else scope.launch { repo.setOpenLinksExternally(false) }
+                        }
+                    )
+                }
+                if (blackoutOn) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.openLinksBlockedByBlackout, color = onGradientMuted, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                if (crashShieldOn) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.crashShieldLoggingLocked, color = onGradientMuted, fontSize = 12.sp)
                 }
                 if (startupLoggingOn) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -3926,6 +4568,53 @@ private fun PaletteSwatch(colors: List<Color>) {
             .clip(RoundedCornerShape(6.dp))
             .background(Brush.horizontalGradient(preview))
     )
+}
+
+
+/**
+ * A labelled -/+ stepper for a small bounded integer (C-group task 18's attempt limits).
+ *
+ * A stepper rather than a text field because every value these settings take is a single digit or
+ * two, and a keyboard for that is more work than the setting is worth — and because a text field
+ * would need its own validation for "", "-3" and "999999", all of which a stepper makes
+ * unrepresentable. [range] is enforced here as well as in the repository: the UI should not offer a
+ * value the data layer would silently clamp, or the number shown stops matching the number stored.
+ */
+@Composable
+private fun StepperRow(
+    label: String,
+    value: Int,
+    range: IntRange,
+    step: Int = 1,
+    onChange: (Int) -> Unit
+) {
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        IconButton(
+            onClick = { onChange((value - step).coerceIn(range)) },
+            enabled = value > range.first
+        ) {
+            Icon(Icons.Default.Remove, contentDescription = null, tint = onGradient)
+        }
+        Text(
+            value.toString(),
+            color = onGradient,
+            fontSize = 15.sp,
+            modifier = Modifier.widthIn(min = 32.dp),
+            textAlign = TextAlign.Center
+        )
+        IconButton(
+            onClick = { onChange((value + step).coerceIn(range)) },
+            enabled = value < range.last
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = onGradientMuted)
+        }
+    }
 }
 
 @Composable

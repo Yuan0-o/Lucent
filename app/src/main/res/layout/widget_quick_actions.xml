@@ -1,12 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Combined "quick actions" widget (task 9): note / task / assistant in one compact bar. Each cell
-     is its own tap target. -->
+<!-- Combined "quick actions" widget: note / task / assistant in one compact bar. Each cell is its
+     own tap target.
+
+     C-GROUP TASK 9 — the small-size overflow.
+
+     This widget is resizable down to 1x1 (see widget_quick_actions_info.xml: minResizeWidth 40dp),
+     but its three cells were built only for the 3x1 default. Each carried a 26dp icon, 8dp padding,
+     4dp margin and a 12sp caption. At 3x1 that fits; squeezed toward 1x1 the weights shrink the
+     cells while every one of those dp values stays put, so the icons collided and the captions were
+     clipped mid-word.
+
+     Fixed by making the parts that must shrink able to shrink:
+       - the caption is `layout_weight=0` with `autoSizeTextType=uniform`, so it steps down from
+         12sp to 8sp and only then ellipsizes, instead of being cut off at full size;
+       - `layout_width` on the caption is 0dp + weight, so it can never push its cell wider than the
+         cell has;
+       - icon and paddings are reduced enough to leave room at the narrow end while staying legible
+         at the wide one. A widget that is resizable to 1x1 has to be designed for 1x1; declaring
+         the resize range and then laying out only for the default size is the actual bug here. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:background="@drawable/widget_bg"
-    android:padding="8dp"
+    android:padding="6dp"
     android:baselineAligned="false">
 
     <LinearLayout
@@ -14,23 +31,28 @@
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:layout_margin="4dp"
+        android:layout_margin="3dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/widget_cell_bg"
-        android:padding="8dp">
+        android:padding="4dp">
         <ImageView
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:src="@drawable/ic_widget_note"
             android:contentDescription="New note" />
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="@string/widget_note"
             android:textColor="@color/widget_text"
             android:textSize="12sp"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="8sp"
+            android:autoSizeMaxTextSize="12sp"
+            android:gravity="center"
+            android:ellipsize="end"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -39,23 +61,28 @@
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:layout_margin="4dp"
+        android:layout_margin="3dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/widget_cell_bg"
-        android:padding="8dp">
+        android:padding="4dp">
         <ImageView
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:src="@drawable/ic_widget_task"
             android:contentDescription="New task" />
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="@string/widget_task"
             android:textColor="@color/widget_text"
             android:textSize="12sp"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="8sp"
+            android:autoSizeMaxTextSize="12sp"
+            android:gravity="center"
+            android:ellipsize="end"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -64,23 +91,28 @@
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:layout_margin="4dp"
+        android:layout_margin="3dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/widget_cell_bg"
-        android:padding="8dp">
+        android:padding="4dp">
         <ImageView
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:src="@drawable/ic_widget_assistant"
             android:contentDescription="Ask the assistant" />
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="@string/widget_ask"
             android:textColor="@color/widget_text"
             android:textSize="12sp"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="8sp"
+            android:autoSizeMaxTextSize="12sp"
+            android:gravity="center"
+            android:ellipsize="end"
             android:maxLines="1" />
     </LinearLayout>
 </LinearLayout>

@@ -1,18 +1,22 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -20,66 +24,103 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.i18n.S
 
 /**
- * The assistant's "are you sure?" modal for an action that will change the user's notes or tasks.
+ * The assistant's confirmation for an action that would change the user's notes or tasks.
  *
- * ### Why this lives at the app level and not on the Assistant screen (task 3)
+ * ### Why this lives at the app level and not on the Assistant screen (task 3, earlier round)
  *
  * It used to be declared inside `AssistantScreen`, which meant it could only be *seen* from the
  * Assistant tab. But generation deliberately does not belong to that screen: [AssistantController]
  * runs a turn on a process-lifetime scope precisely so a reply survives the user wandering off to
- * check a note (see the comment on its `genScope`). Those two decisions were in direct conflict.
+ * check a note. Those two decisions were in direct conflict, and the failure was worse than a
+ * missing dialog: a mutating tool coming up while the user was on Notes parked the generation
+ * coroutine on a `CompletableDeferred` waiting for an answer from a dialog that no longer existed
+ * anywhere in the composition. Nothing could complete it, and the turn hung forever. Hosting it in
+ * `LucentApp` gives the modal exactly the same lifetime as the generation it belongs to.
  *
- * The failure was worse than a missing dialog. When a mutating tool came up while the user was on
- * Notes, Tasks or Settings, the controller set `pendingConfirmation` and parked the generation
- * coroutine on a `CompletableDeferred` waiting for an answer — from a dialog that no longer existed
- * anywhere in the composition. Nothing could ever complete it. The turn hung indefinitely, the
- * thinking indicator span forever, and returning to the Assistant tab did not help either, because
- * by then the confirmation had been set while that screen was disposed. That is the second, and by
- * far the more serious, cause of the "assistant loops forever" report.
+ * ### Edit first, decide second (B-group task 3)
  *
- * Hosting it in `LucentApp` fixes it structurally rather than by patching the symptom: the modal now
- * has exactly the same lifetime as the generation it belongs to. Ask on any tab, answer on any tab.
+ * The order used to be: approve the action, watch it run, and only then get offered a button that
+ * opened the created item so you could fix it. That is backwards. By the time the editor opened,
+ * the note or task genuinely existed — in the list, in the history, with its reminder scheduled —
+ * so "actually, no" meant deleting something rather than declining it, and a wrong due date had
+ * already been committed before anyone could read it.
  *
- * ### The editable field
+ * Now the dialog IS the editor, and it runs before anything is written. Every argument worth
+ * reviewing ([com.lucent.app.tools.AppTools.editableArguments]) is a filled-in field: a task's
+ * title, its notes, its due date, its subtasks. Nothing reaches the database until the add button
+ * is pressed, so cancelling costs exactly nothing and leaves exactly nothing behind.
  *
- * When the call has a field worth correcting ([com.lucent.app.tools.AppTools.editableArgument] —
- * a new note or task's title, a rename's new title, a subtask's text) it is shown as a text box
- * pre-filled with what the model proposed, and approving runs the *edited* value.
+ * Actions with nothing meaningfully editable (deleting, pinning, completing) still show no fields,
+ * because for those the decision genuinely is only yes or no.
  *
- * The reason is that the most common thing wrong with a proposed action is a word. The assistant
- * hears "remind me to eat tomorrow" and offers a task called "eat tomorrow"; the user meant "eat
- * breakfast tomorrow". Before, the only options were to accept the wrong thing and go fix it by
- * hand, or decline and re-explain — and a confirmation dialog that makes you do the work twice is
- * one people learn to dismiss without reading. Being able to fix the word in place is what makes
- * reading it worthwhile.
+ * ### Three ways out, not two
  *
- * Actions with nothing meaningfully editable (deleting, pinning, completing) show no field, because
- * for those the decision genuinely is only yes or no.
+ * Add, cancel, and — new — "keep refining with the assistant". The third exists because the honest
+ * answer to a proposal is often neither yes nor no but "close, but let me explain". Cancelling to
+ * retype the whole request is a poor answer to that, and it was the only one available. Choosing it
+ * runs nothing and hands the proposal (with whatever was typed into the fields) back to the
+ * assistant, which then asks what to change and carries on from there.
  *
- * ### Only the Cancel button cancels (accidental-dismiss fix)
+ * ### Only the buttons decide (accidental-dismiss fix)
  *
- * This dialog appears on the model's schedule, not the user's — it can pop up right as they are
- * scrolling the thread or reaching for something else. With the default dialog behaviour, a stray
- * touch on the scrim (or a reflexive back press) counted as "no" and silently cancelled an action
- * the user had actually asked for, and they were left waiting for a task that was never going to
- * appear. So dismissal is disabled entirely: [DialogProperties] turns off outside-tap and
- * back-press dismissal, and [AlertDialog]'s onDismissRequest is an inert no-op as belt-and-braces
- * (with both routes off it can no longer fire). The ONLY ways out are the two labelled buttons —
- * Confirm runs the action, Cancel declines it — so a decision is always a deliberate tap on a
- * button the user has read, never an accident of where a finger happened to land.
+ * This dialog appears on the model's schedule, not the user's — it can pop up mid-scroll. With the
+ * default behaviour a stray touch on the scrim counted as "no" and silently cancelled an action the
+ * user had actually asked for. So dismissal is disabled entirely: [DialogProperties] turns off
+ * outside-tap and back-press dismissal, and `onDismissRequest` is an inert no-op as belt-and-braces.
+ * A decision is always a deliberate tap on a button the user has read.
+ *
+ * ### Draft area hook (group A)
+ *
+ * The edited-but-uncommitted values live in [draft] below and nowhere else. When group A's draft
+ * area (草稿区) landed, that map became what gets persisted as the draft: it is mirrored where
+ * [draft] is initialised and dropped in every branch that calls `resolveConfirmation`. See
+ * com.lucent.app.data.AssistantDraftBridge — implemented during integration.
  */
 @Composable
 fun AssistantConfirmationDialog() {
     val confirm = AssistantController.pendingConfirmation ?: return
 
     // Keyed on the confirmation itself so a second action in the same turn starts from ITS proposed
-    // value rather than inheriting the text left over from the previous dialog.
-    var draft by remember(confirm) { mutableStateOf(confirm.editValue) }
+    // values rather than inheriting whatever was left in the previous dialog. A snapshot map, so
+    // typing in one field recomposes only what it must.
+    //
+    // ---- GROUP A DRAFT-AREA HOOK: this map is the uncommitted draft. ----
+    val draft = remember(confirm) {
+        mutableStateMapOf<String, String>().apply {
+            confirm.edits.forEach { put(it.key, it.value) }
+        }
+    }
+
+    // INTEGRATION (B task 3 x A task 10) — mirror the proposal into the draft area for as long as
+    // this dialog is open, so a crash or force-quit mid-review lands in drafts instead of losing
+    // the whole proposal.
+    //
+    // Debounced rather than written on every keystroke: this runs inside the editor, and a database
+    // write per character would make typing in the body field stutter on a phone. 700ms after the
+    // user stops typing is far inside the window that matters — the risk being covered is the app
+    // dying, not the app dying between two consecutive letters.
+    //
+    // The snapshot is taken as an immutable map INSIDE the effect key so the effect actually
+    // restarts when a field changes; keying on the snapshot map itself would compare identities and
+    // never re-fire.
+    val ctx = LocalContext.current
+    val draftSnapshot = draft.toMap()
+    LaunchedEffect(confirm, draftSnapshot) {
+        if (!com.lucent.app.data.AssistantDraftBridge.shouldMirror(confirm.toolName)) return@LaunchedEffect
+        kotlinx.coroutines.delay(700)
+        runCatching {
+            com.lucent.app.data.AssistantDraftBridge.mirror(
+                ctx.applicationContext, confirm.toolName, draftSnapshot
+            )
+        }
+    }
+
+    val hasForm = confirm.edits.isNotEmpty()
 
     AlertDialog(
-        // Deliberately inert: scrim taps and back presses are disabled below, so this can't fire —
+        // Deliberately inert: scrim taps and back presses are disabled below, so this cannot fire —
         // and keeping it a no-op guarantees that even if it somehow did, an accidental touch could
-        // never count as "cancel". Only the explicit Cancel button declines the action.
+        // never count as "cancel".
         onDismissRequest = { },
         properties = DialogProperties(
             dismissOnBackPress = false,
@@ -87,57 +128,58 @@ fun AssistantConfirmationDialog() {
         ),
         title = { Text(confirm.actionTitle) },
         text = {
-            Column {
+            // Capped and scrollable: a create_task with notes and a subtask list is a real form, and
+            // on a phone in landscape it would otherwise push its own buttons off the screen.
+            Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                 Text(confirm.details)
-                if (confirm.editKey != null) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        label = { Text(confirm.editLabel) },
-                        // Not single-line: a note title can be a whole sentence, and clipping it
-                        // invisibly at the right edge is how someone approves text they can't read.
-                        singleLine = false,
-                        maxLines = 3,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(S.confirmEditHint, fontSize = 12.sp)
-                }
-                if (confirm.editorKind != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // "Approve and fine-tune": runs the action exactly as shown (including the edit
-                    // above, if any) through the normal tool path — so every guarantee the tools
-                    // give still holds — and then opens the created or edited item's own page,
-                    // where every remaining detail can be adjusted with the real note/task editor
-                    // instead of a dialog field.
-                    TextButton(
-                        onClick = {
-                            AssistantController.resolveConfirmation(
-                                approved = true,
-                                editedValue = if (confirm.editKey != null) draft else null,
-                                openInEditor = true
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(S.confirmOpenEditor) }
-                    Text(S.confirmOpenEditorHint, fontSize = 12.sp)
+                if (hasForm) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.confirmReviewHint, fontSize = 12.sp)
+                    confirm.edits.forEach { field ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = draft[field.key].orEmpty(),
+                            onValueChange = { draft[field.key] = it },
+                            label = { Text(field.label) },
+                            // A body or a subtask list is a paragraph; a title is one line. Neither
+                            // is ever clipped invisibly at the right edge, which is how someone ends
+                            // up approving text they could not read.
+                            singleLine = false,
+                            maxLines = if (field.multiline) 8 else 3,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (field.multiline) Modifier.heightIn(min = 96.dp) else Modifier
+                                )
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                // Only send an edit for calls that actually offered one; the controller treats a
-                // blank or unchanged value as "run it as proposed".
                 AssistantController.resolveConfirmation(
                     approved = true,
-                    editedValue = if (confirm.editKey != null) draft else null
+                    edits = draft.toMap()
                 )
-            }) { Text(S.actionConfirm) }
+            }) { Text(if (hasForm) S.confirmAddIt else S.actionConfirm) }
         },
         dismissButton = {
-            TextButton(onClick = { AssistantController.resolveConfirmation(false) }) {
-                Text(S.actionCancel)
+            // Two choices share this slot: decline outright, or park it and keep talking. They are
+            // stacked rather than laid out in a row because "keep refining with the assistant" is
+            // too long to sit beside two other buttons on a phone without one of them wrapping to
+            // an unreadable stub.
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                TextButton(onClick = {
+                    AssistantController.resolveConfirmation(
+                        approved = false,
+                        edits = draft.toMap(),
+                        refine = true
+                    )
+                }) { Text(S.confirmKeepRefining) }
+                TextButton(onClick = { AssistantController.resolveConfirmation(approved = false) }) {
+                    Text(S.actionCancel)
+                }
             }
         }
     )

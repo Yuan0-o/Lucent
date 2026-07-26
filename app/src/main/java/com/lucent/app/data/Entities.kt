@@ -46,7 +46,34 @@ data class Note(
     // Soft-delete: a trashed note is hidden from the home list, the archive, and search, and is
     // shown only on the Trash screen, until it's restored or TrashCleanup permanently removes it
     // after TrashCleanup.RETENTION_DAYS days. Null = not in the trash.
-    val trashedAt: Long? = null
+    val trashedAt: Long? = null,
+    // ---- 1.1.0, group A ----------------------------------------------------------------------
+    // Task A16: the user's own order. Every existing row migrates in at 0, so they all tie and the
+    // sort falls through to its normal secondary key — i.e. "custom order" starts out identical to
+    // the order the user was already looking at, rather than scrambling the list the first time it
+    // is selected. Real values are assigned on the first drag.
+    val manualOrder: Int = 0,
+    // Task A10: a note that was saved as (or auto-saved into) a draft. Kept in this table rather
+    // than a table of its own for the same reason trashedAt is a column: a draft IS the note, at an
+    // earlier moment, and giving it a second home would mean two schemas, two write paths and two
+    // things to keep in step whenever a note gains a field.
+    val isDraft: Boolean = false,
+    val draftSavedAt: Long? = null,
+    // Task A21: hidden from every list until the user turns the hidden area on in Settings.
+    val hidden: Boolean = false,
+    // Task A22: a third kind of note, alongside plain text and checklist. Its own flag rather than
+    // converting the pair into an enum column: the existing rows already encode "plain vs
+    // checklist" in isChecklist, and rewriting every one of them would be a data migration whose
+    // only product is a tidier-looking schema.
+    // INTEGRATION (C task 20): rich-text spans for [body], stored BESIDE it as JSON rather than as
+    // inline markup, so every existing reader of `body` — assistant tools, exports, backup, the
+    // [[wiki]] scanner — keeps seeing plain text. See data/RichText.kt.
+    val bodySpans: String = "",
+    val isDoodle: Boolean = false,
+    // Serialized strokes (see ui/DoodleCanvas.kt). Held separately from `body` for the same reason
+    // `checklist` is its own column: switching a note between kinds must never destroy the other
+    // kind's content.
+    val doodle: String = ""
 )
 
 @Entity(
@@ -95,7 +122,16 @@ data class Task(
     // Soft-delete: a trashed task is hidden from the active list, the completed-tasks history, and
     // search, and is shown only on the Trash screen, until it's restored or TrashCleanup
     // permanently removes it. Null = not in the trash.
-    val trashedAt: Long? = null
+    val trashedAt: Long? = null,
+    // ---- 1.1.0, group A: identical trio to Note, for identical reasons (see above) -------------
+    val manualOrder: Int = 0,
+    val isDraft: Boolean = false,
+    val draftSavedAt: Long? = null,
+    val hidden: Boolean = false,
+    // INTEGRATION (C task 20): the task twin of Note.bodySpans, covering the `notes` field. Task 20
+    // says "notes or tasks", and the two editors share a code path — a rich-text note that goes
+    // plain when its text is moved into a task is exactly the asymmetry C's handoff warned about.
+    val notesSpans: String = ""
 )
 
 /**
@@ -132,6 +168,33 @@ data class NoteVersion(
     val savedAt: Long = System.currentTimeMillis()
 )
 
+/**
+ * One historical revision of a task (task A19) — the exact counterpart of [NoteVersion], and
+ * deliberately a separate table rather than a shared one with a "kind" column: the two carry
+ * different fields (a note has a body and tags; a task has subtasks, a priority and a due date),
+ * and a shared table would have to make every one of them nullable and then remember which half
+ * applies to which row.
+ *
+ * Snapshots the text-ish state only, never attachments — same reasoning as [NoteVersion]: an
+ * attachment's bytes are referenced by id, so copying that reference into a version row would let
+ * restoring an old version resurrect a file the task had already dropped.
+ */
+@Entity(
+    tableName = "task_versions",
+    indices = [Index(value = ["taskId"])]
+)
+data class TaskVersion(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val taskId: Long,
+    val title: String,
+    val notes: String = "",
+    val subtasks: String = "[]",
+    val priority: Int = 0,
+    val dueAt: Long? = null,
+    /** The task's own updatedAt-equivalent at the moment this revision was replaced. */
+    val savedAt: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "chat_messages")
 data class ChatMessage(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -149,7 +212,16 @@ data class ChatMessage(
     // meaningful on assistant messages — it's the estimated input-context + output size for the
     // turn that produced this reply. 0 on user messages and on rows created before the column
     // existed, in which case the footnote is simply hidden. See data/TokenEstimator.kt.
-    val tokens: Int = 0
+    val tokens: Int = 0,
+    // Which USER message this assistant reply answers (B-group task 12: resend / multiple replies).
+    //
+    // 0 on user messages, on replies saved before this column existed, and on anything the pairing
+    // could not be established for. A non-zero value groups every reply that answers the same
+    // question: asking again appends another row with the SAME replyToId, and the chat shows one of
+    // them at a time with a 1/2 switcher. Deliberately a plain id rather than a separate
+    // "variants" table — a reply is still exactly one row, so search, export, token accounting and
+    // deletion all keep working with no special-casing at all.
+    val replyToId: Long = 0
 )
 
 /**

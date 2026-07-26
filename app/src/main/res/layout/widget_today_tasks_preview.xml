@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- C-group task 9 — picker preview for the task-list widget. Same reasoning as the other two
+     previews: the real layout is a ListView bound at runtime, and a ListView renders EMPTY in the
+     picker because nothing binds its adapter there — which is why this widget's preview was a bare
+     dark rectangle. A preview has to be static content, so it shows two representative rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="8dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/widget_label_today"
+        android:textColor="@color/widget_text"
+        android:textSize="10sp"
+        android:maxLines="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:src="@drawable/ic_widget_check_off"
+            android:contentDescription="@null" />
+        <View
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="3dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_hint_pill" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="5dp">
+        <ImageView
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:src="@drawable/ic_widget_check_on"
+            android:contentDescription="@null" />
+        <View
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="3dp"
+            android:layout_marginEnd="24dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_hint_pill" />
+    </LinearLayout>
+</LinearLayout>

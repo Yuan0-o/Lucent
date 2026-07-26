@@ -91,6 +91,16 @@ private object SettingsKeys {
     // their asterisks and hashes silently restyled or a "Markdown supported" hint they can't use.
     val MARKDOWN_ENABLED = booleanPreferencesKey("markdown_enabled")
 
+    // ---- INTEGRATION: C-group task 20 — rich text, OFF by default ----
+    // Independent of MARKDOWN_ENABLED, and mutually exclusive with it in the UI. C's handoff note
+    // asked for that decision to be made before shipping rather than after a bug report, and the
+    // answer is exclusivity: both on at once means two systems styling one string, and the first
+    // question anybody asks is what **bold** does inside a bolded span. There is no answer to that
+    // which is not arbitrary, so the switches turn each other off.
+    val RICH_TEXT_ENABLED = booleanPreferencesKey("rich_text_enabled")
+    // PHASE 3 (review F-1): saved searches, one JSON string — see data/SavedSearches.kt.
+    val SAVED_SEARCHES = stringPreferencesKey("saved_searches")
+
     // Whether tappable links ([[wiki]] and [text](url)) are active inside Markdown mode. A sub-toggle
     // of Markdown: when Markdown is off there are no links regardless. Default OFF — links are now
     // opt-in, so Markdown formatting alone never turns plain-looking text into tappable links until
@@ -160,6 +170,61 @@ private object SettingsKeys {
     // *destroy* the user's cloud-assistant configuration, so the previous values are parked here
     // first and restored the moment local mode is switched back off. They exist only between those
     // two events; disabling local mode consumes and removes them.
+    // ---- Quick model switching (B-group task 5) ----
+    // The models the user has recently switched to, newest first, as the JSON array
+    // [ModelRecents] understands. Not encrypted: a model id is a public product name, and this key
+    // is read to build a menu, not to authenticate anything.
+    val MODEL_RECENTS = stringPreferencesKey("model_recents")
+
+    // ---- Small-model mode (B-group task 4) ----
+    // Whether the assistant sends its trimmed-down prompt. OFF by default and opt-in behind a
+    // warning: it makes the assistant noticeably plainer, which is a trade nobody should be opted
+    // into silently. Tiny vocabulary, so not encrypted — same reasoning as the toggles above.
+    val SMALL_MODEL_MODE = booleanPreferencesKey("small_model_mode")
+
+    // ---- C-group task 8: the tab to reopen on ----
+    // One value from a six-word vocabulary, so — like theme and language above — deliberately NOT
+    // encrypted. Which tab you were last on is not a secret, and this is read on the pre-first-frame
+    // startup path where a Keystore round-trip would be pure cost.
+    val LAST_SCREEN = stringPreferencesKey("last_screen")
+
+    // ---- C-group task 1: Blackout Mode — OFF by default ----
+    // The switch itself, plus the two settings Blackout has to overwrite while it is on. Those two
+    // are PARKED here first and handed back when Blackout is switched off, exactly as
+    // MEMORY_TIER_PRELOCAL / WEB_SEARCH_PRELOCAL do for local-model mode. Reusing that shape is
+    // deliberate: two features that behave identically should be implemented identically.
+    val BLACKOUT_ENABLED = booleanPreferencesKey("blackout_enabled")
+    val APP_LOCK_PREBLACKOUT = booleanPreferencesKey("app_lock_preblackout")
+    val SYSTEM_INTEGRATION_PREBLACKOUT = booleanPreferencesKey("system_integration_preblackout")
+
+    // ---- C-group task 3: Crash Shield — OFF by default ----
+    // Takes effect at the next launch (the shield installs itself as the outermost frame of the main
+    // loop and is never torn down mid-run), so this flag is read on the startup path.
+    val CRASH_SHIELD_ENABLED = booleanPreferencesKey("crash_shield_enabled")
+
+    // ---- C-group task 18: unlock throttling and self-destruct ----
+    //
+    // The throttle STATE is one JSON blob (see PasswordAttempts.State) so the whole record moves
+    // atomically — a partially-updated throttle is a throttle with a hole in it. It is NOT
+    // encrypted, and that is a considered choice rather than an oversight: it is read on the lock
+    // screen, before any password has been entered, and it contains no secret — only counters and
+    // deadlines. Encrypting it would add a Keystore round-trip to the one screen that must stay
+    // responsive while someone is locked out and impatient.
+    //
+    // Note that "not encrypted" is not "not protected": the blob lives in the app's private data
+    // directory, and PasswordAttempts.State.fromJson fails SAFE (treating an unreadable record as a
+    // full-length lockout) precisely so that corrupting it cannot be used to clear a lockout.
+    val PW_ATTEMPT_STATE = stringPreferencesKey("pw_attempt_state")
+    val PW_FIRST_ROUND_LIMIT = intPreferencesKey("pw_first_round_limit")
+    val PW_LATER_ROUND_LIMIT = intPreferencesKey("pw_later_round_limit")
+    val PW_SELF_DESTRUCT_ENABLED = booleanPreferencesKey("pw_self_destruct_enabled")
+    val PW_SELF_DESTRUCT_THRESHOLD = intPreferencesKey("pw_self_destruct_threshold")
+
+    // ---- C-group task 6: open links in the system browser — OFF by default ----
+    // Independent of MARKDOWN_ENABLED and LINKS_ENABLED: this one makes a bare URL anywhere in a
+    // note, a task or an assistant reply tappable, with no [text](url) syntax required.
+    val OPEN_LINKS_EXTERNALLY = booleanPreferencesKey("open_links_externally")
+
     val MEMORY_TIER_PRELOCAL = stringPreferencesKey("memory_tier_prelocal")
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
 }
@@ -257,6 +322,11 @@ class SettingsRepository(private val context: Context) {
         // prefs exist to prevent, so it rides in the same single read. Defaults to "system" — the app
         // follows the device language out of the box, and the user can pin a specific language in Settings.
         val appLanguage: String = "system",
+        // The assistant's name (B-group task 9). First-frame state for exactly the reason the
+        // theme and language above are: the Assistant screen puts it on every reply bubble, so
+        // reading it asynchronously meant a renamed assistant was briefly labelled "Lucent" on
+        // open. It rides in this same single read at no extra cost. See data/SettingsCache.
+        val assistantName: String = "Lucent",
         // Whether the drifting background animates. First-frame state too: the SPLASH draws the
         // same background, so if this were read asynchronously the splash of a user who turned the
         // effect off would open with drifting blobs and only go still a beat later — exactly the
@@ -276,12 +346,139 @@ class SettingsRepository(private val context: Context) {
             startupLoggingEnabled = prefs[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false,
             systemIntegrationEnabled = prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false,
             appLanguage = prefs[SettingsKeys.APP_LANGUAGE] ?: "system",
+            assistantName = secret(prefs, SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, "Lucent"),
             backgroundAnimationEnabled = prefs[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true
         )
     }
 
     // ---- UI language (localization task) ----
     /** The chosen UI language key ("system", "en", "zh", "ja", "ko"); defaults to "system". See i18n/I18n.kt. */
+
+    // ---- C-group task 8 ----
+    val lastScreen: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.LAST_SCREEN] ?: "" }
+    suspend fun lastScreenOnce(): String = context.settingsDataStore.data.first()[SettingsKeys.LAST_SCREEN] ?: ""
+    suspend fun setLastScreen(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.LAST_SCREEN] = value }
+    }
+
+    // ---- C-group task 1: Blackout Mode ----
+    val blackoutEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BLACKOUT_ENABLED] ?: false }
+    suspend fun blackoutEnabledOnce(): Boolean =
+        context.settingsDataStore.data.first()[SettingsKeys.BLACKOUT_ENABLED] ?: false
+
+    /**
+     * Turn Blackout Mode on or off, parking and restoring what it overrides.
+     *
+     * Two settings are genuinely written rather than merely overridden at the point of use: the app
+     * lock (forced ON, because "re-entering asks for a password" is one of the guarantees) and share
+     * integration (forced OFF, because appearing in the system share sheet is a way for Lucent's
+     * content to leave). Everything else Blackout controls — the network, the cloud assistant, the
+     * recents thumbnail — is gated in the read path by [BlackoutMode], so nothing the user
+     * configured is destroyed by flipping this on.
+     *
+     * Restoring deliberately never *lowers* security: if the app lock is on when Blackout is
+     * switched off, it stays on regardless of what was parked. Parking exists to avoid taking away
+     * something the user had, not to undo a choice they made later.
+     */
+    suspend fun setBlackoutEnabled(value: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            val wasEnabled = prefs[SettingsKeys.BLACKOUT_ENABLED] ?: false
+            prefs[SettingsKeys.BLACKOUT_ENABLED] = value
+            if (value) {
+                if (!wasEnabled) {
+                    prefs[SettingsKeys.APP_LOCK_PREBLACKOUT] = prefs[SettingsKeys.APP_LOCK_ENABLED] ?: false
+                    prefs[SettingsKeys.SYSTEM_INTEGRATION_PREBLACKOUT] =
+                        prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false
+                }
+                prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] = false
+                // NOTE: APP_LOCK_ENABLED is not forced here. The lock cannot be switched on without
+                // credentials, and credentials need a dialog, so the Settings screen collects a
+                // password FIRST and only then calls this. Forcing the flag from the data layer
+                // would produce a lock with no password — an app that can never be opened again.
+            } else {
+                prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] =
+                    prefs[SettingsKeys.SYSTEM_INTEGRATION_PREBLACKOUT] ?: false
+                prefs.remove(SettingsKeys.APP_LOCK_PREBLACKOUT)
+                prefs.remove(SettingsKeys.SYSTEM_INTEGRATION_PREBLACKOUT)
+            }
+        }
+    }
+
+    /** Whether the app lock was already on before Blackout forced it — drives the restore prompt. */
+    suspend fun appLockWasOnBeforeBlackout(): Boolean =
+        context.settingsDataStore.data.first()[SettingsKeys.APP_LOCK_PREBLACKOUT] ?: false
+
+    // ---- C-group task 3: Crash Shield ----
+    val crashShieldEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false }
+    suspend fun crashShieldEnabledOnce(): Boolean =
+        context.settingsDataStore.data.first()[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false
+
+    /**
+     * Crash Shield forces diagnostic logging ON and holds it there. A shield that swallows failures
+     * without recording them converts one visible crash into a silent permanent misbehaviour, so
+     * the two are wired together in the data layer rather than merely in the UI — that way the
+     * invariant survives someone adding a second call site for the logging toggle later.
+     */
+    suspend fun setCrashShieldEnabled(value: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SettingsKeys.CRASH_SHIELD_ENABLED] = value
+            if (value) prefs[SettingsKeys.STARTUP_LOGGING_ENABLED] = true
+        }
+    }
+
+    // ---- C-group task 18: unlock throttling ----
+    val passwordAttemptState: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PW_ATTEMPT_STATE] ?: "" }
+    suspend fun passwordAttemptStateOnce(): String =
+        context.settingsDataStore.data.first()[SettingsKeys.PW_ATTEMPT_STATE] ?: ""
+    suspend fun setPasswordAttemptState(json: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.PW_ATTEMPT_STATE] = json }
+    }
+
+    val pwFirstRoundLimit: Flow<Int> = context.settingsDataStore.data.map {
+        it[SettingsKeys.PW_FIRST_ROUND_LIMIT] ?: PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
+    }
+    val pwLaterRoundLimit: Flow<Int> = context.settingsDataStore.data.map {
+        it[SettingsKeys.PW_LATER_ROUND_LIMIT] ?: PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT
+    }
+    suspend fun setPwFirstRoundLimit(value: Int) {
+        context.settingsDataStore.edit {
+            it[SettingsKeys.PW_FIRST_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
+        }
+    }
+    suspend fun setPwLaterRoundLimit(value: Int) {
+        context.settingsDataStore.edit {
+            it[SettingsKeys.PW_LATER_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
+        }
+    }
+
+    /**
+     * Self-destruct is OFF by default and stays that way unless the user explicitly turns it on.
+     *
+     * This is the only feature in Lucent that destroys data with no recovery path, and a
+     * destructive default is a default nobody consented to. The number (25) is a default; the
+     * *switch* is not.
+     */
+    val pwSelfDestructEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.PW_SELF_DESTRUCT_ENABLED] ?: false }
+    val pwSelfDestructThreshold: Flow<Int> = context.settingsDataStore.data.map {
+        it[SettingsKeys.PW_SELF_DESTRUCT_THRESHOLD] ?: PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
+    }
+    suspend fun setPwSelfDestructEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.PW_SELF_DESTRUCT_ENABLED] = value }
+    }
+    suspend fun setPwSelfDestructThreshold(value: Int) {
+        context.settingsDataStore.edit {
+            it[SettingsKeys.PW_SELF_DESTRUCT_THRESHOLD] = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
+        }
+    }
+
+    // ---- C-group task 6: open links in the system browser ----
+    val openLinksExternally: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] ?: false }
+    suspend fun setOpenLinksExternally(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] = value }
+    }
+
     val appLanguage: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "system" }
     suspend fun setAppLanguage(value: String) { context.settingsDataStore.edit { it[SettingsKeys.APP_LANGUAGE] = value } }
     /** One-shot read for contexts that run without the Activity (e.g. the reminder receiver). */
@@ -360,6 +557,14 @@ class SettingsRepository(private val context: Context) {
      */
     suspend fun localBackgroundReplyEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false
+
+    // ---- Small-model mode (B-group task 4) ----
+    /** Whether the assistant runs on its trimmed-down prompt. Off by default; opt-in with a warning. */
+    val smallModelModeEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.SMALL_MODEL_MODE] ?: false }
+    suspend fun setSmallModelModeEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.SMALL_MODEL_MODE] = value }
+    }
 
     /** Whether the on-device model may call in-app tools. Off by default (opt-in, perf warning). */
     val localToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false }
@@ -444,6 +649,13 @@ class SettingsRepository(private val context: Context) {
 
     /** Whether Markdown formatting is on for notes and tasks. Defaults to OFF (plain text). */
     val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }
+    val richTextEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.RICH_TEXT_ENABLED] ?: false }
+
+    // PHASE 3 (review F-1): the saved-searches JSON (see data/SavedSearches.kt for the format).
+    val savedSearches: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.SAVED_SEARCHES] ?: "" }
+    suspend fun setSavedSearches(json: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.SAVED_SEARCHES] = json }
+    }
 
     /**
      * Whether links ([[wiki]] / [text](url)) are active. A sub-toggle of Markdown, so links are only
@@ -535,6 +747,59 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBaseUrl(value: String) = putSecret(SettingsKeys.BASE_URL_ENC, SettingsKeys.LEGACY_BASE_URL, value)
     suspend fun setApiSpec(value: String) = putSecret(SettingsKeys.API_SPEC_ENC, SettingsKeys.LEGACY_API_SPEC, value)
     suspend fun setModel(value: String) = putSecret(SettingsKeys.MODEL_ENC, SettingsKeys.LEGACY_MODEL, value)
+
+    // ---- Quick model switching (B-group task 5) ----
+
+    /** Models recently switched to, newest first. Drives the Assistant screen's quick switcher. */
+    val modelRecents: Flow<List<String>> =
+        context.settingsDataStore.data.map { ModelRecents.parse(it[SettingsKeys.MODEL_RECENTS]) }
+
+    /**
+     * Switch which model the assistant talks to, from outside Settings.
+     *
+     * ### Why this is not just [setModel]
+     *
+     * The active model lives in TWO places: the flat MODEL_ENC key the assistant reads on every
+     * send, and the `model` field of the selected [ApiProfile]. [saveApiProfiles] mirrors the
+     * profile into the flat key, which means writing only the flat key produces a switch that works
+     * until the next time the user opens Settings and saves — at which point the profile's stale
+     * model silently overwrites it and the assistant reverts. That is a bug that would surface
+     * hours later, far from its cause, so this writes both.
+     *
+     * The [ModelRecents] entry is updated in the same edit, so the menu's ordering and the active
+     * model can never disagree. The API profile is otherwise untouched: this switches the MODEL,
+     * never the API — same endpoint, same key, same spec.
+     */
+    suspend fun setActiveModel(value: String) {
+        val model = value.trim()
+        if (model.isBlank()) return
+        // Read and do the crypto outside the edit lambda: DataStore may re-run that lambda under
+        // contention, and this house style keeps real work out of it (see saveApiProfiles).
+        val prefs = context.settingsDataStore.data.first()
+        val profilesJson = LocalSecrets.decrypt(
+            prefs[SettingsKeys.API_PROFILES_ENC] ?: prefs[SettingsKeys.LEGACY_API_PROFILES] ?: ""
+        )
+        val profiles = ApiProfiles.parse(profilesJson)
+        val selected = (prefs[SettingsKeys.API_PROFILE_SELECTED] ?: 0)
+        val profilesEnc = if (profiles.isEmpty()) null else {
+            val idx = selected.coerceIn(0, profiles.size - 1)
+            LocalSecrets.encrypt(
+                ApiProfiles.serialize(profiles.mapIndexed { i, p -> if (i == idx) p.copy(model = model) else p })
+            )
+        }
+        val modelEnc = LocalSecrets.encrypt(model)
+        val recents = ModelRecents.add(prefs[SettingsKeys.MODEL_RECENTS], model)
+
+        context.settingsDataStore.edit { p ->
+            p[SettingsKeys.MODEL_ENC] = modelEnc
+            p.remove(SettingsKeys.LEGACY_MODEL)
+            if (profilesEnc != null) {
+                p[SettingsKeys.API_PROFILES_ENC] = profilesEnc
+                p.remove(SettingsKeys.LEGACY_API_PROFILES)
+            }
+            p[SettingsKeys.MODEL_RECENTS] = recents
+        }
+    }
     suspend fun setAssistantName(value: String) = putSecret(SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, value)
     suspend fun setAssistantStyle(value: String) = putSecret(SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, value)
 
@@ -552,7 +817,21 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setNotesSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value } }
     suspend fun setTasksSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value } }
-    suspend fun setMarkdownEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value } }
+    suspend fun setMarkdownEnabled(value: Boolean) {
+        context.settingsDataStore.edit {
+            it[SettingsKeys.MARKDOWN_ENABLED] = value
+            // Mutually exclusive — see the note on RICH_TEXT_ENABLED. Done in the same edit block so
+            // there is never an instant, however brief, where both read as on.
+            if (value) it[SettingsKeys.RICH_TEXT_ENABLED] = false
+        }
+    }
+
+    suspend fun setRichTextEnabled(value: Boolean) {
+        context.settingsDataStore.edit {
+            it[SettingsKeys.RICH_TEXT_ENABLED] = value
+            if (value) it[SettingsKeys.MARKDOWN_ENABLED] = false
+        }
+    }
     suspend fun setLinksEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LINKS_ENABLED] = value } }
 
     suspend fun setMemoryTier(value: String) { context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER] = value } }

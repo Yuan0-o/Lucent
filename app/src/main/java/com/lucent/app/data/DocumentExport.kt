@@ -1,7 +1,19 @@
 package com.lucent.app.data
 
+// C-GROUP TASK 10 — exported documents follow the app's language.
+//
+// Every user-visible label in a generated PDF/DOCX/XLSX used to be a hardcoded English
+// string literal, so a Chinese user exporting a Chinese note received a document headed
+// "Lucent notes" with rows labelled "Updated" and "Subtasks". They now read from the same
+// catalog the rest of the UI does, so an export matches the language on screen.
+//
+// Deliberately NOT localized: the internal `noun` discriminator ("note"/"task") used to pick
+// between the count/empty strings. It is a code-level switch, never shown, and translating it
+// would silently break the branch that reads it.
+
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.pdf.PdfDocument
 import java.io.ByteArrayOutputStream
 import java.time.Instant
@@ -84,6 +96,13 @@ object DocumentExport {
         val title: String,
         val meta: String,
         val body: String,
+        // INTEGRATION (C task 20): the sidecar for [body], carried through so the DOCX writer can
+        // turn it into runs. Empty for every format that drops it — see docxRichPara.
+        val bodySpans: String = "",
+        // INTEGRATION (phase 3): the doodle stroke JSON, non-empty only for doodle notes. Only the
+        // PDF writer renders it — PDF is the one export format here that can draw vector strokes.
+        // Every other format keeps exporting the caption text, exactly as before.
+        val doodle: String = "",
         val checklist: List<Pair<Boolean, String>>,
         val checklistLabel: String,
         val attachments: List<String>
@@ -91,39 +110,42 @@ object DocumentExport {
 
     private fun noteBlock(note: Note): Block {
         val meta = buildList {
-            add("Updated ${formatTime(note.updatedAt)}")
-            if (note.pinned) add("Pinned")
-            if (note.archived) add("Archived")
+            add(com.lucent.app.i18n.S.exportDocUpdated(formatTime(note.updatedAt)))
+            if (note.pinned) add(com.lucent.app.i18n.S.exportDocPinned)
+            if (note.archived) add(com.lucent.app.i18n.S.exportDocArchived)
             val tags = note.tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }
             if (tags.isNotEmpty()) add(tags.joinToString(" ") { "#$it" })
         }.joinToString(" · ")
         val checklist = if (note.isChecklist) Checklist.parse(note.checklist).map { it.done to it.text } else emptyList()
         return Block(
-            title = note.title.ifBlank { "Untitled" },
+            title = note.title.ifBlank { com.lucent.app.i18n.S.untitled },
             meta = meta,
             body = if (note.isChecklist) "" else note.body.trim(),
+            bodySpans = if (note.isChecklist) "" else note.bodySpans,
+            doodle = if (note.isDoodle) note.doodle else "",
             checklist = checklist,
-            checklistLabel = if (note.isChecklist) "Checklist" else "",
+            checklistLabel = if (note.isChecklist) com.lucent.app.i18n.S.exportDocChecklist else "",
             attachments = Attachments.parse(note.attachments).map { it.name }
         )
     }
 
     private fun taskBlock(task: Task): Block {
         val meta = buildList {
-            add("Created ${formatTime(task.createdAt)}")
-            task.dueAt?.let { add("Due ${formatTime(it)}") }
-            if (task.pinned) add("Pinned")
-            TaskPriority.fromValue(task.priority).takeIf { it != TaskPriority.NONE }?.let { add("Priority: ${it.label}") }
-            RepeatRule.fromKey(task.repeatRule).takeIf { it != RepeatRule.NONE }?.let { add("Repeats: ${it.label}") }
-            add(if (task.isDone) "Done" else "Open")
+            add(com.lucent.app.i18n.S.exportDocCreated(formatTime(task.createdAt)))
+            task.dueAt?.let { add(com.lucent.app.i18n.S.exportDocDue(formatTime(it))) }
+            if (task.pinned) add(com.lucent.app.i18n.S.exportDocPinned)
+            TaskPriority.fromValue(task.priority).takeIf { it != TaskPriority.NONE }?.let { add(com.lucent.app.i18n.S.exportDocPriority(it.label)) }
+            RepeatRule.fromKey(task.repeatRule).takeIf { it != RepeatRule.NONE }?.let { add(com.lucent.app.i18n.S.exportDocRepeats(it.label)) }
+            add(if (task.isDone) com.lucent.app.i18n.S.exportDocDone else com.lucent.app.i18n.S.exportDocOpen)
         }.joinToString(" · ")
         val box = if (task.isDone) "\u2611" else "\u2610" // ☑ / ☐
         return Block(
-            title = "$box ${task.title.ifBlank { "Untitled task" }}",
+            title = "$box ${task.title.ifBlank { com.lucent.app.i18n.S.exportDocUntitledTask }}",
             meta = meta,
             body = task.notes.trim(),
+            bodySpans = task.notesSpans,
             checklist = Checklist.parse(task.subtasks).map { it.done to it.text },
-            checklistLabel = "Subtasks",
+            checklistLabel = com.lucent.app.i18n.S.exportDocSubtasks,
             attachments = Attachments.parse(task.attachments).map { it.name }
         )
     }
@@ -131,24 +153,24 @@ object DocumentExport {
     // ============================ Word (.docx) ============================
 
     private fun notesDocx(notes: List<Note>): ByteArray =
-        docx("Lucent notes", notes.size, "note", notes.map { noteBlock(it) })
+        docx(com.lucent.app.i18n.S.exportDocNotesTitle, notes.size, "note", notes.map { noteBlock(it) })
 
     private fun tasksDocx(tasks: List<Task>): ByteArray =
-        docx("Lucent tasks", tasks.size, "task", tasks.map { taskBlock(it) })
+        docx(com.lucent.app.i18n.S.exportDocTasksTitle, tasks.size, "task", tasks.map { taskBlock(it) })
 
     private fun docx(heading: String, count: Int, noun: String, blocks: List<Block>): ByteArray {
         val body = StringBuilder()
         body.append(docxPara(heading, bold = true, sizeHalfPt = 40))
-        body.append(docxPara("$count $noun${if (count == 1) "" else "s"}, exported ${formatTime(System.currentTimeMillis())}", italic = true, sizeHalfPt = 18))
-        body.append(docxPara("Attachments are listed by name but not embedded. Use the .json backup if you need the attachment bytes.", italic = true, sizeHalfPt = 18))
+        body.append(docxPara(((if (noun == "note") com.lucent.app.i18n.S.exportDocNoteCount(count) else com.lucent.app.i18n.S.exportDocTaskCount(count)) + ", " + com.lucent.app.i18n.S.exportDocExportedAt(formatTime(System.currentTimeMillis()))), italic = true, sizeHalfPt = 18))
+        body.append(docxPara(com.lucent.app.i18n.S.exportDocAttachmentsNote, italic = true, sizeHalfPt = 18))
 
         if (blocks.isEmpty()) {
-            body.append(docxPara("No ${noun}s yet.", italic = true))
+            body.append(docxPara((if (noun == "note") com.lucent.app.i18n.S.exportDocNoNotes else com.lucent.app.i18n.S.exportDocNoTasks), italic = true))
         } else {
             for (b in blocks) {
                 body.append(docxPara(b.title, bold = true, sizeHalfPt = 30, spaceBeforeTwips = 240))
                 if (b.meta.isNotBlank()) body.append(docxPara(b.meta, italic = true, sizeHalfPt = 18))
-                if (b.body.isNotBlank()) body.append(docxPara(b.body))
+                if (b.body.isNotBlank()) body.append(docxRichPara(b.body, b.bodySpans))
                 if (b.checklist.isNotEmpty()) {
                     body.append(docxPara("${b.checklistLabel}:", bold = true, sizeHalfPt = 20))
                     for ((done, text) in b.checklist) {
@@ -156,7 +178,7 @@ object DocumentExport {
                     }
                 }
                 if (b.attachments.isNotEmpty()) {
-                    body.append(docxPara("Attachments: ${b.attachments.joinToString(", ")}", bold = true, sizeHalfPt = 18))
+                    body.append(docxPara(com.lucent.app.i18n.S.exportDocAttachmentsLine(b.attachments.joinToString(", ")), bold = true, sizeHalfPt = 18))
                 }
             }
         }
@@ -200,17 +222,94 @@ object DocumentExport {
         return "<w:p><w:pPr><w:spacing w:before=\"$spaceBeforeTwips\" w:after=\"40\"/></w:pPr>$runs</w:p>"
     }
 
+
+    /**
+     * INTEGRATION (C-group task 20) — one DOCX paragraph carrying rich-text runs.
+     *
+     * ### The per-format decision C's handoff asked for, made explicitly
+     *
+     * | format | highlights and weights |
+     * |---|---|
+     * | DOCX | **kept** — Word has runs, `<w:b/>`, `<w:i/>` and `<w:highlight/>` for exactly this |
+     * | Markdown | dropped, words kept — Markdown has no highlight syntax, and inventing `==x==` |
+     * |          | would emit something most renderers show as literal equals signs |
+     * | plain text / CSV / XLSX | dropped, words kept — no way to express it at all |
+     * | PDF | dropped, words kept — see the note in [pdf]; this is the one gap left open |
+     *
+     * Dropping is never silent: the Settings switch states it before the user turns the feature on.
+     *
+     * Falls back to the plain writer whenever there is nothing to express, so a note without
+     * formatting produces byte-identical XML to before this existed.
+     */
+    private fun docxRichPara(text: String, spansJson: String, spaceBeforeTwips: Int = 40): String {
+        val spans = RichText.load(spansJson, text)
+        if (spans.isEmpty()) return docxPara(text, spaceBeforeTwips = spaceBeforeTwips)
+
+        // Word highlight names, in the same order as the five swatches the editor offers. Word only
+        // accepts a fixed vocabulary here, so these are the nearest named colours rather than exact
+        // matches — a close highlight is the honest rendering; an exact one is not available.
+        val highlightNames = listOf("yellow", "green", "cyan", "magenta", "darkYellow")
+
+        // Split at every point where the style changes. Working per character and coalescing is
+        // slower than tracking span boundaries, but it is obviously correct in the presence of
+        // overlaps (bold under a highlight), and a note body is a few thousand characters.
+        fun styleAt(i: Int): Triple<Boolean, Boolean, Int> {
+            var bold = false; var light = false; var italic = false; var hl = -1
+            spans.forEach { s ->
+                if (i >= s.start && i < s.end) when (s.kind) {
+                    RichSpan.Kind.BOLD -> bold = true
+                    RichSpan.Kind.LIGHT -> light = true
+                    RichSpan.Kind.ITALIC -> italic = true
+                    RichSpan.Kind.HIGHLIGHT -> hl = s.color
+                }
+            }
+            // Word has no "light" run property, so light is expressed as "not bold" — the closest
+            // thing the format can say. Recorded here rather than dropped silently so the intent
+            // survives in the file even though the distinction from regular does not.
+            return Triple(bold && !light, italic, hl)
+        }
+
+        val runs = StringBuilder()
+        text.split("\n").forEachIndexed { lineIndex, line ->
+            if (lineIndex > 0) runs.append("<w:r><w:br/></w:r>")
+            val lineStart = text.split("\n").take(lineIndex).sumOf { it.length + 1 }
+            var i = 0
+            while (i < line.length) {
+                val style = styleAt(lineStart + i)
+                var j = i + 1
+                while (j < line.length && styleAt(lineStart + j) == style) j++
+                val (bold, italic, hl) = style
+                val rPr = buildString {
+                    if (bold || italic || hl >= 0) {
+                        append("<w:rPr>")
+                        if (bold) append("<w:b/>")
+                        if (italic) append("<w:i/>")
+                        if (hl >= 0) append("<w:highlight w:val=\"" +
+                            highlightNames[hl.coerceIn(0, highlightNames.lastIndex)] + "\"/>")
+                        append("</w:rPr>")
+                    }
+                }
+                runs.append("<w:r>").append(rPr)
+                    .append("<w:t xml:space=\"preserve\">")
+                    .append(xmlEscape(line.substring(i, j)))
+                    .append("</w:t></w:r>")
+                i = j
+            }
+        }
+        return "<w:p><w:pPr><w:spacing w:before=\"$spaceBeforeTwips\" w:after=\"40\"/></w:pPr>$runs</w:p>"
+    }
+
     // ============================ Excel (.xlsx) ============================
 
     private fun notesXlsx(notes: List<Note>): ByteArray {
-        val header = listOf("Title", "Updated", "Tags", "Pinned", "Archived", "Content", "Attachments")
+        val header = listOf(com.lucent.app.i18n.S.exportColTitle, com.lucent.app.i18n.S.exportColUpdated, com.lucent.app.i18n.S.exportColTags, com.lucent.app.i18n.S.exportColPinned, com.lucent.app.i18n.S.exportColArchived, com.lucent.app.i18n.S.exportColContent, com.lucent.app.i18n.S.exportColAttachments)
         val rows = notes.map { n ->
             val content = if (n.isChecklist) {
                 Checklist.parse(n.checklist).joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.text}" }
             } else n.body.trim()
             val tags = n.tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ") { "#$it" }
             listOf(
-                n.title.ifBlank { "Untitled" },
+                n.title.ifBlank { com.lucent.app.i18n.S.untitled },
                 formatTime(n.updatedAt),
                 tags,
                 if (n.pinned) "Yes" else "",
@@ -219,16 +318,16 @@ object DocumentExport {
                 Attachments.parse(n.attachments).joinToString(", ") { it.name }
             )
         }
-        return xlsx("Notes", header, rows)
+        return xlsx(com.lucent.app.i18n.S.tabNotes, header, rows)
     }
 
     private fun tasksXlsx(tasks: List<Task>): ByteArray {
-        val header = listOf("Title", "Status", "Created", "Due", "Priority", "Repeat", "Pinned", "Details", "Subtasks", "Attachments")
+        val header = listOf(com.lucent.app.i18n.S.exportColTitle, com.lucent.app.i18n.S.exportColStatus, com.lucent.app.i18n.S.exportColCreated, com.lucent.app.i18n.S.exportColDue, com.lucent.app.i18n.S.exportColPriority, com.lucent.app.i18n.S.exportColRepeat, com.lucent.app.i18n.S.exportColPinned, com.lucent.app.i18n.S.exportColDetails, com.lucent.app.i18n.S.exportColSubtasks, com.lucent.app.i18n.S.exportColAttachments)
         val rows = tasks.map { t ->
             val subtasks = Checklist.parse(t.subtasks).joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.text}" }
             listOf(
-                t.title.ifBlank { "Untitled task" },
-                if (t.isDone) "Done" else "Open",
+                t.title.ifBlank { com.lucent.app.i18n.S.exportDocUntitledTask },
+                if (t.isDone) com.lucent.app.i18n.S.exportDocDone else com.lucent.app.i18n.S.exportDocOpen,
                 formatTime(t.createdAt),
                 t.dueAt?.let { formatTime(it) } ?: "",
                 TaskPriority.fromValue(t.priority).takeIf { it != TaskPriority.NONE }?.label ?: "",
@@ -239,7 +338,7 @@ object DocumentExport {
                 Attachments.parse(t.attachments).joinToString(", ") { it.name }
             )
         }
-        return xlsx("Tasks", header, rows)
+        return xlsx(com.lucent.app.i18n.S.tabTasks, header, rows)
     }
 
     private fun xlsx(sheetName: String, header: List<String>, rows: List<List<String>>): ByteArray {
@@ -293,10 +392,10 @@ object DocumentExport {
     // ============================ PDF (.pdf) ============================
 
     private fun notesPdf(notes: List<Note>): ByteArray =
-        pdf("Lucent notes", notes.size, "note", notes.map { noteBlock(it) })
+        pdf(com.lucent.app.i18n.S.exportDocNotesTitle, notes.size, "note", notes.map { noteBlock(it) })
 
     private fun tasksPdf(tasks: List<Task>): ByteArray =
-        pdf("Lucent tasks", tasks.size, "task", tasks.map { taskBlock(it) })
+        pdf(com.lucent.app.i18n.S.exportDocTasksTitle, tasks.size, "task", tasks.map { taskBlock(it) })
 
     // A4 at 72dpi, in points.
     private const val PAGE_W = 595
@@ -316,22 +415,35 @@ object DocumentExport {
         state.newPage()
 
         state.drawWrapped(heading, titlePaint, 26f)
-        state.drawWrapped("$count $noun${if (count == 1) "" else "s"}, exported ${formatTime(System.currentTimeMillis())}", metaPaint, 14f)
-        state.drawWrapped("Attachments are listed by name but not embedded. Use the .json backup for the bytes.", metaPaint, 16f)
+        state.drawWrapped(((if (noun == "note") com.lucent.app.i18n.S.exportDocNoteCount(count) else com.lucent.app.i18n.S.exportDocTaskCount(count)) + ", " + com.lucent.app.i18n.S.exportDocExportedAt(formatTime(System.currentTimeMillis()))), metaPaint, 14f)
+        state.drawWrapped(com.lucent.app.i18n.S.exportDocAttachmentsNote, metaPaint, 16f)
 
         if (blocks.isEmpty()) {
-            state.drawWrapped("No ${noun}s yet.", metaPaint, 14f)
+            state.drawWrapped((if (noun == "note") com.lucent.app.i18n.S.exportDocNoNotes else com.lucent.app.i18n.S.exportDocNoTasks), metaPaint, 14f)
         } else {
             for (b in blocks) {
                 state.space(10f)
                 state.drawWrapped(b.title, itemTitlePaint, 20f)
                 if (b.meta.isNotBlank()) state.drawWrapped(b.meta, metaPaint, 14f)
-                if (b.body.isNotBlank()) for (line in b.body.split("\n")) state.drawWrapped(line, bodyPaint, 15f)
+                if (b.body.isNotBlank()) {
+                    // INTEGRATION (C task 20): styled when the note carries a sidecar, and byte-for-byte
+                    // the old path when it does not — so an unformatted export is unchanged.
+                    if (b.bodySpans.isBlank()) {
+                        for (line in b.body.split("\n")) state.drawWrapped(line, bodyPaint, 15f)
+                    } else {
+                        for (runs in RichText.lineRuns(b.body, b.bodySpans)) {
+                            state.drawWrappedRich(runs, bodyPaint, 15f) { run -> richPaintFor(run, bodyPaint) }
+                        }
+                    }
+                }
+                // Phase 3: doodle notes draw their strokes as real vector lines. See drawDoodle for
+                // the sizing reasoning.
+                if (b.doodle.isNotBlank()) state.drawDoodle(b.doodle)
                 if (b.checklist.isNotEmpty()) {
                     state.drawWrapped("${b.checklistLabel}:", labelPaint, 15f)
                     for ((done, text) in b.checklist) state.drawWrapped("${if (done) "\u2611" else "\u2610"} $text", bodyPaint, 15f)
                 }
-                if (b.attachments.isNotEmpty()) state.drawWrapped("Attachments: ${b.attachments.joinToString(", ")}", metaPaint, 15f)
+                if (b.attachments.isNotEmpty()) state.drawWrapped(com.lucent.app.i18n.S.exportDocAttachmentsLine(b.attachments.joinToString(", ")), metaPaint, 15f)
             }
         }
 
@@ -380,7 +492,157 @@ object DocumentExport {
             flush()
         }
 
+
+        /**
+         * INTEGRATION (C-group task 20) — [drawWrapped]'s rich-text sibling.
+         *
+         * Same wrapping rules and the same page-break behaviour; the difference is that a line is
+         * assembled from [RichText.StyledRun]s and drawn segment by segment, with a filled rectangle
+         * behind any highlighted stretch.
+         *
+         * Wrapping measures with the SAME paint each segment will be drawn with. Measuring
+         * everything with the body paint and then drawing some of it bold is how a line ends up a
+         * few points past the right margin — visible, wrong, and only on the notes that use
+         * formatting, which is exactly the sort of bug that ships.
+         */
+        fun drawWrappedRich(
+            runs: List<RichText.StyledRun>,
+            base: Paint,
+            lineAdvance: Float,
+            paintFor: (RichText.StyledRun) -> Paint
+        ) {
+            val maxWidth = PAGE_W - 2 * MARGIN
+
+            // Split every run at spaces so wrapping can break between words while keeping each
+            // fragment's style attached to it.
+            data class Piece(val text: String, val run: RichText.StyledRun)
+            val pieces = ArrayList<Piece>()
+            runs.forEach { r ->
+                if (r.text.isEmpty()) return@forEach
+                r.text.split(" ").forEachIndexed { i, w ->
+                    if (i > 0) pieces.add(Piece(" ", r))
+                    if (w.isNotEmpty()) pieces.add(Piece(w, r))
+                }
+            }
+            if (pieces.isEmpty()) { y += lineAdvance; return }
+
+            var line = ArrayList<Piece>()
+            fun lineWidth(extra: Piece?): Float {
+                var w = 0f
+                line.forEach { w += paintFor(it.run).measureText(it.text) }
+                if (extra != null) w += paintFor(extra.run).measureText(extra.text)
+                return w
+            }
+            fun flush() {
+                if (line.isEmpty()) { y += lineAdvance; return }
+                if (y + lineAdvance > PAGE_H - MARGIN) newPage()
+                var x = MARGIN
+                val canvas = page?.canvas
+                line.forEach { piece ->
+                    val paint = paintFor(piece.run)
+                    val w = paint.measureText(piece.text)
+                    if (piece.run.highlight >= 0 && canvas != null) {
+                        // Drawn first, so the glyphs land on top of it. Sized from the paint's own
+                        // metrics rather than a guessed constant, so it still fits when the body
+                        // text size changes.
+                        val fm = paint.fontMetrics
+                        val hl = Paint().apply {
+                            color = RichText.HIGHLIGHT_ARGB[
+                                piece.run.highlight.coerceIn(0, RichText.HIGHLIGHT_ARGB.size - 1)]
+                            alpha = 110
+                            isAntiAlias = true
+                        }
+                        canvas.drawRect(x, y + fm.ascent, x + w, y + fm.descent, hl)
+                    }
+                    canvas?.drawText(piece.text, x, y, paint)
+                    x += w
+                }
+                y += lineAdvance
+                line = ArrayList()
+            }
+
+            pieces.forEach { p ->
+                // A leading space on a wrapped line is dropped, matching how the plain writer joins
+                // words with a single separator rather than preserving the original run of spaces.
+                if (line.isEmpty() && p.text == " ") return@forEach
+                if (line.isNotEmpty() && lineWidth(p) > maxWidth) flush()
+                line.add(p)
+            }
+            flush()
+        }
+
+
+        /**
+         * INTEGRATION (phase 3) — render a doodle's strokes into the PDF as vector lines.
+         *
+         * ### Sizing
+         *
+         * Stroke points are stored as FRACTIONS of the drawing canvas (see ui/DoodleCanvas.kt), and
+         * the app itself renders them into a full-width box of fixed dp height — meaning the same
+         * doodle already displays at slightly different aspect ratios on a phone and on a wide
+         * desktop window. There is therefore no single "true" aspect to preserve; this writer uses
+         * the full content width at a 5:3 box, which closely matches the phone editor where most
+         * doodles are drawn. Stroke widths are fractions of the canvas WIDTH, same as the app.
+         *
+         * ### Page fit
+         *
+         * The box either fits in the space remaining on the current page or starts a fresh one —
+         * a drawing split across a page boundary is two half-drawings, which is worse than a gap.
+         */
+        fun drawDoodle(doodleJson: String) {
+            val strokes = com.lucent.app.ui.Doodle.parse(doodleJson)
+            if (strokes.isEmpty()) return
+            val boxW = PAGE_W - 2 * MARGIN
+            val boxH = boxW * 0.6f
+            if (y + boxH > PAGE_H - MARGIN) newPage()
+            val canvas = page?.canvas ?: return
+            val top = y
+            strokes.forEach { stroke ->
+                if (stroke.points.isEmpty()) return@forEach
+                val paint = Paint().apply {
+                    color = stroke.color
+                    style = Paint.Style.STROKE
+                    strokeWidth = (stroke.width * boxW).coerceAtLeast(0.5f)
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                    isAntiAlias = true
+                }
+                val path = Path()
+                stroke.points.forEachIndexed { i, pt ->
+                    val px = MARGIN + pt.x * boxW
+                    val py = top + pt.y * boxH
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                // A single tap is a dot: a zero-length path draws nothing under STROKE, so give it
+                // a hair of length instead of special-casing a circle.
+                if (stroke.points.size == 1) {
+                    val pt = stroke.points.first()
+                    path.lineTo(MARGIN + pt.x * boxW + 0.1f, top + pt.y * boxH)
+                }
+                canvas.drawPath(path, paint)
+            }
+            y = top + boxH + 10f
+        }
+
         fun finish() { page?.let { doc.finishPage(it) }; page = null }
+    }
+
+
+    /**
+     * The Paint for one styled run, derived from the body paint so size and colour stay in step.
+     *
+     * `isFakeBoldText` and `textSkewX` are used rather than real font faces because this writer has
+     * always drawn with the platform default typeface and has no font files to reach for. They are
+     * the same approximations the DOCX path settles for on "light", and they are honest: the reader
+     * sees heavier and slanted text, which is what was marked.
+     *
+     * "Light" has no synthetic equivalent at all, so it is rendered as a slightly smaller regular
+     * weight. That is a real loss of fidelity and is recorded here rather than hidden.
+     */
+    private fun richPaintFor(run: RichText.StyledRun, base: Paint): Paint = Paint(base).apply {
+        isFakeBoldText = run.bold
+        if (run.italic) textSkewX = -0.25f
+        if (run.light) textSize = base.textSize * 0.94f
     }
 
     // ============================ ZIP + XML helpers ============================
