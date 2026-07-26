@@ -254,20 +254,22 @@ object DocumentExport {
         // Split at every point where the style changes. Working per character and coalescing is
         // slower than tracking span boundaries, but it is obviously correct in the presence of
         // overlaps (bold under a highlight), and a note body is a few thousand characters.
-        fun styleAt(i: Int): Triple<Boolean, Boolean, Int> {
+        fun styleAt(i: Int): DocxRunStyle {
             var bold = false; var light = false; var italic = false; var hl = -1
+            var col = RichText.TEXT_COLOR_DEFAULT
             spans.forEach { s ->
                 if (i >= s.start && i < s.end) when (s.kind) {
                     RichSpan.Kind.BOLD -> bold = true
                     RichSpan.Kind.LIGHT -> light = true
                     RichSpan.Kind.ITALIC -> italic = true
                     RichSpan.Kind.HIGHLIGHT -> hl = s.color
+                    RichSpan.Kind.COLOR -> col = s.color
                 }
             }
             // Word has no "light" run property, so light is expressed as "not bold" — the closest
             // thing the format can say. Recorded here rather than dropped silently so the intent
             // survives in the file even though the distinction from regular does not.
-            return Triple(bold && !light, italic, hl)
+            return DocxRunStyle(bold && !light, italic, hl, col)
         }
 
         val runs = StringBuilder()
@@ -279,12 +281,16 @@ object DocumentExport {
                 val style = styleAt(lineStart + i)
                 var j = i + 1
                 while (j < line.length && styleAt(lineStart + j) == style) j++
-                val (bold, italic, hl) = style
+                val bold = style.bold; val italic = style.italic; val hl = style.highlight
+                val argb = RichText.textColorArgb(style.color)
                 val rPr = buildString {
-                    if (bold || italic || hl >= 0) {
+                    if (bold || italic || hl >= 0 || argb != null) {
                         append("<w:rPr>")
                         if (bold) append("<w:b/>")
                         if (italic) append("<w:i/>")
+                        // Word takes a plain RRGGBB hex; the alpha byte is dropped because a run
+                        // colour in OOXML has no transparency to give it to.
+                        if (argb != null) append("<w:color w:val=\"" + hex6(argb) + "\"/>")
                         if (hl >= 0) append("<w:highlight w:val=\"" +
                             highlightNames[hl.coerceIn(0, highlightNames.lastIndex)] + "\"/>")
                         append("</w:rPr>")
@@ -644,6 +650,9 @@ object DocumentExport {
         isFakeBoldText = run.bold
         if (run.italic) textSkewX = -0.25f
         if (run.light) textSize = base.textSize * 0.94f
+        // Text colour. Left untouched when the run carries the default, so body text keeps whatever
+        // colour the page decided on rather than being forced to black by the styling path.
+        RichText.textColorArgb(run.color)?.let { color = it }
     }
 
     // ============================ ZIP + XML helpers ============================
@@ -727,3 +736,18 @@ object DocumentExport {
         }
     }
 }
+
+/**
+ * A DOCX run's styling, as one value. Was a `Triple<Boolean, Boolean, Int>` until text colour
+ * arrived and made a fourth component necessary — at which point a tuple of four unnamed fields
+ * stops being readable and starts being a place for bugs to hide.
+ */
+private data class DocxRunStyle(
+    val bold: Boolean,
+    val italic: Boolean,
+    val highlight: Int,
+    val color: Int
+)
+
+/** ARGB to the six-digit RRGGBB hex OOXML and HTML both want. */
+private fun hex6(argb: Int): String = String.format("%06X", argb and 0xFFFFFF)

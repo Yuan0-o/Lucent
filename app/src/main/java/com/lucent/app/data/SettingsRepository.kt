@@ -79,6 +79,11 @@ private object SettingsKeys {
     // feature can gain a field without a migration.
     val AUTO_BACKUP = stringPreferencesKey("auto_backup_state")
 
+    // Task 4 — version history ("flash records"), one switch each for notes and tasks. Default ON;
+    // absent means on, so an existing install keeps the behaviour it already had.
+    val NOTE_HISTORY_ENABLED = booleanPreferencesKey("note_history_enabled")
+    val TASK_HISTORY_ENABLED = booleanPreferencesKey("task_history_enabled")
+
     // ---- Assistant behaviour: memory tier & web access (issues 9 and 16) ----
     //
     // Deliberately NOT encrypted, exactly like the display preferences above: each is one value
@@ -620,6 +625,17 @@ class SettingsRepository(private val context: Context) {
      */
     val backupPassword: Flow<String> = context.settingsDataStore.data.map { prefs ->
         LocalSecrets.decrypt(prefs[SettingsKeys.BACKUP_PASSWORD_ENC] ?: "")
+    }
+
+    val noteHistoryEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.NOTE_HISTORY_ENABLED] ?: true }
+    val taskHistoryEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.TASK_HISTORY_ENABLED] ?: true }
+    suspend fun setNoteHistoryEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.NOTE_HISTORY_ENABLED] = value }
+    }
+    suspend fun setTaskHistoryEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.TASK_HISTORY_ENABLED] = value }
     }
 
     /** Task 14 — the automatic-backup configuration. See [AutoBackup.State]. */
