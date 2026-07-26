@@ -149,7 +149,10 @@ if (EXISTS ${LUCENT_MTMD_DIR}/mtmd.cpp)
     set(LUCENT_MTMD_LIB_SOURCES "")
     foreach(LUCENT_MTMD_SRC ${LUCENT_MTMD_SOURCES})
         file(READ ${LUCENT_MTMD_SRC} LUCENT_MTMD_SRC_TEXT)
-        if (LUCENT_MTMD_SRC_TEXT MATCHES "int[ \t\r\n]+main[ \t]*\(")
+        # Fourth CI pass (both jobs 2026-07-26): CMake's own regex engine rejected the escaped paren
+        # ("Unmatched parentheses" — the \( collapsed to a bare "(" across the string-escape layer).
+        # A character class needs no escaping anywhere, so it cannot collapse: [(] is the paren.
+        if (LUCENT_MTMD_SRC_TEXT MATCHES "int[ \t\r\n]+main[ \t]*[(]")
             message(STATUS "lucent: mtmd source excluded (defines main): ${LUCENT_MTMD_SRC}")
         else()
             list(APPEND LUCENT_MTMD_LIB_SOURCES ${LUCENT_MTMD_SRC})

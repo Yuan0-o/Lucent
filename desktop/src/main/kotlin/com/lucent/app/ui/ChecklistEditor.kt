@@ -19,11 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloseFullscreen
 import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -176,7 +176,7 @@ fun ChecklistEditorSection(
                         modifier = Modifier.size(32.dp).padding(top = ICON_FIRST_LINE_OFFSET)
                     ) {
                         Icon(
-                            Icons.Default.PlaylistAdd,
+                            Icons.AutoMirrored.Filled.PlaylistAdd,
                             contentDescription = com.lucent.app.i18n.S.checklistInsertBelow,
                             tint = onGradientMuted,
                             modifier = Modifier.size(18.dp)
