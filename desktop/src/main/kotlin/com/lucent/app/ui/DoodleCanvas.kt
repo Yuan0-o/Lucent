@@ -180,6 +180,29 @@ object DoodlePages {
 
     /** How many canvases carry anything at all. */
     fun drawnCount(pages: List<String>): Int = pages.count { !Doodle.isEmpty(it) }
+
+    /**
+     * Whether a doodle column holds no strokes at all, across every canvas (round R2, task 2).
+     *
+     * `Doodle.isEmpty` answers this for ONE canvas and understands only a bare stroke array, so
+     * calling it on the column returned true for every multi-canvas note — the container parses as
+     * neither. Anything asking "does this note have a drawing?" therefore had to be told about the
+     * two shapes or be silently wrong; the save path was silently wrong, and discarded doodle-only
+     * notes that had more than one canvas.
+     */
+    fun isEmpty(json: String?): Boolean = drawnCount(parse(json)) == 0
+
+    /**
+     * Drop every canvas that has nothing drawn on it (round R2, task 2).
+     *
+     * Same rule the checklist editors now follow for blank rows: a canvas you added, did not draw
+     * on, and saved is not content — it is a leftover of deciding not to. Keeping it would put an
+     * empty white page in the note, in its exported PDF, and in the export picker's file list.
+     *
+     * Serialising an all-blank result yields "" rather than an empty container, which is what
+     * `Note.isDoodle` and every "is this blank?" check already expect to see.
+     */
+    fun pruneEmpty(json: String?): String = serialize(parse(json).filter { !Doodle.isEmpty(it) })
 }
 
 /**
@@ -622,10 +645,42 @@ fun ExpandableDoodleEditor(
     }
 }
 
-/** Read-only rendering for a detail page or a card preview. */
+/**
+ * Read-only rendering for a detail page or a card preview.
+ *
+ * Round R2, task 2: [value] may be a single canvas OR the whole multi-canvas column, and both are
+ * handled here rather than at each call site. It used to hand the raw value straight to
+ * `Doodle.parse`, which understands only a bare stroke array — so on the detail page a note with
+ * two or more canvases rendered a blank white box, with no error and nothing to suggest the
+ * drawing still existed. `DoodlePages.parse` accepts either shape, and every drawn canvas is
+ * stacked in order.
+ */
 @Composable
 fun DoodleView(value: String, modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp = 260.dp) {
-    val strokes = remember(value) { Doodle.parse(value) }
+    // Parsed to strokes once, outside the loop below: `remember` inside a loop keys on position,
+    // which goes wrong the moment the number of canvases changes.
+    val canvases = remember(value) {
+        DoodlePages.parse(value).filter { !Doodle.isEmpty(it) }.map { Doodle.parse(it) }
+    }
+    if (canvases.isEmpty()) {
+        DoodleCanvasSurface(strokes = emptyList(), modifier = modifier, height = height)
+        return
+    }
+    Column(modifier = modifier.fillMaxWidth()) {
+        canvases.forEachIndexed { index, strokes ->
+            if (index > 0) Spacer(modifier = Modifier.height(8.dp))
+            DoodleCanvasSurface(strokes = strokes, modifier = Modifier, height = height)
+        }
+    }
+}
+
+/** One white board with one canvas's strokes on it — the body [DoodleView] used to be. */
+@Composable
+private fun DoodleCanvasSurface(
+    strokes: List<Doodle.Stroke>,
+    modifier: Modifier,
+    height: androidx.compose.ui.unit.Dp
+) {
     Box(
         modifier = modifier
             .fillMaxWidth()
