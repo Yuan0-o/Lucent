@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
 import android.app.DatePickerDialog
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
@@ -217,6 +218,17 @@ fun GlassCapsuleButton(
  * and answer inside [onClick] with a bottom toast instead — a dead control that ignores touches
  * teaches nothing.
  */
+/**
+ * The height of the two actions that close a note or task composer — "Add"/"Save changes" and
+ * "Save to draft" (task 3).
+ *
+ * It is a named constant in the shared UI file rather than a literal at each of the four call sites
+ * (two composers × two platforms) because "the same size" is a promise between controls that are
+ * declared in different files. Written out four times it holds until someone adjusts one of them;
+ * written once it cannot drift.
+ */
+val COMPOSER_ACTION_HEIGHT = 52.dp
+
 @Composable
 fun GlassButton(
     text: String,
@@ -812,6 +824,70 @@ fun ScrollEdgeJumpButtons(
             ) {
                 Icon(Icons.Default.KeyboardDoubleArrowDown, contentDescription = com.lucent.app.i18n.S.a11yScrollToBottom, tint = tint)
             }
+        }
+    }
+}
+
+
+/**
+ * A near-full-screen editor for any plain-text field (task 12).
+ *
+ * [ExpandableGlassTextField] already does this for the note and task composers, but its expanded
+ * panel is private to that file and bound to its own collapsed field. The assistant composer needs
+ * the same panel without the collapsed half, so the panel is offered here on its own.
+ *
+ * Every name below is fully qualified on purpose. This function is appended to a file whose two
+ * platform copies do not carry an identical import list, and a shared component that compiles on one
+ * platform and not the other is worse than a verbose one that compiles on both.
+ */
+@Composable
+fun LucentExpandedInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    title: String,
+    onCollapse: () -> Unit
+) {
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onCollapse,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    if (onGradient.luminance() > 0.5f) Color(0xFF20202B) else Color(0xFFF4F4F8)
+                )
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(title, color = onGradient, fontSize = 18.sp)
+                androidx.compose.material3.IconButton(
+                    onClick = onCollapse,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    androidx.compose.material3.Icon(
+                        androidx.compose.material.icons.Icons.Default.Close,
+                        contentDescription = com.lucent.app.i18n.S.collapseTextBox,
+                        tint = onGradientMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = { Text(placeholder, color = onGradientMuted) },
+                textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = onGradient),
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            )
         }
     }
 }

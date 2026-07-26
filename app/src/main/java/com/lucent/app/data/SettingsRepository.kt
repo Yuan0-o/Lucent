@@ -73,6 +73,12 @@ private object SettingsKeys {
     val NOTES_SORT = stringPreferencesKey("notes_sort")
     val TASKS_SORT = stringPreferencesKey("tasks_sort")
 
+    // Task 14 — automatic backup. Stored as one JSON string rather than six separate keys because
+    // [AutoBackup.State] is only ever read or written as a whole: an interval without a folder, or
+    // a "last run" without the settings it ran under, describes nothing. One key also means the
+    // feature can gain a field without a migration.
+    val AUTO_BACKUP = stringPreferencesKey("auto_backup_state")
+
     // ---- Assistant behaviour: memory tier & web access (issues 9 and 16) ----
     //
     // Deliberately NOT encrypted, exactly like the display preferences above: each is one value
@@ -614,6 +620,15 @@ class SettingsRepository(private val context: Context) {
      */
     val backupPassword: Flow<String> = context.settingsDataStore.data.map { prefs ->
         LocalSecrets.decrypt(prefs[SettingsKeys.BACKUP_PASSWORD_ENC] ?: "")
+    }
+
+    /** Task 14 — the automatic-backup configuration. See [AutoBackup.State]. */
+    val autoBackup: Flow<AutoBackup.State> = context.settingsDataStore.data
+        .map { AutoBackup.State.fromJson(it[SettingsKeys.AUTO_BACKUP] ?: "") }
+    suspend fun autoBackupOnce(): AutoBackup.State =
+        AutoBackup.State.fromJson(context.settingsDataStore.data.first()[SettingsKeys.AUTO_BACKUP] ?: "")
+    suspend fun setAutoBackup(state: AutoBackup.State) {
+        context.settingsDataStore.edit { it[SettingsKeys.AUTO_BACKUP] = state.toJson() }
     }
 
     val notesSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTES_SORT] ?: "recent" }

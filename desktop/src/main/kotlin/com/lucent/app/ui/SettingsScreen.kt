@@ -3872,6 +3872,44 @@ fun SettingsScreen(active: Boolean = true) {
                         onCheckedChange = { checked -> scope.launch { repo.setLinksEnabled(checked) } }
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                // ---- Task 9: "open web links in your browser" moves here from Privacy ----
+                //
+                // It was filed under Privacy on the reasoning that the switch decides whether a tap
+                // hands an address to another app. True, but it is not how anyone looks for it. The
+                // switch turns text in the editor into something you can tap, it belongs to the same
+                // family as Markdown, rich text and [[links]] directly above it, and every one of
+                // those four answers the same question: what does typing this into a note do? A user
+                // who has just turned Links on and wants http:// addresses to work too should find
+                // that here, not two pages away under a heading about what leaves the device.
+                //
+                // The privacy consequence has not been swept under the carpet — it is still stated
+                // in full, and turning the switch ON still opens the same consent dialog
+                // ([OpenLinksWarningDialog]) with the same argument for and against. Blackout Mode
+                // still outranks it, and the switch still says so.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.openLinksTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.openLinksDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = openLinksExternallyOn,
+                        // Blackout overrides this outright, so while it is on the switch is shown
+                        // but inert — the frozen-UI treatment the rest of the app uses for a
+                        // control that a higher-ranking setting has taken over.
+                        enabled = !blackoutOn,
+                        onCheckedChange = { turnOn ->
+                            if (turnOn) showOpenLinksWarning = true
+                            else scope.launch { repo.setOpenLinksExternally(false) }
+                        }
+                    )
+                }
+                if (blackoutOn) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.openLinksBlockedByBlackout, color = onGradientMuted, fontSize = 12.sp)
+                }
             }
         }
 
@@ -4095,74 +4133,6 @@ fun SettingsScreen(active: Boolean = true) {
             // but "what gets out, or written down". Both switches here are off by default and
             // both are about visibility beyond this screen — one makes Lucent visible to other
             // apps, the other records a local file about what the app did.
-            // ---- Task A21: the hidden area switch ----
-            //
-            // It lives here, off by default, and closes itself on the next launch (see
-            // [HiddenArea]). When an app lock is set, turning it ON asks for that password first:
-            // the lock is the user's statement that reaching this data requires proof, and a switch
-            // that reveals a deliberately hidden area is exactly where that statement applies.
-            // Turning it OFF is never gated — closing something is not a privileged act.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                var hiddenPw by remember { mutableStateOf("") }
-                var hiddenPwError by remember { mutableStateOf(false) }
-                var askingHiddenPw by remember { mutableStateOf(false) }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.hiddenSettingTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.hiddenSettingDesc, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = HiddenArea.visible,
-                        onCheckedChange = { turnOn ->
-                            when {
-                                !turnOn -> HiddenArea.close()
-                                appLockCreds.isBlank() -> HiddenArea.open()
-                                else -> { hiddenPw = ""; hiddenPwError = false; askingHiddenPw = true }
-                            }
-                        }
-                    )
-                }
-
-                if (askingHiddenPw) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(S.hiddenUnlockPrompt, color = onGradientMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = hiddenPw,
-                        onValueChange = { hiddenPw = it; hiddenPwError = false },
-                        singleLine = true,
-                        isError = hiddenPwError,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (hiddenPwError) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.hiddenWrongPassword, color = onGradientMuted, fontSize = 12.sp)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row {
-                        GlassButton(text = S.actionConfirm, compact = true, onClick = {
-                            if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
-                                HiddenArea.open()
-                                askingHiddenPw = false
-                                hiddenPw = ""
-                            } else {
-                                hiddenPwError = true
-                            }
-                        })
-                        Spacer(modifier = Modifier.width(8.dp))
-                        GlassButton(text = S.actionCancel, compact = true, onClick = {
-                            askingHiddenPw = false; hiddenPw = ""
-                        })
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
                 // ---- C-group task 1: Blackout Mode ----
                 //
@@ -4297,6 +4267,89 @@ fun SettingsScreen(active: Boolean = true) {
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ================================================================================
+            //  Task 10 — "Show hidden area" is its own module, and it is the last thing on
+            //  this page
+            // ================================================================================
+            //
+            // It used to be the FIRST card here, which pushed Blackout Mode — the one control that
+            // outranks everything else on this page — below the fold. Two things were wrong with
+            // that. It read as the headline privacy setting when it is in fact a temporary,
+            // session-scoped reveal; and a switch that exposes deliberately concealed content was
+            // the first thing a thumb met on the way into the page.
+            //
+            // Bottom of the page, in a card of its own, fixes both. The controls that decide what
+            // leaves this device come first, in rank order, and the reveal is where a deliberate
+            // scroll takes you rather than where an idle one lands. It is still gated by the app
+            // lock when one is set, and it still closes itself on the next launch.
+            // ---- Task A21: the hidden area switch ----
+            //
+            // It lives here, off by default, and closes itself on the next launch (see
+            // [HiddenArea]). When an app lock is set, turning it ON asks for that password first:
+            // the lock is the user's statement that reaching this data requires proof, and a switch
+            // that reveals a deliberately hidden area is exactly where that statement applies.
+            // Turning it OFF is never gated — closing something is not a privileged act.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                var hiddenPw by remember { mutableStateOf("") }
+                var hiddenPwError by remember { mutableStateOf(false) }
+                var askingHiddenPw by remember { mutableStateOf(false) }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.hiddenSettingTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.hiddenSettingDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = HiddenArea.visible,
+                        onCheckedChange = { turnOn ->
+                            when {
+                                !turnOn -> HiddenArea.close()
+                                appLockCreds.isBlank() -> HiddenArea.open()
+                                else -> { hiddenPw = ""; hiddenPwError = false; askingHiddenPw = true }
+                            }
+                        }
+                    )
+                }
+
+                if (askingHiddenPw) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(S.hiddenUnlockPrompt, color = onGradientMuted, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = hiddenPw,
+                        onValueChange = { hiddenPw = it; hiddenPwError = false },
+                        singleLine = true,
+                        isError = hiddenPwError,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (hiddenPwError) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.hiddenWrongPassword, color = onGradientMuted, fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row {
+                        GlassButton(text = S.actionConfirm, compact = true, onClick = {
+                            if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
+                                HiddenArea.open()
+                                askingHiddenPw = false
+                                hiddenPw = ""
+                            } else {
+                                hiddenPwError = true
+                            }
+                        })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        GlassButton(text = S.actionCancel, compact = true, onClick = {
+                            askingHiddenPw = false; hiddenPw = ""
+                        })
+                    }
+                }
+            }
         }
 
         @Composable
@@ -4329,6 +4382,117 @@ fun SettingsScreen(active: Boolean = true) {
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
+
+            // ================================================================================
+            //  Task 14 — automatic backup
+            // ================================================================================
+            //
+            // [AutoBackup] has always held the policy — when a run is due, what to call the file,
+            // which old ones may be deleted — and until now nothing called any of it. This card and
+            // [AutoBackupRunner] are the two halves that were missing.
+            //
+            // A folder is not optional and the switch says so rather than failing quietly later:
+            // AutoBackup.State.runnable is `enabled && folderUri.isNotBlank()`, and that is exactly
+            // what starts the loop below.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                val autoState by repo.autoBackup.collectAsState(
+                    initial = com.lucent.app.data.AutoBackup.State.EMPTY
+                )
+                fun pickBackupFolder() {
+                    val dir = com.lucent.desktop.platform.DesktopFiles.chooseFolder(S.autoBackupFolder)
+                        ?: return
+                    scope.launch { repo.setAutoBackup(autoState.copy(folderUri = dir.absolutePath)) }
+                }
+                // Starting the loop from here is safe to repeat: ensureStarted() is idempotent, so
+                // every visit to this page simply confirms what is already running.
+                LaunchedEffect(autoState.runnable) {
+                    if (autoState.runnable) com.lucent.app.data.AutoBackupRunner.ensureStarted(context)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.autoBackupTitle, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(S.autoBackupDesc, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = autoState.enabled,
+                        onCheckedChange = { on ->
+                            scope.launch { repo.setAutoBackup(autoState.copy(enabled = on)) }
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    autoState.folderUri.ifBlank { S.autoBackupNoFolder },
+                    color = onGradientMuted,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                GlassButton(text = S.autoBackupFolder, compact = true, onClick = { pickBackupFolder() })
+
+                Spacer(modifier = Modifier.height(12.dp))
+                // Fixed choices, not free entry: AutoBackup.MIN_INTERVAL_HOURS is a floor rather than
+                // a suggestion, and offering a number the feature would silently clamp is worse than
+                // not offering it.
+                Text(S.autoBackupEvery, color = onGradient, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row {
+                    com.lucent.app.data.AutoBackup.INTERVAL_CHOICES.forEach { hours ->
+                        GlassButton(
+                            text = S.autoBackupHours(hours),
+                            compact = true,
+                            enabled = autoState.intervalHours != hours,
+                            onClick = {
+                                scope.launch { repo.setAutoBackup(autoState.copy(intervalHours = hours)) }
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                StepperRow(
+                    label = S.autoBackupKeep,
+                    value = autoState.keep,
+                    range = com.lucent.app.data.AutoBackup.KEEP_RANGE
+                ) { v -> scope.launch { repo.setAutoBackup(autoState.copy(keep = v)) } }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    if (autoState.lastRunAt > 0L) S.autoBackupLastRun(formatTimestamp(autoState.lastRunAt))
+                    else S.autoBackupNever,
+                    color = onGradientMuted,
+                    fontSize = 12.sp
+                )
+                // A backup feature that has been failing in silence for a month is worse than none,
+                // which at least nobody was relying on. So the last failure is shown, not swallowed.
+                if (autoState.lastError.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(S.autoBackupFailed(autoState.lastError), color = Color(0xFFFF8A80), fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(S.autoBackupOnlyWhileOpen, color = onGradientMuted, fontSize = 12.sp)
+
+                Spacer(modifier = Modifier.height(12.dp))
+                GlassButton(
+                    text = S.autoBackupRunNow,
+                    compact = true,
+                    enabled = autoState.folderUri.isNotBlank(),
+                    onClick = {
+                        scope.launch {
+                            val err = com.lucent.app.data.AutoBackupRunner.runNow(context)
+                            LucentToast.show(context, err ?: S.autoBackupRunNow)
+                        }
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
                 Text(S.backupRestoreTitle, color = onGradient)

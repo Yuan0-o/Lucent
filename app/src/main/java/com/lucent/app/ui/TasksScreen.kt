@@ -252,7 +252,10 @@ fun TasksScreen(active: Boolean = true) {
         kotlinx.coroutines.delay(700)
         lastScrollValue = composerScroll.value
     }
-    var quickActionsOpen by remember { mutableStateOf(false) }
+    // Task 5. Keyed on [composing], so the ring is collapsed every time an editor is opened. It used
+    // to be remembered for the lifetime of the whole screen: expand it once, save, open anything
+    // else, and the ring was still fanned out over a page the user had not asked it to cover.
+    var quickActionsOpen by remember(composing) { mutableStateOf(false) }
     // One undo stack per composer session, following the body/details field. Seeded from whatever
     // the field holds when the editor opens, so the first undo returns to the text as it was found
     // rather than to an empty string.
@@ -480,6 +483,11 @@ fun TasksScreen(active: Boolean = true) {
             return
         }
 
+        // ---- Task 15: a committed edit takes its own draft with it ---------------------------
+        // See the note editor's twin for the reasoning; the rule is identical.
+        val draftToClear = draftRowId
+        draftRowId = null
+
         val appContext = context.applicationContext
 
         // App-lifetime scope so saving-then-navigating (e.g. the unsaved-changes dialog) can't
@@ -534,6 +542,13 @@ fun TasksScreen(active: Boolean = true) {
             // One call, whatever changed: sync() decides for itself whether this task should now
             // have an alarm, so there's no "did I need to cancel that" branch to get wrong.
             ReminderScheduler.sync(appContext, saved)
+
+                // Task 15 — drop this session's parked draft now that the real save has landed.
+                if (draftToClear != null) {
+                    db.taskDao().getByIdOnce(draftToClear)?.let { row ->
+                        if (row.isDraft) db.taskDao().delete(row)
+                    }
+                }
             withContext(Dispatchers.Main) {
                 LucentToast.show(appContext, com.lucent.app.i18n.S.taskSaved)
             }
@@ -677,7 +692,9 @@ fun TasksScreen(active: Boolean = true) {
     // Reordering is offered only under the Custom sort. Under any other one the list's order is a
     // computed result, and honouring a drag would mean writing a position the next recomposition
     // is obliged to throw away — a control that appears to work and silently doesn't.
-    val reorderEnabled = sortOption == TaskSort.CUSTOM
+    // Task 8 — always live now, and a drop under any other sort adopts Custom so the positions
+    // just written are actually the ones displayed. See the note-list twin for the full reasoning.
+    val reorderEnabled = true
     fun dropSelection(targetId: Long?) {
         // Selection order, not list order: `Set.plus` returns a LinkedHashSet, so this is the
         // sequence the user ticked them in — the only arrival order they could have predicted.
@@ -691,6 +708,9 @@ fun TasksScreen(active: Boolean = true) {
             reordered.forEachIndexed { index, t ->
                 if (t.manualOrder != index) db.taskDao().update(t.copy(manualOrder = index))
             }
+        }
+        if (sortOption != TaskSort.CUSTOM) {
+            scope.launch { settingsRepo.setTasksSort(TaskSort.CUSTOM.key) }
         }
         exitSelection()
     }
@@ -1056,28 +1076,40 @@ fun TasksScreen(active: Boolean = true) {
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    // Enlarged so this primary action clearly outweighs the slim attachment row
-                    // above it.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Task 3. The two actions are now laid out as equal halves of one row: both get
+                    // weight(1f) and the same explicit height, so they are identical in size no
+                    // matter how long the label is in the current language. Before, the primary was
+                    // a Button sized by its content padding and the secondary a `compact` glass pill
+                    // sized by its own, smaller, padding — two independent size profiles that only
+                    // ever matched by accident, and did not.
+                    //
+                    // Equal size is not equal weight: the primary stays a filled button and the
+                    // secondary stays quiet glass, so the hierarchy the two actions need survives
+                    // the geometry the task asks for.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Button(
                             onClick = { saveTask() },
-                            contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Text(
                                 if (editingTask != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addTaskBtn,
-                                fontSize = 17.sp
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         // Task A10 — "parallel to Save", as asked, and secondary on purpose: it is
-                        // the same commitment in a lower gear ("keep this, I'm not done"), so it
-                        // sits beside the primary action in the quieter glass style rather than
-                        // competing with it as a second filled button.
+                        // the same commitment in a lower gear ("keep this, I'm not done").
                         GlassButton(
                             text = com.lucent.app.i18n.S.saveToDraft,
                             onClick = { saveTask(asDraft = true) },
-                            compact = true
+                            modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         )
                     }
                 }
@@ -1115,7 +1147,14 @@ fun TasksScreen(active: Boolean = true) {
                     }
                 },
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 96.dp)
+                // Task 1. The bottom offset was a hard-coded 96dp, but the floating nav capsule is
+                // taller than that (its own height plus the gap above it plus the system navigation
+                // inset), so the control sat on top of the capsule and stole its taps. The measured
+                // inset is already published as [LocalBottomBarInset] — the same value every list
+                // screen reserves — so use it and lift the ring clear of the capsule on every device
+                // rather than on the one this number was eyeballed against.
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
             )
         }
         }

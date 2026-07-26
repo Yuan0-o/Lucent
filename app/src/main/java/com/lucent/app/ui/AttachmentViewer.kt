@@ -282,10 +282,17 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
     var editing by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     var chromeVisible by remember { mutableStateOf(true) }
+    // Task 13 — whether the image on the page currently being looked at is zoomed in. It lives here
+    // rather than inside the image because the control it governs (the pager's own scrollability) is
+    // declared here; a child cannot switch off a gesture its parent owns.
+    var currentImageZoomed by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(
         initialPage = initialIndex.coerceIn(0, attachments.size - 1)
     ) { attachments.size }
     val current = pagerState.currentPage.coerceIn(0, attachments.size - 1)
+    // A new page starts un-zoomed until its own image says otherwise, so swiping can never leave the
+    // pager frozen by the zoom state of a picture that is no longer on screen.
+    LaunchedEffect(current) { currentImageZoomed = false }
     val att = attachments[current]
     val isMedia = att.isVideo || att.isAudio
 
@@ -307,13 +314,35 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // One page per attachment; swiping moves between them. A zoomed-in image or a playing
-                // video consumes its own drags, so the pager only takes over the plain left/right swipe.
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                // One page per attachment; swiping moves between them.
+                //
+                // Task 13. `canPan { scale > 1f }` was supposed to be enough: at fit scale the image
+                // declines the drag and the pager takes it, zoomed in the image keeps it. It works
+                // vertically, where nothing competes. Horizontally it does not, because the pager's
+                // scrollable ancestor claims horizontal drags during the gesture and the image never
+                // gets to finish claiming them — so a zoomed photo could be moved up and down and
+                // was pinned sideways, which is exactly what was reported.
+                //
+                // Gating `userScrollEnabled` settles it at the source instead of arbitrating between
+                // two competing gesture detectors: while the visible image is zoomed the pager is
+                // simply not a scrollable thing, so every drag belongs to the image. At fit scale it
+                // becomes scrollable again and left/right returns to meaning "next attachment".
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = !currentImageZoomed,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
                     val a = attachments[page]
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         when {
-                            a.isImage -> ZoomableImage(a, if (page == current) reloadKey else 0)
+                            a.isImage -> ZoomableImage(
+                                a,
+                                if (page == current) reloadKey else 0,
+                                onZoomChanged = { zoomed ->
+                                    // Only the page the user is looking at may speak for the pager.
+                                    if (page == current) currentImageZoomed = zoomed
+                                }
+                            )
                             a.isVideo || a.isAudio -> InlineMediaPlayer(
                                 att = a,
                                 chromeVisible = chromeVisible,
@@ -405,7 +434,11 @@ private fun ViewerAction(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 
 /** Pinch-to-zoom, double-tap-to-reset image view. Decodes from the encrypted store off the main thread. */
 @Composable
-private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
+private fun ZoomableImage(
+    att: Attachment,
+    reloadKey: Int = 0,
+    onZoomChanged: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     var bitmap by remember(att.data, reloadKey) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(att.data, reloadKey) { mutableStateOf(false) }
@@ -452,6 +485,12 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
         offsetY = (offsetY + panChange.y).coerceIn(-maxY, maxY)
     }
 
+    // Task 13 — tell the pager whether this image currently owns horizontal drags. Reported as a
+    // boolean rather than the raw scale so the pager is only re-configured when the answer actually
+    // changes, not on every pinch sample.
+    val zoomed = scale > 1f
+    LaunchedEffect(zoomed) { onZoomChanged(zoomed) }
+
     when {
         bitmap != null -> Image(
             bitmap = bitmap!!.asImageBitmap(),
@@ -474,6 +513,7 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
                     detectTapGestures(onDoubleTap = {
                         // Snap between fit and 2x, recentring on reset.
                         if (scale > 1f) { scale = 1f; offsetX = 0f; offsetY = 0f } else scale = 2f
+                        // The pager is told by the LaunchedEffect above; nothing to do here.
                     })
                 }
         )

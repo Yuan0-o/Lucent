@@ -51,6 +51,8 @@ class SettingsRepository(private val context: Context) {
         const val BACKUP_PASSWORD_ENC = "backup_password_enc"
         const val API_PROFILE_SELECTED = "api_profile_selected"
         const val NOTES_SORT = "notes_sort"
+        // Task 14 — automatic backup, stored as one JSON blob. See [AutoBackup.State].
+        const val AUTO_BACKUP = "auto_backup_state"
         const val TASKS_SORT = "tasks_sort"
         const val MEMORY_TIER = "memory_tier"
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
@@ -325,6 +327,15 @@ class SettingsRepository(private val context: Context) {
     val tasksSort: Flow<String> = state.map { str(it, K.TASKS_SORT) ?: "recent" }
     suspend fun setNotesSort(value: String) { edit { it[K.NOTES_SORT] = value } }
     suspend fun setTasksSort(value: String) { edit { it[K.TASKS_SORT] = value } }
+
+    /** Task 14 — the automatic-backup configuration. See [AutoBackup.State]. */
+    val autoBackup: Flow<AutoBackup.State> =
+        state.map { AutoBackup.State.fromJson(str(it, K.AUTO_BACKUP) ?: "") }
+    suspend fun autoBackupOnce(): AutoBackup.State =
+        AutoBackup.State.fromJson(str(state.first(), K.AUTO_BACKUP) ?: "")
+    suspend fun setAutoBackup(value: AutoBackup.State) {
+        edit { it[K.AUTO_BACKUP] = value.toJson() }
+    }
 
     val memoryTier: Flow<String> = state.map { str(it, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key }
     suspend fun setMemoryTier(value: String) { edit { it[K.MEMORY_TIER] = value } }

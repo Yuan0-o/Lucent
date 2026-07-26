@@ -68,6 +68,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -1681,13 +1682,57 @@ fun AssistantScreen(active: Boolean = true) {
             }
             // PHASE 4: dictation — speech appends to whatever is already typed; sending stays a
             // deliberate second tap, so a mis-hearing can be read (and fixed) before it goes out.
-            DictationButton(onText = { spoken ->
-                input = if (input.isBlank()) spoken
-                else input + (if (input.endsWith(" ")) "" else " ") + spoken
-            })
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
+                // ---- Tasks 6 and 12 ----
+                //
+                // The dictation mic used to be a separate button in this Row, sitting OUTSIDE the
+                // text box. Two things were wrong with that. It cost the text box a whole button's
+                // width on the narrowest screen the app runs on — the row already has to hold an
+                // attach button, the field, the model switcher and send — and, placed outside, it
+                // read as an unrelated control that happened to be adjacent rather than as something
+                // the field itself offers. It is the field's own affordance, so it belongs in the
+                // field's trailing slot, and the box now extends across the space it used to take.
+                //
+                // The expand control joins it there. The assistant composer is deliberately a short
+                // box, which means anything longer than a sentence was previously written blind;
+                // this gives it the same full-screen editor the note and task composers have had all
+                // along. Both icons are 34dp inside a 56dp row, so neither crowds the text.
+                trailingIcon = {
+                    var inputExpanded by androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableStateOf(false)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DictationButton(
+                            onText = { spoken ->
+                                input = if (input.isBlank()) spoken
+                                else input + (if (input.endsWith(" ")) "" else " ") + spoken
+                            },
+                            modifier = Modifier.size(34.dp)
+                        )
+                        IconButton(
+                            onClick = { inputExpanded = true },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.OpenInFull,
+                                contentDescription = com.lucent.app.i18n.S.expandTextBox,
+                                tint = onGradientMuted,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                    if (inputExpanded) {
+                        LucentExpandedInput(
+                            value = input,
+                            onValueChange = { input = it },
+                            placeholder = com.lucent.app.i18n.S.messagePlaceholder,
+                            title = com.lucent.app.i18n.S.messagePlaceholder,
+                            onCollapse = { inputExpanded = false }
+                        )
+                    }
+                },
                 placeholder = { Text(com.lucent.app.i18n.S.messagePlaceholder, fontSize = 13.sp) },
                 singleLine = true,
                 textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),

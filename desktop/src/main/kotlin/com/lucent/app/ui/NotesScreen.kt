@@ -244,7 +244,10 @@ fun NotesScreen(active: Boolean = true) {
         kotlinx.coroutines.delay(700)
         lastScrollValue = composerScroll.value
     }
-    var quickActionsOpen by remember { mutableStateOf(false) }
+    // Task 5. Keyed on [composing], so the ring is collapsed every time an editor is opened. It used
+    // to be remembered for the lifetime of the whole screen: expand it once, save, open anything
+    // else, and the ring was still fanned out over a page the user had not asked it to cover.
+    var quickActionsOpen by remember(composing) { mutableStateOf(false) }
     // One undo stack per composer session, following the body/details field. Seeded from whatever
     // the field holds when the editor opens, so the first undo returns to the text as it was found
     // rather than to an empty string.
@@ -463,6 +466,21 @@ fun NotesScreen(active: Boolean = true) {
             return
         }
 
+        // ---- Task 15: a committed edit takes its own draft with it ---------------------------
+        //
+        // A draft is a parking space, not a copy. Once the same edit has been saved for real the
+        // parked version is not merely redundant, it is misleading: the drafts list would keep
+        // offering a stale half-finished version of a note that has since been finished, and
+        // restoring it would quietly undo the save.
+        //
+        // Deleting the row this session created (rather than searching for "drafts that look like
+        // this note") is what makes it exact. [draftRowId] is the id this editing session parked
+        // under and nothing else can be pointed at by it, so there is no rule to get wrong about
+        // which drafts belong to which item — and because the same id is reused for every "save to
+        // draft" within a session, a session can never have produced more than one.
+        val draftToClear = draftRowId
+        draftRowId = null
+
         val appContext = context.applicationContext
 
         // Run on the app-lifetime scope, not the composable's scope: saving from the
@@ -522,6 +540,13 @@ fun NotesScreen(active: Boolean = true) {
                     )
                 )
             }
+
+                // Task 15 — drop this session's parked draft now that the real save has landed.
+                if (draftToClear != null) {
+                    db.noteDao().getByIdOnce(draftToClear)?.let { row ->
+                        if (row.isDraft) db.noteDao().delete(row)
+                    }
+                }
             withContext(Dispatchers.Main) {
                 LucentToast.show(appContext, com.lucent.app.i18n.S.noteSaved)
             }
@@ -701,9 +726,20 @@ fun NotesScreen(active: Boolean = true) {
         filteredNotes.sortedForDisplay(sortOption, query)
     }
 
-    // ---- Task A16 ----------------------------------------------------------------------------
-    // Same rule as the task list: a drag is only honoured where the order is the user's to own.
-    val reorderEnabled = sortOption == NoteSort.CUSTOM
+    // ---- Task A16, revised for task 8 --------------------------------------------------------
+    //
+    // The gesture used to be enabled ONLY under the Custom sort, on the reasoning that writing a
+    // position the next recomposition is obliged to discard is worse than offering nothing. The
+    // reasoning was sound and the outcome was still wrong: the app opens on "Recent", almost nobody
+    // changes the sort, so for almost everybody long-press-and-drag simply did nothing — which is
+    // exactly the "drag to reorder isn't implemented" report.
+    //
+    // The gesture is now always live, and a drop under any other sort does the one thing that makes
+    // the result visible: it writes the new positions AND switches the list to Custom. Dragging a
+    // card is an unambiguous statement that the user wants to decide the order themselves, so
+    // adopting the sort that honours that is the least surprising reading of it — far less
+    // surprising than a card that springs back with no explanation.
+    val reorderEnabled = true
     fun dropSelection(targetId: Long?) {
         val moving = selectedNoteIds.toList().mapNotNull { id -> sortedNotes.firstOrNull { it.id == id } }
         val reordered = reorderedBy(sortedNotes, moving, targetId) { it.id }
@@ -712,6 +748,10 @@ fun NotesScreen(active: Boolean = true) {
             reordered.forEachIndexed { index, n ->
                 if (n.manualOrder != index) db.noteDao().update(n.copy(manualOrder = index))
             }
+        }
+        // Adopt the only sort under which the positions just written mean anything.
+        if (sortOption != NoteSort.CUSTOM) {
+            scope.launch { settingsRepo.setNotesSort(NoteSort.CUSTOM.key) }
         }
         exitSelection()
     }
@@ -985,7 +1025,7 @@ fun NotesScreen(active: Boolean = true) {
                         // sketch can still be captioned. Same reasoning as A20 gave checklist notes
                         // their remarks field: a note kind that can hold *only* one form of content
                         // forces the user to open a second note to say what the first one is.
-                        DoodleEditor(value = doodleData, onValueChange = { doodleData = it })
+                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData = it })
                         Spacer(modifier = Modifier.height(12.dp))
                         ExpandableGlassTextField(
                             value = newBody,
@@ -1077,19 +1117,15 @@ fun NotesScreen(active: Boolean = true) {
                             spans = if (richTextEnabled) bodySpans else emptyList(),
                             onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
                             highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
-                            // The body field now names itself "Details", matching the task composer so
-                            // notes and tasks read consistently (task 7). When Markdown is on we also
-                            // remind the user what's supported here; the [[links]] part of that hint is
-                            // dropped when the Links toggle is off (task 3), and the whole hint is gone
-                            // in plain-text mode where a user can't act on it.
-                            placeholder = when {
-                                markdownEnabled && linksEnabled -> com.lucent.app.i18n.S.detailsMarkdownLinks
-                                markdownEnabled -> com.lucent.app.i18n.S.detailsMarkdown
-                                // Links without Markdown is now a real combination, so it gets its
-                                // own hint rather than falling through to the bare one.
-                                linksEnabled -> com.lucent.app.i18n.S.detailsLinks
-                                else -> com.lucent.app.i18n.S.detailsPlaceholder
-                            },
+                            // Task 11. This used to swap in a longer hint when Markdown and/or links
+                            // were on ("Details — supports Markdown and [[links]]"). Placeholder text
+                            // is a single line that cannot wrap, and the field carries the dictation
+                            // mic in its top-right corner, so the longer strings ran straight under
+                            // the mic and were clipped mid-word. The plain label is used in every
+                            // mode now: it matches the task composer, it never collides with the mic
+                            // in any of the four languages, and what the field supports is documented
+                            // where it can be read properly — Settings › Editor.
+                            placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                             expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
                             collapsedMinHeight = 120.dp,
                             collapsedMaxHeight = 320.dp
@@ -1197,28 +1233,40 @@ fun NotesScreen(active: Boolean = true) {
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    // Enlarged so this primary action clearly outweighs the slim attachment row
-                    // above it.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Task 3. The two actions are now laid out as equal halves of one row: both get
+                    // weight(1f) and the same explicit height, so they are identical in size no
+                    // matter how long the label is in the current language. Before, the primary was
+                    // a Button sized by its content padding and the secondary a `compact` glass pill
+                    // sized by its own, smaller, padding — two independent size profiles that only
+                    // ever matched by accident, and did not.
+                    //
+                    // Equal size is not equal weight: the primary stays a filled button and the
+                    // secondary stays quiet glass, so the hierarchy the two actions need survives
+                    // the geometry the task asks for.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Button(
                             onClick = { saveNote() },
-                            contentPadding = PaddingValues(horizontal = 30.dp, vertical = 15.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Text(
                                 if (editingId != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addNoteBtn,
-                                fontSize = 17.sp
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         // Task A10 — "parallel to Save", as asked, and secondary on purpose: it is
-                        // the same commitment in a lower gear ("keep this, I'm not done"), so it
-                        // sits beside the primary action in the quieter glass style rather than
-                        // competing with it as a second filled button.
+                        // the same commitment in a lower gear ("keep this, I'm not done").
                         GlassButton(
                             text = com.lucent.app.i18n.S.saveToDraft,
                             onClick = { saveNote(asDraft = true) },
-                            compact = true
+                            modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         )
                     }
                 }
@@ -1256,7 +1304,14 @@ fun NotesScreen(active: Boolean = true) {
                     }
                 },
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 96.dp)
+                // Task 1. The bottom offset was a hard-coded 96dp, but the floating nav capsule is
+                // taller than that (its own height plus the gap above it plus the system navigation
+                // inset), so the control sat on top of the capsule and stole its taps. The measured
+                // inset is already published as [LocalBottomBarInset] — the same value every list
+                // screen reserves — so use it and lift the ring clear of the capsule on every device
+                // rather than on the one this number was eyeballed against.
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
             )
         }
         }

@@ -93,7 +93,14 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
     val pagerState = rememberPagerState(
         initialPage = initialIndex.coerceIn(0, attachments.size - 1)
     ) { attachments.size }
+    // Task 13 — whether the image on the page being looked at is zoomed. It lives here because the
+    // control it governs (the pager's scrollability) is declared here; a child cannot switch off a
+    // gesture its parent owns.
+    var currentImageZoomed by remember { mutableStateOf(false) }
     val current = pagerState.currentPage.coerceIn(0, attachments.size - 1)
+    // A new page starts un-zoomed, so swiping can never leave the pager frozen by the zoom state of
+    // a picture that is no longer on screen.
+    LaunchedEffect(current) { currentImageZoomed = false }
     val att = attachments[current]
 
     Dialog(
@@ -105,11 +112,23 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                 modifier = Modifier.fillMaxSize().padding(bottom = 96.dp, top = 56.dp),
                 contentAlignment = Alignment.Center
             ) {
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                // Task 13 — while the visible image is zoomed the pager stops being scrollable, so
+                // every drag belongs to the image. `canPan` alone was not enough: the pager's
+                // scrollable ancestor claims horizontal drags during the gesture, which pinned a
+                // zoomed photo sideways while leaving it free to move vertically.
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = !currentImageZoomed,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
                     val a = attachments[page]
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         when {
-                            a.isImage -> ZoomableImage(a, if (page == current) reloadKey else 0)
+                            a.isImage -> ZoomableImage(
+                                a,
+                                if (page == current) reloadKey else 0,
+                                onZoomChanged = { zoomed -> if (page == current) currentImageZoomed = zoomed }
+                            )
                             a.isPdf -> PdfViewer(a)
                             // Task A1 — same text preview as Android, same extractor.
                             DocumentText.canExtract(a) -> TextPreview(a)
@@ -183,7 +202,11 @@ private fun ViewerAction(icon: ImageVector, label: String, onClick: () -> Unit) 
 
 /** Scroll-wheel / pinch zoom and drag-pan image view. Decodes from the encrypted store off-thread. */
 @Composable
-private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
+private fun ZoomableImage(
+    att: Attachment,
+    reloadKey: Int = 0,
+    onZoomChanged: (Boolean) -> Unit = {}
+) {
     val context = android.content.DesktopContext
     var bitmap by remember(att.data, reloadKey) { mutableStateOf<ImageBitmap?>(null) }
     var failed by remember(att.data, reloadKey) { mutableStateOf(false) }
@@ -220,6 +243,10 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
         offsetY = (offsetY + panChange.y).coerceIn(-maxY, maxY)
     }
 
+    // Task 13 — report zoom as a boolean so the pager is reconfigured only when the answer changes.
+    val zoomed = scale > 1f
+    LaunchedEffect(zoomed) { onZoomChanged(zoomed) }
+
     when {
         bitmap != null -> Image(
             bitmap = bitmap!!,
@@ -229,6 +256,8 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
                 .onSizeChanged { viewport = it }
                 .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY)
                 .transformable(state = transformState, canPan = { scale > 1f })
+                // Task 13 — reported as a boolean so the pager is only reconfigured when the answer
+                // changes, not on every pinch sample.
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
                         if (scale > 1f) { scale = 1f; offsetX = 0f; offsetY = 0f } else scale = 2f

@@ -15,9 +15,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -87,6 +89,9 @@ fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> 
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
+    // Task 7 — see [RevealConfirmDialog]. What is held is the *action*, not the item, so one dialog
+    // serves the whole list instead of every row carrying its own copy of the state.
+    var pendingReveal by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     HiddenScaffold(onBack = onBack, isEmpty = hidden.isEmpty(), hazeState = hazeState) {
         items(hidden, key = { it.id }) { note ->
@@ -99,13 +104,17 @@ fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> 
                 savedAt = note.updatedAt,
                 onOpen = { onOpen(note) },
                 onReveal = {
-                    AppScope.io.launch { db.noteDao().update(note.copy(hidden = false)) }
+                    pendingReveal = {
+                        AppScope.io.launch { db.noteDao().update(note.copy(hidden = false)) }
+                    }
                 },
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted
             )
         }
     }
+
+    RevealConfirmDialog(pending = pendingReveal, onDismiss = { pendingReveal = null })
 }
 
 /** The task side of the hidden area; identical but for the row's own fields. */
@@ -117,6 +126,7 @@ fun HiddenTasksScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Task) -> 
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
+    var pendingReveal by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     HiddenScaffold(onBack = onBack, isEmpty = hidden.isEmpty(), hazeState = hazeState) {
         items(hidden, key = { it.id }) { task ->
@@ -129,13 +139,49 @@ fun HiddenTasksScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Task) -> 
                 savedAt = task.createdAt,
                 onOpen = { onOpen(task) },
                 onReveal = {
-                    AppScope.io.launch { db.taskDao().update(task.copy(hidden = false)) }
+                    pendingReveal = {
+                        AppScope.io.launch { db.taskDao().update(task.copy(hidden = false)) }
+                    }
                 },
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted
             )
         }
     }
+
+    RevealConfirmDialog(pending = pendingReveal, onDismiss = { pendingReveal = null })
+}
+
+/**
+ * Task 7 — confirmation before an item leaves the hidden area.
+ *
+ * The reveal icon sits on every row, a single tap from the same finger that is scrolling past it,
+ * and the action it performs is invisible from here: the item vanishes from this list and reappears
+ * in a list this screen is not showing. There is no undo and no toast to catch it. Every other
+ * one-tap change of this kind in the app already asks (delete, empty trash, batch delete), and this
+ * one is the only one where the cost of a mistake is that something the user deliberately hid is now
+ * on display — which is precisely the thing the hidden area exists to prevent.
+ *
+ * Nothing guards the opposite direction: moving an item *into* the hidden area is still immediate.
+ * Hiding something by accident is recoverable in one tap from this very screen, so a prompt there
+ * would be ceremony rather than protection.
+ */
+@Composable
+private fun RevealConfirmDialog(pending: (() -> Unit)?, onDismiss: () -> Unit) {
+    if (pending == null) return
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(com.lucent.app.i18n.S.hiddenRemoveConfirmTitle) },
+        text = { Text(com.lucent.app.i18n.S.hiddenRemoveConfirmBody) },
+        confirmButton = {
+            TextButton(onClick = { pending(); onDismiss() }) {
+                Text(com.lucent.app.i18n.S.hiddenRemoveConfirmAction)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(com.lucent.app.i18n.S.actionCancel) }
+        }
+    )
 }
 
 @Composable

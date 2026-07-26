@@ -195,7 +195,7 @@ fun QuickActionFab(
             when {
                 // ---- Page 2b: the five highlighter colours ----
                 highlightOpen -> {
-                    val angles = listOf(120f, 150f, 180f, 210f, 240f)
+                    val angles = RING_ANGLES_5
                     RichHighlightColors.forEachIndexed { index, swatch ->
                         RingSwatch(
                             color = swatch,
@@ -211,35 +211,35 @@ fun QuickActionFab(
                 }
                 // ---- Page 2a: weights, italic, highlighter, clear ----
                 formatPage -> {
-                    RingAction(Icons.Default.FormatBold, com.lucent.app.i18n.S.richTextBold, 120f, reveal, hasSelection) {
+                    RingAction(Icons.Default.FormatBold, com.lucent.app.i18n.S.richTextBold, RING_ANGLES_5[0], reveal, hasSelection) {
                         if (hasSelection) onToggleStyle(RichSpan.Kind.BOLD, 0) else onNeedSelection()
                     }
-                    RingAction(Icons.Default.FormatItalic, com.lucent.app.i18n.S.richTextItalic, 150f, reveal, hasSelection) {
+                    RingAction(Icons.Default.FormatItalic, com.lucent.app.i18n.S.richTextItalic, RING_ANGLES_5[1], reveal, hasSelection) {
                         if (hasSelection) onToggleStyle(RichSpan.Kind.ITALIC, 0) else onNeedSelection()
                     }
-                    RingAction(Icons.Default.FormatSize, com.lucent.app.i18n.S.richTextLight, 180f, reveal, hasSelection) {
+                    RingAction(Icons.Default.FormatSize, com.lucent.app.i18n.S.richTextLight, RING_ANGLES_5[2], reveal, hasSelection) {
                         if (hasSelection) onToggleStyle(RichSpan.Kind.LIGHT, 0) else onNeedSelection()
                     }
-                    RingAction(Icons.Default.Brush, com.lucent.app.i18n.S.richTextHighlight, 210f, reveal, hasSelection) {
+                    RingAction(Icons.Default.Brush, com.lucent.app.i18n.S.richTextHighlight, RING_ANGLES_5[3], reveal, hasSelection) {
                         if (hasSelection) highlightOpen = true else onNeedSelection()
                     }
-                    RingAction(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, 240f, reveal, hasSelection) {
+                    RingAction(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, RING_ANGLES_5[4], reveal, hasSelection) {
                         if (hasSelection) onClearStyle() else onNeedSelection()
                     }
                 }
                 // ---- Page 1: the editing actions that were always here ----
                 else -> {
                     // Laid out on an arc that opens up and to the left — the only quadrant that is
-                    // free when the control sits in the bottom-right corner.
-                    RingAction(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, 150f, reveal, canUndo, onUndo)
-                    RingAction(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, 195f, reveal, canRedo, onRedo)
+                    // free when the control sits in the bottom-right corner. See [RING_ANGLES_5].
+                    RingAction(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, RING_ANGLES_3[0], reveal, canUndo, onUndo)
+                    RingAction(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, RING_ANGLES_3[1], reveal, canRedo, onRedo)
                     // The formatting page is offered only when the switch is on, so a user who never
                     // turned rich text on sees the ring exactly as group A shipped it.
                     if (richTextEnabled) {
                         RingAction(
                             Icons.Default.TextFormat,
                             com.lucent.app.i18n.S.a11yRichTextToolbar,
-                            240f, reveal, true
+                            RING_ANGLES_3[2], reveal, true
                         ) { formatPage = true }
                     }
                 }
@@ -371,6 +371,29 @@ private fun RingSwatch(
  * is adjusted.
  */
 val RichHighlightColors: List<Color> = com.lucent.app.data.RichText.HIGHLIGHT_ARGB.map { Color(it) }
+
+/**
+ * Where the satellites sit, measured in SCREEN space: 180° is straight to the left of the centre
+ * button, 270° is straight above it, and the values between sweep the up-and-left quadrant.
+ *
+ * This is deliberately not the mathematical convention, and the difference *was* the bug. Satellites
+ * are placed with `dx = cos(a) * r`, `dy = sin(a) * r`, and on a canvas y grows DOWNWARD — so the
+ * previous 120°–240° arc sent two of the five satellites BELOW the centre button. Below the button
+ * is the bottom edge of the screen and the navigation capsule, and, more to the point, it is outside
+ * this ring's own 160dp box. Compose does not deliver pointer events to a child laid out beyond its
+ * parent's bounds, so those two controls — bold and italic — were drawn perfectly and could not be
+ * tapped at all. That is the whole of the "italic and weight do nothing" report: the feature was
+ * there, the buttons were not reachable.
+ *
+ * Confining every angle to 180°..270° keeps each satellite inside the box (the maximum excursion is
+ * 72dp up or left from a 40dp control bottom-end-aligned in a 160dp box, which fits with 48dp to
+ * spare) and inside the only quadrant guaranteed to be empty when the control sits in the
+ * bottom-right corner.
+ */
+private val RING_ANGLES_5 = listOf(180f, 202.5f, 225f, 247.5f, 270f)
+
+/** The same arc for the three-satellite first page: left, up-left, up. */
+private val RING_ANGLES_3 = listOf(180f, 225f, 270f)
 
 private val RING_DIAMETER = 160.dp
 private val RING_RADIUS = 72.dp
