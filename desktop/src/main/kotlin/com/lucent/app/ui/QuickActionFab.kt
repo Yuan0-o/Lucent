@@ -193,11 +193,9 @@ fun QuickActionFab(
     // One driver for every satellite's position and fade, so they cannot disagree mid-animation.
     val reveal by animateFloatAsState(targetValue = if (expanded) 1f else 0f, label = "quickActionRing")
 
-    // Which page of the ring is showing. The formatting actions are a SECOND page rather than more
-    // satellites on the first: task 20 asks for three weights, italic and five highlighters, which
-    // is nine controls, and nine satellites on a 72dp arc are smaller than a fingertip and no longer
-    // distinguishable at a glance. Two pages of five keep every target at 40dp — the size the rest
-    // of this ring already uses and the size a thumb can actually hit.
+    // Which page is showing. The formatting actions are a second page rather than more satellites
+    // on the first, and that second page is a GRID rather than an arc — see [FormatPanel] for the
+    // arithmetic that rules the ring out past about three controls.
     var formatPage by remember { mutableStateOf(false) }
     var highlightOpen by remember { mutableStateOf(false) }
     // Collapsing the ring resets it, so re-opening never lands on a page the user did not choose.
@@ -226,7 +224,6 @@ fun QuickActionFab(
                 highlightOpen = highlightOpen,
                 canUndo = canUndo,
                 canRedo = canRedo,
-                hasSelection = hasSelection,
                 activeKinds = activeKinds,
                 activeHighlight = activeHighlight,
                 onUndo = onUndo,
@@ -387,7 +384,6 @@ private fun FormatPanel(
     highlightOpen: Boolean,
     canUndo: Boolean,
     canRedo: Boolean,
-    hasSelection: Boolean,
     activeKinds: Set<RichSpan.Kind>,
     activeHighlight: Int?,
     onUndo: () -> Unit,
