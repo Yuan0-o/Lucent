@@ -185,6 +185,10 @@ class MainActivity : FragmentActivity() {
                 // Assistant screen's very first composition already knows the user's assistant name
                 // instead of showing "Lucent" and snapping to it. Costs nothing: no extra I/O.
                 .also { com.lucent.app.data.SettingsCache.seed(it) }
+                // Round R1, task 5 — and the previous run's recovery snapshot, from the same read.
+                // Hydrated here, before anything composes, because the "go back to where you were?"
+                // prompt is asked once per launch by whichever home tab composes first.
+                .also { com.lucent.app.data.SessionRestore.hydrate(it.sessionSnapshot) }
         } catch (t: Throwable) {
             SettingsRepository.StartupPrefs(
                 display = SettingsRepository.DisplayPrefs("system", "SUNSET", "system"),
