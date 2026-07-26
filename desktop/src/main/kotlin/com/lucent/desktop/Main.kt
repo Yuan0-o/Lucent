@@ -49,6 +49,26 @@ import kotlinx.coroutines.runBlocking
  * decrypted-preview cache, exactly as MainActivity.onDestroy does.
  */
 fun main() {
+    // ---- Task 6: why the desktop build could not reach the API while the phone could ----
+    //
+    // Two JVM defaults, neither of which applies on Android:
+    //
+    //  1. **The system proxy is ignored.** Android hands every app the platform's proxy settings
+    //     automatically; the JVM does not consult the Windows proxy configuration at all unless
+    //     `java.net.useSystemProxies` is set. On any machine behind a corporate or VPN proxy — which
+    //     is most managed Windows machines — every request therefore went out direct and timed out,
+    //     while the same account worked fine on the phone next to it.
+    //  2. **IPv6 is preferred.** The JVM tries AAAA records first. Where IPv6 is advertised but not
+    //     actually routable (common on consumer Windows with a tunnel adapter left enabled) each
+    //     connection stalls for the full connect timeout before falling back, which presents as
+    //     "the network is never available" rather than as a delay.
+    //
+    // Both are set before anything can open a socket. They are properties rather than OkHttp
+    // configuration on purpose: they belong to the JVM's own resolver and proxy selector, which
+    // OkHttp then inherits, so this also covers any other client the desktop build ever grows.
+    System.setProperty("java.net.useSystemProxies", "true")
+    System.setProperty("java.net.preferIPv4Stack", "true")
+
     val context = DesktopContext
 
     // ONE synchronous read for everything the first frame needs, mirroring MainActivity. Falls back
