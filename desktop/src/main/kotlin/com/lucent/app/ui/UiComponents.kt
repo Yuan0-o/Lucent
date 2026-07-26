@@ -1,5 +1,7 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
@@ -858,6 +860,14 @@ fun LucentExpandedInput(
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Task 4 — follow the keyboard, exactly as the note and task editors do.
+                //
+                // Without imePadding the panel keeps its full height while the IME covers the bottom
+                // half of it, so the caret sits behind the keyboard and the text being typed cannot
+                // be seen. systemBarsPadding keeps the title clear of the status bar for the same
+                // reason. Both are no-ops on desktop, where there is no IME inset to consume.
+                .systemBarsPadding()
+                .imePadding()
                 .background(
                     if (onGradient.luminance() > 0.5f) Color(0xFF20202B) else Color(0xFFF4F4F8)
                 )

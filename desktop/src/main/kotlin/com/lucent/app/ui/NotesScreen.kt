@@ -801,16 +801,22 @@ fun NotesScreen(active: Boolean = true) {
         m
     }
 
-    fun dropSelection(targetId: Long?) {
+    fun dropSelection(beforeId: Long?, afterId: Long?) {
         val moving = selectedNoteIds.toList().mapNotNull { id -> sortedNotes.firstOrNull { it.id == id } }
-        // One section at a time. A drop onto a card in a different bucket is refused rather than
-        // silently relocating the card, because the buckets are computed from pinned/recency and a
-        // move between them would be undone by the next recomposition anyway.
-        if (sections != null && targetId != null) {
-            val to = sectionOfId[targetId]
-            if (moving.any { sectionOfId[it.id] != to }) return
-        }
-        val reordered = reorderedBy(sortedNotes, moving, targetId) { it.id }
+        if (moving.isEmpty()) return
+        // ---- One section at a time (task 9) ----
+        //
+        // The gap is named by the cards on either side of it. A gap is usable only if the anchor we
+        // would attach to belongs to the same section as what is being dragged: that keeps a card in
+        // Recent inside Recent, and it also handles the ends of the list for free, since the top gap
+        // has no card above it and the bottom gap none below.
+        val home = sectionOfId[moving.first().id]
+        val sameSection = { id: Long? -> sections == null || id == null || sectionOfId[id] == home }
+        val usableAfter = if (sameSection(afterId)) afterId else null
+        val usableBefore = if (sameSection(beforeId)) beforeId else null
+        if (usableAfter == null && usableBefore == null) return
+        if (moving.any { sectionOfId[it.id] != home }) return
+        val reordered = reorderedAround(sortedNotes, moving, usableBefore, usableAfter) { it.id }
         if (reordered === sortedNotes) return
         AppScope.io.launch {
             reordered.forEachIndexed { index, n ->
@@ -2065,7 +2071,7 @@ fun NotesScreen(active: Boolean = true) {
                                         selectionMode = true
                                         if (note.id !in selectedNoteIds) selectedNoteIds = selectedNoteIds + note.id
                                     },
-                                    onDrop = { targetId -> dropSelection(targetId) }
+                                    onDrop = { beforeId, afterId -> dropSelection(beforeId, afterId) }
                                 ),
                                 onToggleSelect = {
                                     selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id

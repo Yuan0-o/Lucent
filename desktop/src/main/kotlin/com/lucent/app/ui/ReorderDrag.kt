@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
 /**
@@ -70,22 +71,37 @@ class ReorderDragState internal constructor() {
     /** How far that card has travelled, in pixels. */
     var dragOffset: Offset by mutableStateOf(Offset.Zero)
 
-    /** The card the finger is over right now, or null when it is over a gap or a header. */
-    var targetId: Long? by mutableStateOf(null)
+    /**
+     * The gap the finger is currently pointing at, named by the two cards that flank it.
+     *
+     * This replaces "which card is under the finger", and the difference is the whole of task 9. A
+     * target card can only ever mean "put it before this one", so the position after the LAST card
+     * was unreachable — there was no card there to aim at, `keyAtY` returned null outside every
+     * item, and the drop was discarded. A gap has one more slot than there are cards, which is
+     * exactly the number of places a card can go.
+     *
+     * At the top of the list [gapBeforeId] is null; at the bottom [gapAfterId] is. That is also what
+     * makes the preview do the right thing at the ends: only one card has a neighbour to move away
+     * from, so only one moves.
+     */
+    var gapBeforeId: Long? by mutableStateOf(null)
+    var gapAfterId: Long? by mutableStateOf(null)
 
     internal fun begin(id: Long) {
         dragging = true
         draggingId = id
         dragOffset = Offset.Zero
-        targetId = null
+        gapBeforeId = null
+        gapAfterId = null
     }
 
-    internal fun finish(): Long? {
-        val landed = targetId
+    internal fun finish(): Pair<Long?, Long?> {
+        val landed = gapBeforeId to gapAfterId
         dragging = false
         draggingId = null
         dragOffset = Offset.Zero
-        targetId = null
+        gapBeforeId = null
+        gapAfterId = null
         return landed
     }
 }
@@ -108,7 +124,7 @@ fun Modifier.reorderableItem(
     listState: LazyListState,
     state: ReorderDragState,
     onLongPress: () -> Unit,
-    onDrop: (targetId: Long?) -> Unit
+    onDrop: (beforeId: Long?, afterId: Long?) -> Unit
 ): Modifier = composed {
     val press by rememberUpdatedState(onLongPress)
     val drop by rememberUpdatedState(onDrop)
@@ -124,7 +140,7 @@ fun Modifier.reorderableItem(
                     state.begin(id)
                     press()
                 },
-                onDragEnd = { drop(state.finish()) },
+                onDragEnd = { val (b, a) = state.finish(); drop(b, a) },
                 onDragCancel = { state.finish() },
                 onDrag = { change, amount ->
                     change.consume()
@@ -133,7 +149,9 @@ fun Modifier.reorderableItem(
                     // Read the card's position from the CURRENT layout rather than from a value
                     // captured at drag start, so scrolling mid-drag cannot desynchronise the two.
                     val top = listState.topOf(id)
-                    state.targetId = listState.keyAtY(top + grabbedAt.y + travelled.y)
+                    val (b, a) = listState.gapAtY(top + grabbedAt.y + travelled.y, id)
+                    state.gapBeforeId = b
+                    state.gapAfterId = a
                 }
             )
         }
@@ -146,7 +164,7 @@ fun Modifier.reorderableGridItem(
     gridState: LazyGridState,
     state: ReorderDragState,
     onLongPress: () -> Unit,
-    onDrop: (targetId: Long?) -> Unit
+    onDrop: (beforeId: Long?, afterId: Long?) -> Unit
 ): Modifier = composed {
     val press by rememberUpdatedState(onLongPress)
     val drop by rememberUpdatedState(onDrop)
@@ -162,13 +180,15 @@ fun Modifier.reorderableGridItem(
                     state.begin(id)
                     press()
                 },
-                onDragEnd = { drop(state.finish()) },
+                onDragEnd = { val (b, a) = state.finish(); drop(b, a) },
                 onDragCancel = { state.finish() },
                 onDrag = { change, amount ->
                     change.consume()
                     travelled += amount
                     state.dragOffset = travelled
-                    state.targetId = gridState.keyAtOffset(gridState.originOf(id) + grabbedAt + travelled)
+                    val (b, a) = gridState.gapAt(gridState.originOf(id) + grabbedAt + travelled, id)
+                    state.gapBeforeId = b
+                    state.gapAfterId = a
                 }
             )
         }
@@ -194,16 +214,24 @@ fun Modifier.reorderableGridItem(
  */
 fun Modifier.reorderVisuals(id: Long, state: ReorderDragState): Modifier = composed {
     val lifted = state.draggingId == id
-    val hovered = state.dragging && !lifted && state.targetId == id
-    // Underdamped on purpose: dampingRatio below 1 overshoots and settles back, which is the
-    // "microbounce" the squeeze needs. A critically damped spring would just deflate.
-    val squeeze by animateFloatAsState(
-        targetValue = if (hovered) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMediumLow),
-        label = "reorderSqueeze"
+    // -1 = this card sits just ABOVE the gap and moves up; +1 = just below, and moves down.
+    val push = when {
+        lifted || !state.dragging -> 0f
+        state.gapBeforeId == id -> -1f
+        state.gapAfterId == id -> 1f
+        else -> 0f
+    }
+    // Underdamped on purpose: a dampingRatio below 1 overshoots and settles back, which is the
+    // wobble. A critically damped spring would just slide open, and the gap would look like a hole
+    // rather than like two soft things being pushed apart.
+    val shift by animateFloatAsState(
+        targetValue = push,
+        animationSpec = spring(dampingRatio = 0.40f, stiffness = Spring.StiffnessMediumLow),
+        label = "reorderGap"
     )
+    val shiftPx = with(androidx.compose.ui.platform.LocalDensity.current) { GAP_SHIFT.toPx() }
     this
-        .zIndex(if (lifted) 2f else if (squeeze > 0.001f) 1f else 0f)
+        .zIndex(if (lifted) 2f else if (shift != 0f) 1f else 0f)
         .graphicsLayer {
             if (state.draggingId == id) {
                 translationX = state.dragOffset.x
@@ -212,11 +240,13 @@ fun Modifier.reorderVisuals(id: Long, state: ReorderDragState): Modifier = compo
                 scaleY = LIFT_SCALE
                 alpha = LIFT_ALPHA
                 shadowElevation = LIFT_ELEVATION
-            } else if (squeeze > 0.001f) {
-                // Volume roughly preserved: what it loses in height it gains in width, which is what
-                // makes it read as compression rather than as simply shrinking.
-                scaleY = 1f - SQUEEZE_AMOUNT * squeeze
-                scaleX = 1f + SQUEEZE_AMOUNT * 0.5f * squeeze
+            } else if (shift != 0f) {
+                translationY = shiftPx * shift
+                // A touch of compression along the way, so the two cards read as being *pushed*
+                // apart by something rather than simply sliding.
+                val squash = SQUEEZE_AMOUNT * kotlin.math.abs(shift)
+                scaleY = 1f - squash
+                scaleX = 1f + squash * 0.5f
             }
         }
 }
@@ -236,6 +266,9 @@ private const val LIFT_ALPHA = 0.93f
 private const val LIFT_ELEVATION = 16f
 private const val SQUEEZE_AMOUNT = 0.09f
 
+/** How far apart the two cards flanking the gap are pushed while it is being previewed. */
+private val GAP_SHIFT = 13.dp
+
 /** This card's current top edge in the list's own viewport coordinates. */
 private fun LazyListState.topOf(id: Long): Float =
     (layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.offset ?: 0).toFloat()
@@ -250,22 +283,42 @@ private fun LazyListState.topOf(id: Long): Float =
  * Section headers are in this list too and their keys are Strings, so `as? Long` returns null for
  * them: dropping onto a header is treated as dropping onto nothing, which is the honest answer.
  */
-private fun LazyListState.keyAtY(y: Float): Long? =
-    layoutInfo.visibleItemsInfo
-        .firstOrNull { y >= it.offset && y < it.offset + it.size }
-        ?.key as? Long
+private fun LazyListState.gapAtY(y: Float, dragged: Long): Pair<Long?, Long?> {
+    // Only real cards are candidates: section headers carry String keys, and the dragged card is
+    // excluded so it can never be treated as its own neighbour.
+    val cards = layoutInfo.visibleItemsInfo.filter { (it.key as? Long)?.let { k -> k != dragged } == true }
+    if (cards.isEmpty()) return null to null
+    // The gap is decided by MIDPOINTS, not by bounds. Past the middle of a card the finger is
+    // asking to go after it; before the middle, in front of it. Bounds would leave the space
+    // between two cards ambiguous and the space past the last card unreachable.
+    var before: Long? = null
+    var after: Long? = null
+    for (item in cards) {
+        val mid = item.offset + item.size / 2f
+        if (y >= mid) before = item.key as Long else { after = item.key as Long; break }
+    }
+    return before to after
+}
 
 private fun LazyGridState.originOf(id: Long): Offset =
     layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.offset
         ?.let { Offset(it.x.toFloat(), it.y.toFloat()) } ?: Offset.Zero
 
-private fun LazyGridState.keyAtOffset(p: Offset): Long? =
-    layoutInfo.visibleItemsInfo
-        .firstOrNull {
-            p.x >= it.offset.x && p.x < it.offset.x + it.size.width &&
-                p.y >= it.offset.y && p.y < it.offset.y + it.size.height
-        }
-        ?.key as? Long
+private fun LazyGridState.gapAt(p: Offset, dragged: Long): Pair<Long?, Long?> {
+    val cards = layoutInfo.visibleItemsInfo.filter { (it.key as? Long)?.let { k -> k != dragged } == true }
+    if (cards.isEmpty()) return null to null
+    // Reading order: down a row, then across. Comparing against each card's centre in that order
+    // gives the same one-more-slot-than-cards behaviour the list version has, in two dimensions.
+    var before: Long? = null
+    var after: Long? = null
+    for (item in cards) {
+        val cx = item.offset.x + item.size.width / 2f
+        val cy = item.offset.y + item.size.height / 2f
+        val pastIt = p.y > cy + item.size.height / 2f || (kotlin.math.abs(p.y - cy) <= item.size.height / 2f && p.x >= cx)
+        if (pastIt) before = item.key as Long else { after = item.key as Long; break }
+    }
+    return before to after
+}
 
 /**
  * Compute the new ordering after a drop: [moving] (in the order given) lifted out of [current] and
@@ -275,18 +328,23 @@ private fun LazyGridState.keyAtOffset(p: Offset): Long? =
  * `manualOrder` on every row anyway — positions are only meaningful relative to their neighbours,
  * so a move is always a renumbering of the sequence, not an edit to one row.
  */
-fun <T> reorderedBy(
+fun <T> reorderedAround(
     current: List<T>,
     moving: List<T>,
-    targetId: Long?,
+    beforeId: Long?,
+    afterId: Long?,
     idOf: (T) -> Long
 ): List<T> {
     if (moving.isEmpty()) return current
     val movingIds = moving.map(idOf).toHashSet()
     val remainder = current.filterNot { idOf(it) in movingIds }
-    // Dropped onto one of the dragged cards: the block is already where it was asked to go.
-    if (targetId == null || targetId in movingIds) return current
-    val at = remainder.indexOfFirst { idOf(it) == targetId }
-    if (at < 0) return current
+    // Prefer the card BELOW the gap ("insert in front of it"); fall back to the one above ("insert
+    // after it"), which is the only anchor available at the very bottom of the list.
+    val at = when {
+        afterId != null && afterId !in movingIds -> remainder.indexOfFirst { idOf(it) == afterId }
+        beforeId != null && beforeId !in movingIds -> remainder.indexOfFirst { idOf(it) == beforeId } + 1
+        else -> -1
+    }
+    if (at < 0 || at > remainder.size) return current
     return remainder.toMutableList().also { it.addAll(at, moving) }
 }
