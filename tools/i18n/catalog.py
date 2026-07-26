@@ -33,6 +33,12 @@ ENTRIES = [
     ("exportDocUntitledTask", "Untitled task", "无标题任务", "無題のタスク", "제목 없는 할 일"),
     ("exportDocAttachmentsLine(names: String)", "Attachments: {names}", "附件：{names}", "添付：{names}", "첨부: {names}"),
     ("exportDocAttachmentsNote", "Attachments are listed by name but not embedded. Use the .lcb backup if you need the files themselves.", "附件仅列出文件名，不会嵌入文档。需要附件本身请使用 .lcb 备份。", "添付ファイルは名前のみ記載され、埋め込まれません。ファイル本体が必要な場合は .lcb バックアップをお使いください。", "첨부 파일은 이름만 기재되며 포함되지 않습니다. 파일 자체가 필요하면 .lcb 백업을 사용하세요."),
+    # Round R1 - the Markdown writer was the one export format still hardcoded in English; these
+    # cover the strings it needed that the other formats did not already have.
+    ("exportDocEmptyChecklist", "(empty checklist)", "（空清单）", "（空のチェックリスト）", "(빈 체크리스트)"),
+    ("exportDocDoodleLine(names: String)", "Doodles: {names}", "涂鸦：{names}", "落書き：{names}", "낙서: {names}"),
+    ("exportDocDoodleCanvases(count: Int)", "{count} doodle canvases", "{count} 块涂鸦画布", "落書きキャンバス {count} 枚", "낙서 캔버스 {count}개"),
+    ("exportDocYes", "Yes", "是", "はい", "예"),
     # Spreadsheet column headers
     ("exportColTitle", "Title", "标题", "タイトル", "제목"),
     ("exportColUpdated", "Updated", "更新时间", "更新日時", "업데이트"),
@@ -65,6 +71,10 @@ ENTRIES = [
     ("autoBackupNeedsFolder", "Choose a folder first", "请先选择文件夹", "先にフォルダーを選択してください", "먼저 폴더를 선택하세요"),
     ("autoBackupWhyNoModels", "Local model files can be several gigabytes and can be downloaded again, so they are left out. Everything else — notes, tasks, chats, settings and attachments — is included.", "本地模型文件可能有数 GB，且可以重新下载，因此不纳入自动备份。其余内容——笔记、任务、聊天、设置和附件——全部包含。", "ローカルモデルのファイルは数ギガバイトになることがあり、再ダウンロードも可能なため除外しています。それ以外——メモ、タスク、チャット、設定、添付ファイル——はすべて含まれます。", "로컬 모델 파일은 수 기가바이트에 이를 수 있고 다시 내려받을 수 있으므로 제외합니다. 그 외 노트, 할 일, 채팅, 설정, 첨부 파일은 모두 포함됩니다."),
     ("autoBackupFailed(reason: String)", "Last automatic backup failed: {reason}", "上次自动备份失败：{reason}", "前回の自動バックアップに失敗しました：{reason}", "마지막 자동 백업 실패: {reason}"),
+    # Restored to the catalog (round R1): these were hand-added straight into both I18n.kt files,
+    # which is the drift the catalog exists to prevent. Values copied verbatim from those files.
+    ("autoBackupRunNow", "Back up now", "立即备份", "今すぐバックアップ", "지금 백업"),
+    ("autoBackupOnlyWhileOpen", "Runs while Lucent is open, and catches up the next time it starts.", "在 Lucent 运行期间执行；错过的备份会在下次启动时补上。", "Lucent の起動中に実行され、逃した分は次回起動時に補われます。", "Lucent가 실행 중일 때 동작하며, 놓친 백업은 다음 실행 시 보완됩니다."),
 
 
     # ---- Task 16: parallel vs overwrite restore ----
@@ -217,6 +227,12 @@ ENTRIES = [
     ("sectionRecent", "Recent", "最近", "最近", "최근"),
     ("sectionToday", "Today", "今天", "今日", "오늘"),
     ("sectionOlder", "Older", "更早", "それ以前", "이전"),
+    ("sectionThreeDays", "Last three days", "三天内", "3日以内", "최근 3일"),
+    ("historyTitle", "Version history", "历史版本（快闪记录）", "履歴バージョン", "버전 기록"),
+    ("historyDesc", "Every meaningful edit is snapshotted, so you can read what a note or task said earlier and put that version back. Snapshots stay on this device and are included in backups.", "每次有实质的修改都会存一份快照，你可以回看一条笔记或任务之前的内容，并把那个版本恢复回来。快照只保存在本设备，并会随备份一起导出。", "意味のある編集ごとにスナップショットを保存し、メモやタスクの以前の内容を読んで戻すことができます。スナップショットはこの端末にのみ保存され、バックアップにも含まれます。", "의미 있는 편집마다 스냅샷을 저장해, 노트나 할 일의 이전 내용을 보고 되돌릴 수 있습니다. 스냅샷은 이 기기에만 저장되며 백업에 포함됩니다."),
+    ("historyNotes", "Keep history for notes", "为笔记保留历史版本", "メモの履歴を保存", "노트 기록 유지"),
+    ("historyTasks", "Keep history for tasks", "为任务保留历史版本", "タスクの履歴を保存", "할 일 기록 유지"),
+    ("historyCapNote(max: Int)", "Up to {max} versions are kept per item. Past that the oldest one is deleted to make room.", "每个条目最多保留 {max} 个版本；超过后会从最早的那一版开始删除。", "1 件あたり最大 {max} 件まで保存し、超えると古いものから削除されます。", "항목당 최대 {max} 개까지 보관하며, 넘으면 가장 오래된 것부터 삭제됩니다."),
 
     # ---- Sort options ----
     ("sortLastEdited", "Last edited", "最近编辑", "最終編集順", "최근 수정순"),
@@ -994,8 +1010,12 @@ ENTRIES = [
     # Settings — Data page: selective export + danger zone
     # =====================================================================================
     ("exportNotesTasksTitle", "Export notes & tasks", "导出笔记与任务", "メモとタスクのエクスポート", "노트 및 할 일 내보내기"),
-    ("exportNotesTasksDesc", "Write your notes or tasks to a single file you can keep or open anywhere — choose Markdown, Word, PDF, or Excel on the next screen. Pick exactly which items to include (with a search box and Select-All). These files are NOT encrypted: that is the entire point of them. Once you tick items, you can also tick their individual attachments to bundle the actual files alongside — the export is then saved as a .zip.", "将你的笔记或任务写入一个可随处保存和打开的文件——在下一屏选择 Markdown、Word、PDF 或 Excel。可精确挑选要包含的条目（带搜索框和全选）。这些文件不加密：这正是它们的用途所在。勾选条目后，还可以逐个勾选它的附件，把附件文件本身一并打包——此时导出会保存为 .zip 压缩包。", "メモやタスクを、どこでも保存・閲覧できる1つのファイルに書き出します。次の画面でMarkdown・Word・PDF・Excelを選べます。含める項目は検索ボックスと全選択で正確に選べます。これらのファイルは暗号化されません。それこそが目的だからです。項目を選ぶと、その添付ファイルを個別に選んで実ファイルも一緒に同梱できます。その場合、エクスポートは .zip として保存されます。", "노트나 할 일을 어디서든 보관하고 열 수 있는 파일 하나로 내보냅니다. 다음 화면에서 마크다운, Word, PDF, Excel을 선택하세요. 포함할 항목은 검색창과 전체 선택으로 정확히 고를 수 있습니다. 이 파일들은 암호화되지 않습니다. 그것이 바로 이 기능의 목적입니다. 항목을 선택하면 해당 첨부 파일을 개별적으로 선택해 실제 파일까지 함께 묶을 수 있으며, 이 경우 내보내기는 .zip으로 저장됩니다."),
+    ("exportNotesTasksDesc", "Write your notes or tasks to a single file you can keep or open anywhere — choose Markdown, Word, PDF, or Excel on the next screen. Pick exactly which items to include (with a search box and Select-All). These files are NOT encrypted: that is the entire point of them. Once you tick items, you can also tick their individual attachments to bundle the actual files alongside — the export is then saved as a .zip. A doodle note's canvases are offered in that same list and each ticked canvas is written out as its own PDF.", "将你的笔记或任务写入一个可随处保存和打开的文件——在下一屏选择 Markdown、Word、PDF 或 Excel。可精确挑选要包含的条目（带搜索框和全选）。这些文件不加密：这正是它们的用途所在。勾选条目后，还可以逐个勾选它的附件，把附件文件本身一并打包——此时导出会保存为 .zip 压缩包。涂鸦笔记的每块画布也会出现在同一份列表里，勾选后会各自导出为一份 PDF。", "メモやタスクを、どこでも保存・閲覧できる1つのファイルに書き出します。次の画面でMarkdown・Word・PDF・Excelを選べます。含める項目は検索ボックスと全選択で正確に選べます。これらのファイルは暗号化されません。それこそが目的だからです。項目を選ぶと、その添付ファイルを個別に選んで実ファイルも一緒に同梱できます。その場合、エクスポートは .zip として保存されます。落書きメモの各キャンバスも同じ一覧に並び、選んだキャンバスはそれぞれ個別の PDF として書き出されます。", "노트나 할 일을 어디서든 보관하고 열 수 있는 파일 하나로 내보냅니다. 다음 화면에서 마크다운, Word, PDF, Excel을 선택하세요. 포함할 항목은 검색창과 전체 선택으로 정확히 고를 수 있습니다. 이 파일들은 암호화되지 않습니다. 그것이 바로 이 기능의 목적입니다. 항목을 선택하면 해당 첨부 파일을 개별적으로 선택해 실제 파일까지 함께 묶을 수 있으며, 이 경우 내보내기는 .zip으로 저장됩니다. 낙서 노트의 캔버스도 같은 목록에 표시되며, 선택한 캔버스는 각각 별도의 PDF로 저장됩니다."),
     ("exportAttachmentsHint", "Tick a file to include it; tap its name to preview.", "勾选文件以包含它；点击名称可预览。", "同梱するファイルを選択。名前をタップでプレビュー。", "포함할 파일을 선택하세요. 이름을 누르면 미리보기."),
+    # Round R1 - per-item select-all (task 4) and doodle-as-attachment (task 3).
+    ("exportSelectAllHere", "Select all files in this one", "全选本条的附件", "この項目のファイルをすべて選択", "이 항목의 파일 모두 선택"),
+    ("exportDoodleCanvas(index: Int)", "Doodle canvas {index}", "涂鸦画布 {index}", "落書きキャンバス {index}", "낙서 캔버스 {index}"),
+    ("exportDoodleHint", "A doodle canvas counts as an attachment: tick it to export that canvas as its own PDF.", "涂鸦画布与附件同级：勾选后会把该画布单独导出为 PDF。", "落書きキャンバスは添付ファイルと同等です。選択するとそのキャンバスを個別の PDF として書き出します。", "낙서 캔버스는 첨부 파일과 동등합니다. 선택하면 해당 캔버스를 별도의 PDF로 내보냅니다."),
     ("chooseTasksToExport", "Choose tasks to export", "选择要导出的任务", "エクスポートするタスクを選択", "내보낼 할 일 선택"),
     ("chooseNotesToExport", "Choose notes to export", "选择要导出的笔记", "エクスポートするメモを選択", "내보낼 노트 선택"),
     ("exportNotesScreenTitle", "Export notes", "导出笔记", "メモをエクスポート", "노트 내보내기"),
@@ -1268,6 +1288,13 @@ ENTRIES = [
     ("draftsEmpty", "No drafts. Anything you save here — or that was still open when the app closed unexpectedly — will appear in this list.", "\u6ca1\u6709\u8349\u7a3f\u3002\u4f60\u5b58\u5165\u7684\u5185\u5bb9\uff0c\u6216\u8005\u8f6f\u4ef6\u5f02\u5e38\u5173\u95ed\u65f6\u672a\u4fdd\u5b58\u7684\u7f16\u8f91\uff0c\u90fd\u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u3002", "\u4e0b\u66f8\u304d\u306f\u3042\u308a\u307e\u305b\u3093\u3002\u4fdd\u5b58\u3057\u305f\u3082\u306e\u3084\u3001\u30a2\u30d7\u30ea\u304c\u4e88\u671f\u305b\u305a\u7d42\u4e86\u3057\u305f\u3068\u304d\u306e\u7de8\u96c6\u5185\u5bb9\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002", "\uc784\uc2dc \uc800\uc7a5\ub41c \ud56d\ubaa9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \uc800\uc7a5\ud55c \ub0b4\uc6a9\uc774\ub098 \uc571\uc774 \uc608\uae30\uce58 \uc54a\uac8c \uc885\ub8cc\ub420 \ub54c \ud3b8\uc9d1 \uc911\uc774\ub358 \ub0b4\uc6a9\uc774 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4."),
     ("draftSavedToast", "Saved to drafts", "\u5df2\u5b58\u5165\u8349\u7a3f", "\u4e0b\u66f8\u304d\u306b\u4fdd\u5b58\u3057\u307e\u3057\u305f", "\uc784\uc2dc \uc800\uc7a5\uc5d0 \ubcf4\uad00\ud588\uc2b5\ub2c8\ub2e4"),
     ("draftRestoreTitle", "Unfinished edits found", "\u53d1\u73b0\u672a\u5b8c\u6210\u7684\u7f16\u8f91", "\u672a\u5b8c\u6210\u306e\u7de8\u96c6\u304c\u3042\u308a\u307e\u3059", "\uc644\ub8cc\ub418\uc9c0 \uc54a\uc740 \ud3b8\uc9d1\uc774 \uc788\uc2b5\ub2c8\ub2e4"),
+    # Round R1 - the abnormal-shutdown prompt (task 5). Deliberately worded as a question about a
+    # PAGE, not about data: the draft copy is safe either way, what is being offered is the trip back.
+    ("sessionRestoreTitle", "Go back to where you were?", "要回到上次的页面吗？", "前回の画面に戻りますか？", "마지막 화면으로 돌아갈까요?"),
+    ("sessionRestoreNoteBody(title: String)", "Lucent closed unexpectedly while you were editing the note \u201c{title}\u201d. Reopen it with the changes you had not saved?", "上次 Lucent 在你编辑笔记“{title}”时异常关闭。是否重新打开并恢复当时未保存的内容？", "メモ「{title}」の編集中に Lucent が予期せず終了しました。未保存の内容を復元して開き直しますか？", "노트 “{title}”을(를) 편집하는 중에 Lucent가 예기치 않게 종료되었습니다. 저장하지 않은 내용을 복원해 다시 열까요?"),
+    ("sessionRestoreTaskBody(title: String)", "Lucent closed unexpectedly while you were editing the task \u201c{title}\u201d. Reopen it with the changes you had not saved?", "上次 Lucent 在你编辑任务“{title}”时异常关闭。是否重新打开并恢复当时未保存的内容？", "タスク「{title}」の編集中に Lucent が予期せず終了しました。未保存の内容を復元して開き直しますか？", "할 일 “{title}”을(를) 편집하는 중에 Lucent가 예기치 않게 종료되었습니다. 저장하지 않은 내용을 복원해 다시 열까요?"),
+    ("sessionRestoreConfirm", "Take me back", "回到上次页面", "戻る", "돌아가기"),
+    ("sessionRestoreDismiss", "Start fresh", "不用，重新开始", "新しく始める", "새로 시작"),
     ("draftRestoreBody(count: Int)", "Lucent closed with {count} unsaved item(s). They were kept in Drafts — open it now?", "Lucent \u4e0a\u6b21\u5173\u95ed\u65f6\u6709 {count} \u9879\u672a\u4fdd\u5b58\uff0c\u5df2\u4fdd\u7559\u5728\u8349\u7a3f\u91cc\u3002\u73b0\u5728\u6253\u5f00\u5417\uff1f", "Lucent \u306e\u7d42\u4e86\u6642\u306b\u672a\u4fdd\u5b58\u306e\u9805\u76ee\u304c {count} \u4ef6\u3042\u308a\u3001\u4e0b\u66f8\u304d\u306b\u4fdd\u5b58\u3055\u308c\u3066\u3044\u307e\u3059\u3002\u4eca\u958b\u304d\u307e\u3059\u304b\uff1f", "Lucent\uac00 \uc885\ub8cc\ub420 \ub54c \uc800\uc7a5\ub418\uc9c0 \uc54a\uc740 \ud56d\ubaa9 {count}\uac1c\uac00 \uc784\uc2dc \uc800\uc7a5\uc5d0 \ubcf4\uad00\ub418\uc5c8\uc2b5\ub2c8\ub2e4. \uc9c0\uae08 \uc5f4\uae4c\uc694?"),
     ("draftOpen", "Open drafts", "\u6253\u5f00\u8349\u7a3f", "\u4e0b\u66f8\u304d\u3092\u958b\u304f", "\uc784\uc2dc \uc800\uc7a5 \uc5f4\uae30"),
     ("draftPromote", "Move out of drafts", "\u79fb\u51fa\u8349\u7a3f", "\u4e0b\u66f8\u304d\u304b\u3089\u623b\u3059", "\uc784\uc2dc \uc800\uc7a5\uc5d0\uc11c \uaebc\ub0b4\uae30"),
@@ -1285,12 +1312,20 @@ ENTRIES = [
     ("hiddenAdd", "Move to hidden", "\u52a0\u5165\u9690\u85cf", "\u975e\u8868\u793a\u306b\u79fb\u52d5", "\uc228\uae40\uc73c\ub85c \uc774\ub3d9"),
     ("hiddenRemove", "Move out of hidden", "\u79fb\u51fa\u9690\u85cf", "\u975e\u8868\u793a\u304b\u3089\u623b\u3059", "\uc228\uae40\uc5d0\uc11c \uaebc\ub0b4\uae30"),
     ("hiddenEmpty", "Nothing is hidden. Long-press a note or task and choose \u201cMove to hidden\u201d.", "\u9690\u85cf\u533a\u4e3a\u7a7a\u3002\u957f\u6309\u7b14\u8bb0\u6216\u4efb\u52a1\uff0c\u9009\u62e9\u201c\u52a0\u5165\u9690\u85cf\u201d\u3002", "\u975e\u8868\u793a\u306e\u9805\u76ee\u306f\u3042\u308a\u307e\u305b\u3093\u3002\u30e1\u30e2\u3084\u30bf\u30b9\u30af\u3092\u9577\u62bc\u3057\u3057\u3066\u300c\u975e\u8868\u793a\u306b\u79fb\u52d5\u300d\u3092\u9078\u3093\u3067\u304f\u3060\u3055\u3044\u3002", "\uc228\uae34 \ud56d\ubaa9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \ub178\ud2b8\ub098 \ud560 \uc77c\uc744 \uae38\uac8c \ub20c\ub7ec \u201c\uc228\uae40\uc73c\ub85c \uc774\ub3d9\u201d\uc744 \uc120\ud0dd\ud558\uc138\uc694."),
+    ("hiddenRemoveConfirmTitle", "Move out of the hidden area?", "要移出隐藏区吗？", "非表示から戻しますか？", "숨김에서 꺼낼까요?"),
+    ("hiddenRemoveConfirmBody", "This item goes back to its normal list, where anyone using this device can see it.", "该条目将回到普通列表，使用本设备的任何人都能看到它。", "この項目は通常の一覧に戻り、この端末を使う人なら誰でも見られるようになります。", "이 항목은 일반 목록으로 돌아가며, 이 기기를 사용하는 누구나 볼 수 있게 됩니다."),
+    ("hiddenRemoveConfirmAction", "Move out", "移出", "戻す", "꺼내기"),
 
     # ---- Task A22: doodle notes ----
     ("doodleNote", "Doodle", "\u6d82\u9e26", "\u624b\u66f8\u304d", "\ub099\uc11c"),
     ("doodleClear", "Clear canvas", "\u6e05\u7a7a\u753b\u5e03", "\u30ad\u30e3\u30f3\u30d0\u30b9\u3092\u6d88\u53bb", "\uce94\ubc84\uc2a4 \uc9c0\uc6b0\uae30"),
     ("doodleUndoStroke", "Undo stroke", "\u64a4\u9500\u4e00\u7b14", "\u4e00\u753b\u5143\u306b\u623b\u3059", "\ud55c \ud68d \uc2e4\ud589 \ucde8\uc18c"),
     ("doodleEmpty", "Nothing drawn yet.", "\u8fd8\u6ca1\u6709\u753b\u4efb\u4f55\u4e1c\u897f\u3002", "\u307e\u3060\u4f55\u3082\u63cf\u304b\u308c\u3066\u3044\u307e\u305b\u3093\u3002", "\uc544\uc9c1 \uadf8\ub824\uc9c4 \uac83\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."),
+    ("doodleRedoStroke", "Redo stroke", "重做笔画", "筆をやり直す", "획 다시 실행"),
+    ("doodleAddPage", "Add a canvas", "添加画布", "キャンバスを追加", "캔버스 추가"),
+    ("doodleSaveCanvas", "Save canvas", "保存画布", "キャンバスを保存", "캔버스 저장"),
+    ("doodleDeletePage", "Delete this canvas", "删除这块画布", "このキャンバスを削除", "이 캔버스 삭제"),
+    ("doodlePageName(index: Int)", "Canvas {index}", "画布 {index}", "キャンバス {index}", "캔버스 {index}"),
 
     # ---- Task A7: the floating scroll / quick-edit control ----
     ("a11yScrollTop", "Scroll to top", "\u56de\u5230\u9876\u90e8", "\u4e00\u756a\u4e0a\u3078", "\ub9e8 \uc704\ub85c"),
@@ -1367,6 +1402,7 @@ ENTRIES = [
     ("richTextItalic", "Italic", "斜体", "斜体", "기울임"),
     ("richTextHighlight", "Highlighter", "荧光笔", "マーカー", "형광펜"),
     ("richTextClear", "Clear formatting", "清除格式", "書式をクリア", "서식 지우기"),
+    ("richTextColor", "Colour", "字体颜色", "文字色", "글자 색"),
     ("richTextNeedSelection", "Select some text first, then choose a style.", "请先选中一段文字，再选择样式。", "先にテキストを選択してから、スタイルを選んでください。", "먼저 텍스트를 선택한 다음 스타일을 고르세요."),
     ("a11yRichTextToolbar", "Formatting", "格式", "書式", "서식"),
 
