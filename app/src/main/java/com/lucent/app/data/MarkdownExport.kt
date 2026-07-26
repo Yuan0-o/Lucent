@@ -64,8 +64,11 @@ object MarkdownExport {
                 add("Updated ${formatTime(note.updatedAt)}")
                 if (note.pinned) add("Pinned")
                 if (note.archived) add("Archived")
-                val tags = note.tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-                if (tags.isNotEmpty()) add(tags.joinToString(" ") { "#$it" })
+                // Task 3.2 — exported in the reader's language, not in the canonical form the
+                // column stores. The canonical value exists so a tag keeps its identity across a
+                // language switch; it was never meant to be the thing a person reads.
+                val tags = NoteTags.parse(note.tags)
+                if (tags.isNotEmpty()) add(tags.joinToString(" ") { "#" + NoteTags.label(it) })
             }
             sb.appendLine("_${meta.joinToString(" · ")}_")
             sb.appendLine()

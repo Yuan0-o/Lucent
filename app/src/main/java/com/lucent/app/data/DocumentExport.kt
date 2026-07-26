@@ -113,8 +113,9 @@ object DocumentExport {
             add(com.lucent.app.i18n.S.exportDocUpdated(formatTime(note.updatedAt)))
             if (note.pinned) add(com.lucent.app.i18n.S.exportDocPinned)
             if (note.archived) add(com.lucent.app.i18n.S.exportDocArchived)
-            val tags = note.tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            if (tags.isNotEmpty()) add(tags.joinToString(" ") { "#$it" })
+            // Task 3.2 — see MarkdownExport: canonical in the column, local language on the page.
+            val tags = NoteTags.parse(note.tags)
+            if (tags.isNotEmpty()) add(tags.joinToString(" ") { "#" + NoteTags.label(it) })
         }.joinToString(" · ")
         val checklist = if (note.isChecklist) Checklist.parse(note.checklist).map { it.done to it.text } else emptyList()
         return Block(
@@ -307,7 +308,7 @@ object DocumentExport {
             val content = if (n.isChecklist) {
                 Checklist.parse(n.checklist).joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.text}" }
             } else n.body.trim()
-            val tags = n.tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ") { "#$it" }
+            val tags = NoteTags.parse(n.tags).joinToString(" ") { "#" + NoteTags.label(it) }
             listOf(
                 n.title.ifBlank { com.lucent.app.i18n.S.untitled },
                 formatTime(n.updatedAt),
