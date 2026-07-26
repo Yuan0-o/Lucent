@@ -68,6 +68,8 @@ class SettingsRepository(private val context: Context) {
 
         // ---- C-group tasks 1, 3, 6, 8, 18 (names identical to Android's SettingsKeys) ----
         const val LAST_SCREEN = "last_screen"
+        // Round R1, task 5 - the recovery snapshot (data/SessionRestore); see the Android twin.
+        const val SESSION_SNAPSHOT = "session_snapshot"
         const val BLACKOUT_ENABLED = "blackout_enabled"
         const val APP_LOCK_PREBLACKOUT = "app_lock_preblackout"
         const val SYSTEM_INTEGRATION_PREBLACKOUT = "system_integration_preblackout"
@@ -222,7 +224,16 @@ class SettingsRepository(private val context: Context) {
         // copy of this class. See data/SettingsCache.
         val assistantName: String = "Lucent",
         // Desktop default is OFF — see the class comment.
-        val backgroundAnimationEnabled: Boolean = false
+        val backgroundAnimationEnabled: Boolean = false,
+        // Round R1, task 2. The home lists' sort keys. First-frame state in the strictest sense:
+        // reading them late did not merely show the wrong label, it laid the list out in the wrong
+        // ORDER and then animated it into the right one on every launch. See SettingsCache.
+        val notesSort: String = "recent",
+        val tasksSort: String = "recent",
+        // Round R1, task 5. The previous run's recovery snapshot, empty when it closed cleanly.
+        // Rides here because the "go back to where you were?" prompt is asked once per launch,
+        // before anything else can navigate, and this costs no extra I/O. See data/SessionRestore.
+        val sessionSnapshot: String = ""
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -238,7 +249,10 @@ class SettingsRepository(private val context: Context) {
             systemIntegrationEnabled = bool(prefs, K.SYSTEM_INTEGRATION_ENABLED) ?: false,
             appLanguage = str(prefs, K.APP_LANGUAGE) ?: "system",
             assistantName = secret(prefs, K.ASSISTANT_NAME_ENC, "Lucent"),
-            backgroundAnimationEnabled = bool(prefs, K.BACKGROUND_ANIMATION_ENABLED) ?: false
+            backgroundAnimationEnabled = bool(prefs, K.BACKGROUND_ANIMATION_ENABLED) ?: false,
+            notesSort = str(prefs, K.NOTES_SORT) ?: "recent",
+            tasksSort = str(prefs, K.TASKS_SORT) ?: "recent",
+            sessionSnapshot = str(prefs, K.SESSION_SNAPSHOT) ?: ""
         )
     }
 
@@ -367,6 +381,10 @@ class SettingsRepository(private val context: Context) {
     val lastScreen: Flow<String> = state.map { str(it, K.LAST_SCREEN) ?: "" }
     suspend fun lastScreenOnce(): String = str(state.first(), K.LAST_SCREEN) ?: ""
     suspend fun setLastScreen(value: String) { edit { it[K.LAST_SCREEN] = value } }
+
+    // ---- Round R1, task 5: the crash-recovery snapshot ----
+    suspend fun setSessionSnapshot(value: String) { edit { it[K.SESSION_SNAPSHOT] = value } }
+    suspend fun sessionSnapshotOnce(): String = str(state.first(), K.SESSION_SNAPSHOT) ?: ""
 
     // ---- task 1: Blackout Mode ----
     val blackoutEnabled: Flow<Boolean> = state.map { bool(it, K.BLACKOUT_ENABLED) ?: false }
