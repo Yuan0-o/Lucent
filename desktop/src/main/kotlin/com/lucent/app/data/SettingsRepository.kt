@@ -53,6 +53,9 @@ class SettingsRepository(private val context: Context) {
         const val NOTES_SORT = "notes_sort"
         // Task 14 — automatic backup, stored as one JSON blob. See [AutoBackup.State].
         const val AUTO_BACKUP = "auto_backup_state"
+        // Task 4 — version history ("flash records"), one switch each. Default ON; absent means on.
+        const val NOTE_HISTORY_ENABLED = "note_history_enabled"
+        const val TASK_HISTORY_ENABLED = "task_history_enabled"
         const val TASKS_SORT = "tasks_sort"
         const val MEMORY_TIER = "memory_tier"
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
@@ -327,6 +330,11 @@ class SettingsRepository(private val context: Context) {
     val tasksSort: Flow<String> = state.map { str(it, K.TASKS_SORT) ?: "recent" }
     suspend fun setNotesSort(value: String) { edit { it[K.NOTES_SORT] = value } }
     suspend fun setTasksSort(value: String) { edit { it[K.TASKS_SORT] = value } }
+
+    val noteHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.NOTE_HISTORY_ENABLED) ?: true }
+    val taskHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.TASK_HISTORY_ENABLED) ?: true }
+    suspend fun setNoteHistoryEnabled(value: Boolean) { edit { it[K.NOTE_HISTORY_ENABLED] = value } }
+    suspend fun setTaskHistoryEnabled(value: Boolean) { edit { it[K.TASK_HISTORY_ENABLED] = value } }
 
     /** Task 14 — the automatic-backup configuration. See [AutoBackup.State]. */
     val autoBackup: Flow<AutoBackup.State> =

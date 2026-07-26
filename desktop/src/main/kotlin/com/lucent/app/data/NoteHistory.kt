@@ -20,7 +20,19 @@ object NoteHistory {
      * even twenty revisions of a long note is a handful of kilobytes. Older revisions fall off the
      * end automatically (see [NoteVersionDao.trimTo]).
      */
-    const val MAX_VERSIONS_PER_NOTE = 20
+    const val MAX_VERSIONS_PER_NOTE = 35
+
+    /**
+     * Whether snapshots are being taken at all (task 4).
+     *
+     * A plain process-level mirror of the stored setting rather than a read inside [recordIfChanged],
+     * because that function is suspend-but-hot — it runs on every save, from four different call
+     * sites, none of which carry a Context. The mirror is refreshed by the screens that own a
+     * SettingsRepository (see NotesScreen / TasksScreen / SettingsScreen), and it defaults to ON so
+     * that a process which somehow never syncs keeps history rather than silently losing it.
+     */
+    @Volatile
+    var enabled: Boolean = true
 
     /**
      * Snapshot [existing] as it stands right now, but only if the incoming text actually differs
@@ -44,6 +56,11 @@ object NoteHistory {
         newIsChecklist: Boolean,
         newChecklist: String
     ) {
+        // Task 4 — the user can turn version history off. Checked HERE rather than at each call
+        // site: there are four of them (the editor, a restore, and two assistant tools), and a
+        // switch that some writers honour and others do not is worse than no switch at all.
+        if (!enabled) return
+
         val unchanged = existing.title == newTitle &&
             existing.body == newBody &&
             existing.tags == newTags &&
