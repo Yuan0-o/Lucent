@@ -123,30 +123,34 @@ object AssistantController {
         val actionTitle: String,
         val details: String,
         val toolName: String,
-        val editKey: String? = null,
-        val editLabel: String = "",
-        val editValue: String = "",
-        // Non-null when an approved call would create or edit a note/task the app can open — the
-        // dialog then also offers "approve and fine-tune in the editor" (see AssistantConfirmationDialog).
+        // Every argument worth reviewing before the call runs, in display order (B-group task 3).
+        // Empty for a plain yes/no action (a delete, a pin, a completion), which shows no form.
+        val edits: List<AppTools.EditableArgument> = emptyList(),
+        // Non-null when the call would create or edit a note/task the app can open. It no longer
+        // drives an "approve and then fine-tune" button — the fine-tuning now happens BEFORE
+        // anything is written — but it still tells the dialog it is looking at a whole item rather
+        // than a single field, which is what earns the fuller layout.
         val editorKind: EditorKind? = null
     )
 
     /** The kind of item an approved call would create or edit, for the dialog's editor entry. */
     enum class EditorKind { NOTE, TASK }
 
-    /** The user's answer to a confirmation, plus their edit of the offered field when they made one.
-     *  [openInEditor] is the "approve and fine-tune" choice: run the action, then open its item. */
+    /** The user's answer to a confirmation, plus any edits they made to the proposed arguments. */
     private data class ConfirmationOutcome(
         val approved: Boolean,
-        val editedValue: String? = null,
-        val openInEditor: Boolean = false
+        val edits: Map<String, String> = emptyMap(),
+        // "Keep talking about it" (B-group task 3). Not an approval and not a plain refusal: the
+        // action does not run, but the conversation continues from the proposal rather than ending
+        // on it — the assistant is told what was proposed and asked what should change.
+        val refine: Boolean = false
     )
 
     /** A confirmation that has been answered: the decision, and the arguments to actually run. */
     private data class ConfirmedCall(
         val approved: Boolean,
         val argumentsJson: String,
-        val openInEditor: Boolean = false
+        val refine: Boolean = false
     )
 
     var messages by mutableStateOf<List<ChatMessage>>(emptyList())
@@ -417,11 +421,42 @@ object AssistantController {
      * coroutine, which then either runs the tool (approved) or reports the refusal to the model
      * (denied) so it knows the action did not happen.
      */
-    fun resolveConfirmation(approved: Boolean, editedValue: String? = null, openInEditor: Boolean = false) {
+    /**
+     * Delete the given messages from the conversation on screen (B-group task 11).
+     *
+     * Chat messages have no Trash — unlike notes and tasks, nothing here is recoverable — so the
+     * caller is responsible for confirming first, and the UI does. Runs off the main thread; the
+     * observed Flow pushes the new list back, so no local cache has to be patched by hand.
+     */
+    fun deleteMessages(appContext: Context, ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        val db = AppDatabase.getInstance(appContext.applicationContext)
+        AppScope.io.launch {
+            try {
+                db.chatDao().deleteByIds(ids.toList())
+            } catch (t: Throwable) {
+                // A failed delete leaves the messages in place, which is the safe direction; the
+                // list simply does not change and the user can try again.
+            }
+        }
+    }
+
+    fun resolveConfirmation(
+        approved: Boolean,
+        edits: Map<String, String> = emptyMap(),
+        refine: Boolean = false
+    ) {
         pendingConfirmation = null
         val turn = confirmingTurn
         confirmingTurn = null
-        turn?.confirmationDeferred?.complete(ConfirmationOutcome(approved, editedValue, openInEditor))
+        // INTEGRATION (B task 3 x A task 10): drop the draft-area mirror on EVERY outcome —
+        // approve, cancel and refine alike. See AssistantDraftBridge for why cancel is included:
+        // the point of the edit-first flow is that declining leaves nothing behind, and a draft
+        // that survives a cancel puts that back.
+        appContextRef?.let { ctx ->
+            scope.launch { com.lucent.app.data.AssistantDraftBridge.clear(ctx) }
+        }
+        turn?.confirmationDeferred?.complete(ConfirmationOutcome(approved, edits, refine))
         turn?.confirmationDeferred = null
     }
 
@@ -552,7 +587,9 @@ object AssistantController {
         val useLocalModel: Boolean = false,
         val useLocalTools: Boolean = false,
         val useLocalGpu: Boolean = false,
-        val confirmTools: Boolean = true
+        val confirmTools: Boolean = true,
+        val smallModelMode: Boolean = false,
+        val answersMessageId: Long = 0
     )
     private var lastSend: LastSend? = null
     // The conversation the failed turn belonged to, captured together with [lastSend] at failure
@@ -579,6 +616,8 @@ object AssistantController {
             insertUserMessage = false, useLocalModel = p.useLocalModel,
             useLocalTools = p.useLocalTools, useLocalGpu = p.useLocalGpu,
             confirmTools = p.confirmTools,
+            smallModelMode = p.smallModelMode,
+            answersMessageId = p.answersMessageId,
             // The failed turn's own conversation: the user may have moved to another chat while
             // the error modal was up, and the retry must not land wherever they happen to be now.
             targetConversationId = target
@@ -726,12 +765,102 @@ object AssistantController {
             shown = 0
         }
 
-        /** The completion buzz, gated exactly like the typing tick: on-screen conversation only. */
+        /**
+         * The completion buzz, gated exactly like the typing tick: on-screen conversation only.
+         *
+         * B-group task 1: the typewriter job is stopped FIRST. finishTyping() only waits until the
+         * reveal has caught up — it leaves the reveal coroutine alive and looping, so a stray
+         * per-character tick could still be issued microseconds before (or after) the strong pulse.
+         * On OEM vibrators that drop an effect arriving while another plays, that tick was eating
+         * the finish buzz outright, which is why no completion vibration was ever felt. Cancelling
+         * here makes the strong pulse the only effect in flight; Haptics.finishBuzz then cancels
+         * the motor and lets it settle before firing at full amplitude.
+         *
+         * The reveal is complete by the time this runs (every caller awaits finishTyping first), so
+         * cancelling changes nothing the user sees — streamingText already holds the whole reply,
+         * and the stored message replaces it a moment later.
+         */
         fun completionBuzz() {
+            typewriterJob?.cancel()
+            typewriterJob = null
             if (!AssistantController.typingHapticsOn) return
             if (conversationId != AssistantController.currentConversationId) return
             AssistantController.appContextRef?.let { Haptics.finishBuzz(it) }
         }
+    }
+
+    /**
+     * Ask the same question again and keep BOTH answers (B-group task 12).
+     *
+     * Two things people want and could not do: get a second opinion on the same prompt, and re-send
+     * a message whose reply failed. Both are "run this user message again", so both are this.
+     *
+     * The user message is NOT re-inserted — it is already in the thread, and duplicating it would
+     * turn "ask again" into a conversation that looks like the user repeated themselves. Instead the
+     * new reply is tagged with that message's id, which is what puts the two answers in one variant
+     * group and gives the chat its 1/2 switcher. The newest variant is selected automatically, so
+     * asking again shows the new answer while the previous one stays one tap away.
+     *
+     * Every send parameter is taken live from settings rather than replayed from the original turn:
+     * a resend after switching model is a resend ON THE NEW MODEL, which is most of the point.
+     */
+    fun resend(
+        appContext: Context,
+        message: ChatMessage,
+        url: String,
+        spec: ApiSpec,
+        key: String,
+        model: String,
+        name: String,
+        style: String,
+        memoryTier: MemoryTier,
+        webSearchEnabled: Boolean,
+        typingHapticsEnabled: Boolean,
+        useLocalModel: Boolean,
+        useLocalTools: Boolean,
+        useLocalGpu: Boolean,
+        confirmTools: Boolean,
+        smallModelMode: Boolean
+    ) {
+        if (message.role != "user") return
+        send(
+            appContext = appContext,
+            text = message.content,
+            attachmentMime = message.attachmentMime,
+            attachmentData = message.attachmentData,
+            attachmentName = message.attachmentName,
+            url = url, spec = spec, key = key, model = model,
+            name = name, style = style,
+            memoryTier = memoryTier,
+            webSearchEnabled = webSearchEnabled,
+            typingHapticsEnabled = typingHapticsEnabled,
+            insertUserMessage = false,
+            useLocalModel = useLocalModel,
+            useLocalTools = useLocalTools,
+            useLocalGpu = useLocalGpu,
+            confirmTools = confirmTools,
+            smallModelMode = smallModelMode,
+            answersMessageId = message.id,
+            targetConversationId = message.conversationId
+        )
+        // Show the new answer as it arrives; the older one is still reachable from the switcher.
+        variantSelection.remove(message.id)
+    }
+
+    /**
+     * Which variant of each answer group is on screen, keyed by the user message id. Absent means
+     * "the newest", which is what a fresh reply should always show; a value is written only when the
+     * user has deliberately paged back to an earlier answer.
+     *
+     * Snapshot state so the chat recomposes on a switch, and NOT persisted: which of two equally
+     * saved answers you were last looking at is view state, not data, and restoring it days later
+     * would be surprising rather than helpful.
+     */
+    val variantSelection = androidx.compose.runtime.mutableStateMapOf<Long, Int>()
+
+    /** Page to a specific variant within one answer group. */
+    fun selectVariant(replyToId: Long, index: Int) {
+        variantSelection[replyToId] = index
     }
 
     fun send(
@@ -756,6 +885,14 @@ object AssistantController {
         // Whether every tool call this turn makes — reads as well as writes — must be confirmed by
         // the user first (the Settings toggle, default ON). OFF runs tools directly, no modal.
         confirmTools: Boolean = true,
+        // Small-model mode (B-group task 4). Captured at send time like every other mode flag, so
+        // flipping the setting mid-reply never changes the prompt a turn is already running on.
+        smallModelMode: Boolean = false,
+        // The user message this turn answers (B-group task 12). Non-zero only on the resend path,
+        // where the question is already in the thread and a SECOND reply to it is being produced —
+        // the two then share a replyToId and the chat offers a 1/2 switcher between them. A fresh
+        // send leaves this 0 and learns the id from its own insert below.
+        answersMessageId: Long = 0,
         // Non-null only on the Retry path: the conversation the failed turn belongs to, so the
         // re-run writes there even if the user has since moved to another chat. A fresh send
         // always targets the conversation currently on screen.
@@ -772,7 +909,7 @@ object AssistantController {
         turn.params = LastSend(
             text, attachmentMime, attachmentData, attachmentName, url, spec, key, model,
             name, style, memoryTier, webSearchEnabled, typingHapticsEnabled, useLocalModel,
-            useLocalTools, useLocalGpu, confirmTools
+            useLocalTools, useLocalGpu, confirmTools, smallModelMode, answersMessageId
         )
         turn.thinking = true
         // Clear a leftover error banner only when it belongs to the conversation being sent in;
@@ -806,8 +943,11 @@ object AssistantController {
 
                 // On a Retry after a connection failure the user's message is already in the
                 // thread, so only a fresh send inserts one (and refreshes the title/recency).
+                // Which question this turn's reply will be tagged with (B-group task 12). A fresh
+                // send learns it from its own insert; a resend was given it by the caller.
+                var answeredId = answersMessageId
                 if (insertUserMessage) {
-                    db.chatDao().insert(
+                    answeredId = db.chatDao().insert(
                         ChatMessage(
                             role = "user", content = text,
                             attachmentMime = attachmentMime,
@@ -841,7 +981,7 @@ object AssistantController {
                     // The turn was flagged local at construction; the lifecycle paths read that
                     // off the registry — only a LOCAL turn holds gigabytes of RAM, and only a
                     // local turn is stopped by leaving its conversation or the app (task 2).
-                    runLocalTurn(turn, db, conversationId, useLocalTools, useLocalGpu, confirmTools, memoryTier)
+                    runLocalTurn(turn, db, conversationId, useLocalTools, useLocalGpu, confirmTools, memoryTier, smallModelMode, answeredId)
                     return@launch // the shared finally below still cleans this turn's state
                 }
 
@@ -850,7 +990,9 @@ object AssistantController {
                 // of other conversations into the system prompt as background memory.
                 var history = buildHistory(db, conversationId, memoryTier)
                 val crossMemory = crossConversationMemory(db, conversationId, memoryTier)
-                val systemPrompt = buildSystemPrompt(name, style, memoryTier, webSearchEnabled, crossMemory)
+                val systemPrompt =
+                    if (smallModelMode) buildCompactSystemPrompt(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text)
+                    else buildSystemPrompt(name, style, memoryTier, webSearchEnabled, crossMemory, text)
                 val tools = AppTools.definitions(includeWebSearch = webSearchEnabled)
 
                 // The upload the attach_upload_* tools may store this turn: the file on the
@@ -910,13 +1052,52 @@ object AssistantController {
                             continue
                         }
 
-                        // EVERY call is confirmed while the Settings toggle is on — reads as well
-                        // as writes — because "the assistant acts only with my say-so" is the
-                        // contract that toggle promises. With it off nothing asks; isMutating now
-                        // only shapes the dialog's title, never whether it appears.
-                        val confirmed = if (confirmTools) {
+                        // Only calls that CHANGE the user's data ask (B-group task 2).
+                        //
+                        // The previous rule confirmed every call, reads included, on the reasoning
+                        // that "the assistant acts only with my say-so" should cover everything.
+                        // In practice that made the toggle unusable: listing tasks, reading a note
+                        // the model needs before it can act, or running a web search each threw a
+                        // modal, so a single ordinary request ("search the web and update my note")
+                        // could demand three or four approvals before anything happened — and a
+                        // dialog people must dismiss that often is a dialog they stop reading,
+                        // which defeats the protection on the calls that genuinely matter.
+                        //
+                        // AppTools.READ_ONLY_TOOLS is the authority for what may run unattended:
+                        // list_notes, read_note, list_tasks, read_task, search_items, web_search,
+                        // read_attachment, list_note_versions, list_trash. Every one of those only
+                        // reads; nothing in that set can create, edit, move, or delete anything.
+                        // Everything else — every create/update/delete/pin/archive/attach, on both
+                        // notes and tasks alike — still stops for an explicit confirmation.
+                        val confirmed = if (confirmTools && AppTools.isMutating(call.name)) {
                             confirmToolCall(turn, call.name, call.argumentsJson)
                         } else ConfirmedCall(approved = true, argumentsJson = call.argumentsJson)
+
+                        if (confirmed.refine) {
+                            // "Keep talking about it" (B-group task 3). The action does NOT run —
+                            // nothing is written — but unlike a refusal the turn continues, with the
+                            // proposal (including whatever the user edited in the dialog before
+                            // choosing this) handed back as the tool's result, so the assistant
+                            // picks the conversation up from there and asks what to change.
+                            //
+                            // Fed back as a normal failed result rather than breaking the loop: the
+                            // existing machinery then does the right thing for free. The per-turn
+                            // dedup means a model that stubbornly re-proposes the identical call
+                            // gets this same note back without re-opening the modal, the round cap
+                            // still applies, and the forced tools-off round below still guarantees
+                            // the turn ends in words rather than in silence.
+                            val r = ToolExecResult(
+                                summary = "The user has not run this yet and wants to refine it first. " +
+                                    "Proposed action: " +
+                                    AppTools.describeToolCall(call.name, confirmed.argumentsJson) +
+                                    ". Do NOT call this tool again until they say what they want. " +
+                                    "Ask them, briefly and in their language, what to change.",
+                                success = false
+                            )
+                            executed[sig] = r
+                            results.add(r)
+                            continue
+                        }
 
                         if (!confirmed.approved) {
                             // The user said no. END THE TURN — do not feed the refusal back and let
@@ -945,7 +1126,6 @@ object AssistantController {
                             uploadMime, uploadData, uploadName
                         )
                         executed[sig] = r
-                        maybeOpenInEditor(confirmed, r)
                         results.add(r)
                     }
                     if (declinedDetails != null) break
@@ -1003,7 +1183,7 @@ object AssistantController {
                     turn.thinking = false
                     turn.resetStream(reveal = true)
                     turn.finishTyping(content)
-                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content))
+                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content), answeredId)
                     turn.turnPersisted = true
                     turn.completionBuzz()
                 } else if (!errored) {
@@ -1037,7 +1217,7 @@ object AssistantController {
                         val tokens = TokenEstimator.estimate(systemPrompt) +
                             TokenEstimator.estimateAll(history.map { it.content }) +
                             TokenEstimator.estimate(content)
-                        insertAssistant(db, conversationId, content, reply.imageMime, img, tokens)
+                        insertAssistant(db, conversationId, content, reply.imageMime, img, tokens, answeredId)
                         turn.turnPersisted = true
                         // One firm buzz to mark the reply is complete (issue 11).
                         turn.completionBuzz()
@@ -1105,13 +1285,23 @@ object AssistantController {
         // conversation tail. HIGH is clamped to MEDIUM as a belt-and-braces measure — a backup
         // restored from a cloud-configured device could still carry it — because HIGH additionally
         // folds in a cross-conversation digest that would blow past a small model's context window.
-        memoryTier: MemoryTier
+        memoryTier: MemoryTier,
+        // See the send() parameter of the same name (B-group task 4).
+        smallModelMode: Boolean,
+        // The user message this reply answers (B-group task 12); 0 when unknown.
+        answeredId: Long
     ) {
         val ctx = appContextRef ?: return
 
         if (!com.lucent.app.local.LocalLlm.isSupported()) {
             turn.thinking = false
-            postError(turn, com.lucent.app.i18n.S.localModelUnsupportedAbi)
+            // W-1: name the real reason when it's the CPU (desktop AVX2 guard), not a packaging gap.
+            postError(
+                turn,
+                if (com.lucent.app.local.LocalLlm.unsupportedBecauseCpuLacksAvx2())
+                    com.lucent.app.i18n.S.localModelNeedsAvx2
+                else com.lucent.app.i18n.S.localModelUnsupportedAbi
+            )
             return
         }
         if (!com.lucent.app.local.LocalModelStore.hasModel(ctx)) {
@@ -1153,7 +1343,7 @@ object AssistantController {
 
         // Tools are opt-in (default off, for phone performance — see the Settings toggle). With them
         // off this is a plain, fast chat that never spends a round on the tool protocol.
-        if (!useTools) { runLocalChatOnly(turn, db, conversationId, memoryTier); return }
+        if (!useTools) { runLocalChatOnly(turn, db, conversationId, memoryTier, smallModelMode, answeredId); return }
 
         // The in-app tools (create/read/update/… notes and tasks). Web search is left off on
         // purpose: local mode is meant to work with no network, and a small model drives the
@@ -1177,7 +1367,7 @@ object AssistantController {
         // see what already happened — the same loop the cloud path runs, but over a text protocol
         // the on-device model can follow (there is no native function-calling channel through GGUF).
         val messages = mutableListOf<Pair<String, String>>()
-        messages.add("system" to buildLocalSystemPrompt(tools))
+        messages.add("system" to buildLocalSystemPrompt(tools, lastUserText, smallModelMode))
         messages.addAll(turns)
 
         // The upload the attach_upload_* tools may store this turn. The just-sent message is
@@ -1245,12 +1435,25 @@ object AssistantController {
             val sig = signatureOf(call.name, call.argsJson)
             val cached = executed[sig]
             val result = if (cached != null) cached else {
-                // Same contract as the cloud loop: the toggle decides, not the tool's category.
-                val confirmed = if (confirmTools) {
+                // Same contract as the cloud loop (B-group task 2): the toggle decides WHETHER
+                // confirmation is in play, and the tool's category decides whether THIS call needs
+                // it. Read-only calls run straight through. That matters even more here than on the
+                // cloud path — an on-device round costs tens of seconds, so a modal in front of a
+                // plain list_tasks was pure dead time on top of an already slow turn.
+                val confirmed = if (confirmTools && AppTools.isMutating(call.name)) {
                     confirmToolCall(turn, call.name, call.argsJson)
                 } else ConfirmedCall(approved = true, argumentsJson = call.argsJson)
 
-                if (!confirmed.approved) {
+                if (confirmed.refine) {
+                    // Same three-way outcome as the cloud loop (B-group task 3): not approved, not
+                    // refused — parked, with the proposal handed back so the conversation continues.
+                    ToolExecResult(
+                        summary = "The user wants to refine this before it runs. Proposed: " +
+                            AppTools.describeToolCall(call.name, confirmed.argumentsJson) +
+                            ". Do not call this tool again; ask them what to change.",
+                        success = false
+                    ).also { executed[sig] = it }
+                } else if (!confirmed.approved) {
                     // Same as the cloud path, and it matters more here: one extra local round costs
                     // tens of seconds of on-device decoding, so continuing after a refusal is what
                     // turned "no" into a minutes-long hang. Reply now and stop (task 2).
@@ -1260,20 +1463,22 @@ object AssistantController {
                     turn.thinking = false
                     turn.resetStream(reveal = true)
                     turn.finishTyping(content)
-                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content))
+                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content), answeredId)
                     turn.turnPersisted = true
                     turn.completionBuzz()
                     return
+                } else {
+                    // Approved: run it. This is the ONLY branch that reaches execute(), which is
+                    // what makes "refine" genuinely non-destructive — an `if` without this `else`
+                    // would fall through and run the tool anyway.
+                    turn.thinking = true
+                    val r = AppTools.execute(
+                        ctx, db, call.name, confirmed.argumentsJson,
+                        uploadMime, uploadData, uploadName
+                    )
+                    executed[sig] = r
+                    r
                 }
-
-                turn.thinking = true
-                val r = AppTools.execute(
-                    ctx, db, call.name, confirmed.argumentsJson,
-                    uploadMime, uploadData, uploadName
-                )
-                executed[sig] = r
-                maybeOpenInEditor(confirmed, r)
-                r
             }
             toolResults.add(result)
 
@@ -1316,7 +1521,7 @@ object AssistantController {
         turn.resetStream(reveal = true)
         turn.finishTyping(content)
         val tokens = TokenEstimator.estimateAll(messages.map { it.second }) + TokenEstimator.estimate(content)
-        insertAssistant(db, conversationId, content, null, null, tokens)
+        insertAssistant(db, conversationId, content, null, null, tokens, answeredId)
         turn.turnPersisted = true
         turn.completionBuzz()
     }
@@ -1327,13 +1532,45 @@ object AssistantController {
      * — no silent buffering, because with no tools there is never a tool-call JSON that could flash on
      * screen. This is the fast, low-overhead mode a weak phone gets unless the user opts tools in.
      */
-    private suspend fun runLocalChatOnly(turn: Turn, db: AppDatabase, conversationId: Long, memoryTier: MemoryTier) {
+    private suspend fun runLocalChatOnly(
+        turn: Turn,
+        db: AppDatabase,
+        conversationId: Long,
+        memoryTier: MemoryTier,
+        smallModelMode: Boolean,
+        // The user message this reply answers (B-group task 12); 0 when unknown.
+        answeredId: Long
+    ) {
+        // Small-model mode also shortens the HISTORY, not just the instructions (B-group task 4).
+        // Trimming the prompt but still feeding sixteen past messages would give most of the
+        // reclaimed context window straight back — and on a 4K-context model the conversation tail
+        // is usually the larger of the two. Four exchanges is enough for "and delete that one" to
+        // still resolve, which is the thing history is actually load-bearing for here.
+        val historyTurns =
+            if (smallModelMode) com.lucent.app.local.LocalLlm.HISTORY_TURNS
+            else com.lucent.app.local.LocalLlm.HISTORY_TURNS * 2
         val turns = buildHistory(db, conversationId, localTier(memoryTier))
             .filter { it.role == "user" || it.role == "assistant" }
             .map { it.role to it.content }
             .filter { it.second.isNotBlank() }
-            .takeLast(com.lucent.app.local.LocalLlm.HISTORY_TURNS * 2)
+            .takeLast(historyTurns)
         val lastUserText = turns.lastOrNull { it.first == "user" }?.second ?: ""
+
+        // PHASE 4 — local multimodal. The image the user attached to THIS message, decoded only
+        // when the resident model actually has a projector (supportsVision). android.util.Base64
+        // matches the encoder in AssistantScreen; the desktop tree satisfies it via its android.*
+        // shims, so this twin file stays identical on both platforms.
+        val turnImages: List<ByteArray> = if (com.lucent.app.local.LocalLlm.supportsVision() && answeredId > 0) {
+            try {
+                db.chatDao().getAll().first().firstOrNull { it.id == answeredId }
+                    ?.takeIf { it.attachmentMime?.startsWith("image/") == true }
+                    ?.attachmentData
+                    ?.let { listOf(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }
+                    ?: emptyList()
+            } catch (t: Throwable) {
+                emptyList()
+            }
+        } else emptyList()
 
         val messages = buildList {
             add(
@@ -1389,6 +1626,18 @@ object AssistantController {
                     "over — and offering that is far more useful than an apology."
                 )
             )
+            // The concrete output-language order (B-group task 8). Added as its own trailing system
+            // message rather than folded into the paragraph above: on this path the model is at its
+            // smallest and least steerable, and a short standalone instruction sitting immediately
+            // before the conversation is the placement it actually obeys. Omitted entirely when
+            // detection is not confident — see i18n/ReplyLanguage.
+            com.lucent.app.i18n.ReplyLanguage.instructionFor(lastUserText)?.let { add("system" to it) }
+            // PHASE 4: with a projector loaded and an image on this message, the blanket
+            // "you cannot see attachments" above would be false for exactly this turn — and a
+            // model told it is blind will refuse to describe what it is looking at.
+            if (turnImages.isNotEmpty()) {
+                add("system" to "The user's current message includes an image, and you CAN see it. Describe or use it directly; do not claim you cannot see images.")
+            }
             addAll(turns)
         }
 
@@ -1397,7 +1646,7 @@ object AssistantController {
         turn.resetStream(reveal = true)
         var first = true
         val chatEpoch = turn.streamEpoch
-        val rc = com.lucent.app.local.LocalLlm.generate(messages) { piece ->
+        val rc = com.lucent.app.local.LocalLlm.generate(messages, images = turnImages) { piece ->
             if (first) { first = false; turn.thinking = false }
             turn.onDelta(chatEpoch, piece)
         }
@@ -1412,7 +1661,7 @@ object AssistantController {
         turn.thinking = false
         turn.finishTyping(content)
         val tokens = TokenEstimator.estimateAll(messages.map { it.second }) + TokenEstimator.estimate(content)
-        insertAssistant(db, conversationId, content, null, null, tokens)
+        insertAssistant(db, conversationId, content, null, null, tokens, answeredId)
         turn.turnPersisted = true
         turn.completionBuzz()
     }
@@ -1428,7 +1677,11 @@ object AssistantController {
      * catalogue of the available tools. English instructions (models follow them most reliably)
      * that nonetheless order replies in the user's own language, so a Chinese-language question gets a Chinese-language answer.
      */
-    private fun buildLocalSystemPrompt(tools: List<ToolDefinition>): String {
+    private fun buildLocalSystemPrompt(
+        tools: List<ToolDefinition>,
+        userText: String,
+        compact: Boolean = false
+    ): String {
         val today = java.time.ZonedDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("EEEE, yyyy-MM-dd, HH:mm"))
         return buildString {
@@ -1454,7 +1707,10 @@ object AssistantController {
             // call functions" to "I can do anything the app can do" — in particular it has no
             // network in local mode, by design, and an offline model inventing a web lookup is the
             // same class of failure as a tool-less model inventing a task.
-            append("The tools listed below are the ONLY actions available to you. If something is " +
+            if (compact) append("The tools below are the ONLY things you can do. You have NO internet " +
+                "access. Never say you did something unless its \"Result of <tool>:\" line says it " +
+                "worked.\n\n")
+            else append("The tools listed below are the ONLY actions available to you. If something is " +
                 "not in that list you cannot do it, and you must say so rather than claiming you " +
                 "did it — and say the real reason in the user's language (this assistant doesn't " +
                 "have that ability in this app), never a bare \"I can't\" and never that their " +
@@ -1468,9 +1724,32 @@ object AssistantController {
                 val params = t.params.joinToString(", ") { p -> p.name + if (p.required) "*" else "" }
                 append("- ").append(t.name)
                 if (params.isNotEmpty()) append("(").append(params).append(")")
-                append(" — ").append(t.description).append("\n")
+                // In compact mode only the FIRST sentence of each description survives (B-group
+                // task 4). The full catalogue is ~40 tools with a paragraph each — on its own that
+                // is more than a small model's whole context window, and the tool NAME plus its
+                // argument list already carries almost all of the signal a model needs to pick
+                // correctly. The prose after the first sentence is nuance, and nuance is what a
+                // small model has no room for.
+                val desc = if (compact) t.description.substringBefore(". ").take(120) else t.description
+                append(" — ").append(desc).append("\n")
             }
             append("\n(* = required argument. Booleans are true or false. Dates are \"YYYY-MM-DD\" or \"YYYY-MM-DD HH:mm\".)")
+
+            // ---- What the user actually said, in words a small model recognises (task 14) ----
+            append("\n\nPeople rarely use a tool's own word. Delete also means: remove, erase, get ")
+            append("rid of, throw away, I don't need it, \u5220\u9664/\u5220\u6389/\u53bb\u6389/\u4e0d\u8981\u4e86, \u524a\u9664/\u6d88\u3059/\u3044\u3089\u306a\u3044, ")
+            append("\uc0ad\uc81c/\uc9c0\uc6cc. Complete also means: done, finished, tick it off, \u5b8c\u6210/\u505a\u5b8c\u4e86/\u641e\u5b9a, ")
+            append("\u5b8c\u4e86/\u7d42\u308f\u3063\u305f, \uc644\ub8cc/\ub05d\ub0ac\uc5b4. Restore also means: bring it back, undelete, \u6062\u590d/\u8fd8\u539f, ")
+            append("\u5fa9\u5143, \ubcf5\uc6d0. Deleting a whole note or task is NOT the same as removing one ")
+            append("checklist line or one attached file — pick the narrower tool when that is what ")
+            append("they meant. If one message asks for several things, do them all, one tool call ")
+            append("at a time, before you write your final answer.")
+
+            // The concrete output-language order (B-group task 8), last and therefore heaviest.
+            // Small on-device models are exactly the ones that answered in English regardless of
+            // the prose rule above, so this is where it matters most. Null when detection is not
+            // confident, in which case nothing is appended.
+            com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append("\n\n").append(it) }
         }
     }
 
@@ -1759,27 +2038,31 @@ object AssistantController {
             turn.confirmationDeferred = deferred
             confirmingTurn = turn
             turn.thinking = false
-            val editable = AppTools.editableArgument(name, argsJson)
+            val editable = AppTools.editableArguments(name, argsJson)
             pendingConfirmation = PendingConfirmation(
                 actionTitle = confirmTitleFor(name),
                 details = AppTools.describeToolCall(name, argsJson),
                 toolName = name,
-                editKey = editable?.key,
-                editLabel = editable?.label.orEmpty(),
-                editValue = editable?.value.orEmpty(),
+                edits = editable,
                 editorKind = editorKindFor(name)
             )
             return try {
                 val outcome = deferred.await()
-                // An edit only counts when the user actually changed something to something non-blank.
-                // Blanking the field is treated as "leave it alone" rather than as a request to create
-                // a nameless item, which is the one edit that could not possibly be what they meant.
-                val edited = outcome.editedValue?.trim()
+                // Edits only count when the user actually changed something to something non-blank
+                // (B-group task 3). Blanking a field is treated as "leave it as proposed" rather
+                // than as a request to create a nameless item, which is the one edit that could not
+                // possibly be what they meant. Unchanged fields are dropped so the call runs with
+                // exactly the arguments it arrived with wherever the user did not intervene.
+                val changed = outcome.edits
+                    .mapValues { (_, v) -> v.trim() }
+                    .filter { (k, v) ->
+                        v.isNotBlank() && editable.firstOrNull { it.key == k }?.value != v
+                    }
                 val finalArgs =
-                    if (outcome.approved && editable != null && !edited.isNullOrBlank() && edited != editable.value) {
-                        AppTools.withArgument(argsJson, editable.key, edited)
+                    if ((outcome.approved || outcome.refine) && changed.isNotEmpty()) {
+                        AppTools.withArguments(argsJson, changed)
                     } else argsJson
-                ConfirmedCall(outcome.approved, finalArgs, outcome.openInEditor)
+                ConfirmedCall(outcome.approved, finalArgs, outcome.refine)
             } finally {
                 if (confirmingTurn === turn) {
                     confirmingTurn = null
@@ -1797,22 +2080,19 @@ object AssistantController {
         else -> null
     }
 
-    /**
-     * The "approve and fine-tune in the editor" landing: the action has ALREADY run through the
-     * normal tool path — so nothing here can ever drift from what execute() does, and every
-     * guarantee the tools give (history snapshots, reminder sync, honest failure reporting) holds
-     * unchanged — and this only carries the user to the row it produced. AppNavigation fields are
-     * snapshot state, safe to write from the generation thread.
-     */
-    private fun maybeOpenInEditor(confirmed: ConfirmedCall, result: ToolExecResult) {
-        if (!confirmed.openInEditor || !result.success) return
-        val noteId = result.openNoteId
-        val taskId = result.openTaskId
-        when {
-            noteId != null -> com.lucent.app.AppNavigation.openNote(noteId)
-            taskId != null -> com.lucent.app.AppNavigation.openTask(taskId)
-        }
-    }
+    // The old "approve, run it, THEN open the editor" landing has been removed (B-group task 3).
+    // Reviewing after the write WAS the defect: the note or task genuinely existed — listed,
+    // reminder scheduled, history entry written — before the user had agreed to its contents, so
+    // "cancel" at that point meant deleting something rather than declining it. The confirmation
+    // dialog now shows the item's fields BEFORE anything is written, and nothing reaches the
+    // database until the user presses the add button.
+    //
+    // INTEGRATION WITH GROUP A'S DRAFT AREA (草稿区) — DONE. The edited-but-not-yet-committed
+    // values live between PendingConfirmation.edits and resolveConfirmation(); while the dialog is
+    // open they are additionally mirrored into a draft row by AssistantDraftBridge, so a crash or a
+    // force-quit mid-review lands in the drafts area instead of losing the proposal. The mirror is
+    // written where the dialog initialises `draft` (AssistantConfirmationDialog) and dropped in
+    // resolveConfirmation() above, for all three outcomes.
 
     private fun confirmTitleFor(name: String): String = when {
         name.startsWith("delete_") -> com.lucent.app.i18n.S.confirmMoveTrash
@@ -1845,7 +2125,18 @@ object AssistantController {
         }
     }
 
-    private suspend fun insertAssistant(db: AppDatabase, conversationId: Long, content: String, mime: String?, data: String?, tokens: Int = 0) {
+    private suspend fun insertAssistant(
+        db: AppDatabase,
+        conversationId: Long,
+        content: String,
+        mime: String?,
+        data: String?,
+        tokens: Int = 0,
+        // The user message being answered (B-group task 12). 0 where the pairing isn't known — a
+        // reply saved from a path that has no question in hand — which simply means "no variant
+        // group", exactly like every row that predates the column.
+        replyToId: Long = 0
+    ) {
         val hasImage = !data.isNullOrBlank()
         db.chatDao().insert(
             ChatMessage(
@@ -1855,7 +2146,8 @@ object AssistantController {
                 attachmentData = data?.takeIf { it.isNotBlank() },
                 attachmentName = if (hasImage) imageFileName(mime) else null,
                 conversationId = conversationId,
-                tokens = tokens
+                tokens = tokens,
+                replyToId = replyToId
             )
         )
     }
@@ -2029,12 +2321,74 @@ object AssistantController {
         else -> 1
     }
 
+    /**
+     * The trimmed-down system prompt for small models (B-group task 4).
+     *
+     * ### What it drops, and why that is the point
+     *
+     * The full [buildSystemPrompt] is several thousand tokens of carefully-tuned behavioural
+     * instruction: tone, anti-robot phrasing, markdown bans, proactivity limits, retrieval advice,
+     * date handling, per-tool guidance. On a frontier model every paragraph earns its place. On a
+     * 1–3B model the same text is actively harmful in two separate ways:
+     *
+     *  - It is most of the context window. A 4K-context model that spends 3K on instructions has
+     *    almost nothing left for the conversation, and starts forgetting the message it is
+     *    answering.
+     *  - It is a wall of competing constraints. Small models degrade badly under many simultaneous
+     *    rules — they start following the most recent one and dropping the rest, or freeze up and
+     *    produce a refusal, which is exactly the "the local assistant just doesn't work" report.
+     *
+     * So this keeps only what changes CORRECTNESS and drops everything that only shapes STYLE. What
+     * survives: who it is, notes-vs-tasks (getting that wrong writes data to the wrong place), the
+     * current date (getting that wrong writes a wrong due date), tool honesty (getting that wrong
+     * means claiming work it did not do), and the output-language order. What goes: the entire tone
+     * guide, the markdown bans, the proactivity rules, the vocabulary tables, the retrieval advice.
+     *
+     * That is a deliberate trade the user opts into behind a warning, not a silent downgrade — the
+     * setting says in plain words that the assistant will read plainer and follow personalization
+     * less closely.
+     *
+     * Cross-conversation memory is not accepted here at all: it is the single largest thing that can
+     * be prepended to a prompt, and it exists to help a model that has room for it.
+     */
+    private fun buildCompactSystemPrompt(
+        name: String,
+        style: String,
+        tier: MemoryTier,
+        webSearchEnabled: Boolean,
+        userText: String
+    ): String {
+        val today = java.time.ZonedDateTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        return buildString {
+            append("You are $name, a friendly assistant inside Lucent, a notes and tasks app. ")
+            if (style.isNotBlank()) append("Your style: $style ")
+            append("Talk like a person texting a friend: short, warm, plain text. No markdown.\n")
+            append("Now: $today (the user's local time). Work out any date from this and pass it as ")
+            append("YYYY-MM-DD or YYYY-MM-DD HH:mm.\n")
+            append("NOTES are things to remember; TASKS are things to do. Never mix them up.\n")
+            append("Use the tools to act. Call the tool first, then reply in one short sentence. ")
+            append("Only say something was done if the tool result says it worked. ")
+            append("If a tool result says the user declined, it did not happen.\n")
+            if (!webSearchEnabled) {
+                append("You have no web access. Say so plainly if asked for current information.\n")
+            }
+            if (tier == MemoryTier.LOW) {
+                append("You can only see the user's latest message, not earlier ones.\n")
+            }
+            com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append(it) }
+        }
+    }
+
     private fun buildSystemPrompt(
         name: String,
         style: String,
         tier: MemoryTier,
         webSearchEnabled: Boolean,
-        crossMemory: String
+        crossMemory: String,
+        // The message being answered (B-group task 8). Used only to derive the concrete
+        // output-language order appended at the very end — see i18n/ReplyLanguage.
+        userText: String
     ): String {
         val effectiveStyle = style.ifBlank { DEFAULT_ASSISTANT_STYLE }
         return buildString {
@@ -2254,6 +2608,52 @@ object AssistantController {
             append("been uploaded in this conversation at all, tell them to add it in the chat box and ")
             append("try again. ")
 
+            // ---- Finish the WHOLE request, not the first part of it (B-group task 14) ----
+            //
+            // The reported failure: in a running conversation the assistant would stop after the
+            // first step of a multi-step message ("look this up and then update my note"), or
+            // acknowledge a deletion it never performed. Both are the same shape — the model
+            // treating one satisfied clause as the end of the request — and both are addressed by
+            // saying, explicitly, that a turn is not finished until every clause is.
+            append("HANDLING A REQUEST THAT HAS SEVERAL PARTS. One message often asks for more than ")
+            append("one thing (\"look this up, then update my note\", \"read that task and delete ")
+            append("it\", \"add these three and pin the last one\"). Do ALL of it in this same turn, ")
+            append("in order, calling as many tools as it takes, before you write a single word back. ")
+            append("Finishing one part is not finishing the request. If part of it fails, still ")
+            append("attempt the rest, then say plainly which parts worked and which did not. Never ")
+            append("stop early, and never describe a later step as done because an earlier one was. ")
+
+            // ---- Say the word, mean the tool (B-group task 14) ----
+            //
+            // Deletion was singled out in the report, and vocabulary is the cause: the tools are
+            // named in English, the users are not, and a paraphrase ("get rid of it", "\u4e0d\u8981\u4e86",
+            // "\uc9c0\uc6cc") does not look like "delete" to a model reading a short conversational turn.
+            // Listing the real phrasings, in the four languages the app ships, closes that gap. The
+            // same failure applies to the other verbs, so they are covered here too rather than
+            // waiting for each one to be reported separately.
+            append("RECOGNISING WHAT THEY ARE ASKING FOR, IN ANY LANGUAGE AND ANY PHRASING. People ")
+            append("almost never use the tool's own word. Treat all of these as the same request and ")
+            append("act on them immediately, with no extra confirmation question of your own: ")
+            append("DELETE — delete, remove, erase, get rid of, throw away, take it off, drop it, ")
+            append("scrap it, clear it, I don't need it any more, \u5220\u9664, \u5220\u6389, \u5220\u4e86, \u53bb\u6389, \u79fb\u9664, \u6e05\u9664, ")
+            append("\u6254\u6389, \u4e0d\u8981\u4e86, \u5e2e\u6211\u5220, \u524a\u9664, \u6d88\u3059, \u6d88\u3057\u3066, \u3044\u3089\u306a\u3044, \uc0ad\uc81c, \uc9c0\uc6cc, \uc9c0\uc6cc\uc918, \uc5c6\uc560. ")
+            append("COMPLETE — done, finished, I did it, tick it off, check it off, mark it done, ")
+            append("\u5b8c\u6210, \u505a\u5b8c\u4e86, \u641e\u5b9a, \u6253\u52fe, \u52fe\u6389, \u7d42\u308f\u3063\u305f, \u5b8c\u4e86, \ub05d\ub0ac\uc5b4, \uc644\ub8cc. ")
+            append("REOPEN — not actually done, undo that, put it back, \u6ca1\u505a\u5b8c, \u8fd8\u6ca1\u5b8c\u6210, ")
+            append("\u307e\u3060, \u623b\u3057\u3066, \uc544\uc9c1, \ub418\ub3cc\ub824. ")
+            append("PIN — pin, stick it at the top, keep it up top, \u7f6e\u9876, \u9489\u4f4f, \u56fa\u5b9a, ")
+            append("\u30d4\u30f3\u7559\u3081, \uace0\uc815, \uc0c1\ub2e8 \uace0\uc815. ")
+            append("ARCHIVE — archive, put it away, tuck it away, \u5f52\u6863, \u6536\u8d77\u6765, \u5b58\u6863, ")
+            append("\u30a2\u30fc\u30ab\u30a4\u30d6, \u3057\u307e\u3046, \ubcf4\uad00, \uc544\uce74\uc774\ube0c. ")
+            append("RESTORE — bring it back, undelete, recover it, I need it again, \u6062\u590d, \u8fd8\u539f, ")
+            append("\u627e\u56de, \u64a4\u9500\u5220\u9664, \u5fa9\u5143, \u623b\u3059, \ubcf5\uc6d0, \ub418\uc0b4\ub824. ")
+            append("Be equally alert to WHICH thing they mean: deleting a whole note or task ")
+            append("(delete_note / delete_task) is not the same as removing one line inside it ")
+            append("(remove_subtask, remove_note_checklist_item) or removing an attached file ")
+            append("(remove_note_attachment / remove_task_attachment). When the wording could mean ")
+            append("either, read the item first, then pick the narrower action — and if it is still ")
+            append("genuinely ambiguous, ask one short question. ")
+
             // ---- Proactive, but never presumptuous (issue 5) ----
             append("Be helpfully proactive about notes and tasks, but never pushy. When the person clearly ")
             append("has something worth keeping (they say \"remind me to…\", \"I need to…\", \"don't let me ")
@@ -2330,6 +2730,13 @@ object AssistantController {
 
             append("Above all: be genuinely warm, actually helpful, and completely human. Confirm what you ")
             append("did the way a friend would mention it in passing, never in a scripted way.")
+
+            // The one concrete, code-derived instruction in this whole prompt (B-group task 8).
+            // Everything above asks the model to work the language out for itself; this tells it
+            // the answer. Appended LAST on purpose — it is the instruction closest to the input,
+            // which is where an instruction has the most influence, and it is null (nothing
+            // appended, prose rule unchanged) whenever detection is not confident.
+            com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append(" ").append(it) }
         }
     }
 }

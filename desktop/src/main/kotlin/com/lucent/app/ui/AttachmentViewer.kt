@@ -24,7 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Launch
+import androidx.compose.material.icons.automirrored.filled.Launch
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +43,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -50,6 +53,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.lucent.app.data.Attachment
 import com.lucent.app.data.AttachmentAccess
 import com.lucent.app.data.Attachments
+import com.lucent.app.data.DocumentText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -107,6 +111,8 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                         when {
                             a.isImage -> ZoomableImage(a, if (page == current) reloadKey else 0)
                             a.isPdf -> PdfViewer(a)
+                            // Task A1 — same text preview as Android, same extractor.
+                            DocumentText.canExtract(a) -> TextPreview(a)
                             else -> NonPreviewableInfo(a)
                         }
                     }
@@ -142,7 +148,7 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                     ViewerAction(Icons.Default.Edit, com.lucent.app.i18n.S.actionEdit) { editing = true }
                 }
                 ViewerAction(Icons.Default.Download, com.lucent.app.i18n.S.actionSave) { save(att) }
-                ViewerAction(Icons.Default.Launch, com.lucent.app.i18n.S.openWith) {
+                ViewerAction(Icons.AutoMirrored.Filled.Launch, com.lucent.app.i18n.S.openWith) {
                     Thread {
                         val ok = AttachmentAccess.openExternally(context, att)
                         if (!ok) LucentToast.show(context, com.lucent.app.i18n.S.cantOpenFile)
@@ -193,10 +199,25 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+
+    // Task A3 — identical rule to Android: the picture may not be dragged past its own edge, and a
+    // picture at fit scale doesn't claim the drag at all, so the pager keeps its swipe.
+    fun panLimits(): Pair<Float, Float> {
+        val bmp = bitmap ?: return 0f to 0f
+        if (viewport.width == 0 || viewport.height == 0) return 0f to 0f
+        val vw = viewport.width.toFloat()
+        val vh = viewport.height.toFloat()
+        val fit = minOf(vw / bmp.width.toFloat(), vh / bmp.height.toFloat())
+        return ((bmp.width * fit * scale - vw).coerceAtLeast(0f) / 2f) to
+            ((bmp.height * fit * scale - vh).coerceAtLeast(0f) / 2f)
+    }
+
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceIn(1f, 6f)
-        offsetX += panChange.x
-        offsetY += panChange.y
+        val (maxX, maxY) = panLimits()
+        offsetX = (offsetX + panChange.x).coerceIn(-maxX, maxX)
+        offsetY = (offsetY + panChange.y).coerceIn(-maxY, maxY)
     }
 
     when {
@@ -205,8 +226,9 @@ private fun ZoomableImage(att: Attachment, reloadKey: Int = 0) {
             contentDescription = att.name,
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged { viewport = it }
                 .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY)
-                .transformable(transformState)
+                .transformable(state = transformState, canPan = { scale > 1f })
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
                         if (scale > 1f) { scale = 1f; offsetX = 0f; offsetY = 0f } else scale = 2f
@@ -274,7 +296,7 @@ private fun PdfViewer(att: Attachment) {
 private fun NonPreviewableInfo(att: Attachment) {
     val context = android.content.DesktopContext
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-        Icon(Icons.Default.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
+        Icon(Icons.AutoMirrored.Filled.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
         Spacer(Modifier.height(12.dp))
         Text(att.name, color = Color.White, fontSize = 16.sp)
         Spacer(Modifier.height(4.dp))
@@ -296,9 +318,53 @@ private fun NonPreviewableInfo(att: Attachment) {
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Filled.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
             Text(com.lucent.app.i18n.S.openWith, color = Color.White, fontSize = 14.sp)
         }
+    }
+}
+
+/**
+ * Task A1 — the in-app text preview for documents and code. Desktop twin of the Android composable
+ * of the same name; the extraction itself is the shared [DocumentText], so the two platforms show
+ * the same words for the same file.
+ */
+@Composable
+private fun TextPreview(att: Attachment) {
+    val context = android.content.DesktopContext
+    var result by remember(att.data) { mutableStateOf<DocumentText.Result?>(null) }
+    var failed by remember(att.data) { mutableStateOf(false) }
+
+    LaunchedEffect(att.data) {
+        val extracted = withContext(Dispatchers.IO) { DocumentText.extract(context, att) }
+        if (extracted != null) result = extracted else failed = true
+    }
+
+    when {
+        result != null -> {
+            val text = result!!.text
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(com.lucent.app.i18n.S.previewTextOnly, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+                Spacer(Modifier.height(10.dp))
+                if (text.isEmpty()) {
+                    Text(com.lucent.app.i18n.S.previewEmptyDocument, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                } else {
+                    Text(text, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                }
+                if (result!!.truncated) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(com.lucent.app.i18n.S.previewTextTruncated, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+        failed -> Text(com.lucent.app.i18n.S.cantLoadText, color = Color.White)
+        else -> CircularProgressIndicator(color = Color.White)
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -78,6 +79,9 @@ fun NoteHistoryScreen(
 
     var previewing by remember { mutableStateOf<NoteVersion?>(null) }
     var confirmRestore by remember { mutableStateOf<NoteVersion?>(null) }
+    // Task A19 — automatic trimming answers "don't grow forever"; it does not answer
+    // "I don't want that one kept", which is a different and entirely reasonable request.
+    var confirmDelete by remember { mutableStateOf<NoteVersion?>(null) }
 
     BackHandler(enabled = previewing != null) { previewing = null }
 
@@ -116,6 +120,22 @@ fun NoteHistoryScreen(
         )
     }
 
+    confirmDelete?.let { version ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text(com.lucent.app.i18n.S.deleteVersionTitle) },
+            text = { Text(com.lucent.app.i18n.S.deleteVersionBody(formatTimestamp(version.savedAt))) },
+            confirmButton = {
+                TextButton(onClick = {
+                    AppScope.io.launch { db.noteVersionDao().deleteById(version.id) }
+                    if (previewing?.id == version.id) previewing = null
+                    confirmDelete = null
+                }) { Text(com.lucent.app.i18n.S.actionDelete) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
+        )
+    }
+
     val preview = previewing
     if (preview != null) {
         // ---- Read-only preview of one old version ----
@@ -125,6 +145,9 @@ fun NoteHistoryScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
                 }
                 Text(com.lucent.app.i18n.S.screenVersion, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+                IconButton(onClick = { confirmDelete = preview }) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = com.lucent.app.i18n.S.deleteThisVersion, tint = onGradientMuted)
+                }
             }
 
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
@@ -203,7 +226,8 @@ fun NoteHistoryScreen(
                 VersionCard(
                     version = version,
                     onPreview = { previewing = version },
-                    onRestore = { confirmRestore = version }
+                    onRestore = { confirmRestore = version },
+                    onDelete = { confirmDelete = version }
                 )
             }
         }
@@ -218,7 +242,12 @@ fun NoteHistoryScreen(
  * feature exists to remove.
  */
 @Composable
-private fun VersionCard(version: NoteVersion, onPreview: () -> Unit, onRestore: () -> Unit) {
+private fun VersionCard(
+    version: NoteVersion,
+    onPreview: () -> Unit,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit
+) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
@@ -255,6 +284,12 @@ private fun VersionCard(version: NoteVersion, onPreview: () -> Unit, onRestore: 
             }
             IconButton(onClick = onRestore) {
                 Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.restoreThisVersion, tint = onGradient)
+            }
+            // Muted, and second: deleting a revision is a rarer intent than restoring one, and on a
+            // screen full of things you might want back the destructive control should not be the
+            // loudest thing on the row.
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.DeleteOutline, contentDescription = com.lucent.app.i18n.S.deleteThisVersion, tint = onGradientMuted)
             }
         }
         Spacer(modifier = Modifier.height(6.dp))

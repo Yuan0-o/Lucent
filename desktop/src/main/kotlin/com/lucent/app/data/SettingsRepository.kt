@@ -56,7 +56,32 @@ class SettingsRepository(private val context: Context) {
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
         const val ASSISTANT_CONFIRM_TOOLS = "assistant_confirm_tools"
         const val TYPING_HAPTICS = "typing_haptics"
+        // Quick model switching (B-group task 5) — same stored key name as Android.
+        const val MODEL_RECENTS = "model_recents"
+        // Small-model mode (B-group task 4) — same stored key name as Android.
+        const val SMALL_MODEL_MODE = "small_model_mode"
+
+        // ---- C-group tasks 1, 3, 6, 8, 18 (names identical to Android's SettingsKeys) ----
+        const val LAST_SCREEN = "last_screen"
+        const val BLACKOUT_ENABLED = "blackout_enabled"
+        const val APP_LOCK_PREBLACKOUT = "app_lock_preblackout"
+        const val SYSTEM_INTEGRATION_PREBLACKOUT = "system_integration_preblackout"
+        const val CRASH_SHIELD_ENABLED = "crash_shield_enabled"
+        const val PW_ATTEMPT_STATE = "pw_attempt_state"
+        const val PW_FIRST_ROUND_LIMIT = "pw_first_round_limit"
+        const val PW_LATER_ROUND_LIMIT = "pw_later_round_limit"
+        const val PW_SELF_DESTRUCT_ENABLED = "pw_self_destruct_enabled"
+        const val PW_SELF_DESTRUCT_THRESHOLD = "pw_self_destruct_threshold"
+        const val OPEN_LINKS_EXTERNALLY = "open_links_externally"
         const val MARKDOWN_ENABLED = "markdown_enabled"
+        // INTEGRATION: C-group task 20 — same stored key name as Android.
+        const val RICH_TEXT_ENABLED = "rich_text_enabled"
+        // PHASE 3 (C-3), desktop-only: closing the window hides to the tray instead of quitting.
+        // Default ON — the review's finding was that reminders silently die with the window, and a
+        // default that preserves armed reminders is the one that matches what "Friday 18:00" means.
+        const val CLOSE_TO_TRAY = "close_to_tray"
+        // PHASE 3 (review F-1): saved searches, one JSON string — see data/SavedSearches.kt.
+        const val SAVED_SEARCHES = "saved_searches"
         const val LINKS_ENABLED = "links_enabled"
         const val BACKGROUND_ANIMATION_ENABLED = "background_animation_enabled"
         const val APP_LOCK_ENABLED = "app_lock_enabled"
@@ -188,6 +213,9 @@ class SettingsRepository(private val context: Context) {
         val startupLoggingEnabled: Boolean,
         val systemIntegrationEnabled: Boolean,
         val appLanguage: String = "system",
+        // The assistant's name (B-group task 9) — first-frame state, same reasoning as Android's
+        // copy of this class. See data/SettingsCache.
+        val assistantName: String = "Lucent",
         // Desktop default is OFF — see the class comment.
         val backgroundAnimationEnabled: Boolean = false
     )
@@ -204,6 +232,7 @@ class SettingsRepository(private val context: Context) {
             startupLoggingEnabled = bool(prefs, K.STARTUP_LOGGING_ENABLED) ?: false,
             systemIntegrationEnabled = bool(prefs, K.SYSTEM_INTEGRATION_ENABLED) ?: false,
             appLanguage = str(prefs, K.APP_LANGUAGE) ?: "system",
+            assistantName = secret(prefs, K.ASSISTANT_NAME_ENC, "Lucent"),
             backgroundAnimationEnabled = bool(prefs, K.BACKGROUND_ANIMATION_ENABLED) ?: false
         )
     }
@@ -252,6 +281,10 @@ class SettingsRepository(private val context: Context) {
 
     val localToolsEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_TOOLS_ENABLED) ?: false }
     suspend fun setLocalToolsEnabled(value: Boolean) { edit { it[K.LOCAL_TOOLS_ENABLED] = value } }
+
+    // ---- Small-model mode (B-group task 4) — mirror of the Android implementation ----
+    val smallModelModeEnabled: Flow<Boolean> = state.map { bool(it, K.SMALL_MODEL_MODE) ?: false }
+    suspend fun setSmallModelModeEnabled(value: Boolean) { edit { it[K.SMALL_MODEL_MODE] = value } }
 
     val localGpuEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_GPU_ENABLED) ?: false }
     suspend fun setLocalGpuEnabled(value: Boolean) { edit { it[K.LOCAL_GPU_ENABLED] = value } }
@@ -306,8 +339,105 @@ class SettingsRepository(private val context: Context) {
     val typingHapticsEnabled: Flow<Boolean> = state.map { bool(it, K.TYPING_HAPTICS) ?: true }
     suspend fun setTypingHapticsEnabled(value: Boolean) { edit { it[K.TYPING_HAPTICS] = value } }
 
+
+    // ==== C-group tasks 1, 3, 6, 8, 18 — same API as Android, same defaults ====
+    // Every comment justifying these lives in the Android twin; kept short here on purpose so the
+    // two files stay diffable rather than divergent prose.
+
+    // ---- task 8: the tab to reopen on ----
+    val lastScreen: Flow<String> = state.map { str(it, K.LAST_SCREEN) ?: "" }
+    suspend fun lastScreenOnce(): String = str(state.first(), K.LAST_SCREEN) ?: ""
+    suspend fun setLastScreen(value: String) { edit { it[K.LAST_SCREEN] = value } }
+
+    // ---- task 1: Blackout Mode ----
+    val blackoutEnabled: Flow<Boolean> = state.map { bool(it, K.BLACKOUT_ENABLED) ?: false }
+    suspend fun blackoutEnabledOnce(): Boolean = bool(state.first(), K.BLACKOUT_ENABLED) ?: false
+
+    /** Park what Blackout overrides on the way in; hand it back on the way out. See the Android twin. */
+    suspend fun setBlackoutEnabled(value: Boolean) {
+        edit { prefs ->
+            val wasEnabled = prefs[K.BLACKOUT_ENABLED] as? Boolean ?: false
+            prefs[K.BLACKOUT_ENABLED] = value
+            if (value) {
+                if (!wasEnabled) {
+                    prefs[K.APP_LOCK_PREBLACKOUT] = prefs[K.APP_LOCK_ENABLED] as? Boolean ?: false
+                    prefs[K.SYSTEM_INTEGRATION_PREBLACKOUT] =
+                        prefs[K.SYSTEM_INTEGRATION_ENABLED] as? Boolean ?: false
+                }
+                prefs[K.SYSTEM_INTEGRATION_ENABLED] = false
+            } else {
+                prefs[K.SYSTEM_INTEGRATION_ENABLED] =
+                    prefs[K.SYSTEM_INTEGRATION_PREBLACKOUT] as? Boolean ?: false
+                prefs.remove(K.APP_LOCK_PREBLACKOUT)
+                prefs.remove(K.SYSTEM_INTEGRATION_PREBLACKOUT)
+            }
+        }
+    }
+
+    suspend fun appLockWasOnBeforeBlackout(): Boolean =
+        bool(state.first(), K.APP_LOCK_PREBLACKOUT) ?: false
+
+    // ---- task 3: Crash Shield (forces logging on, as the Android twin explains) ----
+    val crashShieldEnabled: Flow<Boolean> = state.map { bool(it, K.CRASH_SHIELD_ENABLED) ?: false }
+    suspend fun crashShieldEnabledOnce(): Boolean = bool(state.first(), K.CRASH_SHIELD_ENABLED) ?: false
+    suspend fun setCrashShieldEnabled(value: Boolean) {
+        edit {
+            it[K.CRASH_SHIELD_ENABLED] = value
+            if (value) it[K.STARTUP_LOGGING_ENABLED] = true
+        }
+    }
+
+    // ---- task 18: unlock throttling and self-destruct ----
+    val passwordAttemptState: Flow<String> = state.map { str(it, K.PW_ATTEMPT_STATE) ?: "" }
+    suspend fun passwordAttemptStateOnce(): String = str(state.first(), K.PW_ATTEMPT_STATE) ?: ""
+    suspend fun setPasswordAttemptState(json: String) { edit { it[K.PW_ATTEMPT_STATE] = json } }
+
+    val pwFirstRoundLimit: Flow<Int> =
+        state.map { int(it, K.PW_FIRST_ROUND_LIMIT) ?: PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT }
+    val pwLaterRoundLimit: Flow<Int> =
+        state.map { int(it, K.PW_LATER_ROUND_LIMIT) ?: PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT }
+    suspend fun setPwFirstRoundLimit(value: Int) {
+        edit { it[K.PW_FIRST_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE) }
+    }
+    suspend fun setPwLaterRoundLimit(value: Int) {
+        edit { it[K.PW_LATER_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE) }
+    }
+
+    /** OFF by default — the only irreversible feature in the app; see the Android twin. */
+    val pwSelfDestructEnabled: Flow<Boolean> = state.map { bool(it, K.PW_SELF_DESTRUCT_ENABLED) ?: false }
+    val pwSelfDestructThreshold: Flow<Int> =
+        state.map { int(it, K.PW_SELF_DESTRUCT_THRESHOLD) ?: PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD }
+    suspend fun setPwSelfDestructEnabled(value: Boolean) { edit { it[K.PW_SELF_DESTRUCT_ENABLED] = value } }
+    suspend fun setPwSelfDestructThreshold(value: Int) {
+        edit { it[K.PW_SELF_DESTRUCT_THRESHOLD] = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE) }
+    }
+
+    // ---- task 6: open links in the system browser ----
+    val openLinksExternally: Flow<Boolean> = state.map { bool(it, K.OPEN_LINKS_EXTERNALLY) ?: false }
+    suspend fun setOpenLinksExternally(value: Boolean) { edit { it[K.OPEN_LINKS_EXTERNALLY] = value } }
+
     val markdownEnabled: Flow<Boolean> = state.map { bool(it, K.MARKDOWN_ENABLED) ?: false }
-    suspend fun setMarkdownEnabled(value: Boolean) { edit { it[K.MARKDOWN_ENABLED] = value } }
+    val richTextEnabled: Flow<Boolean> = state.map { bool(it, K.RICH_TEXT_ENABLED) ?: false }
+    val closeToTray: Flow<Boolean> = state.map { bool(it, K.CLOSE_TO_TRAY) ?: true }
+    suspend fun setCloseToTray(value: Boolean) { edit { it[K.CLOSE_TO_TRAY] = value } }
+    val savedSearches: Flow<String> = state.map { str(it, K.SAVED_SEARCHES) ?: "" }
+    suspend fun setSavedSearches(json: String) { edit { it[K.SAVED_SEARCHES] = json } }
+
+    // Mutually exclusive — see the note on RICH_TEXT_ENABLED in SettingsKeys. Both flags move in a
+    // single edit so there is never an instant where both read as on.
+    suspend fun setMarkdownEnabled(value: Boolean) {
+        edit {
+            it[K.MARKDOWN_ENABLED] = value
+            if (value) it[K.RICH_TEXT_ENABLED] = false
+        }
+    }
+
+    suspend fun setRichTextEnabled(value: Boolean) {
+        edit {
+            it[K.RICH_TEXT_ENABLED] = value
+            if (value) it[K.MARKDOWN_ENABLED] = false
+        }
+    }
 
     val linksEnabled: Flow<Boolean> = state.map { bool(it, K.LINKS_ENABLED) ?: false }
     suspend fun setLinksEnabled(value: Boolean) { edit { it[K.LINKS_ENABLED] = value } }
@@ -375,6 +505,33 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBaseUrl(value: String) = putSecret(K.BASE_URL_ENC, value)
     suspend fun setApiSpec(value: String) = putSecret(K.API_SPEC_ENC, value)
     suspend fun setModel(value: String) = putSecret(K.MODEL_ENC, value)
+
+    // ---- Quick model switching (B-group task 5) — mirror of the Android implementation ----
+
+    val modelRecents: Flow<List<String>> = state.map { ModelRecents.parse(str(it, K.MODEL_RECENTS)) }
+
+    /**
+     * Switch which model the assistant talks to, writing BOTH the flat model key and the selected
+     * API profile's own `model` field. See the Android twin for why writing only one of the two
+     * produces a switch that silently reverts the next time Settings is saved.
+     */
+    suspend fun setActiveModel(value: String) {
+        val model = value.trim()
+        if (model.isBlank()) return
+        val prefs = state.first()
+        val profiles = ApiProfiles.parse(secret(prefs, K.API_PROFILES_ENC, ""))
+        val selected = int(prefs, K.API_PROFILE_SELECTED) ?: 0
+        val profilesJson = if (profiles.isEmpty()) null else {
+            val idx = selected.coerceIn(0, profiles.size - 1)
+            ApiProfiles.serialize(profiles.mapIndexed { i, p -> if (i == idx) p.copy(model = model) else p })
+        }
+        val recents = ModelRecents.add(str(prefs, K.MODEL_RECENTS), model)
+        edit {
+            it[K.MODEL_ENC] = LocalSecrets.encrypt(model)
+            if (profilesJson != null) it[K.API_PROFILES_ENC] = LocalSecrets.encrypt(profilesJson)
+            it[K.MODEL_RECENTS] = recents
+        }
+    }
     suspend fun setAssistantName(value: String) = putSecret(K.ASSISTANT_NAME_ENC, value)
     suspend fun setAssistantStyle(value: String) = putSecret(K.ASSISTANT_STYLE_ENC, value)
 

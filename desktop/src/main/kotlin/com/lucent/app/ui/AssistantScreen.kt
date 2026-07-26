@@ -1,7 +1,9 @@
 package com.lucent.app.ui
 
 import android.util.Base64
+import com.lucent.desktop.platform.DesktopCloudFolders
 import com.lucent.desktop.platform.DesktopFiles
+import com.lucent.desktop.platform.FileFilter
 import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -10,6 +12,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -44,15 +48,25 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -73,6 +87,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,9 +97,18 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -96,6 +121,8 @@ import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.ChatMessage
 import com.lucent.app.data.ChatSearch
 import com.lucent.app.data.MemoryTier
+import com.lucent.app.data.ReplyFiles
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.TokenEstimator
 import com.lucent.app.network.ApiSpec
@@ -164,11 +191,32 @@ fun AssistantScreen(active: Boolean = true) {
 
     LaunchedEffect(Unit) { AssistantController.ensureMessagesLoaded(context) }
     val messages = AssistantController.messages
+    /**
+     * Every attachment in this conversation, oldest first (tasks A1, A3, A24). A chat message keeps
+     * its attachment inline as Base64, and [com.lucent.app.data.Attachments.readBytes] already
+     * decodes that form when `data` is not an AttachmentStore id — so wrapping the rows is enough
+     * to hand them to the same viewer notes and tasks use. Nothing is copied or re-imported.
+     */
+    val chatAttachments = remember(messages) {
+        messages.mapNotNull { m ->
+            val data = m.attachmentData
+            if (data.isNullOrBlank()) null else com.lucent.app.data.Attachment(
+                mime = m.attachmentMime ?: "application/octet-stream",
+                data = data,
+                name = m.attachmentName ?: "attachment"
+            )
+        }
+    }
     val savedUrl by repo.baseUrl.collectAsState(initial = "")
     val savedSpecStr by repo.apiSpec.collectAsState(initial = "openai")
     val savedKey by repo.apiKey.collectAsState(initial = "")
     val savedModel by repo.model.collectAsState(initial = "")
-    val assistantName by repo.assistantName.collectAsState(initial = "Lucent")
+    // B-group task 9: seeded from the synchronous startup read rather than the literal "Lucent",
+    // which every renamed assistant briefly wore on open. Nullable on purpose — null means "not
+    // read yet", and the bubbles below draw NO name tag for that frame rather than a wrong one.
+    // See data/SettingsCache.
+    val assistantNameOrNull by repo.assistantName.collectAsState(initial = SettingsCache.assistantName)
+    val assistantName = assistantNameOrNull.orEmpty()
     val assistantStyle by repo.assistantStyle.collectAsState(initial = "")
     // Assistant memory & web settings, read live so a change in Settings takes effect on the next
     // send without reopening the screen (issues 9 and 16).
@@ -182,10 +230,40 @@ fun AssistantScreen(active: Boolean = true) {
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
     val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = false)
     val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = false)
+    // Models the user has recently switched to, for the quick switcher next to Send (B-group task 5).
+    val modelRecents by repo.modelRecents.collectAsState(initial = emptyList())
+    // Small-model mode (B-group task 4): trims the prompt so a weak model can keep up. Read live
+    // like every other assistant setting, so a change applies to the very next send.
+    val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = false)
 
     var input by remember { mutableStateOf("") }
+    // Keeps the caret in the message box across a send (B-group task 6), so consecutive messages can
+    // be typed without reaching for the mouse.
+    val inputFocus = remember { FocusRequester() }
     var localError by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<PendingAttachment?>(null) }
+    // Tasks A1/A3/A24 — see the Android twin; the chat's attachments go through the shared viewer.
+    var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
+
+    // Which attachment source the user is choosing between (B-group task 16).
+    var attachMenuOpen by remember { mutableStateOf(false) }
+
+    // ---- Multi-select over chat history (B-group task 11) ----
+    //
+    // Entered by long-pressing a message. While active, the conversation bar is replaced by a
+    // selection bar, tapping a bubble toggles it, and the two batch actions (delete, export) work
+    // on the whole selection. Cleared on leaving the tab and on switching conversations, because a
+    // selection that outlives the list it points into is a selection nobody can see.
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedIds = remember { mutableStateListOf<Long>() }
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+    // The message currently switched into text-selection mode (task 13), or null.
+    var selectingTextIn by remember { mutableStateOf<Long?>(null) }
+
+    fun exitSelection() {
+        selectionMode = false
+        selectedIds.clear()
+    }
     var showClearConfirm by remember { mutableStateOf(false) }
     var conversationMenuOpen by remember { mutableStateOf(false) }
     // Search over chat *history*. The effect below finds every place the query occurs across all
@@ -234,6 +312,11 @@ fun AssistantScreen(active: Boolean = true) {
             convoActions = null
             convoToDelete = null
             showClearConfirm = false
+            // A selection that outlives the visit it was made in is a selection nobody remembers
+            // making (B-group task 11).
+            selectionMode = false
+            selectedIds.clear()
+            selectingTextIn = null
         }
     }
 
@@ -315,9 +398,37 @@ fun AssistantScreen(active: Boolean = true) {
         onDispose { AssistantController.clearError() }
     }
 
+    // ---- Variant collapsing (B-group task 12) ----
+    //
     // The chat list always shows the full current conversation; history search only affects the
-    // conversation switcher, so the messages themselves are never filtered here.
-    val filteredMessages = messages
+    // conversation switcher, so nothing is filtered by content here.
+    //
+    // What IS collapsed is answer groups. Asking the same question again appends another assistant
+    // row carrying the same replyToId, so the raw list can hold several answers to one question.
+    // Rendering them all stacked would be unreadable and would make the thread grow every time
+    // someone asked for a second opinion — so each group contributes exactly ONE row, and the
+    // bubble carries a 1/2 switcher to page between them.
+    //
+    // Everything with replyToId == 0 — every user message, and every reply from before this
+    // feature existed — passes through untouched, which is what keeps old conversations rendering
+    // exactly as they always did.
+    val variantGroups = remember(messages) {
+        messages.filter { it.role == "assistant" && it.replyToId != 0L }.groupBy { it.replyToId }
+    }
+    val filteredMessages = remember(messages, variantGroups, AssistantController.variantSelection.toMap()) {
+        val emitted = HashSet<Long>()
+        messages.mapNotNull { msg ->
+            val group = if (msg.role == "assistant" && msg.replyToId != 0L) variantGroups[msg.replyToId] else null
+            if (group == null || group.size <= 1) return@mapNotNull msg
+            // One row per group, at the position of its FIRST answer: a later variant should
+            // replace the original in place, not jump to the bottom of the thread and orphan the
+            // question above it.
+            if (!emitted.add(msg.replyToId)) return@mapNotNull null
+            val index = (AssistantController.variantSelection[msg.replyToId] ?: (group.size - 1))
+                .coerceIn(0, group.size - 1)
+            group[index]
+        }
+    }
 
     // Start the list already at the newest record. Messages are cached in the controller before
     // this screen composes, so reading messages.size here lets LazyColumn lay out with the last
@@ -369,7 +480,19 @@ fun AssistantScreen(active: Boolean = true) {
             if (!scrolling && !listState.canScrollForward) autoScroll = true
         }
     }
-    LaunchedEffect(messages.size, streamingText, autoScroll) {
+    // B-group task 15: `thinking` and the presence of a confirmation are part of what decides how
+    // TALL this list is, so they belong in the follow-mode keys alongside the message count.
+    //
+    // The bug they fix: asking for a confirmation sets thinking = false and puts the modal up, which
+    // REMOVES the "thinking" item from the end of the list. Approving puts both back — thinking goes
+    // true again and the item returns. LazyColumn anchors on the first visible item, not the last, so
+    // an item reappearing at the end lands below the fold and the chat reads as having scrolled up by
+    // one bubble the instant you press Confirm. Neither messages.size nor streamingText changes
+    // across that swap, so the old key set never re-ran and follow mode silently lost the bottom.
+    //
+    // `pendingConfirmation != null` rather than the object itself: the identity changes on every
+    // field of every question, and only its presence/absence moves the layout.
+    LaunchedEffect(messages.size, streamingText, autoScroll, thinking, pendingConfirmation != null) {
         // Don't yank the list to the bottom while a history-search jump is pending/landing (task 9).
         if (autoScroll && pendingJump == null) listState.scrollToLatest()
     }
@@ -378,6 +501,10 @@ fun AssistantScreen(active: Boolean = true) {
     // Keying on the conversation id guarantees a jump-to-latest on every switch and re-enables
     // follow mode, which keeps the transition smooth and flicker-free (issue 15).
     LaunchedEffect(AssistantController.currentConversationId) {
+        // The selection points at message ids in the OLD conversation; carrying it across would let
+        // a batch delete act on rows the user can no longer see (B-group task 11).
+        selectionMode = false
+        selectedIds.clear()
         // A history-search jump may switch conversations on purpose to reach a hit; in that case we
         // want to scroll to the hit, not to the bottom, so we defer to the jump resolver (task 9).
         if (pendingJump == null) {
@@ -392,7 +519,9 @@ fun AssistantScreen(active: Boolean = true) {
         val jump = pendingJump ?: return@LaunchedEffect
         // Still on the old conversation — wait for the switch to bring in the right messages.
         if (AssistantController.currentConversationId != jump.conversationId) return@LaunchedEffect
-        val idx = messages.indexOfFirst { it.id == jump.messageId }
+        // Index within the RENDERED list, not the raw one: variant collapsing (B-group task 12)
+        // means the two can differ, and scrolling to a raw index would land on the wrong bubble.
+        val idx = filteredMessages.indexOfFirst { it.id == jump.messageId }
         if (idx < 0) return@LaunchedEffect   // messages for the target chat haven't arrived yet
         // With messages present there are no leading items in the list, so the message's position in
         // `messages` is its item index. Bring it to the top of the viewport.
@@ -418,8 +547,11 @@ fun AssistantScreen(active: Boolean = true) {
     // on the AWT thread from the attach button; this reads the chosen java.io.File off the main
     // thread. Images become a PendingAttachment; other files are attached as bytes and, when they
     // decode as UTF-8 text, inlined into the input so the model can read them.
-    fun pickAttachment() {
-        val file = DesktopFiles.openFile() ?: return
+    fun pickAttachment(imagesOnly: Boolean = false, startIn: File? = null) {
+        val file = DesktopFiles.openFile(
+            filter = if (imagesOnly) FileFilter.IMAGES else FileFilter.ANY,
+            startIn = startIn
+        ) ?: return
         scope.launch {
             val mime = mimeForFileName(file.name)
             if (mime.startsWith("image/")) {
@@ -638,6 +770,18 @@ fun AssistantScreen(active: Boolean = true) {
     // Per-reply download modal (issue 6): lists every file on the reply — the reply text and any
     // attachment — and lets the user choose which to download. One selection saves directly; several
     // are bundled into a zip.
+    // Tasks A1/A3/A24 — one viewer for notes, tasks and chat. Opening it with the whole
+    // conversation's attachment list (not just the tapped one) is what makes swiping work, and
+    // because every action in the viewer reads the *current* page, Share and Save follow the swipe
+    // instead of staying pinned to whatever was tapped first.
+    viewingAttachment?.let { att ->
+        AttachmentViewerDialog(
+            attachments = chatAttachments,
+            initialIndex = chatAttachments.indexOfFirst { it.data == att.data }.coerceAtLeast(0),
+            onDismiss = { viewingAttachment = null }
+        )
+    }
+
     downloadDialogMsg?.let { msg ->
         DownloadFilesDialog(
             message = msg,
@@ -685,6 +829,45 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
+    // ---- One long-press, one meaning (integration decision) ----
+    //
+    // Tasks B11 and B13 both claimed long-press on a chat bubble: B13 wanted selectable text, B11
+    // wanted multi-select. Group B reconciled them with a three-item sheet. Group A had meanwhile
+    // set the app-wide convention with task A16 — long-press an item in a LIST starts a multi-select
+    // — and A6 set the other half: long-press BODY TEXT in a detail view selects text.
+    //
+    // Unified here on that convention, at the integrator's instruction. Long-press on a message
+    // means the same thing it means on a note card or a task card: start selecting. The two
+    // single-message actions did not disappear; they moved to the selection bar, where they appear
+    // as soon as the selection is exactly one message. That is also where the note and task list
+    // screens put their single-item actions, so there is now one rule for the whole app instead of
+    // one rule per screen.
+    //
+    // The extra tap the sheet cost is gone, the actions are visible rather than nested behind a
+    // gesture, and "copy the whole message" survives as an explicit button.
+
+    // Batch delete confirms first, and says how many (B-group task 11). Chat messages have no
+    // Trash — unlike every other kind of record in this app, these do not come back — so the
+    // confirmation names the count and the dialog says plainly that it is permanent.
+    if (showBatchDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirm = false },
+            title = { Text(com.lucent.app.i18n.S.batchDeleteTitle) },
+            text = { Text(com.lucent.app.i18n.S.batchDeleteBody(selectedIds.size)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val ids = selectedIds.toSet()
+                    showBatchDeleteConfirm = false
+                    exitSelection()
+                    AssistantController.deleteMessages(context.applicationContext, ids)
+                }) { Text(com.lucent.app.i18n.S.actionDelete) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirm = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
+            }
+        )
+    }
+
     // The whole column reserves the floating capsule's height at its bottom (LocalBottomBarInset),
     // which keeps the input row sitting just above the pill rather than trapped behind it — exactly
     // where it was before the capsule was made to float. The chat list fills the space above the
@@ -693,6 +876,86 @@ fun AssistantScreen(active: Boolean = true) {
         // Conversation bar: start a new conversation (keeping old ones), switch between saved
         // conversations, or delete the current one. Kept to a single compact row so the chat
         // stays the focus.
+        if (selectionMode) {
+            // ---- Selection bar (B-group task 11) ----
+            // It REPLACES the conversation row rather than stacking above it: the two are mutually
+            // exclusive modes, and pushing the chat down by a whole row every time a selection
+            // starts would make the list jump under the user's finger at the exact moment they are
+            // pointing at something in it.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { exitSelection() }) {
+                    Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.actionCancel, tint = onGradient)
+                }
+                Text(
+                    com.lucent.app.i18n.S.selectedCount(selectedIds.size),
+                    color = onGradient,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = {
+                    // Select-all toggles: pressing it when everything is already selected clears,
+                    // which is the fastest way out of an over-broad selection.
+                    if (selectedIds.size == messages.size) selectedIds.clear()
+                    else { selectedIds.clear(); messages.forEach { selectedIds.add(it.id) } }
+                }) {
+                    Icon(Icons.Default.SelectAll, contentDescription = com.lucent.app.i18n.S.selectAll, tint = onGradient)
+                }
+                // ---- Single-message actions (integration: the old long-press sheet's contents) ----
+                // Shown only while the selection is exactly one message, because "copy the whole
+                // message" and "select text in it" have no meaning for five of them. Placed before
+                // the batch actions so the row reads narrow-to-broad, and hidden rather than
+                // disabled — a permanently greyed-out pair of icons is just noise in the common
+                // case, which is a multi-message selection.
+                if (selectedIds.size == 1) {
+                    val only = messages.firstOrNull { it.id == selectedIds.first() }
+                    if (only != null) {
+                        IconButton(onClick = {
+                            copyToClipboard(context, only.content)
+                            exitSelection()
+                        }) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = com.lucent.app.i18n.S.msgCopyWhole,
+                                tint = onGradient
+                            )
+                        }
+                        IconButton(onClick = {
+                            // Text selection replaces the selection mode rather than nesting inside
+                            // it: once the user is picking characters, a message-level selection
+                            // running underneath would leave two highlights on screen meaning two
+                            // different things.
+                            selectingTextIn = only.id
+                            exitSelection()
+                        }) {
+                            Icon(
+                                Icons.Default.TextFields,
+                                contentDescription = com.lucent.app.i18n.S.msgSelectText,
+                                tint = onGradient
+                            )
+                        }
+                    }
+                }
+                IconButton(
+                    enabled = selectedIds.isNotEmpty(),
+                    onClick = {
+                        val chosen = messages.filter { it.id in selectedIds }
+                        pendingZipSave = buildChatExportEntries(chosen, assistantName.ifBlank { "Lucent" })
+                        saveZip("lucent-selection.zip")
+                    }
+                ) {
+                    Icon(Icons.Default.Archive, contentDescription = com.lucent.app.i18n.S.a11yExportChat, tint = onGradient)
+                }
+                IconButton(
+                    enabled = selectedIds.isNotEmpty(),
+                    onClick = { showBatchDeleteConfirm = true }
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = OverdueColor)
+                }
+            }
+        } else
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -904,7 +1167,7 @@ fun AssistantScreen(active: Boolean = true) {
             ) {
                 IconButton(
                     onClick = {
-                        pendingZipSave = buildChatExportEntries(messages, assistantName)
+                        pendingZipSave = buildChatExportEntries(messages, assistantName.ifBlank { "Lucent" })
                         saveZip("lucent-chat.zip")
                     },
                     enabled = messages.isNotEmpty()
@@ -934,7 +1197,7 @@ fun AssistantScreen(active: Boolean = true) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                if (messages.isEmpty()) {
+                if (messages.isEmpty() && assistantName.isNotBlank()) {
                     item(key = "greeting") {
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.align(Alignment.CenterStart).frostedGlass().padding(12.dp)) {
@@ -968,16 +1231,63 @@ fun AssistantScreen(active: Boolean = true) {
                             }
                         }
                     }
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    val isSelected = msg.id in selectedIds
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // The checkbox lives OUTSIDE the bubble, in its own leading column, so the
+                        // bubble itself keeps the exact geometry it has when nothing is selected —
+                        // entering selection mode must not reflow every message on screen.
+                        if (selectionMode) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { on ->
+                                    if (on) selectedIds.add(msg.id) else selectedIds.remove(msg.id)
+                                }
+                            )
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
                         Column(
                             modifier = Modifier
                                 .align(if (isUser) Alignment.CenterEnd else Alignment.CenterStart)
                                 .graphicsLayer { scaleX = bounce.value; scaleY = bounce.value }
                                 .frostedGlass()
+                                .then(
+                                    if (isSelected) Modifier.background(Color.White.copy(alpha = 0.10f))
+                                    else Modifier
+                                )
+                                // Long-press starts a multi-select with this message in it — the
+                                // same thing long-press does on a note card and a task card
+                                // (A16). In selection mode a plain tap toggles this message, which
+                                // is the gesture people expect once a selection is running.
+                                .pointerInput(msg.id, selectionMode) {
+                                    detectTapGestures(
+                                        onLongPress = {
+                                            if (!selectionMode) {
+                                                Haptics.tick(context)
+                                                selectionMode = true
+                                                selectedIds.clear()
+                                                selectedIds.add(msg.id)
+                                                // Leaving text-selection mode on the way in: the two
+                                                // are different modes over the same bubble and both
+                                                // at once has no coherent meaning.
+                                                selectingTextIn = null
+                                            }
+                                        },
+                                        onTap = {
+                                            if (selectionMode) {
+                                                if (isSelected) selectedIds.remove(msg.id) else selectedIds.add(msg.id)
+                                            }
+                                        }
+                                    )
+                                }
                                 .padding(12.dp)
                         ) {
-                            // Assistant name tag at the top-left of the bubble (issue 15).
-                            if (!isUser) {
+                            // Assistant name tag at the top-left of the bubble (issue 15). Blank
+                            // only in the (usually zero-frame) window before the name has been read
+                            // — drawing nothing beats drawing the wrong name (B-group task 9).
+                            if (!isUser && assistantName.isNotBlank()) {
                                 Text(
                                     assistantName,
                                     color = onGradientMuted,
@@ -999,7 +1309,13 @@ fun AssistantScreen(active: Boolean = true) {
                                         Image(
                                             bitmap = bitmap,
                                             contentDescription = com.lucent.app.i18n.S.a11yAttachment,
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp)
+                                                // A3/A24: opens the shared viewer on this file.
+                                                .clickable {
+                                                    viewingAttachment = chatAttachments.firstOrNull { it.data == base64 }
+                                                }
                                         )
                                     } else {
                                         Text(com.lucent.app.i18n.S.imageUnreadable, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
@@ -1011,15 +1327,32 @@ fun AssistantScreen(active: Boolean = true) {
                                             .padding(bottom = 8.dp)
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(Color.White.copy(alpha = 0.10f))
+                                            // A2's rule here too: the row opens the file, download
+                                            // keeps its own button. Tapping used to be download-only,
+                                            // so a chat attachment could not be looked at without
+                                            // saving it somewhere first.
                                             .clickable {
-                                                pendingSaveImage = base64 to fileName
-                                                saveImage(fileName)
+                                                viewingAttachment = chatAttachments.firstOrNull { it.data == base64 }
                                             }
-                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            .padding(horizontal = 10.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.Download, contentDescription = com.lucent.app.i18n.S.a11yDownloadFile(fileName), tint = onGradient)
-                                        Text(fileName, color = onGradient, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
+                                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = onGradient)
+                                        Text(fileName, color = onGradient, fontSize = 13.sp, modifier = Modifier.weight(1f, fill = false).padding(start = 6.dp))
+                                        IconButton(
+                                            onClick = {
+                                                pendingSaveImage = base64 to fileName
+                                                saveImage(fileName)
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Download,
+                                                contentDescription = com.lucent.app.i18n.S.a11yDownloadFile(fileName),
+                                                tint = onGradient,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1043,12 +1376,93 @@ fun AssistantScreen(active: Boolean = true) {
                             } else {
                                 buildAnnotatedString { append(msg.content.withLineStartPunctuationAllowed()) }
                             }
-                            Text(
-                                contentText,
-                                color = onGradient,
-                                modifier = Modifier.longPressCopy(context, msg.content)
-                            )
+                            // B-group task 13: long-press used to copy the WHOLE message and
+                            // nothing else — all or nothing, with no way to take just the command,
+                            // the URL, or the one line you actually wanted out of a long reply.
+                            //
+                            // SelectionContainer replaces that with the platform's own text
+                            // selection: long-press starts a selection with drag handles, and the
+                            // system Copy toolbar acts on whatever the user actually chose. Copying
+                            // everything is still one gesture away (long-press, Select all), so this
+                            // strictly adds reach rather than trading one behaviour for another.
+                            //
+                            // Per bubble rather than around the whole LazyColumn on purpose: a
+                            // list-wide container would let a selection drag fight the scroll
+                            // gesture, and cross-bubble selection is not what was asked for.
+                            // Text selection is switched on for THIS message from the long-press
+                            // sheet (B-group tasks 11 + 13 — see the sheet's comment for why the
+                            // two had to be reconciled). An always-on SelectionContainer would
+                            // swallow the long-press before multi-select could ever see it.
+                            if (selectingTextIn == msg.id) {
+                                SelectionContainer {
+                                    Text(contentText, color = onGradient)
+                                }
+                            } else {
+                                Text(contentText, color = onGradient)
+                            }
+                            if (isUser) {
+                                // Ask this question again (B-group task 12). On a user bubble
+                                // because that is where "send this again" belongs — it is the same
+                                // affordance whether the previous reply failed outright or simply
+                                // wasn't what was wanted.
+                                IconButton(
+                                    onClick = {
+                                        val useLocal = localModelEnabled
+                                        AssistantController.resend(
+                                            appContext = context.applicationContext,
+                                            message = msg,
+                                            url = savedUrl,
+                                            spec = when (savedSpecStr) {
+                                                "anthropic" -> ApiSpec.ANTHROPIC
+                                                "google" -> ApiSpec.GOOGLE
+                                                else -> ApiSpec.OPENAI
+                                            },
+                                            key = savedKey, model = savedModel,
+                                            name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
+                                            memoryTier = MemoryTier.fromKey(memoryTierKey),
+                                            webSearchEnabled = webSearchEnabled,
+                                            typingHapticsEnabled = typingHapticsEnabled,
+                                            useLocalModel = useLocal,
+                                            useLocalTools = localToolsEnabled,
+                                            useLocalGpu = localGpuEnabled,
+                                            confirmTools = confirmToolsEnabled,
+                                            smallModelMode = smallModelMode
+                                        )
+                                    },
+                                    enabled = !sending,
+                                    modifier = Modifier.height(28.dp).align(Alignment.End)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = com.lucent.app.i18n.S.resendMessage, tint = onGradientMuted)
+                                }
+                            }
                             if (!isUser) {
+                                // The 1/2 variant switcher (B-group task 12), shown only when this
+                                // answer actually has siblings — a single reply gets no chrome at all.
+                                val siblings = variantGroups[msg.replyToId]
+                                if (msg.replyToId != 0L && siblings != null && siblings.size > 1) {
+                                    val current = siblings.indexOfFirst { it.id == msg.id }.coerceAtLeast(0)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { AssistantController.selectVariant(msg.replyToId, current - 1) },
+                                            enabled = current > 0,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.ChevronLeft, contentDescription = com.lucent.app.i18n.S.variantPrevious, tint = onGradientMuted, modifier = Modifier.size(18.dp))
+                                        }
+                                        Text(
+                                            "${current + 1}/${siblings.size}",
+                                            color = onGradientMuted,
+                                            fontSize = 11.sp
+                                        )
+                                        IconButton(
+                                            onClick = { AssistantController.selectVariant(msg.replyToId, current + 1) },
+                                            enabled = current < siblings.size - 1,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.ChevronRight, contentDescription = com.lucent.app.i18n.S.variantNext, tint = onGradientMuted, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
                                 // Download opens a modal listing every file on this reply so the user
                                 // picks what to save (issue 6).
                                 IconButton(
@@ -1069,18 +1483,26 @@ fun AssistantScreen(active: Boolean = true) {
                                 }
                             }
                         }
+                        }
                     }
                 }
                 if (streamingText != null) {
-                    item {
+                    // Stable key (B-group task 15): an unkeyed item is identified by its POSITION,
+                    // so as the tail of the list cycles thinking -> streaming -> stored message the
+                    // list keeps re-binding one positional slot to three different bubbles and its
+                    // scroll anchor moves with it. A constant key makes the streaming bubble one
+                    // identity that appears and disappears cleanly.
+                    item(key = "streaming") {
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.align(Alignment.CenterStart).frostedGlass().padding(12.dp)) {
-                                Text(
-                                    assistantName,
-                                    color = onGradientMuted,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(bottom = 3.dp)
-                                )
+                                if (assistantName.isNotBlank()) {
+                                    Text(
+                                        assistantName,
+                                        color = onGradientMuted,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(bottom = 3.dp)
+                                    )
+                                }
                                 Text(streamingText.withLineStartPunctuationAllowed(), color = onGradient)
                             }
                         }
@@ -1153,22 +1575,165 @@ fun AssistantScreen(active: Boolean = true) {
                 }
             }
         }
+        // ---- One send path, two triggers (B-group task 6) ----
+        //
+        // The send action used to live inline in the button's onClick. Enter-to-send needs the
+        // identical behaviour — same local-mode authority, same API guard, same field clearing — so
+        // it is extracted here rather than duplicated at the key handler, where the two copies would
+        // drift the first time either is touched.
+        //
+        // Focus is restored afterwards so the caret stays in the box and the next message can be
+        // typed straight away, which is the point of a keyboard-driven send.
+        fun submitMessage() {
+            val text = input.trim()
+            val attachment = pendingAttachment
+            if (text.isBlank() && attachment == null) return
+            // Local mode is AUTHORITATIVE. Once "use local model" is on, the assistant
+            // replies on-device and the cloud API is frozen — the send path must never
+            // silently fall back to it (that was the "it still calls the API" bug). If
+            // local is on but no model is loaded, the controller surfaces a clear
+            // "no model" error rather than reaching for the API. The cloud URL/model
+            // guard below therefore only applies when local mode is OFF.
+            val useLocal = localModelEnabled
+            if (!useLocal && (savedUrl.isBlank() || savedModel.isBlank())) {
+                localError = com.lucent.app.i18n.S.setupApiFirst
+                return
+            }
+            input = ""
+            pendingAttachment = null
+            localError = ""
+            autoScroll = true
+            val spec = when (savedSpecStr) {
+                "anthropic" -> ApiSpec.ANTHROPIC
+                "google" -> ApiSpec.GOOGLE
+                else -> ApiSpec.OPENAI
+            }
+            AssistantController.send(
+                appContext = context.applicationContext,
+                text = text,
+                attachmentMime = attachment?.mime,
+                attachmentData = attachment?.data,
+                attachmentName = attachment?.name,
+                url = savedUrl, spec = spec, key = savedKey, model = savedModel,
+                name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
+                memoryTier = MemoryTier.fromKey(memoryTierKey),
+                webSearchEnabled = webSearchEnabled,
+                typingHapticsEnabled = typingHapticsEnabled,
+                useLocalModel = useLocal,
+                useLocalTools = localToolsEnabled,
+                useLocalGpu = localGpuEnabled,
+                confirmTools = confirmToolsEnabled,
+                smallModelMode = smallModelMode
+            )
+            inputFocus.requestFocus()
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { pickAttachment() }, modifier = Modifier.height(56.dp)) {
-                Icon(Icons.Default.AttachFile, contentDescription = com.lucent.app.i18n.S.a11yAttachFile, tint = onGradient)
+            // Attach: the same menu shape as Android (B-group task 16), with the sources that
+            // actually exist on a PC.
+            //
+            // Camera and gallery are phone concepts and are deliberately NOT faked here: Windows has
+            // no system "gallery" an app can hand off to, and a webcam capture UI is a feature in
+            // its own right rather than a port of this one. What a desktop does have — and what the
+            // Android cloud entry is really for — is cloud storage, which on Windows appears as a
+            // synced FOLDER rather than a picker. So the third entry jumps the native file dialog
+            // straight to whichever of Google Drive / OneDrive / Dropbox is actually installed.
+            Box {
+                IconButton(onClick = { attachMenuOpen = true }, modifier = Modifier.height(56.dp)) {
+                    Icon(Icons.Default.AttachFile, contentDescription = com.lucent.app.i18n.S.a11yAttachFile, tint = onGradient)
+                }
+                DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(com.lucent.app.i18n.S.attachFromFiles) },
+                        leadingIcon = { Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = { attachMenuOpen = false; pickAttachment() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(com.lucent.app.i18n.S.attachFromGallery) },
+                        leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = { attachMenuOpen = false; pickAttachment(imagesOnly = true) }
+                    )
+                    val cloudDir = remember { DesktopCloudFolders.firstAvailable() }
+                    DropdownMenuItem(
+                        text = { Text(com.lucent.app.i18n.S.attachFromCloud) },
+                        leadingIcon = { Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        enabled = cloudDir != null,
+                        onClick = { attachMenuOpen = false; pickAttachment(startIn = cloudDir) }
+                    )
+                    if (cloudDir == null) {
+                        Text(
+                            com.lucent.app.i18n.S.attachNoCloudFolder,
+                            color = onGradientMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
+            // PHASE 4: dictation — speech appends to whatever is already typed; sending stays a
+            // deliberate second tap, so a mis-hearing can be read (and fixed) before it goes out.
+            DictationButton(onText = { spoken ->
+                input = if (input.isBlank()) spoken
+                else input + (if (input.endsWith(" ")) "" else " ") + spoken
+            })
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
                 placeholder = { Text(com.lucent.app.i18n.S.messagePlaceholder, fontSize = 13.sp) },
-                singleLine = true,
+                // No longer single-line (B-group task 6): Shift+Enter has to be able to put a real
+                // newline in the box, and a singleLine field swallows every newline by definition.
+                // The height grows with the text instead of being pinned, up to a few lines, so a
+                // longer message is visible while it is being written and the chat above still is.
+                singleLine = false,
+                maxLines = 6,
                 textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
-                modifier = Modifier.weight(1f).height(56.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp, max = 140.dp)
+                    .focusRequester(inputFocus)
+                    // Enter sends, Shift+Enter breaks the line — the convention every desktop chat
+                    // client uses. onPreviewKeyEvent (not onKeyEvent) so the key is intercepted
+                    // BEFORE the text field's own editor consumes it and inserts a newline; the
+                    // handler returns true to say "handled, don't pass it on".
+                    //
+                    // KeyDown only: acting on both down and up would fire the send twice. NumPadEnter
+                    // is matched as well, since it is a distinct key code and people do use it.
+                    // While a reply is generating the send button is a Stop button, so Enter must do
+                    // nothing rather than quietly queue a second turn.
+                    .onPreviewKeyEvent { event ->
+                        val isEnter = event.key == Key.Enter || event.key == Key.NumPadEnter
+                        when {
+                            !isEnter || event.type != KeyEventType.KeyDown -> false
+                            event.isShiftPressed -> false   // let the editor insert the newline
+                            sending -> true                 // consumed, but deliberately inert
+                            else -> { submitMessage(); true }
+                        }
+                    }
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            // Quick model switch (B-group task 5). Immediately left of send, as specified, and on
+            // both platforms — the composable itself is identical, only this call site differs in
+            // which screen file it lives in. It switches the MODEL only; the API stays put.
+            QuickModelSwitcher(
+                currentModel = savedModel,
+                recents = modelRecents,
+                baseUrl = savedUrl,
+                spec = when (savedSpecStr) {
+                    "anthropic" -> ApiSpec.ANTHROPIC
+                    "google" -> ApiSpec.GOOGLE
+                    else -> ApiSpec.OPENAI
+                },
+                apiKey = savedKey,
+                localModelEnabled = localModelEnabled,
+                tint = onGradient,
+                mutedTint = onGradientMuted,
+                onPickCloudModel = { model -> scope.launch { repo.setActiveModel(model) } },
+                modifier = Modifier.height(56.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
             if (sending) {
                 // While generating, the send button becomes a Stop button that interrupts the reply
                 // (issue 14) — replacing the old non-interactive spinner.
@@ -1181,47 +1746,7 @@ fun AssistantScreen(active: Boolean = true) {
             } else {
                 IconButton(
                     modifier = Modifier.height(56.dp),
-                    onClick = {
-                        val text = input.trim()
-                        val attachment = pendingAttachment
-                        if (text.isBlank() && attachment == null) return@IconButton
-                        // Local mode is AUTHORITATIVE. Once "use local model" is on, the assistant
-                        // replies on-device and the cloud API is frozen — the send path must never
-                        // silently fall back to it (that was the "it still calls the API" bug). If
-                        // local is on but no model is loaded, the controller surfaces a clear
-                        // "no model" error rather than reaching for the API. The cloud URL/model
-                        // guard below therefore only applies when local mode is OFF.
-                        val useLocal = localModelEnabled
-                        if (!useLocal && (savedUrl.isBlank() || savedModel.isBlank())) {
-                            localError = com.lucent.app.i18n.S.setupApiFirst
-                            return@IconButton
-                        }
-                        input = ""
-                        pendingAttachment = null
-                        localError = ""
-                        autoScroll = true
-                        val spec = when (savedSpecStr) {
-                            "anthropic" -> ApiSpec.ANTHROPIC
-                            "google" -> ApiSpec.GOOGLE
-                            else -> ApiSpec.OPENAI
-                        }
-                        AssistantController.send(
-                            appContext = context.applicationContext,
-                            text = text,
-                            attachmentMime = attachment?.mime,
-                            attachmentData = attachment?.data,
-                            attachmentName = attachment?.name,
-                            url = savedUrl, spec = spec, key = savedKey, model = savedModel,
-                            name = assistantName, style = assistantStyle,
-                            memoryTier = MemoryTier.fromKey(memoryTierKey),
-                            webSearchEnabled = webSearchEnabled,
-                            typingHapticsEnabled = typingHapticsEnabled,
-                            useLocalModel = useLocal,
-                            useLocalTools = localToolsEnabled,
-                            useLocalGpu = localGpuEnabled,
-                            confirmTools = confirmToolsEnabled
-                        )
-                    }
+                    onClick = { submitMessage() }
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = com.lucent.app.i18n.S.a11ySend, tint = onGradient)
                 }
@@ -1277,6 +1802,7 @@ private fun JumpToLatestButton(
 @Composable
 private fun ThinkingBubble(name: String, tint: Color, mutedTint: Color, loadingModel: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "thinking")
+    Column {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             if (loadingModel) com.lucent.app.i18n.S.lmLoadingIndicator
@@ -1303,6 +1829,21 @@ private fun ThinkingBubble(name: String, tint: Color, mutedTint: Color, loadingM
             )
         }
     }
+    // A localized word about WHY the first reply is slow (B-group task 10). Loading a multi-GB
+    // model off storage takes real seconds, and an indicator that only spins reads as a hang —
+    // the user has no way to tell "working" from "stuck", and the honest difference between the
+    // two is worth one line. Only shown during the load, and only in local mode, so it never
+    // becomes noise on the fast path.
+    if (loadingModel) {
+        Text(
+            com.lucent.app.i18n.S.lmFirstLoadHint,
+            color = mutedTint,
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+    }
 }
 
 /**
@@ -1320,14 +1861,27 @@ private fun DownloadFilesDialog(
     onSaveFile: (fileName: String, bytes: ByteArray) -> Unit,
     onSaveZip: (entries: List<Pair<String, ByteArray>>) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val hasText = message.content.isNotBlank()
     val attName = message.attachmentName
     val attData = message.attachmentData
     val hasAttachment = !attData.isNullOrBlank() && attName != null
     val textFileName = "lucent-reply.txt"
 
+    // Files the reply REFERS to rather than carries (B-group task 7): a generated image, a hosted
+    // document. Parsed out of the reply text; see data/ReplyFiles for why they were unreachable.
+    val replyFiles = remember(message.id, message.content) { ReplyFiles.extract(message.content) }
+
     var selText by remember(message.id) { mutableStateOf(hasText) }
     var selAtt by remember(message.id) { mutableStateOf(hasAttachment) }
+    // Referenced files default to selected: the user opened this dialog because of them.
+    val selRemote = remember(message.id) {
+        mutableStateMapOf<String, Boolean>().apply { replyFiles.forEach { put(it.url, true) } }
+    }
+    // Set while remote files are being fetched, so the buttons can say so and not be pressed twice.
+    var working by remember(message.id) { mutableStateOf(false) }
+    var failure by remember(message.id) { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1354,28 +1908,105 @@ private fun DownloadFilesDialog(
                         Text(attName ?: com.lucent.app.i18n.S.a11yAttachment, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (!hasText && !hasAttachment) {
+                // Files the reply links to (B-group task 7) — listed exactly like a real attachment,
+                // because from the user's side that is what they are.
+                replyFiles.forEach { file ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            selRemote[file.url] = !(selRemote[file.url] ?: false)
+                        }
+                    ) {
+                        Checkbox(
+                            checked = selRemote[file.url] ?: false,
+                            onCheckedChange = { selRemote[file.url] = it }
+                        )
+                        Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (!hasText && !hasAttachment && replyFiles.isEmpty()) {
                     Text(com.lucent.app.i18n.S.downloadNone, fontSize = 13.sp)
+                }
+                if (working) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(com.lucent.app.i18n.S.downloadFetching, fontSize = 12.sp)
+                }
+                if (failure.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(failure, fontSize = 12.sp, color = OverdueColor)
+                }
+                // "Save to a note / task" (the 转存 half of task 7). Creates a new item carrying the
+                // reply text AND the file as a real, encrypted attachment — not the raw Markdown URL
+                // that used to be all that survived.
+                if (replyFiles.isNotEmpty() || hasAttachment) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(com.lucent.app.i18n.S.downloadSaveInto, fontSize = 12.sp)
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        TextButton(
+                            enabled = !working,
+                            onClick = {
+                                working = true; failure = ""
+                                scope.launch {
+                                    val ok = saveReplyIntoItem(context, message, replyFiles, selRemote, asTask = false)
+                                    working = false
+                                    if (ok) onDismiss() else failure = com.lucent.app.i18n.S.downloadFetchFailed
+                                }
+                            }
+                        ) { Text(com.lucent.app.i18n.S.saveAsNote) }
+                        TextButton(
+                            enabled = !working,
+                            onClick = {
+                                working = true; failure = ""
+                                scope.launch {
+                                    val ok = saveReplyIntoItem(context, message, replyFiles, selRemote, asTask = true)
+                                    working = false
+                                    if (ok) onDismiss() else failure = com.lucent.app.i18n.S.downloadFetchFailed
+                                }
+                            }
+                        ) { Text(com.lucent.app.i18n.S.saveAsTask) }
+                    }
                 }
             }
         },
         confirmButton = {
+            val anyRemote = replyFiles.any { selRemote[it.url] == true }
             TextButton(
-                enabled = selText || selAtt,
+                enabled = (selText || selAtt || anyRemote) && !working,
                 onClick = {
-                    val entries = mutableListOf<Pair<String, ByteArray>>()
-                    if (selText && hasText) entries.add(textFileName to message.content.toByteArray())
-                    if (selAtt && hasAttachment) {
-                        val bytes = try { Base64.decode(attData, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
-                        entries.add((attName ?: "attachment") to bytes)
-                    }
-                    when {
-                        entries.isEmpty() -> onDismiss()
-                        entries.size == 1 -> {
+                    // Referenced files have to be FETCHED before anything can be written, and that
+                    // is network work — so the whole assembly moved into a coroutine off the main
+                    // thread (B-group task 7). With nothing remote selected it completes without
+                    // ever touching the network, so the original local-only path is unchanged in
+                    // both behaviour and cost.
+                    working = true; failure = ""
+                    scope.launch {
+                        val entries = mutableListOf<Pair<String, ByteArray>>()
+                        if (selText && hasText) entries.add(textFileName to message.content.toByteArray())
+                        if (selAtt && hasAttachment) {
+                            val bytes = try { Base64.decode(attData, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
+                            entries.add((attName ?: "attachment") to bytes)
+                        }
+                        var missed = 0
+                        for (file in replyFiles) {
+                            if (selRemote[file.url] != true) continue
+                            val bytes = withContext(Dispatchers.IO) { ReplyFiles.fetch(file) }
+                            if (bytes == null) missed++ else entries.add(file.name to bytes)
+                        }
+                        working = false
+                        if (entries.isEmpty()) {
+                            // Nothing survived — say so instead of closing on a silent no-op.
+                            failure = com.lucent.app.i18n.S.downloadFetchFailed
+                            return@launch
+                        }
+                        if (missed > 0) failure = com.lucent.app.i18n.S.downloadFetchPartial(missed)
+                        if (entries.size == 1) {
                             val (n, b) = entries.first()
                             if (n == textFileName) onSaveText(n, message.content) else onSaveFile(n, b)
+                        } else {
+                            onSaveZip(entries)
                         }
-                        else -> onSaveZip(entries)
                     }
                 }
             ) { Text(com.lucent.app.i18n.S.actionDownload) }
@@ -1390,6 +2021,52 @@ private fun DownloadFilesDialog(
  * numbered, sanitised filename. The transcript references each attachment by its in-zip name so the
  * two line up.
  */
+/**
+ * Create a note or task carrying this reply and its files (B-group task 7).
+ *
+ * The title is the reply's first line, trimmed — the same shape the app's own "save reply" paths
+ * use, so a saved reply looks like anything else in the list. Every SELECTED referenced file is
+ * fetched and attached; a reply carrying no file at all still saves as text, because "save this
+ * answer" is a reasonable thing to want on its own.
+ *
+ * Returns false only when something was selected and NOTHING could be produced, which is the one
+ * case where silently closing the dialog would look like success.
+ */
+private suspend fun saveReplyIntoItem(
+    context: android.content.Context,
+    message: ChatMessage,
+    replyFiles: List<ReplyFiles.ReplyFile>,
+    selected: Map<String, Boolean>,
+    asTask: Boolean
+): Boolean = withContext(Dispatchers.IO) {
+    val db = AppDatabase.getInstance(context.applicationContext)
+    val title = message.content.lineSequence()
+        .firstOrNull { it.isNotBlank() }
+        ?.trim()
+        ?.take(60)
+        ?.ifBlank { null }
+        ?: com.lucent.app.i18n.S.conversationFallback
+    val wanted = replyFiles.filter { selected[it.url] == true }
+    if (wanted.isEmpty()) {
+        // No file to attach: still save the answer itself rather than doing nothing.
+        return@withContext ReplyFiles.saveToNewItem(
+            context.applicationContext, db, asTask, title, message.content,
+            fileName = "", mime = "", bytes = ByteArray(0)
+        )
+    }
+    var saved = 0
+    for (file in wanted) {
+        val bytes = ReplyFiles.fetch(file) ?: continue
+        val mime = if (file.isImage) "image/*" else "application/octet-stream"
+        val ok = ReplyFiles.saveToNewItem(
+            context.applicationContext, db, asTask, title, message.content,
+            file.name, mime, bytes
+        )
+        if (ok) saved++
+    }
+    saved > 0
+}
+
 private fun buildChatExportEntries(messages: List<ChatMessage>, assistantName: String): List<Pair<String, ByteArray>> {
     val entries = mutableListOf<Pair<String, ByteArray>>()
     val sb = StringBuilder()

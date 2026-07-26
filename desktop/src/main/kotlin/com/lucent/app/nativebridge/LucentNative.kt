@@ -26,6 +26,23 @@ object LucentNative {
     // fallbacks below make a missing library invisible except in timings.
     val available: Boolean = NativeLoader.load("lucent_native")
 
+    // ---- CPU capability (Windows backlog W-1) ----
+
+    /**
+     * Whether this CPU supports AVX2 — the instruction-set floor of the packaged LLM engine DLLs.
+     * null when the Rust library isn't loaded (the question can't be answered); the caller treats
+     * that as "proceed as before", because refusing on UNKNOWN would take the local model away
+     * from the overwhelming AVX2-capable majority to protect a machine we can't even identify.
+     */
+    fun cpuHasAvx2(): Boolean? {
+        if (!available) return null
+        return try {
+            nativeCpuHasAvx2()
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     // ---- Crypto ----
 
     /**
@@ -91,6 +108,7 @@ object LucentNative {
     }
 
     // ---- Native surface (rust/src/lib.rs) ----
+    private external fun nativeCpuHasAvx2(): Boolean
     private external fun nativePbkdf2Sha256(password: ByteArray, salt: ByteArray, iterations: Int, keyLen: Int): ByteArray?
     private external fun nativeAesGcmSeal(key: ByteArray, iv: ByteArray, aad: ByteArray, plaintext: ByteArray): ByteArray?
     private external fun nativeAesGcmOpen(key: ByteArray, iv: ByteArray, aad: ByteArray, sealed: ByteArray): ByteArray?

@@ -20,6 +20,19 @@ import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.TextRange
+import com.lucent.app.data.RichSpan
+import com.lucent.app.data.RichText
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -66,14 +79,46 @@ fun ExpandableGlassTextField(
     modifier: Modifier = Modifier,
     collapsedMinHeight: Dp = 120.dp,
     collapsedMaxHeight: Dp = 320.dp,
+    // ---- INTEGRATION: C-group task 20 ----
+    // All optional, all inert by default, so every existing call site is untouched and a user who
+    // never turns rich text on gets byte-identical behaviour to before.
+    spans: List<RichSpan> = emptyList(),
+    onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
+    highlightColors: List<Color> = emptyList(),
+    // PHASE 4: an optional action rendered in the field's top-right corner (the expand toggle owns
+    // the bottom-right). Used for the dictation mic; default null keeps every existing call site
+    // byte-compatible.
+    extraAction: (@Composable () -> Unit)? = null,
 ) {
     val onGradientMuted = LocalOnGradientMuted.current
     var expanded by remember { mutableStateOf(false) }
 
+
+    // The field still owns a plain String; this only carries the caret/selection so the formatting
+    // buttons know what to act on. Re-synced from [value] whenever the text changes underneath us
+    // (an undo, the assistant, a version restore) so the selection can never point past the end.
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+    if (fieldValue.text != value) {
+        fieldValue = fieldValue.copy(
+            text = value,
+            selection = TextRange(fieldValue.selection.start.coerceIn(0, value.length),
+                                  fieldValue.selection.end.coerceIn(0, value.length))
+        )
+    }
+    val transformation = remember(spans, highlightColors) {
+        if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
+        else RichSpanTransformation(spans, highlightColors)
+    }
+
     Box(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = fieldValue,
+            onValueChange = { updated ->
+                fieldValue = updated
+                onSelectionChange(updated.selection.min, updated.selection.max)
+                if (updated.text != value) onValueChange(updated.text)
+            },
+            visualTransformation = transformation,
             placeholder = { Text(placeholder) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -93,6 +138,9 @@ fun ExpandableGlassTextField(
                 modifier = Modifier.size(18.dp)
             )
         }
+        if (extraAction != null) {
+            Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) { extraAction() }
+        }
     }
 
     if (expanded) {
@@ -101,7 +149,10 @@ fun ExpandableGlassTextField(
             onValueChange = onValueChange,
             placeholder = placeholder,
             title = expandedTitle,
-            onCollapse = { expanded = false }
+            onCollapse = { expanded = false },
+            spans = spans,
+            onSelectionChange = onSelectionChange,
+            highlightColors = highlightColors
         )
     }
 }
@@ -124,7 +175,24 @@ private fun ExpandedEditor(
     placeholder: String,
     title: String,
     onCollapse: () -> Unit,
+    spans: List<RichSpan> = emptyList(),
+    onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
+    highlightColors: List<Color> = emptyList(),
 ) {
+    // Same treatment as the collapsed field — see the comments there. The expanded editor is where
+    // long-form writing actually happens, so it would be the wrong one to leave unstyled.
+    var expandedField by remember { mutableStateOf(TextFieldValue(value)) }
+    if (expandedField.text != value) {
+        expandedField = expandedField.copy(
+            text = value,
+            selection = TextRange(expandedField.selection.start.coerceIn(0, value.length),
+                                  expandedField.selection.end.coerceIn(0, value.length))
+        )
+    }
+    val expandedTransformation = remember(spans, highlightColors) {
+        if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
+        else RichSpanTransformation(spans, highlightColors)
+    }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     // A shared, indication-free interaction source so the scrim/panel tap targets add no ripple.
@@ -196,8 +264,13 @@ private fun ExpandedEditor(
                     }
                     Spacer(modifier = Modifier.size(8.dp))
                     OutlinedTextField(
-                        value = value,
-                        onValueChange = onValueChange,
+                        value = expandedField,
+                        onValueChange = { updated ->
+                            expandedField = updated
+                            onSelectionChange(updated.selection.min, updated.selection.max)
+                            if (updated.text != value) onValueChange(updated.text)
+                        },
+                        visualTransformation = expandedTransformation,
                         placeholder = { Text(placeholder, color = onGradientMuted) },
                         textStyle = LocalTextStyle.current.copy(color = onGradient),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -234,3 +307,40 @@ private fun panelSurfaceColor(onGradient: Color): Color =
         // Dark text -> light surface.
         Color(0xFFF4F4F8).copy(alpha = 0.92f)
     }
+
+/**
+ * INTEGRATION (C-group task 20) — turn a sidecar span list into Compose styling.
+ *
+ * Kept as a [VisualTransformation] rather than by swapping the field for a rich editor: the field
+ * keeps holding a plain [String], every existing caller keeps working, and the styling is applied
+ * at draw time only. Offsets are unchanged (nothing is inserted or hidden), so the mapping is the
+ * identity — which is what makes the cursor, selection handles and IME all behave exactly as they
+ * did before.
+ */
+private class RichSpanTransformation(
+    private val spans: List<RichSpan>,
+    private val highlightColors: List<Color>
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        if (spans.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+        val styled = buildAnnotatedString {
+            append(text.text)
+            // Clamped against the text actually in the field: the spans come from the database and
+            // the field may already have been edited this frame. A stale range would either throw
+            // or, worse, style the wrong words.
+            RichText.reconcile(spans, text.text.length).forEach { s ->
+                val style = when (s.kind) {
+                    RichSpan.Kind.LIGHT -> SpanStyle(fontWeight = FontWeight.Light)
+                    RichSpan.Kind.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
+                    RichSpan.Kind.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
+                    RichSpan.Kind.HIGHLIGHT -> SpanStyle(
+                        background = highlightColors[s.color.coerceIn(0, highlightColors.lastIndex)]
+                            .copy(alpha = 0.45f)
+                    )
+                }
+                addStyle(style, s.start, s.end)
+            }
+        }
+        return TransformedText(styled, OffsetMapping.Identity)
+    }
+}

@@ -25,7 +25,18 @@ data class Note(
     val isChecklist: Boolean = false,
     val checklist: String = "[]",
     // Soft-delete: null = not in the trash. See TrashCleanup.
-    val trashedAt: Long? = null
+    val trashedAt: Long? = null,
+    // ---- 1.1.0, group A (mirrors the Android entity exactly) ----------------------------------
+    val manualOrder: Int = 0,
+    val isDraft: Boolean = false,
+    val draftSavedAt: Long? = null,
+    val hidden: Boolean = false,
+    // Task A22 — mirrors the Android entity: a doodle is a third kind of note, and its strokes live
+    // in their own column so switching kinds never destroys the other kind's content.
+    // INTEGRATION (C task 20) — mirrors the Android entity. See data/RichText.kt.
+    val bodySpans: String = "",
+    val isDoodle: Boolean = false,
+    val doodle: String = ""
 )
 
 data class Task(
@@ -45,7 +56,14 @@ data class Task(
     // A RepeatRule.key (see data/Recurrence.kt). Only meaningful when dueAt is set.
     val repeatRule: String = "NONE",
     val reminderEnabled: Boolean = false,
-    val trashedAt: Long? = null
+    val trashedAt: Long? = null,
+    // ---- 1.1.0, group A (mirrors the Android entity exactly) ----------------------------------
+    val manualOrder: Int = 0,
+    val isDraft: Boolean = false,
+    val draftSavedAt: Long? = null,
+    val hidden: Boolean = false,
+    // INTEGRATION (C task 20) — the task twin of Note.bodySpans.
+    val notesSpans: String = ""
 )
 
 /** One historical revision of a note's text — see the Android original for the full rationale. */
@@ -60,6 +78,21 @@ data class NoteVersion(
     val savedAt: Long = System.currentTimeMillis()
 )
 
+/**
+ * Task A19 — one historical revision of a task. Desktop twin of the Android entity; field-for-field
+ * identical so BackupManager and the history screens compile against one shape on both platforms.
+ */
+data class TaskVersion(
+    val id: Long = 0,
+    val taskId: Long,
+    val title: String,
+    val notes: String = "",
+    val subtasks: String = "[]",
+    val priority: Int = 0,
+    val dueAt: Long? = null,
+    val savedAt: Long = System.currentTimeMillis()
+)
+
 data class ChatMessage(
     val id: Long = 0,
     val role: String,
@@ -70,7 +103,16 @@ data class ChatMessage(
     val attachmentName: String? = null,
     val conversationId: Long = 1,
     // Approximate tokens this turn cost — see data/TokenEstimator.kt.
-    val tokens: Int = 0
+    val tokens: Int = 0,
+    // Which USER message this assistant reply answers (B-group task 12: resend / multiple replies).
+    //
+    // 0 on user messages, on replies saved before this column existed, and on anything the pairing
+    // could not be established for. A non-zero value groups every reply that answers the same
+    // question: asking again appends another row with the SAME replyToId, and the chat shows one of
+    // them at a time with a 1/2 switcher. Deliberately a plain id rather than a separate
+    // "variants" table — a reply is still exactly one row, so search, export, token accounting and
+    // deletion all keep working with no special-casing at all.
+    val replyToId: Long = 0
 )
 
 data class ChatConversation(

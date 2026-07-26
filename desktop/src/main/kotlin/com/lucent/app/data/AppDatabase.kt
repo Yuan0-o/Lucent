@@ -12,12 +12,14 @@ class AppDatabase private constructor(db: Db) {
     private val notes = NoteDao(db)
     private val tasks = TaskDao(db)
     private val versions = NoteVersionDao(db)
+    private val taskVersions = TaskVersionDao(db)
     private val chats = ChatDao(db)
     private val conversations = ChatConversationDao(db)
 
     fun noteDao(): NoteDao = notes
     fun taskDao(): TaskDao = tasks
     fun noteVersionDao(): NoteVersionDao = versions
+    fun taskVersionDao(): TaskVersionDao = taskVersions
     fun chatDao(): ChatDao = chats
     fun chatConversationDao(): ChatConversationDao = conversations
 

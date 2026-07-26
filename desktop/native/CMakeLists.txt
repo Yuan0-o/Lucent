@@ -70,8 +70,16 @@ set(BUILD_SHARED_LIBS    OFF CACHE BOOL "" FORCE)
 #                      below turns it on for the second, GPU-enabled engine build; it degrades
 #                      itself back to CPU-only with a warning when the Vulkan SDK isn't installed,
 #                      so a misconfigured environment can never fail the build outright.
-#   GGML_NATIVE OFF  — don't bake in -march=native; a portable binary runs on any x86-64 Windows
-#                      rather than faulting with an illegal instruction on an older CPU.
+#   GGML_NATIVE OFF  — don't bake in -march=native. NOTE (backlog W-1): this does NOT mean
+#                      "lowest common denominator" — ggml then defaults GGML_AVX2/FMA/F16C/BMI2 ON,
+#                      producing a fixed x86-64-v3-class binary that requires AVX2. On an older CPU
+#                      the DLL loads fine and the FIRST INFERENCE dies with an illegal-instruction
+#                      fault. The shipped guard: NativeLoader refuses to load the engine on
+#                      non-AVX2 CPUs (probed via lucent_native, which IS plain x86-64) and the app
+#                      shows a plain message instead. The proper long-term fix is
+#                      -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON (ship several CPU variants,
+#                      pick at runtime — what upstream's own Windows releases do), at the cost of
+#                      build time and a few MB.
 #   GGML_OPENMP OFF  — avoid an external OpenMP runtime dependency in the shipped DLL.
 option(LUCENT_ENABLE_VULKAN "Compile the Vulkan GPU backend into the desktop engine" OFF)
 if (LUCENT_ENABLE_VULKAN)
@@ -108,3 +116,29 @@ target_include_directories(lucent_llama PRIVATE
 )
 
 target_link_libraries(lucent_llama llama)
+
+# ---- PHASE 4: multimodal (llama.cpp's official mtmd) ----
+# The mtmd library lives in the llama.cpp tree at tools/mtmd but is only built as a target when
+# LLAMA_BUILD_TOOLS is ON — which would drag every CLI tool into this build. So its sources are
+# compiled straight into lucent_llama instead: they depend only on ggml + llama (already linked)
+# and the vendored stb/miniaudio headers. Guarded by an existence check so a future llama.cpp pin
+# that moves these files degrades to a text-only engine WITH A WARNING instead of a broken build —
+# multimodal must never be the reason the engine fails to exist.
+set(LUCENT_MTMD_DIR ${llama_cpp_SOURCE_DIR}/tools/mtmd)
+if (EXISTS ${LUCENT_MTMD_DIR}/mtmd.cpp)
+    target_sources(lucent_llama PRIVATE
+        ${LUCENT_MTMD_DIR}/mtmd.cpp
+        ${LUCENT_MTMD_DIR}/mtmd-helper.cpp
+        ${LUCENT_MTMD_DIR}/mtmd-audio.cpp
+        ${LUCENT_MTMD_DIR}/clip.cpp
+    )
+    target_include_directories(lucent_llama PRIVATE
+        ${LUCENT_MTMD_DIR}
+        ${llama_cpp_SOURCE_DIR}/vendor
+        ${llama_cpp_SOURCE_DIR}/common
+    )
+    message(STATUS "lucent: multimodal (mtmd) compiled in from ${LUCENT_MTMD_DIR}")
+else()
+    target_compile_definitions(lucent_llama PRIVATE LUCENT_NO_MTMD)
+    message(WARNING "lucent: tools/mtmd not found in the llama.cpp checkout - building a TEXT-ONLY engine (local multimodal will be unavailable)")
+endif()

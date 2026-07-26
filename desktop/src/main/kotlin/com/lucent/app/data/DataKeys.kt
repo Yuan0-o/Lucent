@@ -43,11 +43,36 @@ object DataKeys {
         return if (bytes != null && bytes.size == KEY_BYTES) bytes else null
     }
 
-    /** Atomic write: temp file then rename, so a half-written key file can never be observed. */
+    /**
+     * Atomic **and durable** write: temp file, fsync, then rename — so neither a half-written nor a
+     * present-but-empty key file can ever be observed.
+     *
+     * ### C-group task 4/17: why the fsync is not optional here
+     *
+     * The original wrote the temp file and renamed it. That is atomic with respect to *other
+     * readers* — nobody sees a partial file — but it is not durable with respect to *power loss*.
+     * On NTFS the metadata change (the new name) can reach the disk before the file's contents do,
+     * so an abrupt power-off leaves `database.key` existing at zero length.
+     *
+     * That is not a theoretical window. Task 4's GPU hang forces exactly that power-off, and the
+     * dialog reported afterwards — "The Lucent database ... could not be unlocked with this
+     * machine's key" — is what an unreadable or regenerated key file produces on the next launch.
+     * A key file is the one thing in this app whose loss is unrecoverable without a backup, so it
+     * gets the strongest write the platform offers.
+     *
+     * `fd.sync()` blocks until the bytes are on the platter. After it returns, the only two states
+     * the crash can leave are "temp file exists, real file absent" (recoverable: a fresh key is
+     * minted, and [getOrCreate] only ever mints when the real file is absent) and "real file exists,
+     * complete".
+     */
     private fun atomicWrite(file: File, contents: String): Boolean {
         val temp = File(file.parentFile, "${file.name}.tmp")
         return try {
-            temp.writeText(contents)
+            java.io.FileOutputStream(temp).use { out ->
+                out.write(contents.toByteArray(Charsets.UTF_8))
+                out.flush()
+                out.fd.sync()
+            }
             if (temp.renameTo(file)) true else { temp.delete(); false }
         } catch (t: Throwable) {
             temp.delete()

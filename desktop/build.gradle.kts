@@ -72,6 +72,26 @@ dependencies {
 
     // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
     implementation("org.apache.pdfbox:pdfbox:3.0.3")
+
+    // ---- C-group task 10: the bundled CJK face for PDF export ----
+    //
+    // PDFBox embeds only the fonts it is handed, and its built-in Helvetica has no CJK coverage.
+    // Because DocumentExport DROPS characters the chosen face cannot encode, a Chinese/Japanese/
+    // Korean note exported to PDF on a machine with no imported CJK font came out with its text
+    // silently missing. See the comment on DocumentExport.loadPdfFonts.
+    //
+    // The face is a build INPUT, not a Gradle dependency: it is a binary asset the workflow places
+    // at
+    //     desktop/src/main/resources/fonts/LucentCJK.otf
+    // before `packageExe` runs. Recommended: **Noto Sans CJK** (SIL Open Font License 1.1, which
+    // permits redistribution inside an application — record it in THIRD-PARTY-NOTICES.md), the
+    // "Super OTC" or a regional subset. Expect the installer to grow by roughly 15-20 MB; this was
+    // chosen over glyph subsetting deliberately, because a subset has to be regenerated whenever
+    // the exportable string set changes and a stale subset fails the same silent way this bug did.
+    //
+    // The build does NOT fail when the file is absent — an optional asset must never break CI — but
+    // DocumentExport.cjkFontMissing is then set and the app tells the user their characters were
+    // dropped and offers .docx instead.
 }
 
 // CI proof that the desktop database is REALLY encrypted with the driver Gradle resolved — see
@@ -94,7 +114,12 @@ compose.desktop {
             // workflow uploads exactly the one .exe this produces.
             targetFormats(TargetFormat.Exe)
             packageName = "Lucent"
-            packageVersion = "1.0.0"
+            // 2.0.0 for the integrated three-group release. This MUST be bumped for WiX to
+            // perform an in-place upgrade: the installer only replaces an existing install when the
+            // incoming version is HIGHER. This release also changes the installer's UI structure
+            // (dirChooser was turned on for C-group task 5), so shipping it under the old version
+            // would leave users with two parallel installs and no obvious way to tell them apart.
+            packageVersion = "2.0.0"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with
@@ -114,8 +139,28 @@ compose.desktop {
                 // build over the old one" replace it — provided packageVersion above is bumped for the
                 // new release, since the installer only upgrades to a *higher* version.)
                 upgradeUuid = "8f4e2a10-1c3b-4d5e-9a7f-2b6c8d0e1f23"
+                // ---- C-group task 5: install anywhere, not just C: or D: ----
+                //
+                // The report was "the desktop build can only be installed on C: or D:". The cause is
+                // that WiX was never told to show a directory page at all: with no `dirChooser`,
+                // jpackage generates an installer with a FIXED destination, and `perUserInstall`
+                // below pins that destination to %LOCALAPPDATA% — which lives on whichever drive
+                // Windows is installed on. Anyone who wanted it elsewhere had to reach for the
+                // installer's own drive dropdown, which is why it looked like "C: or D: only":
+                // those were simply the only fixed drives that dialog would offer.
+                //
+                // `dirChooser = true` adds the WixUI_InstallDir browse page, so the user picks a
+                // real folder on any volume — E:, an external disk, a mounted network path.
+                dirChooser = true
                 // Install into the user's profile rather than Program Files, so installing and
                 // upgrading never needs administrator rights and the overwrite-upgrade is clean.
+                //
+                // NOTE (task 4 aftermath): keep this true. `perUserInstall = false` writes to
+                // Program Files and registers machine-wide, and it is the machine-wide MSI
+                // registration that gets stranded by a hard power-off mid-install — which is what
+                // produces the "cannot uninstall, cannot reinstall into the same folder, Failed to
+                // launch JVM" state reported in task 4. A per-user install is repairable by the
+                // user; a stranded machine-wide one needs msiexec surgery.
                 perUserInstall = true
                 // The .ico is bundled if present; the build still succeeds without it (jpackage falls
                 // back to a default icon), so a missing icon never fails CI.

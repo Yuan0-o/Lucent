@@ -78,7 +78,7 @@ object AppTools {
      */
     private val READ_ONLY_TOOLS = setOf(
         "list_notes", "read_note", "list_tasks", "read_task", "search_items", "web_search",
-        "read_attachment", "list_note_versions", "list_trash"
+        "read_attachment", "list_note_versions", "list_trash", "list_drafts"
     )
 
     /** Whether calling [name] would change the user's notes/tasks (and therefore needs confirmation). */
@@ -100,6 +100,7 @@ object AppTools {
             "create_note" -> com.lucent.app.i18n.S.ccCreateNote(s("title"))
             "update_note" -> com.lucent.app.i18n.S.ccEditNote(title) + newTitleSuffix(a)
             "delete_note" -> com.lucent.app.i18n.S.ccDeleteNote(title)
+            "delete_draft" -> com.lucent.app.i18n.S.ccDeleteDraft(title)
             "pin_note" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinNote(title) else com.lucent.app.i18n.S.ccUnpinNote(title)
             "archive_note" -> if (a.optBoolean("archived", true)) com.lucent.app.i18n.S.ccArchiveNote(title) else com.lucent.app.i18n.S.ccUnarchiveNote(title)
             "set_note_color" -> com.lucent.app.i18n.S.ccSetNoteColor(title, s("color", "colour"))
@@ -155,27 +156,108 @@ object AppTools {
      * Returns null for calls with no such field (deletes, pins, completions), where the decision
      * really is only yes or no.
      */
-    data class EditableArgument(val key: String, val label: String, val value: String)
+    data class EditableArgument(
+        val key: String,
+        val label: String,
+        val value: String,
+        // Body text, checklists and note contents are paragraphs, not labels; the dialog gives
+        // those a taller, multi-line box. A title or a due date gets a single line.
+        val multiline: Boolean = false
+    )
 
-    fun editableArgument(name: String, argumentsJson: String): EditableArgument? {
-        val a = try { JSONObject(argumentsJson) } catch (e: Exception) { return null }
-        fun of(key: String, label: String): EditableArgument? =
-            a.optString(key, "").takeIf { it.isNotBlank() }?.let { EditableArgument(key, label, it) }
+    /**
+     * Kept for callers that only ever wanted the headline field. Delegates to
+     * [editableArguments] so there is exactly one definition of "what is worth editing".
+     */
+    fun editableArgument(name: String, argumentsJson: String): EditableArgument? =
+        editableArguments(name, argumentsJson).firstOrNull()
+
+    /**
+     * EVERY argument of a proposed call that is worth showing the user before it runs, in the order
+     * they should appear (B-group task 3).
+     *
+     * ### Why this replaced the single-field version
+     *
+     * The old flow was: approve the action, and only afterwards get the option to open the created
+     * item and fix it. That is the wrong way round — it writes first and reviews second, so a wrong
+     * note or task genuinely exists (and has fired its reminder, and sits in the list) before the
+     * user has agreed to what is in it. The brief is the opposite order: see the whole thing, edit
+     * it, and only then decide whether it is added at all.
+     *
+     * So the modal now shows the *content* of the proposed item, not a one-line description of it.
+     * The single editable title was never enough for that: a create_task with a due date, a
+     * priority and three subtasks was summarised as its title alone, and everything else was
+     * approved sight-unseen.
+     *
+     * ### What is deliberately NOT editable
+     *
+     * The arguments that identify WHICH item is being acted on — the lookup `title` on an update,
+     * a version number, a colour keyword. Editing those does not correct the action, it silently
+     * retargets it at a different item, which is the one mistake a confirmation dialog must not
+     * make easy. Those still appear in the summary line above the fields; they are just not fields.
+     *
+     * Returns an empty list for calls where the decision genuinely is only yes or no (deletes,
+     * pins, completions) — those show no form at all, exactly as before.
+     */
+    fun editableArguments(name: String, argumentsJson: String): List<EditableArgument> {
+        val a = try { JSONObject(argumentsJson) } catch (e: Exception) { return emptyList() }
+        fun of(key: String, label: String, multiline: Boolean = false): EditableArgument? =
+            a.optString(key, "").takeIf { it.isNotBlank() }
+                ?.let { EditableArgument(key, label, it, multiline) }
+
         return when (name) {
-            // Creating something: the title is the thing the user is really approving.
-            "create_note" -> of("title", com.lucent.app.i18n.S.confirmEditTitleLabel)
-            "create_task" -> of("title", com.lucent.app.i18n.S.confirmEditTitleLabel)
-            // Renaming: the NEW title is the part under review, not the old one used to find it.
-            "update_note" -> of("new_title", com.lucent.app.i18n.S.confirmEditNewTitleLabel)
-            "update_task" -> of("new_title", com.lucent.app.i18n.S.confirmEditNewTitleLabel)
-            // Subtask text is short, free-form, and just as easy for a model to slightly mishear.
-            "add_subtask" -> of("item", com.lucent.app.i18n.S.confirmEditItemLabel)
-            "add_note_checklist_item" -> of("item", com.lucent.app.i18n.S.confirmEditItemLabel)
-            // Rewording an item: what it will SAY afterwards is the part under review.
-            "edit_subtask" -> of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel)
-            "edit_note_checklist_item" -> of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel)
-            else -> null
+            // Creating a note: title, then whatever body or checklist it would be created with.
+            "create_note" -> listOfNotNull(
+                of("title", com.lucent.app.i18n.S.confirmEditTitleLabel),
+                of("body", com.lucent.app.i18n.S.confirmEditBodyLabel, multiline = true),
+                of("checklist", com.lucent.app.i18n.S.confirmEditChecklistLabel, multiline = true),
+                of("tags", com.lucent.app.i18n.S.confirmEditTagsLabel)
+            )
+            // Creating a task: title, its notes, when it is due, and any subtasks proposed with it.
+            "create_task" -> listOfNotNull(
+                of("title", com.lucent.app.i18n.S.confirmEditTitleLabel),
+                of("notes", com.lucent.app.i18n.S.confirmEditNotesLabel, multiline = true),
+                of("due", com.lucent.app.i18n.S.confirmEditDueLabel),
+                of("subtasks", com.lucent.app.i18n.S.confirmEditSubtasksLabel, multiline = true)
+            )
+            // Editing: the NEW values are under review; the lookup title is not a field.
+            "update_note" -> listOfNotNull(
+                of("new_title", com.lucent.app.i18n.S.confirmEditNewTitleLabel),
+                of("body", com.lucent.app.i18n.S.confirmEditBodyLabel, multiline = true)
+            )
+            "update_task" -> listOfNotNull(
+                of("new_title", com.lucent.app.i18n.S.confirmEditNewTitleLabel),
+                of("notes", com.lucent.app.i18n.S.confirmEditNotesLabel, multiline = true),
+                of("new_due", com.lucent.app.i18n.S.confirmEditDueLabel)
+            )
+            "set_task_due_date" -> listOfNotNull(of("due_at", com.lucent.app.i18n.S.confirmEditDueLabel))
+            "add_subtask" -> listOfNotNull(of("item", com.lucent.app.i18n.S.confirmEditItemLabel))
+            "add_note_checklist_item" -> listOfNotNull(of("item", com.lucent.app.i18n.S.confirmEditItemLabel))
+            "edit_subtask" -> listOfNotNull(of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel))
+            "edit_note_checklist_item" -> listOfNotNull(of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel))
+            // Writing free text onto an item: the text itself is the whole of what is approved.
+            "set_note_attachment", "set_task_attachment" -> listOfNotNull(
+                of("file_name", com.lucent.app.i18n.S.confirmEditFileNameLabel),
+                of("content", com.lucent.app.i18n.S.confirmEditContentLabel, multiline = true)
+            )
+            else -> emptyList()
         }
+    }
+
+    /**
+     * Return [argumentsJson] with every entry of [edits] applied. Blank values are skipped rather
+     * than written, so clearing a field in the dialog means "leave this as proposed" instead of
+     * "create a nameless item" — the one edit that could not possibly be intended.
+     *
+     * Falls back to the original text if the arguments won't parse, for the same reason
+     * [withArgument] does: a call we cannot read is a call we must not silently rewrite.
+     */
+    fun withArguments(argumentsJson: String, edits: Map<String, String>): String = try {
+        val o = JSONObject(argumentsJson)
+        edits.forEach { (k, v) -> if (v.isNotBlank()) o.put(k, v) }
+        o.toString()
+    } catch (e: Exception) {
+        argumentsJson
     }
 
     /**
@@ -233,7 +315,7 @@ object AppTools {
         ),
         ToolDefinition(
             name = "delete_note",
-            description = "Delete a NOTE, matched by its title text. This moves it to Trash rather than erasing it — the user can restore it themselves for 30 days afterwards, so you can be matter-of-fact about deleting when asked.",
+            description = "Delete a NOTE (doodle notes included), matched by its title text. This moves it to Trash rather than erasing it — the user can restore it themselves for 30 days afterwards, so you can be matter-of-fact about deleting when asked.",
             params = listOf(ToolParam("title", "string", "The title (or part of it) of the note to delete"))
         ),
         ToolDefinition(
@@ -487,6 +569,21 @@ object AppTools {
         // assistant can too — but ONLY list and restore. It still cannot read, edit, or attach
         // to a trashed row, and it cannot delete anything permanently: restoring is the one safe
         // direction, and everything destructive stays behind the user's own hands. ----
+        // ---- Drafts (phase 3). Read + delete only, on purpose: a draft is an uncommitted
+        // proposal, so the one thing the assistant may do to it besides look is discard it. ----
+        ToolDefinition(
+            name = "list_drafts",
+            description = "List the user's DRAFTS: notes and tasks that were saved to the draft area (manually, or automatically when the app closed unexpectedly) and have not been committed yet. Returns titles and when each draft was saved. The assistant cannot edit or promote drafts — only the user can, from the Drafts screen; the assistant can delete one with delete_draft if asked.",
+            params = emptyList()
+        ),
+        ToolDefinition(
+            name = "delete_draft",
+            description = "Permanently delete a DRAFT note or task, matched by its title. Unlike delete_note/delete_task this does NOT go to the Trash — it matches the app's own Drafts screen, where discarding a draft is final. Only use when the user clearly asks to discard a draft.",
+            params = listOf(
+                ToolParam("kind", "string", "Which kind of draft: note or task"),
+                ToolParam("title", "string", "The title (or part of it) of the draft to delete")
+            )
+        ),
         ToolDefinition(
             name = "list_trash",
             description = "List what's currently in the Trash: recently deleted notes and/or tasks, with when each was deleted. Deleted items stay there for 30 days before they're removed for good. Use this to find something the user deleted and wants back, then bring it back with restore_note_from_trash or restore_task_from_trash.",
@@ -554,11 +651,33 @@ object AppTools {
      * DAO. Otherwise the assistant could quietly read or edit something the user believes they
      * deleted.
      */
+    /**
+     * PHASE-3 SCOPING RULE — which rows the assistant may see at all.
+     *
+     * `getAllOnce()` is deliberately unfiltered (backup and cleanup depend on that), which meant
+     * the assistant was inheriting the FULL table — including two kinds of row it must not:
+     *
+     *  - **Hidden rows.** The hidden area (task A21) sits behind the app-lock password in the UI.
+     *    An assistant that lists a hidden note in chat has walked the contents straight around
+     *    that password. Hidden rows are therefore invisible to every tool here — list, read,
+     *    search, update, and delete alike — and the same filter is applied to the Trash view, so
+     *    trashing a hidden note does not resurface it in chat either.
+     *  - **Drafts.** A draft is a note or task the user has not committed yet; presenting it as a
+     *    real item would let the assistant "edit" something that does not exist. Drafts get their
+     *    own explicit surface instead: list_drafts to see them, delete_draft to discard one —
+     *    and, per the current instruction, delete is the ONLY write the assistant has for them.
+     */
     private suspend fun activeNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.trashedAt == null }
+        db.noteDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
 
     private suspend fun activeTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.trashedAt == null }
+        db.taskDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
+
+    private suspend fun draftNotes(db: AppDatabase): List<Note> =
+        db.noteDao().getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
+
+    private suspend fun draftTasks(db: AppDatabase): List<Task> =
+        db.taskDao().getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
 
     /**
      * The rows currently in the Trash. Only list_trash and the two restore tools may look here:
@@ -566,10 +685,10 @@ object AppTools {
      * user can see on the Trash screens but can never quietly work on a row while it's "deleted".
      */
     private suspend fun trashedNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.trashedAt != null }
+        db.noteDao().getAllOnce().filter { it.trashedAt != null && !it.hidden }
 
     private suspend fun trashedTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.trashedAt != null }
+        db.taskDao().getAllOnce().filter { it.trashedAt != null && !it.hidden }
 
     private fun matchNote(notes: List<Note>, query: String): Note? =
         notes.firstOrNull { it.title.contains(query, ignoreCase = true) }
@@ -632,6 +751,7 @@ object AppTools {
         sb.append(note.title.ifBlank { "Untitled" })
         if (note.pinned) sb.append(" [pinned]")
         if (note.archived) sb.append(" [archived]")
+        if (note.isDoodle) sb.append(" {drawing}")
         if (note.isChecklist) {
             Checklist.progress(note.checklist)?.let { (done, total) -> sb.append(" {checklist: $done/$total}") }
         } else {
@@ -743,7 +863,14 @@ object AppTools {
                     if (match.pinned) sb.append("Pinned: yes\n")
                     if (match.archived) sb.append("Archived: yes\n")
                     if (match.tags.isNotBlank()) sb.append("Tags: ${match.tags}\n")
-                    if (match.isChecklist) {
+                    if (match.isDoodle) {
+                        // The strokes are geometry, not text — say so instead of pretending the
+                        // note is empty, and hand over the caption, which IS text.
+                        val strokes = com.lucent.app.ui.Doodle.parse(match.doodle)
+                        sb.append("This is a doodle note — a freehand drawing (${strokes.size} strokes). ")
+                        sb.append("The drawing itself cannot be read as text.\n")
+                        sb.append("Caption:\n${match.body.ifBlank { "(no caption)" }}\n")
+                    } else if (match.isChecklist) {
                         val items = Checklist.parse(match.checklist)
                         if (items.isEmpty()) {
                             sb.append("Checklist: (empty)\n")
@@ -769,6 +896,11 @@ object AppTools {
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
                     ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else if (match.isDoodle) {
+                    // Phase-3 rule: for the new note kinds the assistant may only DELETE. An edit
+                    // that rewrote a doodle's caption while silently keeping strokes it cannot see
+                    // would look like a full edit and not be one.
+                    ToolExecResult("\"${match.title}\" is a doodle note. The assistant can delete doodle notes but cannot edit them — the user edits the drawing in the app.", success = false)
                 } else if (!args.hasAny("new_title", "new_body", "new_tags")) {
                     ToolExecResult("No changes were provided.", success = false)
                 } else {
@@ -803,6 +935,8 @@ object AppTools {
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
                     ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else if (match.isDoodle) {
+                    ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
                     val pinned = args.optBoolean("pinned", true)
                     db.noteDao().update(match.copy(pinned = pinned))
@@ -815,6 +949,8 @@ object AppTools {
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
                     ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                } else if (match.isDoodle) {
+                    ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
                     val archived = args.optBoolean("archived", true)
                     // The same two-field write the archive button makes, so both paths are
@@ -1473,6 +1609,53 @@ object AppTools {
             // The Trash screens let the user see and restore what they deleted, so the assistant
             // gets the same two abilities — and ONLY those two. Trashed rows still can't be read,
             // edited, attached to, or purged through here: restoring is the one safe direction.
+
+            "list_drafts" -> {
+                val notes = draftNotes(db)
+                val tasks = draftTasks(db)
+                if (notes.isEmpty() && tasks.isEmpty()) {
+                    ToolExecResult("The draft area is empty.")
+                } else {
+                    val sb = StringBuilder()
+                    if (notes.isNotEmpty()) {
+                        sb.append("Draft notes (${notes.size}): ")
+                        sb.append(notes.joinToString("; ") { it.title.ifBlank { "Untitled" } + (if (it.isDoodle) " {drawing}" else "") })
+                        sb.append(".\n")
+                    }
+                    if (tasks.isNotEmpty()) {
+                        sb.append("Draft tasks (${tasks.size}): ")
+                        sb.append(tasks.joinToString("; ") { it.title.ifBlank { "Untitled" } })
+                        sb.append(".")
+                    }
+                    ToolExecResult(sb.toString().trim())
+                }
+            }
+
+            "delete_draft" -> {
+                val kind = args.optString("kind", "").lowercase()
+                val titleQuery = args.optString("title", "")
+                when (kind) {
+                    "note" -> {
+                        val match = matchNote(draftNotes(db), titleQuery)
+                        if (match == null) ToolExecResult("No draft note found matching \"$titleQuery\".", success = false)
+                        else {
+                            // Hard delete, mirroring the app's Drafts screen: a discarded draft is
+                            // final there too — drafts never pass through the Trash.
+                            db.noteDao().delete(match)
+                            ToolExecResult("Deleted draft note \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
+                        }
+                    }
+                    "task" -> {
+                        val match = matchTask(draftTasks(db), titleQuery)
+                        if (match == null) ToolExecResult("No draft task found matching \"$titleQuery\".", success = false)
+                        else {
+                            db.taskDao().delete(match)
+                            ToolExecResult("Deleted draft task \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
+                        }
+                    }
+                    else -> ToolExecResult("delete_draft needs kind = note or task.", success = false)
+                }
+            }
 
             "list_trash" -> {
                 val type = args.optString("type", "both").trim().lowercase()

@@ -44,12 +44,18 @@ object DesktopFiles {
      *                 quietly ignored by the Windows native dialog (which shows everything) — the
      *                 caller must not assume the returned file matches an extension.
      */
-    fun openFile(title: String = "Open", filter: FileFilter = FileFilter.ANY): File? =
-        openInternal(title, filter, multiple = false).firstOrNull()
+    fun openFile(
+        title: String = "Open",
+        filter: FileFilter = FileFilter.ANY,
+        startIn: File? = null
+    ): File? = openInternal(title, filter, multiple = false, startIn = startIn).firstOrNull()
 
     /** Show a native "open" dialog allowing several files. Returns an empty list on cancel. */
-    fun openFiles(title: String = "Open", filter: FileFilter = FileFilter.ANY): List<File> =
-        openInternal(title, filter, multiple = true)
+    fun openFiles(
+        title: String = "Open",
+        filter: FileFilter = FileFilter.ANY,
+        startIn: File? = null
+    ): List<File> = openInternal(title, filter, multiple = true, startIn = startIn)
 
     /**
      * Show a native "save as" dialog. Returns the destination [File] (which may not yet exist), or
@@ -75,11 +81,21 @@ object DesktopFiles {
         }
     }
 
-    private fun openInternal(title: String, filter: FileFilter, multiple: Boolean): List<File> {
+    private fun openInternal(
+        title: String,
+        filter: FileFilter,
+        multiple: Boolean,
+        // Where the dialog opens (B-group task 16). Used by the "attach from cloud storage" entry
+        // to land the user directly in their Google Drive / OneDrive / Dropbox folder instead of
+        // wherever the dialog happened to be last. Ignored if the path no longer exists, so a
+        // stale or uninstalled sync folder degrades to the normal default rather than failing.
+        startIn: File? = null
+    ): List<File> {
         val owner: Frame? = null
         val dialog = FileDialog(owner, title, FileDialog.LOAD).apply {
             isMultipleMode = multiple
             extFilter(filter)?.let { filenameFilter = it }
+            if (startIn != null && startIn.isDirectory) directory = startIn.absolutePath
         }
         return try {
             dialog.isVisible = true

@@ -279,6 +279,12 @@ object BackupManager {
         val noteVersions = if (BackupModule.NOTES in modules) {
             db.noteVersionDao().getAllOnce().filter { it.noteId in keptNoteIds }
         } else emptyList()
+        // Task A19 — the task side of the same rule: revisions travel only for tasks that survived
+        // the selection, so a deselected task cannot leave orphaned history in the file.
+        val keptTaskIds = tasks.map { it.id }.toHashSet()
+        val taskVersions = if (BackupModule.TASKS in modules) {
+            db.taskVersionDao().getAllOnce().filter { it.taskId in keptTaskIds }
+        } else emptyList()
         // Conversations narrowed to the chosen subset (task F1); a null selection keeps them all.
         val conversations =
             if (BackupModule.CHATS in modules) {
@@ -755,6 +761,17 @@ object BackupManager {
                     .put("isChecklist", it.isChecklist)
                     .put("checklist", it.checklist)
                     .put("trashedAt", it.trashedAt ?: JSONObject.NULL)
+                    // 1.1.0 group A — additive, same contract as the archive keys above.
+                    .put("manualOrder", it.manualOrder)
+                    .put("isDraft", it.isDraft)
+                    .put("draftSavedAt", it.draftSavedAt ?: JSONObject.NULL)
+                    .put("hidden", it.hidden)
+                    // Task A22 — additive, same contract as every key added before it.
+                    .put("isDoodle", it.isDoodle)
+                    // INTEGRATION (C task 20): the rich-text sidecar travels with the body it
+                    // describes. Absent from older backups, where it restores as "" = unstyled.
+                    .put("bodySpans", it.bodySpans)
+                    .put("doodle", it.doodle)
             )
         }
 
@@ -776,6 +793,11 @@ object BackupManager {
                     .put("repeatRule", it.repeatRule)
                     .put("reminderEnabled", it.reminderEnabled)
                     .put("trashedAt", it.trashedAt ?: JSONObject.NULL)
+                    .put("manualOrder", it.manualOrder)
+                    .put("isDraft", it.isDraft)
+                    .put("draftSavedAt", it.draftSavedAt ?: JSONObject.NULL)
+                    .put("hidden", it.hidden)
+                    .put("notesSpans", it.notesSpans)
             )
         }
 
@@ -796,6 +818,27 @@ object BackupManager {
                     .put("tags", version.tags)
                     .put("isChecklist", version.isChecklist)
                     .put("checklist", version.checklist)
+                    .put("savedAt", version.savedAt)
+            )
+        }
+
+        // Task A19 — task revision history, carried exactly as note history is: by *task title +
+        // createdAt*, never by taskId. Import inserts tasks as new rows and the database hands them
+        // brand-new ids, so a stored id would point at whatever task happened to land there — worse
+        // than useless. The importer re-links each revision to the task it actually belongs to.
+        val taskVersionsArray = JSONArray()
+        val taskById = tasks.associateBy { it.id }
+        taskVersions.forEach { version ->
+            val owner = taskById[version.taskId] ?: return@forEach
+            taskVersionsArray.put(
+                JSONObject()
+                    .put("taskTitle", owner.title)
+                    .put("taskCreatedAt", owner.createdAt)
+                    .put("title", version.title)
+                    .put("notes", version.notes)
+                    .put("subtasks", version.subtasks)
+                    .put("priority", version.priority)
+                    .put("dueAt", version.dueAt ?: JSONObject.NULL)
                     .put("savedAt", version.savedAt)
             )
         }
@@ -951,7 +994,7 @@ object BackupManager {
             // leaving the user to work out whether that was the file or the app.
             .put("modules", JSONArray().apply { modules.forEach { put(it.name) } })
         if (BackupModule.NOTES in modules) root.put("notes", notesArray).put("noteVersions", versionsArray)
-        if (BackupModule.TASKS in modules) root.put("tasks", tasksArray)
+        if (BackupModule.TASKS in modules) root.put("tasks", tasksArray).put("taskVersions", taskVersionsArray)
         if (BackupModule.CHATS in modules) root.put("chats", chatsArray).put("conversations", conversationsArray)
         if (settingsObj.length() > 0) root.put("settings", settingsObj)
         return root
@@ -1349,13 +1392,24 @@ object BackupManager {
         // Per-item restore choices (task F2): null = everything in that module, a non-null set is an
         // explicit subset. Chats by conversation id, API by profile name.
         conversationIds: Set<Long>? = null,
-        apiProfileNames: Set<String>? = null
+        apiProfileNames: Set<String>? = null,
+        /**
+         * C-group task 16 — parallel vs overwrite. Defaults to [ImportMode.PARALLEL], which is the
+         * behaviour every existing call site already had, so adding this parameter changes nothing
+         * for a caller that does not pass it.
+         */
+        mode: ImportMode = ImportMode.DEFAULT
     ): String {
         val root = JSONObject(json)
         var importedNotes = 0
         var importedTasks = 0
         var importedChats = 0
         var skipped = 0
+        // C-group task 16: replacements are counted separately from inserts. "Imported 12" when
+        // four of them silently replaced existing notes is a report that hides the only part of
+        // the operation the user might want to undo.
+        var replacedNotes = 0
+        var replacedTasks = 0
 
         val existingNotes = db.noteDao().getAllOnce()
         val existingTasks = db.taskDao().getAllOnce()
@@ -1365,6 +1419,8 @@ object BackupManager {
         // ids are not stable across an import — Room assigns fresh ones — so version history can't
         // travel by id and has to be re-linked through something that survives the trip.
         val noteIdByKey = HashMap<String, Long>()
+        // Task A19 — same re-linking table for tasks; see the export comment.
+        val taskIdByKey = HashMap<String, Long>()
         var importedVersions = 0
 
         // Restore conversations first so chat messages can be repointed at them. Backups store
@@ -1415,20 +1471,52 @@ object BackupManager {
                 val isChecklist = o.optBoolean("isChecklist", false)
                 val checklist = o.optString("checklist", "[]")
                 val trashedAt = if (o.isNull("trashedAt")) null else o.optLong("trashedAt")
-                val isDuplicate = existingNotes.any { it.title == title && it.body == body && it.updatedAt == updatedAt }
-                if (isDuplicate) { skipped++; continue }
-                val newNoteId = db.noteDao().insert(
-                    Note(
-                        title = title, body = body, updatedAt = updatedAt, tags = tags,
-                        attachments = attachments, archived = archived, archivedAt = archivedAt,
-                        pinned = pinned, color = color, isChecklist = isChecklist,
-                        checklist = checklist, trashedAt = trashedAt
-                    )
+                // 1.1.0 group A. Every default here is the value a pre-1.1.0 row already had, so an
+                // older backup restores as "not a draft, not hidden, no manual position" — which is
+                // precisely what those notes were.
+                val manualOrder = o.optInt("manualOrder", 0)
+                val isDraft = o.optBoolean("isDraft", false)
+                val draftSavedAt = if (o.isNull("draftSavedAt")) null else o.optLong("draftSavedAt")
+                val hidden = o.optBoolean("hidden", false)
+                val isDoodle = o.optBoolean("isDoodle", false)
+                val doodle = o.optString("doodle", "")
+                val bodySpans = o.optString("bodySpans", "")
+                // C-group task 16. Identity is the trimmed, case-insensitive title — the same rule
+                // NoteLinks resolves [[wiki]] links with, so a restore can never split a note away
+                // from the links pointing at it. See ImportMode for the full reasoning.
+                val key = ImportDecision.noteKey(title)
+                val local = existingNotes.firstOrNull { ImportDecision.noteKey(it.title) == key }
+                val isDuplicate = existingNotes.any {
+                    it.title == title && it.body == body && it.updatedAt == updatedAt
+                }
+                val action = ImportDecision.forNote(mode, local?.updatedAt, updatedAt, isDuplicate)
+                if (action == ImportAction.SKIP) { skipped++; continue }
+                val incoming = Note(
+                    title = title, body = body, updatedAt = updatedAt, tags = tags,
+                    attachments = attachments, archived = archived, archivedAt = archivedAt,
+                    pinned = pinned, color = color, isChecklist = isChecklist,
+                    checklist = checklist, trashedAt = trashedAt,
+                    // INTEGRATION: group A's 1.1.0 columns travel through C's import-mode path too.
+                    // In OVERWRITE mode the incoming row replaces the local one wholesale, so these
+                    // must be carried here — leaving them off would silently reset a replaced note's
+                    // draft/hidden/order state to the defaults instead of to what the backup held.
+                    manualOrder = manualOrder, isDraft = isDraft,
+                    draftSavedAt = draftSavedAt, hidden = hidden,
+                    isDoodle = isDoodle, doodle = doodle, bodySpans = bodySpans
                 )
+                val newNoteId = if (action == ImportAction.REPLACE && local != null) {
+                    // Keep the local row's id so anything already pointing at it — a widget, an
+                    // open editor, this device's version history — keeps pointing at it.
+                    db.noteDao().update(incoming.copy(id = local.id))
+                    replacedNotes++
+                    local.id
+                } else {
+                    db.noteDao().insert(incoming)
+                }
                 // Remember where this note landed so its revision history can be re-linked to the
                 // id Room just handed it. Keyed on the same (title, updatedAt) pair the export used.
                 noteIdByKey["$title\u0000$updatedAt"] = newNoteId
-                importedNotes++
+                if (action == ImportAction.INSERT) importedNotes++
             }
         }
         (if (wantTasks) root.optJSONArray("tasks") else null)?.let { arr ->
@@ -1450,20 +1538,82 @@ object BackupManager {
                 val repeatRule = o.optString("repeatRule", "NONE")
                 val reminderEnabled = o.optBoolean("reminderEnabled", false)
                 val taskTrashedAt = if (o.isNull("trashedAt")) null else o.optLong("trashedAt")
-                val isDuplicate = existingTasks.any { it.title == title && it.createdAt == createdAt }
-                if (isDuplicate) { skipped++; continue }
-                db.taskDao().insert(
-                    Task(
-                        title = title, isDone = isDone, createdAt = createdAt,
-                        attachments = attachments, dueAt = dueAt, notes = taskNotes,
-                        completedAt = completedAt, priority = priority, pinned = taskPinned,
-                        subtasks = subtasks, repeatRule = repeatRule,
-                        reminderEnabled = reminderEnabled, trashedAt = taskTrashedAt
-                    )
+                val taskManualOrder = o.optInt("manualOrder", 0)
+                val taskIsDraft = o.optBoolean("isDraft", false)
+                val taskDraftSavedAt = if (o.isNull("draftSavedAt")) null else o.optLong("draftSavedAt")
+                val taskHidden = o.optBoolean("hidden", false)
+                val taskNotesSpans = o.optString("notesSpans", "")
+                // C-group task 16. Tasks match on title + createdAt: a title alone is a bad key
+                // ("Buy milk" recurs), while the creation instant is stable and travels in the
+                // backup. Tasks carry NO modification timestamp, so OVERWRITE cannot ask which copy
+                // is newer and instead does what the mode plainly says — see ImportMode.
+                val taskKey = ImportDecision.taskKey(title, createdAt)
+                val localTask = existingTasks.firstOrNull {
+                    ImportDecision.taskKey(it.title, it.createdAt) == taskKey
+                }
+                val isDuplicate = localTask != null &&
+                    localTask.isDone == isDone && localTask.notes == taskNotes &&
+                    localTask.dueAt == dueAt && localTask.priority == priority &&
+                    localTask.subtasks == subtasks && localTask.trashedAt == taskTrashedAt
+                val taskAction = ImportDecision.forTask(mode, localTask != null, isDuplicate)
+                if (taskAction == ImportAction.SKIP) { skipped++; continue }
+                val incomingTask = Task(
+                    title = title, isDone = isDone, createdAt = createdAt,
+                    attachments = attachments, dueAt = dueAt, notes = taskNotes,
+                    completedAt = completedAt, priority = priority, pinned = taskPinned,
+                    subtasks = subtasks, repeatRule = repeatRule,
+                    reminderEnabled = reminderEnabled, trashedAt = taskTrashedAt,
+                    // INTEGRATION: same reasoning as the note block above.
+                    manualOrder = taskManualOrder, isDraft = taskIsDraft,
+                    draftSavedAt = taskDraftSavedAt, hidden = taskHidden,
+                    notesSpans = taskNotesSpans
                 )
-                importedTasks++
+                // INTEGRATION: group A recorded the landing id so task revision history can be
+                // re-linked; group C introduced the REPLACE branch, where the row keeps the LOCAL
+                // id rather than getting a new one. Both are needed, so the id is captured from
+                // whichever branch ran — a REPLACE that recorded the insert id instead would
+                // re-link every restored revision to a task that does not exist.
+                val newTaskId = if (taskAction == ImportAction.REPLACE && localTask != null) {
+                    db.taskDao().update(incomingTask.copy(id = localTask.id))
+                    replacedTasks++
+                    localTask.id
+                } else {
+                    val inserted = db.taskDao().insert(incomingTask)
+                    importedTasks++
+                    inserted
+                }
+                taskIdByKey["$title\u0000$createdAt"] = newTaskId
             }
         }
+        // Task revision history — the task twin of the note block below, including the same rule
+        // about dropping revisions whose owner wasn't imported: an orphaned version row would be
+        // invisible history attached to nothing, which is strictly worse than no history.
+        (if (wantTasks) root.optJSONArray("taskVersions") else null)?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val ownerTitle = o.optString("taskTitle", "")
+                val ownerCreatedAt = o.optLong("taskCreatedAt", -1L)
+                val taskId = taskIdByKey["$ownerTitle\u0000$ownerCreatedAt"] ?: continue
+                db.taskVersionDao().insert(
+                    TaskVersion(
+                        taskId = taskId,
+                        title = o.optString("title", ""),
+                        notes = o.optString("notes", ""),
+                        subtasks = o.optString("subtasks", "[]"),
+                        priority = o.optInt("priority", 0),
+                        dueAt = if (o.isNull("dueAt")) null else o.optLong("dueAt"),
+                        savedAt = o.optLong("savedAt", System.currentTimeMillis())
+                    )
+                )
+                importedVersions++
+            }
+            // The per-task cap is enforced on the way in as well as on the way out, so a
+            // hand-edited backup carrying a thousand revisions of one task can't blow past it.
+            taskIdByKey.values.distinct().forEach { id ->
+                db.taskVersionDao().trimTo(id, TaskHistory.MAX_VERSIONS_PER_TASK)
+            }
+        }
+
         // Note revision history. Re-linked to whichever local id each note actually landed on (see
         // noteIdByKey). Versions whose note wasn't imported — because it was a duplicate and got
         // skipped, or because the file was hand-edited — are simply dropped: an orphaned version row
@@ -1526,6 +1676,22 @@ object BackupManager {
                         attachmentName = if (o.isNull("attachmentName")) null else o.optString("attachmentName"),
                         conversationId = newConvId,
                         tokens = o.optInt("tokens", 0)
+                        // replyToId (B-group task 12) is deliberately NOT carried across a
+                        // restore. It is a raw row id, and a restore assigns brand-new ids —
+                        // conversations are already remapped through convIdRemap for exactly that
+                        // reason. Copying the old value verbatim would leave every restored reply
+                        // pointing at whatever message happens to hold that id now, which is a
+                        // dangling pointer into unrelated content: the chat would group answers
+                        // that have nothing to do with each other.
+                        //
+                        // Leaving it 0 means restored replies are simply ungrouped — no 1/2
+                        // switcher, every answer shown in order, exactly as conversations rendered
+                        // before this feature existed. Losing which answers were siblings is a
+                        // small, honest loss; showing the wrong ones as siblings would not be.
+                        //
+                        // Preserving it properly would need a message-id remap alongside the
+                        // conversation one, built in the same pass. Worth doing if variants ever
+                        // become load-bearing; not worth the risk today.
                     )
                 )
                 importedChats++
@@ -1701,7 +1867,15 @@ object BackupManager {
         val settingsNote = if (settingsRestored) com.lucent.app.i18n.S.importSettingsRestored else ""
         val historyNote = if (importedVersions > 0) com.lucent.app.i18n.S.importVersionsRestored(importedVersions) else ""
         val dedupNote = if (skipped > 0) com.lucent.app.i18n.S.importDuplicatesSkipped(skipped) else ""
-        return com.lucent.app.i18n.S.importSummary(importedNotes, importedTasks, importedChats) + settingsNote + historyNote + dedupNote
+        // C-group task 16: replacements get their own line, and only when there were any. An
+        // overwrite restore that silently reports "imported 12" is hiding the one part of the
+        // operation the user might want to reverse.
+        val replacedNote =
+            if (replacedNotes > 0 || replacedTasks > 0)
+                "\n" + com.lucent.app.i18n.S.importReplacedSummary(replacedNotes, replacedTasks)
+            else ""
+        return com.lucent.app.i18n.S.importSummary(importedNotes, importedTasks, importedChats) +
+            settingsNote + historyNote + dedupNote + replacedNote
     }
 
     /**

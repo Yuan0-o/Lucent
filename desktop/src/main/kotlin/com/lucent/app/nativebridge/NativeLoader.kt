@@ -17,6 +17,15 @@ import java.io.File
 object NativeLoader {
 
     /**
+     * W-1: true when the engine load was REFUSED because this CPU lacks AVX2. The UI reads this to
+     * show the honest sentence ("this processor can't run the on-device model") instead of the
+     * generic "engine missing" one — the difference between a message and a mystery.
+     */
+    @Volatile
+    var cpuMissingAvx2: Boolean = false
+        private set
+
+    /**
      * Load the on-device LLM engine, preferring the Vulkan-enabled build when this machine can run
      * it (settings task A4 — Windows GPU support, mirroring the Android build's approach).
      *
@@ -35,6 +44,18 @@ object NativeLoader {
      * GPU is opt-in behind the existing warning dialog, exactly like Android.
      */
     fun loadLlmEngine(): Boolean {
+        // ---- W-1: refuse, politely, before the fault can happen. ----
+        // Both engine DLLs are compiled /arch:AVX2 (desktop/native/CMakeLists.txt). On a CPU
+        // without AVX2 they LOAD fine and then kill the whole JVM with an illegal-instruction
+        // fault on the first inference — a process death, not a catchable exception. So the check
+        // runs HERE, before any engine DLL enters the process. The probe lives in lucent_native
+        // (plain x86-64, safe everywhere); when that library is absent the answer is unknown and
+        // the old behaviour stands — refusing on "unknown" would take the local model away from
+        // the AVX2-capable majority to protect machines we can't identify.
+        if (LucentNative.cpuHasAvx2() == false) {
+            cpuMissingAvx2 = true
+            return false
+        }
         if (vulkanRuntimePresent() && load("lucent_llama_vk")) return true
         return load("lucent_llama")
     }
