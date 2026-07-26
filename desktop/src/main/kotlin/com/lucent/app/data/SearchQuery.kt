@@ -295,8 +295,14 @@ data class SearchQuery(
     // The haystack helpers take the caller's already-parsed checklist so the JSON parse happens
     // exactly once per row, in matches()/rank(), rather than being repeated down here.
 
+    // Round R2, task 2 — BOTH, never either/or.
+    //
+    // This returned the items *instead of* the body for a checklist note, which quietly meant a
+    // checklist note's remarks field (which has existed since task A20) was not searchable at all:
+    // you could read the text on the page and then fail to find the note by typing it. Now that a
+    // note can carry items and a drawing and a body at once, "pick one" has no defensible answer.
     private fun noteBodyText(note: Note, checklist: List<ChecklistItem>): String =
-        if (note.isChecklist) checklist.joinToString(" ") { it.text } else note.body
+        if (note.isChecklist) (checklist.joinToString(" ") { it.text } + " " + note.body) else note.body
 
     private fun noteHaystack(note: Note, checklist: List<ChecklistItem>): String =
         listOf(note.title, noteBodyText(note, checklist), note.tags).joinToString(" ").lowercase()
