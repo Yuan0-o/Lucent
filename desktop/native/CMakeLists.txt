@@ -126,18 +126,27 @@ target_link_libraries(lucent_llama llama)
 # multimodal must never be the reason the engine fails to exist.
 set(LUCENT_MTMD_DIR ${llama_cpp_SOURCE_DIR}/tools/mtmd)
 if (EXISTS ${LUCENT_MTMD_DIR}/mtmd.cpp)
-    target_sources(lucent_llama PRIVATE
-        ${LUCENT_MTMD_DIR}/mtmd.cpp
-        ${LUCENT_MTMD_DIR}/mtmd-helper.cpp
-        ${LUCENT_MTMD_DIR}/mtmd-audio.cpp
-        ${LUCENT_MTMD_DIR}/clip.cpp
-    )
+    # Second CI pass (Android job 2026-07-26): the hand-picked four-file list above COMPILED but
+    # the LINKER answered with two dozen missing vtables (clip_graph_*, mtmd_image_preprocessor_*):
+    # b9888 splits the per-model clip graphs and image preprocessors across many more translation
+    # units than older revisions. So: stop hand-listing sources at all. Take every .cpp in the mtmd
+    # tree except executables/tests — a future upstream re-split then lands here as "more files in
+    # the glob", not as another red run.
+    #
+    # Filter notes: "-cli.cpp" (not a bare "cli" substring — clip.cpp CONTAINS "cli" and must
+    # survive), standalone main.cpp, and any test/example/bench trees.
+    file(GLOB_RECURSE LUCENT_MTMD_SOURCES CONFIGURE_DEPENDS ${LUCENT_MTMD_DIR}/*.cpp)
+    list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "-cli\.cpp$")
+    list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "/main\.cpp$")
+    list(FILTER LUCENT_MTMD_SOURCES EXCLUDE REGEX "/(tests?|examples?|bench|deprecated)/")
+    list(LENGTH LUCENT_MTMD_SOURCES LUCENT_MTMD_COUNT)
+    message(STATUS "lucent: multimodal (mtmd) compiled in - ${LUCENT_MTMD_COUNT} source(s) under ${LUCENT_MTMD_DIR}")
+    target_sources(lucent_llama PRIVATE ${LUCENT_MTMD_SOURCES})
     target_include_directories(lucent_llama PRIVATE
         ${LUCENT_MTMD_DIR}
         ${llama_cpp_SOURCE_DIR}/vendor
         ${llama_cpp_SOURCE_DIR}/common
     )
-    message(STATUS "lucent: multimodal (mtmd) compiled in from ${LUCENT_MTMD_DIR}")
 else()
     target_compile_definitions(lucent_llama PRIVATE LUCENT_NO_MTMD)
     message(WARNING "lucent: tools/mtmd not found in the llama.cpp checkout - building a TEXT-ONLY engine (local multimodal will be unavailable)")
