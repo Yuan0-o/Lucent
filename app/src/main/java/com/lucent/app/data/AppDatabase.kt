@@ -239,7 +239,7 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
  * conversations render exactly as they did, with no switcher and no backfill pass over the user's
  * history.
  */
-val MIGRATION_13_14, MIGRATION_14_15 = object : Migration(13, 14) {
+val MIGRATION_13_14 = object : Migration(13, 14) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE chat_messages ADD COLUMN replyToId INTEGER NOT NULL DEFAULT 0")
     }
