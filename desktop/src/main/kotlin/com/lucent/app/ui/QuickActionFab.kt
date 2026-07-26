@@ -2,6 +2,16 @@ package com.lucent.app.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -170,7 +180,13 @@ fun QuickActionFab(
     hasSelection: Boolean = false,
     onToggleStyle: (RichSpan.Kind, Int) -> Unit = { _, _ -> },
     onClearStyle: () -> Unit = {},
-    onNeedSelection: () -> Unit = {}
+    onNeedSelection: () -> Unit = {},
+    // Task 1. Which attributes are currently in force — the styles covering the selection when there
+    // is one, and otherwise the styles the user has ARMED for whatever they type next. The panel
+    // lights its buttons from these, which is the only way "press bold, then type" is discoverable:
+    // without it the button would look identical before and after being pressed.
+    activeKinds: Set<RichSpan.Kind> = emptySet(),
+    activeHighlight: Int? = null
 ) {
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
@@ -190,61 +206,57 @@ fun QuickActionFab(
         highlightOpen = false
     }
 
-    Box(modifier = modifier.size(RING_DIAMETER), contentAlignment = Alignment.BottomEnd) {
-        if (reveal > 0.01f) {
-            when {
-                // ---- Page 2b: the five highlighter colours ----
-                highlightOpen -> {
-                    val angles = RING_ANGLES_5
-                    RichHighlightColors.forEachIndexed { index, swatch ->
-                        RingSwatch(
-                            color = swatch,
-                            label = com.lucent.app.i18n.S.richTextHighlight,
-                            angleDegrees = angles[index],
-                            reveal = reveal,
-                            enabled = hasSelection
-                        ) {
-                            onToggleStyle(RichSpan.Kind.HIGHLIGHT, index)
-                            highlightOpen = false
-                        }
-                    }
-                }
-                // ---- Page 2a: weights, italic, highlighter, clear ----
-                formatPage -> {
-                    RingAction(Icons.Default.FormatBold, com.lucent.app.i18n.S.richTextBold, RING_ANGLES_5[0], reveal, hasSelection) {
-                        if (hasSelection) onToggleStyle(RichSpan.Kind.BOLD, 0) else onNeedSelection()
-                    }
-                    RingAction(Icons.Default.FormatItalic, com.lucent.app.i18n.S.richTextItalic, RING_ANGLES_5[1], reveal, hasSelection) {
-                        if (hasSelection) onToggleStyle(RichSpan.Kind.ITALIC, 0) else onNeedSelection()
-                    }
-                    RingAction(Icons.Default.FormatSize, com.lucent.app.i18n.S.richTextLight, RING_ANGLES_5[2], reveal, hasSelection) {
-                        if (hasSelection) onToggleStyle(RichSpan.Kind.LIGHT, 0) else onNeedSelection()
-                    }
-                    RingAction(Icons.Default.Brush, com.lucent.app.i18n.S.richTextHighlight, RING_ANGLES_5[3], reveal, hasSelection) {
-                        if (hasSelection) highlightOpen = true else onNeedSelection()
-                    }
-                    RingAction(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, RING_ANGLES_5[4], reveal, hasSelection) {
-                        if (hasSelection) onClearStyle() else onNeedSelection()
-                    }
-                }
-                // ---- Page 1: the editing actions that were always here ----
-                else -> {
-                    // Laid out on an arc that opens up and to the left — the only quadrant that is
-                    // free when the control sits in the bottom-right corner. See [RING_ANGLES_5].
-                    RingAction(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, RING_ANGLES_3[0], reveal, canUndo, onUndo)
-                    RingAction(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, RING_ANGLES_3[1], reveal, canRedo, onRedo)
-                    // The formatting page is offered only when the switch is on, so a user who never
-                    // turned rich text on sees the ring exactly as group A shipped it.
-                    if (richTextEnabled) {
-                        RingAction(
-                            Icons.Default.TextFormat,
-                            com.lucent.app.i18n.S.a11yRichTextToolbar,
-                            RING_ANGLES_3[2], reveal, true
-                        ) { formatPage = true }
-                    }
+    Column(modifier = modifier, horizontalAlignment = Alignment.End) {
+
+        // ---- The formatting panel (task 1) --------------------------------------------------
+        //
+        // This used to be a second and third PAGE OF THE RING, and the ring could not hold them.
+        // Five satellites on a 90° arc at 72dp put their centres 28dp apart while each control is
+        // 40dp across, so they overlapped by a third of their own width; the task asks for seven,
+        // which on the same arc would be 19dp apart. There is no radius that fixes this on a phone:
+        // a 40dp target every 44dp needs an arc 170dp in radius, which is off the side of the
+        // screen. A ring is the wrong container for more than about three things.
+        //
+        // So the formatting controls are a grid instead — four columns, laid out downward from the
+        // top-right, every cell a full 52dp with room to spare between them. It also solves the
+        // *other* half of the report ("two of them, I don't know what they do"): a grid has room for
+        // a label under each icon, and the ring never did.
+        if (reveal > 0.01f && (formatPage || highlightOpen)) {
+            FormatPanel(
+                highlightOpen = highlightOpen,
+                canUndo = canUndo,
+                canRedo = canRedo,
+                hasSelection = hasSelection,
+                activeKinds = activeKinds,
+                activeHighlight = activeHighlight,
+                onUndo = onUndo,
+                onRedo = onRedo,
+                onToggleStyle = onToggleStyle,
+                onClearStyle = onClearStyle,
+                onOpenHighlights = { highlightOpen = true },
+                onCloseHighlights = { highlightOpen = false }
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        Box(modifier = Modifier.size(RING_DIAMETER), contentAlignment = Alignment.BottomEnd) {
+            // Page 1 keeps the ring: three satellites at 45° apart are 55dp between centres, which
+            // is the one case the arc genuinely fits.
+            if (reveal > 0.01f && !formatPage && !highlightOpen) {
+                // Laid out on an arc that opens up and to the left — the only quadrant that is
+                // free when the control sits in the bottom-right corner. See [RING_ANGLES_5].
+                RingAction(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, RING_ANGLES_3[0], reveal, canUndo, onUndo)
+                RingAction(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, RING_ANGLES_3[1], reveal, canRedo, onRedo)
+                // The formatting page is offered only when the switch is on, so a user who never
+                // turned rich text on sees the ring exactly as group A shipped it.
+                if (richTextEnabled) {
+                    RingAction(
+                        Icons.Default.TextFormat,
+                        com.lucent.app.i18n.S.a11yRichTextToolbar,
+                        RING_ANGLES_3[2], reveal, true
+                    ) { formatPage = true }
                 }
             }
-        }
 
         val icon: ImageVector = when {
             expanded -> Icons.Default.Check
@@ -258,7 +270,7 @@ fun QuickActionFab(
             scrollingDown -> com.lucent.app.i18n.S.a11yScrollBottom
             else -> com.lucent.app.i18n.S.a11yQuickEdit
         }
-        Box(
+            Box(
             modifier = Modifier
                 .size(52.dp)
                 .clip(CircleShape)
@@ -283,6 +295,7 @@ fun QuickActionFab(
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = label, tint = onGradient, modifier = Modifier.size(26.dp))
+            }
         }
     }
 }
@@ -322,47 +335,6 @@ private fun RingAction(
 
 
 /**
- * One highlighter colour on the ring. A filled disc rather than an icon, because the thing being
- * chosen IS the colour — an icon tinted five ways is five icons nobody can tell apart at 20dp.
- */
-@Composable
-private fun RingSwatch(
-    color: Color,
-    label: String,
-    angleDegrees: Float,
-    reveal: Float,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    val context = LocalContext.current
-    val radians = Math.toRadians(angleDegrees.toDouble())
-    val radiusPx = with(androidx.compose.ui.platform.LocalDensity.current) { RING_RADIUS.toPx() }
-    val dx = (cos(radians) * radiusPx * reveal).roundToInt()
-    val dy = (sin(radians) * radiusPx * reveal).roundToInt()
-
-    Box(
-        modifier = Modifier
-            .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
-            .size(40.dp)
-            .graphicsLayer { alpha = reveal * (if (enabled) 1f else 0.35f) }
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.30f))
-            .pointerInput(enabled) {
-                detectTapGestures(onTap = { if (enabled) { Haptics.tick(context); onClick() } })
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(color)
-                .semantics { contentDescription = label }
-        )
-    }
-}
-
-/**
  * The five highlighter colours the editor offers.
  *
  * Derived from [com.lucent.app.data.RichText.HIGHLIGHT_ARGB] rather than restated, so the swatch a
@@ -397,3 +369,144 @@ private val RING_ANGLES_3 = listOf(180f, 225f, 270f)
 
 private val RING_DIAMETER = 160.dp
 private val RING_RADIUS = 72.dp
+
+/**
+ * The formatting toolbar (task 1) — a grid, deliberately, and not another ring.
+ *
+ * Seven 40dp controls cannot share a 72dp arc: adjacent centres would be 19dp apart. Four columns
+ * of 54dp cells hold all seven with clear space between every pair, and — the part the ring could
+ * never do — leave room for a **label under each icon**, which is the whole answer to "I don't know
+ * what these two do". A brush and a "TT" are not self-explanatory; "Highlight" and "Light" are.
+ *
+ * A lit cell means the attribute is IN FORCE: applied to the current selection if there is one, or
+ * armed for whatever gets typed next if there isn't. Without that feedback, arming a style before
+ * typing is invisible and therefore not a feature.
+ */
+@Composable
+private fun FormatPanel(
+    highlightOpen: Boolean,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    hasSelection: Boolean,
+    activeKinds: Set<RichSpan.Kind>,
+    activeHighlight: Int?,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onToggleStyle: (RichSpan.Kind, Int) -> Unit,
+    onClearStyle: () -> Unit,
+    onOpenHighlights: () -> Unit,
+    onCloseHighlights: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.Black.copy(alpha = 0.62f))
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+        if (highlightOpen) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                RichHighlightColors.forEachIndexed { index, swatch ->
+                    PanelCell(
+                        label = com.lucent.app.i18n.S.richTextHighlight,
+                        enabled = true,
+                        active = activeHighlight == index,
+                        onClick = { onToggleStyle(RichSpan.Kind.HIGHLIGHT, index); onCloseHighlights() }
+                    ) {
+                        Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(swatch))
+                    }
+                }
+                PanelCell(
+                    label = com.lucent.app.i18n.S.actionBack,
+                    enabled = true,
+                    active = false,
+                    onClick = onCloseHighlights
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            return@Column
+        }
+
+        // Seven controls, four to a row. The order is the order of use: the three that change how
+        // text looks, then the highlighter, then the two that take a change back, then clear.
+        val cells: List<PanelItem> = listOf(
+            PanelItem(Icons.Default.FormatBold, com.lucent.app.i18n.S.richTextBold, true,
+                RichSpan.Kind.BOLD in activeKinds) { onToggleStyle(RichSpan.Kind.BOLD, 0) },
+            PanelItem(Icons.Default.FormatItalic, com.lucent.app.i18n.S.richTextItalic, true,
+                RichSpan.Kind.ITALIC in activeKinds) { onToggleStyle(RichSpan.Kind.ITALIC, 0) },
+            PanelItem(Icons.Default.FormatSize, com.lucent.app.i18n.S.richTextLight, true,
+                RichSpan.Kind.LIGHT in activeKinds) { onToggleStyle(RichSpan.Kind.LIGHT, 0) },
+            PanelItem(Icons.Default.Brush, com.lucent.app.i18n.S.richTextHighlight, true,
+                activeHighlight != null) { onOpenHighlights() },
+            PanelItem(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, canUndo, false) { onUndo() },
+            PanelItem(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, canRedo, false) { onRedo() },
+            PanelItem(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, true, false) { onClearStyle() }
+        )
+        cells.chunked(4).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                row.forEach { item ->
+                    PanelCell(item.label, item.enabled, item.active, item.onClick) {
+                        Icon(
+                            item.icon,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+private data class PanelItem(
+    val icon: ImageVector,
+    val label: String,
+    val enabled: Boolean,
+    val active: Boolean,
+    val onClick: () -> Unit
+)
+
+/** One 54dp cell: a round icon well with its name underneath. */
+@Composable
+private fun PanelCell(
+    label: String,
+    enabled: Boolean,
+    active: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .width(54.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (active) Color.White.copy(alpha = 0.26f) else Color.Transparent)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
+            .pointerInput(enabled, active) {
+                detectTapGestures(onTap = { if (enabled) { Haptics.tick(context); onClick() } })
+            }
+            .padding(vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier.size(30.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) { content() }
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.85f),
+            fontSize = 9.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
+    }
+}

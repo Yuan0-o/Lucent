@@ -131,8 +131,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+// Task 3.2 — the starter tags are canonical values now, not translated display strings. See
+// [com.lucent.app.data.NoteTags] for why storing the translation was the bug.
 private val DEFAULT_TAGS: List<String>
-    get() = listOf(com.lucent.app.i18n.S.tagStudy, com.lucent.app.i18n.S.tagWork, com.lucent.app.i18n.S.tagGame, com.lucent.app.i18n.S.tagSports, com.lucent.app.i18n.S.tagOther)
+    get() = com.lucent.app.data.NoteTags.DEFAULTS
 
 @Composable
 fun NotesScreen(active: Boolean = true) {
@@ -267,8 +269,24 @@ fun NotesScreen(active: Boolean = true) {
     // Spans follow the text. Any writer that does NOT go through the field — undo, the assistant, a
     // version restore — lands here as a length change, and reconcile() drops whatever no longer
     // sits on real characters. See data/RichText.kt.
+    // ---- Task 1: styles armed BEFORE typing ----
+    //
+    // Formatting used to require text that already existed: select it, then style it. Every editor
+    // anyone actually uses also works the other way round — press bold, then type — and these two
+    // hold what has been armed. They are cleared with the composer session, like the spans they feed.
+    var pendingKinds by remember(composing) { mutableStateOf(emptySet<com.lucent.app.data.RichSpan.Kind>()) }
+    var pendingHighlight by remember(composing) { mutableStateOf<Int?>(null) }
+    // The text the span list currently describes. Kept beside the spans so an edit can be DIFFED
+    // rather than merely clamped: reconcile() only ever chopped spans back to the new length, which
+    // silently mis-styled every edit that inserted or deleted anywhere but the very end.
+    var spansText by remember(composing) { mutableStateOf(newBody) }
     LaunchedEffect(newBody) {
-        bodySpans = com.lucent.app.data.RichText.reconcile(bodySpans, newBody.length)
+        if (spansText != newBody) {
+            bodySpans = com.lucent.app.data.RichText.applyEdit(
+                bodySpans, spansText, newBody, pendingKinds, pendingHighlight
+            )
+            spansText = newBody
+        }
     }
     LaunchedEffect(newBody) { bodyUndo.record(newBody) }
     // Task A16 — see ReorderDrag.kt; enabled only under the Custom sort.
@@ -370,7 +388,7 @@ fun NotesScreen(active: Boolean = true) {
         newBody = note.body
         // INTEGRATION (C task 20): load the sidecar, clamped to the body it describes.
         bodySpans = com.lucent.app.data.RichText.load(note.bodySpans, note.body)
-        selectedTags = note.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        selectedTags = com.lucent.app.data.NoteTags.parse(note.tags).toSet()
         newCustomTag = ""
         pendingAttachments = Attachments.parse(note.attachments)
         pinned = note.pinned
@@ -563,7 +581,7 @@ fun NotesScreen(active: Boolean = true) {
     val noteDirty = composing && run {
         val original = editingNote
         if (original != null) {
-            val originalTags = original.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+            val originalTags = com.lucent.app.data.NoteTags.parse(original.tags).toSet()
             newTitle != original.title || newBody != original.body || selectedTags != originalTags ||
                 Attachments.serialize(pendingAttachments) != original.attachments ||
                 pinned != original.pinned || selectedColor.key != original.color ||
@@ -623,8 +641,15 @@ fun NotesScreen(active: Boolean = true) {
     BackHandler(enabled = !composing && historyForId == null && viewingId == null && showArchive) { showArchive = false }
     BackHandler(enabled = !composing && historyForId == null && viewingId == null && !showArchive && showTrash) { showTrash = false }
     BackHandler(enabled = !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && showSearch) { showSearch = false }
+    // Task 3.4 — Drafts and the hidden area had no back handler at all, so a back press on either
+    // fell straight through to the activity's "press again to exit". They are sub-pages of this tab
+    // exactly like the archive and the trash beside them, and back means "up one level" on every
+    // other page in the app.
+    BackHandler(enabled = !composing && historyForId == null && viewingId == null && (showDrafts || showHidden)) {
+        if (showDrafts) showDrafts = false else showHidden = false
+    }
     // On the home grid, a back press first exits multi-select mode rather than leaving the screen.
-    BackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch) { exitSelection() }
+    BackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
     // Leaving this tab folds it back to the notes grid (task 3). Same reasoning as the Tasks tab:
     // the detail page, composer, archive, trash, history and search are destinations, and returning
@@ -702,7 +727,9 @@ fun NotesScreen(active: Boolean = true) {
     // yet, so without this it wouldn't render as a chip (or its selected highlight) until after
     // the note was saved and the list re-queried. Unioning it in makes it show immediately.
     val allTags = remember(notes, selectedTags) {
-        (DEFAULT_TAGS + notes.flatMap { it.tags.split(",").map(String::trim).filter(String::isNotBlank) } + selectedTags).distinct()
+        (DEFAULT_TAGS +
+            notes.flatMap { com.lucent.app.data.NoteTags.parse(it.tags) } +
+            selectedTags.map { com.lucent.app.data.NoteTags.canonical(it) }).distinct()
     }
 
     // The typed text is parsed into a structured query (terms, phrases, tag:/is:/has:/link: filters)
@@ -1179,7 +1206,8 @@ fun NotesScreen(active: Boolean = true) {
                                 onClick = {
                                     selectedTags = if (selectedTags.contains(tag)) selectedTags - tag else selectedTags + tag
                                 },
-                                label = { Text(tag) }
+                                // Canonical underneath, translated on screen.
+                                label = { Text(com.lucent.app.data.NoteTags.label(tag)) }
                             )
                         }
                     }
@@ -1194,7 +1222,9 @@ fun NotesScreen(active: Boolean = true) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = {
-                            val tag = newCustomTag.trim()
+                            // Canonicalised on the way in, so typing "Study" (or "学习") by hand
+                            // selects the built-in chip instead of creating a duplicate beside it.
+                            val tag = com.lucent.app.data.NoteTags.canonical(newCustomTag)
                             if (tag.isNotBlank()) {
                                 selectedTags = selectedTags + tag
                                 newCustomTag = ""
@@ -1293,16 +1323,44 @@ fun NotesScreen(active: Boolean = true) {
                 onRedo = { bodyUndo.redo()?.let { newBody = it } },
                 richTextEnabled = richTextEnabled,
                 hasSelection = bodySelEnd > bodySelStart,
+                // With a selection the style is applied to it, exactly as before. WITHOUT one the
+                // same tap arms the style for whatever is typed next, which is what makes the
+                // toolbar usable on an empty note — previously it just said "select something first".
                 onToggleStyle = { kind, color ->
-                    bodySpans = com.lucent.app.data.RichText.toggle(
-                        bodySpans, bodySelStart, bodySelEnd, kind, color
-                    )
-                },
-                onClearStyle = {
-                    bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
-                        com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichText.toggle(
+                            bodySpans, bodySelStart, bodySelEnd, kind, color
+                        )
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
+                        pendingHighlight = if (pendingHighlight == color) null else color
+                    } else {
+                        // Light and bold are one axis: arming one disarms the other, the same rule
+                        // RichText.toggle() enforces on a selection.
+                        val opposite = when (kind) {
+                            com.lucent.app.data.RichSpan.Kind.BOLD -> com.lucent.app.data.RichSpan.Kind.LIGHT
+                            com.lucent.app.data.RichSpan.Kind.LIGHT -> com.lucent.app.data.RichSpan.Kind.BOLD
+                            else -> null
+                        }
+                        pendingKinds = if (kind in pendingKinds) pendingKinds - kind
+                        else (if (opposite != null) pendingKinds - opposite else pendingKinds) + kind
                     }
                 },
+                onClearStyle = {
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
+                            com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                        }
+                    } else {
+                        pendingKinds = emptySet()
+                        pendingHighlight = null
+                    }
+                },
+                activeKinds = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.kindsCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingKinds,
+                activeHighlight = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingHighlight,
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
                 // Task 1. The bottom offset was a hard-coded 96dp, but the floating nav capsule is
                 // taller than that (its own height plus the gap above it plus the system navigation
@@ -1589,7 +1647,7 @@ fun NotesScreen(active: Boolean = true) {
                             Text(formatTimestamp(note.updatedAt), color = onGradientMuted, fontSize = 12.sp)
                             if (note.tags.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(note.tags.split(",").joinToString(" · "), color = onGradientMuted, fontSize = 12.sp)
+                                Text(com.lucent.app.data.NoteTags.displayLine(note.tags), color = onGradientMuted, fontSize = 12.sp)
                             }
                         }
                     }
@@ -1774,7 +1832,18 @@ fun NotesScreen(active: Boolean = true) {
             // When the user is neither searching nor date-filtering, the list is split into
             // Recent / Today / Older sections; otherwise it's a flat result list. Sectioning search
             // results would be noise — you asked for matches, not a timeline of them.
-            val browsing = searchText.isBlank() && dateRange == null
+            // ---- Why Custom sort switches sectioning OFF (the drag-to-reorder fix) ----
+            //
+            // This is what made long-press-drag look unimplemented. The gesture fired, the drop was
+            // computed, `manualOrder` was written to every row — and then the home grid regrouped
+            // everything into Recent / Today / Older and displayed THAT. The user's order was
+            // recorded faithfully and then overruled by the layout, every single time, so the cards
+            // sprang back and nothing appeared to have happened.
+            //
+            // Automatic grouping and a hand-made order are contradictory by definition: one of them
+            // has to lose, and it cannot be the one the user just performed with their thumb. Under
+            // Custom the list is flat, and a card dropped in a position stays in that position.
+            val browsing = searchText.isBlank() && dateRange == null && sortOption != NoteSort.CUSTOM
             val now = remember(sortedNotes) { System.currentTimeMillis() }
             val sections = remember(sortedNotes, noteUsage, browsing, now) {
                 if (!browsing) null else sectionHomeItems(
@@ -2071,11 +2140,14 @@ private fun NoteCard(
             .frostedGlass(tint = NoteColor.fromKey(note.color).swatch)
             // A long press enters multi-select and grabs this card; once in select mode a tap toggles
             // this card instead of opening it. Outside select mode a tap opens as before.
-            .then(reorderModifier)
+            // Order matters: the drag detector must be the INNER pointer handler so it wins the
+            // main pass and can consume the long press. Declared before `combinedClickable` it was
+            // the outer one, and the click node got first refusal on every gesture.
             .combinedClickable(
                 onClick = { if (selectionMode) onToggleSelect() else onOpen() },
                 onLongClick = if (reorderEnabled) null else { { if (!selectionMode) onLongPress() } }
             )
+            .then(reorderModifier)
             .then(
                 if (selected) Modifier.border(2.dp, onGradient, selShape) else Modifier
             )
@@ -2151,7 +2223,7 @@ private fun NoteCard(
 
         if (note.tags.isNotBlank()) {
             Text(
-                note.tags.split(",").joinToString(" · "),
+                com.lucent.app.data.NoteTags.displayLine(note.tags),
                 color = onGradientMuted,
                 fontSize = 11.sp,
                 maxLines = 1,
