@@ -63,6 +63,12 @@ object LocalLlm {
     fun isSupported(): Boolean = available
 
     /**
+     * PHASE 4: whether the resident model can see images — i.e. an mmproj was imported for the
+     * active slot AND the projector loaded successfully. False whenever no model is resident.
+     */
+    fun supportsVision(): Boolean = handle != 0L && visionReady
+
+    /**
      * W-1: whether "unsupported" specifically means "this CPU lacks AVX2" (engine load refused by
      * NativeLoader's guard). Lets shared UI show the honest reason. Always false on Android, where
      * ABI packaging is the only way to be unsupported — the twin files stay identical by asking
@@ -81,6 +87,8 @@ object LocalLlm {
     // The slot id of the resident model, so a switch to a different slot forces a clean reload even
     // if two slots ever shared a path (they don't today, but tracking the id makes the intent exact).
     @Volatile private var loadedSlotId: String? = null
+    // PHASE 4: whether the ACTIVE model has a working multimodal projector loaded next to it.
+    @Volatile private var visionReady: Boolean = false
     private val generating = AtomicBoolean(false)
     // True only while a model is actually being loaded into memory (the slow, multi-second first
     // load). The assistant reads this to show a distinct "loading the model…" line, so the wait is
@@ -464,6 +472,10 @@ object LocalLlm {
 
     // ---- Native surface (lucent_llama.cpp) ----
     private external fun nativeLoad(path: String, nCtx: Int, nThreads: Int, nGpuLayers: Int): Long
+    // PHASE 4 — multimodal. All three degrade gracefully when the engine was built text-only.
+    private external fun nativeMtmdLoad(handle: Long, mmprojPath: String, nThreads: Int): Boolean
+    private external fun nativeMediaMarker(): String
+    private external fun nativeGenerateWithImages(handle: Long, prompt: String, images: Array<ByteArray>, maxNew: Int, callback: PieceCallback): Int
     private external fun nativeChatPrompt(handle: Long, roles: Array<String>, texts: Array<String>, addAssistant: Boolean): String
     private external fun nativeGenerate(handle: Long, prompt: String, maxNew: Int, callback: PieceCallback): Int
     private external fun nativeStop(handle: Long)

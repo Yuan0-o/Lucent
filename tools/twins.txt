@@ -16,6 +16,7 @@ com/lucent/app/data/AttachmentLimits.kt
 com/lucent/app/data/AttachmentMigration.kt
 com/lucent/app/data/AutoBackup.kt
 com/lucent/app/data/BackupCrypto.kt
+com/lucent/app/data/BackupManager.kt
 com/lucent/app/data/BackupRecovery.kt
 com/lucent/app/data/BlackoutMode.kt
 com/lucent/app/data/ChatSearch.kt
