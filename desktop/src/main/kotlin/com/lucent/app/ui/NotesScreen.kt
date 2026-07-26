@@ -253,6 +253,10 @@ fun NotesScreen(active: Boolean = true) {
     // The spans for the field above, plus the current selection. Both are plain composer state, in
     // the same place and with the same lifetime as the text they describe — a span list that
     // outlived its body would style whatever text happened to be there next.
+    // First-compile fix (CI 2026-07-26): the rich-text state below reads settings via `repo`,
+    // which was never declared in this screen on either platform — the integration referenced a
+    // name from another screen. Same construction the rest of the app uses.
+    val repo = remember { com.lucent.app.data.SettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
     var bodySpans by remember(composing) { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
     var bodySelStart by remember(composing) { mutableStateOf(0) }
@@ -449,7 +453,7 @@ fun NotesScreen(active: Boolean = true) {
                 if (existing == null) draftRowId = db.noteDao().insert(row)
                 else db.noteDao().update(row.copy(id = existing))
                 withContext(Dispatchers.Main) {
-                    LucentToast.show(appContext, com.lucent.app.i18n.S.draftSavedToast)
+                    LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.draftSavedToast)
                 }
             }
             if (closeAfter) {

@@ -32,6 +32,45 @@
 #ifndef LUCENT_NO_MTMD
 #include "mtmd.h"
 #include "mtmd-helper.h"
+
+// ------------------------------------------------------------------------------------------------
+// Helper-API adapter (first CI pass, Android job 2026-07-26).
+//
+// The pinned b9888 checkout's mtmd_helper_bitmap_init_from_buf is
+//     mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(ctx, buf, len, bool placeholder)
+// — four arguments, returning a small C wrapper struct — where earlier revisions returned the
+// mtmd_bitmap* directly from three arguments. Written as overload-ranked templates so this file
+// compiles against EITHER shape and extracts the pointer by whichever wrapper member exists:
+// changing the llama.cpp pin someday must not make this call site the thing that breaks.
+// ------------------------------------------------------------------------------------------------
+template <int N> struct lucent_rank : lucent_rank<N - 1> {};
+template <>      struct lucent_rank<0> {};
+
+// A plain pointer passes straight through (the pre-wrapper API shape).
+static inline mtmd_bitmap * lucent_unwrap_bitmap(mtmd_bitmap * p) { return p; }
+// A wrapper yields whichever pointer member it actually declares.
+template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<3>) -> decltype(w.bitmap) { return w.bitmap; }
+template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<2>) -> decltype(w.bmp)    { return w.bmp; }
+template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<1>) -> decltype(w.ptr)    { return w.ptr; }
+template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<0>) -> decltype(w.data)   { return w.data; }
+template <typename W> static inline mtmd_bitmap * lucent_unwrap_bitmap(W w) {
+    return lucent_unwrap_impl(w, lucent_rank<3>{});
+}
+
+// Prefer the current 4-argument form (trailing bool = the header's "placeholder" flag, off — we
+// always hand real image bytes); fall back to the older 3-argument form when that is what the
+// header declares.
+template <typename C> static auto lucent_from_buf_impl(C * c, const unsigned char * d, size_t n, lucent_rank<1>)
+    -> decltype(lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false))) {
+    return lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false));
+}
+template <typename C> static auto lucent_from_buf_impl(C * c, const unsigned char * d, size_t n, lucent_rank<0>)
+    -> decltype(lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n))) {
+    return lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n));
+}
+static inline mtmd_bitmap * lucent_bitmap_from_buf(mtmd_context * c, const unsigned char * d, size_t n) {
+    return lucent_from_buf_impl(c, d, n, lucent_rank<1>{});
+}
 #endif
 
 #define TAG "LucentLlama"
@@ -518,7 +557,7 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
             std::vector<unsigned char> buf((size_t) len);
             env->GetByteArrayRegion(jarr, 0, len, (jbyte *) buf.data());
             env->DeleteLocalRef(jarr);
-            mtmd_bitmap * bmp = mtmd_helper_bitmap_init_from_buf(mctx, buf.data(), buf.size());
+            mtmd_bitmap * bmp = lucent_bitmap_from_buf(mctx, buf.data(), buf.size());
             if (!bmp) { LOGE("mtmd: image %d failed to decode (%d bytes)", (int) i, (int) len); rc = -31; break; }
             bitmaps.push_back(bmp);
         }
@@ -530,8 +569,11 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
             text.text          = prompt.c_str();
             text.add_special   = true;
             text.parse_special = true;
+            // mtmd_tokenize takes const mtmd_bitmap** (the log's exact words); the owning vector
+            // stays non-const because mtmd_bitmap_free wants the mutable pointer back.
+            std::vector<const mtmd_bitmap *> cbitmaps(bitmaps.begin(), bitmaps.end());
             int32_t tok = mtmd_tokenize(mctx, chunks, &text,
-                                        bitmaps.data(), bitmaps.size());
+                                        cbitmaps.data(), cbitmaps.size());
             if (tok != 0) { LOGE("mtmd: tokenize failed rc=%d", (int) tok); rc = -31; }
         }
 

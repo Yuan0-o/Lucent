@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -328,5 +329,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDoodleStroke(
 /** A tap target with no ripple — the swatches are their own visual feedback. */
 private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
     this.pointerInput(Unit) {
-        androidx.compose.foundation.gestures.detectTapGestures(onTap = { onClick() })
+        // First-compile fix (CI 2026-07-26): detectTapGestures is an EXTENSION on
+        // PointerInputScope — Kotlin cannot call an extension through its package name; it must be
+        // imported and called on the receiver, which pointerInput provides right here.
+        detectTapGestures(onTap = { onClick() })
     }

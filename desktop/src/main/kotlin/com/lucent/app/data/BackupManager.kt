@@ -298,7 +298,7 @@ object BackupManager {
             db.chatDao().getAll().first().filter { selection.wantsConversation(it.conversationId) }
         } else emptyList()
         return buildManifest(
-            context, notes, tasks, noteVersions, chats, conversations, settings,
+            context, notes, tasks, noteVersions, taskVersions, chats, conversations, settings,
             inlineAttachments = true, modules = modules, apiProfileNames = selection.apiProfileNames
         ).toString(2)
     }
@@ -731,6 +731,11 @@ object BackupManager {
         notes: List<Note>,
         tasks: List<Task>,
         noteVersions: List<NoteVersion>,
+        // First-compile fix (CI 2026-07-26): this list was assembled by the caller (module-filtered,
+        // like everything else here) and then never handed over — the A19 export block below read a
+        // name that did not exist in this scope, on both platforms. The parameter is the fix; the
+        // caller now passes what it already computed.
+        taskVersions: List<TaskVersion>,
         chats: List<ChatMessage>,
         conversations: List<ChatConversation>,
         settings: SettingsRepository,
@@ -761,7 +766,11 @@ object BackupManager {
                     .put("isChecklist", it.isChecklist)
                     .put("checklist", it.checklist)
                     .put("trashedAt", it.trashedAt ?: JSONObject.NULL)
-                    // 1.1.0 group A — additive, same contract as the archive keys above.
+                    // 1.1.0 group A. Same additive contract as the archive keys above: an older
+                    // reader ignores them, an older *file* doesn't carry them, and the importer
+                    // defaults each one to the value that reproduces pre-1.1.0 behaviour — so a
+                    // backup written today restores into an old build, and a backup written two
+                    // years ago restores into this one.
                     .put("manualOrder", it.manualOrder)
                     .put("isDraft", it.isDraft)
                     .put("draftSavedAt", it.draftSavedAt ?: JSONObject.NULL)
