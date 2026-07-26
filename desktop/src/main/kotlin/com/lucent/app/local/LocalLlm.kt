@@ -62,6 +62,15 @@ object LocalLlm {
     /** Whether the native engine was packaged for this ABI at all. */
     fun isSupported(): Boolean = available
 
+    /**
+     * W-1: whether "unsupported" specifically means "this CPU lacks AVX2" (engine load refused by
+     * NativeLoader's guard). Lets shared UI show the honest reason. Always false on Android, where
+     * ABI packaging is the only way to be unsupported — the twin files stay identical by asking
+     * this same question.
+     */
+    fun unsupportedBecauseCpuLacksAvx2(): Boolean =
+        com.lucent.app.nativebridge.NativeLoader.cpuMissingAvx2
+
     // One thread for every native call, for the model's whole lifetime.
     private val llmDispatcher: CoroutineDispatcher =
         Executors.newSingleThreadExecutor { r -> Thread(r, "LucentLocalLlm") }.asCoroutineDispatcher()
@@ -78,8 +87,139 @@ object LocalLlm {
     // visible and never looks like a hang — loading a multi-gigabyte model is expected to take time.
     private val loading = AtomicBoolean(false)
 
-    /** Offload-all sentinel for GPU mode; llama.cpp keeps on CPU any layer the device can't take. */
+    /**
+     * Offload-all sentinel for GPU mode; llama.cpp keeps on CPU any layer the device can't take.
+     *
+     * **Do not pass this to [nativeLoad] on Windows unguarded — see [gpuLayersFor].** It is kept as
+     * the value of the *user's preference* ("GPU, please"), not as the number of layers actually
+     * requested from the engine.
+     */
     private const val GPU_OFFLOAD_ALL = 999
+
+    /**
+     * ### C-group task 4: why "offload everything" was a machine-killer
+     *
+     * The reported failure was: GPU acceleration on, ask the assistant to create a task, whole
+     * machine goes black, forced restart, and afterwards Lucent will not start, will not uninstall,
+     * and will not reinstall into the same folder. That chain starts here.
+     *
+     * `n_gpu_layers = 999` asks llama.cpp to put **every** layer in VRAM. llama.cpp honours that
+     * literally: unlike the CPU path there is no "and fall back if it does not fit" — it allocates
+     * until the driver refuses. On top of the weights sits the KV cache for [N_CTX] = 4096 tokens,
+     * which for a 7-8B model is another ~1-2 GB. A 6 GB or 8 GB consumer card running a desktop,
+     * a browser and a compositor does not have that headroom.
+     *
+     * Asking the assistant to *create a task* is what tips it over, and that is not a coincidence:
+     * a tool call forces a **second** generation round (generate → call the tool → feed the result
+     * back → generate again) against a longer prompt. Peak VRAM lands on that second decode. When a
+     * Vulkan allocation fails or a shader overruns its budget there, the Windows display driver hits
+     * **TDR** (Timeout Detection and Recovery). A TDR that recovers gives a black flicker; one that
+     * does not gives exactly what was reported — a black screen with no way out but the power
+     * button.
+     *
+     * Everything after that is collateral from the hard power-off, not a second bug: see
+     * [com.lucent.app.data.LocalSecrets] and [com.lucent.app.data.DataKeys] for the key files a
+     * forced power-off can leave present-but-empty, which is what produces the
+     * "could not be unlocked with this machine's key" dialog on the next launch.
+     *
+     * ### The fix
+     *
+     * Three changes, in order of how much they matter:
+     *
+     *  1. **Never request more layers than the card can hold.** [gpuLayersFor] budgets against the
+     *     model file's own size plus the KV cache, and leaves [VRAM_HEADROOM_BYTES] for the desktop
+     *     compositor. A model that cannot fit gets a *partial* offload, which is what GPU
+     *     acceleration is supposed to mean anyway — llama.cpp runs the remaining layers on the CPU.
+     *  2. **Shrink the context on GPU.** The KV cache is the part that scales with context and the
+     *     part users never see, so GPU turns use [N_CTX_GPU] rather than [N_CTX]. A shorter memory
+     *     is a far better outcome than a driver reset.
+     *  3. **Refuse rather than gamble when the budget is unknown.** If VRAM cannot be determined,
+     *     the offload is capped at [GPU_LAYERS_BLIND_CAP] instead of falling through to "all of
+     *     them". An unknown card is not evidence of a large card.
+     */
+    private const val VRAM_HEADROOM_BYTES = 1_200L * 1024 * 1024   // left for the compositor/browser
+
+    /** Context length used for GPU turns; the KV cache is the allocation that scales with it. */
+    const val N_CTX_GPU = 2048
+
+    /** Layer cap applied when this machine's VRAM could not be determined at all. */
+    private const val GPU_LAYERS_BLIND_CAP = 20
+
+    /** Rough per-layer KV cache cost used for budgeting; deliberately generous. */
+    private const val KV_BYTES_PER_LAYER_PER_TOKEN = 512L
+
+    /**
+     * How many layers may safely be offloaded for [modelFile] on this machine.
+     *
+     * Budgeting, not probing: a probe means allocating, and allocating is the thing that hangs the
+     * driver. So the decision is made from numbers that are free to obtain — the model file's size
+     * on disk (a good proxy for the weights, since a GGUF is almost entirely weights) and the
+     * reported VRAM — and it errs downwards at every step.
+     *
+     * Returns 0 when the answer is "do not use the GPU at all", which the caller treats exactly like
+     * a CPU turn.
+     */
+    private fun gpuLayersFor(modelFile: java.io.File): Int {
+        val vram = detectVramBytes()
+        if (vram <= 0L) {
+            Log.w("LocalLlm", "VRAM unknown; capping GPU offload at $GPU_LAYERS_BLIND_CAP layers")
+            return GPU_LAYERS_BLIND_CAP
+        }
+        val weights = modelFile.length()
+        if (weights <= 0L) return GPU_LAYERS_BLIND_CAP
+        val budget = vram - VRAM_HEADROOM_BYTES
+        if (budget <= 0L) {
+            Log.w("LocalLlm", "VRAM too small for any offload; staying on CPU")
+            return 0
+        }
+        // Assume a typical 32-layer model unless the file is small enough to imply fewer; the exact
+        // count is not knowable without parsing the GGUF header, and over-estimating layers makes
+        // the per-layer budget SMALLER, which is the safe direction to be wrong in.
+        val assumedLayers = 32
+        val perLayerWeights = (weights / assumedLayers).coerceAtLeast(1L)
+        val perLayerKv = KV_BYTES_PER_LAYER_PER_TOKEN * N_CTX_GPU
+        val affordable = (budget / (perLayerWeights + perLayerKv)).toInt()
+        val layers = affordable.coerceIn(0, assumedLayers)
+        Log.i(
+            "LocalLlm",
+            "GPU budget: vram=${vram / (1024 * 1024)}MB model=${weights / (1024 * 1024)}MB -> $layers layers"
+        )
+        return layers
+    }
+
+    /**
+     * Total VRAM on the primary adapter, in bytes, or 0 when it cannot be determined.
+     *
+     * Read through WMI via PowerShell, the same mechanism `security/WindowsHello.kt` already uses to
+     * reach a Windows API the JVM cannot see. `AdapterRAM` is a 32-bit field and therefore wrong
+     * (it wraps) on cards above 4 GB, so the driver's own `HardwareInformation.qwMemorySize`
+     * registry value is read first and `AdapterRAM` is only the fallback. Any failure returns 0,
+     * which [gpuLayersFor] treats as "unknown", not as "plenty".
+     */
+    private fun detectVramBytes(): Long {
+        val os = System.getProperty("os.name")?.lowercase() ?: ""
+        if (!os.contains("win")) return 0L
+        return try {
+            val script =
+                "(Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\" +
+                    "{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' -Name HardwareInformation.qwMemorySize " +
+                    "-ErrorAction SilentlyContinue).'HardwareInformation.qwMemorySize'"
+            val proc = ProcessBuilder(
+                "powershell", "-NoProfile", "-NonInteractive", "-Command", script
+            ).redirectErrorStream(true).start()
+            val text = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+            if (!proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                proc.destroyForcibly()
+                return 0L
+            }
+            text.lineSequence()
+                .mapNotNull { it.trim().toLongOrNull() }
+                .maxOrNull() ?: 0L
+        } catch (t: Throwable) {
+            Log.w("LocalLlm", "VRAM probe failed: ${t.message}")
+            0L
+        }
+    }
 
     // The GPU choice (0 = CPU, the safe default; GPU_OFFLOAD_ALL = GPU). [desiredGpuLayers] is what
     // the user's setting asks for; [loadedGpuLayers] is what the resident model was actually loaded
@@ -121,8 +261,26 @@ object LocalLlm {
      * Threads for token generation: half the cores, clamped to 2..4. More threads than that hurts
      * on big.LITTLE phones (little cores drag the pace) and cooks the battery; fewer starves it.
      */
-    private fun threadCount(): Int =
-        (Runtime.getRuntime().availableProcessors() / 2).coerceIn(2, 4)
+    /**
+     * Threads for token generation (B-group task 10: "squeeze the processor").
+     *
+     * The previous rule — half the cores, capped at 4 — was inherited from the Android build, where
+     * it exists to avoid handing work to big.LITTLE little cores that would set the pace for every
+     * token. On a desktop that reasoning mostly does not apply: a typical Windows machine has one
+     * uniform performance cluster (or, on 12th-gen-and-later Intel, P-cores plus E-cores), and the
+     * cap meant a 16-core workstation ran the model on four threads.
+     *
+     * So the cap moves to 8 and the count is taken from the machine's actual core count rather than
+     * an arbitrary half. Still capped, and deliberately: past ~8 threads llama.cpp spends more time
+     * synchronising per token than the extra parallelism wins back, so more threads would be slower
+     * as well as noisier. Leaving a couple of cores free also keeps the UI thread responsive while
+     * a reply generates, which on a desktop the user WILL notice.
+     */
+    private fun threadCount(): Int {
+        val total = Runtime.getRuntime().availableProcessors()
+        // Leave one core for the rest of the app on anything with room to spare.
+        return (if (total > 4) total - 1 else total).coerceIn(2, 8)
+    }
 
     /**
      * Make sure the imported model is loaded, loading it if needed. Safe to call every send:
@@ -139,22 +297,31 @@ object LocalLlm {
         // below unloads first. Only one model is ever resident.
         val activeSlot = LocalModelStore.activeSlot(context) ?: return@withContext false
         val file = LocalModelStore.activeModelFile(context) ?: return@withContext false
+        // Compare the *preference* (GPU on/off), not the budgeted layer count: the budget is derived
+        // from live VRAM and can legitimately differ by a layer or two between calls, and comparing
+        // it directly would reload a multi-gigabyte model on every single send.
         if (handle != 0L &&
             loadedSlotId == activeSlot.id &&
             loadedPath == file.absolutePath &&
-            loadedGpuLayers == desiredGpuLayers
+            (loadedGpuLayers > 0) == (desiredGpuLayers > 0)
         ) return@withContext true
         if (handle != 0L) {
             // A previous model is resident (a different slot, or a changed backend). Free it before
             // the new one loads so the peak footprint is one model, not two.
             nativeUnload(handle)
             handle = 0L
+            visionReady = false
             loadedPath = null
             loadedSlotId = null
         }
-        val wantGpu = desiredGpuLayers
+        // C-group task 4: the user's preference is still "GPU or not", but what reaches the engine
+        // is a BUDGETED layer count, never the offload-all sentinel. See [gpuLayersFor].
+        val wantGpu = if (desiredGpuLayers > 0) gpuLayersFor(file) else 0
         fun attempt(gpuLayers: Int): Long = try {
-            nativeLoad(file.absolutePath, N_CTX, threadCount(), gpuLayers)
+            // A GPU turn also runs on the shorter context: the KV cache is what scales with context
+            // length, and it is the allocation that pushed the driver over the edge.
+            val ctx = if (gpuLayers > 0) N_CTX_GPU else N_CTX
+            nativeLoad(file.absolutePath, ctx, threadCount(), gpuLayers)
         } catch (t: Throwable) {
             Log.e("LocalLlm", "load failed (gpuLayers=$gpuLayers)", t)
             0L
@@ -174,6 +341,16 @@ object LocalLlm {
                 loadedPath = file.absolutePath
                 loadedSlotId = activeSlot.id
                 loadedGpuLayers = used
+                // PHASE 4: if this slot has a projector, load it beside the model. Best-effort in
+                // the strictest sense — a failed projector leaves a perfectly good TEXT model
+                // resident, so the flag is the only thing that changes.
+                visionReady = try {
+                    val mmproj = LocalModelStore.activeMmprojFile(context)
+                    mmproj != null && nativeMtmdLoad(h, mmproj.absolutePath, threadCount())
+                } catch (t: Throwable) {
+                    Log.e("LocalLlm", "mmproj load failed", t)
+                    false
+                }
             }
             h != 0L
         } finally {
@@ -195,14 +372,32 @@ object LocalLlm {
      */
     suspend fun generate(
         messages: List<Pair<String, String>>,
+        // PHASE 4: raw encoded image bytes (png/jpeg/webp) for THIS turn. Used only when the
+        // resident model has a projector (see supportsVision); otherwise silently ignored so the
+        // reply still happens as text — a missing mmproj must degrade, never dead-end.
+        images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
     ): Int = withContext(llmDispatcher) {
         val h = handle
         if (h == 0L) return@withContext -1
         generating.set(true)
         try {
-            val roles = Array(messages.size) { messages[it].first }
-            val texts = Array(messages.size) { messages[it].second }
+            val useVision = images.isNotEmpty() && visionReady
+            val marker = if (useVision) {
+                try { nativeMediaMarker() } catch (t: Throwable) { "" }
+            } else ""
+            // The media markers go INSIDE the last user message, before its text, so after
+            // templating each image lands exactly where every multimodal chat template expects
+            // media: in the user turn. mtmd_tokenize then replaces each marker with that image's
+            // embedding chunks, in order.
+            val effective = if (useVision && marker.isNotEmpty()) {
+                val lastUser = messages.indexOfLast { it.first == "user" }
+                messages.mapIndexed { i, m ->
+                    if (i == lastUser) m.first to (marker.repeat(images.size) + "\n" + m.second) else m
+                }
+            } else messages
+            val roles = Array(effective.size) { effective[it].first }
+            val texts = Array(effective.size) { effective[it].second }
             val prompt = try {
                 nativeChatPrompt(h, roles, texts, true)
             } catch (t: Throwable) {
@@ -216,7 +411,15 @@ object LocalLlm {
                 }
             }
             try {
-                nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb)
+                if (useVision && marker.isNotEmpty()) {
+                    val rc = nativeGenerateWithImages(h, prompt, images.toTypedArray(), MAX_NEW_TOKENS, cb)
+                    // -30/-31 = projector missing at native level or the image didn't decode.
+                    // Retry the same turn as plain text rather than failing it: the words the
+                    // user typed still deserve an answer.
+                    if (rc == -30 || rc == -31) nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb) else rc
+                } else {
+                    nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb)
+                }
             } catch (t: Throwable) {
                 // Distinct from the native side's own -3 (empty tokens): -20 means the native call
                 // itself threw into Java (e.g. a missing symbol), which is a different problem to chase.
@@ -248,6 +451,7 @@ object LocalLlm {
         llmScope.launch {
             val h = handle
             handle = 0L
+            visionReady = false
             loadedPath = null
             loadedSlotId = null
             if (h != 0L) try {

@@ -306,7 +306,51 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     // ---- Gradient (vivid multi-hue) ----
     AURORA(listOf(Color(0xFF0FA3A3), Color(0xFF6A5AE0), Color(0xFFE85D9E)), PaletteGroup.GRADIENT),
     PEACH_DUSK(listOf(Color(0xFFFF8A5B), Color(0xFFEE4D8F), Color(0xFF8A4FD8)), PaletteGroup.GRADIENT),
-    COSMIC(listOf(Color(0xFF1E5AE8), Color(0xFF9B2FE8), Color(0xFF2ED0C0)), PaletteGroup.GRADIENT);
+    COSMIC(listOf(Color(0xFF1E5AE8), Color(0xFF9B2FE8), Color(0xFF2ED0C0)), PaletteGroup.GRADIENT),
+
+    // ==========================================================================================
+    //  C-GROUP TASK 15 — twelve further backgrounds
+    // ==========================================================================================
+    //
+    // The brief was "no duplication or overlap", which for a colour set means something stricter
+    // than "not byte-identical": two palettes overlap when a user cannot tell which one is
+    // selected by looking at the app. So each addition below fills a hue or a treatment the
+    // existing fifteen genuinely do not cover, and where a new palette sits near an old one the
+    // note says which one and what separates them.
+    //
+    // The existing SOLID set covers rose, violet, grey-green, tan, blue-grey, rust and teal. The
+    // six added here are the obvious absences: gold, red, indigo, yellow-green, wine, neutral grey.
+
+    // Gold, not tan. Deliberately more saturated than SAND (0xFF7A5C36…), which is a desaturated
+    // beige — side by side these read as "gold" and "sand", which is the whole point.
+    AMBER(listOf(Color(0xFF7A6108), Color(0xFFD4A81A), Color(0xFFF5E39B)), PaletteGroup.SOLID),
+    // Scarlet, pushed to the orange side of red on purpose so it cannot be mistaken for BLUSH,
+    // which is a pink (hue ~345 vs ~5 here).
+    CRIMSON(listOf(Color(0xFF6E1410), Color(0xFFC0392B), Color(0xFFF0A79C)), PaletteGroup.SOLID),
+    // True indigo. MIDNIGHT is a navy-to-purple CLASSIC pair; this is one hue in three tones.
+    INDIGO(listOf(Color(0xFF232A63), Color(0xFF4A55A8), Color(0xFFA3AAE0)), PaletteGroup.SOLID),
+    // Yellow-green, where SAGE is a grey-green. The two sit on opposite sides of green.
+    OLIVE(listOf(Color(0xFF4A4A22), Color(0xFF86864A), Color(0xFFCBCB93)), PaletteGroup.SOLID),
+    // Wine. Redder and darker than LAVENDER, far less saturated than BERRY.
+    PLUM(listOf(Color(0xFF4A1F3A), Color(0xFF8A4270), Color(0xFFD69EC0)), PaletteGroup.SOLID),
+    // Neutral grey, where SLATE carries a blue cast. This is the only palette in the app with no
+    // hue at all, which is exactly why it is worth having.
+    GRAPHITE(listOf(Color(0xFF2B2B30), Color(0xFF5A5A63), Color(0xFFA8A8B2)), PaletteGroup.SOLID),
+
+    // The GRADIENT set had three entries, all travelling through the blue-violet-pink region. The
+    // six added here deliberately travel elsewhere, and two of them run LIGHT to DARK rather than
+    // dark to light — direction is as visible as hue in a blob background.
+    CITRUS(listOf(Color(0xFF7ED321), Color(0xFFF5A623), Color(0xFFFF6B6B)), PaletteGroup.GRADIENT),
+    // Runs pale-to-deep, the reverse of OCEAN's deep-to-bright, so the two never read alike even
+    // though both are broadly "blue".
+    GLACIER(listOf(Color(0xFFA8D8F0), Color(0xFF5E9CC7), Color(0xFF1E3A5F)), PaletteGroup.GRADIENT),
+    // Magenta to deep blue — COSMIC ends on teal, so the two diverge exactly where it shows.
+    NEBULA(listOf(Color(0xFFE0218A), Color(0xFF7B2FBE), Color(0xFF2A2A8C)), PaletteGroup.GRADIENT),
+    EMBERGLOW(listOf(Color(0xFF8C1C13), Color(0xFFE2571E), Color(0xFFF2B705)), PaletteGroup.GRADIENT),
+    // Teal to olive to sand: a three-hue journey no single-hue SOLID palette can imitate.
+    MERIDIAN(listOf(Color(0xFF0E6E6E), Color(0xFF7A9A3C), Color(0xFFE3C88F)), PaletteGroup.GRADIENT),
+    // Entirely light. BLUSH and LAVENDER are tonal ramps from dark; this one never gets dark.
+    ORCHID(listOf(Color(0xFFF28FC2), Color(0xFFB57BE0), Color(0xFF7C9BE8)), PaletteGroup.GRADIENT);
 
     // Live i18n lookup (localization task); call sites keep reading `palette.label`.
     val label: String
@@ -326,5 +370,17 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
             AURORA -> com.lucent.app.i18n.S.paletteAurora
             PEACH_DUSK -> com.lucent.app.i18n.S.palettePeachDusk
             COSMIC -> com.lucent.app.i18n.S.paletteCosmic
+            AMBER -> com.lucent.app.i18n.S.paletteAmber
+            CRIMSON -> com.lucent.app.i18n.S.paletteCrimson
+            INDIGO -> com.lucent.app.i18n.S.paletteIndigo
+            OLIVE -> com.lucent.app.i18n.S.paletteOlive
+            PLUM -> com.lucent.app.i18n.S.palettePlum
+            GRAPHITE -> com.lucent.app.i18n.S.paletteGraphite
+            CITRUS -> com.lucent.app.i18n.S.paletteCitrus
+            GLACIER -> com.lucent.app.i18n.S.paletteGlacier
+            NEBULA -> com.lucent.app.i18n.S.paletteNebula
+            EMBERGLOW -> com.lucent.app.i18n.S.paletteEmberglow
+            MERIDIAN -> com.lucent.app.i18n.S.paletteMeridian
+            ORCHID -> com.lucent.app.i18n.S.paletteOrchid
         }
 }

@@ -1,5 +1,56 @@
 package com.lucent.app.ui
 
+/*
+ * ============================================================================================
+ *  C-GROUP TASK 20 — RICH TEXT SWITCH: PLACEHOLDER ONLY, DELIBERATELY NOT IMPLEMENTED
+ * ============================================================================================
+ *
+ * A separate "Rich text" switch is planned for Settings -> Editor, independent of the Markdown
+ * switch above it. Scope as specified:
+ *
+ *   - three weights (light / regular / bold)
+ *   - italic
+ *   - five highlighter colours
+ *
+ * and explicitly NOT Markdown syntax — the user types nothing, they select text and press a
+ * button.
+ *
+ * ### Why there is no code here yet
+ *
+ * The controls live in the bottom-right editor button, which is A-GROUP's surface (the draft-area
+ * work). Building the toolbar here would collide with that on the first merge, so C-group stops at
+ * this note by instruction.
+ *
+ * ### What A-group needs to know before wiring it up
+ *
+ * 1. **Storage.** Rich text needs somewhere to put spans. `notes.body` and `tasks.notes` are plain
+ *    TEXT columns, and the assistant tools, the export path (`MarkdownExport`, `DocumentExport`),
+ *    the backup engine and the `[[wiki]]` link scanner all read them as plain strings. Adding
+ *    inline markup to those columns would change what every one of those sees. The
+ *    non-destructive option is a SIDECAR column holding span ranges as JSON, leaving `body`
+ *    readable as plain text for everything that already consumes it.
+ *
+ * 2. **Schema.** A new column is a Room schema bump (currently v11) plus the matching
+ *    `CREATE TABLE` in the desktop `Db.createSchema`, which is hand-written to match. Both must
+ *    move together or the two platforms stop being interchangeable.
+ *
+ * 3. **Notes AND tasks.** Task 20 says "notes or tasks". Task bodies use the same editor path, so
+ *    whatever is added must be added for both — a rich-text note that becomes plain when pasted
+ *    into a task is the kind of asymmetry this project has been careful to avoid.
+ *
+ * 4. **Export.** Every export format has to decide what to do with a highlight: Markdown has no
+ *    highlight syntax, PDF does, plain text does not. Decide per format rather than dropping spans
+ *    silently.
+ *
+ * 5. **Interaction with Markdown mode.** Both switches on at once means two systems styling the
+ *    same string. Decide whether rich text wins, Markdown wins, or the two are mutually exclusive
+ *    in the UI — before shipping, not after a user reports bold-inside-asterisks.
+ *
+ * 6. **Four languages.** The toolbar's labels (weights, italic, five colour names) need catalog
+ *    entries in en/zh/ja/ko like everything else; add them to tools/i18n/catalog.py and re-run
+ *    the generator, then hand-sync the desktop fork.
+ */
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

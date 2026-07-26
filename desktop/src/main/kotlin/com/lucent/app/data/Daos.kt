@@ -21,7 +21,18 @@ private fun noteOf(rs: ResultSet) = Note(
     color = rs.getString("color"),
     isChecklist = rs.getInt("isChecklist") != 0,
     checklist = rs.getString("checklist"),
-    trashedAt = rs.longOrNull("trashedAt")
+    trashedAt = rs.longOrNull("trashedAt"),
+    // 1.1.0 group A. Read positionally by NAME, like every other column here, so the mapper is
+    // insensitive to where ALTER TABLE happened to append them.
+    manualOrder = rs.getInt("manualOrder"),
+    isDraft = rs.getInt("isDraft") != 0,
+    draftSavedAt = rs.longOrNull("draftSavedAt"),
+    hidden = rs.getInt("hidden") != 0,
+    isDoodle = rs.getInt("isDoodle") != 0,
+    doodle = rs.getString("doodle"),
+    // INTEGRATION (C task 20) — read by name like the rest, so it does not matter where the ALTER
+    // appended it. Nullable-safe: a row written before the column existed reads back as "".
+    bodySpans = rs.getString("bodySpans") ?: ""
 )
 
 private fun taskOf(rs: ResultSet) = Task(
@@ -38,7 +49,13 @@ private fun taskOf(rs: ResultSet) = Task(
     subtasks = rs.getString("subtasks"),
     repeatRule = rs.getString("repeatRule"),
     reminderEnabled = rs.getInt("reminderEnabled") != 0,
-    trashedAt = rs.longOrNull("trashedAt")
+    trashedAt = rs.longOrNull("trashedAt"),
+    manualOrder = rs.getInt("manualOrder"),
+    isDraft = rs.getInt("isDraft") != 0,
+    draftSavedAt = rs.longOrNull("draftSavedAt"),
+    hidden = rs.getInt("hidden") != 0,
+    // INTEGRATION (C task 20) — the task twin of Note.bodySpans.
+    notesSpans = rs.getString("notesSpans") ?: ""
 )
 
 private fun versionOf(rs: ResultSet) = NoteVersion(
@@ -61,7 +78,8 @@ private fun messageOf(rs: ResultSet) = ChatMessage(
     attachmentData = rs.stringOrNull("attachmentData"),
     attachmentName = rs.stringOrNull("attachmentName"),
     conversationId = rs.getLong("conversationId"),
-    tokens = rs.getInt("tokens")
+    tokens = rs.getInt("tokens"),
+    replyToId = rs.getLong("replyToId")
 )
 
 private fun conversationOf(rs: ResultSet) = ChatConversation(
@@ -78,7 +96,7 @@ class NoteDao internal constructor(private val db: Db) {
     fun getArchived(): Flow<List<Note>> = db.watch("notes") {
         db.use { c ->
             c.prepareStatement(
-                "SELECT * FROM notes WHERE archived = 1 AND trashedAt IS NULL " +
+                "SELECT * FROM notes WHERE archived = 1 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 " +
                     "ORDER BY COALESCE(archivedAt, updatedAt) DESC"
             ).executeQuery().mapAll(::noteOf)
         }
@@ -86,13 +104,13 @@ class NoteDao internal constructor(private val db: Db) {
 
     fun getTrashed(): Flow<List<Note>> = db.watch("notes") {
         db.use { c ->
-            c.prepareStatement("SELECT * FROM notes WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+            c.prepareStatement("SELECT * FROM notes WHERE trashedAt IS NOT NULL AND isDraft = 0 ORDER BY trashedAt DESC")
                 .executeQuery().mapAll(::noteOf)
         }
     }
 
     private suspend fun getAllActiveOnce(): List<Note> = db.use { c ->
-        c.prepareStatement("SELECT * FROM notes WHERE archived = 0 AND trashedAt IS NULL ORDER BY updatedAt DESC")
+        c.prepareStatement("SELECT * FROM notes WHERE archived = 0 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 ORDER BY updatedAt DESC")
             .executeQuery().mapAll(::noteOf)
     }
 
@@ -116,6 +134,8 @@ class NoteDao internal constructor(private val db: Db) {
                         OR tags LIKE '%' || ? || '%'
                         OR checklist LIKE '%' || ? || '%')
                   AND (? = '' OR tags LIKE '%' || ? || '%')
+                  AND isDraft = 0
+                  AND hidden = 0
                   AND (? = -1 OR archived = ?)
                   AND (? = -1
                         OR (? = 1 AND trashedAt IS NOT NULL)
@@ -132,10 +152,43 @@ class NoteDao internal constructor(private val db: Db) {
             }.executeQuery().mapAll(::noteOf)
         }
 
+    /** Task A10 — the draft area, a sibling of the trash. */
+    fun getDrafts(): Flow<List<Note>> = db.watch("notes") {
+        db.use { c ->
+            c.prepareStatement(
+                "SELECT * FROM notes WHERE isDraft = 1 AND trashedAt IS NULL " +
+                    "ORDER BY COALESCE(draftSavedAt, updatedAt) DESC"
+            ).executeQuery().mapAll(::noteOf)
+        }
+    }
+
+    /** Task A21 — the hidden area; only read once the user has unlocked it in Settings. */
+    fun getHidden(): Flow<List<Note>> = db.watch("notes") {
+        db.use { c ->
+            c.prepareStatement(
+                "SELECT * FROM notes WHERE hidden = 1 AND isDraft = 0 AND trashedAt IS NULL ORDER BY updatedAt DESC"
+            ).executeQuery().mapAll(::noteOf)
+        }
+    }
+
+    /** Task A10 — is there anything to offer to restore on the next launch? */
+    suspend fun draftCountOnce(): Int = db.use { c ->
+        c.prepareStatement("SELECT COUNT(*) FROM notes WHERE isDraft = 1 AND trashedAt IS NULL")
+            .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+    }
+
+    /** Task A16 — highest order in use, so a drag can append without renumbering the table. */
+    suspend fun maxManualOrderOnce(): Int = db.use { c ->
+        c.prepareStatement("SELECT COALESCE(MAX(manualOrder), 0) FROM notes")
+            .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+    }
+
     suspend fun insert(note: Note): Long = db.write("notes") { c ->
         val ps = c.prepareStatement(
             "INSERT INTO notes (title, body, updatedAt, tags, attachments, archived, archivedAt, " +
-                "pinned, color, isChecklist, checklist, trashedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "pinned, color, isChecklist, checklist, trashedAt, manualOrder, isDraft, " +
+                "draftSavedAt, hidden, isDoodle, doodle, bodySpans) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, note.title); ps.setString(2, note.body); ps.setLong(3, note.updatedAt)
@@ -144,6 +197,10 @@ class NoteDao internal constructor(private val db: Db) {
         ps.setInt(8, if (note.pinned) 1 else 0); ps.setString(9, note.color)
         ps.setInt(10, if (note.isChecklist) 1 else 0); ps.setString(11, note.checklist)
         ps.bindLongOrNull(12, note.trashedAt)
+        ps.setInt(13, note.manualOrder); ps.setInt(14, if (note.isDraft) 1 else 0)
+        ps.bindLongOrNull(15, note.draftSavedAt); ps.setInt(16, if (note.hidden) 1 else 0)
+        ps.setInt(17, if (note.isDoodle) 1 else 0); ps.setString(18, note.doodle)
+        ps.setString(19, note.bodySpans)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
@@ -152,14 +209,21 @@ class NoteDao internal constructor(private val db: Db) {
         db.write("notes") { c ->
             val ps = c.prepareStatement(
                 "UPDATE notes SET title=?, body=?, updatedAt=?, tags=?, attachments=?, archived=?, " +
-                    "archivedAt=?, pinned=?, color=?, isChecklist=?, checklist=?, trashedAt=? WHERE id=?"
+                    "archivedAt=?, pinned=?, color=?, isChecklist=?, checklist=?, trashedAt=?, " +
+                    "manualOrder=?, isDraft=?, draftSavedAt=?, hidden=?, isDoodle=?, doodle=?, " +
+                    "bodySpans=? WHERE id=?"
             )
             ps.setString(1, note.title); ps.setString(2, note.body); ps.setLong(3, note.updatedAt)
             ps.setString(4, note.tags); ps.setString(5, note.attachments)
             ps.setInt(6, if (note.archived) 1 else 0); ps.bindLongOrNull(7, note.archivedAt)
             ps.setInt(8, if (note.pinned) 1 else 0); ps.setString(9, note.color)
             ps.setInt(10, if (note.isChecklist) 1 else 0); ps.setString(11, note.checklist)
-            ps.bindLongOrNull(12, note.trashedAt); ps.setLong(13, note.id)
+            ps.bindLongOrNull(12, note.trashedAt)
+            ps.setInt(13, note.manualOrder); ps.setInt(14, if (note.isDraft) 1 else 0)
+            ps.bindLongOrNull(15, note.draftSavedAt); ps.setInt(16, if (note.hidden) 1 else 0)
+            ps.setInt(17, if (note.isDoodle) 1 else 0); ps.setString(18, note.doodle)
+            ps.setString(19, note.bodySpans)
+            ps.setLong(20, note.id)
             ps.executeUpdate()
         }
     }
@@ -218,6 +282,13 @@ class NoteVersionDao internal constructor(private val db: Db) {
         }
     }
 
+    /** Task A19 — delete one revision on the user's explicit instruction. */
+    suspend fun deleteById(id: Long) {
+        db.write("note_versions") { c ->
+            c.prepareStatement("DELETE FROM note_versions WHERE id=?").apply { setLong(1, id) }.executeUpdate()
+        }
+    }
+
     suspend fun trimTo(noteId: Long, keep: Int) {
         db.write("note_versions") { c ->
             c.prepareStatement(
@@ -237,6 +308,91 @@ class NoteVersionDao internal constructor(private val db: Db) {
 
     suspend fun clearAll() {
         db.write("note_versions") { c -> c.createStatement().use { it.executeUpdate("DELETE FROM note_versions") } }
+    }
+}
+
+private fun taskVersionOf(rs: ResultSet) = TaskVersion(
+    id = rs.getLong("id"),
+    taskId = rs.getLong("taskId"),
+    title = rs.getString("title"),
+    notes = rs.getString("notes"),
+    subtasks = rs.getString("subtasks"),
+    priority = rs.getInt("priority"),
+    dueAt = rs.longOrNull("dueAt"),
+    savedAt = rs.getLong("savedAt")
+)
+
+/**
+ * Task A19 — desktop twin of the Android TaskVersionDao, method-for-method, so the history screens
+ * and BackupManager compile against one shape on both platforms.
+ */
+class TaskVersionDao internal constructor(private val db: Db) {
+
+    fun getForTask(taskId: Long): Flow<List<TaskVersion>> = db.watch("task_versions") { getForTaskOnce(taskId) }
+
+    suspend fun getForTaskOnce(taskId: Long): List<TaskVersion> = db.use { c ->
+        c.prepareStatement("SELECT * FROM task_versions WHERE taskId = ? ORDER BY savedAt DESC")
+            .apply { setLong(1, taskId) }.executeQuery().mapAll(::taskVersionOf)
+    }
+
+    suspend fun getAllOnce(): List<TaskVersion> = db.use { c ->
+        c.prepareStatement("SELECT * FROM task_versions ORDER BY savedAt DESC").executeQuery().mapAll(::taskVersionOf)
+    }
+
+    suspend fun countForTask(taskId: Long): Int = db.use { c ->
+        c.prepareStatement("SELECT COUNT(*) FROM task_versions WHERE taskId = ?")
+            .apply { setLong(1, taskId) }.executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+    }
+
+    suspend fun insert(version: TaskVersion): Long = db.write("task_versions") { c ->
+        val ps = c.prepareStatement(
+            "INSERT INTO task_versions (taskId, title, notes, subtasks, priority, dueAt, savedAt) " +
+                "VALUES (?,?,?,?,?,?,?)",
+            java.sql.Statement.RETURN_GENERATED_KEYS
+        )
+        ps.setLong(1, version.taskId); ps.setString(2, version.title); ps.setString(3, version.notes)
+        ps.setString(4, version.subtasks); ps.setInt(5, version.priority)
+        ps.bindLongOrNull(6, version.dueAt); ps.setLong(7, version.savedAt)
+        ps.executeUpdate()
+        ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
+    }
+
+    suspend fun delete(version: TaskVersion) {
+        db.write("task_versions") { c ->
+            c.prepareStatement("DELETE FROM task_versions WHERE id=?").apply { setLong(1, version.id) }.executeUpdate()
+        }
+    }
+
+    suspend fun deleteForTask(taskId: Long) {
+        db.write("task_versions") { c ->
+            c.prepareStatement("DELETE FROM task_versions WHERE taskId=?").apply { setLong(1, taskId) }.executeUpdate()
+        }
+    }
+
+    /** Task A19 — delete one revision on the user's explicit instruction. */
+    suspend fun deleteById(id: Long) {
+        db.write("task_versions") { c ->
+            c.prepareStatement("DELETE FROM task_versions WHERE id=?").apply { setLong(1, id) }.executeUpdate()
+        }
+    }
+
+    suspend fun trimTo(taskId: Long, keep: Int) {
+        db.write("task_versions") { c ->
+            c.prepareStatement(
+                "DELETE FROM task_versions WHERE taskId = ? AND id NOT IN (" +
+                    "SELECT id FROM task_versions WHERE taskId = ? ORDER BY savedAt DESC LIMIT ?)"
+            ).apply { setLong(1, taskId); setLong(2, taskId); setInt(3, keep) }.executeUpdate()
+        }
+    }
+
+    suspend fun pruneOrphaned() {
+        db.write("task_versions") { c ->
+            c.createStatement().use { it.executeUpdate("DELETE FROM task_versions WHERE taskId NOT IN (SELECT id FROM tasks)") }
+        }
+    }
+
+    suspend fun clearAll() {
+        db.write("task_versions") { c -> c.createStatement().use { it.executeUpdate("DELETE FROM task_versions") } }
     }
 }
 
@@ -269,6 +425,8 @@ class TaskDao internal constructor(private val db: Db) {
                     OR title LIKE '%' || ? || '%'
                     OR notes LIKE '%' || ? || '%'
                     OR subtasks LIKE '%' || ? || '%')
+              AND isDraft = 0
+              AND hidden = 0
               AND (? = -1 OR isDone = ?)
               AND (? = -1
                     OR (? = 1 AND trashedAt IS NOT NULL)
@@ -292,20 +450,20 @@ class TaskDao internal constructor(private val db: Db) {
 
     fun getActive(): Flow<List<Task>> = db.watch("tasks") {
         db.use { c ->
-            c.prepareStatement("SELECT * FROM tasks WHERE isDone = 0 AND trashedAt IS NULL ORDER BY createdAt DESC")
+            c.prepareStatement("SELECT * FROM tasks WHERE isDone = 0 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 ORDER BY createdAt DESC")
                 .executeQuery().mapAll(::taskOf)
         }
     }
 
     suspend fun activeCountOnce(): Int = db.use { c ->
-        c.prepareStatement("SELECT COUNT(*) FROM tasks WHERE isDone = 0 AND trashedAt IS NULL")
+        c.prepareStatement("SELECT COUNT(*) FROM tasks WHERE isDone = 0 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0")
             .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
     }
 
     fun getCompleted(): Flow<List<Task>> = db.watch("tasks") {
         db.use { c ->
             c.prepareStatement(
-                "SELECT * FROM tasks WHERE isDone = 1 AND trashedAt IS NULL " +
+                "SELECT * FROM tasks WHERE isDone = 1 AND trashedAt IS NULL AND isDraft = 0 AND hidden = 0 " +
                     "ORDER BY COALESCE(completedAt, createdAt) DESC"
             ).executeQuery().mapAll(::taskOf)
         }
@@ -313,16 +471,47 @@ class TaskDao internal constructor(private val db: Db) {
 
     fun getTrashed(): Flow<List<Task>> = db.watch("tasks") {
         db.use { c ->
-            c.prepareStatement("SELECT * FROM tasks WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+            c.prepareStatement("SELECT * FROM tasks WHERE trashedAt IS NOT NULL AND isDraft = 0 ORDER BY trashedAt DESC")
                 .executeQuery().mapAll(::taskOf)
         }
+    }
+
+    /** Task A10 — the draft area for tasks; mirrors [NoteDao.getDrafts]. */
+    fun getDrafts(): Flow<List<Task>> = db.watch("tasks") {
+        db.use { c ->
+            c.prepareStatement(
+                "SELECT * FROM tasks WHERE isDraft = 1 AND trashedAt IS NULL " +
+                    "ORDER BY COALESCE(draftSavedAt, createdAt) DESC"
+            ).executeQuery().mapAll(::taskOf)
+        }
+    }
+
+    /** Task A21 — the hidden area for tasks. */
+    fun getHidden(): Flow<List<Task>> = db.watch("tasks") {
+        db.use { c ->
+            c.prepareStatement(
+                "SELECT * FROM tasks WHERE hidden = 1 AND isDraft = 0 AND trashedAt IS NULL ORDER BY createdAt DESC"
+            ).executeQuery().mapAll(::taskOf)
+        }
+    }
+
+    suspend fun draftCountOnce(): Int = db.use { c ->
+        c.prepareStatement("SELECT COUNT(*) FROM tasks WHERE isDraft = 1 AND trashedAt IS NULL")
+            .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+    }
+
+    /** Task A16 — see [NoteDao.maxManualOrderOnce]. */
+    suspend fun maxManualOrderOnce(): Int = db.use { c ->
+        c.prepareStatement("SELECT COALESCE(MAX(manualOrder), 0) FROM tasks")
+            .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
     }
 
     suspend fun insert(task: Task): Long = db.write("tasks") { c ->
         val ps = c.prepareStatement(
             "INSERT INTO tasks (title, isDone, createdAt, attachments, dueAt, notes, completedAt, " +
-                "priority, pinned, subtasks, repeatRule, reminderEnabled, trashedAt) " +
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "priority, pinned, subtasks, repeatRule, reminderEnabled, trashedAt, manualOrder, " +
+                "isDraft, draftSavedAt, hidden, notesSpans) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, task.title); ps.setInt(2, if (task.isDone) 1 else 0); ps.setLong(3, task.createdAt)
@@ -331,6 +520,9 @@ class TaskDao internal constructor(private val db: Db) {
         ps.setInt(9, if (task.pinned) 1 else 0); ps.setString(10, task.subtasks)
         ps.setString(11, task.repeatRule); ps.setInt(12, if (task.reminderEnabled) 1 else 0)
         ps.bindLongOrNull(13, task.trashedAt)
+        ps.setInt(14, task.manualOrder); ps.setInt(15, if (task.isDraft) 1 else 0)
+        ps.bindLongOrNull(16, task.draftSavedAt); ps.setInt(17, if (task.hidden) 1 else 0)
+        ps.setString(18, task.notesSpans)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
@@ -340,14 +532,19 @@ class TaskDao internal constructor(private val db: Db) {
             val ps = c.prepareStatement(
                 "UPDATE tasks SET title=?, isDone=?, createdAt=?, attachments=?, dueAt=?, notes=?, " +
                     "completedAt=?, priority=?, pinned=?, subtasks=?, repeatRule=?, reminderEnabled=?, " +
-                    "trashedAt=? WHERE id=?"
+                    "trashedAt=?, manualOrder=?, isDraft=?, draftSavedAt=?, hidden=?, " +
+                    "notesSpans=? WHERE id=?"
             )
             ps.setString(1, task.title); ps.setInt(2, if (task.isDone) 1 else 0); ps.setLong(3, task.createdAt)
             ps.setString(4, task.attachments); ps.bindLongOrNull(5, task.dueAt); ps.setString(6, task.notes)
             ps.bindLongOrNull(7, task.completedAt); ps.setInt(8, task.priority)
             ps.setInt(9, if (task.pinned) 1 else 0); ps.setString(10, task.subtasks)
             ps.setString(11, task.repeatRule); ps.setInt(12, if (task.reminderEnabled) 1 else 0)
-            ps.bindLongOrNull(13, task.trashedAt); ps.setLong(14, task.id)
+            ps.bindLongOrNull(13, task.trashedAt)
+            ps.setInt(14, task.manualOrder); ps.setInt(15, if (task.isDraft) 1 else 0)
+            ps.bindLongOrNull(16, task.draftSavedAt); ps.setInt(17, if (task.hidden) 1 else 0)
+            ps.setString(18, task.notesSpans)
+            ps.setLong(19, task.id)
             ps.executeUpdate()
         }
     }
@@ -397,17 +594,32 @@ class ChatDao internal constructor(private val db: Db) {
         ).executeQuery().mapAll { rs -> ConversationContent(rs.getLong("conversationId"), rs.stringOrNull("content")) }
     }
 
-    suspend fun insert(message: ChatMessage) {
+    /** Insert one message, returning its new row id — see the Android twin for why the id matters. */
+    suspend fun insert(message: ChatMessage): Long = db.write("chat_messages") { c ->
+        val ps = c.prepareStatement(
+            "INSERT INTO chat_messages (role, content, timestamp, attachmentMime, attachmentData, " +
+                "attachmentName, conversationId, tokens, replyToId) VALUES (?,?,?,?,?,?,?,?,?)",
+            java.sql.Statement.RETURN_GENERATED_KEYS
+        )
+        ps.setString(1, message.role); ps.setString(2, message.content); ps.setLong(3, message.timestamp)
+        ps.bindStringOrNull(4, message.attachmentMime); ps.bindStringOrNull(5, message.attachmentData)
+        ps.bindStringOrNull(6, message.attachmentName); ps.setLong(7, message.conversationId)
+        ps.setInt(8, message.tokens); ps.setLong(9, message.replyToId)
+        ps.executeUpdate()
+        ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
+    }
+
+    /**
+     * Delete a specific set of messages (B-group task 11). The id list is interpolated rather than
+     * bound because JDBC has no parameter form for `IN (?)` — safe here precisely because these are
+     * Longs: they come from ChatMessage.id, and a Long cannot carry SQL. An empty set is a no-op
+     * rather than an `IN ()`, which SQLite rejects outright.
+     */
+    suspend fun deleteByIds(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val list = ids.joinToString(",")
         db.write("chat_messages") { c ->
-            val ps = c.prepareStatement(
-                "INSERT INTO chat_messages (role, content, timestamp, attachmentMime, attachmentData, " +
-                    "attachmentName, conversationId, tokens) VALUES (?,?,?,?,?,?,?,?)"
-            )
-            ps.setString(1, message.role); ps.setString(2, message.content); ps.setLong(3, message.timestamp)
-            ps.bindStringOrNull(4, message.attachmentMime); ps.bindStringOrNull(5, message.attachmentData)
-            ps.bindStringOrNull(6, message.attachmentName); ps.setLong(7, message.conversationId)
-            ps.setInt(8, message.tokens)
-            ps.executeUpdate()
+            c.createStatement().use { it.executeUpdate("DELETE FROM chat_messages WHERE id IN ($list)") }
         }
     }
 

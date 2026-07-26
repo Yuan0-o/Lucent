@@ -28,7 +28,14 @@ import androidx.compose.runtime.mutableStateMapOf
  */
 object UnsavedChangesGuard {
 
-    private class Registration(val onSave: () -> Unit, val onDiscard: () -> Unit)
+    private class Registration(
+        val onSave: () -> Unit,
+        val onDiscard: () -> Unit,
+        // Task A10: how this owner parks its work in the draft area without committing it. Given a
+        // default no-op so an owner that has nothing draftable (Settings > Assistant) registers
+        // exactly as before.
+        val onAutoDraft: () -> Unit
+    )
 
     // Owner key -> its save/discard actions, present only while that owner has unsaved changes.
     // A snapshot-backed map so reads of [dirty] recompose/observe correctly.
@@ -38,8 +45,13 @@ object UnsavedChangesGuard {
     val dirty: Boolean get() = registrations.isNotEmpty()
 
     /** Mark [owner] as having unsaved changes, recording how to save or discard them. */
-    fun register(owner: String, onSave: () -> Unit, onDiscard: () -> Unit) {
-        registrations[owner] = Registration(onSave, onDiscard)
+    fun register(
+        owner: String,
+        onSave: () -> Unit,
+        onDiscard: () -> Unit,
+        onAutoDraft: () -> Unit = {}
+    ) {
+        registrations[owner] = Registration(onSave, onDiscard, onAutoDraft)
     }
 
     /** Mark [owner] as no longer having unsaved changes. Safe to call when it wasn't registered. */
@@ -52,6 +64,22 @@ object UnsavedChangesGuard {
         val pending = registrations.values.toList()
         registrations.clear()
         pending.forEach { it.onSave() }
+    }
+
+    /**
+     * Task A10 — park every pending edit in the draft area, **without** clearing the registrations.
+     *
+     * Called when the app is about to leave the foreground, where the honest assumption is that it
+     * may never come back: Android can kill a stopped process at any moment, and the app lock
+     * re-locking on resume tears the composer down too. Either way the edit used to be gone.
+     *
+     * Not clearing is the whole point of the distinction from [save] and [discard]. This is not the
+     * user finishing anything — the editor is still open, and if they do come back it must still be
+     * open, still dirty, and still able to save properly. So this leaves a copy behind and changes
+     * nothing about the session it copied.
+     */
+    fun autoDraft() {
+        registrations.values.toList().forEach { it.onAutoDraft() }
     }
 
     /** Discard every pending edit, then clear all registrations. */

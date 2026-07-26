@@ -188,7 +188,10 @@ private fun PriorityChip(
             Spacer(modifier = Modifier.width(3.dp))
         }
         Text(
-            option.label,
+            // Task A17: the chip showed TaskPriority.label, which is the *English* wire name the
+            // assistant's tools and the CSV/Markdown exports depend on — so "None"/"Low" stayed
+            // English in every language. uiLabel is the localized twin (zh/en/ja/ko).
+            option.uiLabel,
             color = if (selected) onGradient else onGradientMuted,
             fontSize = 11.sp,
             maxLines = 1,
@@ -224,7 +227,9 @@ fun RepeatRuleRow(selected: RepeatRule, onSelect: (RepeatRule) -> Unit, modifier
                 FilterChip(
                     selected = option == selected,
                     onClick = { onSelect(option) },
-                    label = { Text(option.label) }
+                    // Task A17: same fix as the priority chips — the repeat cadences were showing
+                    // their English wire names instead of the localized uiLabel.
+                    label = { Text(option.uiLabel) }
                 )
             }
         }

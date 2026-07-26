@@ -76,8 +76,14 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        /** Schema version this build writes. Matches the Android Room schema (version 11). */
-        private const val SCHEMA_VERSION = 11
+        /**
+         * Schema version this build writes. Matches the Android Room schema (version 15).
+         *
+         * INTEGRATION NOTE: group A took 12 and 13 (drafts / hidden / manual order / task history /
+         * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
+         * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
+         */
+        private const val SCHEMA_VERSION = 15
 
         fun open(context: Context): Db {
             val file = File(context.applicationContext.filesDir, "lucent.db")
@@ -90,6 +96,10 @@ class Db private constructor(private val connection: Connection) {
                 st.execute("PRAGMA foreign_keys=ON")
             }
             createSchema(conn)
+            // An EXISTING store gets its new columns here — createSchema cannot, see its closing
+            // comment. Group A's introspective upgrade and group B's versioned walker were merged
+            // into this one function during integration.
+            migrateSchema(context, conn)
             return Db(conn)
         }
 
@@ -139,11 +149,20 @@ class Db private constructor(private val connection: Connection) {
             val passphrase = try {
                 DataKeys.databasePassphrase(context) // "x'<64 hex>'"
             } catch (t: Throwable) {
+                // C-group task 17: a degradation to plaintext must be RECORDED, not just logged
+                // to a file the user may not have enabled. EncryptionStatus drives the Settings
+                // banner too, so this is visible without reading a log at all.
+                EncryptionStatus.reportDatabase(
+                    EncryptionStatus.State.PLAINTEXT, "key unavailable: ${t.message}"
+                )
                 StartupLog.event(context, "db: key unavailable (${t.message}); opening unencrypted")
                 return DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
             }
             val hexKey = passphrase.removePrefix("x'").removeSuffix("'")
             if (!hexKey.matches(Regex("[0-9a-fA-F]{64}"))) {
+                EncryptionStatus.reportDatabase(
+                    EncryptionStatus.State.PLAINTEXT, "key had an unexpected form"
+                )
                 StartupLog.event(context, "db: key had an unexpected form; opening unencrypted")
                 return DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
             }
@@ -164,6 +183,9 @@ class Db private constructor(private val connection: Connection) {
                     conn.createStatement().use { it.executeQuery("SELECT count(*) FROM sqlite_master").close() }
                     true
                 } catch (t: Throwable) {
+                    EncryptionStatus.reportDatabase(
+                        EncryptionStatus.State.PLAINTEXT, "in-place encryption failed: ${t.message}"
+                    )
                     StartupLog.event(context, "db: in-place encryption failed (${t.message}); opening unencrypted")
                     false
                 }
@@ -185,6 +207,9 @@ class Db private constructor(private val connection: Connection) {
             val conn = try {
                 DriverManager.getConnection(keyedSqliteUrl(file, hexKey))
             } catch (t: Throwable) {
+                if (existed) EncryptionStatus.reportDatabase(
+                    EncryptionStatus.State.LOCKED_OUT, "existing database rejected this machine's key"
+                )
                 if (existed) throw IllegalStateException(
                     "The Lucent database at ${file.absolutePath} could not be unlocked with this " +
                         "machine's key. If the key files under ${File(context.filesDir, "keys")} were " +
@@ -194,7 +219,12 @@ class Db private constructor(private val connection: Connection) {
             }
             val core = probeCipherCore(conn)
             if (core == null) {
+                EncryptionStatus.reportDatabase(
+                    EncryptionStatus.State.PLAINTEXT, "cipher core not identified by any probe"
+                )
                 StartupLog.event(context, "db: cipher core NOT identified by any probe — at-rest encryption may not be active on this driver")
+            } else {
+                EncryptionStatus.reportDatabase(EncryptionStatus.State.ENCRYPTED, core)
             }
             return conn
         }
@@ -204,6 +234,160 @@ class Db private constructor(private val connection: Connection) {
          * same columns, same defaults — so the two stores stay structurally interchangeable.
          * Idempotent: IF NOT EXISTS everywhere, and user_version records what is on disk.
          */
+        /**
+         * Bring an EXISTING database up to [SCHEMA_VERSION] — the desktop counterpart of Room's
+         * migration chain on Android.
+         *
+         * ### Why this had to exist
+         *
+         * `createSchema` is `CREATE TABLE IF NOT EXISTS` throughout, which is exactly right for a
+         * fresh install and does precisely nothing for an existing one. Adding a column to a table
+         * that already exists was therefore impossible on desktop: the new column would appear on
+         * new installs and be silently missing on every upgrade, and the first query naming it
+         * would throw. `PRAGMA user_version` was already being written but never read.
+         *
+         * ### Integration note (three chains became one)
+         *
+         * Group B introduced the versioned walker; group A independently introduced an
+         * introspection-based `upgradeSchema`. They are merged here, keeping the strengths of both:
+         * the walker's structure (adding a future step is one `when` branch) and the
+         * introspection's safety (every step checks the store before it changes it).
+         *
+         * Two consequences of the merge, both deliberate:
+         *
+         *  1. **The stamp is a fast path, not the source of truth.** Any store not already at
+         *     [SCHEMA_VERSION] replays *every* step from 11, and every step is guarded by
+         *     `PRAGMA table_info` / `IF NOT EXISTS`. B's original rule — "a store stamped 0 is
+         *     current, run only the newest step" — was correct while exactly one step existed and
+         *     becomes wrong the moment there are three: a store written by a build that had only
+         *     some of them would skip the rest forever. Replaying guarded steps costs a handful of
+         *     pragmas per launch and cannot be wrong.
+         *  2. **createSchema no longer stamps.** It used to stamp unconditionally at the end, which
+         *     on an existing store meant "did nothing, then declared itself up to date" — the store
+         *     would be missing columns and permanently marked as migrated. The stamp lives here now,
+         *     written only after the steps have actually run.
+         *
+         * ### Failure policy
+         *
+         * A failed step is logged and swallowed, and the version is NOT stamped, so the next launch
+         * tries again. It never throws: refusing to start is a far worse outcome than running one
+         * version behind, and every column added here is optional at each of its read sites.
+         */
+        private fun migrateSchema(context: Context, conn: Connection) {
+            val current = try {
+                conn.createStatement().use { st ->
+                    st.executeQuery("PRAGMA user_version").use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+                }
+            } catch (t: Throwable) {
+                StartupLog.event(context, "db: could not read user_version (${t.message}); skipping migrations")
+                return
+            }
+            if (current >= SCHEMA_VERSION) return
+
+            // See point 1 above: the stamp only tells us whether we can skip entirely. Once we are
+            // running at all, we run every guarded step, whatever the stamp claimed.
+            var version = BASE_MIGRATABLE_VERSION
+
+            while (version < SCHEMA_VERSION) {
+                val next = version + 1
+                val ok = try {
+                    when (next) {
+                        // v12 (group A): manual order, drafts, hidden items, task revision history.
+                        12 -> {
+                            var good = true
+                            for ((table, column, decl) in listOf(
+                                Triple("notes", "manualOrder", "INTEGER NOT NULL DEFAULT 0"),
+                                Triple("notes", "isDraft", "INTEGER NOT NULL DEFAULT 0"),
+                                Triple("notes", "draftSavedAt", "INTEGER"),
+                                Triple("notes", "hidden", "INTEGER NOT NULL DEFAULT 0"),
+                                Triple("tasks", "manualOrder", "INTEGER NOT NULL DEFAULT 0"),
+                                Triple("tasks", "isDraft", "INTEGER NOT NULL DEFAULT 0"),
+                                Triple("tasks", "draftSavedAt", "INTEGER"),
+                                Triple("tasks", "hidden", "INTEGER NOT NULL DEFAULT 0")
+                            )) {
+                                if (!addColumnIfMissing(conn, table, column, decl)) good = false
+                            }
+                            // The table and indices are IF NOT EXISTS, so replaying is a no-op.
+                            conn.createStatement().use { st ->
+                                st.executeUpdate(
+                                    "CREATE TABLE IF NOT EXISTS task_versions (" +
+                                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                                        "taskId INTEGER NOT NULL, " +
+                                        "title TEXT NOT NULL, " +
+                                        "notes TEXT NOT NULL DEFAULT '', " +
+                                        "subtasks TEXT NOT NULL DEFAULT '[]', " +
+                                        "priority INTEGER NOT NULL DEFAULT 0, " +
+                                        "dueAt INTEGER, " +
+                                        "savedAt INTEGER NOT NULL)"
+                                )
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_task_versions_taskId ON task_versions (taskId)")
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_isDraft ON notes (isDraft)")
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_hidden ON notes (hidden)")
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDraft ON tasks (isDraft)")
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_hidden ON tasks (hidden)")
+                            }
+                            good
+                        }
+                        // v13 (group A): doodle notes.
+                        13 -> addColumnIfMissing(conn, "notes", "isDoodle", "INTEGER NOT NULL DEFAULT 0") &&
+                            addColumnIfMissing(conn, "notes", "doodle", "TEXT NOT NULL DEFAULT ''")
+                        // v14 (group B, originally numbered 12): chat_messages.replyToId — pairs a
+                        // reply to the question it answers, so alternative answers can be grouped.
+                        14 -> addColumnIfMissing(conn, "chat_messages", "replyToId", "INTEGER NOT NULL DEFAULT 0")
+                        // v15 (C group task 20, wired up during integration): rich-text sidecars.
+                        15 -> addColumnIfMissing(conn, "notes", "bodySpans", "TEXT NOT NULL DEFAULT ''") &&
+                            addColumnIfMissing(conn, "tasks", "notesSpans", "TEXT NOT NULL DEFAULT ''")
+                        else -> true   // no step for this version
+                    }
+                } catch (t: Throwable) {
+                    StartupLog.event(context, "db: migration to v$next FAILED (${t.message}); will retry next launch")
+                    false
+                }
+                if (!ok) return
+                try {
+                    conn.createStatement().use { it.executeUpdate("PRAGMA user_version=$next") }
+                } catch (t: Throwable) {
+                    StartupLog.event(context, "db: could not stamp user_version=$next (${t.message})")
+                    return
+                }
+                StartupLog.event(context, "db: migrated to schema v$next")
+                version = next
+            }
+        }
+
+        /**
+         * The version every replay starts from. 11 is the last shape that shipped before this
+         * release, and every step from here on is written to survive being applied to a store that
+         * already has it — so starting low is free and starting high can strand a column.
+         */
+        private const val BASE_MIGRATABLE_VERSION = 11
+
+        /** Add [column] to [table] unless it is already there. Returns false only on a real failure. */
+        private fun addColumnIfMissing(
+            conn: Connection,
+            table: String,
+            column: String,
+            definition: String
+        ): Boolean {
+            val present = try {
+                conn.createStatement().use { st ->
+                    st.executeQuery("PRAGMA table_info($table)").use { rs ->
+                        generateSequence { if (rs.next()) rs.getString("name") else null }
+                            .any { it.equals(column, ignoreCase = true) }
+                    }
+                }
+            } catch (t: Throwable) {
+                return false
+            }
+            if (present) return true
+            return try {
+                conn.createStatement().use { it.executeUpdate("ALTER TABLE $table ADD COLUMN $column $definition") }
+                true
+            } catch (t: Throwable) {
+                false
+            }
+        }
+
         private fun createSchema(conn: Connection) {
             conn.createStatement().use { st ->
                 st.executeUpdate(
@@ -220,7 +404,16 @@ class Db private constructor(private val connection: Connection) {
                         "color TEXT NOT NULL DEFAULT '', " +
                         "isChecklist INTEGER NOT NULL DEFAULT 0, " +
                         "checklist TEXT NOT NULL DEFAULT '[]', " +
-                        "trashedAt INTEGER)"
+                        "trashedAt INTEGER, " +
+                        // 1.1.0 group A (tasks A16 / A10 / A21)
+                        "manualOrder INTEGER NOT NULL DEFAULT 0, " +
+                        "isDraft INTEGER NOT NULL DEFAULT 0, " +
+                        "draftSavedAt INTEGER, " +
+                        "hidden INTEGER NOT NULL DEFAULT 0, " +
+                        "isDoodle INTEGER NOT NULL DEFAULT 0, " +
+                        "doodle TEXT NOT NULL DEFAULT '', " +
+                        // INTEGRATION (C task 20) — rich-text sidecar; see data/RichText.kt.
+                        "bodySpans TEXT NOT NULL DEFAULT '')"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS tasks (" +
@@ -237,7 +430,12 @@ class Db private constructor(private val connection: Connection) {
                         "subtasks TEXT NOT NULL DEFAULT '[]', " +
                         "repeatRule TEXT NOT NULL DEFAULT 'NONE', " +
                         "reminderEnabled INTEGER NOT NULL DEFAULT 0, " +
-                        "trashedAt INTEGER)"
+                        "trashedAt INTEGER, " +
+                        "manualOrder INTEGER NOT NULL DEFAULT 0, " +
+                        "isDraft INTEGER NOT NULL DEFAULT 0, " +
+                        "draftSavedAt INTEGER, " +
+                        "hidden INTEGER NOT NULL DEFAULT 0, " +
+                        "notesSpans TEXT NOT NULL DEFAULT '')"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS note_versions (" +
@@ -250,6 +448,18 @@ class Db private constructor(private val connection: Connection) {
                         "checklist TEXT NOT NULL DEFAULT '[]', " +
                         "savedAt INTEGER NOT NULL)"
                 )
+                // Task A19 — task revision history, mirroring note_versions.
+                st.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS task_versions (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "taskId INTEGER NOT NULL, " +
+                        "title TEXT NOT NULL, " +
+                        "notes TEXT NOT NULL DEFAULT '', " +
+                        "subtasks TEXT NOT NULL DEFAULT '[]', " +
+                        "priority INTEGER NOT NULL DEFAULT 0, " +
+                        "dueAt INTEGER, " +
+                        "savedAt INTEGER NOT NULL)"
+                )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS chat_messages (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
@@ -260,7 +470,9 @@ class Db private constructor(private val connection: Connection) {
                         "attachmentData TEXT, " +
                         "attachmentName TEXT, " +
                         "conversationId INTEGER NOT NULL DEFAULT 1, " +
-                        "tokens INTEGER NOT NULL DEFAULT 0)"
+                        "tokens INTEGER NOT NULL DEFAULT 0, " +
+                        // B-group task 12 — see ChatMessage.replyToId.
+                        "replyToId INTEGER NOT NULL DEFAULT 0)"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS chat_conversations (" +
@@ -277,7 +489,15 @@ class Db private constructor(private val connection: Connection) {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDone ON tasks (isDone)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_trashedAt ON tasks (trashedAt)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_note_versions_noteId ON note_versions (noteId)")
-                st.executeUpdate("PRAGMA user_version=$SCHEMA_VERSION")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_task_versions_taskId ON task_versions (taskId)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_isDraft ON notes (isDraft)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_hidden ON notes (hidden)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDraft ON tasks (isDraft)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_hidden ON tasks (hidden)")
+                // The version stamp moved to migrateSchema, which is the only place that knows the
+                // store is genuinely at the current shape. Stamping here would mark an existing
+                // database as up to date after doing nothing to it — every statement above is
+                // CREATE ... IF NOT EXISTS, which no-ops against tables that already exist.
             }
         }
     }
