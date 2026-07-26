@@ -85,8 +85,8 @@ fun ExpandableGlassTextField(
     placeholder: String,
     expandedTitle: String,
     modifier: Modifier = Modifier,
-    collapsedMinHeight: Dp = 240.dp,
-    collapsedMaxHeight: Dp = 640.dp,
+    collapsedMinHeight: Dp = 360.dp,
+    collapsedMaxHeight: Dp = 960.dp,
     // ---- INTEGRATION: C-group task 20 ----
     // All optional, all inert by default, so every existing call site is untouched and a user who
     // never turns rich text on gets byte-identical behaviour to before.

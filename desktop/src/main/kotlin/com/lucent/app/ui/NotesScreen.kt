@@ -464,9 +464,18 @@ fun NotesScreen(active: Boolean = true) {
         // item and hitting Save directly never silently drops it. Only in checklist mode — that is
         // the only mode in which the add field is even on screen.
         val pendingItem = newChecklistItemText.trim()
-        val composedChecklist =
+        // Round R2, task 2 — a row with nothing written on it is not an item.
+        //
+        // "Add another one" is a single tap, and changing your mind afterwards is not: the blank
+        // row stayed, saved, and came back every time the note was opened, so the only way to be
+        // rid of it was to notice it and delete it by hand. Pruning on save is the honest reading —
+        // an empty row is the *absence* of an item, not an item that happens to be empty — and it
+        // is done unconditionally rather than only in checklist mode, because a list left behind by
+        // switching the mode off should not smuggle blanks back in later.
+        val composedChecklist = (
             if (isChecklistMode && pendingItem.isNotEmpty()) checklistItems + Checklist.newItem(pendingItem)
             else checklistItems
+            ).filter { it.text.isNotBlank() }
         // Task 2 — a doodle counts as content.
         //
         // This guard decides "there is nothing here, close without saving", and it asked about the
@@ -474,7 +483,14 @@ fun NotesScreen(active: Boolean = true) {
         // hold EXCEPT the drawing. So a note whose only content was a drawing matched "empty" and
         // was discarded on save, silently, every time. Checklist-only notes were already covered by
         // `composedChecklist`, which is why only the doodle case failed.
-        val hasDoodle = isDoodleMode && !com.lucent.app.ui.Doodle.isEmpty(doodleData)
+        // Round R2, task 2 — the same rule for canvases, plus the multi-canvas fix.
+        //
+        // `Doodle.isEmpty` understands one bare stroke array, not the multi-canvas container, so it
+        // answered "empty" for EVERY note with two or more canvases: a doodle-only note with two
+        // canvases matched the "nothing here" guard below and was discarded on save, silently.
+        // DoodlePages answers for the column, and prunes the canvases nobody drew on.
+        val prunedDoodle = com.lucent.app.ui.DoodlePages.pruneEmpty(doodleData)
+        val hasDoodle = isDoodleMode && prunedDoodle.isNotBlank()
         if (newTitle.isBlank() && newBody.isBlank() && pendingAttachments.isEmpty() &&
             composedChecklist.isEmpty() && !hasDoodle
         ) {
@@ -501,7 +517,7 @@ fun NotesScreen(active: Boolean = true) {
         val colorSnapshot = selectedColor.key
         val isChecklistSnapshot = isChecklistMode
         val isDoodleSnapshot = isDoodleMode
-        val doodleSnapshot = doodleData
+        val doodleSnapshot = prunedDoodle
         val checklistJson = Checklist.serialize(composedChecklist)
         val id = editingId
         // ---- Task A10: park this edit in the draft area instead of committing it ----------
@@ -651,13 +667,22 @@ fun NotesScreen(active: Boolean = true) {
                 pinned != original.pinned || selectedColor.key != original.color ||
                 isChecklistMode != original.isChecklist ||
                 Checklist.serialize(checklistItems) != original.checklist ||
+                // Round R2, task 2 — the drawing counts as an edit. It was missing from this
+                // expression entirely, so a note whose ONLY change was a stroke on the canvas was
+                // "not dirty": the unsaved-changes guard let it go without asking, and the crash
+                // snapshot never recorded it. Both switch and strokes, because turning the canvas
+                // off is as much a change as drawing on it.
+                isDoodleMode != original.isDoodle || doodleData != original.doodle ||
                 // Text sitting in the add field is work too (B4): losing it on exit because no "+"
                 // was pressed is exactly the bug this flag exists to prevent.
                 (isChecklistMode && newChecklistItemText.isNotBlank())
         } else {
             newTitle.isNotBlank() || newBody.isNotBlank() || pendingAttachments.isNotEmpty() ||
                 selectedTags.isNotEmpty() || pinned || selectedColor != NoteColor.DEFAULT ||
-                checklistItems.isNotEmpty() || (isChecklistMode && newChecklistItemText.isNotBlank())
+                checklistItems.isNotEmpty() || (isChecklistMode && newChecklistItemText.isNotBlank()) ||
+                // Round R2, task 2 — a brand-new note that is nothing but a drawing is still a note
+                // with work in it; see the existing-note branch above.
+                !com.lucent.app.ui.DoodlePages.isEmpty(doodleData)
         }
     }
 
@@ -1205,10 +1230,28 @@ fun NotesScreen(active: Boolean = true) {
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Checklist-mode toggle: switches the editor below between free text and a
-                    // Keep-style checkable list. Both live in composer state regardless of which is
-                    // showing, so flipping back and forth never discards either one — a note that
-                    // was a paragraph, became a checklist, and goes back still has its paragraph.
+                    // ---- Round R2, task 2: the two note kinds are no longer rivals ----
+                    //
+                    // They used to be mutually exclusive: each switch turned the other off, on the
+                    // stated reasoning that "both" was an undefined state the save path would have
+                    // to pick a winner for. That reasoning was wrong on its own terms - the row
+                    // already has a column for each kind, and the detail page already rendered both
+                    // - so the exclusion was not protecting anything. What it actually cost was the
+                    // obvious use: sketch a diagram, list the steps that go with it, in one note.
+                    //
+                    // ### Where each thing goes, and why the old layout read as a bug
+                    //
+                    // Both switches used to sit together at the top and the content appeared below
+                    // BOTH of them, so a checklist rendered under the doodle switch - visually
+                    // belonging to the control that had nothing to do with it. Each kind's editor
+                    // now sits directly beneath its own switch:
+                    //
+                    //     [checklist switch]  ->  the items
+                    //     [doodle switch]     ->  the canvases
+                    //     details
+                    //
+                    // Ownership is then readable off the layout instead of having to be remembered,
+                    // and turning a switch on makes something appear where the eye already is.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.AutoMirrored.Filled.FormatListBulleted,
@@ -1219,55 +1262,12 @@ fun NotesScreen(active: Boolean = true) {
                         Text(com.lucent.app.i18n.S.checklistNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = isChecklistMode,
-                            onCheckedChange = { isChecklistMode = it; if (it) isDoodleMode = false }
+                            onCheckedChange = { isChecklistMode = it }
                         )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Brush,
-                            contentDescription = null,
-                            tint = if (isDoodleMode) onGradient else onGradientMuted
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(com.lucent.app.i18n.S.doodleNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        // The two kinds are mutually exclusive, so each switch turns the other off
-                        // rather than leaving an undefined "both" state the save path would have to
-                        // pick a winner for.
-                        Switch(
-                            checked = isDoodleMode,
-                            onCheckedChange = { isDoodleMode = it; if (it) isChecklistMode = false }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
 
-                    if (isDoodleMode) {
-                        // Task A22 — the whiteboard, plus the ordinary details box underneath so a
-                        // sketch can still be captioned. Same reasoning as A20 gave checklist notes
-                        // their remarks field: a note kind that can hold *only* one form of content
-                        // forces the user to open a second note to say what the first one is.
-                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData = it })
-                        Spacer(modifier = Modifier.height(12.dp))
-                        ExpandableGlassTextField(
-                            value = newBody,
-                            onValueChange = { newBody = it },
-                            // PHASE 4: dictation — recognized speech appends to whatever is already
-                            // written, joined with a single space, never replacing it.
-                            extraAction = { DictationButton(onText = { spoken ->
-                                newBody = if (newBody.isBlank()) spoken
-                                else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
-                            }) },
-                            spans = if (richTextEnabled) bodySpans else emptyList(),
-                            onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
-                            highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
-                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
-                            placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
-                            expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
-                            // Round R1, task 1: doubled with the main box, keeping the 3:4
-                            // ratio that makes this read as an aside rather than as the content.
-                            collapsedMinHeight = 180.dp,
-                            collapsedMaxHeight = 440.dp
-                        )
-                    } else if (isChecklistMode) {
+                    if (isChecklistMode) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         ChecklistEditorSection(
                             items = checklistItems,
                             newItemText = newChecklistItemText,
@@ -1295,83 +1295,90 @@ fun NotesScreen(active: Boolean = true) {
                             }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        // Task A20. A checklist note could hold nothing but its items — there was
-                        // nowhere to write down *why* the list exists, what it's for, or anything
-                        // that isn't itself a tickable step, which a task has always had. The column
-                        // was never the obstacle: Note.body is kept even in checklist mode
-                        // (deliberately, so switching modes back and forth loses nothing), it simply
-                        // wasn't rendered here. So this is the same field the plain-text branch uses,
-                        // shown alongside the items rather than instead of them, and saved by the
-                        // same code path with no migration and no new column.
-                        ExpandableGlassTextField(
-                            value = newBody,
-                            onValueChange = { newBody = it },
-                            // PHASE 4: dictation — recognized speech appends to whatever is already
-                            // written, joined with a single space, never replacing it.
-                            extraAction = { DictationButton(onText = { spoken ->
-                                newBody = if (newBody.isBlank()) spoken
-                                else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
-                            }) },
-                            spans = if (richTextEnabled) bodySpans else emptyList(),
-                            onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
-                            highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
-                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
-                            placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
-                            expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
-                            // Shorter than the plain-text branch's box: here the items are the
-                            // content and this is an aside, so it should not out-weigh them on
-                            // first sight. It still expands to full screen on demand.
-                            // Round R1, task 1: doubled with the main box, keeping the 3:4
-                            // ratio that makes this read as an aside rather than as the content.
-                            collapsedMinHeight = 180.dp,
-                            collapsedMaxHeight = 440.dp
-                        )
-                    } else {
-                        // Body field with an expand toggle in its bottom-right corner. Expanding
-                        // opens a modal editor that fills the top 3/4 of the screen (see
-                        // ExpandableGlassTextField) so long notes are comfortable to read and edit,
-                        // without reflowing the tags/attachments/save controls below.
-                        ExpandableGlassTextField(
-                            value = newBody,
-                            onValueChange = { newBody = it },
-                            // PHASE 4: dictation — recognized speech appends to whatever is already
-                            // written, joined with a single space, never replacing it.
-                            extraAction = { DictationButton(onText = { spoken ->
-                                newBody = if (newBody.isBlank()) spoken
-                                else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
-                            }) },
-                            spans = if (richTextEnabled) bodySpans else emptyList(),
-                            onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
-                            highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
-                            textColors = if (richTextEnabled) richTextColors() else emptyList(),
-                            // Task 11. This used to swap in a longer hint when Markdown and/or links
-                            // were on ("Details — supports Markdown and [[links]]"). Placeholder text
-                            // is a single line that cannot wrap, and the field carries the dictation
-                            // mic in its top-right corner, so the longer strings ran straight under
-                            // the mic and were clipped mid-word. The plain label is used in every
-                            // mode now: it matches the task composer, it never collides with the mic
-                            // in any of the four languages, and what the field supports is documented
-                            // where it can be read properly — Settings › Editor.
-                            placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
-                            expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
-                            // Round R1, task 1: doubled - see ExpandableGlassTextField.
-                            collapsedMinHeight = 240.dp,
-                            collapsedMaxHeight = 640.dp
-                        )
-                        if (newBody.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            // Paragraphs + characters, not words: "word" is meaningless in scripts
-                            // that don't separate words with spaces (Chinese, Japanese, Korean),
-                            // where a whole note collapsed to "1 word". Both figures below count
-                            // correctly in every language. See NoteStats.paragraphCharLabel.
-                            val statsLabel = remember(newBody) { com.lucent.app.data.NoteStats.paragraphCharLabel(newBody) }
-                            Text(
-                                statsLabel,
-                                color = onGradientMuted,
-                                fontSize = 11.sp
-                            )
-                        }
                     }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Brush,
+                            contentDescription = null,
+                            tint = if (isDoodleMode) onGradient else onGradientMuted
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(com.lucent.app.i18n.S.doodleNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = isDoodleMode,
+                            onCheckedChange = { isDoodleMode = it }
+                        )
+                    }
+
+                    if (isDoodleMode) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // Task A22 — the whiteboard. The details box below is shared with every
+                        // other mode now, so a sketch can still be captioned without this branch
+                        // carrying a second copy of that field.
+                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData = it })
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ---- The details box: ONE field, in every mode ----
+                    //
+                    // There used to be three copies of this call, one per branch, differing only in
+                    // their height and their comment. Three copies of a field is three places for a
+                    // fix to be applied twice and forgotten once - and with the kinds now free to
+                    // combine, a branch-per-kind could not have expressed "checklist AND doodle"
+                    // without a fourth copy. It is declared once and its height reacts instead.
+                    //
+                    // Task A20 / A22 reasoning, unchanged and now unconditional: a note kind that
+                    // can hold *only* one form of content forces the user to open a second note to
+                    // say what the first one is. Note.body is kept in every mode (deliberately, so
+                    // switching modes back and forth loses nothing), so this is the same field and
+                    // the same save path, with no migration and no new column.
+                    val detailsIsAside = isChecklistMode || isDoodleMode
+                    ExpandableGlassTextField(
+                        value = newBody,
+                        onValueChange = { newBody = it },
+                        // PHASE 4: dictation — recognized speech appends to whatever is already
+                        // written, joined with a single space, never replacing it.
+                        extraAction = { DictationButton(onText = { spoken ->
+                            newBody = if (newBody.isBlank()) spoken
+                            else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
+                        }) },
+                        spans = if (richTextEnabled) bodySpans else emptyList(),
+                        onSelectionChange = { a, b -> bodySelStart = a; bodySelEnd = b },
+                        highlightColors = if (richTextEnabled) RichHighlightColors else emptyList(),
+                        textColors = if (richTextEnabled) richTextColors() else emptyList(),
+                        // Task 11. This used to swap in a longer hint when Markdown and/or links
+                        // were on ("Details — supports Markdown and [[links]]"). Placeholder text
+                        // is a single line that cannot wrap, and the field carries the dictation
+                        // mic in its top-right corner, so the longer strings ran straight under
+                        // the mic and were clipped mid-word. The plain label is used in every
+                        // mode now: it matches the task composer, it never collides with the mic
+                        // in any of the four languages, and what the field supports is documented
+                        // where it can be read properly — Settings › Editor.
+                        placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
+                        expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
+                        // Round R2, task 3: 1.5x again. Smaller when something else on the page is
+                        // the content and this is an aside to it, so the items or the canvas are
+                        // not pushed off screen by a box nobody has typed in yet. It still expands
+                        // to full screen on demand either way.
+                        collapsedMinHeight = if (detailsIsAside) 270.dp else 360.dp,
+                        collapsedMaxHeight = if (detailsIsAside) 660.dp else 960.dp
+                    )
+                    if (!detailsIsAside && newBody.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Paragraphs + characters, not words: "word" is meaningless in scripts
+                        // that don't separate words with spaces (Chinese, Japanese, Korean),
+                        // where a whole note collapsed to "1 word". Both figures below count
+                        // correctly in every language. See NoteStats.paragraphCharLabel.
+                        val statsLabel = remember(newBody) { com.lucent.app.data.NoteStats.paragraphCharLabel(newBody) }
+                        Text(
+                            statsLabel,
+                            color = onGradientMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+
                     // Task A12 anchor. Deliberately *here* — after the body/items, before the pin,
                     // tags and attachment rows. Scrolling to the true bottom of the form would put
                     // the attachment list on screen and the text the user came to edit off it.
@@ -1865,10 +1872,6 @@ fun NotesScreen(active: Boolean = true) {
                         }
                     }
 
-                    if (note.isDoodle) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        DoodleView(value = note.doodle)
-                    }
                     if (note.isChecklist) {
                         Spacer(modifier = Modifier.height(12.dp))
                         ChecklistView(
@@ -1882,6 +1885,14 @@ fun NotesScreen(active: Boolean = true) {
                                 }
                             }
                         )
+                    }
+                    // Round R2, task 2 — the canvases come AFTER the items, so the read view lists
+                    // a note's parts in the same order the composer edits them. A page that shows
+                    // the same content in a different order to the screen that produced it makes
+                    // the reader re-find their place every time they switch between the two.
+                    if (note.isDoodle) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        DoodleView(value = note.doodle)
                     }
                     // Task A20: no longer an `else`. A checklist note's remarks and its items are
                     // both content and both belong on the page — the old branch showed the body
