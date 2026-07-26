@@ -697,10 +697,52 @@ fun TasksScreen(active: Boolean = true) {
     // Task 8 — always live now, and a drop under any other sort adopts Custom so the positions
     // just written are actually the ones displayed. See the note-list twin for the full reasoning.
     val reorderEnabled = true
+    // ---- Home sections, hoisted so the drop handler below can see them ----
+    //
+    // Reordering is confined to ONE section: a card dragged inside Recent stays in Recent, a pinned
+    // card stays among the pinned. That is what the sections are for — they answer "why is this card
+    // here?", and a drag that could move a card between them would be answering it differently every
+    // time. Under the Custom sort the buckets keep the user's own sequence (see
+    // [sectionHomeItems.orderWithinSections]), so a drop inside a section is visible and permanent.
+    val browsing = searchText.isBlank() && dateRange == null
+    val sectionNow = remember(sortedActive) { System.currentTimeMillis() }
+    val sections = remember(sortedActive, taskUsage, browsing, sectionNow, sortOption) {
+        if (!browsing) null else sectionHomeItems(
+            items = sortedActive,
+            now = sectionNow,
+            maxRecent = 6,
+            id = { it.id },
+                    // A task's own time for the Today bucket is its creation time.
+            timestamp = { it.createdAt },
+            activityScore = { com.lucent.app.data.UsageTracker.score(taskUsage[it.id] ?: 0.0, it.createdAt, sectionNow) },
+            // Task A13 — pinned items lead the page instead of being scattered by date.
+            isPinned = { it.pinned },
+            orderWithinSections = sortOption == TaskSort.CUSTOM
+        )
+    }
+    // Which section a given id sits in, or null when the page is not sectioned at all.
+    val sectionOfId = remember(sections) {
+        val m = HashMap<Long, HomeSection>()
+        sections?.let { s ->
+            s.pinned.forEach { m[it.id] = HomeSection.PINNED }
+            s.recent.forEach { m[it.id] = HomeSection.RECENT }
+            s.today.forEach { m[it.id] = HomeSection.TODAY }
+            s.older.forEach { m[it.id] = HomeSection.OLDER }
+        }
+        m
+    }
+
     fun dropSelection(targetId: Long?) {
         // Selection order, not list order: `Set.plus` returns a LinkedHashSet, so this is the
         // sequence the user ticked them in — the only arrival order they could have predicted.
         val moving = selectedTaskIds.toList().mapNotNull { id -> sortedActive.firstOrNull { it.id == id } }
+        // One section at a time. A drop onto a card in a different bucket is refused rather than
+        // silently relocating the card, because the buckets are computed from pinned/recency and a
+        // move between them would be undone by the next recomposition anyway.
+        if (sections != null && targetId != null) {
+            val to = sectionOfId[targetId]
+            if (moving.any { sectionOfId[it.id] != to }) return
+        }
         val reordered = reorderedBy(sortedActive, moving, targetId) { it.id }
         if (reordered === sortedActive) return
         // Renumber the whole visible sequence rather than patching two rows: a position only means
@@ -1610,25 +1652,6 @@ fun TasksScreen(active: Boolean = true) {
         }
 
         else -> {
-            // ---- Clean home list (active tasks only) ----
-            // Sections apply only while browsing (no search/date filter); a search gets a flat list.
-            // Custom sort turns sectioning off — see the notes screen twin for the full reasoning.
-            // Recency buckets and a hand-made order cannot both decide where a card goes.
-            val browsing = searchText.isBlank() && dateRange == null && sortOption != TaskSort.CUSTOM
-            val now = remember(sortedActive) { System.currentTimeMillis() }
-            val sections = remember(sortedActive, taskUsage, browsing, now) {
-                if (!browsing) null else sectionHomeItems(
-                    items = sortedActive,
-                    now = now,
-                    maxRecent = 6,
-                    id = { it.id },
-                    // A task's own time for the Today bucket is its creation time.
-                    timestamp = { it.createdAt },
-                    activityScore = { com.lucent.app.data.UsageTracker.score(taskUsage[it.id] ?: 0.0, it.createdAt, now) },
-                    // Task A13 — same rule as notes; the two home lists must not disagree here.
-                    isPinned = { it.pinned }
-                )
-            }
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 if (selectionMode) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1804,9 +1827,10 @@ fun TasksScreen(active: Boolean = true) {
                             }
                         }
                     } else {
-                        val renderCard: @Composable (Task) -> Unit = { task ->
+                        val renderCard: @Composable (Task, Modifier) -> Unit = { task, itemModifier ->
                             TaskCard(
                                 task = task,
+                                reorderVisualModifier = itemModifier.reorderVisuals(task.id, reorderState),
                                 selectionMode = selectionMode,
                                 selected = task.id in selectedTaskIds,
                                 onOpen = { openDetail(task) },
@@ -1837,10 +1861,14 @@ fun TasksScreen(active: Boolean = true) {
                         if (sections != null) {
                             sections.nonEmpty().forEach { (section, list) ->
                                 item(key = "header_${section.name}") { TaskSectionHeader(section.label) }
-                                items(list, key = { it.id }) { task -> renderCard(task) }
+                                items(list, key = { it.id }) { task ->
+                                    renderCard(task, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                                }
                             }
                         } else {
-                            items(sortedActive, key = { it.id }) { task -> renderCard(task) }
+                            items(sortedActive, key = { it.id }) { task ->
+                                renderCard(task, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                            }
                         }
                     }
                 }
@@ -1883,6 +1911,8 @@ private fun TaskCard(
     // installed at a time.
     reorderEnabled: Boolean = false,
     reorderModifier: Modifier = Modifier,
+    // Applied FIRST — see the notes card twin and [reorderVisuals].
+    reorderVisualModifier: Modifier = Modifier,
     onToggleSelect: () -> Unit,
     onArmComplete: () -> Unit,
     onTogglePin: () -> Unit,
@@ -1900,7 +1930,7 @@ private fun TaskCard(
     val selShape = RoundedCornerShape(20.dp)
 
     Column(
-        modifier = Modifier
+        modifier = reorderVisualModifier
             .fillMaxWidth()
             .frostedGlass()
             // Long press enters multi-select and grabs this card; in select mode a tap toggles it.

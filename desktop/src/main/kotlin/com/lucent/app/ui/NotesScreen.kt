@@ -767,8 +767,49 @@ fun NotesScreen(active: Boolean = true) {
     // adopting the sort that honours that is the least surprising reading of it — far less
     // surprising than a card that springs back with no explanation.
     val reorderEnabled = true
+    // ---- Home sections, hoisted so the drop handler below can see them ----
+    //
+    // Reordering is confined to ONE section: a card dragged inside Recent stays in Recent, a pinned
+    // card stays among the pinned. That is what the sections are for — they answer "why is this card
+    // here?", and a drag that could move a card between them would be answering it differently every
+    // time. Under the Custom sort the buckets keep the user's own sequence (see
+    // [sectionHomeItems.orderWithinSections]), so a drop inside a section is visible and permanent.
+    val browsing = searchText.isBlank() && dateRange == null
+    val sectionNow = remember(sortedNotes) { System.currentTimeMillis() }
+    val sections = remember(sortedNotes, noteUsage, browsing, sectionNow, sortOption) {
+        if (!browsing) null else sectionHomeItems(
+            items = sortedNotes,
+            now = sectionNow,
+            maxRecent = 6,
+            id = { it.id },
+            timestamp = { it.updatedAt },
+            activityScore = { com.lucent.app.data.UsageTracker.score(noteUsage[it.id] ?: 0.0, it.updatedAt, sectionNow) },
+            // Task A13 — pinned items lead the page instead of being scattered by date.
+            isPinned = { it.pinned },
+            orderWithinSections = sortOption == NoteSort.CUSTOM
+        )
+    }
+    // Which section a given id sits in, or null when the page is not sectioned at all.
+    val sectionOfId = remember(sections) {
+        val m = HashMap<Long, HomeSection>()
+        sections?.let { s ->
+            s.pinned.forEach { m[it.id] = HomeSection.PINNED }
+            s.recent.forEach { m[it.id] = HomeSection.RECENT }
+            s.today.forEach { m[it.id] = HomeSection.TODAY }
+            s.older.forEach { m[it.id] = HomeSection.OLDER }
+        }
+        m
+    }
+
     fun dropSelection(targetId: Long?) {
         val moving = selectedNoteIds.toList().mapNotNull { id -> sortedNotes.firstOrNull { it.id == id } }
+        // One section at a time. A drop onto a card in a different bucket is refused rather than
+        // silently relocating the card, because the buckets are computed from pinned/recency and a
+        // move between them would be undone by the next recomposition anyway.
+        if (sections != null && targetId != null) {
+            val to = sectionOfId[targetId]
+            if (moving.any { sectionOfId[it.id] != to }) return
+        }
         val reordered = reorderedBy(sortedNotes, moving, targetId) { it.id }
         if (reordered === sortedNotes) return
         AppScope.io.launch {
@@ -1828,35 +1869,6 @@ fun NotesScreen(active: Boolean = true) {
         }
 
         else -> {
-            // ---- Clean home grid ----
-            // When the user is neither searching nor date-filtering, the list is split into
-            // Recent / Today / Older sections; otherwise it's a flat result list. Sectioning search
-            // results would be noise — you asked for matches, not a timeline of them.
-            // ---- Why Custom sort switches sectioning OFF (the drag-to-reorder fix) ----
-            //
-            // This is what made long-press-drag look unimplemented. The gesture fired, the drop was
-            // computed, `manualOrder` was written to every row — and then the home grid regrouped
-            // everything into Recent / Today / Older and displayed THAT. The user's order was
-            // recorded faithfully and then overruled by the layout, every single time, so the cards
-            // sprang back and nothing appeared to have happened.
-            //
-            // Automatic grouping and a hand-made order are contradictory by definition: one of them
-            // has to lose, and it cannot be the one the user just performed with their thumb. Under
-            // Custom the list is flat, and a card dropped in a position stays in that position.
-            val browsing = searchText.isBlank() && dateRange == null && sortOption != NoteSort.CUSTOM
-            val now = remember(sortedNotes) { System.currentTimeMillis() }
-            val sections = remember(sortedNotes, noteUsage, browsing, now) {
-                if (!browsing) null else sectionHomeItems(
-                    items = sortedNotes,
-                    now = now,
-                    maxRecent = 6,
-                    id = { it.id },
-                    timestamp = { it.updatedAt },
-                    activityScore = { com.lucent.app.data.UsageTracker.score(noteUsage[it.id] ?: 0.0, it.updatedAt, now) },
-                    // Task A13 — pinned notes lead the page instead of being scattered by date.
-                    isPinned = { it.pinned }
-                )
-            }
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 if (selectionMode) {
                     // A dedicated action bar takes over the top row while selecting: a live count,
@@ -2032,9 +2044,13 @@ fun NotesScreen(active: Boolean = true) {
                             )
                         }
                     } else {
-                        val renderCard: @Composable (Note) -> Unit = { note ->
+                        // The item modifier is handed in from inside `items { }`, where
+                        // LazyGridItemScope.animateItem is in scope: that is what makes every card
+                        // that has to shift slide and settle instead of teleporting.
+                        val renderCard: @Composable (Note, Modifier) -> Unit = { note, itemModifier ->
                             NoteCard(
                                 note = note,
+                                reorderVisualModifier = itemModifier.reorderVisuals(note.id, reorderState),
                                 selectionMode = selectionMode,
                                 selected = note.id in selectedNoteIds,
                                 onOpen = { openDetail(note) },
@@ -2062,10 +2078,14 @@ fun NotesScreen(active: Boolean = true) {
                                 item(key = "header_${section.name}", span = { GridItemSpan(maxLineSpan) }) {
                                     HomeSectionHeader(section.label)
                                 }
-                                items(list, key = { it.id }) { note -> renderCard(note) }
+                                items(list, key = { it.id }) { note ->
+                                    renderCard(note, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                                }
                             }
                         } else {
-                            items(sortedNotes, key = { it.id }) { note -> renderCard(note) }
+                            items(sortedNotes, key = { it.id }) { note ->
+                                renderCard(note, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                            }
                         }
                     }
                 }
@@ -2123,6 +2143,9 @@ private fun NoteCard(
     // Task A16 — see the identical pair on TaskCard: exactly one long-press detector at a time.
     reorderEnabled: Boolean = false,
     reorderModifier: Modifier = Modifier,
+    // Applied FIRST, so the drag carries the whole glass panel rather than only its contents, and so
+    // the lifted card is drawn above its neighbours. See [reorderVisuals].
+    reorderVisualModifier: Modifier = Modifier,
     onToggleSelect: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -2134,7 +2157,7 @@ private fun NoteCard(
     // many) is pure waste when the underlying updatedAt hasn't changed. Keyed so an edit refreshes.
     val formattedTimestamp = remember(note.updatedAt) { formatTimestamp(note.updatedAt) }
     Column(
-        modifier = Modifier
+        modifier = reorderVisualModifier
             .fillMaxWidth()
             .height(172.dp)
             .frostedGlass(tint = NoteColor.fromKey(note.color).swatch)
