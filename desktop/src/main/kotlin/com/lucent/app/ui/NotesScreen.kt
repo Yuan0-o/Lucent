@@ -155,7 +155,14 @@ fun NotesScreen(active: Boolean = true) {
     val onGradientMuted = LocalOnGradientMuted.current
 
     // Remembered sort choice, persisted across app restarts (see SettingsRepository.notesSort).
-    val sortKey by settingsRepo.notesSort.collectAsState(initial = "recent")
+    //
+    // Round R1, task 2: the initial value is the one read synchronously at startup, NOT the literal
+    // "recent". With the literal, a user whose saved sort is Custom got a first frame ordered by
+    // recency and a second frame ordered by their own arrangement — and `Modifier.animateItem`
+    // dutifully animated the difference, replaying their reordering at them on every single launch.
+    // Seeding from the startup read means frame one is already right. See data/SettingsCache.
+    val sortKey by settingsRepo.notesSort
+        .collectAsState(initial = com.lucent.app.data.SettingsCache.notesSort ?: "recent")
     val sortOption = NoteSort.fromKey(sortKey)
 
     // Whether Markdown formatting is on. Off by default (plain-text mode): the body renders
@@ -217,6 +224,9 @@ fun NotesScreen(active: Boolean = true) {
     // Task A10 — how many drafts are waiting, for the once-per-launch restore prompt below.
     val draftCount by db.noteDao().getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
+    // Round R1, task 5 — the "go back to where you were?" prompt. Shown by whichever home tab
+    // composes first regardless of which one the snapshot belongs to; see SessionRestoreDialog.
+    SessionRestoreDialog()
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     // Whether the header's secondary-action cluster (date filter, sort, overflow) is expanded.
@@ -272,7 +282,25 @@ fun NotesScreen(active: Boolean = true) {
     // name from another screen. Same construction the rest of the app uses.
     val repo = remember { com.lucent.app.data.SettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
-    var bodySpans by remember(composing) { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
+    // Deliberately NOT keyed on `composing`, unlike every other piece of composer state around it.
+    //
+    // It used to be `remember(composing) { ... }`, and that was quietly destructive. `startEdit`
+    // loads the saved sidecar into this and THEN sets `composing = true`; a keyed remember discards
+    // its state object on the recomposition that flip causes, so the freshly-loaded spans were
+    // replaced by an empty list every single time an existing item was opened for editing.
+    //
+    // That was not merely a display bug. The save path writes
+    // `RichText.encode(reconcile(bodySpans, ...))` unconditionally, so opening a formatted item and
+    // saving it - changing nothing else, not even touching the text - ERASED its formatting in the
+    // database. Silently, permanently, and on the most ordinary action there is.
+    //
+    // Dropping the key costs nothing, because the reset it provided was already being done
+    // explicitly: every path that opens a *fresh* composer goes through `resetComposer()`, which
+    // clears this, and the one path that must NOT be reset is precisely the one the key was
+    // breaking. The remaining `remember(composing)` state below is left alone - none of it is
+    // populated before the flip, and `bodyUndo`/`spansText` actually depend on being rebuilt from
+    // the text that is in place by then.
+    var bodySpans by remember { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
     var bodySelStart by remember(composing) { mutableStateOf(0) }
     var bodySelEnd by remember(composing) { mutableStateOf(0) }
     // Spans follow the text. Any writer that does NOT go through the field — undo, the assistant, a
@@ -459,6 +487,14 @@ fun NotesScreen(active: Boolean = true) {
         // launch block would race the reset and could persist blanks over a perfectly good note.
         val title = newTitle
         val body = newBody
+        // The rich-text sidecar is snapshotted HERE, with everything else, and for the
+        // reason stated above: it is a `var`, resetComposer() clears it synchronously as
+        // soon as this function returns, and the write below runs on a background scope.
+        // Reading it from inside that block persisted an empty sidecar over perfectly
+        // good formatting - the one field the snapshot block had been missing.
+        val bodySpansJson = com.lucent.app.data.RichText.encode(
+            com.lucent.app.data.RichText.reconcile(bodySpans, body.length)
+        )
         val tags = selectedTags.joinToString(",")
         val attachmentsJson = Attachments.serialize(pendingAttachments)
         val pinnedSnapshot = pinned
@@ -488,7 +524,7 @@ fun NotesScreen(active: Boolean = true) {
                 val row = Note(
                     title = title,
                     body = body,
-                    bodySpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, body.length)),
+                    bodySpans = bodySpansJson,
                     tags = tags,
                     attachments = attachmentsJson,
                     pinned = pinnedSnapshot,
@@ -557,7 +593,7 @@ fun NotesScreen(active: Boolean = true) {
                 val updated = (existing ?: Note(id = id, title = title, body = body)).copy(
                     title = title,
                     body = body,
-                    bodySpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, body.length)),
+                    bodySpans = bodySpansJson,
                     updatedAt = System.currentTimeMillis(),
                     tags = tags,
                     attachments = attachmentsJson,
@@ -574,7 +610,7 @@ fun NotesScreen(active: Boolean = true) {
                     Note(
                         title = title,
                         body = body,
-                        bodySpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, body.length)),
+                        bodySpans = bodySpansJson,
                         tags = tags,
                         attachments = attachmentsJson,
                         pinned = pinnedSnapshot,
@@ -728,6 +764,85 @@ fun NotesScreen(active: Boolean = true) {
     }
     DisposableEffect(Unit) { onDispose { UnsavedChangesGuard.clear("notes") } }
 
+    // ---- Round R1, task 5: the recovery snapshot -------------------------------------------
+    //
+    // Rebuilt on every recomposition and used as the KEY of the effect below, which is what makes
+    // the debounce work: identical content means an identical Snapshot means the effect is not
+    // restarted, so a pause in typing writes once rather than a write per keystroke. Snapshot's
+    // timestamp is deliberately left at zero here and stamped at save time for the same reason.
+    val sessionSnapshot = if (composing && noteDirty) {
+        com.lucent.app.data.SessionRestore.Snapshot(
+            kind = com.lucent.app.data.SessionRestore.KIND_NOTE,
+            itemId = editingId,
+            title = newTitle,
+            payload = com.lucent.app.data.SessionRestore.put(
+                "title" to newTitle,
+                "body" to newBody,
+                "bodySpans" to com.lucent.app.data.RichText.encode(
+                    com.lucent.app.data.RichText.reconcile(bodySpans, newBody.length)
+                ),
+                "tags" to selectedTags.joinToString(","),
+                "attachments" to Attachments.serialize(pendingAttachments),
+                "pinned" to pinned,
+                "color" to selectedColor.key,
+                "isChecklist" to isChecklistMode,
+                "checklist" to Checklist.serialize(checklistItems),
+                "checklistText" to newChecklistItemText,
+                "isDoodle" to isDoodleMode,
+                "doodle" to doodleData
+            )
+        )
+    } else null
+    LaunchedEffect(sessionSnapshot) {
+        if (sessionSnapshot == null) {
+            // Nothing open, so nothing to come back to — unless the PREVIOUS run left something
+            // and the user has not been asked about it yet. Clearing then would destroy the answer
+            // to a question still on screen, so it waits.
+            if (com.lucent.app.data.SessionRestore.pending == null) {
+                com.lucent.app.data.SessionRestore.clear(context)
+            }
+        } else {
+            kotlinx.coroutines.delay(900)
+            com.lucent.app.data.SessionRestore.save(context, sessionSnapshot)
+        }
+    }
+
+    // The other half: the user said yes, so put the composer back the way they left it. Every field
+    // the payload carries is restored, because a composer that comes back *almost* right is worse
+    // than one that does not come back at all — it looks like it worked.
+    LaunchedEffect(com.lucent.app.data.SessionRestore.restoring) {
+        val snap = com.lucent.app.data.SessionRestore
+            .consumeRestore(com.lucent.app.data.SessionRestore.KIND_NOTE) ?: return@LaunchedEffect
+        val p = com.lucent.app.data.SessionRestore.read(snap.payload)
+        resetComposer()
+        editingId = snap.itemId
+        newTitle = p.optString("title")
+        newBody = p.optString("body")
+        selectedTags = p.optString("tags").split(",").filter { it.isNotBlank() }.toSet()
+        pendingAttachments = Attachments.parse(p.optString("attachments", "[]"))
+        pinned = p.optBoolean("pinned")
+        selectedColor = NoteColor.fromKey(p.optString("color"))
+        isChecklistMode = p.optBoolean("isChecklist")
+        checklistItems = Checklist.parse(p.optString("checklist", "[]"))
+        newChecklistItemText = p.optString("checklistText")
+        isDoodleMode = p.optBoolean("isDoodle")
+        doodleData = p.optString("doodle")
+        // Written straight in now that `bodySpans` is no longer keyed on `composing`;
+        // see its declaration for the bug that used to force this into a second stage.
+        bodySpans = com.lucent.app.data.RichText.load(p.optString("bodySpans"), newBody)
+        // Land on the composer and nothing else: any sub-page that happened to be open would
+        // otherwise sit on top of the very editor the user asked to be taken back to.
+        viewingId = null
+        historyForId = null
+        showArchive = false
+        showTrash = false
+        showSearch = false
+        showDrafts = false
+        showHidden = false
+        composing = true
+    }
+
+
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
@@ -795,6 +910,9 @@ fun NotesScreen(active: Boolean = true) {
     // adopting the sort that honours that is the least surprising reading of it — far less
     // surprising than a card that springs back with no explanation.
     val reorderEnabled = true
+    // Round R1, task 2 — see rememberReorderPlacementSpec: no placement animation until the
+    // screen has settled, so opening the app never replays a reordering the user already made.
+    val placementSpec = rememberReorderPlacementSpec()
     // ---- Home sections, hoisted so the drop handler below can see them ----
     //
     // Reordering is confined to ONE section: a card dragged inside Recent stays in Recent, a pinned
@@ -1144,8 +1262,10 @@ fun NotesScreen(active: Boolean = true) {
                             textColors = if (richTextEnabled) richTextColors() else emptyList(),
                             placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                             expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
-                            collapsedMinHeight = 90.dp,
-                            collapsedMaxHeight = 220.dp
+                            // Round R1, task 1: doubled with the main box, keeping the 3:4
+                            // ratio that makes this read as an aside rather than as the content.
+                            collapsedMinHeight = 180.dp,
+                            collapsedMaxHeight = 440.dp
                         )
                     } else if (isChecklistMode) {
                         ChecklistEditorSection(
@@ -1201,8 +1321,10 @@ fun NotesScreen(active: Boolean = true) {
                             // Shorter than the plain-text branch's box: here the items are the
                             // content and this is an aside, so it should not out-weigh them on
                             // first sight. It still expands to full screen on demand.
-                            collapsedMinHeight = 90.dp,
-                            collapsedMaxHeight = 220.dp
+                            // Round R1, task 1: doubled with the main box, keeping the 3:4
+                            // ratio that makes this read as an aside rather than as the content.
+                            collapsedMinHeight = 180.dp,
+                            collapsedMaxHeight = 440.dp
                         )
                     } else {
                         // Body field with an expand toggle in its bottom-right corner. Expanding
@@ -1232,8 +1354,9 @@ fun NotesScreen(active: Boolean = true) {
                             // where it can be read properly — Settings › Editor.
                             placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                             expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
-                            collapsedMinHeight = 120.dp,
-                            collapsedMaxHeight = 320.dp
+                            // Round R1, task 1: doubled - see ExpandableGlassTextField.
+                            collapsedMinHeight = 240.dp,
+                            collapsedMaxHeight = 640.dp
                         )
                         if (newBody.isNotBlank()) {
                             Spacer(modifier = Modifier.height(4.dp))
@@ -2145,12 +2268,12 @@ fun NotesScreen(active: Boolean = true) {
                                     HomeSectionHeader(section.label)
                                 }
                                 items(list, key = { it.id }) { note ->
-                                    renderCard(note, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                                    renderCard(note, Modifier.animateItem(placementSpec = placementSpec))
                                 }
                             }
                         } else {
                             items(sortedNotes, key = { it.id }) { note ->
-                                renderCard(note, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                                renderCard(note, Modifier.animateItem(placementSpec = placementSpec))
                             }
                         }
                     }

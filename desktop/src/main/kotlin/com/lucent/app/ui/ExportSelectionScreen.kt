@@ -59,8 +59,25 @@ import com.lucent.app.data.Attachment
  * then written into a .zip alongside an `attachments/` folder); leaving it unticked keeps the old
  * behaviour where the document only names the attachment. Tapping an attachment's name opens it in
  * the standard viewer so you can check what it is before deciding — closing the viewer returns here
- * with every tick preserved. [onExport] receives the selected items, the chosen format, and the flat
- * list of attachments the user ticked to embed.
+ * with every tick preserved. [onExport] receives the selected items, the chosen format, the flat
+ * list of attachments the user ticked to embed, and the flat list of doodle canvases they ticked.
+ *
+ * ### Round R1, task 3 — a doodle canvas is an attachment here
+ *
+ * A drawing used to be invisible on this screen. It is not a file, so it never appeared in the
+ * list; it is not text, so three of the four document formats dropped it silently. A note made
+ * entirely of drawings therefore looked, in the picker, exactly like an empty note. Canvases are
+ * now listed under their note exactly as files are, with the same tick, and a ticked canvas is
+ * written into the archive as its own PDF. See [com.lucent.app.data.DoodleExport].
+ *
+ * ### Round R1, task 4 — two select-alls, at two scopes
+ *
+ * The existing "select all attachments" row spans the *whole export* — every file of every ticked
+ * item. That is the right tool for "bundle everything" and the wrong one for anything else: with
+ * forty notes ticked and one of them carrying the photos you actually want, it was that button or
+ * forty individual taps. So each item now carries its own select-all as well, covering just its
+ * files and its canvases. The two share one set of ticks, so the global row still reads as
+ * fully-ticked exactly when every per-item row does.
  */
 @Composable
 fun <T> ExportSelectionScreen(
@@ -72,7 +89,10 @@ fun <T> ExportSelectionScreen(
     timestamp: (T) -> Long,
     searchText: (T) -> String,
     attachmentsOf: (T) -> List<Attachment>,
-    onExport: (List<T>, com.lucent.app.data.ExportFormat, List<Attachment>) -> Unit,
+    // Round R1, task 3. Defaulted to nothing so the Tasks call site — tasks cannot hold a drawing —
+    // stays exactly as it was rather than being made to pass an empty lambda.
+    doodlesOf: (T) -> List<com.lucent.app.data.DoodleExport.Canvas> = { emptyList() },
+    onExport: (List<T>, com.lucent.app.data.ExportFormat, List<Attachment>, List<com.lucent.app.data.DoodleExport.Canvas>) -> Unit,
     onBack: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
@@ -92,7 +112,16 @@ fun <T> ExportSelectionScreen(
     // The attachment currently open in the viewer overlay, or null when the list is showing.
     var viewingAttachment by remember { mutableStateOf<Attachment?>(null) }
 
-    fun attKey(itemId: Long, name: String) = "$itemId\u0000$name"
+    // Both key builders live in DoodleExport so the screen that writes a key and the bundler that
+    // reads it cannot drift apart. A canvas key carries a sentinel no file name can contain, so the
+    // two kinds share this one set without any chance of collision.
+    fun attKey(itemId: Long, name: String) = com.lucent.app.data.DoodleExport.attachmentKey(itemId, name)
+    fun canvasKey(itemId: Long, index: Int) = com.lucent.app.data.DoodleExport.canvasKey(itemId, index)
+
+    /** Every tickable file under one item: its attachments first, then its drawn canvases. */
+    fun keysUnder(item: T): List<String> =
+        attachmentsOf(item).map { attKey(id(item), it.name) } +
+            doodlesOf(item).map { canvasKey(id(item), it.index) }
 
     // Newest first, then narrowed by the search box (case-insensitive substring).
     val ordered = remember(items) { items.sortedByDescending { timestamp(it) } }
@@ -111,7 +140,7 @@ fun <T> ExportSelectionScreen(
     // to an item the user did not ask to export.
     val selectableAttachmentKeys: Set<String> = ordered
         .filter { id(it) in selectedIds }
-        .flatMap { item -> attachmentsOf(item).map { attKey(id(item), it.name) } }
+        .flatMap { item -> keysUnder(item) }
         .toSet()
     val allAttachmentsSelected =
         selectableAttachmentKeys.isNotEmpty() &&
@@ -142,7 +171,12 @@ fun <T> ExportSelectionScreen(
                     val chosenAttachments = chosen.flatMap { item ->
                         attachmentsOf(item).filter { attKey(id(item), it.name) in selectedAttachmentKeys }
                     }
-                    if (chosen.isNotEmpty()) onExport(chosen, selectedFormat, chosenAttachments)
+                    // Round R1, task 3 — the ticked canvases travel beside the ticked files, and the
+                    // caller turns each one into its own PDF inside the archive.
+                    val chosenCanvases = chosen.flatMap { item ->
+                        doodlesOf(item).filter { canvasKey(id(item), it.index) in selectedAttachmentKeys }
+                    }
+                    if (chosen.isNotEmpty()) onExport(chosen, selectedFormat, chosenAttachments, chosenCanvases)
                 },
                 enabled = selectedIds.isNotEmpty(),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
@@ -247,17 +281,109 @@ fun <T> ExportSelectionScreen(
                     }
                 }
 
-                // Attachments appear only once the item itself is ticked. Each is a circle you can
-                // tick to embed the file; tapping its name opens the viewer (closing it returns here).
+                // Attachments and canvases appear only once the item itself is ticked. Each is a
+                // circle you can tick to embed the file; tapping an attachment's name opens the
+                // viewer (closing it returns here).
                 if (checked) {
                     val atts = attachmentsOf(item)
-                    if (atts.isNotEmpty()) {
+                    val canvases = doodlesOf(item)
+                    if (atts.isNotEmpty() || canvases.isNotEmpty()) {
+                        // ---- Round R1, task 4: this item's own select-all ----
+                        //
+                        // Indented to sit visually inside the item rather than beside it, so its
+                        // scope reads off the layout: the row at the top of the page belongs to the
+                        // export, this one belongs to the note above it. It ticks files and canvases
+                        // together — they are the same kind of thing on this screen, and offering
+                        // two separate "all"s under one item would be a distinction without a use.
+                        val here = keysUnder(item)
+                        val allHere = here.isNotEmpty() && selectedAttachmentKeys.containsAll(here)
+                        fun toggleHere() {
+                            selectedAttachmentKeys =
+                                if (allHere) selectedAttachmentKeys - here.toSet()
+                                else selectedAttachmentKeys + here
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { toggleHere() }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = allHere, onCheckedChange = { toggleHere() })
+                            Text(
+                                com.lucent.app.i18n.S.exportSelectAllHere,
+                                color = onGradient,
+                                fontSize = 13.sp,
+                                modifier = Modifier.weight(1f).padding(start = 4.dp)
+                            )
+                            Text(
+                                com.lucent.app.i18n.S.nAttachmentsSelected(
+                                    here.count { it in selectedAttachmentKeys }
+                                ),
+                                color = onGradientMuted,
+                                fontSize = 12.sp
+                            )
+                        }
                         Text(
                             com.lucent.app.i18n.S.exportAttachmentsHint,
                             color = onGradientMuted,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(start = 44.dp, bottom = 2.dp)
                         )
+                        // Canvases lead the list: they are the part of this that is new, and the one
+                        // whose behaviour needs stating (it becomes a PDF, which a file does not).
+                        if (canvases.isNotEmpty()) {
+                            Text(
+                                com.lucent.app.i18n.S.exportDoodleHint,
+                                color = onGradientMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(start = 44.dp, bottom = 2.dp)
+                            )
+                            canvases.forEach { canvas ->
+                                val key = canvasKey(id(item), canvas.index)
+                                val canvasChecked = key in selectedAttachmentKeys
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 44.dp, top = 2.dp, bottom = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (canvasChecked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (canvasChecked) onGradient else onGradientMuted,
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .clickable {
+                                                selectedAttachmentKeys =
+                                                    if (canvasChecked) selectedAttachmentKeys - key
+                                                    else selectedAttachmentKeys + key
+                                            }
+                                    )
+                                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                                        Text(
+                                            com.lucent.app.i18n.S.exportDoodleCanvas(canvas.index + 1),
+                                            color = onGradient,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        // The archive file name, shown because it is the thing the
+                                        // user will actually be looking at afterwards.
+                                        Text(
+                                            canvas.fileName,
+                                            color = onGradientMuted,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         atts.forEach { att ->
                             val key = attKey(id(item), att.name)
                             val attChecked = key in selectedAttachmentKeys

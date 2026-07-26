@@ -2708,13 +2708,24 @@ fun SettingsScreen(active: Boolean = true) {
                 timestamp = { it.updatedAt },
                 searchText = { it.title + "\n" + it.body },
                 attachmentsOf = { com.lucent.app.data.Attachments.parse(it.attachments) },
-                onExport = { subset, format, atts ->
+                // Round R1, task 3 — a note's drawn canvases, offered beside its files.
+                doodlesOf = { com.lucent.app.data.DoodleExport.canvasesOf(it) },
+                onExport = { subset, format, atts, canvases ->
                     val doc = com.lucent.app.data.DocumentExport.exportNotes(subset, format)
-                    if (atts.isEmpty()) {
+                    // Each ticked canvas becomes its own PDF inside the archive. Rendering happens
+                    // here rather than in the picker so the picker stays a picker: it decides what
+                    // is wanted, this decides what that costs. The heading is the note's title, so
+                    // a folder of exported drawings survives being renamed.
+                    val canvasFiles = canvases.map { canvas ->
+                        val owner = subset.firstOrNull { it.id == canvas.ownerId }
+                        val heading = owner?.title.orEmpty().ifBlank { S.untitled }
+                        canvas.fileName to com.lucent.app.data.DocumentExport.doodlePdf(canvas, heading)
+                    }
+                    if (atts.isEmpty() && canvasFiles.isEmpty()) {
                         launchExport("lucent-notes", doc, format)
                     } else {
                         val bundle = com.lucent.app.data.DocumentExport.zipWithAttachments(
-                            context, "lucent-notes.${format.extension}", doc, atts
+                            context, "lucent-notes.${format.extension}", doc, atts, canvasFiles
                         )
                         launchExport("lucent-notes", bundle, format, asZip = true)
                     }
@@ -2730,7 +2741,10 @@ fun SettingsScreen(active: Boolean = true) {
                 timestamp = { it.createdAt },
                 searchText = { it.title + "\n" + it.notes },
                 attachmentsOf = { com.lucent.app.data.Attachments.parse(it.attachments) },
-                onExport = { subset, format, atts ->
+                // A task cannot hold a drawing, so `doodlesOf` is left at its empty default and the
+                // canvas list handed back here is always empty; it is named `_` rather than dropped
+                // so the arity mismatch would be a compile error if that ever stopped being true.
+                onExport = { subset, format, atts, _ ->
                     val doc = com.lucent.app.data.DocumentExport.exportTasks(subset, format)
                     if (atts.isEmpty()) {
                         launchExport("lucent-tasks", doc, format)

@@ -156,7 +156,10 @@ fun TasksScreen(active: Boolean = true) {
     val hazeState = LocalHazeState.current
 
     // Remembered sort choice, persisted across app restarts (see SettingsRepository.tasksSort).
-    val sortKey by settingsRepo.tasksSort.collectAsState(initial = "recent")
+    // Round R1, task 2 — seeded from the synchronous startup read; see the Notes twin of this
+    // comment and data/SettingsCache for what reading it late actually looked like.
+    val sortKey by settingsRepo.tasksSort
+        .collectAsState(initial = com.lucent.app.data.SettingsCache.tasksSort ?: "recent")
     val sortOption = TaskSort.fromKey(sortKey)
 
     // Frequency scores for the "Recent" home section (id -> activity), see UsageTracker.
@@ -175,6 +178,9 @@ fun TasksScreen(active: Boolean = true) {
     // Task A10 — how many drafts are waiting, for the once-per-launch restore prompt below.
     val draftCount by db.taskDao().getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
+    // Round R1, task 5 — the "go back to where you were?" prompt. Shown by whichever home tab
+    // composes first regardless of which one the snapshot belongs to; see SessionRestoreDialog.
+    SessionRestoreDialog()
     var showOverflowMenu by remember { mutableStateOf(false) }
     // Task A19: which task's revision history is open, if any.
     var historyForTaskId by remember { mutableStateOf<Long?>(null) }
@@ -272,7 +278,25 @@ fun TasksScreen(active: Boolean = true) {
     // name from another screen. Same construction the rest of the app uses.
     val repo = remember { com.lucent.app.data.SettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
-    var bodySpans by remember(composing) { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
+    // Deliberately NOT keyed on `composing`, unlike every other piece of composer state around it.
+    //
+    // It used to be `remember(composing) { ... }`, and that was quietly destructive. `startEdit`
+    // loads the saved sidecar into this and THEN sets `composing = true`; a keyed remember discards
+    // its state object on the recomposition that flip causes, so the freshly-loaded spans were
+    // replaced by an empty list every single time an existing item was opened for editing.
+    //
+    // That was not merely a display bug. The save path writes
+    // `RichText.encode(reconcile(bodySpans, ...))` unconditionally, so opening a formatted item and
+    // saving it - changing nothing else, not even touching the text - ERASED its formatting in the
+    // database. Silently, permanently, and on the most ordinary action there is.
+    //
+    // Dropping the key costs nothing, because the reset it provided was already being done
+    // explicitly: every path that opens a *fresh* composer goes through `resetComposer()`, which
+    // clears this, and the one path that must NOT be reset is precisely the one the key was
+    // breaking. The remaining `remember(composing)` state below is left alone - none of it is
+    // populated before the flip, and `bodyUndo`/`spansText` actually depend on being rebuilt from
+    // the text that is in place by then.
+    var bodySpans by remember { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
     var bodySelStart by remember(composing) { mutableStateOf(0) }
     var bodySelEnd by remember(composing) { mutableStateOf(0) }
     // Spans follow the text. Any writer that does NOT go through the field — undo, the assistant, a
@@ -442,6 +466,14 @@ fun TasksScreen(active: Boolean = true) {
         // these vars from inside the coroutine would race it.
         val title = newTitle.text
         val notesText = newNotes
+        // The rich-text sidecar is snapshotted HERE, with everything else, and for the
+        // reason stated above: it is a `var`, resetComposer() clears it synchronously as
+        // soon as this function returns, and the write below runs on a background scope.
+        // Reading it from inside that block persisted an empty sidecar over perfectly
+        // good formatting - the one field the snapshot block had been missing.
+        val notesSpansJson = com.lucent.app.data.RichText.encode(
+            com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)
+        )
         val attachmentsJson = Attachments.serialize(pendingAttachments)
         val due = dueAt
         val prioritySnapshot = priority.value
@@ -472,7 +504,7 @@ fun TasksScreen(active: Boolean = true) {
                     title = title,
                     createdAt = createdAt,
                     notes = notesText,
-                    notesSpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)),
+                    notesSpans = notesSpansJson,
                     attachments = attachmentsJson,
                     dueAt = due,
                     priority = prioritySnapshot,
@@ -511,7 +543,7 @@ fun TasksScreen(active: Boolean = true) {
                 val updated = original.copy(
                     title = title,
                     notes = notesText,
-                    notesSpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)),
+                    notesSpans = notesSpansJson,
                     attachments = attachmentsJson,
                     dueAt = due,
                     priority = prioritySnapshot,
@@ -541,7 +573,7 @@ fun TasksScreen(active: Boolean = true) {
                     title = title,
                     createdAt = createdAt,
                     notes = notesText,
-                    notesSpans = com.lucent.app.data.RichText.encode(com.lucent.app.data.RichText.reconcile(bodySpans, notesText.length)),
+                    notesSpans = notesSpansJson,
                     attachments = attachmentsJson,
                     dueAt = due,
                     priority = prioritySnapshot,
@@ -663,6 +695,77 @@ fun TasksScreen(active: Boolean = true) {
     }
     DisposableEffect(Unit) { onDispose { UnsavedChangesGuard.clear("tasks") } }
 
+    // ---- Round R1, task 5: the recovery snapshot ----
+    // See the Notes twin of this block for why the Snapshot doubles as the effect key.
+    val sessionSnapshot = if (composing && taskDirty) {
+        com.lucent.app.data.SessionRestore.Snapshot(
+            kind = com.lucent.app.data.SessionRestore.KIND_TASK,
+            itemId = editingTask?.id,
+            title = newTitle.text,
+            payload = com.lucent.app.data.SessionRestore.put(
+                "title" to newTitle.text,
+                "notes" to newNotes,
+                "notesSpans" to com.lucent.app.data.RichText.encode(
+                    com.lucent.app.data.RichText.reconcile(bodySpans, newNotes.length)
+                ),
+                "attachments" to Attachments.serialize(pendingAttachments),
+                "dueAt" to dueAt,
+                "priority" to priority.value,
+                "pinned" to pinned,
+                "subtasks" to Checklist.serialize(subtasks),
+                "subtaskText" to newSubtaskText,
+                "subtasksEnabled" to subtasksEnabled,
+                "repeatRule" to repeatRule.key,
+                "reminderEnabled" to reminderEnabled
+            )
+        )
+    } else null
+    LaunchedEffect(sessionSnapshot) {
+        if (sessionSnapshot == null) {
+            if (com.lucent.app.data.SessionRestore.pending == null) {
+                com.lucent.app.data.SessionRestore.clear(context)
+            }
+        } else {
+            kotlinx.coroutines.delay(900)
+            com.lucent.app.data.SessionRestore.save(context, sessionSnapshot)
+        }
+    }
+
+    LaunchedEffect(com.lucent.app.data.SessionRestore.restoring) {
+        val snap = com.lucent.app.data.SessionRestore
+            .consumeRestore(com.lucent.app.data.SessionRestore.KIND_TASK) ?: return@LaunchedEffect
+        val p = com.lucent.app.data.SessionRestore.read(snap.payload)
+        val id = snap.itemId
+        resetComposer()
+        // An edit of an existing task needs the row itself back, not just its id: the dirty check
+        // and the save path both diff against it. A row that has since been deleted restores as a
+        // new task carrying the same text, which is the only honest thing left to do with it.
+        editingTask = if (id != null) db.taskDao().getByIdOnce(id) else null
+        newTitle = androidx.compose.ui.text.input.TextFieldValue(p.optString("title"))
+        newNotes = p.optString("notes")
+        pendingAttachments = Attachments.parse(p.optString("attachments", "[]"))
+        dueAt = if (p.isNull("dueAt")) null else p.optLong("dueAt")
+        priority = TaskPriority.fromValue(p.optInt("priority"))
+        pinned = p.optBoolean("pinned")
+        subtasks = Checklist.parse(p.optString("subtasks", "[]"))
+        newSubtaskText = p.optString("subtaskText")
+        subtasksEnabled = p.optBoolean("subtasksEnabled")
+        repeatRule = RepeatRule.fromKey(p.optString("repeatRule"))
+        reminderEnabled = p.optBoolean("reminderEnabled")
+        // Written straight in now that `bodySpans` is no longer keyed on `composing`;
+        // see its declaration for the bug that used to force this into a second stage.
+        bodySpans = com.lucent.app.data.RichText.load(p.optString("notesSpans"), newNotes)
+        viewingId = null
+        showingHistory = false
+        historyForTaskId = null
+        showTrash = false
+        showSearch = false
+        showDrafts = false
+        showHidden = false
+        composing = true
+    }
+
+
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
@@ -712,6 +815,9 @@ fun TasksScreen(active: Boolean = true) {
     // Task 8 — always live now, and a drop under any other sort adopts Custom so the positions
     // just written are actually the ones displayed. See the note-list twin for the full reasoning.
     val reorderEnabled = true
+    // Round R1, task 2 - see rememberReorderPlacementSpec: no placement animation until the screen
+    // has settled, so opening the app never replays a reordering the user already made.
+    val placementSpec = rememberReorderPlacementSpec()
     // ---- Home sections, hoisted so the drop handler below can see them ----
     //
     // Reordering is confined to ONE section: a card dragged inside Recent stays in Recent, a pinned
@@ -1050,8 +1156,9 @@ fun TasksScreen(active: Boolean = true) {
                             textColors = if (richTextEnabled) richTextColors() else emptyList(),
                         placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                         expandedTitle = if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask,
-                        collapsedMinHeight = 120.dp,
-                        collapsedMaxHeight = 320.dp
+                        // Round R1, task 1: doubled - see ExpandableGlassTextField.
+                        collapsedMinHeight = 240.dp,
+                        collapsedMaxHeight = 640.dp
                     )
                     // Task A12 anchor: the bottom of the Details box, above priority / due date /
                     // attachments. Scrolling to the true bottom of the form would land on the
@@ -1909,12 +2016,12 @@ fun TasksScreen(active: Boolean = true) {
                             sections.nonEmpty().forEach { (section, list) ->
                                 item(key = "header_${section.name}") { TaskSectionHeader(section.label) }
                                 items(list, key = { it.id }) { task ->
-                                    renderCard(task, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                                    renderCard(task, Modifier.animateItem(placementSpec = placementSpec))
                                 }
                             }
                         } else {
                             items(sortedActive, key = { it.id }) { task ->
-                                renderCard(task, Modifier.animateItem(placementSpec = REORDER_SETTLE))
+                                renderCard(task, Modifier.animateItem(placementSpec = placementSpec))
                             }
                         }
                     }
