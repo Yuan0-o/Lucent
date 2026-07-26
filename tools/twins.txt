@@ -24,6 +24,7 @@ com/lucent/app/data/Checklist.kt
 com/lucent/app/data/CryptoUtil.kt
 com/lucent/app/data/DataCache.kt
 com/lucent/app/data/DocumentTextPreview.kt
+com/lucent/app/data/DoodleExport.kt
 com/lucent/app/data/DueParsing.kt
 com/lucent/app/data/EncryptionStatus.kt
 com/lucent/app/data/FileCrypto.kt
@@ -41,6 +42,7 @@ com/lucent/app/data/ReplyFiles.kt
 com/lucent/app/data/RichText.kt
 com/lucent/app/data/SavedSearches.kt
 com/lucent/app/data/SearchQuery.kt
+com/lucent/app/data/SessionRestore.kt
 com/lucent/app/data/SettingsCache.kt
 com/lucent/app/data/TaskHistory.kt
 com/lucent/app/data/TaskInsights.kt
@@ -74,6 +76,7 @@ com/lucent/app/ui/QuickActionFab.kt
 com/lucent/app/ui/QuickModelSwitcher.kt
 com/lucent/app/ui/ReorderDrag.kt
 com/lucent/app/ui/SearchScreen.kt
+com/lucent/app/ui/SessionRestoreDialog.kt
 com/lucent/app/ui/SortOptions.kt
 com/lucent/app/ui/TaskHistoryScreen.kt
 com/lucent/app/ui/TaskStyling.kt
