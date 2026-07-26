@@ -113,6 +113,30 @@ object DesktopFiles {
         }
     }
 
+    /**
+     * Pick a directory — the folder automatic backups are written into (task 14).
+     *
+     * Swing's JFileChooser rather than the AWT FileDialog every other function here uses. That is a
+     * deliberate exception to this file's own rule: AWT's FileDialog cannot select directories on
+     * Windows at all (the `apple.awt.fileDialogForDirectories` property that enables it is macOS
+     * only), so the choice is between a dialog that looks native and one that works. For the one
+     * control in the app that has to return a folder, working wins.
+     */
+    fun chooseFolder(title: String = "Choose folder"): File? = try {
+        val chooser = javax.swing.JFileChooser().apply {
+            dialogTitle = title
+            fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
+            isMultiSelectionEnabled = false
+        }
+        if (chooser.showOpenDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) {
+            chooser.selectedFile?.takeIf { it.isDirectory }
+        } else null
+    } catch (t: Throwable) {
+        // Same contract as the rest of this file: a dialog that cannot be shown returns "nothing
+        // was picked" rather than taking the app down with it.
+        null
+    }
+
     /** Build a case-insensitive extension filter, or null for "no filtering" (all files). */
     private fun extFilter(filter: FileFilter): FilenameFilter? {
         if (filter.extensions.isEmpty()) return null
