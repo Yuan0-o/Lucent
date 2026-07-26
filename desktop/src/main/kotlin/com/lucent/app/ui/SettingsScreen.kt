@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.layout.FlowRow
 import androidx.activity.compose.BackHandler
 import com.lucent.desktop.platform.DesktopFiles
 import java.io.File
@@ -254,6 +255,8 @@ fun SettingsScreen(active: Boolean = true) {
     var selfDestructTyped by remember { mutableStateOf("") }
     // Result of the on-demand at-rest encryption self-check (task 17). Null = not run yet.
     var encryptionCheckResult by remember { mutableStateOf<String?>(null) }
+    val noteHistoryOn by repo.noteHistoryEnabled.collectAsState(initial = true)
+    val taskHistoryOn by repo.taskHistoryEnabled.collectAsState(initial = true)
     // Task 3.1 — the self-check result used to stay on screen forever. It is the answer to a
     // question the user asked by pressing a button one second ago, not a property of the page, and
     // once read it is just a line of stale text sitting under a control that now looks like it did
@@ -4289,6 +4292,51 @@ fun SettingsScreen(active: Boolean = true) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ================================================================================
+            //  Task 4 — version history ("flash records")
+            // ================================================================================
+            //
+            // On by default, and switched off without a confirmation dialog: turning it off costs
+            // nothing that exists yet — it only stops FUTURE snapshots — so a prompt would be
+            // ceremony. What the page does owe the user is an explanation of what the feature is and
+            // what its limit does, because "flash record" means nothing on its own and silent
+            // deletion of an old version would otherwise look like data loss.
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.historyTitle, color = onGradient)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(S.historyDesc, color = onGradientMuted, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    S.historyCapNote(com.lucent.app.data.NoteHistory.MAX_VERSIONS_PER_NOTE),
+                    color = onGradientMuted,
+                    fontSize = 12.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(S.historyNotes, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = noteHistoryOn,
+                        onCheckedChange = { on ->
+                            com.lucent.app.data.NoteHistory.enabled = on
+                            scope.launch { repo.setNoteHistoryEnabled(on) }
+                        }
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(S.historyTasks, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = taskHistoryOn,
+                        onCheckedChange = { on ->
+                            com.lucent.app.data.TaskHistory.enabled = on
+                            scope.launch { repo.setTaskHistoryEnabled(on) }
+                        }
+                    )
+                }
+            }
+
             // ================================================================================
             //  Task 10 — "Show hidden area" is its own module, and it is the last thing on
             //  this page
@@ -4479,25 +4527,44 @@ fun SettingsScreen(active: Boolean = true) {
                 // not offering it.
                 Text(S.autoBackupInterval, color = onGradient, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row {
-                    if (!autoLoaded) return@Row
-                    com.lucent.app.data.AutoBackup.INTERVAL_CHOICES.forEach { hours ->
-                        GlassButton(
-                            // The catalogue already names the two round numbers ("Once a day",
-                            // "Once a week") and falls back to "Every N hours" for the rest, so the
-                            // chips read as language rather than as arithmetic.
-                            text = when (hours) {
-                                24 -> S.autoBackupEveryDay
-                                24 * 7 -> S.autoBackupEveryWeek
-                                else -> S.autoBackupEvery(hours)
-                            },
-                            compact = true,
-                            enabled = autoState.intervalHours != hours,
-                            onClick = {
-                                scope.launch { repo.setAutoBackup(autoState.copy(intervalHours = hours)) }
+                // ---- Task 3: four chips, all the same size, in every language ----
+                //
+                // One row of four cannot do it. The longest label ("Once a week" — 일주일에 한 번 in
+                // Korean) needs roughly half a phone's width on its own, so four of them across can
+                // only be achieved by squeezing, which is the defect this started as.
+                //
+                // Two rows of two, each cell weighted, gives the requirement exactly: every chip is
+                // one half of the row, so all four are identical in size regardless of how many
+                // characters their label happens to have — which is the point of a chip group. The
+                // label is capped at one line (see GlassButton) and shortens if it ever has to,
+                // rather than the chip changing shape around it.
+                if (autoLoaded) {
+                    com.lucent.app.data.AutoBackup.INTERVAL_CHOICES.chunked(2).forEach { pair ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            pair.forEach { hours ->
+                                GlassButton(
+                                    // The catalogue already names the two round numbers ("Once a
+                                    // day", "Once a week") and falls back to "Every N hours" for the
+                                    // rest, so the chips read as language rather than as arithmetic.
+                                    text = when (hours) {
+                                        24 -> S.autoBackupEveryDay
+                                        24 * 7 -> S.autoBackupEveryWeek
+                                        else -> S.autoBackupEvery(hours)
+                                    },
+                                    compact = true,
+                                    enabled = autoState.intervalHours != hours,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        scope.launch { repo.setAutoBackup(autoState.copy(intervalHours = hours)) }
+                                    }
+                                )
                             }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                            // An odd count would leave the last chip double width; balance it.
+                            if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
 

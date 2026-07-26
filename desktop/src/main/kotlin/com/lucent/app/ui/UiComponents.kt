@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -293,6 +294,30 @@ fun GlassButton(
             text,
             color = label.copy(alpha = label.alpha * fade),
             fontSize = labelSize,
+            // ---- Task 3, and the reason it was not only a Korean problem ----
+            //
+            // A pill is a fixed shape with a word in it. When the row it sits in runs out of width,
+            // the layout's only remaining move is to squeeze the pill, and a Text that is allowed to
+            // wrap answers by breaking its label into one character per line — which is how "Once a
+            // week" became a 600px-tall column on a phone. Korean showed it first because its label
+            // is longest, but English does exactly the same thing at a slightly narrower screen or a
+            // larger system font, and so does every other language.
+            //
+            // Refusing to wrap is what makes the pill's width HONEST: it now asks for the space its
+            // word actually needs, so a FlowRow can wrap the pill to the next line (the right
+            // answer) instead of the pill wrapping its text (never the right answer).
+            // ONE line, always. That single rule is what prevents the failure you saw: when a row
+            // runs out of width the layout squeezes the pill, and a Text allowed to use more lines
+            // answers by breaking its label into one character per line — a 600px-tall pill. Capping
+            // the line count makes the pill ask for its label's real width instead, which is what
+            // lets a FlowRow wrap the PILL (right) rather than the pill wrapping its TEXT (never).
+            //
+            // softWrap is deliberately left ON. Turning it off as well would change how the label is
+            // measured inside a width the caller has already fixed — a `weight(1f)` pill in an
+            // equal-size group — and those groups are supposed to keep their equal widths and shorten
+            // the label if they must. Equality comes from the weight, not from this.
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             // Task A8: see [CapsuleLabelLineHeight].
             style = LocalTextStyle.current.copy(lineHeightStyle = CapsuleLabelLineHeight)
         )
@@ -855,7 +880,19 @@ fun LucentExpandedInput(
     val onGradientMuted = LocalOnGradientMuted.current
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onCollapse,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        // Task 7 — `decorFitsSystemWindows = false` is what stops the panel dropping in from
+        // nowhere when the keyboard appears.
+        //
+        // Left at its default (true) the platform ALSO resizes the dialog's own window for the IME,
+        // on top of the imePadding below — so for one frame the panel is laid out at full height,
+        // then shrunk twice over, and what you see is it falling into place. With decor fitting
+        // switched off the window stays edge to edge and the inset is consumed exactly once, by the
+        // padding. This is the same combination the note and task editors already use, which is why
+        // they never had the flicker.
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
