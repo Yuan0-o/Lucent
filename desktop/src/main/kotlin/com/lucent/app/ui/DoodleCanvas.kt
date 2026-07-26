@@ -8,8 +8,13 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,7 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CloseFullscreen
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -134,7 +141,13 @@ object Doodle {
 fun DoodleEditor(
     value: String,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Task 12. When true the board fills whatever it is given instead of standing at a fixed 340dp,
+    // and the corner control collapses rather than expands. The full-screen editor is this same
+    // composable hosted in a Dialog, so there is exactly one whiteboard implementation and the two
+    // sizes cannot drift apart in behaviour.
+    fullScreen: Boolean = false,
+    onToggleFullScreen: (() -> Unit)? = null
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -154,9 +167,8 @@ fun DoodleEditor(
     Column(modifier = modifier.fillMaxWidth()) {
         // ---- The board -----------------------------------------------------------------------
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(340.dp)
+            modifier = (if (fullScreen) Modifier.fillMaxWidth().weight(1f)
+                        else Modifier.fillMaxWidth().height(340.dp))
                 .clip(RoundedCornerShape(16.dp))
                 // Opaque white, not glass: ink needs a surface with a known colour behind it, and
                 // the animated gradient showing through would change what a drawing looks like
@@ -192,7 +204,7 @@ fun DoodleEditor(
                     )
                 }
         ) {
-            Canvas(modifier = Modifier.fillMaxWidth().height(340.dp)) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
                 canvasSize = size
                 strokes.forEach { drawDoodleStroke(it.points, Color(it.color), it.width) }
                 if (live.size > 1) {
@@ -207,12 +219,40 @@ fun DoodleEditor(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
+            // Task 12 — the expand/collapse control, in the board's top-right corner, mirroring
+            // where [ExpandableGlassTextField] puts its own. Drawn over the ink rather than beside
+            // it so the drawing area loses nothing to a control strip.
+            if (onToggleFullScreen != null) {
+                IconButton(
+                    onClick = onToggleFullScreen,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(36.dp)
+                ) {
+                    Icon(
+                        if (fullScreen) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
+                        contentDescription = if (fullScreen) com.lucent.app.i18n.S.collapseTextBox
+                                             else com.lucent.app.i18n.S.expandTextBox,
+                        tint = Color(0xFF616161),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
         // ---- Pen: five colours, three widths ---------------------------------------------------
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        //
+        // Task 12. This row carries five colours, three widths, undo and clear — eleven controls.
+        // On a phone they did not fit, and the previous answer was to squeeze them: undo and clear
+        // were shrunk to 36dp, well under the 48dp a fingertip actually needs, which is why "clear
+        // canvas" was reported as too small to hit. Shrinking controls to fit a row is the wrong
+        // trade every time; the row scrolls now instead, and every button is back at a size a thumb
+        // can land on. Nothing is hidden — it is one short swipe away, and the colours a user
+        // reaches for most are the ones already in view.
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Doodle.COLORS.forEachIndexed { index, c ->
                 Box(
                     modifier = Modifier
@@ -250,10 +290,12 @@ fun DoodleEditor(
                 }
                 Spacer(modifier = Modifier.width(6.dp))
             }
-            Spacer(modifier = Modifier.weight(1f))
+            // A fixed gap rather than weight(1f): a horizontally scrolling Row has no bounded
+            // width to hand out, so a weighted spacer cannot be measured here.
+            Spacer(modifier = Modifier.width(12.dp))
             IconButton(
                 onClick = { if (strokes.isNotEmpty()) commit(strokes.dropLast(1)) },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Undo,
@@ -261,11 +303,59 @@ fun DoodleEditor(
                     tint = if (strokes.isEmpty()) onGradientMuted else onGradient
                 )
             }
-            IconButton(onClick = { commit(emptyList()) }, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = { commit(emptyList()) }, modifier = Modifier.size(44.dp)) {
                 Icon(
                     Icons.Default.DeleteOutline,
                     contentDescription = com.lucent.app.i18n.S.doodleClear,
                     tint = onGradientMuted
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Task 12 — the whiteboard plus its full-screen mode.
+ *
+ * The expanded canvas is the *same* [DoodleEditor] hosted in a Dialog, not a second implementation:
+ * a drawing surface that behaved even slightly differently at two sizes would be a bug factory, and
+ * the state it edits is the caller's `value` either way, so a stroke drawn full-screen is already in
+ * the note the moment the dialog closes. Composers use this rather than [DoodleEditor] directly.
+ */
+@Composable
+fun ExpandableDoodleEditor(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    DoodleEditor(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        onToggleFullScreen = { expanded = true }
+    )
+
+    if (expanded) {
+        Dialog(
+            onDismissRequest = { expanded = false },
+            // Let the content decide its own size, so the board really does fill the screen instead
+            // of sitting inside the platform's default dialog width.
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF101014))
+                    .padding(12.dp)
+            ) {
+                DoodleEditor(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.weight(1f),
+                    fullScreen = true,
+                    onToggleFullScreen = { expanded = false }
                 )
             }
         }

@@ -298,6 +298,13 @@ fun FluidGlassBackground(
     }
 }
 
+/**
+ * How finely the auto-cycling palette is stepped (task 4). At the default twelve seconds per
+ * palette this is one update every ~94ms — about eleven a second instead of sixty, with a colour
+ * delta per step that is not visible even side by side. See [rememberCyclingPaletteColors].
+ */
+private const val CYCLE_STEPS_PER_PALETTE = 128
+
 // Reused frame buffer for the native path: [cx, cy, radius, corner, squash, angleDeg] × 6.
 // One allocation for the app's lifetime — the draw loop stays at zero allocations per frame.
 // Written and read only on the UI (render) thread inside the Canvas lambda, so no synchronization
@@ -331,10 +338,36 @@ fun rememberCyclingPaletteColors(
     if (!inspection) {
         LaunchedEffect(n, secondsPerPalette) {
             val start = withInfiniteAnimationFrameNanos { it }
+            // Task 4 — the single biggest cause of the stutter, and the least obvious.
+            //
+            // This value is read during COMPOSITION by the caller (it is returned as a plain list of
+            // colours, which the app's root composable then hands to the background). Writing it on
+            // every animation frame therefore did not merely redraw the background: it invalidated
+            // and recomposed the entire application tree sixty times a second, for as long as the
+            // "Cycle" palette was selected. Worse, [FluidGlassBackground] keys its six radial
+            // gradients on the palette with remember(palette), so all six brushes were rebuilt every
+            // frame too — 360 short-lived shader objects a second, exactly the per-frame allocation
+            // the rest of this file was rewritten to eliminate.
+            //
+            // In steady state nobody notices; the frame budget absorbs it. The moment anything else
+            // needs the main thread — switching to a tab that has not been composed yet, which means
+            // building a whole screen — the two collide and the animation visibly hitches.
+            //
+            // The fix is to quantise. A palette takes `secondsPerPalette` seconds to become the next
+            // one, so the visible colour difference between two consecutive frames at 60fps is about
+            // one seven-hundredth of one step: far below anything an eye can resolve. Emitting only
+            // when the quantised phase actually changes cuts the update rate to [CYCLE_STEPS_PER_
+            // PALETTE] per palette — a handful per second — and the cross-fade looks identical.
+            var lastEmitted = -1
             while (true) {
                 withInfiniteAnimationFrameNanos { now ->
                     val elapsed = (now - start) / 1_000_000f
-                    phase = (elapsed / totalMs * n) % n
+                    val raw = (elapsed / totalMs * n) % n
+                    val step = (raw * CYCLE_STEPS_PER_PALETTE).toInt()
+                    if (step != lastEmitted) {
+                        lastEmitted = step
+                        phase = step / CYCLE_STEPS_PER_PALETTE.toFloat()
+                    }
                 }
             }
         }
