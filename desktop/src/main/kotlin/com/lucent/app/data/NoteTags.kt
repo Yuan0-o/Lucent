@@ -40,8 +40,6 @@ object NoteTags {
 
     private val TABLES: List<Tr> = listOf(En, Zh, Ja, Ko)
 
-    private fun labelsOf(pick: (Tr) -> String): List<String> = TABLES.map(pick)
-
     /** Canonical value -> how to read it out of a language table. */
     private val BUILT_IN: List<Pair<String, (Tr) -> String>> = listOf(
         En.tagStudy to { t: Tr -> t.tagStudy },
@@ -55,16 +53,24 @@ object NoteTags {
     val DEFAULTS: List<String> = BUILT_IN.map { it.first }
 
     /**
+     * Every spelling of every built-in tag, in all four languages, mapped to its canonical value.
+     *
+     * Built once at class initialisation rather than per call. [canonical] runs for every tag of
+     * every note the home grid draws — the naive version rebuilt four lists and did twenty
+     * case-insensitive comparisons each time, on the scroll path.
+     */
+    private val CANONICAL_BY_LABEL: Map<String, String> = HashMap<String, String>().apply {
+        BUILT_IN.forEach { (key, pick) -> TABLES.forEach { put(pick(it).lowercase(), key) } }
+    }
+
+    /**
      * Fold any known spelling of a built-in tag — in any of the four languages — down to its
      * canonical value. Anything unrecognised is the user's own tag and is returned as given.
      */
     fun canonical(tag: String): String {
         val t = tag.trim()
         if (t.isEmpty()) return t
-        BUILT_IN.forEach { (key, pick) ->
-            if (labelsOf(pick).any { it.equals(t, ignoreCase = true) }) return key
-        }
-        return t
+        return CANONICAL_BY_LABEL[t.lowercase()] ?: t
     }
 
     /** How a tag should be shown right now. Built-ins are translated; custom tags are themselves. */
