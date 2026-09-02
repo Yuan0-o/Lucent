@@ -112,6 +112,15 @@ android {
             // toolchain isn't present this directory simply stays empty and the app runs on its
             // Kotlin fallbacks — building without Rust must always keep working.
             jniLibs.srcDir(layout.buildDirectory.dir("rustJniLibs"))
+            // ---- The single shared source tree ----
+            // The business logic and most UI live ONCE in shared/src/main/kotlin and are compiled
+            // by BOTH this module and :desktop (which adds the same directory to its own source
+            // set). Editing a file there changes Android and Windows in the same commit — the old
+            // twin-file mirror (app/ + desktop/ byte-identical copies enforced by check_twins.py)
+            // is gone. Only genuinely platform-bound files remain in this module's own src dir.
+            // .kt files in a java.srcDir are compiled as Kotlin (the module's own tree has always
+            // been .kt under src/main/java); adding the shared dir the same way keeps that working.
+            java.srcDir(rootProject.file("shared/src/main/kotlin"))
         }
     }
 

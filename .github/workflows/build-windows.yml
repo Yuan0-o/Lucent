@@ -39,10 +39,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6
 
-      # ---- Twin-file drift guard (codebase review C-1); same step as the Android pipeline ----
-      - name: Check twin files have not drifted
-        shell: pwsh
-        run: python tools/check_twins.py
+      # (The twin-file drift guard that used to live here is gone: shared code now exists ONCE in
+      # shared/src/main/kotlin, compiled by both :app and :desktop, so drift is impossible.)
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5

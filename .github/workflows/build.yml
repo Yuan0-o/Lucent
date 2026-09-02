@@ -55,12 +55,8 @@ jobs:
         # v6 runs on Node 24 (v4 targeted the now-deprecated Node 20).
         uses: actions/checkout@v6
 
-      # ---- Twin-file drift guard (codebase review C-1) ----
-      # app/ and desktop/ share ~50 intentionally byte-identical files, synced by hand. This fails
-      # the build IN SECONDS (before any SDK install) when any pair in tools/twins.txt has drifted,
-      # printing the diff — a fix landing in one tree but not the other used to ship silently.
-      - name: Check twin files have not drifted
-        run: python3 tools/check_twins.py
+      # (The twin-file drift guard that used to live here is gone: shared code now exists ONCE in
+      # shared/src/main/kotlin, compiled by both :app and :desktop, so drift is impossible.)
 
       - name: Check signing secrets are configured
         # Fail in seconds with a plain-language message instead of ten minutes in with a Gradle

@@ -23,6 +23,15 @@ plugins {
 
 kotlin {
     jvmToolchain(17)
+    sourceSets {
+        main {
+            // ---- The single shared source tree ----
+            // Compile the SAME shared/src/main/kotlin sources as :app does. Platform seams stay in
+            // this module's own tree (the android.* shims, the JDBC database core, desktop shells);
+            // everything else is one file for both platforms now.
+            kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
+        }
+    }
 }
 
 dependencies {

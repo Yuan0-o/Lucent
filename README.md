@@ -175,16 +175,19 @@ No Android Studio, no local SDK, no command line.
 ## Project layout
 
 ```
-app/          Android module (:app) — UI, data layer, i18n, JNI bridges, widgets
-desktop/      Desktop module (:desktop) — Compose for Desktop shell, shims, shared-code copies,
-              native CMake build for the engine DLL
+shared/       THE single shared source tree — business logic and most UI live here ONCE, and both
+              :app and :desktop compile it. Edit a file here to change both platforms together.
+app/          Android module (:app) — Activity shell, Room database layer, JNI bridges, widgets,
+              and other genuinely Android-bound code only
+desktop/      Desktop module (:desktop) — Compose for Desktop shell, the android.* JVM shims,
+              the JDBC database core, native CMake build for the engine DLL
 rust/         The Rust accelerator (shared across platforms)
 .github/      build.yml (Android APK) and build-windows.yml (Windows installer)
 ```
 
-Everything user-visible is localised through `i18n/I18n.kt` — one catalogue per platform copy, four
-languages, compile-checked keys — and those translation tables are where the interface's every word
-actually lives.
+Everything user-visible is localised through `i18n/I18n.kt` — one catalogue, four languages,
+compile-checked keys — and those translation tables are where the interface's every word actually
+lives.
 
 ## With thanks to the giants whose shoulders these are
 
