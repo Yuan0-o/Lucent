@@ -3801,12 +3801,40 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
 
-                // Palettes grouped by kind, each with a small colour preview.
-                listOf(
-                    S.paletteGroupSolid to PaletteGroup.SOLID,
-                    S.paletteGroupGradient to PaletteGroup.GRADIENT,
-                    S.paletteGroupClassic to PaletteGroup.CLASSIC
-                ).forEach { (heading, group) ->
+                // Random (v3.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
+                // Random jumps to a different palette every RANDOM_SWITCH_MS. The row carries the
+                // small hint so the behaviour is discoverable without opening anything.
+                Column(
+                    modifier = Modifier.fillMaxWidth().clickable { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        RadioButton(
+                            selected = savedPalette == com.lucent.app.ui.PALETTE_RANDOM,
+                            enabled = paletteEnabled,
+                            onClick = { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
+                        )
+                        Box(modifier = Modifier.alpha(paletteAlpha)) {
+                            PaletteSwatch(LucentPalette.entries.shuffled().take(4).flatMap { it.colors })
+                        }
+                        Text(
+                            S.paletteRandomAuto,
+                            color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
+                            modifier = Modifier.padding(start = 10.dp)
+                        )
+                    }
+                    Text(
+                        S.paletteRandomHint,
+                        color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(start = 28.dp)
+                    )
+                }
+
+                // Palettes grouped by style family (v3.4.0: eight sections), each with a small
+                // colour preview. The sections come straight from the enum, so a new family can
+                // never exist without its title and its picker section.
+                PaletteGroup.entries.forEach { group ->
+                    val heading = group.title()
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         heading,

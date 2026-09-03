@@ -323,7 +323,10 @@ class MainActivity : FragmentActivity() {
             // The Monet options are light themes with a tinted backdrop, so this is the only place
             // they differ from plain Light at all.
             val backdropColor = themeChoice.backdrop(systemDark)
-            val paletteColors = if (paletteName == PALETTE_CYCLE) {
+            val paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
+                // v3.4.0: self-switching random palette (see rememberRandomPaletteColors).
+                com.lucent.app.ui.rememberRandomPaletteColors()
+            } else if (paletteName == PALETTE_CYCLE) {
                 // Auto-cycling background: drifts smoothly through every palette over time. The
                 // backdrop and text colours stay theme-based (below), so contrast is unaffected.
                 rememberCyclingPaletteColors(LucentPalette.entries.map { it.colors })

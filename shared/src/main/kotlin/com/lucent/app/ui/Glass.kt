@@ -265,8 +265,16 @@ fun formatDateRange(startMillis: Long, endMillis: Long): String {
     return if (start == end) start else "$start – $end"
 }
 
-/** Which section a palette is shown under in the appearance picker. */
-enum class PaletteGroup { SOLID, GRADIENT, CLASSIC }
+/**
+ * Which section a palette is shown under in the appearance picker (v3.4.0 redesign).
+ *
+ * The background palettes used to live in SOLID/GRADIENT/CLASSIC; they now live in EIGHT style
+ * families, each with a deliberately different character, and each family holds close to the same
+ * number of palettes (five or six boards = fifteen or eighteen colours), so no section dominates
+ * the picker. Section names are unique, and no colour value is repeated anywhere in the whole set
+ * (126 colours across the eight families).
+ */
+enum class PaletteGroup { DAWN, BLOSSOM, EVERGREEN, AQUA, SUNFIRE, VIVID, EARTH, VELVET }
 
 /**
  * Stored palette value for the auto-cycling option, which slowly rotates through every palette
@@ -274,6 +282,49 @@ enum class PaletteGroup { SOLID, GRADIENT, CLASSIC }
  * recognises this value and animates the background instead (see rememberCyclingPaletteColors).
  */
 const val PALETTE_CYCLE = "CYCLE"
+/** The "random" background option: switches to a different palette by itself on a timer. */
+const val PALETTE_RANDOM = "RANDOM"
+/** How long the "Random" background option keeps one palette before switching to another. */
+const val RANDOM_SWITCH_MS = 20_000L
+
+/**
+ * Colours for the "Random" background option (v3.4.0): a different palette every
+ * [RANDOM_SWITCH_MS], chosen uniformly from all 126 colours' boards and never equal to the one
+ * currently showing. The switch itself is a palette change; the drifting blobs continue smoothly
+ * around it because they rebuild their brushes from the new palette exactly as a manual pick does.
+ */
+@androidx.compose.runtime.Composable
+fun rememberRandomPaletteColors(): List<Color> {
+    val boards = LucentPalette.entries
+    var shown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    var colors by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(boards.first().colors) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(RANDOM_SWITCH_MS)
+            var next = boards.random()
+            var guard = 0
+            while (next.name == shown && guard++ < 8) next = boards.random()
+            shown = next.name
+            colors = next.colors
+        }
+    }
+    return colors
+}
+
+/**
+ * Display title for one appearance-picker section (v3.4.0: eight style families). Kept next to
+ * the enum so a new section cannot exist without its four-language name.
+ */
+fun PaletteGroup.title(): String = when (this) {
+    PaletteGroup.DAWN -> com.lucent.app.i18n.S.paletteGroupDawn
+    PaletteGroup.BLOSSOM -> com.lucent.app.i18n.S.paletteGroupBlossom
+    PaletteGroup.EVERGREEN -> com.lucent.app.i18n.S.paletteGroupEvergreen
+    PaletteGroup.AQUA -> com.lucent.app.i18n.S.paletteGroupAqua
+    PaletteGroup.SUNFIRE -> com.lucent.app.i18n.S.paletteGroupSunfire
+    PaletteGroup.VIVID -> com.lucent.app.i18n.S.paletteGroupVivid
+    PaletteGroup.EARTH -> com.lucent.app.i18n.S.paletteGroupEarth
+    PaletteGroup.VELVET -> com.lucent.app.i18n.S.paletteGroupVelvet
+}
 
 /**
  * A background palette: three colours the fluid-glass blobs draw from. [group] only decides which
@@ -288,25 +339,25 @@ const val PALETTE_CYCLE = "CYCLE"
  */
 enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     // ---- Classic (original) ----
-    SUNSET(listOf(Color(0xFF3A1C71), Color(0xFFD76D77), Color(0xFFFFAF7B)), PaletteGroup.CLASSIC),
-    OCEAN(listOf(Color(0xFF00507A), Color(0xFF3A6EA5), Color(0xFF4FD9C4)), PaletteGroup.CLASSIC),
-    FOREST(listOf(Color(0xFF0F4C3A), Color(0xFF1F9E6B), Color(0xFFB6E388)), PaletteGroup.CLASSIC),
-    BERRY(listOf(Color(0xFF5B2C82), Color(0xFFB43D8F), Color(0xFFFF7CA3)), PaletteGroup.CLASSIC),
-    MIDNIGHT(listOf(Color(0xFF16213E), Color(0xFF0F3460), Color(0xFF533483)), PaletteGroup.CLASSIC),
+    SUNSET(listOf(Color(0xFF3A1C71), Color(0xFFD76D77), Color(0xFFFFAF7B)), PaletteGroup.DAWN),
+    OCEAN(listOf(Color(0xFF00507A), Color(0xFF3A6EA5), Color(0xFF4FD9C4)), PaletteGroup.AQUA),
+    FOREST(listOf(Color(0xFF0F4C3A), Color(0xFF1F9E6B), Color(0xFFB6E388)), PaletteGroup.EVERGREEN),
+    BERRY(listOf(Color(0xFF5B2C82), Color(0xFFB43D8F), Color(0xFFFF7CA3)), PaletteGroup.BLOSSOM),
+    MIDNIGHT(listOf(Color(0xFF16213E), Color(0xFF0F3460), Color(0xFF533483)), PaletteGroup.VELVET),
 
     // ---- Solid (elegant single-hue) ----
-    BLUSH(listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.SOLID),
-    LAVENDER(listOf(Color(0xFF4B3A6B), Color(0xFF8A6FB0), Color(0xFFCBB6E8)), PaletteGroup.SOLID),
-    SAGE(listOf(Color(0xFF2F4A3C), Color(0xFF5E8B6F), Color(0xFFAFCBB4)), PaletteGroup.SOLID),
-    SAND(listOf(Color(0xFF7A5C36), Color(0xFFC1996A), Color(0xFFEAD6B8)), PaletteGroup.SOLID),
-    SLATE(listOf(Color(0xFF2A3A4A), Color(0xFF4F6B84), Color(0xFF9DB4C8)), PaletteGroup.SOLID),
-    TERRACOTTA(listOf(Color(0xFF7A3B2E), Color(0xFFC26A50), Color(0xFFEAB59B)), PaletteGroup.SOLID),
-    TEAL(listOf(Color(0xFF10403B), Color(0xFF2E7E76), Color(0xFF8FC9C0)), PaletteGroup.SOLID),
+    BLUSH(listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.BLOSSOM),
+    LAVENDER(listOf(Color(0xFF4B3A6B), Color(0xFF8A6FB0), Color(0xFFCBB6E8)), PaletteGroup.VIVID),
+    SAGE(listOf(Color(0xFF2F4A3C), Color(0xFF5E8B6F), Color(0xFFAFCBB4)), PaletteGroup.EVERGREEN),
+    SAND(listOf(Color(0xFF7A5C36), Color(0xFFC1996A), Color(0xFFEAD6B8)), PaletteGroup.DAWN),
+    SLATE(listOf(Color(0xFF2A3A4A), Color(0xFF4F6B84), Color(0xFF9DB4C8)), PaletteGroup.AQUA),
+    TERRACOTTA(listOf(Color(0xFF7A3B2E), Color(0xFFC26A50), Color(0xFFEAB59B)), PaletteGroup.SUNFIRE),
+    TEAL(listOf(Color(0xFF10403B), Color(0xFF2E7E76), Color(0xFF8FC9C0)), PaletteGroup.EVERGREEN),
 
     // ---- Gradient (vivid multi-hue) ----
-    AURORA(listOf(Color(0xFF0FA3A3), Color(0xFF6A5AE0), Color(0xFFE85D9E)), PaletteGroup.GRADIENT),
-    PEACH_DUSK(listOf(Color(0xFFFF8A5B), Color(0xFFEE4D8F), Color(0xFF8A4FD8)), PaletteGroup.GRADIENT),
-    COSMIC(listOf(Color(0xFF1E5AE8), Color(0xFF9B2FE8), Color(0xFF2ED0C0)), PaletteGroup.GRADIENT),
+    AURORA(listOf(Color(0xFF0FA3A3), Color(0xFF6A5AE0), Color(0xFFE85D9E)), PaletteGroup.VIVID),
+    PEACH_DUSK(listOf(Color(0xFFFF8A5B), Color(0xFFEE4D8F), Color(0xFF8A4FD8)), PaletteGroup.DAWN),
+    COSMIC(listOf(Color(0xFF1E5AE8), Color(0xFF9B2FE8), Color(0xFF2ED0C0)), PaletteGroup.VIVID),
 
     // ==========================================================================================
     //  C-GROUP TASK 15 — twelve further backgrounds
@@ -323,34 +374,34 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
 
     // Gold, not tan. Deliberately more saturated than SAND (0xFF7A5C36…), which is a desaturated
     // beige — side by side these read as "gold" and "sand", which is the whole point.
-    AMBER(listOf(Color(0xFF7A6108), Color(0xFFD4A81A), Color(0xFFF5E39B)), PaletteGroup.SOLID),
+    AMBER(listOf(Color(0xFF7A6108), Color(0xFFD4A81A), Color(0xFFF5E39B)), PaletteGroup.DAWN),
     // Scarlet, pushed to the orange side of red on purpose so it cannot be mistaken for BLUSH,
     // which is a pink (hue ~345 vs ~5 here).
-    CRIMSON(listOf(Color(0xFF6E1410), Color(0xFFC0392B), Color(0xFFF0A79C)), PaletteGroup.SOLID),
+    CRIMSON(listOf(Color(0xFF6E1410), Color(0xFFC0392B), Color(0xFFF0A79C)), PaletteGroup.SUNFIRE),
     // True indigo. MIDNIGHT is a navy-to-purple CLASSIC pair; this is one hue in three tones.
-    INDIGO(listOf(Color(0xFF232A63), Color(0xFF4A55A8), Color(0xFFA3AAE0)), PaletteGroup.SOLID),
+    INDIGO(listOf(Color(0xFF232A63), Color(0xFF4A55A8), Color(0xFFA3AAE0)), PaletteGroup.VIVID),
     // Yellow-green, where SAGE is a grey-green. The two sit on opposite sides of green.
-    OLIVE(listOf(Color(0xFF4A4A22), Color(0xFF86864A), Color(0xFFCBCB93)), PaletteGroup.SOLID),
+    OLIVE(listOf(Color(0xFF4A4A22), Color(0xFF86864A), Color(0xFFCBCB93)), PaletteGroup.EVERGREEN),
     // Wine. Redder and darker than LAVENDER, far less saturated than BERRY.
-    PLUM(listOf(Color(0xFF4A1F3A), Color(0xFF8A4270), Color(0xFFD69EC0)), PaletteGroup.SOLID),
+    PLUM(listOf(Color(0xFF4A1F3A), Color(0xFF8A4270), Color(0xFFD69EC0)), PaletteGroup.VELVET),
     // Neutral grey, where SLATE carries a blue cast. This is the only palette in the app with no
     // hue at all, which is exactly why it is worth having.
-    GRAPHITE(listOf(Color(0xFF2B2B30), Color(0xFF5A5A63), Color(0xFFA8A8B2)), PaletteGroup.SOLID),
+    GRAPHITE(listOf(Color(0xFF2B2B30), Color(0xFF5A5A63), Color(0xFFA8A8B2)), PaletteGroup.EARTH),
 
     // The GRADIENT set had three entries, all travelling through the blue-violet-pink region. The
     // six added here deliberately travel elsewhere, and two of them run LIGHT to DARK rather than
     // dark to light — direction is as visible as hue in a blob background.
-    CITRUS(listOf(Color(0xFF7ED321), Color(0xFFF5A623), Color(0xFFFF6B6B)), PaletteGroup.GRADIENT),
+    CITRUS(listOf(Color(0xFF7ED321), Color(0xFFF5A623), Color(0xFFFF6B6B)), PaletteGroup.SUNFIRE),
     // Runs pale-to-deep, the reverse of OCEAN's deep-to-bright, so the two never read alike even
     // though both are broadly "blue".
-    GLACIER(listOf(Color(0xFFA8D8F0), Color(0xFF5E9CC7), Color(0xFF1E3A5F)), PaletteGroup.GRADIENT),
+    GLACIER(listOf(Color(0xFFA8D8F0), Color(0xFF5E9CC7), Color(0xFF1E3A5F)), PaletteGroup.AQUA),
     // Magenta to deep blue — COSMIC ends on teal, so the two diverge exactly where it shows.
-    NEBULA(listOf(Color(0xFFE0218A), Color(0xFF7B2FBE), Color(0xFF2A2A8C)), PaletteGroup.GRADIENT),
-    EMBERGLOW(listOf(Color(0xFF8C1C13), Color(0xFFE2571E), Color(0xFFF2B705)), PaletteGroup.GRADIENT),
+    NEBULA(listOf(Color(0xFFE0218A), Color(0xFF7B2FBE), Color(0xFF2A2A8C)), PaletteGroup.VIVID),
+    EMBERGLOW(listOf(Color(0xFF8C1C13), Color(0xFFE2571E), Color(0xFFF2B705)), PaletteGroup.SUNFIRE),
     // Teal to olive to sand: a three-hue journey no single-hue SOLID palette can imitate.
-    MERIDIAN(listOf(Color(0xFF0E6E6E), Color(0xFF7A9A3C), Color(0xFFE3C88F)), PaletteGroup.GRADIENT),
+    MERIDIAN(listOf(Color(0xFF0E6E6E), Color(0xFF7A9A3C), Color(0xFFE3C88F)), PaletteGroup.EVERGREEN),
     // Entirely light. BLUSH and LAVENDER are tonal ramps from dark; this one never gets dark.
-    ORCHID(listOf(Color(0xFFF28FC2), Color(0xFFB57BE0), Color(0xFF7C9BE8)), PaletteGroup.GRADIENT),
+    ORCHID(listOf(Color(0xFFF28FC2), Color(0xFFB57BE0), Color(0xFF7C9BE8)), PaletteGroup.BLOSSOM),
 
     // ==========================================================================================
     //  R3 REPORT — fifteen further backgrounds, to 14 boards per section (42 boards, 126 colours)
@@ -364,51 +415,51 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     // ---- CLASSIC additions (rich mixes) ----
     // Warm umber brown. SAND is a pale tan (much lighter at every step); EMBERGLOW is fire with a
     // red and a yellow member — this one stays a single brown family.
-    TOBACCO(listOf(Color(0xFF3A2113), Color(0xFF8A5A33), Color(0xFFDCC09A)), PaletteGroup.CLASSIC),
+    TOBACCO(listOf(Color(0xFF3A2113), Color(0xFF8A5A33), Color(0xFFDCC09A)), PaletteGroup.EARTH),
     // Warm neutral grey, where GRAPHITE is deliberately cool. Side by side the two are plainly
     // different greys.
-    STONE(listOf(Color(0xFF403E3A), Color(0xFF807A70), Color(0xFFD2CBC0)), PaletteGroup.CLASSIC),
+    STONE(listOf(Color(0xFF403E3A), Color(0xFF807A70), Color(0xFFD2CBC0)), PaletteGroup.EARTH),
     // Cold slate navy. MIDNIGHT's light member (0xFF533483) is violet; NOCTURNE never leaves blue.
-    NOCTURNE(listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.CLASSIC),
+    NOCTURNE(listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.AQUA),
     // Cool red-pink. CRIMSON is pushed to the ORANGE side of red; BLUSH is a soft rose ramp —
     // CHERRY is the blue side of red and darker than either.
-    CHERRY(listOf(Color(0xFF450F1E), Color(0xFF94263F), Color(0xFFE2A0B4)), PaletteGroup.CLASSIC),
+    CHERRY(listOf(Color(0xFF450F1E), Color(0xFF94263F), Color(0xFFE2A0B4)), PaletteGroup.BLOSSOM),
     // Burnt orange. EMBERGLOW's mids are saturated fire, AMBER (SOLID) is gold: TANGERINE sits
     // between them as a deep orange with a lighter, warmer light member.
-    TANGERINE(listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.CLASSIC),
+    TANGERINE(listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.SUNFIRE),
     // True blue. INDIGO (SOLID) is violet-blue; OCEAN runs teal-blue to cyan. ROYAL is the plain
     // primary blue neither of them is.
-    ROYAL(listOf(Color(0xFF17275C), Color(0xFF3E63B0), Color(0xFF9DB8EE)), PaletteGroup.CLASSIC),
+    ROYAL(listOf(Color(0xFF17275C), Color(0xFF3E63B0), Color(0xFF9DB8EE)), PaletteGroup.AQUA),
     // Amethyst. LAVENDER (SOLID) is a blue-violet ramp; AMETHYST is the warmer pink-violet of a
     // cut stone — same family, opposite temperature, distinct side by side.
-    AMETHYST(listOf(Color(0xFF34164A), Color(0xFF6E3D9E), Color(0xFFC3A2E0)), PaletteGroup.CLASSIC),
+    AMETHYST(listOf(Color(0xFF34164A), Color(0xFF6E3D9E), Color(0xFFC3A2E0)), PaletteGroup.VELVET),
     // Cool grey-green. SAGE leans yellow-green; FOREST's light member is lime — ALPINE keeps the
     // green cool and muted at every step.
-    ALPINE(listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.CLASSIC),
+    ALPINE(listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.EARTH),
     // Pearl: the lightest neutral of all. STONE is warm grey, MISTY (below) is blue-grey;
     // PEARL carries a faint violet cast and sits apart from both.
-    PEARL(listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.CLASSIC),
+    PEARL(listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.EARTH),
 
     // ---- SOLID addition ----
     // Eggshell: a cream-khaki single hue. SAND is a tan-brown; EGGSHELL is yellower, softer and
     // lighter at the top of its ramp — a paper colour where SAND is a leather colour.
-    EGGSHELL(listOf(Color(0xFF6E6657), Color(0xFFB0A693), Color(0xFFF0E9DA)), PaletteGroup.SOLID),
+    EGGSHELL(listOf(Color(0xFF6E6657), Color(0xFFB0A693), Color(0xFFF0E9DA)), PaletteGroup.DAWN),
 
     // ---- GRADIENT additions (multi-hue journeys) ----
     // Red -> gold -> sky. CITRUS runs green-orange-red; CONFETTI is the complementary trip.
-    CONFETTI(listOf(Color(0xFFFF5E5B), Color(0xFFFFC24B), Color(0xFF6DD5ED)), PaletteGroup.GRADIENT),
+    CONFETTI(listOf(Color(0xFFFF5E5B), Color(0xFFFFC24B), Color(0xFF6DD5ED)), PaletteGroup.SUNFIRE),
     // Plum -> orchid. NEBULA is magenta-to-deep-blue; GRAPEVINE stays in the violet half and
     // travels dark-to-light instead of light-to-dark.
-    GRAPEVINE(listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.GRADIENT),
+    GRAPEVINE(listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.BLOSSOM),
     // Deep blue -> cyan light. OCEAN ends on bright teal and GLACIER runs pale-to-deep; SEABREEZE
     // is deep-to-pale with a lighter middle than either.
-    SEABREEZE(listOf(Color(0xFF123A54), Color(0xFF2F8FB3), Color(0xFFA8E2E0)), PaletteGroup.GRADIENT),
+    SEABREEZE(listOf(Color(0xFF123A54), Color(0xFF2F8FB3), Color(0xFFA8E2E0)), PaletteGroup.EVERGREEN),
     // Navy -> violet -> pink sunset. NEBULA runs pink-to-deep-blue; TWILIGHT is the reverse
     // direction with the same central violet — direction is the difference.
-    TWILIGHT(listOf(Color(0xFF0F1B4C), Color(0xFF5C2E91), Color(0xFFE55D87)), PaletteGroup.GRADIENT),
+    TWILIGHT(listOf(Color(0xFF0F1B4C), Color(0xFF5C2E91), Color(0xFFE55D87)), PaletteGroup.VELVET),
     // Blue-grey mist: the only near-monochrome GRADIENT. STONE (CLASSIC) is warm and GRAPHITE
     // (SOLID) is flat; MISTY shades a cool blue-grey across all three steps.
-    MISTY(listOf(Color(0xFF2F3542), Color(0xFF57606F), Color(0xFFA4B0BE)), PaletteGroup.GRADIENT);
+    MISTY(listOf(Color(0xFF2F3542), Color(0xFF57606F), Color(0xFFA4B0BE)), PaletteGroup.VELVET);
 
     // Live i18n lookup (localization task); call sites keep reading `palette.label`.
     val label: String

@@ -356,39 +356,21 @@ fun rememberCyclingPaletteColors(
     val inspection = LocalInspectionMode.current
     var phase by remember { mutableFloatStateOf(0f) } // 0f..n, wrapping
     if (!inspection) {
-        LaunchedEffect(n, secondsPerPalette) {
-            val start = withInfiniteAnimationFrameNanos { it }
-            // Task 4 — the single biggest cause of the stutter, and the least obvious.
-            //
-            // This value is read during COMPOSITION by the caller (it is returned as a plain list of
-            // colours, which the app's root composable then hands to the background). Writing it on
-            // every animation frame therefore did not merely redraw the background: it invalidated
-            // and recomposed the entire application tree sixty times a second, for as long as the
-            // "Cycle" palette was selected. Worse, [FluidGlassBackground] keys its six radial
-            // gradients on the palette with remember(palette), so all six brushes were rebuilt every
-            // frame too — 360 short-lived shader objects a second, exactly the per-frame allocation
-            // the rest of this file was rewritten to eliminate.
-            //
-            // In steady state nobody notices; the frame budget absorbs it. The moment anything else
-            // needs the main thread — switching to a tab that has not been composed yet, which means
-            // building a whole screen — the two collide and the animation visibly hitches.
-            //
-            // The fix is to quantise. A palette takes `secondsPerPalette` seconds to become the next
-            // one, so the visible colour difference between two consecutive frames at 60fps is about
-            // one seven-hundredth of one step: far below anything an eye can resolve. Emitting only
-            // when the quantised phase actually changes cuts the update rate to [CYCLE_STEPS_PER_
-            // PALETTE] per palette — a handful per second — and the cross-fade looks identical.
+        LaunchedEffect(n, secondsPerPalette, kotlinx.coroutines.Dispatchers.Default) {
+            // v3.4.0: like the background clock itself, the cycle phase advances from WALL time on
+            // its own dispatcher instead of waiting for UI frames - page transitions and heavy UI
+            // work can no longer freeze or jump the auto-cycle either.
+            val start = System.nanoTime()
             var lastEmitted = -1
             while (true) {
-                withInfiniteAnimationFrameNanos { now ->
-                    val elapsed = (now - start) / 1_000_000f
-                    val raw = (elapsed / totalMs * n) % n
-                    val step = (raw * CYCLE_STEPS_PER_PALETTE).toInt()
-                    if (step != lastEmitted) {
-                        lastEmitted = step
-                        phase = step / CYCLE_STEPS_PER_PALETTE.toFloat()
-                    }
+                val elapsed = (System.nanoTime() - start) / 1_000_000f
+                val raw = (elapsed / totalMs * n) % n
+                val step = (raw * CYCLE_STEPS_PER_PALETTE).toInt()
+                if (step != lastEmitted) {
+                    lastEmitted = step
+                    phase = step / CYCLE_STEPS_PER_PALETTE.toFloat()
                 }
+                kotlinx.coroutines.delay(DRIFT_FRAME_BUDGET_MS.toLong() / 2)
             }
         }
     }
