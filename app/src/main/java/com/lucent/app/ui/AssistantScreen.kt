@@ -1464,7 +1464,6 @@ fun AssistantScreen(active: Boolean = true) {
                             } else {
                                 Text(contentText, color = onGradient)
                             }
-                        }
                             if (!isUser) {
                                 // The 1/2 variant switcher (B-group task 12), shown only when this
                                 // answer actually has siblings — a single reply gets no chrome at all.
