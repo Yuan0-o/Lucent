@@ -2,6 +2,7 @@ package com.lucent.app
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
@@ -41,7 +42,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -262,6 +266,13 @@ class MainActivity : FragmentActivity() {
         //     needed it. The encrypted originals are untouched.
         AppScope.io.launch { com.lucent.app.data.AttachmentAccess.clearPreviewCache(applicationContext) }
 
+        // 2c. Arm the auto-backup polling loop. Idempotent (no-op while already running), so
+        //     Settings -> Data may also arm it; doing it here means a configured auto-backup keeps
+        //     running across cold starts instead of silently waiting for that page to be visited.
+        AppScope.io.launch {
+            runCatching { com.lucent.app.data.AutoBackupRunner.ensureStarted(applicationContext) }
+        }
+
         // 3. Re-arm task reminders. Alarms are OS state and don't survive a reboot, an app update,
         //    or a force-stop; BootReceiver covers the reboot, and this covers everything else. It
         //    also self-corrects, since rescheduleAll cancels alarms that shouldn't exist any more.
@@ -304,6 +315,14 @@ class MainActivity : FragmentActivity() {
                 initial = startup.backgroundAnimationEnabled
             )
 
+            // Material You dynamic colour (task 2): whether the user has the wallpaper-palette mode
+            // on. The initial value comes from the same synchronous startup read as the theme
+            // above, for the same reason — the FIRST frame must already be dynamic, or the app
+            // would flash the saved theme before the async DataStore emission arrives.
+            val dynamicColorOn by settingsRepo.dynamicColorEnabled.collectAsState(
+                initial = startup.dynamicColor
+            )
+
             // Keep the runtime language in step with the setting (localization task). L.current is
             // snapshot state, so this LaunchedEffect flipping it recomposes every S-reading text in
             // the app at once — the switch in Settings takes effect instantly, no restart.
@@ -317,23 +336,51 @@ class MainActivity : FragmentActivity() {
             val systemDark = isSystemInDarkTheme()
             val themeChoice = com.lucent.app.ui.LucentThemeMode.fromKey(themeMode)
             val isDarkTheme = themeChoice.isDark(systemDark)
-            val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
-            val onGradient = if (isDarkTheme) Color.White else Color(0xFF20202B)
-            val onGradientMuted = onGradient.copy(alpha = 0.65f)
-            // The Monet options are light themes with a tinted backdrop, so this is the only place
-            // they differ from plain Light at all.
-            val backdropColor = themeChoice.backdrop(systemDark)
-            val paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
-                // v2.4.0: self-switching random palette (see rememberRandomPaletteColors).
-                com.lucent.app.ui.rememberRandomPaletteColors()
-            } else if (paletteName == PALETTE_CYCLE) {
-                // Auto-cycling background: drifts smoothly through every palette over time. The
-                // backdrop and text colours stay theme-based (below), so contrast is unaffected.
-                rememberCyclingPaletteColors(LucentPalette.entries.map { it.colors })
+
+            // ---- Material You dynamic colour (task 2): the resolution itself ----
+            //
+            // While dynamic mode is active (switch on AND the device is Android 12+, API 31), the
+            // system wallpaper palette OUTRANKS every stored appearance choice: the user's theme
+            // mode, backdrop tint and blob palette are overridden HERE, in the read path, and
+            // nothing stored is rewritten — the same supremacy philosophy as Blackout Mode.
+            // Flipping the switch off restores the saved look instantly, byte for byte.
+            val dynamicActive = dynamicColorOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            val colors: ColorScheme
+            val onGradient: Color
+            val backdropColor: Color
+            val paletteColors: List<Color>
+            if (dynamicActive) {
+                val scheme = if (systemDark) {
+                    dynamicDarkColorScheme(this@MainActivity)
+                } else {
+                    dynamicLightColorScheme(this@MainActivity)
+                }
+                colors = scheme
+                onGradient = scheme.onBackground
+                backdropColor = scheme.background
+                // The blobs take the scheme's three drifting colours (primary/secondary/tertiary).
+                // Never PALETTE_CYCLE while dynamic: the wallpaper palette IS the cycle now, and
+                // auto-cycling over the stored palettes would fight it.
+                paletteColors = com.lucent.app.ui.dynamicBlobPalette(scheme)
             } else {
-                LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
-                    ?: LucentPalette.SUNSET.colors
+                colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+                onGradient = if (isDarkTheme) Color.White else Color(0xFF20202B)
+                // The Monet options are light themes with a tinted backdrop, so this is the only
+                // place they differ from plain Light at all.
+                backdropColor = themeChoice.backdrop(systemDark)
+                paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
+                    // v2.4.0: self-switching random palette (see rememberRandomPaletteColors).
+                    com.lucent.app.ui.rememberRandomPaletteColors()
+                } else if (paletteName == PALETTE_CYCLE) {
+                    // Auto-cycling background: drifts smoothly through every palette over time. The
+                    // backdrop and text colours stay theme-based (below), so contrast is unaffected.
+                    rememberCyclingPaletteColors(LucentPalette.entries.map { it.colors })
+                } else {
+                    LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
+                        ?: LucentPalette.SUNSET.colors
+                }
             }
+            val onGradientMuted = onGradient.copy(alpha = 0.65f)
 
             MaterialTheme(colorScheme = colors, typography = lucentTypography(fontKey)) {
                 CompositionLocalProvider(

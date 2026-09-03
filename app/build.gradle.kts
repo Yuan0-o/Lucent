@@ -42,7 +42,10 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // AGP 9.4.0, Kotlin 2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2).
 // 2.4.0 - themes 32, backgrounds in 8 families with Random mode, 1.3x faster launch, a
 // UI-independent background clock, live lockout countdowns, and the single-i18n catalogue.
-val MARKETING_VERSION = "2.4.0"
+// 2.7.0: the v2.7 line (2.5.0/2.6.0 skipped as planned): two-level composers, Material You
+// dynamic colour, attachment-picker fixes, date/language fix, unified password throttling and
+// backup coverage v12. See the v2.7.0 release notes.
+val MARKETING_VERSION = "2.7.0"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

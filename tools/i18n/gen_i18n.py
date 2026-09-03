@@ -230,15 +230,11 @@ def emit(entries, path):
     n = sum(1 for e in entries if not isinstance(e, str))
     print(f"Wrote {path}: {n} entries")
 
-# Android: every shared entry.
-emit(ENTRIES, os.path.join(_REPO, "app", "src", "main", "java", "com", "lucent", "app", "i18n", "I18n.kt"))
-
-# Desktop: shared minus Android-only, plus the desktop-only section.
-desktop_entries = [
-    e for e in ENTRIES
-    if isinstance(e, str) or (fn_name(e[0]) if is_fn(e[0]) else e[0]) not in ANDROID_ONLY
-]
-desktop_entries.append("")
-desktop_entries.append("// ---- Desktop-only entries (catalog_desktop.py) ----")
-desktop_entries.extend(DESKTOP_ONLY)
-emit(desktop_entries, os.path.join(_REPO, "desktop", "src", "main", "kotlin", "com", "lucent", "app", "i18n", "I18n.kt"))
+# The consolidated layout (post shared-merge): ONE generated catalog compiled by every module,
+# shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt, carrying the shared entries plus the
+# desktop-only section (desktop-only keys are harmless on Android and keep one source of truth).
+all_entries = list(ENTRIES)
+all_entries.append("")
+all_entries.append("// ---- Desktop-only entries (catalog_desktop.py) ----")
+all_entries.extend(DESKTOP_ONLY)
+emit(all_entries, os.path.join(_REPO, "shared", "src", "main", "kotlin", "com", "lucent", "app", "i18n", "I18n.kt"))

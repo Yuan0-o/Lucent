@@ -72,6 +72,12 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
         initial = startup.backgroundAnimationEnabled
     )
 
+    // Task 2 — Material You dynamic colour (Android 12+). There is no wallpaper API on Windows, so
+    // this flag is deliberately IGNORED here: even when it is true (e.g. after restoring a backup
+    // made on Android), the desktop keeps the user's manual theme and palette below, and no toggle
+    // is ever surfaced in desktop Settings. The key exists only so backups stay symmetric.
+    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = startup.dynamicColor)
+
     // Keep the runtime language following the setting, so switching it in Settings re-renders every
     // S-reading string at once with no restart — the same contract as Android's LaunchedEffect.
     val languageKey by repo.appLanguage.collectAsState(initial = startup.appLanguage)

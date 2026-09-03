@@ -241,7 +241,16 @@ object BackupManager {
     // they are small enough that opting in per-export would be a question without a point.
     // Additive as ever: every new key is guarded by has(), and unprefixed blobs still restore as
     // model files, so a v10 file restores exactly as it always did.
-    private const val BACKUP_VERSION = 11
+    // 12: the audit's remaining settings coverage gaps closed, still purely additive. The
+    // saved-searches JSON travels as "savedSearches" (G1), and the preferences added since
+    // "task 17" claimed completeness — note/task history toggles, the unlock attempts-ladder
+    // configuration (pwFirstRoundLimit/pwLaterRoundLimit/pwSelfDestructEnabled/
+    // pwSelfDestructThreshold), crash shield, blackout, the rich-text editor toggle,
+    // open-links-externally, assistant tool confirmation and small-model mode — travel as their
+    // own keys in the settings block (G2). Each is read back guarded by has(), so a v11 file
+    // restores exactly as it always did and a v12 file restores fully on any build that
+    // understands the keys.
+    private const val BACKUP_VERSION = 12
 
     // ---------------------------------------------------------------------------------------
     // Export
@@ -980,6 +989,36 @@ object BackupManager {
             .put("tasksSort", settings.tasksSort.first())
             .put("systemIntegrationEnabled", settings.systemIntegrationEnabled.first())
             .put("startupLoggingEnabled", settings.startupLoggingEnabled.first())
+            // ---- Backup v12: keys that drifted in after "task 17" (audit G1/G2) ----
+            //
+            // The completeness promise above was quietly broken by later additions: the saved
+            // searches, the note/task history capture toggles, the unlock attempts-ladder
+            // configuration, crash shield, blackout, the rich-text editor toggle,
+            // open-links-externally, assistant tool confirmation and small-model mode are all
+            // persisted, user-visible choices, and none of them travelled — a restore silently
+            // reset each one. Every key is written below and read back guarded by has(), so a v11
+            // file restores exactly as it always did. What still stays out is transient or
+            // device-local, not a durable user choice: the lockout record (pw_attempt_state), the
+            // parking keys local-mode/blackout park values into (*_prelocal / *_preblackout), the
+            // remembered tab (last_screen), the crash-recovery snapshot (session_snapshot), the
+            // model quick-switcher recency list (model_recents — no restore accessor exists on
+            // either platform) and the auto-backup configuration. The desktop-only keys
+            // (close_to_tray, app_lock_hello_enabled) stay out too: this file is compiled
+            // verbatim on both platforms, and neither accessor exists on the Android twin, so
+            // naming one here would break the shared build.
+            .put("savedSearches", settings.savedSearches.first())
+            .put("noteHistoryEnabled", settings.noteHistoryEnabled.first())
+            .put("taskHistoryEnabled", settings.taskHistoryEnabled.first())
+            .put("pwFirstRoundLimit", settings.pwFirstRoundLimit.first())
+            .put("pwLaterRoundLimit", settings.pwLaterRoundLimit.first())
+            .put("pwSelfDestructEnabled", settings.pwSelfDestructEnabled.first())
+            .put("pwSelfDestructThreshold", settings.pwSelfDestructThreshold.first())
+            .put("richTextEnabled", settings.richTextEnabled.first())
+            .put("openLinksExternally", settings.openLinksExternally.first())
+            .put("assistantConfirmToolsEnabled", settings.assistantConfirmToolsEnabled.first())
+            .put("smallModelModeEnabled", settings.smallModelModeEnabled.first())
+            .put("crashShieldEnabled", settings.crashShieldEnabled.first())
+            .put("blackoutEnabled", settings.blackoutEnabled.first())
 
         // The local-assistant switches, plus — new in v10 — the model SLOT MANIFEST: the names the
         // user gave their models and which one was active.
@@ -1798,6 +1837,31 @@ object BackupManager {
                 if (s.has("appLanguage")) settings.setAppLanguage(s.optString("appLanguage"))
                 if (s.has("notesSort")) settings.setNotesSort(s.optString("notesSort"))
                 if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))
+                // Backup v12 (audit G1/G2): the preferences added after "task 17" claimed
+                // completeness. Same has()-guard as the block above, so a v11 file restores
+                // exactly as it always did and a v12 file restores fully. Crash shield and
+                // blackout are restored here — BEFORE the system-integration / logging keys
+                // below, whose file-side values re-assert whatever their setters force (blackout
+                // forces share integration off; crash shield forces logging on).
+                if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
+                if (s.has("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s.optBoolean("noteHistoryEnabled", true))
+                if (s.has("taskHistoryEnabled")) settings.setTaskHistoryEnabled(s.optBoolean("taskHistoryEnabled", true))
+                if (s.has("pwFirstRoundLimit")) {
+                    settings.setPwFirstRoundLimit(s.optInt("pwFirstRoundLimit", PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT))
+                }
+                if (s.has("pwLaterRoundLimit")) {
+                    settings.setPwLaterRoundLimit(s.optInt("pwLaterRoundLimit", PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT))
+                }
+                if (s.has("pwSelfDestructEnabled")) settings.setPwSelfDestructEnabled(s.optBoolean("pwSelfDestructEnabled"))
+                if (s.has("pwSelfDestructThreshold")) {
+                    settings.setPwSelfDestructThreshold(s.optInt("pwSelfDestructThreshold", PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD))
+                }
+                if (s.has("crashShieldEnabled")) settings.setCrashShieldEnabled(s.optBoolean("crashShieldEnabled"))
+                if (s.has("blackoutEnabled")) settings.setBlackoutEnabled(s.optBoolean("blackoutEnabled"))
+                if (s.has("richTextEnabled")) settings.setRichTextEnabled(s.optBoolean("richTextEnabled"))
+                if (s.has("openLinksExternally")) settings.setOpenLinksExternally(s.optBoolean("openLinksExternally"))
+                if (s.has("assistantConfirmToolsEnabled")) settings.setAssistantConfirmTools(s.optBoolean("assistantConfirmToolsEnabled", true))
+                if (s.has("smallModelModeEnabled")) settings.setSmallModelModeEnabled(s.optBoolean("smallModelModeEnabled"))
             }
             if (restoreLocal && s.has("localBackgroundReply")) {
                 settings.setLocalBackgroundReplyEnabled(s.optBoolean("localBackgroundReply"))

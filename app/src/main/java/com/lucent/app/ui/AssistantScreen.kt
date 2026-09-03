@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -130,6 +131,24 @@ import kotlinx.coroutines.withContext
 private data class PendingAttachment(val mime: String, val data: String, val name: String)
 
 private const val MAX_CHAT_UPLOAD_BYTES = 1_000_000L
+
+/**
+ * Known cloud-storage apps that register a DocumentsProvider with the Storage Access Framework,
+ * i.e. the apps the SAF "OpenDocument" picker can actually navigate into when the user taps
+ * "Cloud storage" in the attach menu. Package names, not authorities: the app being installed is
+ * what we can check cheaply and reliably, and an installed Drive/OneDrive/Dropbox is what makes a
+ * cloud root appear in the picker. Devices with none of these (a Google-free phone, say) have no
+ * cloud surface to navigate to at all, so the menu entry is shown disabled with a plain-language
+ * reason instead of opening a picker that has nothing to offer.
+ */
+private val CLOUD_STORAGE_PACKAGES = listOf(
+    "com.google.android.apps.docs",   // Google Drive
+    "com.microsoft.skydrive",         // Microsoft OneDrive
+    "com.dropbox.android",            // Dropbox
+    "com.box.android",                // Box
+    "com.yandex.disk",                // Yandex Disk
+    "mega.privacy.android.app"        // MEGA
+)
 
 /**
  * A FileProvider URI the system camera can write a photo into (B-group task 16).
@@ -628,10 +647,18 @@ fun AssistantScreen(active: Boolean = true) {
         uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
-    // 2. Gallery. GetContent with an image/* filter rather than PickVisualMedia: the photo picker
-    // is the nicer modern API, but GetContent is present on every API level this app supports and
-    // lands in the same gallery UI, and an attachment picker is not the place to take a
-    // compatibility risk for a cosmetic gain.
+    // 2. Gallery — the system photo picker. GetContent("image/*") routinely failed to wake the
+    // device's real gallery app on OEM phones (notably Huawei): the chooser either omitted the
+    // album app or listed it in a state that never opened its albums. PickVisualMedia is a system
+    // surface that resolves to SOMETHING that can actually show the photo library on every API
+    // level this app supports — the native photo picker on Android 13+, the Google backport
+    // picker on 8.0–12 with Play services, and the SAF documents UI's image root everywhere else
+    // (the contract handles that fallback chain itself). The multi-pick content launcher stays as
+    // the last-resort fallback for the (practically impossible) case where launch itself throws.
+    val photoPickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+            if (uri != null) scope.launch { ingestAttachment(uri) }
+        }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
@@ -639,7 +666,18 @@ fun AssistantScreen(active: Boolean = true) {
     // 3. Cloud storage — Google Drive, OneDrive, Dropbox and anything else that ships a
     // DocumentsProvider. OpenDocument (the Storage Access Framework) is what enumerates those
     // providers; GetContent lists apps that can hand over content and often hides them, which is
-    // precisely why "attach from Drive" was not reachable before.
+    // precisely why "attach from Drive" was not reachable before. Whether the entry is *offered*
+    // depends on whether any such provider is actually installed (see CLOUD_STORAGE_PACKAGES).
+    val cloudStorageAvailable = remember(context) {
+        CLOUD_STORAGE_PACKAGES.any { pkg ->
+            try {
+                context.packageManager.getApplicationInfo(pkg, 0)
+                true
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                false
+            }
+        }
+    }
     val cloudPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
@@ -1675,11 +1713,34 @@ fun AssistantScreen(active: Boolean = true) {
                     DropdownMenuItem(
                         text = { Text(com.lucent.app.i18n.S.attachFromGallery) },
                         leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        onClick = { attachMenuOpen = false; galleryLauncher.launch("image/*") }
+                        onClick = {
+                            attachMenuOpen = false
+                            try {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                // No picker surface at all on this ROM (no photo picker, no backport,
+                                // no DocumentsUI): the old content chooser is the last resort.
+                                galleryLauncher.launch("image/*")
+                            }
+                        }
                     )
                     DropdownMenuItem(
-                        text = { Text(com.lucent.app.i18n.S.attachFromCloud) },
+                        text = {
+                            Column {
+                                Text(com.lucent.app.i18n.S.attachFromCloud)
+                                if (!cloudStorageAvailable) {
+                                    Text(
+                                        com.lucent.app.i18n.S.attachCloudUnavailable,
+                                        color = onGradientMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        },
                         leadingIcon = { Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        enabled = cloudStorageAvailable,
                         onClick = { attachMenuOpen = false; cloudPickerLauncher.launch(arrayOf("*/*")) }
                     )
                 }
@@ -2166,7 +2227,7 @@ private suspend fun saveReplyIntoItem(
 private fun buildChatExportEntries(messages: List<ChatMessage>, assistantName: String): List<Pair<String, ByteArray>> {
     val entries = mutableListOf<Pair<String, ByteArray>>()
     val sb = StringBuilder()
-    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", com.lucent.app.i18n.lucentLocale())
     var attIndex = 1
     messages.forEach { m ->
         val who = if (m.role == "assistant") assistantName else com.lucent.app.i18n.S.exportYou

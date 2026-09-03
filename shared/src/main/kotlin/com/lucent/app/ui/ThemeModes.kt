@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -293,3 +294,17 @@ enum class LucentThemeMode(val key: String) {
             entries.firstOrNull { it.key == key } ?: SYSTEM
     }
 }
+
+/**
+ * Material You blob palette: the three drifting colours, taken from the active scheme.
+ *
+ * Material You dynamic colour (task 2) hands the app a whole [ColorScheme] derived from the system
+ * wallpaper; the drifting background needs exactly the three colours [LucentPalette] is built
+ * around, so the scheme's [ColorScheme.primary]/[ColorScheme.secondary]/[ColorScheme.tertiary] stand
+ * in for them. [FluidGlassBackground] cycles palette[i % size] for its six blobs and rebuilds its
+ * brushes only when the list changes, so passing the stable list this returns from composition is
+ * all the wiring it needs. Desktop uses the identical function (it just never runs in dynamic mode —
+ * there is no wallpaper API on Windows).
+ */
+fun dynamicBlobPalette(scheme: ColorScheme): List<Color> =
+    listOf(scheme.primary, scheme.secondary, scheme.tertiary)

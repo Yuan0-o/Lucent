@@ -40,6 +40,10 @@ class SettingsRepository(private val context: Context) {
         const val THEME_MODE = "theme_mode"
         const val PALETTE = "palette"
         const val FONT = "font"
+        // Material You dynamic colour (task 2). Android 12+ only — the desktop has no wallpaper API,
+        // so this flag exists purely so backups stay symmetric across platforms; DesktopApp ignores
+        // it and no desktop Settings row is surfaced. Same key name as Android's SettingsKeys.
+        const val DYNAMIC_COLOR_ENABLED = "dynamic_color_enabled"
         const val BASE_URL_ENC = "base_url_enc"
         const val API_SPEC_ENC = "api_spec_enc"
         const val MODEL_ENC = "model_enc"
@@ -203,6 +207,11 @@ class SettingsRepository(private val context: Context) {
     // the system font — see ui/LucentFonts.
     val font: Flow<String> = state.map { str(it, K.FONT) ?: "system" }
 
+    // Material You dynamic colour (task 2). Mirrors the Android flow; desktop ignores the value
+    // (no wallpaper palette exists on Windows) and never surfaces a toggle for it.
+    val dynamicColorEnabled: Flow<Boolean> =
+        state.map { bool(it, K.DYNAMIC_COLOR_ENABLED) ?: false }
+
     data class DisplayPrefs(val themeMode: String, val palette: String, val font: String)
 
     suspend fun displayPrefsOnce(): DisplayPrefs {
@@ -225,6 +234,10 @@ class SettingsRepository(private val context: Context) {
         val assistantName: String = "Lucent",
         // Desktop default is OFF — see the class comment.
         val backgroundAnimationEnabled: Boolean = false,
+        // Material You dynamic colour (task 2). First-frame state for the same reason as Android's
+        // copy of this class: if a restored backup ever turns it on, the desktop must decide about
+        // it before the first frame composes (the answer is: deliberately ignore it — no wallpaper).
+        val dynamicColor: Boolean = false,
         // Round R1, task 2. The home lists' sort keys. First-frame state in the strictest sense:
         // reading them late did not merely show the wrong label, it laid the list out in the wrong
         // ORDER and then animated it into the right one on every launch. See SettingsCache.
@@ -250,6 +263,7 @@ class SettingsRepository(private val context: Context) {
             appLanguage = str(prefs, K.APP_LANGUAGE) ?: "system",
             assistantName = secret(prefs, K.ASSISTANT_NAME_ENC, "Lucent"),
             backgroundAnimationEnabled = bool(prefs, K.BACKGROUND_ANIMATION_ENABLED) ?: false,
+            dynamicColor = bool(prefs, K.DYNAMIC_COLOR_ENABLED) ?: false,
             notesSort = str(prefs, K.NOTES_SORT) ?: "recent",
             tasksSort = str(prefs, K.TASKS_SORT) ?: "recent",
             sessionSnapshot = str(prefs, K.SESSION_SNAPSHOT) ?: ""
@@ -575,6 +589,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemeMode(value: String) { edit { it[K.THEME_MODE] = value } }
     suspend fun setPalette(value: String) { edit { it[K.PALETTE] = value } }
     suspend fun setFont(value: String) { edit { it[K.FONT] = value } }
+    suspend fun setDynamicColorEnabled(value: Boolean) { edit { it[K.DYNAMIC_COLOR_ENABLED] = value } }
 
     suspend fun setApiKey(value: String) {
         edit { it[K.API_KEY_ENC] = LocalSecrets.encrypt(value) }

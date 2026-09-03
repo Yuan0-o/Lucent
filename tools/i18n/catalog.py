@@ -164,6 +164,8 @@ ENTRIES = [
     ("selfDestructConfirmPhrase", "ERASE", "清除", "消去", "삭제"),
     ("selfDestructConfirmHint(phrase: String)", "Type {phrase} to confirm", "输入 {phrase} 以确认", "確認のため {phrase} と入力してください", "확인하려면 {phrase}을(를) 입력하세요"),
     ("selfDestructRemaining(count: Int)", "Warning: {count} more wrong passwords will erase everything", "警告：再输错 {count} 次将清除全部数据", "警告：あと {count} 回間違えるとすべて消去されます", "경고: {count}번 더 틀리면 모든 데이터가 삭제됩니다"),
+    # Lock-screen banner while wrong guesses approach the (optional) self-destruct threshold.
+    ("selfDestructNear", "Warning: a few more wrong attempts will permanently erase all of your data", "警告：再输错几次将永久清除你的全部数据", "警告：もう少し間違えると、すべてのデータが完全に消去されます", "경고: 몇 번 더 틀리면 모든 데이터가 영구히 삭제됩니다"),
 
     # ---- Task 6: open links in the system browser ----
     ("openLinksTitle", "Open web links in your browser", "在浏览器中打开网址", "ウェブリンクをブラウザで開く", "웹 링크를 브라우저에서 열기"),
@@ -617,6 +619,9 @@ ENTRIES = [
     ("lockConfirmNewPassword", "Confirm new password", "确认新密码", "新しいパスワードを確認", "새 비밀번호 확인"),
     ("lockPasswordsDontMatch", "The passwords don't match.", "两次输入的密码不一致。", "パスワードが一致しません。", "비밀번호가 일치하지 않습니다."),
     ("lockCouldntUpdate", "Couldn't update the password. Try again.", "无法更新密码，请重试。", "パスワードを更新できませんでした。もう一度お試しください。", "비밀번호를 업데이트할 수 없습니다. 다시 시도하세요."),
+    # Wrong-password hints on the lock screen, powered by PasswordAttempts (task 18).
+    ("lockAttemptsLeft(n: Int)", "{n} attempts left before a time-out", "还剩 {n} 次机会，之后将临时锁定", "あと {n} 回失敗すると一時的にロックされます", "남은 기회 {n}번, 그 후 일시적으로 잠깁니다"),
+    ("lockTryAgainIn(time: String)", "Try again in {time}", "请 {time} 后再试", "{time} 後にもう一度お試しください", "{time} 후에 다시 시도하세요"),
 
     # ---- Screen titles ----
     ("screenCompletedTasks", "Completed tasks", "已完成任务", "完了したタスク", "완료된 할 일"),
@@ -901,6 +906,14 @@ ENTRIES = [
     ("paletteGroupSolid", "Solid", "纯色", "単色", "단색"),
     ("paletteGroupGradient", "Gradient", "渐变", "グラデーション", "그라데이션"),
     ("paletteGroupClassic", "Classic", "经典", "クラシック", "클래식"),
+
+    # ---- Task 2: Material You dynamic colour (Android 12+ wallpaper palette) ----
+    ("dynamicColorTitle", "Material You colours", "Material You 动态取色", "Material You カラー", "Material You 컬러"),
+    ("dynamicColorSub", "Match your wallpaper and system accents (Android 12+). This takes priority over the theme and background choices below.", "跟随你的壁纸与系统强调色（Android 12+）。开启后优先于下方选择的主题与背景。", "壁紙とシステムのアクセントカラーに合わせます（Android 12 以上）。以下で選ぶテーマや背景より優先されます。", "배경화면과 시스템 강조색에 맞춥니다(Android 12 이상). 아래에서 고른 테마와 배경보다 우선합니다."),
+    ("dynamicColorOnSub", "Active: Lucent now follows your wallpaper palette.", "已启用：Lucent 现在跟随你的壁纸配色。", "有効です：Lucent は壁紙のパレットに従います。", "사용 중: Lucent가 이제 배경화면 팔레트를 따릅니다."),
+    ("dynamicColorUnsupported", "This device's Android version doesn't support dynamic colours.", "此设备的 Android 版本不支持动态取色。", "この端末の Android バージョンはダイナミックカラーに対応していません。", "이 기기의 Android 버전은 다이내믹 컬러를 지원하지 않습니다."),
+    ("dynamicColorPausedTheme", "Theme choices are paused while Material You colours are on — the wallpaper palette is in charge.", "Material You 动态取色开启期间，主题选择暂停生效——由壁纸配色接管。", "Material You カラーがオンの間、テーマの選択は一時停止されます。壁紙のパレットが優先されます。", "Material You 컬러가 켜져 있는 동안 테마 선택이 일시 중지됩니다. 배경화면 팔레트가 우선합니다."),
+    ("dynamicColorPausedBackground", "Background palettes are paused while Material You colours are on — the wallpaper palette is in charge.", "Material You 动态取色开启期间，背景配色选择暂停生效——由壁纸配色接管。", "Material You カラーがオンの間、背景パレットの選択は一時停止されます。壁紙のパレットが優先されます。", "Material You 컬러가 켜져 있는 동안 배경 팔레트 선택이 일시 중지됩니다. 배경화면 팔레트가 우선합니다."),
 
     # =====================================================================================
     # Settings — Editor page
@@ -1371,6 +1384,11 @@ ENTRIES = [
     ("attachFromGallery", "Photos", "相册", "写真", "사진"),
     ("attachFromCloud", "Cloud storage", "云存储", "クラウドストレージ", "클라우드 저장소"),
     ("attachCameraFailed", "Couldn't open the camera. Try attaching a file instead.", "无法打开相机，请改用文件方式添加。", "カメラを起動できませんでした。ファイルから添付してください。", "카메라를 열 수 없습니다. 파일로 첨부해 보세요."),
+    ("attachCloudUnavailable", "No cloud storage app found on this device (Google Drive, OneDrive, Dropbox or similar). Attach the file from Files instead.", "本机未检测到云存储应用（Google Drive、OneDrive、Dropbox 等）。请改用「文件」添加附件。", "この端末にクラウドストレージアプリ（Google Drive、OneDrive、Dropbox など）が見つかりません。「ファイル」から添付してください。", "이 기기에서 클라우드 저장소 앱(Google Drive, OneDrive, Dropbox 등)을 찾지 못했습니다. '파일'에서 첨부해 주세요."),
+    ("trashArchivedSuffix", " \u00b7 was archived", " \u00b7 \u66fe\u5f52\u6863", " \u00b7 \u30a2\u30fc\u30ab\u30a4\u30d6\u6e08\u307f", " \u00b7 \ubcf4\uad00\ub428"),
+    ("trashCompletedSuffix", " \u00b7 was completed", " \u00b7 \u5df2\u5b8c\u6210", " \u00b7 \u5b8c\u4e86\u6e08\u307f", " \u00b7 \uc644\ub8cc\ub428"),
+    ("composerMoreOptions", "More options", "更多选项", "その他のオプション", "추가 옵션"),
+    ("composerMoreA11y", "More options for this note or task", "此笔记或任务的更多选项", "このノート・タスクのその他のオプション", "이 노트·작업의 추가 옵션"),
     ("attachNoCloudFolder", "No cloud sync folder found on this PC (Google Drive, OneDrive, Dropbox).", "本机未找到云盘同步文件夹（Google Drive、OneDrive、Dropbox）。", "この PC にクラウド同期フォルダー（Google Drive、OneDrive、Dropbox）が見つかりません。", "이 PC에서 클라우드 동기화 폴더(Google Drive, OneDrive, Dropbox)를 찾지 못했습니다."),
     ("downloadFetching", "Fetching the files…", "正在获取文件…", "ファイルを取得中…", "파일을 가져오는 중…"),
     ("downloadFetchFailed", "Couldn't fetch that file. It may have expired or need a sign-in.", "无法获取该文件，可能已过期或需要登录。", "ファイルを取得できませんでした。期限切れかログインが必要な可能性があります。", "파일을 가져올 수 없습니다. 만료되었거나 로그인이 필요할 수 있습니다."),

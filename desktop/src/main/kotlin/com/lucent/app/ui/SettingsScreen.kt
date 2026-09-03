@@ -253,6 +253,111 @@ fun SettingsScreen(active: Boolean = true) {
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
     )
 
+    // =========================================================================
+    // Unified credential gate for this screen's password prompts (task 18/5B)
+    // =========================================================================
+    //
+    // Every Settings dialog that VERIFIES a credential - turning the App Lock off, the
+    // danger-zone auth gate, the hidden-area unlock, and the backup-restore password -
+    // charges the SAME persisted counter as the lock screen (PasswordAttempts: one counter,
+    // not one per screen). Wrong guesses announce the attempts left this round; a closed round
+    // disables the field behind a live mm:ss countdown; and when the optional self-destruct is
+    // enabled and its lifetime threshold is reached, the wipe (AppWipe.wipeAllData) runs and the
+    // app reopens empty and unlocked. A correct app password anywhere calls registerSuccess,
+    // which resets the whole counter.
+    val gateAttemptJson by repo.passwordAttemptState.collectAsState(initial = "")
+    val gateAttempt = remember(gateAttemptJson) {
+        com.lucent.app.data.PasswordAttempts.State.fromJson(gateAttemptJson)
+    }
+    var gateTick by remember { mutableStateOf(0L) }
+    val gateLockedMs = remember(gateAttempt, gateTick) {
+        com.lucent.app.data.PasswordAttempts.remainingLockoutMs(gateAttempt)
+    }
+    val gateLockedOut = gateLockedMs > 0L
+    LaunchedEffect(gateLockedOut) {
+        while (gateLockedOut) {
+            kotlinx.coroutines.delay(1000L)
+            gateTick++
+        }
+    }
+    var gateFailedOnce by remember { mutableStateOf(false) }
+    var gateWiping by remember { mutableStateOf(false) }
+
+    /** The optional self-destruct from a Settings prompt (same wipe as the lock screen). */
+    fun runSettingsGateWipe() {
+        if (gateWiping) return
+        gateWiping = true
+        scope.launch {
+            val wiped = runCatching {
+                com.lucent.app.data.wipeAllData(
+                    context.applicationContext,
+                    com.lucent.app.data.AppDatabase.getInstance(context.applicationContext),
+                    repo)
+            }.isSuccess
+            if (!wiped) {
+                gateWiping = false
+                return@launch
+            }
+            repo.setAppLock(enabled = false, credentialsJson = "")
+            repo.setPasswordAttemptState(com.lucent.app.data.PasswordAttempts.registerSuccess().toJson())
+            AppLockController.enabled = false
+            AppLockController.unlock()
+            LucentToast.show(context, S.allDataClearedToast)
+        }
+    }
+
+    /** A correct credential anywhere on this screen resets the whole shared counter. */
+    fun settingsGateSuccess() {
+        gateFailedOnce = false
+        scope.launch {
+            repo.setPasswordAttemptState(com.lucent.app.data.PasswordAttempts.registerSuccess().toJson())
+        }
+    }
+
+    /** Charge one wrong credential guess on the shared counter. */
+    fun chargeSettingsGate() {
+        if (gateLockedOut || gateWiping) return
+        val next = com.lucent.app.data.PasswordAttempts.registerFailure(
+            gateAttempt, pwFirstRound, pwLaterRound
+        )
+        gateFailedOnce = true
+        if (com.lucent.app.data.PasswordAttempts.shouldSelfDestruct(
+                next, selfDestructOn, selfDestructThreshold
+            )
+        ) {
+            runSettingsGateWipe()
+            return
+        }
+        scope.launch { repo.setPasswordAttemptState(next.toJson()) }
+    }
+
+    /** Shared feedback under a gated password field: countdown / attempts-left / proximity warn. */
+    @Composable
+    fun SettingsGateFeedback() {
+        if (selfDestructOn && !gateLockedOut && !gateWiping &&
+            com.lucent.app.data.PasswordAttempts.failuresBeforeSelfDestruct(
+                gateAttempt, selfDestructThreshold
+            ) in 1..5
+        ) {
+            Text(S.selfDestructNear, color = Color(0xFFFFB74D), fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        if (gateLockedOut) {
+            Text(
+                S.lockTryAgainIn(com.lucent.app.data.PasswordAttempts.formatRemaining(gateLockedMs)),
+                color = Color(0xFFFF8A80),
+                fontSize = 13.sp
+            )
+        } else if (gateFailedOnce) {
+            val left = com.lucent.app.data.PasswordAttempts.attemptsRemaining(
+                gateAttempt, pwFirstRound, pwLaterRound
+            )
+            if (left > 0) {
+                Text(S.lockAttemptsLeft(left), color = Color(0xFFFFB74D), fontSize = 13.sp)
+            }
+        }
+    }
+
     // Confirmation dialogs for the three switches that change what the app is allowed to do.
     var showBlackoutWarning by remember { mutableStateOf(false) }
     var showCrashShieldInfo by remember { mutableStateOf(false) }
@@ -1384,15 +1489,20 @@ fun SettingsScreen(active: Boolean = true) {
                         onValueChange = { importPasswordDraft = it; importPasswordError = false },
                         singleLine = true,
                         isError = importPasswordError,
+                        enabled = !gateLockedOut && !gateWiping,
                         visualTransformation = PasswordVisualTransformation(),
                         label = { Text(if (importPasswordError) S.wrongPassword else S.lockPassword) },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    // Wrong backup-password guesses charge the SAME shared counter as the lock
+                    // screen and the other Settings prompts; a correct backup password merely
+                    // proceeds (only the app's own credential resets the counter).
+                    SettingsGateFeedback()
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = importPasswordDraft.isNotEmpty(),
+                    enabled = importPasswordDraft.isNotEmpty() && !gateLockedOut && !gateWiping,
                     onClick = {
                         val attempt = importPasswordDraft
                         val job = scope.launch {
@@ -1421,8 +1531,10 @@ fun SettingsScreen(active: Boolean = true) {
                                         if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
                                             // Stay on the dialog. There is no recovery for a forgotten
                                             // backup password — that is the whole point of it — so the
-                                            // only useful thing left to offer is another try.
+                                            // only useful thing left to offer is another try. Each
+                                            // wrong guess also charges the shared credential gate.
                                             importPasswordError = true
+                                            chargeSettingsGate()
                                         } else {
                                             backupStatus = S.importFailed(error.message ?: "")
                                             discardImportSource()
@@ -1864,6 +1976,8 @@ fun SettingsScreen(active: Boolean = true) {
                         onValueChange = { disablePw = it; disableError = "" },
                         label = { Text(S.lockPassword) },
                         singleLine = true,
+                        isError = disableError.isNotEmpty(),
+                        enabled = !gateLockedOut && !gateWiping,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1871,13 +1985,15 @@ fun SettingsScreen(active: Boolean = true) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(disableError, color = Color(0xFFFF8A80), fontSize = 13.sp)
                     }
+                    SettingsGateFeedback()
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = disablePw.isNotEmpty() && appLockCreds.isNotEmpty(),
+                    enabled = disablePw.isNotEmpty() && appLockCreds.isNotEmpty() && !gateLockedOut && !gateWiping,
                     onClick = {
                         if (AppLock.verifyPassword(appLockCreds, disablePw)) {
+                            settingsGateSuccess()
                             scope.launch { repo.setAppLock(false, "") }
                             AppLockController.enabled = false
                             AppLockController.unlock()
@@ -1885,7 +2001,8 @@ fun SettingsScreen(active: Boolean = true) {
                             showAppLockDisable = false
                             LucentToast.show(context, S.appLockOffToast)
                         } else {
-                            disableError = S.lockWrongPassword
+                            disableError = ""
+                            chargeSettingsGate()
                         }
                     }
                 ) { Text(S.turnOff) }
@@ -2144,6 +2261,8 @@ fun SettingsScreen(active: Boolean = true) {
                         onValueChange = { dangerAuthPw = it; dangerAuthError = "" },
                         label = { Text(S.lockPassword) },
                         singleLine = true,
+                        isError = dangerAuthError.isNotEmpty(),
+                        enabled = !gateLockedOut && !gateWiping,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -2151,20 +2270,23 @@ fun SettingsScreen(active: Boolean = true) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(dangerAuthError, color = Color(0xFFFF8A80), fontSize = 13.sp)
                     }
+                    SettingsGateFeedback()
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = dangerAuthPw.isNotEmpty(),
+                    enabled = dangerAuthPw.isNotEmpty() && !gateLockedOut && !gateWiping,
                     onClick = {
                         if (AppLock.verifyPassword(appLockCreds, dangerAuthPw)) {
+                            settingsGateSuccess()
                             val action = dangerAuthAction
                             dangerAuthAction = null
                             dangerAuthPw = ""
                             dangerAuthError = ""
                             action?.invoke()
                         } else {
-                            dangerAuthError = S.lockWrongPassword
+                            dangerAuthError = ""
+                            chargeSettingsGate()
                         }
                     }
                 ) { Text(S.actionConfirm) }
@@ -3700,6 +3822,8 @@ fun SettingsScreen(active: Boolean = true) {
         @NonRestartableComposable
         fun AppearancePage() {
             BackHeader(S.settingsAppearanceTitle) { route = SettingsRoute.Root }
+            // (Task 2 — Material You dynamic colour: Android-only, so no row here; the stored flag
+            // is ignored by the desktop shell, which has no wallpaper API.)
             // Two hierarchical entries, mirroring the Assistant screen's structure. (Font moved
             // to the Language screen — it's as much a writing choice as a visual one.)
             NavCard(S.settingsThemeTitle, S.settingsThemeSub) { route = SettingsRoute.Theme }
@@ -4477,6 +4601,7 @@ fun SettingsScreen(active: Boolean = true) {
                         onValueChange = { hiddenPw = it; hiddenPwError = false },
                         singleLine = true,
                         isError = hiddenPwError,
+                        enabled = !gateLockedOut && !gateWiping,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -4484,17 +4609,24 @@ fun SettingsScreen(active: Boolean = true) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(S.hiddenWrongPassword, color = onGradientMuted, fontSize = 12.sp)
                     }
+                    SettingsGateFeedback()
                     Spacer(modifier = Modifier.height(8.dp))
                     Row {
-                        GlassButton(text = S.actionConfirm, compact = true, onClick = {
-                            if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
-                                HiddenArea.open()
-                                askingHiddenPw = false
-                                hiddenPw = ""
-                            } else {
-                                hiddenPwError = true
-                            }
-                        })
+                        GlassButton(
+                            text = S.actionConfirm,
+                            compact = true,
+                            enabled = !gateLockedOut && !gateWiping,
+                            onClick = {
+                                if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
+                                    settingsGateSuccess()
+                                    HiddenArea.open()
+                                    askingHiddenPw = false
+                                    hiddenPw = ""
+                                } else {
+                                    hiddenPwError = false
+                                    chargeSettingsGate()
+                                }
+                            })
                         Spacer(modifier = Modifier.width(8.dp))
                         GlassButton(text = S.actionCancel, compact = true, onClick = {
                             askingHiddenPw = false; hiddenPw = ""

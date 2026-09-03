@@ -25,6 +25,13 @@ private object SettingsKeys {
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val PALETTE = stringPreferencesKey("palette")
     val FONT = stringPreferencesKey("font")
+    // ---- Material You dynamic colour (task 2) — Android 12+ wallpaper palette ----
+    // One boolean from a two-word vocabulary, so — exactly like THEME_MODE and PALETTE above —
+    // deliberately NOT encrypted: it says nothing private, and it is read on the pre-first-frame
+    // startup path (the first frame must already be dynamic, or the app would flash the saved theme
+    // before snapping to the wallpaper palette). Key name is identical on desktop so restored
+    // backups stay symmetric across platforms.
+    val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")
 
     // ---- Everything the user wrote or configured: encrypted at rest ----
     //
@@ -297,6 +304,11 @@ class SettingsRepository(private val context: Context) {
     // the system font — see ui/LucentFonts.
     val font: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.FONT] ?: "system" }
 
+    // Material You dynamic colour (task 2): when on, the whole app re-resolves from the system
+    // wallpaper palette (Android 12+). Off by default; the OS version is the caller's gate.
+    val dynamicColorEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] ?: false }
+
     /** The three display preferences read together, for the pre-first-frame startup snapshot. */
     data class DisplayPrefs(val themeMode: String, val palette: String, val font: String)
 
@@ -348,6 +360,11 @@ class SettingsRepository(private val context: Context) {
         // effect off would open with drifting blobs and only go still a beat later — exactly the
         // splash/app mismatch this synchronous read exists to prevent.
         val backgroundAnimationEnabled: Boolean = true,
+        // Material You dynamic colour (task 2). First-frame state in the strictest sense: if the
+        // first frame were composed in the saved theme and only snapped to the wallpaper palette a
+        // beat later, the "no theme flash" guarantee this whole read exists for would be broken the
+        // moment the user turns the switch on. Rides here at no extra cost, like every other field.
+        val dynamicColor: Boolean = false,
         // Round R1, task 2. The home lists' sort keys. First-frame state in the strictest sense:
         // reading them late did not merely show the wrong label, it laid the list out in the wrong
         // ORDER and then animated it into the right one on every launch. See SettingsCache.
@@ -373,6 +390,7 @@ class SettingsRepository(private val context: Context) {
             appLanguage = prefs[SettingsKeys.APP_LANGUAGE] ?: "system",
             assistantName = secret(prefs, SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, "Lucent"),
             backgroundAnimationEnabled = prefs[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true,
+            dynamicColor = prefs[SettingsKeys.DYNAMIC_COLOR_ENABLED] ?: false,
             notesSort = prefs[SettingsKeys.NOTES_SORT] ?: "recent",
             tasksSort = prefs[SettingsKeys.TASKS_SORT] ?: "recent",
             sessionSnapshot = prefs[SettingsKeys.SESSION_SNAPSHOT] ?: ""
@@ -854,6 +872,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemeMode(value: String) { context.settingsDataStore.edit { it[SettingsKeys.THEME_MODE] = value } }
     suspend fun setPalette(value: String) { context.settingsDataStore.edit { it[SettingsKeys.PALETTE] = value } }
     suspend fun setFont(value: String) { context.settingsDataStore.edit { it[SettingsKeys.FONT] = value } }
+    suspend fun setDynamicColorEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] = value }
+    }
     suspend fun setAttachmentsMigrated(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.ATTACHMENTS_MIGRATED] = value } }
     /** Set or clear the backup password. A blank value removes it entirely. */
     suspend fun setBackupPassword(value: String) {

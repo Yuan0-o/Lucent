@@ -115,6 +115,9 @@ fun main() {
     }
     AppScope.io.launch { runCatching { AttachmentAccess.clearPreviewCache(context) } }
     AppScope.io.launch { runCatching { com.lucent.app.data.AppDatabase.getInstance(context) } }
+    // Arm the auto-backup polling loop at startup (idempotent; Settings -> Data arms it too), so a
+    // configured auto-backup survives cold starts instead of waiting for that page to be visited.
+    AppScope.io.launch { runCatching { com.lucent.app.data.AutoBackupRunner.ensureStarted(context) } }
 
     application {
         val windowState = rememberWindowState(placement = WindowPlacement.Maximized)
