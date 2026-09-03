@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // Kotlin support is BUILT INTO AGP 9 (kotl.in/gradle/agp-built-in-kotlin): the
+    // org.jetbrains.kotlin.android plugin is deliberately NOT applied any more.
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
@@ -43,7 +44,7 @@ val ciVersionName = (project.findProperty("versionName") as String?)
 
 android {
     namespace = "com.lucent.app"
-    compileSdk = 37
+    compileSdk = 36 // AGP 9.4 supports up to API 37; pinned to the newest STABLE platform the default SDK channel serves
 
     // Native code arrives with the local-model feature (llama.cpp via CMake) and the Rust
     // acceleration library. NDK 28.2 is what AGP 9.4 defaults to; CI installs the same build.
@@ -59,7 +60,7 @@ android {
         // from minSdk. So the default (GPU) build needs minSdk 28; a -PcpuOnly build has no Vulkan and
         // keeps the wider Android 8.0 (API 26) reach.
         minSdk = if (project.hasProperty("cpuOnly")) 26 else 28
-        targetSdk = 37
+        targetSdk = 36
         versionCode = ciVersionCode
         versionName = ciVersionName
 
