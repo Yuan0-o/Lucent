@@ -87,19 +87,65 @@ jobs:
       # cipher-check and packaging steps below, leaving them almost nothing to fetch. A genuine
       # compile error also surfaces here (after the retries, unavoidably — a script can't tell a
       # flaky repository from a broken build) instead of a quarter hour later. Same red, earlier.
-      - name: Resolve Gradle plugins + dependencies, compile :desktop (retried)
+      # W-6 (2026-09-02 post-mortem): the warm-up used to retry exactly 4 times at a fixed 45 s —
+      # about 5 minutes of wall coverage. That morning all three artifact repositories (Google,
+      # Maven Central, the Gradle Plugin Portal) were unreachable from the Windows runner for
+      # ~13 minutes: every attempt died on "Plugin ... was not found in any of the following
+      # sources / could not resolve plugin artifact ..." and the job went red although nothing in
+      # the repo had changed (the same commit went green 13 minutes later). Retrying longer is only
+      # safe if the script knows WHAT failed, so it now classifies the failure from the log text: a
+      # network/repository marker buys another attempt with escalating backoff (total wall coverage
+      # well beyond the observed 13-minute outage), while a genuine compile error fails the job
+      # immediately instead of burning the runner on doomed retries.
+      - name: Resolve Gradle plugins + dependencies, compile :desktop (network-aware retries)
         shell: pwsh
         run: |
-          $max = 4
-          for ($i = 1; $i -le $max; $i++) {
-            gradle :desktop:compileKotlin --no-daemon --stacktrace
-            if ($LASTEXITCODE -eq 0) { Write-Host "Gradle warm-up OK on attempt $i."; exit 0 }
-            if ($i -lt $max) {
-              Write-Warning "Gradle warm-up attempt $i failed (exit $LASTEXITCODE). Transient repository errors (like the dl.google.com flake of 2026-07-22) usually clear; retrying in 45 s."
-              Start-Sleep -Seconds 45
+          $maxAttempts = 6
+          # Backoff (seconds) between attempts 1-2, 2-3, ... 5-6. Escalating on purpose: a short
+          # repository blip clears quickly, the long outage of 2026-09-02 needed ~13 minutes.
+          $backoffSeconds = @(45, 60, 120, 240, 300)
+          # Log fragments that mean "the network/repository layer failed" - worth a retry. This
+          # list leads with exactly the failure text seen on 2026-09-02, followed by the usual
+          # Gradle transport errors. Anything else (a Kotlin compile error, a missing SDK
+          # component, disk space...) is a REAL build problem and must not be retried.
+          $networkMarkers = @(
+            'was not found in any of the following sources',
+            'Could not resolve plugin artifact',
+            'Could not GET', 'Could not HEAD', 'Could not POST',
+            'Read timed out', 'timed out',
+            'Connection refused', 'Connection reset', 'Connection timed out',
+            'Remote host terminated the handshake',
+            'Premature end of Content-Length',
+            'SSLHandshakeException', 'SSLPeerUnverifiedException',
+            'Unexpected end of file from server',
+            'repository was unavailable', 'marked the repository unavailable',
+            'Received status code 5', 'Received status code 429'
+          )
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            # Tee keeps the live log flowing while also giving us the text to classify.
+            $lines = @()
+            gradle :desktop:compileKotlin --no-daemon --stacktrace 2>&1 | Tee-Object -Variable lines
+            $code = $LASTEXITCODE
+            if ($code -eq 0) { Write-Host "Gradle warm-up OK on attempt $i."; exit 0 }
+            $text = $lines | Out-String
+            $isNetwork = $false
+            foreach ($marker in $networkMarkers) {
+              if ($text.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $isNetwork = $true
+                break
+              }
+            }
+            if (-not $isNetwork) {
+              Write-Error "Gradle warm-up attempt $i failed (exit $code) with an error that does not match any network/repository marker - see the full output above. Treated as a genuine build problem; NOT retried."
+              exit 1
+            }
+            if ($i -lt $maxAttempts) {
+              $wait = $backoffSeconds[$i - 1]
+              Write-Warning "Gradle warm-up attempt $i failed (exit $code) with a repository/network error (like the multi-repo outage of 2026-09-02). Retrying in $wait s (attempt $($i + 1) of $maxAttempts)."
+              Start-Sleep -Seconds $wait
             }
           }
-          Write-Error "Gradle warm-up failed after $max attempts - see the last stacktrace above. If the same error repeats on every attempt, it is a real build problem, not a flake."
+          Write-Error "Gradle warm-up failed after $maxAttempts attempts - every failure matched a network/repository marker. See the last stacktrace above. If the artifact repositories stay unreachable this long, re-run the workflow once GitHub's infrastructure recovers."
           exit 1
 
       # ---- llama.cpp source, fetched up front with retries (pinned b9888) ----
