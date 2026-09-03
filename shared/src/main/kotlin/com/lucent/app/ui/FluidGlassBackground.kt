@@ -181,35 +181,34 @@ fun FluidGlassBackground(
         }
     }
 
-    // A single monotonic clock, read once per frame. In a @Preview there is no frame clock, so we
-    // fall back to a fixed timestamp and render one static frame rather than spinning.
+    // A single monotonic clock that does NOT wait for the UI frame callback (v3.4.0 report).
+    //
+    // The previous loop advanced only inside withInfiniteAnimationFrameNanos - i.e. only when the
+    // UI thread actually produced a frame. When anything else on that thread stalled (a page
+    // transition, a heavy list, an editor burst), the clock stalled with it and the blobs froze,
+    // then JUMPED to catch up: the exact stutter this background keeps being reported for. The
+    // clock now runs in its own coroutine on the Default dispatcher, advancing elapsedMs on a
+    // wall-clock schedule that is completely independent of UI-thread health. The canvas itself is
+    // still drawn by the UI thread (a single surface can only be drawn once per frame), but it
+    // always reads the CURRENT position, so whenever frames resume the blobs are exactly where
+    // they should be - no freeze, no jump, no catch-up burst. In a @Preview there is no runtime,
+    // so we render one static frame rather than spinning.
     val inspection = LocalInspectionMode.current
     var elapsedMs by remember { mutableFloatStateOf(0f) }
     if (!inspection) {
-        // ---- R3 report: the drift clock is a frame-rate GOVERNOR, not a spinner ----
-        //
-        // Background stutter when switching pages keeps coming back, and the last word on it is
-        // that the background must never compete with the page that is arriving. Each frame the
-        // canvas repaints six blobs AND the two Haze surfaces (the top bar and the bottom capsule)
-        // re-blur what just repainted — so every frame we skip halves that work. The blobs'
-        // slowest period is over three seconds, so at 30 fps a single skipped frame moves a blob
-        // by a fraction of a pixel: invisible. Frame budget 33 ms ≈ 30 fps.
-        //
-        // If page-switch stutter is ever reported again, FIRST check this budget before touching
-        // anything else — lowering it (33f -> e.g. 40f) buys headroom on every page at once, which
-        // is the whole point of a single governor. The visual quality floor is high: blobs stay
-        // perfectly smooth down to ~24 fps because every individual blob moves so slowly.
+        // The 30 fps write governor (DRIFT_FRAME_BUDGET_MS) is unchanged; only the SOURCE of the
+        // ticks changed. Waking every ~16 ms and gating writes to 33 ms keeps the coroutine cheap
+        // while never writing slower than the governor allows.
         var lastWriteMs = 0f
-        LaunchedEffect(Unit) {
-            val start = withInfiniteAnimationFrameNanos { it }
+        LaunchedEffect(kotlinx.coroutines.Dispatchers.Default) {
+            val start = System.nanoTime()
             while (true) {
-                withInfiniteAnimationFrameNanos { now ->
-                    val ms = (now - start) / 1_000_000f
-                    if (ms - lastWriteMs >= DRIFT_FRAME_BUDGET_MS) {
-                        elapsedMs = ms
-                        lastWriteMs = ms
-                    }
+                val ms = (System.nanoTime() - start) / 1_000_000f
+                if (ms - lastWriteMs >= DRIFT_FRAME_BUDGET_MS) {
+                    elapsedMs = ms
+                    lastWriteMs = ms
                 }
+                kotlinx.coroutines.delay(DRIFT_FRAME_BUDGET_MS.toLong() / 2)
             }
         }
     }

@@ -614,11 +614,10 @@ private fun Path.union(other: Path): Path = Path.combine(PathOperation.Union, th
 // against hard-coded numbers scattered through the drawing code.
 // SPEED: overall launch-animation speed. A factor below 1 makes the whole sequence quicker; every
 // duration below is multiplied by it, so the relative timing of the phases is preserved exactly.
-// HISTORY (do not let this regress again): 1.0 -> 0.9 -> 0.85 -> 0.8. The launch animation keeps
-// being reported as "too long" after every release, so it is tuned DOWN on purpose: when the
-// sequence is complained about again, change ONLY this constant (0.8 -> e.g. 0.75) and leave every
-// phase below untouched — they all scale together.
-private const val SPEED = 0.8f
+// HISTORY (do not let this regress again): 1.0 -> 0.9 -> 0.85 -> 0.8 -> 0.615. 0.615 makes the
+// whole sequence run 1.3x FASTER than 0.8 did (0.8 / 1.3). When the launch is complained about
+// again, change ONLY this constant and leave every phase below untouched - they all scale.
+private const val SPEED = 0.615f
 private const val TOTAL_MS = 7700f * SPEED
 private const val ENTER_MS = 700f * SPEED
 private const val WAVE_END_MS = 2600f * SPEED     // paws wave from ENTER_MS up to here
