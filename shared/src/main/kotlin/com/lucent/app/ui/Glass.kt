@@ -296,19 +296,22 @@ const val RANDOM_SWITCH_MS = 20_000L
 @androidx.compose.runtime.Composable
 fun rememberRandomPaletteColors(): List<Color> {
     val boards = LucentPalette.entries
-    var shown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-    var colors by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(boards.first().colors) }
+    // Plain MutableState holders instead of `by` delegates: this file does not import the
+    // androidx.compose.runtime getValue/setValue extensions, and full qualification reads better
+    // than an import list that exists for two lines.
+    val shown = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    val colors = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(boards.first().colors) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(RANDOM_SWITCH_MS)
             var next = boards.random()
             var guard = 0
-            while (next.name == shown && guard++ < 8) next = boards.random()
-            shown = next.name
-            colors = next.colors
+            while (next.name == shown.value && guard++ < 8) next = boards.random()
+            shown.value = next.name
+            colors.value = next.colors
         }
     }
-    return colors
+    return colors.value
 }
 
 /**
