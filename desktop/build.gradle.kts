@@ -74,7 +74,7 @@ dependencies {
     // `cipherSelfCheck` CI step still proves the driver Gradle resolves really encrypts before
     // anything is packaged. When bumping, pick an EXACT version from
     //   https://central.sonatype.com/artifact/io.github.willena/sqlite-jdbc/versions
-    // (latest as of 2026-07-22 is 3.53.2.0).
+    // (latest as of 2026-09 is 3.53.4.0).
     // NEVER fall back to org.xerial here — that silently ships an unencrypted store, and the
     // self-check below will (rightly) fail the build in red if anyone tries.
     implementation("io.github.willena:sqlite-jdbc:3.53.4.0")
@@ -144,9 +144,9 @@ compose.desktop {
             // clear/redraw and full-screen fixes.
                         // 2.3.5 - the engineering release (multi-attachment chat, shared i18n, toolchain
             // upgrades). Bumped so WiX upgrades 2.3.0 installs in place.
-                        // 3.4.0 - see the note beside Android's MARKETING_VERSION; bumped so WiX upgrades
+                        // 2.4.0 - see the note beside Android's MARKETING_VERSION; bumped so WiX upgrades
             // 2.3.x installs in place.
-            packageVersion = "3.4.0"
+            packageVersion = "2.4.0"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with

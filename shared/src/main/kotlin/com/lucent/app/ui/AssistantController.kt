@@ -2500,7 +2500,7 @@ object AssistantController {
             // (The language rule above is the ONE canonical statement of reply language. A second,
             // looser restatement used to follow here after the tone rules and drifted out of sync with
             // it; only the canonical rule remains so the prompt says every behavioural rule exactly
-            // once - v3.4.0 prompt cleanup.)
+            // once - v2.4.0 prompt cleanup.)
 
             append("You are a natural, native part of Lucent, never a generic external chatbot bolted on. ")
             append("Lucent lets the person keep NOTES and TASKS, search them by name and by date, attach ")

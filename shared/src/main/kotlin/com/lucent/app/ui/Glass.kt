@@ -266,7 +266,7 @@ fun formatDateRange(startMillis: Long, endMillis: Long): String {
 }
 
 /**
- * Which section a palette is shown under in the appearance picker (v3.4.0 redesign).
+ * Which section a palette is shown under in the appearance picker (v2.4.0 redesign).
  *
  * The background palettes used to live in SOLID/GRADIENT/CLASSIC; they now live in EIGHT style
  * families, each with a deliberately different character, and each family holds close to the same
@@ -288,7 +288,7 @@ const val PALETTE_RANDOM = "RANDOM"
 const val RANDOM_SWITCH_MS = 20_000L
 
 /**
- * Colours for the "Random" background option (v3.4.0): a different palette every
+ * Colours for the "Random" background option (v2.4.0): a different palette every
  * [RANDOM_SWITCH_MS], chosen uniformly from all 126 colours' boards and never equal to the one
  * currently showing. The switch itself is a palette change; the drifting blobs continue smoothly
  * around it because they rebuild their brushes from the new palette exactly as a manual pick does.
@@ -312,7 +312,7 @@ fun rememberRandomPaletteColors(): List<Color> {
 }
 
 /**
- * Display title for one appearance-picker section (v3.4.0: eight style families). Kept next to
+ * Display title for one appearance-picker section (v2.4.0: eight style families). Kept next to
  * the enum so a new section cannot exist without its four-language name.
  */
 fun PaletteGroup.title(): String = when (this) {

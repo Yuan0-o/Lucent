@@ -543,7 +543,7 @@ jobs:
             Remove-Item $pfx -ErrorAction SilentlyContinue
           }
 
-      # v3.4.0: hand the release its final name on the runner, so the artifact is already
+      # v2.4.0: hand the release its final name on the runner, so the artifact is already
       # "Lucent.for.Windows-<version>.exe" when it leaves the pipeline.
       - name: Rename installer to the release asset name
         shell: pwsh

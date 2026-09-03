@@ -337,7 +337,7 @@ jobs:
           echo "Signature verified — this is a signed RELEASE build."
 
       - name: Rename APK to the release asset name
-        # v3.4.0: the release asset name is decided here, on the runner, so the artifact is
+        # v2.4.0: the release asset name is decided here, on the runner, so the artifact is
         # already "Lucent.for.Android-<version>.apk" when it leaves the pipeline. The version
         # is the workflow's "Version name" input when provided, else MARKETING_VERSION.
         run: |

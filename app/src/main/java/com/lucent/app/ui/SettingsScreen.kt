@@ -3857,7 +3857,7 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
 
-                // Random (v3.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
+                // Random (v2.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
                 // Random jumps to a different palette every RANDOM_SWITCH_MS. The row carries the
                 // small hint so the behaviour is discoverable without opening anything.
                 Column(
@@ -3886,7 +3886,7 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
 
-                // Palettes grouped by style family (v3.4.0: eight sections), each with a small
+                // Palettes grouped by style family (v2.4.0: eight sections), each with a small
                 // colour preview. The sections come straight from the enum, so a new family can
                 // never exist without its title and its picker section.
                 PaletteGroup.entries.forEach { group ->

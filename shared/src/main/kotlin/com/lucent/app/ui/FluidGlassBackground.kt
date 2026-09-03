@@ -181,7 +181,7 @@ fun FluidGlassBackground(
         }
     }
 
-    // A single monotonic clock that does NOT wait for the UI frame callback (v3.4.0 report).
+    // A single monotonic clock that does NOT wait for the UI frame callback (v2.4.0 report).
     //
     // The previous loop advanced only inside withInfiniteAnimationFrameNanos - i.e. only when the
     // UI thread actually produced a frame. When anything else on that thread stalled (a page
@@ -357,7 +357,7 @@ fun rememberCyclingPaletteColors(
     var phase by remember { mutableFloatStateOf(0f) } // 0f..n, wrapping
     if (!inspection) {
         LaunchedEffect(n, secondsPerPalette, kotlinx.coroutines.Dispatchers.Default) {
-            // v3.4.0: like the background clock itself, the cycle phase advances from WALL time on
+            // v2.4.0: like the background clock itself, the cycle phase advances from WALL time on
             // its own dispatcher instead of waiting for UI frames - page transitions and heavy UI
             // work can no longer freeze or jump the auto-cycle either.
             val start = System.nanoTime()

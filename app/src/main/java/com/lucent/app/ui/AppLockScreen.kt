@@ -144,7 +144,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
-    // v3.4.0: every red error hint is TRANSIENT - it disappears three seconds after the LAST time
+    // v2.4.0: every red error hint is TRANSIENT - it disappears three seconds after the LAST time
     // it was set, so a user hammering wrong passwords can never keep a stale banner pinned on
     // screen (each fresh failure restarts the three-second clock). The lockout countdown is a
     // separate, live line that ticks down once per second and clears itself when it reaches zero.

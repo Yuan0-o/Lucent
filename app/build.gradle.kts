@@ -40,9 +40,9 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // single-shared i18n catalogue (Android + Windows), the byte-identical twins moved into
 // shared/, and the toolchain brought to the newest official versions (Gradle 9.7.1,
 // AGP 9.4.0, Kotlin 2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2).
-// 3.4.0 - themes 32, backgrounds in 8 families with Random mode, 1.3x faster launch, a
+// 2.4.0 - themes 32, backgrounds in 8 families with Random mode, 1.3x faster launch, a
 // UI-independent background clock, live lockout countdowns, and the single-i18n catalogue.
-val MARKETING_VERSION = "3.4.0"
+val MARKETING_VERSION = "2.4.0"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
