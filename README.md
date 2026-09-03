@@ -187,7 +187,24 @@ rust/         The Rust accelerator (shared across platforms)
 
 Everything user-visible is localised through `i18n/I18n.kt` — one catalogue, four languages,
 compile-checked keys — and those translation tables are where the interface's every word actually
-lives.
+lives. The catalogue itself is a SINGLE shared file now: the Android and desktop copies were
+merged, so a new string is added exactly once.
+
+## Toolchain
+
+Everything builds on the newest official versions (September 2026): Gradle 9.7.1, AGP 9.4.0,
+Kotlin 2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2. Android compiles against API 36:
+the API 37 platform is not yet on any SDK channel, so Android-facing dependencies are pinned to the
+newest versions whose AAR metadata still accepts compileSdk 36.
+
+## What stays per platform, and why
+
+`shared/` holds everything that can be shared. A short list of files deliberately remains once per
+platform, each for a real reason, and it never grows on purpose: `SettingsRepository` (Android
+DataStore vs desktop preferences), `Daos`/`Db` (Room vs JDBC), `Entities` (Room annotations),
+`DocumentExport` (PdfDocument vs PDFBox), and the large screens whose platform seams run deep.
+Whenever one of those seams can be removed, it is — the single-point rule is the default, and the
+exceptions are the ones listed here.
 
 ## With thanks to the giants whose shoulders these are
 
