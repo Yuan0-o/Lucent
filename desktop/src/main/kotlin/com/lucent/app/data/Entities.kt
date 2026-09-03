@@ -101,6 +101,12 @@ data class ChatMessage(
     val attachmentMime: String? = null,
     val attachmentData: String? = null,
     val attachmentName: String? = null,
+    // Multiple-attachment support (R3 task #15): a JSON array (see Attachments.serialize/parse)
+    // holding EVERY attachment of this message. The three legacy columns above stay populated with
+    // the FIRST attachment so pre-existing readers never break; readers that understand multiple
+    // files use the merged view (see ChatMessage.allAttachments) instead. Null on rows created
+    // before schema v16 and whenever a message has at most one attachment.
+    val attachmentList: String? = null,
     val conversationId: Long = 1,
     // Approximate tokens this turn cost — see data/TokenEstimator.kt.
     val tokens: Int = 0,

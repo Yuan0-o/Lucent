@@ -581,7 +581,8 @@ object AssistantController {
     // same message without inserting a duplicate row (insertUserMessage = false below).
     private data class LastSend(
         val text: String, val attachmentMime: String?, val attachmentData: String?,
-        val attachmentName: String?, val url: String, val spec: ApiSpec, val key: String,
+        val attachmentName: String?, val attachmentListJson: String?,
+        val url: String, val spec: ApiSpec, val key: String,
         val model: String, val name: String, val style: String,
         val memoryTier: MemoryTier, val webSearchEnabled: Boolean, val typingHaptics: Boolean,
         val useLocalModel: Boolean = false,
@@ -613,6 +614,7 @@ object AssistantController {
         send(
             ctx, p.text, p.attachmentMime, p.attachmentData, p.attachmentName, p.url, p.spec,
             p.key, p.model, p.name, p.style, p.memoryTier, p.webSearchEnabled, p.typingHaptics,
+            attachmentListJson = p.attachmentListJson,
             insertUserMessage = false, useLocalModel = p.useLocalModel,
             useLocalTools = p.useLocalTools, useLocalGpu = p.useLocalGpu,
             confirmTools = p.confirmTools,
@@ -829,6 +831,8 @@ object AssistantController {
             attachmentMime = message.attachmentMime,
             attachmentData = message.attachmentData,
             attachmentName = message.attachmentName,
+            // A resent message keeps whatever multiple attachments it was sent with.
+            attachmentListJson = message.attachmentList,
             url = url, spec = spec, key = key, model = model,
             name = name, style = style,
             memoryTier = memoryTier,
@@ -896,7 +900,14 @@ object AssistantController {
         // Non-null only on the Retry path: the conversation the failed turn belongs to, so the
         // re-run writes there even if the user has since moved to another chat. A fresh send
         // always targets the conversation currently on screen.
-        targetConversationId: Long? = null
+        targetConversationId: Long? = null,
+        // JSON list of a message's multiple attachments (R3 task #15). Populated on resend/retry so
+        // the re-run keeps the exact files the original message carried; a fresh send passes
+        // emptyList through [attachments] instead and never sets this.
+        attachmentListJson: String? = null,
+        // Every attachment of a fresh send, in order (R3 task #15). The first entry also populates
+        // the legacy single-attachment columns; entries beyond the first live only in the JSON list.
+        attachments: List<com.lucent.app.data.Attachment> = emptyList()
     ) {
         val targetKey = targetConversationId ?: currentConversationId
         // One turn PER CONVERSATION: if this conversation is already generating, the button on its
@@ -907,7 +918,10 @@ object AssistantController {
         typingHapticsOn = typingHapticsEnabled
         val turn = Turn(initialConversationId = targetKey, isLocal = useLocalModel)
         turn.params = LastSend(
-            text, attachmentMime, attachmentData, attachmentName, url, spec, key, model,
+            text, attachmentMime, attachmentData, attachmentName,
+            if (attachments.size > 1) com.lucent.app.data.Attachments.serialize(attachments)
+            else attachmentListJson,
+            url, spec, key, model,
             name, style, memoryTier, webSearchEnabled, typingHapticsEnabled, useLocalModel,
             useLocalTools, useLocalGpu, confirmTools, smallModelMode, answersMessageId
         )
@@ -953,6 +967,11 @@ object AssistantController {
                             attachmentMime = attachmentMime,
                             attachmentData = attachmentData,
                             attachmentName = attachmentName,
+                            // R3 task #15: fresh sends carry their files as a list; the first one
+                            // stays in the legacy trio above, extras live in this JSON column.
+                            attachmentList =
+                                if (attachments.size > 1) com.lucent.app.data.Attachments.serialize(attachments)
+                                else attachmentListJson,
                             conversationId = conversationId
                         )
                     )

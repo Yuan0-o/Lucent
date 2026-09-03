@@ -225,3 +225,38 @@ object Attachments {
         return (base64.length.toLong() * 3 / 4) - padding
     }
 }
+
+/**
+ * Chat-message attachments (R3 task #15): one view over the two storage shapes a message can be in.
+ *
+ * A message with several files stores ALL of them in a JSON list column, while its three legacy
+ * columns keep the first file so pre-v16 readers still see it. A message from before the multi-file
+ * column existed has only the legacy trio. This object merges both shapes into one list so no
+ * reader has to remember which era a row came from.
+ */
+object ChatAttachments {
+
+    /**
+     * Every attachment on a message, in send order. Returns an empty list when the message has
+     * none. New rows (JSON list present) return exactly that list; legacy rows fall back to the
+     * single-attachment trio.
+     */
+    fun all(
+        primaryMime: String?,
+        primaryData: String?,
+        primaryName: String?,
+        listJson: String?
+    ): List<Attachment> {
+        val stored = Attachments.parse(listJson)
+        if (stored.isNotEmpty()) return stored
+        if (primaryData.isNullOrBlank()) return emptyList()
+        return listOf(Attachment(primaryMime ?: "application/octet-stream", primaryData, primaryName ?: "file"))
+    }
+
+    /**
+     * The JSON-list value a writer should persist for [list]: null when the list has at most one
+     * entry (the legacy trio alone can carry it), the serialized array otherwise.
+     */
+    fun listJsonFor(list: List<Attachment>): String? =
+        if (list.size > 1) Attachments.serialize(list) else null
+}

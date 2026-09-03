@@ -77,6 +77,7 @@ private fun messageOf(rs: ResultSet) = ChatMessage(
     attachmentMime = rs.stringOrNull("attachmentMime"),
     attachmentData = rs.stringOrNull("attachmentData"),
     attachmentName = rs.stringOrNull("attachmentName"),
+    attachmentList = rs.stringOrNull("attachmentList"),
     conversationId = rs.getLong("conversationId"),
     tokens = rs.getInt("tokens"),
     replyToId = rs.getLong("replyToId")
@@ -598,13 +599,13 @@ class ChatDao internal constructor(private val db: Db) {
     suspend fun insert(message: ChatMessage): Long = db.write("chat_messages") { c ->
         val ps = c.prepareStatement(
             "INSERT INTO chat_messages (role, content, timestamp, attachmentMime, attachmentData, " +
-                "attachmentName, conversationId, tokens, replyToId) VALUES (?,?,?,?,?,?,?,?,?)",
+                "attachmentName, attachmentList, conversationId, tokens, replyToId) VALUES (?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, message.role); ps.setString(2, message.content); ps.setLong(3, message.timestamp)
         ps.bindStringOrNull(4, message.attachmentMime); ps.bindStringOrNull(5, message.attachmentData)
-        ps.bindStringOrNull(6, message.attachmentName); ps.setLong(7, message.conversationId)
-        ps.setInt(8, message.tokens); ps.setLong(9, message.replyToId)
+        ps.bindStringOrNull(6, message.attachmentName); ps.bindStringOrNull(7, message.attachmentList)
+        ps.setLong(8, message.conversationId); ps.setInt(9, message.tokens); ps.setLong(10, message.replyToId)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }

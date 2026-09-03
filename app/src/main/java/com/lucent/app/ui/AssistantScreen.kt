@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
@@ -232,13 +233,9 @@ fun AssistantScreen(active: Boolean = true) {
      * and one viewer now serves all three surfaces.
      */
     val chatAttachments = remember(messages) {
-        messages.mapNotNull { m ->
-            val data = m.attachmentData
-            if (data.isNullOrBlank()) null else com.lucent.app.data.Attachment(
-                mime = m.attachmentMime ?: "application/octet-stream",
-                data = data,
-                name = m.attachmentName ?: "attachment"
-            )
+        messages.flatMap { m ->
+            com.lucent.app.data.ChatAttachments.all(
+                m.attachmentMime, m.attachmentData, m.attachmentName, m.attachmentList)
         }
     }
     val savedUrl by repo.baseUrl.collectAsState(initial = "")
@@ -272,7 +269,7 @@ fun AssistantScreen(active: Boolean = true) {
 
     var input by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf("") }
-    var pendingAttachment by remember { mutableStateOf<PendingAttachment?>(null) }
+    var pendingAttachments by remember { mutableStateOf<List<PendingAttachment>>(emptyList()) }
     // Tasks A1/A3/A24. Which chat attachment, if any, is open in the shared full-screen viewer.
     var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
 
@@ -589,7 +586,8 @@ fun AssistantScreen(active: Boolean = true) {
             val prepared = uriToChatImage(context, uri)
             if (prepared != null) {
                 val (outMime, base64, name) = prepared
-                pendingAttachment = PendingAttachment(outMime, base64, name)
+                // R3 task #15: attachments queue up instead of replacing one another.
+                pendingAttachments = pendingAttachments + PendingAttachment(outMime, base64, name)
             }
         } else {
             val name = queryFileName(context, uri) ?: "file"
@@ -612,7 +610,7 @@ fun AssistantScreen(active: Boolean = true) {
             } catch (t: Throwable) { null }
             if (bytes != null) {
                 val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                pendingAttachment = PendingAttachment(mime, base64, name)
+                pendingAttachments = pendingAttachments + PendingAttachment(mime, base64, name)
             }
             val asText: String? = if (bytes != null && bytes.none { it.toInt() == 0 }) {
                 try { String(bytes, Charsets.UTF_8) } catch (t: Throwable) { null }
@@ -625,25 +623,25 @@ fun AssistantScreen(active: Boolean = true) {
         }
     }
 
-    // 1. Any local file — unchanged from before, still the default entry.
-    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) scope.launch { ingestAttachment(uri) }
+    // 1. Any local file(s) — multiple selection now queues them all (R3 task #15).
+    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+        uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
     // 2. Gallery. GetContent with an image/* filter rather than PickVisualMedia: the photo picker
     // is the nicer modern API, but GetContent is present on every API level this app supports and
     // lands in the same gallery UI, and an attachment picker is not the place to take a
     // compatibility risk for a cosmetic gain.
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) scope.launch { ingestAttachment(uri) }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+        uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
     // 3. Cloud storage — Google Drive, OneDrive, Dropbox and anything else that ships a
     // DocumentsProvider. OpenDocument (the Storage Access Framework) is what enumerates those
     // providers; GetContent lists apps that can hand over content and often hides them, which is
     // precisely why "attach from Drive" was not reachable before.
-    val cloudPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) scope.launch { ingestAttachment(uri) }
+    val cloudPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
     // 4. Camera. The photo is written to a FileProvider URI under cache/camera-capture (see
@@ -1354,70 +1352,35 @@ fun AssistantScreen(active: Boolean = true) {
                                     modifier = Modifier.padding(bottom = 3.dp)
                                 )
                             }
-                            msg.attachmentData?.let { base64 ->
-                                if (isUser) {
-                                    // R3 report (#15): chat attachments show their FILE NAME, not a
-                                    // full-width pixel preview — messages with files no longer fill
-                                    // the conversation with bitmaps, and a tap opens the shared
-                                    // viewer positioned on exactly this file. The bytes are decoded
-                                    // only when the viewer asks for them.
-                                    val fileName = msg.attachmentName ?: "image.png"
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(bottom = 8.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color.White.copy(alpha = 0.10f))
-                                            .clickable {
-                                                viewingAttachment = chatAttachments.firstOrNull { it.data == base64 }
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = onGradient)
-                                        Text(
-                                            fileName,
-                                            color = onGradient,
-                                            fontSize = 13.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false).padding(start = 6.dp)
-                                        )
-                                    }
-                                } else {
-                                    val fileName = msg.attachmentName ?: "image.png"
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(bottom = 8.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(Color.White.copy(alpha = 0.10f))
-                                            // A2's rule, applied here too: the row opens the file,
-                                            // and the one action the row can't express — download —
-                                            // keeps its own button. Tapping the row used to be
-                                            // *only* download, so a chat attachment could never be
-                                            // looked at without first saving it somewhere.
-                                            .clickable {
-                                                viewingAttachment = chatAttachments.firstOrNull { it.data == base64 }
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = onGradient)
-                                        Text(fileName, color = onGradient, fontSize = 13.sp, modifier = Modifier.weight(1f, fill = false).padding(start = 6.dp))
-                                        IconButton(
-                                            onClick = {
-                                                pendingSaveImage = base64 to fileName
-                                                imageSaveLauncher.launch(fileName)
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Download,
-                                                contentDescription = com.lucent.app.i18n.S.a11yDownloadFile(fileName),
-                                                tint = onGradient,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                            // R3 task #15: a message can carry several files. Render each as a
+                            // compact filename row — never a pixel preview — and a tap opens the
+                            // shared viewer positioned on exactly that file.
+                            val attachmentsAll = remember(msg.id, msg.attachmentData, msg.attachmentList) {
+                                com.lucent.app.data.ChatAttachments.all(
+                                    msg.attachmentMime, msg.attachmentData, msg.attachmentName, msg.attachmentList)
+                            }
+                            attachmentsAll.forEach { att ->
+                                val fileName = att.name.ifBlank { "file" }
+                                Row(
+                                    modifier = Modifier
+                                        .padding(bottom = 8.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.10f))
+                                        .clickable {
+                                            viewingAttachment = chatAttachments.firstOrNull { it.data == att.data }
                                         }
-                                    }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = onGradient)
+                                    Text(
+                                        fileName,
+                                        color = onGradient,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false).padding(start = 6.dp)
+                                    )
                                 }
                             }
 
@@ -1637,12 +1600,44 @@ fun AssistantScreen(active: Boolean = true) {
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             )
         }
-        if (pendingAttachment != null) {
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AttachFile, contentDescription = null, tint = onGradientMuted)
-                Text(pendingAttachment?.name ?: "", color = onGradientMuted, modifier = Modifier.weight(1f).padding(start = 4.dp))
-                IconButton(onClick = { pendingAttachment = null }) {
-                    Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yRemoveAttachment, tint = onGradientMuted)
+        if (pendingAttachments.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                pendingAttachments.forEachIndexed { index, att ->
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AttachFile, contentDescription = null, tint = onGradientMuted, modifier = Modifier.size(14.dp))
+                        Text(
+                            att.name,
+                            color = onGradientMuted,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                        IconButton(
+                            onClick = { pendingAttachments = pendingAttachments.filterIndexed { i, _ -> i != index } },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = com.lucent.app.i18n.S.a11yRemoveAttachment,
+                                tint = onGradientMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1781,8 +1776,10 @@ fun AssistantScreen(active: Boolean = true) {
                     modifier = Modifier.height(56.dp),
                     onClick = {
                         val text = input.trim()
-                        val attachment = pendingAttachment
-                        if (text.isBlank() && attachment == null) return@IconButton
+                        val attachments = pendingAttachments.map {
+                            com.lucent.app.data.Attachment(it.mime, it.data, it.name)
+                        }
+                        if (text.isBlank() && attachments.isEmpty()) return@IconButton
                         // Local mode is AUTHORITATIVE. Once "use local model" is on, the assistant
                         // replies on-device and the cloud API is frozen — the send path must never
                         // silently fall back to it (that was the "it still calls the API" bug). If
@@ -1795,7 +1792,7 @@ fun AssistantScreen(active: Boolean = true) {
                             return@IconButton
                         }
                         input = ""
-                        pendingAttachment = null
+                        pendingAttachments = emptyList()
                         localError = ""
                         autoScroll = true
                         val spec = when (savedSpecStr) {
@@ -1806,9 +1803,10 @@ fun AssistantScreen(active: Boolean = true) {
                         AssistantController.send(
                             appContext = context.applicationContext,
                             text = text,
-                            attachmentMime = attachment?.mime,
-                            attachmentData = attachment?.data,
-                            attachmentName = attachment?.name,
+                            attachmentMime = attachments.firstOrNull()?.mime,
+                            attachmentData = attachments.firstOrNull()?.data,
+                            attachmentName = attachments.firstOrNull()?.name,
+                            attachments = attachments,
                             url = savedUrl, spec = spec, key = savedKey, model = savedModel,
                             name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
                             memoryTier = MemoryTier.fromKey(memoryTierKey),
@@ -1938,9 +1936,15 @@ private fun DownloadFilesDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val hasText = message.content.isNotBlank()
-    val attName = message.attachmentName
-    val attData = message.attachmentData
-    val hasAttachment = !attData.isNullOrBlank() && attName != null
+    // R3 task #15: a reply can carry several files; each gets its own row and its own tick.
+    val messageAtts = remember(message.id, message.attachmentData, message.attachmentList) {
+        com.lucent.app.data.ChatAttachments.all(
+            message.attachmentMime, message.attachmentData, message.attachmentName, message.attachmentList)
+    }
+    val hasAttachment = messageAtts.isNotEmpty()
+    val selAtts = remember(message.id) {
+        mutableStateMapOf<Int, Boolean>().apply { messageAtts.indices.forEach { put(it, true) } }
+    }
     val textFileName = "lucent-reply.txt"
 
     // Files the reply REFERS to rather than carries (B-group task 7): a generated image, a hosted
@@ -1948,7 +1952,6 @@ private fun DownloadFilesDialog(
     val replyFiles = remember(message.id, message.content) { ReplyFiles.extract(message.content) }
 
     var selText by remember(message.id) { mutableStateOf(hasText) }
-    var selAtt by remember(message.id) { mutableStateOf(hasAttachment) }
     // Referenced files default to selected: the user opened this dialog because of them.
     val selRemote = remember(message.id) {
         mutableStateMapOf<String, Boolean>().apply { replyFiles.forEach { put(it.url, true) } }
@@ -1974,12 +1977,17 @@ private fun DownloadFilesDialog(
                     }
                 }
                 if (hasAttachment) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { selAtt = !selAtt }
-                    ) {
-                        Checkbox(checked = selAtt, onCheckedChange = { selAtt = it })
-                        Text(attName ?: com.lucent.app.i18n.S.a11yAttachment, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    messageAtts.forEachIndexed { idx, att ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { selAtts[idx] = !(selAtts[idx] ?: false) }
+                        ) {
+                            Checkbox(
+                                checked = selAtts[idx] ?: false,
+                                onCheckedChange = { selAtts[idx] = it }
+                            )
+                            Text(att.name.ifBlank { com.lucent.app.i18n.S.a11yAttachment }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
                 // Files the reply links to (B-group task 7) — listed exactly like a real attachment,
@@ -2023,7 +2031,8 @@ private fun DownloadFilesDialog(
                             onClick = {
                                 working = true; failure = ""
                                 scope.launch {
-                                    val ok = saveReplyIntoItem(context, message, replyFiles, selRemote, asTask = false)
+                                    val ok = saveReplyIntoItem(context, message, replyFiles, selRemote,
+                                        localAtts = messageAtts.filterIndexed { i, _ -> selAtts[i] == true }, asTask = false)
                                     working = false
                                     if (ok) onDismiss() else failure = com.lucent.app.i18n.S.downloadFetchFailed
                                 }
@@ -2034,7 +2043,8 @@ private fun DownloadFilesDialog(
                             onClick = {
                                 working = true; failure = ""
                                 scope.launch {
-                                    val ok = saveReplyIntoItem(context, message, replyFiles, selRemote, asTask = true)
+                                    val ok = saveReplyIntoItem(context, message, replyFiles, selRemote,
+                                        localAtts = messageAtts.filterIndexed { i, _ -> selAtts[i] == true }, asTask = true)
                                     working = false
                                     if (ok) onDismiss() else failure = com.lucent.app.i18n.S.downloadFetchFailed
                                 }
@@ -2047,7 +2057,7 @@ private fun DownloadFilesDialog(
         confirmButton = {
             val anyRemote = replyFiles.any { selRemote[it.url] == true }
             TextButton(
-                enabled = (selText || selAtt || anyRemote) && !working,
+                enabled = (selText || selAtts.values.any { it } || anyRemote) && !working,
                 onClick = {
                     // Referenced files have to be FETCHED before anything can be written, and that
                     // is network work — so the whole assembly moved into a coroutine off the main
@@ -2058,9 +2068,11 @@ private fun DownloadFilesDialog(
                     scope.launch {
                         val entries = mutableListOf<Pair<String, ByteArray>>()
                         if (selText && hasText) entries.add(textFileName to message.content.toByteArray())
-                        if (selAtt && hasAttachment) {
-                            val bytes = try { Base64.decode(attData, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
-                            entries.add((attName ?: "attachment") to bytes)
+                        // R3 task #15: every ticked local file, not just the legacy first one.
+                        messageAtts.forEachIndexed { idx, att ->
+                            if (selAtts[idx] != true) return@forEachIndexed
+                            val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
+                            entries.add((att.name.ifBlank { "attachment" }) to bytes)
                         }
                         var missed = 0
                         for (file in replyFiles) {
@@ -2111,6 +2123,8 @@ private suspend fun saveReplyIntoItem(
     message: ChatMessage,
     replyFiles: List<ReplyFiles.ReplyFile>,
     selected: Map<String, Boolean>,
+    // R3 task #15: the message's own ticked files, so a multi-file reply saves every chosen one.
+    localAtts: List<com.lucent.app.data.Attachment> = emptyList(),
     asTask: Boolean
 ): Boolean = withContext(Dispatchers.IO) {
     val db = AppDatabase.getInstance(context.applicationContext)
@@ -2121,7 +2135,7 @@ private suspend fun saveReplyIntoItem(
         ?.ifBlank { null }
         ?: com.lucent.app.i18n.S.conversationFallback
     val wanted = replyFiles.filter { selected[it.url] == true }
-    if (wanted.isEmpty()) {
+    if (wanted.isEmpty() && localAtts.isEmpty()) {
         // No file to attach: still save the answer itself rather than doing nothing.
         return@withContext ReplyFiles.saveToNewItem(
             context.applicationContext, db, asTask, title, message.content,
@@ -2129,6 +2143,14 @@ private suspend fun saveReplyIntoItem(
         )
     }
     var saved = 0
+    for (att in localAtts) {
+        val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
+        val ok = ReplyFiles.saveToNewItem(
+            context.applicationContext, db, asTask, title, message.content,
+            att.name, att.mime, bytes
+        )
+        if (ok) saved++
+    }
     for (file in wanted) {
         val bytes = ReplyFiles.fetch(file) ?: continue
         val mime = if (file.isImage) "image/*" else "application/octet-stream"
@@ -2151,14 +2173,15 @@ private fun buildChatExportEntries(messages: List<ChatMessage>, assistantName: S
         val time = fmt.format(java.util.Date(m.timestamp))
         sb.append("[").append(time).append("] ").append(who).append(":\n")
         sb.append(m.content).append("\n")
-        val data = m.attachmentData
-        if (!data.isNullOrBlank()) {
-            val entryName = "%02d_%s".format(attIndex, sanitizeExportName(m.attachmentName ?: "attachment"))
-            val bytes = try { Base64.decode(data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
-            entries.add(entryName to bytes)
-            sb.append("[attachment: ").append(entryName).append("]\n")
-            attIndex++
-        }
+        // R3 task #15: export every file the message carries, not just the legacy first one.
+        com.lucent.app.data.ChatAttachments.all(m.attachmentMime, m.attachmentData, m.attachmentName, m.attachmentList)
+            .forEach { att ->
+                val entryName = "%02d_%s".format(attIndex, sanitizeExportName(att.name.ifBlank { "attachment" }))
+                val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
+                entries.add(entryName to bytes)
+                sb.append("[attachment: ").append(entryName).append("]\n")
+                attIndex++
+            }
         sb.append("\n")
     }
     entries.add(0, "chat.txt" to sb.toString().toByteArray())

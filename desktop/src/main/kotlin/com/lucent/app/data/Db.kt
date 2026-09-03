@@ -83,7 +83,7 @@ class Db private constructor(private val connection: Connection) {
          * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
          * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
          */
-        private const val SCHEMA_VERSION = 15
+        private const val SCHEMA_VERSION = 16
 
         fun open(context: Context): Db {
             val file = File(context.applicationContext.filesDir, "lucent.db")
@@ -337,6 +337,9 @@ class Db private constructor(private val connection: Connection) {
                         // v15 (C group task 20, wired up during integration): rich-text sidecars.
                         15 -> addColumnIfMissing(conn, "notes", "bodySpans", "TEXT NOT NULL DEFAULT ''") &&
                             addColumnIfMissing(conn, "tasks", "notesSpans", "TEXT NOT NULL DEFAULT ''")
+                        // v16 (R3 task #15): multi-attachment chat messages — a nullable JSON list
+                        // beside the legacy single-attachment trio (see ChatMessage.allAttachments).
+                        16 -> addColumnIfMissing(conn, "chat_messages", "attachmentList", "TEXT")
                         else -> true   // no step for this version
                     }
                 } catch (t: Throwable) {

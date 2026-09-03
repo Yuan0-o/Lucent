@@ -259,6 +259,17 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
     }
 }
 
+/**
+ * v16 (R3 task #15): chat messages may carry several attachments. The extra files live in one
+ * nullable JSON column next to the legacy single-attachment trio; the trio keeps the first file,
+ * so old readers and old rows are unaffected.
+ */
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE chat_messages ADD COLUMN attachmentList TEXT")
+    }
+}
+
 @Database(
     entities = [
         Note::class,
@@ -268,7 +279,7 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
         ChatMessage::class,
         ChatConversation::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -316,7 +327,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                    MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
+                    MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
                 )
                 // dropAllTables = true preserves the old no-arg behaviour (every table is
                 // recreated) while using the non-deprecated overload.
