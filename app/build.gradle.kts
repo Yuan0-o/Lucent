@@ -130,9 +130,9 @@ android {
             // set). Editing a file there changes Android and Windows in the same commit — the old
             // twin-file mirror (app/ + desktop/ byte-identical copies enforced by check_twins.py)
             // is gone. Only genuinely platform-bound files remain in this module's own src dir.
-            // .kt files in a java.srcDir are compiled as Kotlin (the module's own tree has always
-            // been .kt under src/main/java); adding the shared dir the same way keeps that working.
-            java.srcDir(rootProject.file("shared/src/main/kotlin"))
+            // AGP 9's built-in Kotlin reads Kotlin directories from the kotlin source set, so the
+            // shared tree is added there (previously it rode along via java.srcDir under KGP).
+            kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
         }
     }
 
