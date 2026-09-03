@@ -142,7 +142,9 @@ compose.desktop {
             // armed before typing, drag-to-reorder actually taking effect, canonical note tags that
             // survive a language switch, scheduled backups wired end to end, and the whiteboard's
             // clear/redraw and full-screen fixes.
-            packageVersion = "2.3.0"
+                        // 2.3.5 - the engineering release (multi-attachment chat, shared i18n, toolchain
+            // upgrades). Bumped so WiX upgrades 2.3.0 installs in place.
+            packageVersion = "2.3.5"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with

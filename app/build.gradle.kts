@@ -36,7 +36,11 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // 2.0.0 — the three-group 1.x delivery, integrated. A major bump rather than 1.1.0 because the
 // database moves from schema 11 to 15 across four migrations and the on-disk shape is no longer
 // readable by a 1.0.0 build. The version people read should say that.
-val MARKETING_VERSION = "2.3.0"
+// 2.3.5 - the engineering release: true multi-file chat attachments end to end, the
+// single-shared i18n catalogue (Android + Windows), the byte-identical twins moved into
+// shared/, and the toolchain brought to the newest official versions (Gradle 9.7.1,
+// AGP 9.4.0, Kotlin 2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2).
+val MARKETING_VERSION = "2.3.5"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
