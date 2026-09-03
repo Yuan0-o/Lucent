@@ -1233,9 +1233,9 @@ fun AssistantScreen(active: Boolean = true) {
                 ) {
                     Icon(Icons.Default.Archive, contentDescription = com.lucent.app.i18n.S.a11yExportChat, tint = onGradient)
                 }
-                IconButton(onClick = { AssistantController.startNewConversation(context.applicationContext) }) {
-                    Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.newConversation, tint = onGradient)
-                }
+                // R3 report: the middle control of the three ("+", start a new conversation) is
+                // removed — with no conversation open the screen already lands on the greeting and
+                // a first message creates one, so the button duplicated what sending already did.
                 IconButton(
                     onClick = { showClearConfirm = true },
                     enabled = AssistantController.currentConversationId != null && messages.isNotEmpty()
@@ -1356,30 +1356,32 @@ fun AssistantScreen(active: Boolean = true) {
                             }
                             msg.attachmentData?.let { base64 ->
                                 if (isUser) {
-                                    val bitmap = remember(base64) {
-                                        val bytes = try {
-                                            Base64.decode(base64, Base64.DEFAULT)
-                                        } catch (t: Throwable) {
-                                            null
-                                        }
-                                        if (bytes != null) decodeSampledBitmap(bytes) else null
-                                    }
-                                    if (bitmap != null) {
-                                        Image(
-                                            bitmap = bitmap.asImageBitmap(),
-                                            contentDescription = com.lucent.app.i18n.S.a11yAttachment,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 8.dp)
-                                                // A3/A24: opens the shared viewer positioned on this
-                                                // file, so the rest of the conversation's
-                                                // attachments can be swiped through from here.
-                                                .clickable {
-                                                    viewingAttachment = chatAttachments.firstOrNull { it.data == base64 }
-                                                }
+                                    // R3 report (#15): chat attachments show their FILE NAME, not a
+                                    // full-width pixel preview — messages with files no longer fill
+                                    // the conversation with bitmaps, and a tap opens the shared
+                                    // viewer positioned on exactly this file. The bytes are decoded
+                                    // only when the viewer asks for them.
+                                    val fileName = msg.attachmentName ?: "image.png"
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(bottom = 8.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color.White.copy(alpha = 0.10f))
+                                            .clickable {
+                                                viewingAttachment = chatAttachments.firstOrNull { it.data == base64 }
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = onGradient)
+                                        Text(
+                                            fileName,
+                                            color = onGradient,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false).padding(start = 6.dp)
                                         )
-                                    } else {
-                                        Text(com.lucent.app.i18n.S.imageUnreadable, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
                                     }
                                 } else {
                                     val fileName = msg.attachmentName ?: "image.png"
@@ -1462,41 +1464,7 @@ fun AssistantScreen(active: Boolean = true) {
                             } else {
                                 Text(contentText, color = onGradient)
                             }
-                            if (isUser) {
-                                // Ask this question again (B-group task 12). On a user bubble
-                                // because that is where "send this again" belongs — it is the same
-                                // affordance whether the previous reply failed outright or simply
-                                // wasn't what was wanted.
-                                IconButton(
-                                    onClick = {
-                                        val useLocal = localModelEnabled
-                                        AssistantController.resend(
-                                            appContext = context.applicationContext,
-                                            message = msg,
-                                            url = savedUrl,
-                                            spec = when (savedSpecStr) {
-                                                "anthropic" -> ApiSpec.ANTHROPIC
-                                                "google" -> ApiSpec.GOOGLE
-                                                else -> ApiSpec.OPENAI
-                                            },
-                                            key = savedKey, model = savedModel,
-                                            name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
-                                            memoryTier = MemoryTier.fromKey(memoryTierKey),
-                                            webSearchEnabled = webSearchEnabled,
-                                            typingHapticsEnabled = typingHapticsEnabled,
-                                            useLocalModel = useLocal,
-                                            useLocalTools = localToolsEnabled,
-                                            useLocalGpu = localGpuEnabled,
-                                            confirmTools = confirmToolsEnabled,
-                                            smallModelMode = smallModelMode
-                                        )
-                                    },
-                                    enabled = !sending,
-                                    modifier = Modifier.height(28.dp).align(Alignment.End)
-                                ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = com.lucent.app.i18n.S.resendMessage, tint = onGradientMuted)
-                                }
-                            }
+                        }
                             if (!isUser) {
                                 // The 1/2 variant switcher (B-group task 12), shown only when this
                                 // answer actually has siblings — a single reply gets no chrome at all.
@@ -1547,6 +1515,44 @@ fun AssistantScreen(active: Boolean = true) {
                         }
                         }
                     }
+                    // ---- R3 report: "Ask again" lives OUTSIDE the user bubble ----
+                    // It used to sit inside the bubble under the text, where it read as part of the
+                    // message. It now hangs beneath the bubble's bottom-right edge, small, outside
+                    // the glass, and only while nothing is mid-send — still one tap from the
+                    // message it re-sends.
+                    if (isUser) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            IconButton(
+                                onClick = {
+                                    val useLocal = localModelEnabled
+                                    AssistantController.resend(
+                                        appContext = context.applicationContext,
+                                        message = msg,
+                                        url = savedUrl,
+                                        spec = when (savedSpecStr) {
+                                            "anthropic" -> ApiSpec.ANTHROPIC
+                                            "google" -> ApiSpec.GOOGLE
+                                            else -> ApiSpec.OPENAI
+                                        },
+                                        key = savedKey, model = savedModel,
+                                        name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
+                                        memoryTier = MemoryTier.fromKey(memoryTierKey),
+                                        webSearchEnabled = webSearchEnabled,
+                                        typingHapticsEnabled = typingHapticsEnabled,
+                                        useLocalModel = useLocal,
+                                        useLocalTools = localToolsEnabled,
+                                        useLocalGpu = localGpuEnabled,
+                                        confirmTools = confirmToolsEnabled,
+                                        smallModelMode = smallModelMode
+                                    )
+                                },
+                                enabled = !sending,
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = com.lucent.app.i18n.S.resendMessage, tint = onGradientMuted, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
                 }
                 if (streamingText != null) {
                     // Stable key (B-group task 15): an unkeyed item is identified by its POSITION,
@@ -1588,9 +1594,13 @@ fun AssistantScreen(active: Boolean = true) {
                 }
                 if (shownError.isNotBlank()) {
                     item(key = "error") {
+                        // R3 report: the error tint used to be a fixed pale pink that vanished
+                        // against the light theme's pale glass. Dark themes ink white (see the
+                        // LocalOnGradient provider), so the tint flips with the ink colour: pale
+                        // on dark, a strong red on light.
                         Text(
                             shownError,
-                            color = Color(0xFFFFC1C1),
+                            color = if (onGradient == Color.White) Color(0xFFFFC1C1) else Color(0xFFC62828),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).longPressCopy(context, shownError)
                         )
                     }

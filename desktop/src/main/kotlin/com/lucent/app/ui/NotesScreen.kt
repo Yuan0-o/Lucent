@@ -151,6 +151,11 @@ fun NotesScreen(active: Boolean = true) {
     // Archived notes are collected too so that a note opened from the archive screen can still be
     // resolved for its detail page (the `notes` list above excludes archived notes by design).
     val archivedNotes by remember { db.noteDao().getArchived() }.collectAsState(initial = emptyList())
+    // Hidden (private-area) notes are collected too, for the same reason: the two lists above
+    // exclude them at the SQL layer (hidden = 0), so without this third stream tapping a hidden
+    // note could never resolve to a detail page (R3 report). The task side always worked because
+    // its pool is unfiltered.
+    val hiddenNotes by remember { db.noteDao().getHidden() }.collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
@@ -1142,8 +1147,8 @@ fun NotesScreen(active: Boolean = true) {
     // The note currently open in the detail page, resolved live so edits reflect at once. Trashed
     // notes are excluded, so a note trashed by *any* path — this page's button, the assistant, the
     // grid — makes the detail page fall away rather than sit there showing a deleted note.
-    val viewingNote = remember(notes, archivedNotes, viewingId) {
-        (notes + archivedNotes).firstOrNull { it.id == viewingId && it.trashedAt == null }
+    val viewingNote = remember(notes, archivedNotes, hiddenNotes, viewingId) {
+        (notes + archivedNotes + hiddenNotes).firstOrNull { it.id == viewingId && it.trashedAt == null }
     }
 
     when {

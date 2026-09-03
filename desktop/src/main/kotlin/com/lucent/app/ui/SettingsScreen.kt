@@ -2721,14 +2721,21 @@ fun SettingsScreen(active: Boolean = true) {
                 doodlesOf = { com.lucent.app.data.DoodleExport.canvasesOf(it) },
                 onExport = { subset, format, atts, canvases ->
                     val doc = com.lucent.app.data.DocumentExport.exportNotes(subset, format)
-                    // Each ticked canvas becomes its own PDF inside the archive. Rendering happens
-                    // here rather than in the picker so the picker stays a picker: it decides what
-                    // is wanted, this decides what that costs. The heading is the note's title, so
-                    // a folder of exported drawings survives being renamed.
-                    val canvasFiles = canvases.map { canvas ->
-                        val owner = subset.firstOrNull { it.id == canvas.ownerId }
-                        val heading = owner?.title.orEmpty().ifBlank { S.untitled }
-                        canvas.fileName to com.lucent.app.data.DocumentExport.doodlePdf(canvas, heading)
+                    // R3 report: one PDF per NOTE, not one per canvas. The ticked canvases of each
+                    // doodle note are grouped and written as a single multi-page PDF (the picker
+                    // still ticks canvases individually — that is the selection UI — but the
+                    // exporter merges them). Rendering happens here rather than in the picker so
+                    // the picker stays a picker: it decides what is wanted, this decides what that
+                    // costs. The heading is the note's title, so a folder of exported drawings
+                    // survives being renamed.
+                    val canvasFiles = canvases.groupBy { it.ownerId }.flatMap { (ownerId, group) ->
+                        val owner = subset.firstOrNull { it.id == ownerId }
+                        val title = owner?.title.orEmpty().ifBlank { S.untitled }
+                        // One ticked canvas keeps its descriptive "canvas N" name; a merged set
+                        // takes the note's plain file stem.
+                        val name = if (group.size == 1) group.first().fileName
+                                   else com.lucent.app.data.DoodleExport.fileStem(title).ifBlank { S.untitled } + ".pdf"
+                        listOf(name to com.lucent.app.data.DocumentExport.doodlesPdf(group, title))
                     }
                     if (atts.isEmpty() && canvasFiles.isEmpty()) {
                         launchExport("lucent-notes", doc, format)
@@ -3314,33 +3321,6 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
             }
-
-            // ---- Optimize for small models (B-group task 4) ----
-            //
-            // Default OFF, and opt-in behind an explicit warning, because it is a genuine trade
-            // rather than a strict improvement: the assistant gets faster and far less likely to
-            // stall on a weak model, and in exchange it reads plainer and follows the user's own
-            // personality/style settings less closely. Nobody should discover that by accident,
-            // so the warning is shown when turning it ON and the subtitle states the trade too.
-            Spacer(modifier = Modifier.height(12.dp))
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
-                        Text(S.smallModelModeSub, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = savedSmallModelMode,
-                        onCheckedChange = { on ->
-                            // Only turning it ON warns. Turning it off restores the full prompt,
-                            // which needs no explanation and no permission.
-                            if (on) showSmallModelWarn = true
-                            else AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
-                        }
-                    )
-                }
-            }
         }
 
         @Composable
@@ -3404,6 +3384,32 @@ fun SettingsScreen(active: Boolean = true) {
                         else AppScope.io.launch { repo.setMemoryTier(MemoryTier.HIGH.key) }
                     }
                 )
+            }
+
+            // ---- Optimize for small models (R3 report) ----
+            // Moved here from Personalization so every knob about WHAT the assistant is fed — how
+            // much history, and how the prompt is trimmed for a weak model — lives on the same
+            // page, directly under the tier it modifies. Kept as its own glass card on purpose:
+            // the two blocks must never merge, and the trade-off warning reads against the memory
+            // choice made just above.
+            Spacer(modifier = Modifier.height(12.dp))
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
+                        Text(S.smallModelModeSub, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = savedSmallModelMode,
+                        onCheckedChange = { on ->
+                            // Only turning it ON warns. Turning it off restores the full prompt,
+                            // which needs no explanation and no permission.
+                            if (on) showSmallModelWarn = true
+                            else AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
+                        }
+                    )
+                }
             }
         }
 
@@ -3647,16 +3653,31 @@ fun SettingsScreen(active: Boolean = true) {
                         enabled = models.isNotEmpty()
                     )
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        Column(
-                            modifier = Modifier
-                                .heightIn(max = 320.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            models.forEach { m ->
-                                DropdownMenuItem(text = { Text(m) }, onClick = {
-                                    selectedModel = m
-                                    menuExpanded = false
-                                })
+                        // R3 report: a manual FUZZY model search on top of the list, sharing the
+                        // same ranking rules as the chat model switcher (ModelSearch.rankModels):
+                        // typing part of a name — case, separators and even exact order optional —
+                        // reorders the list best-match first. The query resets with each open.
+                        var query by remember(menuExpanded) { mutableStateOf("") }
+                        Column(modifier = Modifier.width(280.dp)) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                placeholder = { Text(S.actionSearch) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 320.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                val shown = com.lucent.app.data.ModelSearch.rankModels(models, query)
+                                shown.forEach { m ->
+                                    DropdownMenuItem(text = { Text(m) }, onClick = {
+                                        selectedModel = m
+                                        menuExpanded = false
+                                    })
+                                }
                             }
                         }
                     }
@@ -4106,8 +4127,15 @@ fun SettingsScreen(active: Boolean = true) {
                     // Two honest notes rather than one reassuring one: the switch does not take
                     // effect until relaunch, and logging is now held on and cannot be turned off
                     // from the Privacy page while this is running.
-                    Text(S.crashShieldNextLaunch, color = onGradientMuted, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(2.dp))
+                    //
+                    // The "next launch" note is a PENDING notice, not a permanent caption: once a
+                    // later launch has actually installed the shield (CrashShield.isInstalled), the
+                    // promise in the note has been kept, so the note disappears instead of telling
+                    // the user forever that a change is still coming (R3 report).
+                    if (!com.lucent.app.data.CrashShield.isInstalled()) {
+                        Text(S.crashShieldNextLaunch, color = onGradientMuted, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
                     Text(S.crashShieldLoggingLocked, color = onGradientMuted, fontSize = 12.sp)
                     if (com.lucent.app.data.CrashShield.isInstalled() &&
                         com.lucent.app.data.CrashShield.caughtCount > 0
@@ -4630,7 +4658,11 @@ fun SettingsScreen(active: Boolean = true) {
                     onClick = {
                         scope.launch {
                             val err = com.lucent.app.data.AutoBackupRunner.runNow(context)
-                            LucentToast.show(context, err ?: S.autoBackupRunNow)
+                            // Report the OUTCOME, not the button label: a toast that echoes the
+                            // button ("Back up now") after the user pressed it says nothing about
+                            // whether the backup actually happened. runNow returns null on success
+                            // and the error text otherwise, so the message is chosen from that.
+                            LucentToast.show(context, if (err == null) S.backupNowSucceeded else S.backupNowFailed)
                         }
                     }
                 )

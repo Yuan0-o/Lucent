@@ -70,6 +70,9 @@ import kotlin.math.sin
  */
 
 private const val BLOB_COUNT = 6
+// R3 report: minimum spacing between two elapsedMs writes in the drift clock, i.e. the frame
+// budget of the background animation (~30 fps). See the governor comment at the frame loop.
+private const val DRIFT_FRAME_BUDGET_MS = 33f
 private const val TAU = (2.0 * Math.PI).toFloat()
 
 // Per-blob motion constants, pulled out of the composable so they're compiled once and never
@@ -183,11 +186,29 @@ fun FluidGlassBackground(
     val inspection = LocalInspectionMode.current
     var elapsedMs by remember { mutableFloatStateOf(0f) }
     if (!inspection) {
+        // ---- R3 report: the drift clock is a frame-rate GOVERNOR, not a spinner ----
+        //
+        // Background stutter when switching pages keeps coming back, and the last word on it is
+        // that the background must never compete with the page that is arriving. Each frame the
+        // canvas repaints six blobs AND the two Haze surfaces (the top bar and the bottom capsule)
+        // re-blur what just repainted — so every frame we skip halves that work. The blobs'
+        // slowest period is over three seconds, so at 30 fps a single skipped frame moves a blob
+        // by a fraction of a pixel: invisible. Frame budget 33 ms ≈ 30 fps.
+        //
+        // If page-switch stutter is ever reported again, FIRST check this budget before touching
+        // anything else — lowering it (33f -> e.g. 40f) buys headroom on every page at once, which
+        // is the whole point of a single governor. The visual quality floor is high: blobs stay
+        // perfectly smooth down to ~24 fps because every individual blob moves so slowly.
+        var lastWriteMs = 0f
         LaunchedEffect(Unit) {
             val start = withInfiniteAnimationFrameNanos { it }
             while (true) {
                 withInfiniteAnimationFrameNanos { now ->
-                    elapsedMs = (now - start) / 1_000_000f
+                    val ms = (now - start) / 1_000_000f
+                    if (ms - lastWriteMs >= DRIFT_FRAME_BUDGET_MS) {
+                        elapsedMs = ms
+                        lastWriteMs = ms
+                    }
                 }
             }
         }

@@ -168,6 +168,22 @@ class MainActivity : FragmentActivity() {
         )
 
         val settingsRepo = SettingsRepository(applicationContext)
+        // Crash Shield, installed at launch when the setting is on (see CrashShield.install). The
+        // shield must wrap the main message loop from its very first message, so it can only ever
+        // be installed HERE — never later in the session. That is exactly why the Settings note
+        // says the switch "takes effect the next time you open Lucent", and why that note is shown
+        // only while the shield is NOT yet installed: once this line has run, the note's promise
+        // has been kept and it must disappear (R3 report).
+        val crashShieldWanted = try {
+            runBlocking { settingsRepo.crashShieldEnabledOnce() }
+        } catch (t: Throwable) {
+            // R3 report hardening: a swallowed preference read used to leave the shield uninstalled
+            // with no trace and no retry, so the Settings note "takes effect the next time you open
+            // Lucent" could linger forever. Say so in the startup log instead of failing silently.
+            StartupLog.event(applicationContext, "crash shield: preference read failed at startup (${t::class.simpleName}) - shield not installed this launch")
+            false
+        }
+        if (crashShieldWanted) com.lucent.app.data.CrashShield.install(applicationContext)
         // Read the saved appearance synchronously *before* the first frame is composed. DataStore
         // emits asynchronously, so without this the first frame renders with the defaults ("system"
         // theme, SUNSET palette) and then snaps to the user's real choice a moment later — the

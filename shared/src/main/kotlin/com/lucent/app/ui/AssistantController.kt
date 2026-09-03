@@ -990,8 +990,17 @@ object AssistantController {
                 // of other conversations into the system prompt as background memory.
                 var history = buildHistory(db, conversationId, memoryTier)
                 val crossMemory = crossConversationMemory(db, conversationId, memoryTier)
+                // R3 report: small-model mode used to DROP the HIGH-tier cross-conversation digest
+                // entirely (the compact prompt accepted no memory at all), so "High · cross-chat"
+                // silently behaved like "Medium" whenever the small-model switch was on. HIGH must
+                // keep its promise under the compact prompt too, so the compact path receives a
+                // heavily trimmed digest (SMALL_MODEL_CROSS_BUDGET messages instead of the full
+                // HIGH_CROSS_MESSAGE_BUDGET) — still a memory, just a shorter one.
+                val compactCrossMemory =
+                    if (smallModelMode) crossConversationMemory(db, conversationId, memoryTier, cap = SMALL_MODEL_CROSS_BUDGET)
+                    else ""
                 val systemPrompt =
-                    if (smallModelMode) buildCompactSystemPrompt(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text)
+                    if (smallModelMode) buildCompactSystemPrompt(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory)
                     else buildSystemPrompt(name, style, memoryTier, webSearchEnabled, crossMemory, text)
                 val tools = AppTools.definitions(includeWebSearch = webSearchEnabled)
 
@@ -1991,14 +2000,20 @@ object AssistantController {
     /**
      * For the HIGH tier, a compact digest of the most recent messages from the user's *other*
      * conversations, so the assistant carries memory across chats. Bounded by
-     * [MemoryTier.HIGH_CROSS_MESSAGE_BUDGET] and truncated per message, so global memory can never
-     * turn one request into the whole archive. Empty for every other tier.
+     * [MemoryTier.HIGH_CROSS_MESSAGE_BUDGET] (or [cap], when a caller needs a shorter digest — the
+     * small-model path) and truncated per message, so global memory can never turn one request
+     * into the whole archive. Empty for every other tier.
      */
-    private suspend fun crossConversationMemory(db: AppDatabase, currentConversationId: Long, tier: MemoryTier): String {
+    private suspend fun crossConversationMemory(
+        db: AppDatabase,
+        currentConversationId: Long,
+        tier: MemoryTier,
+        cap: Int = MemoryTier.HIGH_CROSS_MESSAGE_BUDGET
+    ): String {
         if (tier != MemoryTier.HIGH) return ""
         val all = db.chatDao().getAll().first()
         val others = all.filter { it.conversationId != currentConversationId }
-            .takeLast(MemoryTier.HIGH_CROSS_MESSAGE_BUDGET)
+            .takeLast(cap)
         if (others.isEmpty()) return ""
         val sb = StringBuilder()
         others.forEach { m ->
@@ -2322,6 +2337,13 @@ object AssistantController {
     }
 
     /**
+     * How many other-conversation messages the SMALL-MODEL path may fold into its compact prompt
+     * when the HIGH memory tier is selected (R3 report). A quarter of the full budget: still a
+     * real cross-chat memory, small enough for a model with a tight context window.
+     */
+    private const val SMALL_MODEL_CROSS_BUDGET = 10
+
+    /**
      * The trimmed-down system prompt for small models (B-group task 4).
      *
      * ### What it drops, and why that is the point
@@ -2348,15 +2370,19 @@ object AssistantController {
      * setting says in plain words that the assistant will read plainer and follow personalization
      * less closely.
      *
-     * Cross-conversation memory is not accepted here at all: it is the single largest thing that can
-     * be prepended to a prompt, and it exists to help a model that has room for it.
+     * Cross-conversation memory is accepted only in a deliberately short form ([crossMemory]): the
+     * full digest is the single largest thing that can be prepended to a prompt, and it exists to
+     * help a model that has room for it. The small-model path therefore keeps a trimmed digest when
+     * the HIGH tier is selected (R3 report — HIGH must not silently degrade to MEDIUM under the
+     * small-model switch), just short enough not to crowd out the actual question.
      */
     private fun buildCompactSystemPrompt(
         name: String,
         style: String,
         tier: MemoryTier,
         webSearchEnabled: Boolean,
-        userText: String
+        userText: String,
+        crossMemory: String
     ): String {
         val today = java.time.ZonedDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
@@ -2375,6 +2401,12 @@ object AssistantController {
             }
             if (tier == MemoryTier.LOW) {
                 append("You can only see the user's latest message, not earlier ones.\n")
+            }
+            // A trimmed cross-chat digest when HIGH is on (R3 report). Kept short and clearly
+            // labelled so a small model treats it as background, never as the current question.
+            if (crossMemory.isNotBlank()) {
+                append("\nBackground from your other chats with this user (older context, keep it brief):\n")
+                append(crossMemory).append("\n")
             }
             com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append(it) }
         }

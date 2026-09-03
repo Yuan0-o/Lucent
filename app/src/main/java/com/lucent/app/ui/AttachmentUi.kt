@@ -289,11 +289,20 @@ fun CardAttachments(
     }
 
     viewing?.let { att ->
-        AttachmentViewerDialog(
-            attachments = attachments,
-            initialIndex = attachments.indexOf(att).coerceAtLeast(0),
-            onDismiss = { viewing = null }
-        )
+        // R3 report: resolve the viewer's start page against the CURRENT list by the file's
+        // unique store id, at the moment the dialog is about to open. Resolving by data-class
+        // equality on a list that may have been refreshed between the tap frame and this
+        // composition could land on an older equal element — or on none at all (silently clamped
+        // to 0) — which is exactly the "tapping a just-added attachment shows the old preview
+        // instead" report.
+        val idx = attachments.indexOfFirst { it.data == att.data }
+        if (idx >= 0) {
+            AttachmentViewerDialog(
+                attachments = attachments,
+                initialIndex = idx,
+                onDismiss = { viewing = null }
+            )
+        }
     }
 
     renaming?.let { att ->
@@ -438,11 +447,20 @@ fun PendingAttachmentChips(
     }
 
     viewing?.let { att ->
-        AttachmentViewerDialog(
-            attachments = attachments,
-            initialIndex = attachments.indexOf(att).coerceAtLeast(0),
-            onDismiss = { viewing = null }
-        )
+        // R3 report: resolve the viewer's start page against the CURRENT list by the file's
+        // unique store id, at the moment the dialog is about to open. Resolving by data-class
+        // equality on a list that may have been refreshed between the tap frame and this
+        // composition could land on an older equal element — or on none at all (silently clamped
+        // to 0) — which is exactly the "tapping a just-added attachment shows the old preview
+        // instead" report.
+        val idx = attachments.indexOfFirst { it.data == att.data }
+        if (idx >= 0) {
+            AttachmentViewerDialog(
+                attachments = attachments,
+                initialIndex = idx,
+                onDismiss = { viewing = null }
+            )
+        }
     }
 
     renaming?.let { att ->

@@ -807,10 +807,19 @@ fun BrokenLinkChips(
 }
 
 /**
- * A vertical pair of round "jump to top / jump to bottom" buttons for a long scrolling list, meant
- * to be overlaid at the bottom-right of the notes or tasks list. Each button appears only when there
- * is somewhere to scroll that way, so at the very top only "down" shows and at the very bottom only
- * "up". Same frosted disc styling as the assistant's jump-to-latest control (task E2).
+ * A single round "edge jump" control for a long scrolling page, overlaid at the bottom-right of a
+ * list or a detail page.
+ *
+ * ### One disc, not a pair (R3 report fix)
+ *
+ * This used to be two stacked discs (up above down), each fading in and out through its own
+ * AnimatedVisibility. Whenever scrolling reached an edge only one disc remained, the Column
+ * collapsed, and the survivor slid into the other disc's slot — the visible position jump that
+ * was reported as flickering. The control is now ONE disc that never moves: it shows "jump up"
+ * whenever there is content above ([canUp]) and "jump down" otherwise, so a single tap always
+ * heads for the far end the reader is not at. Mid-page it offers up first; at the very top it
+ * offers down; at the very bottom, up again — both extremes stay reachable in at most two taps,
+ * and nothing ever relocates on screen.
  */
 @Composable
 fun ScrollEdgeJumpButtons(
@@ -821,37 +830,26 @@ fun ScrollEdgeJumpButtons(
     onDown: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    // Nothing to travel to: a short page that cannot scroll in either direction gets no control,
+    // exactly as the two-disc version rendered nothing at all there.
+    if (!canUp && !canDown) return
+
+    // One anchor, one disc: the direction is a property of the icon, not of a second slot.
+    val jumpUp = canUp
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.15f))
+            .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape)
+            .clickable(onClick = if (jumpUp) onUp else onDown),
+        contentAlignment = Alignment.Center
     ) {
-        AnimatedVisibility(visible = canUp, enter = fadeIn(), exit = fadeOut()) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
-                    .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape)
-                    .clickable(onClick = onUp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.KeyboardDoubleArrowUp, contentDescription = com.lucent.app.i18n.S.a11yScrollToTop, tint = tint)
-            }
-        }
-        AnimatedVisibility(visible = canDown, enter = fadeIn(), exit = fadeOut()) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
-                    .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape)
-                    .clickable(onClick = onDown),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.KeyboardDoubleArrowDown, contentDescription = com.lucent.app.i18n.S.a11yScrollToBottom, tint = tint)
-            }
-        }
+        Icon(
+            if (jumpUp) Icons.Default.KeyboardDoubleArrowUp else Icons.Default.KeyboardDoubleArrowDown,
+            contentDescription = if (jumpUp) com.lucent.app.i18n.S.a11yScrollToTop else com.lucent.app.i18n.S.a11yScrollToBottom,
+            tint = tint
+        )
     }
 }
 

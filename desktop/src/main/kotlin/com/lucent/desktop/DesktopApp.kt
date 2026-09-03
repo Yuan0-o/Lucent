@@ -81,6 +81,17 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
     val appLockOn by repo.appLockEnabled.collectAsState(initial = startup.appLockEnabled)
     LaunchedEffect(appLockOn) { com.lucent.app.ui.AppLockController.enabled = appLockOn }
 
+    // Crash Shield, installed on launch when the setting is on (peer of Android's MainActivity).
+    // The shield must wrap the event queue from the very first moment of the session, so it can
+    // only ever be installed here — never later — which is exactly why the Settings note says the
+    // switch "takes effect the next time you open Lucent", and why that note is shown only while
+    // the shield is NOT yet installed: once this has run, the note's promise is kept and it must
+    // disappear (R3 report).
+    LaunchedEffect(Unit) {
+        val shieldWanted = try { repo.crashShieldEnabledOnce() } catch (t: Throwable) { false }
+        if (shieldWanted) com.lucent.app.data.CrashShield.install(context)
+    }
+
     val themeChoice = LucentThemeMode.fromKey(themeMode)
     val isDark = themeChoice.isDark(systemDark)
     val colors = if (isDark) darkColorScheme() else lightColorScheme()

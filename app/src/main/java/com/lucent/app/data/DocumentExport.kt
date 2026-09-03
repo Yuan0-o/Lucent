@@ -798,6 +798,29 @@ object DocumentExport {
         return baos.toByteArray()
     }
 
+    /**
+     * One PDF for MANY canvases of the same doodle note (R3 report): a ticked set that spans
+     * several pages is written as a single multi-page document — one page per canvas — instead of
+     * one file per canvas. The heading is repeated on every page, which matches what per-canvas
+     * exports used to produce.
+     */
+    fun doodlesPdf(canvases: List<DoodleExport.Canvas>, heading: String = ""): ByteArray {
+        val doc = PdfDocument()
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 13f; isFakeBoldText = true; isAntiAlias = true }
+        val state = PdfState(doc)
+        canvases.forEachIndexed { i, canvas ->
+            if (i > 0) state.newPage()
+            if (heading.isNotBlank()) state.drawWrapped(heading, titlePaint, 20f)
+            state.space(4f)
+            state.drawDoodle(canvas.strokesJson)
+        }
+        state.finish()
+        val baos = ByteArrayOutputStream()
+        doc.writeTo(baos)
+        doc.close()
+        return baos.toByteArray()
+    }
+
     /** Make [name] unique within [used] by inserting " (2)", " (3)", … before the extension. */
     private fun uniqueEntryName(name: String, used: MutableSet<String>): String {
         if (used.add(name)) return name

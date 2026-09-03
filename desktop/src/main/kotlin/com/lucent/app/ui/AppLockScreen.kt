@@ -111,11 +111,26 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
+    // R3 report: a fixed pale red is unreadable against the light theme's pale glass, so the
+    // error tint follows the ink — dark themes (white ink) keep the pale red, light themes get a
+    // deep red that holds its contrast.
+    val errorTint = if (onGradient == Color.White) Color(0xFFFF8A80) else Color(0xFFB71C1C)
 
     // Enabled ⇒ credentials exist; collected here so verification has them. Until the first emission
     // arrives the unlock button stays disabled, so the opening frame can't produce a false "wrong
     // password" by comparing against an empty blob.
     val credentials by repo.appLockCredentials.collectAsState(initial = "")
+
+    // Brute-force throttle knobs (R3 report): the lock screen never used to consult
+    // PasswordAttempts at all — wrong passwords were free, and the "wipe after N lifetime
+    // failures" safety net was a setting that nothing executed. These mirror Settings → Security.
+    val pwFirstLimit by repo.pwFirstRoundLimit.collectAsState(
+        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT)
+    val pwLaterLimit by repo.pwLaterRoundLimit.collectAsState(
+        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT)
+    val selfDestructArmed by repo.pwSelfDestructEnabled.collectAsState(initial = false)
+    val selfDestructAt by repo.pwSelfDestructThreshold.collectAsState(
+        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD)
 
     var stage by remember { mutableStateOf(LockStage.ENTER_PASSWORD) }
     var password by remember { mutableStateOf("") }
@@ -167,17 +182,56 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         )
                         if (error.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(error, color = Color(0xFFFF8A80), fontSize = 13.sp)
+                            Text(error, color = errorTint, fontSize = 13.sp)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             enabled = password.isNotEmpty() && credentials.isNotEmpty(),
                             onClick = {
-                                if (AppLock.verifyPassword(credentials, password)) {
-                                    password = ""
-                                    AppLockController.unlock()
-                                } else {
-                                    error = com.lucent.app.i18n.S.lockWrongPassword
+                                scope.launch {
+                                    // R3 report: every attempt goes through the throttling engine.
+                                    // A lockout in force rejects the try outright (the countdown is
+                                    // shown instead of "wrong password"); a wrong password is
+                                    // registered and persisted; crossing the self-destruct
+                                    // threshold wipes ALL data (the same body as Settings' delete
+                                    // everything) and unlocks into the empty app. A correct answer
+                                    // clears the whole ladder.
+                                    val state = com.lucent.app.data.PasswordAttempts.State.fromJson(
+                                        repo.passwordAttemptStateOnce())
+                                    val wait = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(state)
+                                    if (wait > 0L) {
+                                        error = com.lucent.app.i18n.S.lockRetryIn(
+                                            com.lucent.app.data.PasswordAttempts.formatRemaining(wait))
+                                        return@launch
+                                    }
+                                    if (AppLock.verifyPassword(credentials, password)) {
+                                        password = ""
+                                        error = ""
+                                        repo.setPasswordAttemptState(
+                                            com.lucent.app.data.PasswordAttempts.registerSuccess().toJson())
+                                        AppLockController.unlock()
+                                    } else {
+                                        val next = com.lucent.app.data.PasswordAttempts.registerFailure(
+                                            state, pwFirstLimit, pwLaterLimit)
+                                        repo.setPasswordAttemptState(next.toJson())
+                                        if (com.lucent.app.data.PasswordAttempts.shouldSelfDestruct(
+                                                next, selfDestructArmed, selfDestructAt)
+                                        ) {
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                com.lucent.app.data.wipeAllData(
+                                                    context,
+                                                    com.lucent.app.data.AppDatabase.getInstance(context),
+                                                    repo)
+                                            }
+                                            error = ""
+                                            AppLockController.unlock()
+                                        } else {
+                                            val remain = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(next)
+                                            error = if (remain > 0L) com.lucent.app.i18n.S.lockRetryIn(
+                                                com.lucent.app.data.PasswordAttempts.formatRemaining(remain))
+                                            else com.lucent.app.i18n.S.lockWrongPassword
+                                        }
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -258,7 +312,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         )
                         if (error.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(error, color = Color(0xFFFF8A80), fontSize = 13.sp)
+                            Text(error, color = errorTint, fontSize = 13.sp)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
@@ -304,7 +358,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         )
                         if (error.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(error, color = Color(0xFFFF8A80), fontSize = 13.sp)
+                            Text(error, color = errorTint, fontSize = 13.sp)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(

@@ -99,7 +99,11 @@ fun NoteHistoryScreen(
                 newBody = restored.body,
                 newTags = restored.tags,
                 newIsChecklist = restored.isChecklist,
-                newChecklist = restored.checklist
+                newChecklist = restored.checklist,
+                // R3 report: the pre-restore snapshot is a brand-new history entry made NOW, not a
+                // record of an old saved-at time — without this it could read as "nothing was
+                // recorded" in the newest-first list (see NoteHistory.recordIfChanged).
+                savedAt = System.currentTimeMillis()
             )
             db.noteDao().update(restored)
         }

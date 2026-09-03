@@ -54,7 +54,13 @@ object NoteHistory {
         newBody: String,
         newTags: String,
         newIsChecklist: Boolean,
-        newChecklist: String
+        newChecklist: String,
+        // R3 report: the moment this snapshot claims to have been current. Defaults to the note's
+        // own updatedAt (the instant the text it captures stopped being live). The two RESTORE
+        // call sites pass System.currentTimeMillis() instead: a snapshot taken because of a
+        // restore is a NEW history entry made right now, and with the default timestamp it could
+        // carry an old time and read in the history list as if nothing had been recorded.
+        savedAt: Long = existing.updatedAt
     ) {
         // Task 4 — the user can turn version history off. Checked HERE rather than at each call
         // site: there are four of them (the editor, a restore, and two assistant tools), and a
@@ -78,7 +84,8 @@ object NoteHistory {
                 checklist = existing.checklist,
                 // The note's own updatedAt, not "now": this row records what the note said during
                 // the period ending at this instant, so that's the timestamp people recognise.
-                savedAt = existing.updatedAt
+                // (Restores override this with "now" via [savedAt] — see the parameter above.)
+                savedAt = savedAt
             )
         )
         db.noteVersionDao().trimTo(existing.id, MAX_VERSIONS_PER_NOTE)

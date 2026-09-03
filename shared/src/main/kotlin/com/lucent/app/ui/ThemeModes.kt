@@ -57,7 +57,17 @@ enum class LucentThemeMode(val key: String) {
     MONET_ROSE("monet_rose"),
     MONET_LAGOON("monet_lagoon"),
     MONET_INK("monet_ink"),
-    MONET_GARNET("monet_garnet");
+    MONET_GARNET("monet_garnet"),
+    // ---- R3 report: four further appearances (light/dark pair of orange, light/dark pair of
+    // orchid-mauve) ----
+    // Orange was the one warm hue family with no member in EITHER half; mauve sits between the
+    // existing violet (WISTERIA/PLUM) and pink (ROSE/GARNET) families at a hue neither of them
+    // owns. Adding one light + one dark per family keeps the set balanced at eight light and
+    // eight dark. "No overlap" is binding — see the notes at each colour below.
+    MONET_PEACH("monet_peach"),
+    MONET_CLAY("monet_clay"),
+    MONET_ORCHID("monet_orchid"),
+    MONET_ORCHID_NIGHT("monet_orchid_night");
 
     // Live i18n lookups (localization task); `label`/`detail` call sites are unchanged.
     val label: String
@@ -77,6 +87,10 @@ enum class LucentThemeMode(val key: String) {
             MONET_LAGOON -> com.lucent.app.i18n.S.themeMonetLagoon
             MONET_INK -> com.lucent.app.i18n.S.themeMonetInk
             MONET_GARNET -> com.lucent.app.i18n.S.themeMonetGarnet
+            MONET_PEACH -> com.lucent.app.i18n.S.themeMonetPeach
+            MONET_CLAY -> com.lucent.app.i18n.S.themeMonetClay
+            MONET_ORCHID -> com.lucent.app.i18n.S.themeMonetOrchid
+            MONET_ORCHID_NIGHT -> com.lucent.app.i18n.S.themeMonetOrchidNight
         }
 
     val detail: String
@@ -96,6 +110,10 @@ enum class LucentThemeMode(val key: String) {
             MONET_LAGOON -> com.lucent.app.i18n.S.themeMonetLagoonDesc
             MONET_INK -> com.lucent.app.i18n.S.themeMonetInkDesc
             MONET_GARNET -> com.lucent.app.i18n.S.themeMonetGarnetDesc
+            MONET_PEACH -> com.lucent.app.i18n.S.themeMonetPeachDesc
+            MONET_CLAY -> com.lucent.app.i18n.S.themeMonetClayDesc
+            MONET_ORCHID -> com.lucent.app.i18n.S.themeMonetOrchidDesc
+            MONET_ORCHID_NIGHT -> com.lucent.app.i18n.S.themeMonetOrchidNightDesc
         }
 
     /**
@@ -112,7 +130,10 @@ enum class LucentThemeMode(val key: String) {
         // no compiler help at all. Any future dark tint goes in this list at the same time as it
         // goes in the enum; the two are not independent.
         MONET_NIGHT, MONET_PINE, MONET_PLUM, MONET_EMBER,
-        MONET_INK, MONET_GARNET -> true
+        MONET_INK, MONET_GARNET,
+        // R3 report: the two new dark tints MUST be named here or they would compile cleanly and
+        // render dark text on a dark backdrop — see the warning comment above.
+        MONET_CLAY, MONET_ORCHID_NIGHT -> true
         else -> false
     }
 
@@ -141,6 +162,17 @@ enum class LucentThemeMode(val key: String) {
         // the blue side of red rather than the yellow side. Side by side they are plainly two
         // different colours, which is the test that matters.
         MONET_GARNET -> Color(0xFF2E161C)
+        // R3 additions: light peach — no light ORANGE existed (EMBER's 0xFF2A1E19 is a dark
+        // brown at hue ~18; this pale apricot is the light half of the same family).
+        MONET_PEACH -> Color(0xFFF9EFE1)
+        // Dark orange, against MONET_EMBER's dark brown: same warm corner, more orange in it.
+        MONET_CLAY -> Color(0xFF371B0C)
+        // Light mauve — WISTERIA (0xFFEEE9F7) is violet, ROSE (0xFFF9EEF0) is pink; this sits
+        // between them.
+        MONET_ORCHID -> Color(0xFFF8EBF4)
+        // Dark mauve — PLUM (0xFF241A2E) is indigo-violet, GARNET (0xFF2E161C) is crimson; this
+        // is the blue-ish side of magenta, distinct from both.
+        MONET_ORCHID_NIGHT -> Color(0xFF2C1024)
     }
 
     /**
@@ -164,6 +196,10 @@ enum class LucentThemeMode(val key: String) {
         MONET_LAGOON -> listOf(Color(0xFFEFF7F6), Color(0xFFBFDEDA))
         MONET_INK -> listOf(Color(0xFF1B3A40), Color(0xFF0A1B1E))
         MONET_GARNET -> listOf(Color(0xFF46242C), Color(0xFF1F0F13))
+        MONET_PEACH -> listOf(Color(0xFFFDF6EA), Color(0xFFEBD9B8))
+        MONET_CLAY -> listOf(Color(0xFF59301A), Color(0xFF2A1307))
+        MONET_ORCHID -> listOf(Color(0xFFFDF3F9), Color(0xFFE5CBDD))
+        MONET_ORCHID_NIGHT -> listOf(Color(0xFF4A1E3E), Color(0xFF1F0B1A))
     }
 
     companion object {

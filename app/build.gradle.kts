@@ -21,13 +21,21 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 
 // The user-facing version. Edit this line (or type a value into the workflow box) to change it.
 //
+// 2.3.0 — the R3 maintenance release: sixteen fixes across the app plus four new Monet themes and
+// the background-palette expansion to 126 colours. Highlights: hidden-area notes open again and
+// keep their rounded-square cards; restoring writes the pre-restore state as a new history entry;
+// chat attachments show file names instead of stacked previews; app-lock brute-force throttling
+// and the self-destruct wipe are wired to the lock screen; small-model mode keeps a trimmed
+// HIGH-tier cross-chat memory; the API model list gained fuzzy search; crash shield installs on
+// launch and its "next launch" note disappears once installed. Realigned with the Windows
+// installer (desktop packageVersion).
 // 2.2.1 — patch release: no user-facing Android change. The number is realigned with the Windows
 // installer (desktop/build.gradle.kts packageVersion) so both platforms of this release report the
 // same version again.
 // 2.0.0 — the three-group 1.x delivery, integrated. A major bump rather than 1.1.0 because the
 // database moves from schema 11 to 15 across four migrations and the on-disk shape is no longer
 // readable by a 1.0.0 build. The version people read should say that.
-val MARKETING_VERSION = "2.2.1"
+val MARKETING_VERSION = "2.3.0"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

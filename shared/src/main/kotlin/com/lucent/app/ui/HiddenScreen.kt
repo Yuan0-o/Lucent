@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -80,6 +84,11 @@ object HiddenArea {
  * The hidden notes list. Deliberately plain: no search, no sort, no bulk actions. This is a place
  * you visit to take something out of, and every control that isn't "show me" or "put it back"
  * would be another thing on screen while the screen is open.
+ *
+ * R3 report: notes are laid out as TWO-COLUMN ROUNDED-SQUARE cards here, the same shape they have
+ * on the home grid — not the full-width bars used for tasks below. The hidden area used to render
+ * both kinds with the same bar ([HiddenRow]), which made a hidden note visually change shape the
+ * moment it was hidden (a "note became a task row" report).
  */
 @Composable
 fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> Unit) {
@@ -89,18 +98,17 @@ fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> 
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
-    // Task 7 — see [RevealConfirmDialog]. What is held is the *action*, not the item, so one dialog
-    // serves the whole list instead of every row carrying its own copy of the state.
     var pendingReveal by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    HiddenScaffold(onBack = onBack, isEmpty = hidden.isEmpty(), hazeState = hazeState) {
-        items(hidden, key = { it.id }) { note ->
-            HiddenRow(
+    HiddenGridScaffold(onBack = onBack, isEmpty = hidden.isEmpty(), hazeState = hazeState) {
+        gridItems(hidden, key = { it.id }) { note ->
+            HiddenNoteCard(
                 title = note.title,
                 subtitle = if (note.isChecklist) {
                     val items = Checklist.parse(note.checklist)
                     com.lucent.app.i18n.S.checklistDoneCount(items.count { it.done }, items.size)
                 } else note.body,
+                colorKey = note.color,
                 savedAt = note.updatedAt,
                 onOpen = { onOpen(note) },
                 onReveal = {
@@ -212,6 +220,94 @@ private fun HiddenScaffold(
     }
 }
 
+/**
+ * The two-column grid twin of [HiddenScaffold] for notes (R3 report): same header and empty
+ * state, but a [LazyVerticalGrid] of rounded-square cards instead of full-width bars, so a note
+ * keeps the exact shape it has on the home grid while it sits in the hidden area. Kept as a
+ * separate scaffold rather than a flag on [HiddenScaffold] because the two content scopes
+ * (LazyListScope vs LazyGridScope) cannot share one lambda type.
+ */
+@Composable
+private fun HiddenGridScaffold(
+    onBack: () -> Unit,
+    isEmpty: Boolean,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit
+) {
+    val onGradient = LocalOnGradient.current
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
+            }
+            Text(com.lucent.app.i18n.S.screenHidden, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+        }
+        if (isEmpty) {
+            EmptyState(isFiltered = false, emptyMessage = com.lucent.app.i18n.S.hiddenEmpty, noMatchMessage = "")
+            return
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.hazeSource(state = hazeState),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = LocalBottomBarInset.current),
+            content = content
+        )
+    }
+}
+
+/**
+ * One hidden note as a rounded-square card (R3 report) — mirrors the home grid's note cards:
+ * fixed height, the note's own colour washed through the glass, and the reveal control tucked
+ * into the card's top-right corner instead of a separate trailing column.
+ */
+@Composable
+private fun HiddenNoteCard(
+    title: String,
+    subtitle: String,
+    colorKey: String,
+    savedAt: Long,
+    onOpen: () -> Unit,
+    onReveal: () -> Unit,
+    onGradient: androidx.compose.ui.graphics.Color,
+    onGradientMuted: androidx.compose.ui.graphics.Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(176.dp)
+            .frostedGlass(tint = NoteColor.fromKey(colorKey).swatch)
+            .clickable { onOpen() }
+            .padding(12.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title.ifBlank { com.lucent.app.i18n.S.untitled },
+                color = onGradient,
+                fontSize = 15.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            IconButton(onClick = onReveal, modifier = Modifier.size(30.dp)) {
+                Icon(
+                    Icons.Default.VisibilityOff,
+                    contentDescription = com.lucent.app.i18n.S.hiddenRemove,
+                    tint = onGradient,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+        }
+        if (subtitle.isNotBlank()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(subtitle, color = onGradientMuted, fontSize = 13.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Text(formatTimestamp(savedAt), color = onGradientMuted, fontSize = 11.sp)
+    }
+}
 @Composable
 private fun HiddenRow(
     title: String,

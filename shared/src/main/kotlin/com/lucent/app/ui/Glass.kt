@@ -350,7 +350,65 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     // Teal to olive to sand: a three-hue journey no single-hue SOLID palette can imitate.
     MERIDIAN(listOf(Color(0xFF0E6E6E), Color(0xFF7A9A3C), Color(0xFFE3C88F)), PaletteGroup.GRADIENT),
     // Entirely light. BLUSH and LAVENDER are tonal ramps from dark; this one never gets dark.
-    ORCHID(listOf(Color(0xFFF28FC2), Color(0xFFB57BE0), Color(0xFF7C9BE8)), PaletteGroup.GRADIENT);
+    ORCHID(listOf(Color(0xFFF28FC2), Color(0xFFB57BE0), Color(0xFF7C9BE8)), PaletteGroup.GRADIENT),
+
+    // ==========================================================================================
+    //  R3 REPORT — fifteen further backgrounds, to 14 boards per section (42 boards, 126 colours)
+    // ==========================================================================================
+    //
+    // The brief: add background colours until every section of the picker holds the SAME number
+    // of boards, never duplicating an existing hex. The picker's three sections were 5/13/9, so
+    // this block adds 9 CLASSIC, 1 SOLID and 5 GRADIENT to reach 14/14/14 (42 boards = 126
+    // colours). Where a new board sits near an existing family the note says which one and what
+    // separates them — the same "no overlap" rule the previous additions used.
+    // ---- CLASSIC additions (rich mixes) ----
+    // Warm umber brown. SAND is a pale tan (much lighter at every step); EMBERGLOW is fire with a
+    // red and a yellow member — this one stays a single brown family.
+    TOBACCO(listOf(Color(0xFF3A2113), Color(0xFF8A5A33), Color(0xFFDCC09A)), PaletteGroup.CLASSIC),
+    // Warm neutral grey, where GRAPHITE is deliberately cool. Side by side the two are plainly
+    // different greys.
+    STONE(listOf(Color(0xFF403E3A), Color(0xFF807A70), Color(0xFFD2CBC0)), PaletteGroup.CLASSIC),
+    // Cold slate navy. MIDNIGHT's light member (0xFF533483) is violet; NOCTURNE never leaves blue.
+    NOCTURNE(listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.CLASSIC),
+    // Cool red-pink. CRIMSON is pushed to the ORANGE side of red; BLUSH is a soft rose ramp —
+    // CHERRY is the blue side of red and darker than either.
+    CHERRY(listOf(Color(0xFF450F1E), Color(0xFF94263F), Color(0xFFE2A0B4)), PaletteGroup.CLASSIC),
+    // Burnt orange. EMBERGLOW's mids are saturated fire, AMBER (SOLID) is gold: TANGERINE sits
+    // between them as a deep orange with a lighter, warmer light member.
+    TANGERINE(listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.CLASSIC),
+    // True blue. INDIGO (SOLID) is violet-blue; OCEAN runs teal-blue to cyan. ROYAL is the plain
+    // primary blue neither of them is.
+    ROYAL(listOf(Color(0xFF17275C), Color(0xFF3E63B0), Color(0xFF9DB8EE)), PaletteGroup.CLASSIC),
+    // Amethyst. LAVENDER (SOLID) is a blue-violet ramp; AMETHYST is the warmer pink-violet of a
+    // cut stone — same family, opposite temperature, distinct side by side.
+    AMETHYST(listOf(Color(0xFF34164A), Color(0xFF6E3D9E), Color(0xFFC3A2E0)), PaletteGroup.CLASSIC),
+    // Cool grey-green. SAGE leans yellow-green; FOREST's light member is lime — ALPINE keeps the
+    // green cool and muted at every step.
+    ALPINE(listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.CLASSIC),
+    // Pearl: the lightest neutral of all. STONE is warm grey, MISTY (below) is blue-grey;
+    // PEARL carries a faint violet cast and sits apart from both.
+    PEARL(listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.CLASSIC),
+
+    // ---- SOLID addition ----
+    // Eggshell: a cream-khaki single hue. SAND is a tan-brown; EGGSHELL is yellower, softer and
+    // lighter at the top of its ramp — a paper colour where SAND is a leather colour.
+    EGGSHELL(listOf(Color(0xFF6E6657), Color(0xFFB0A693), Color(0xFFF0E9DA)), PaletteGroup.SOLID),
+
+    // ---- GRADIENT additions (multi-hue journeys) ----
+    // Red -> gold -> sky. CITRUS runs green-orange-red; CONFETTI is the complementary trip.
+    CONFETTI(listOf(Color(0xFFFF5E5B), Color(0xFFFFC24B), Color(0xFF6DD5ED)), PaletteGroup.GRADIENT),
+    // Plum -> orchid. NEBULA is magenta-to-deep-blue; GRAPEVINE stays in the violet half and
+    // travels dark-to-light instead of light-to-dark.
+    GRAPEVINE(listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.GRADIENT),
+    // Deep blue -> cyan light. OCEAN ends on bright teal and GLACIER runs pale-to-deep; SEABREEZE
+    // is deep-to-pale with a lighter middle than either.
+    SEABREEZE(listOf(Color(0xFF123A54), Color(0xFF2F8FB3), Color(0xFFA8E2E0)), PaletteGroup.GRADIENT),
+    // Navy -> violet -> pink sunset. NEBULA runs pink-to-deep-blue; TWILIGHT is the reverse
+    // direction with the same central violet — direction is the difference.
+    TWILIGHT(listOf(Color(0xFF0F1B4C), Color(0xFF5C2E91), Color(0xFFE55D87)), PaletteGroup.GRADIENT),
+    // Blue-grey mist: the only near-monochrome GRADIENT. STONE (CLASSIC) is warm and GRAPHITE
+    // (SOLID) is flat; MISTY shades a cool blue-grey across all three steps.
+    MISTY(listOf(Color(0xFF2F3542), Color(0xFF57606F), Color(0xFFA4B0BE)), PaletteGroup.GRADIENT);
 
     // Live i18n lookup (localization task); call sites keep reading `palette.label`.
     val label: String
@@ -382,5 +440,20 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
             EMBERGLOW -> com.lucent.app.i18n.S.paletteEmberglow
             MERIDIAN -> com.lucent.app.i18n.S.paletteMeridian
             ORCHID -> com.lucent.app.i18n.S.paletteOrchid
+            TOBACCO -> com.lucent.app.i18n.S.paletteTobacco
+            STONE -> com.lucent.app.i18n.S.paletteStone
+            NOCTURNE -> com.lucent.app.i18n.S.paletteNocturne
+            CHERRY -> com.lucent.app.i18n.S.paletteCherry
+            TANGERINE -> com.lucent.app.i18n.S.paletteTangerine
+            ROYAL -> com.lucent.app.i18n.S.paletteRoyal
+            AMETHYST -> com.lucent.app.i18n.S.paletteAmethyst
+            ALPINE -> com.lucent.app.i18n.S.paletteAlpine
+            PEARL -> com.lucent.app.i18n.S.palettePearl
+            EGGSHELL -> com.lucent.app.i18n.S.paletteEggshell
+            CONFETTI -> com.lucent.app.i18n.S.paletteConfetti
+            GRAPEVINE -> com.lucent.app.i18n.S.paletteGrapevine
+            SEABREEZE -> com.lucent.app.i18n.S.paletteSeabreeze
+            TWILIGHT -> com.lucent.app.i18n.S.paletteTwilight
+            MISTY -> com.lucent.app.i18n.S.paletteMisty
         }
 }

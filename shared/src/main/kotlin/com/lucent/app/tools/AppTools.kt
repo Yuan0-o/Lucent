@@ -1209,7 +1209,10 @@ object AppTools {
                                 newBody = restored.body,
                                 newTags = restored.tags,
                                 newIsChecklist = restored.isChecklist,
-                                newChecklist = restored.checklist
+                                newChecklist = restored.checklist,
+                                // R3 report: same rule as the History screen — the pre-restore
+                                // snapshot is a new entry made now, not an old timestamp.
+                                savedAt = System.currentTimeMillis()
                             )
                             db.noteDao().update(restored)
                             ToolExecResult("Restored note \"${restored.title}\" to its version from ${DueParsing.format(version.savedAt)}. What it said just before the restore was saved to history too, so this can be undone.")
