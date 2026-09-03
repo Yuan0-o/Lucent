@@ -543,6 +543,19 @@ jobs:
             Remove-Item $pfx -ErrorAction SilentlyContinue
           }
 
+      # v3.4.0: hand the release its final name on the runner, so the artifact is already
+      # "Lucent.for.Windows-<version>.exe" when it leaves the pipeline.
+      - name: Rename installer to the release asset name
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path desktop/build.gradle.kts -Pattern 'packageVersion = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          if (-not $ver) { Write-Error "could not read packageVersion from desktop/build.gradle.kts"; exit 1 }
+          $exe = Get-ChildItem desktop/build/compose/binaries/main/exe/*.exe | Select-Object -First 1
+          if (-not $exe) { Write-Error "no installer .exe found to rename"; exit 1 }
+          $target = "Lucent.for.Windows-$ver.exe"
+          if ($exe.Name -ne $target) { Move-Item -Force $exe.FullName (Join-Path $exe.DirectoryName $target) }
+          Write-Host "renamed to $target"
+
       # ---- Upload ONLY the one installer, as agreed ----
       - name: Upload installer
         uses: actions/upload-artifact@v4

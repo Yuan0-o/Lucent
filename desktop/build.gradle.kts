@@ -144,7 +144,9 @@ compose.desktop {
             // clear/redraw and full-screen fixes.
                         // 2.3.5 - the engineering release (multi-attachment chat, shared i18n, toolchain
             // upgrades). Bumped so WiX upgrades 2.3.0 installs in place.
-            packageVersion = "2.3.5"
+                        // 3.4.0 - see the note beside Android's MARKETING_VERSION; bumped so WiX upgrades
+            // 2.3.x installs in place.
+            packageVersion = "3.4.0"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with

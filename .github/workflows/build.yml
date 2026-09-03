@@ -336,6 +336,22 @@ jobs:
           "$APKSIGNER" verify --print-certs "$APK"
           echo "Signature verified — this is a signed RELEASE build."
 
+      - name: Rename APK to the release asset name
+        # v3.4.0: the release asset name is decided here, on the runner, so the artifact is
+        # already "Lucent.for.Android-<version>.apk" when it leaves the pipeline. The version
+        # is the workflow's "Version name" input when provided, else MARKETING_VERSION.
+        run: |
+          set -eu
+          VER="${{ inputs.version_name }}"
+          if [ -z "$VER" ]; then
+            VER=$(sed -n 's/^val MARKETING_VERSION = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)
+          fi
+          [ -n "$VER" ] || { echo "::error::could not determine the APK version name"; exit 1; }
+          APK=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)
+          [ -n "$APK" ] || { echo "::error::no release APK found to rename"; exit 1; }
+          mv "$APK" "app/build/outputs/apk/release/Lucent.for.Android-$VER.apk"
+          echo "renamed to Lucent.for.Android-$VER.apk"
+
       - name: Upload APK
         # v6 runs on Node 24 and fixes the punycode deprecation notice from older releases.
         uses: actions/upload-artifact@v6
