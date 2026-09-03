@@ -9,7 +9,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 // swaps only the genuinely platform-bound pieces for desktop implementations of the SAME package,
 // name, and API. See the handover document for the architecture in full.
 //
-// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.3, okhttp 5.5.0) and the
+// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.2, okhttp 5.5.0) and the
 // desktop toolchain the root build declares (Compose Multiplatform 1.12.0). Keeping them in lockstep
 // is what lets the shared source compile identically on both sides.
 
@@ -51,8 +51,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
 
     // Frosted-glass blur, identical to :app so Glass.kt compiles unchanged.
-    implementation("dev.chrisbanes.haze:haze:1.7.3")
-    implementation("dev.chrisbanes.haze:haze-materials:1.7.3")
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
 
     // Networking for the cloud assistant — same version as :app.
     implementation("com.squareup.okhttp3:okhttp:5.5.0")

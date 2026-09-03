@@ -44,7 +44,7 @@ val ciVersionName = (project.findProperty("versionName") as String?)
 
 android {
     namespace = "com.lucent.app"
-    compileSdk = 37
+    compileSdk = 36 // Newest androidx requires API 37, whose platform is not on any SDK channel yet; 36 is the newest installable platform (AGP 9.4 supports it).
 
     // Native code arrives with the local-model feature (llama.cpp via CMake) and the Rust
     // acceleration library. NDK 28.2 is what AGP 9.4 defaults to; CI installs the same build.
@@ -60,7 +60,7 @@ android {
         // from minSdk. So the default (GPU) build needs minSdk 28; a -PcpuOnly build has no Vulkan and
         // keeps the wider Android 8.0 (API 26) reach.
         minSdk = if (project.hasProperty("cpuOnly")) 26 else 28
-        targetSdk = 37
+        targetSdk = 36
         versionCode = ciVersionCode
         versionName = ciVersionName
 
@@ -249,32 +249,32 @@ if (cargoNdkReady) {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.08.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.04.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.core:core-ktx:1.15.0")
 
     // Biometric unlock for the App Lock. BiometricPrompt requires the host Activity to be a
     // FragmentActivity, so fragment-ktx is pinned to a version that pairs with activity 1.9.x.
     implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.fragment:fragment-ktx:1.9.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     implementation("androidx.room:room-runtime:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
 
-    implementation("net.zetetic:sqlcipher-android:4.18.0")
-    implementation("androidx.sqlite:sqlite-ktx:2.7.0")
+    implementation("net.zetetic:sqlcipher-android:4.6.1")
+    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
-    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    implementation("dev.chrisbanes.haze:haze:1.7.3")
-    implementation("dev.chrisbanes.haze:haze-materials:1.7.3")
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
 }

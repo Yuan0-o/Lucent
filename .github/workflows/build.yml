@@ -106,8 +106,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           "$SDKMANAGER" \
             "platform-tools" \
-            "platforms;android-37" \
-            || "$SDKMANAGER" --channel=3 "platforms;android-37"  # API 37 may sit on the canary channel \
+            "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
