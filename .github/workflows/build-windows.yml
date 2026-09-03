@@ -55,7 +55,7 @@ jobs:
         # never a failure. This removes most of the ~3.5 min per-run Maven re-download.
         uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.7.1'
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # ---- MSVC developer environment + compiler cache (backlog W-2) ----

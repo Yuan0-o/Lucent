@@ -9,7 +9,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 // swaps only the genuinely platform-bound pieces for desktop implementations of the SAME package,
 // name, and API. See the handover document for the architecture in full.
 //
-// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.2, okhttp 4.12.0) and the
+// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.3, okhttp 5.5.0) and the
 // desktop toolchain the root build declares (Compose Multiplatform 1.11.1). Keeping them in lockstep
 // is what lets the shared source compile identically on both sides.
 
@@ -47,19 +47,19 @@ dependencies {
 
     // Coroutines: -core is the engine; -swing supplies Dispatchers.Main on the desktop (the Swing/AWT
     // event thread Compose for Desktop renders on). Same 1.8.1 line as :app's -android artifact.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
 
     // Frosted-glass blur, identical to :app so Glass.kt compiles unchanged.
-    implementation("dev.chrisbanes.haze:haze:1.7.2")
-    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
+    implementation("dev.chrisbanes.haze:haze:1.7.3")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.3")
 
     // Networking for the cloud assistant — same version as :app.
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
 
     // Android ships org.json in the platform; the desktop JVM does not, so bring it in explicitly.
     // The shared code (ApiProfiles, AppLock, BackupManager, …) uses org.json.JSONObject throughout.
-    implementation("org.json:json:20240303")
+    implementation("org.json:json:20260814")
 
     // SQLite JDBC driver — io.github.willena:sqlite-jdbc, the drop-in Xerial build whose SQLite
     // core is SQLite3MultipleCiphers, i.e. it speaks the SQLCipher scheme Db.kt keys with. This is
@@ -77,10 +77,10 @@ dependencies {
     // (latest as of 2026-07-22 is 3.53.2.0).
     // NEVER fall back to org.xerial here — that silently ships an unencrypted store, and the
     // self-check below will (rightly) fail the build in red if anyone tries.
-    implementation("io.github.willena:sqlite-jdbc:3.51.2.0")
+    implementation("io.github.willena:sqlite-jdbc:3.53.4.0")
 
     // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
-    implementation("org.apache.pdfbox:pdfbox:3.0.3")
+    implementation("org.apache.pdfbox:pdfbox:3.0.8")
 
     // ---- C-group task 10: the bundled CJK face for PDF export ----
     //
