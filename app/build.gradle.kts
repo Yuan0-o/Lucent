@@ -13,18 +13,21 @@ plugins {
 //                Users never see it. It must never go backwards, so CI passes the workflow run
 //                number: it increases by one on every run, which is exactly what this field wants.
 //
-//   versionName  The string people actually read ("2.0.0"). It is NOT tied to the run number any
+//   versionName  The string people actually read ("2.2.1"). It is NOT tied to the run number any
 //                more. It comes from MARKETING_VERSION below, or from -PversionName=... which the
 //                workflow's optional "Version name" box supplies. Build ten times in a row and it
-//                stays 2.0.0; change it only when you decide a release deserves a new number.
+//                stays 2.2.1; change it only when you decide a release deserves a new number.
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
 
 // The user-facing version. Edit this line (or type a value into the workflow box) to change it.
 //
+// 2.2.1 — patch release: no user-facing Android change. The number is realigned with the Windows
+// installer (desktop/build.gradle.kts packageVersion) so both platforms of this release report the
+// same version again.
 // 2.0.0 — the three-group 1.x delivery, integrated. A major bump rather than 1.1.0 because the
 // database moves from schema 11 to 15 across four migrations and the on-disk shape is no longer
 // readable by a 1.0.0 build. The version people read should say that.
-val MARKETING_VERSION = "2.0.0"
+val MARKETING_VERSION = "2.2.1"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

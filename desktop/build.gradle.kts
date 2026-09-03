@@ -123,17 +123,21 @@ compose.desktop {
             // workflow uploads exactly the one .exe this produces.
             targetFormats(TargetFormat.Exe)
             packageName = "Lucent"
-            // 2.2.0. This MUST be bumped for WiX to perform an in-place upgrade: the installer only
+            // 2.2.1. This MUST be bumped for WiX to perform an in-place upgrade: the installer only
             // replaces an existing install when the incoming version is HIGHER, so shipping a new
             // build under the old number leaves the user with two parallel installs and no obvious
             // way to tell them apart.
+            //
+            // 2.2.1 is the patch on 2.2.0: no user-facing change — it realigns the desktop number
+            // with Android's MARKETING_VERSION (both are 2.2.1 now) and hardens the Windows CI
+            // warm-up step against long repository outages (see build-windows.yml).
             //
             // 2.0.0 was the integrated three-group release. 2.2.0 carries the editor and whiteboard
             // work on top of it — the rich-text toolbar rebuilt as a grid with styles that can be
             // armed before typing, drag-to-reorder actually taking effect, canonical note tags that
             // survive a language switch, scheduled backups wired end to end, and the whiteboard's
             // clear/redraw and full-screen fixes.
-            packageVersion = "2.2.0"
+            packageVersion = "2.2.1"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with
