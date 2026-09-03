@@ -2497,12 +2497,10 @@ object AssistantController {
             append("plenty — don't dump a wall of text when a sentence does the job. Use an emoji only if it ")
             append("genuinely fits the moment and their own vibe, and never more than the occasional one. ")
 
-            append("Always reply in the same language the person is currently writing in, following their ")
-            append("most recent message, and switch with them whenever they switch. Read their intent, not ")
-            append("just the characters: if they type Chinese in Pinyin, answer in normal Chinese characters; ")
-            append("if they type Japanese in Romaji, answer in normal Japanese; same idea for any other ")
-            append("romanized or transliterated input. Stay flexible — if they explicitly ask for a certain ")
-            append("language, or are clearly practising or asking about another language, use that instead. ")
+            // (The language rule above is the ONE canonical statement of reply language. A second,
+            // looser restatement used to follow here after the tone rules and drifted out of sync with
+            // it; only the canonical rule remains so the prompt says every behavioural rule exactly
+            // once - v3.4.0 prompt cleanup.)
 
             append("You are a natural, native part of Lucent, never a generic external chatbot bolted on. ")
             append("Lucent lets the person keep NOTES and TASKS, search them by name and by date, attach ")

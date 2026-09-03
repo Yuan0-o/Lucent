@@ -144,6 +144,37 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+    // v3.4.0: every red error hint is TRANSIENT - it disappears three seconds after the LAST time
+    // it was set, so a user hammering wrong passwords can never keep a stale banner pinned on
+    // screen (each fresh failure restarts the three-second clock). The lockout countdown is a
+    // separate, live line that ticks down once per second and clears itself when it reaches zero.
+    var errorClearsAt by remember { mutableStateOf(0L) }
+    var lockoutSeconds by remember { mutableStateOf(0) }
+
+    fun showError(msg: String) {
+        error = msg
+        errorClearsAt = System.currentTimeMillis() + 3000L
+    }
+
+    // Auto-dismiss the transient hint 3 s after the last set (restarted whenever [error] changes).
+    LaunchedEffect(error) {
+        if (error.isNotBlank() && lockoutSeconds == 0) {
+            val deadline = errorClearsAt.coerceAtLeast(System.currentTimeMillis() + 3000L)
+            while (System.currentTimeMillis() < deadline && lockoutSeconds == 0) {
+                kotlinx.coroutines.delay(200)
+            }
+            if (lockoutSeconds == 0 && error.isNotBlank()) error = ""
+        }
+    }
+    // Live per-second countdown while a lockout is in force.
+    LaunchedEffect(lockoutSeconds) {
+        while (lockoutSeconds > 0) {
+            kotlinx.coroutines.delay(1000)
+            lockoutSeconds--
+        }
+        error = ""
+        errorClearsAt = 0L
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         FluidGlassBackground(palette = paletteColors, backdropColor = backdropColor, animated = backgroundAnimated, modifier = Modifier.fillMaxSize())
@@ -175,7 +206,14 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        if (error.isNotEmpty()) {
+                        if (lockoutSeconds > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                com.lucent.app.i18n.S.lockRetryIn(
+                                    com.lucent.app.data.PasswordAttempts.formatRemaining(lockoutSeconds * 1000L)),
+                                color = errorTint, fontSize = 13.sp
+                            )
+                        } else if (error.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(error, color = errorTint, fontSize = 13.sp)
                         }
@@ -195,13 +233,17 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                         repo.passwordAttemptStateOnce())
                                     val wait = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(state)
                                     if (wait > 0L) {
-                                        error = com.lucent.app.i18n.S.lockRetryIn(
-                                            com.lucent.app.data.PasswordAttempts.formatRemaining(wait))
+                                        // Lockout in force: show a LIVE countdown (ticks each second)
+                                        // instead of a stale one-shot message.
+                                        error = ""
+                                        lockoutSeconds = ((wait + 999L) / 1000L).toInt().coerceAtLeast(1)
                                         return@launch
                                     }
                                     if (AppLock.verifyPassword(credentials, password)) {
                                         password = ""
                                         error = ""
+                                        errorClearsAt = 0L
+                                        lockoutSeconds = 0
                                         repo.setPasswordAttemptState(
                                             com.lucent.app.data.PasswordAttempts.registerSuccess().toJson())
                                         AppLockController.unlock()
@@ -219,12 +261,16 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                                     repo)
                                             }
                                             error = ""
+                                            lockoutSeconds = 0
                                             AppLockController.unlock()
                                         } else {
                                             val remain = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(next)
-                                            error = if (remain > 0L) com.lucent.app.i18n.S.lockRetryIn(
-                                                com.lucent.app.data.PasswordAttempts.formatRemaining(remain))
-                                            else com.lucent.app.i18n.S.lockWrongPassword
+                                            if (remain > 0L) {
+                                                error = ""
+                                                lockoutSeconds = ((remain + 999L) / 1000L).toInt().coerceAtLeast(1)
+                                            } else {
+                                                showError(com.lucent.app.i18n.S.lockWrongPassword)
+                                            }
                                         }
                                     }
                                 }
