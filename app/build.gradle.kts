@@ -46,7 +46,7 @@ android {
     compileSdk = 37
 
     // Native code arrives with the local-model feature (llama.cpp via CMake) and the Rust
-    // acceleration library. r27 is the LTS line AGP 8.12 targets; CI runners carry it and AGP
+    // acceleration library. NDK 28.2 is what AGP 9.4 defaults to; CI installs the same build.
     // auto-installs it locally when missing.
     ndkVersion = "28.2.13676358"
 

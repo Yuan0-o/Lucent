@@ -50,7 +50,7 @@ jobs:
 
       - name: Setup Gradle
         # Same approach as build.yml: the wrapper isn't committed, so the action provides Gradle
-        # 8.13 directly. DECISION (backlog A-6/W-2 preamble, recorded 2026-07-26): dependency cache
+        # 9.7.1 directly. DECISION (backlog A-6/W-2 preamble, recorded 2026-07-26): dependency cache
         # ON — main writes, other refs read; a rare cache-service hiccup degrades to a warning,
         # never a failure. This removes most of the ~3.5 min per-run Maven re-download.
         uses: gradle/actions/setup-gradle@v6
