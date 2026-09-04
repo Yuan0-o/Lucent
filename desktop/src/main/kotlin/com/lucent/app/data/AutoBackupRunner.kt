@@ -4,6 +4,7 @@ import com.lucent.app.AppScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 /**
  * Automatic backup, task 14 — the half that runs.
