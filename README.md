@@ -190,6 +190,25 @@ short version, with our gratitude, is this:
 | [llama.cpp & GGML](https://github.com/ggml-org/llama.cpp) — © Georgi Gerganov & contributors | an entire language model, on your own silicon | MIT |
 | [org.json](https://github.com/stleary/JSON-java) — © JSON.org | reading JSON on the desktop | JSON License |
 
+### And the notes apps we studied
+
+Six mature notes-and-tasks applications were read, poked, and taken to tea for this project — not
+for their code, which Lucent does not bundle, but for the things their authors figured out first.
+Their fingerprints are on Lucent's structure and its manners, rather than on its binaries, and a
+design debt repaid loudly is the least we can do:
+
+| Studied for | What Lucent borrowed | Their words |
+|---|---|---|
+| [Quillpad](https://github.com/quillpad/quillpad) | the two-level drawer — pin where you can reach it, configuration one level down | APACHE-2.0 |
+| [Omni-Notes](https://github.com/federicoiosue/Omni-Notes) | the honesty of system pickers and long-press actions that explain themselves | GPL-3.0 |
+| [OpenNote-Compose](https://github.com/YangDai2003/OpenNote-Compose) | the dynamic-colour priority model — wallpaper first, stored choices never destroyed | AGPL-3.0 |
+| [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy) | saying what is happening in the open, in the settings page and elsewhere | AGPL-3.0 |
+| [Logseq](https://github.com/logseq/logseq) | that a notes app should feel like a place, not a dashboard | AGPL-3.0 |
+| [MarkLeaf](https://github.com/jeiel85/markleaf-android) | that the editorial surface stays calm while the configuration waits its turn | GPL-3.0 |
+
+Lucent's own licence governs everything you install; the projects above are honoured as sources of
+ideas and arrangements, not as included works. The structure is ours; the courtesy is theirs.
+
 A particular word for **SQLCipher**, whose BSD-style licence asks — not unreasonably, given it is
 the thing keeping your diary shut — that its copyright and notice be reproduced somewhere a user can
 actually find them. So they are, in the notices file above; if you ship a build of Lucent, keep them
