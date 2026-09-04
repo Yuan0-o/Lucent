@@ -2891,7 +2891,6 @@ private fun HomeSectionHeader(label: String) {
 }
 
 /** The glyph for a template chip. Kept here so `data/NoteTemplates.kt` stays free of Compose types. */
-@Composable
 /**
  * v2.7.4: the long-press target of a template chip. A real FilterChip cannot carry a long-press,
  * so the chip is wrapped in a low-level detector that waits for the hold, consumes the event (which
