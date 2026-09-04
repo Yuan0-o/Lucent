@@ -199,12 +199,12 @@ design debt repaid loudly is the least we can do:
 
 | Studied for | What Lucent borrowed | Their words |
 |---|---|---|
-| [Quillpad](https://github.com/quillpad/quillpad) | the two-level drawer — pin where you can reach it, configuration one level down | APACHE-2.0 |
+| [Quillpad](https://github.com/quillpad/quillpad) | the two-level drawer — pin where you can reach it, configuration one level down | GPL-3.0 |
 | [Omni-Notes](https://github.com/federicoiosue/Omni-Notes) | the honesty of system pickers and long-press actions that explain themselves | GPL-3.0 |
-| [OpenNote-Compose](https://github.com/YangDai2003/OpenNote-Compose) | the dynamic-colour priority model — wallpaper first, stored choices never destroyed | AGPL-3.0 |
+| [OpenNote-Compose](https://github.com/YangDai2003/OpenNote-Compose) | the dynamic-colour priority model — wallpaper first, stored choices never destroyed | GPL-3.0 |
 | [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy) | saying what is happening in the open, in the settings page and elsewhere | AGPL-3.0 |
 | [Logseq](https://github.com/logseq/logseq) | that a notes app should feel like a place, not a dashboard | AGPL-3.0 |
-| [MarkLeaf](https://github.com/jeiel85/markleaf-android) | that the editorial surface stays calm while the configuration waits its turn | GPL-3.0 |
+| [MarkLeaf](https://github.com/jeiel85/markleaf-android) | that the editorial surface stays calm while the configuration waits its turn | Apache-2.0 |
 
 Lucent's own licence governs everything you install; the projects above are honoured as sources of
 ideas and arrangements, not as included works. The structure is ours; the courtesy is theirs.
