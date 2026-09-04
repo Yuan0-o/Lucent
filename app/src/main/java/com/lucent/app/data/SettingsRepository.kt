@@ -128,6 +128,14 @@ private object SettingsKeys {
     val CUSTOM_TEMPLATES = stringPreferencesKey("custom_templates")
     val TEMPLATE_DRAFT = stringPreferencesKey("template_draft")
     val HIDDEN_TEMPLATES = stringPreferencesKey("hidden_templates")
+    // v2.7.5: cloud storage module (WebDAV). The password is stored encrypted via CryptoUtil.
+    val CLOUD_ENABLED = booleanPreferencesKey("cloud_enabled")
+    val CLOUD_PROVIDER = stringPreferencesKey("cloud_provider")
+    val CLOUD_URL = stringPreferencesKey("cloud_url")
+    val CLOUD_USER = stringPreferencesKey("cloud_user")
+    val CLOUD_PASSWORD_ENC = stringPreferencesKey("cloud_password_enc")
+    val CLOUD_FOLDER = stringPreferencesKey("cloud_folder")
+    val CLOUD_AUTO_BACKUP = booleanPreferencesKey("cloud_auto_backup")
 
     // Whether tappable links ([[wiki]] and [text](url)) are active inside Markdown mode. A sub-toggle
     // of Markdown: when Markdown is off there are no links regardless. Default OFF — links are now
@@ -740,6 +748,35 @@ class SettingsRepository(private val context: Context) {
     val hiddenTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.HIDDEN_TEMPLATES] ?: "" }
     suspend fun setHiddenTemplatesJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.HIDDEN_TEMPLATES] = json }
+    }
+    // ---- v2.7.5: cloud storage (WebDAV) ----
+    val cloudEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_ENABLED] ?: false }
+    suspend fun setCloudEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_ENABLED] = value }
+    }
+    val cloudProvider: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PROVIDER] ?: "Nutstore" }
+    suspend fun setCloudProvider(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PROVIDER] = value }
+    }
+    val cloudUrl: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_URL] ?: "" }
+    suspend fun setCloudUrl(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_URL] = value }
+    }
+    val cloudUser: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_USER] ?: "" }
+    suspend fun setCloudUser(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_USER] = value }
+    }
+    val cloudPasswordEnc: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "" }
+    suspend fun setCloudPasswordEnc(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PASSWORD_ENC] = value }
+    }
+    val cloudFolder: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_FOLDER] ?: "Lucent" }
+    suspend fun setCloudFolder(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_FOLDER] = value }
+    }
+    val cloudAutoBackup: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false }
+    suspend fun setCloudAutoBackup(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_AUTO_BACKUP] = value }
     }
 
     /**

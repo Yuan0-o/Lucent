@@ -1845,6 +1845,10 @@ fun NotesScreen(active: Boolean = true) {
                                 onValueChange = { newCustomTag = it },
                                 placeholder = { Text(com.lucent.app.i18n.S.newTag) },
                                 singleLine = true,
+                                // v2.7.5: compact 0.8-height box - the default vertical padding
+                                // (16 dp) does not fit 45 dp and clips the placeholder's top half,
+                                // so the vertical padding is tightened to match the shrunken box.
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                                 modifier = Modifier.weight(1f).height(45.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))

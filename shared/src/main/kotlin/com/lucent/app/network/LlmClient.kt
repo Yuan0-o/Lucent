@@ -220,7 +220,11 @@ object LlmClient {
                 when (spec) {
                     ApiSpec.OPENAI -> {
                         val delta = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
-                        val piece = delta?.optString("content", "") ?: ""
+                        // DeepSeek-style providers send "content": null while reasoning (their text
+                        // rides in reasoning_content); org.json's optString turns an explicit JSON
+                        // null into the literal "null", which the chat then displays. Null-guard
+                        // every piece so a thinking model types nothing while it thinks.
+                        val piece = delta?.let { if (it.isNull("content")) "" else it.optString("content", "") } ?: ""
                         if (piece.isNotEmpty()) { fullText.append(piece); onDelta(piece) }
                         delta?.optJSONArray("tool_calls")?.let { tcArr ->
                             for (i in 0 until tcArr.length()) {
@@ -230,7 +234,7 @@ object LlmClient {
                                 tc.optString("id", "").takeIf { it.isNotEmpty() }?.let { acc.id = it }
                                 tc.optJSONObject("function")?.let { fn ->
                                     fn.optString("name", "").takeIf { it.isNotEmpty() }?.let { acc.name = it }
-                                    acc.args.append(fn.optString("arguments", ""))
+                                    acc.args.append(if (fn.isNull("arguments")) "" else fn.optString("arguments", ""))
                                 }
                             }
                         }
@@ -255,12 +259,12 @@ object LlmClient {
                                 val delta = json.optJSONObject("delta")
                                 when (delta?.optString("type")) {
                                     "text_delta" -> {
-                                        val piece = delta.optString("text", "")
+                                        val piece = if (delta.isNull("text")) "" else delta.optString("text", "")
                                         if (piece.isNotEmpty()) { fullText.append(piece); onDelta(piece) }
                                     }
                                     "input_json_delta" -> {
                                         val idx = json.optInt("index", 0)
-                                        anthropicToolAcc[idx]?.args?.append(delta.optString("partial_json", ""))
+                                        anthropicToolAcc[idx]?.args?.append(if (delta.isNull("partial_json")) "" else delta.optString("partial_json", ""))
                                     }
                                 }
                             }
@@ -271,7 +275,7 @@ object LlmClient {
                         if (parts != null) {
                             for (i in 0 until parts.length()) {
                                 val part = parts.getJSONObject(i)
-                                val piece = part.optString("text", "")
+                                val piece = if (part.isNull("text")) "" else part.optString("text", "")
                                 if (piece.isNotEmpty()) { fullText.append(piece); onDelta(piece) }
                                 part.optJSONObject("functionCall")?.let { fc ->
                                     val args = fc.optJSONObject("args") ?: JSONObject()

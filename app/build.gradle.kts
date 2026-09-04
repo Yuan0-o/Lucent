@@ -60,7 +60,11 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // path asks what to change deterministically and re-proposes after your answer, the confirm dialog
 // is one row on every device, the new-tag field is 0.8 tall, and on Android the blob background
 // renders fully off the UI thread (isolated renderer at half resolution). See the v2.7.4 notes.
-val MARKETING_VERSION = "2.7.4"
+// 2.7.5: DeepSeek-style streams no longer type "null" while reasoning; the new-tag box is a true
+// 0.8 with its label intact; a cloud storage module (WebDAV: Nutstore/Nextcloud/Koofr/custom) sits
+// in Settings between Editor and Security with test, auto-backup mirroring, backup-now and
+// restore-from-cloud; Huawei claim removed from the 2.7.0 notes. See the v2.7.5 notes.
+val MARKETING_VERSION = "2.7.5"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

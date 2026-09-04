@@ -126,7 +126,34 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
     val db = AppDatabase.getInstance(context)
     val settings = SettingsRepository(context)
     resolver.openOutputStream(file)?.use { out ->
-        BackupManager.exportEncrypted(context, db, settings, out, null)
+        // v2.7.5: tee the same bytes for the cloud mirror (the folder picker's stream is
+        // write-only, so the backup is captured as it is written).
+        val tee = java.io.ByteArrayOutputStream()
+        val mirrored = object : java.io.OutputStream() {
+            override fun write(b: Int) { out.write(b); tee.write(b) }
+            override fun write(b: ByteArray, off: Int, len: Int) { out.write(b, off, len); tee.write(b, off, len) }
+            override fun flush() = out.flush()
+            override fun close() = out.close()
+        }
+        BackupManager.exportEncrypted(context, db, settings, mirrored, null)
+        val cloudOn = runCatching {
+            val repo = SettingsRepository(context)
+            repo.cloudEnabled.first() && repo.cloudAutoBackup.first() &&
+                repo.cloudUrl.first().isNotBlank() && repo.cloudUser.first().isNotBlank()
+        }.getOrDefault(false)
+        if (cloudOn) {
+            runCatching {
+                val repo = SettingsRepository(context)
+                val cfg = com.lucent.app.data.CloudSync.Config(
+                    url = repo.cloudUrl.first(),
+                    user = repo.cloudUser.first(),
+                    password = com.lucent.app.data.CryptoUtil.decrypt(repo.cloudPasswordEnc.first()),
+                    folder = repo.cloudFolder.first().ifBlank { "Lucent" }
+                )
+                com.lucent.app.data.CloudSync.upload(cfg, name, tee.toByteArray())
+            }
+            // A failed cloud upload never fails the local backup - it is a mirror, not a hostage.
+        }
     } ?: throw java.io.IOException("could not open $name")
 }
 

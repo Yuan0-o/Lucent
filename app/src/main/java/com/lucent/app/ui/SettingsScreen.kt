@@ -117,7 +117,7 @@ import androidx.compose.ui.text.style.TextAlign
 //   - LocalModel: the on-device GGUF assistant — import, enable, inspect, delete. It lives under
 //     Assistant beside API and Memory, because it IS an assistant backend: the fourth answer to
 //     "where do replies come from".
-private enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Security, Privacy, Data }
+private enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data }
 
 /** Which kind of item the selective Markdown-export picker is currently choosing. */
 private enum class ExportKind { NOTES, TASKS }
@@ -1015,7 +1015,7 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.LocalModel -> route = SettingsRoute.Assistant
             SettingsRoute.Theme, SettingsRoute.Background -> route = SettingsRoute.Appearance
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
-            SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> route = SettingsRoute.Root
+            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> route = SettingsRoute.Root
             else -> route = SettingsRoute.Root
         }
     }
@@ -2992,6 +2992,10 @@ fun SettingsScreen(active: Boolean = true) {
             NavCard(S.settingsAssistantTitle, S.settingsAssistantSub) { route = SettingsRoute.Assistant }
             Spacer(modifier = Modifier.height(12.dp))
             NavCard(S.settingsEditorTitle, S.settingsEditorSub) { route = SettingsRoute.Editor }
+            Spacer(modifier = Modifier.height(12.dp))
+            // v2.7.5: cloud storage lives between Editor and Security - a capability of the app's
+            // data (backup) side, not a privacy/security guarantee, hence the position.
+            NavCard(S.cloudTitle, S.cloudSub) { route = SettingsRoute.Cloud }
             Spacer(modifier = Modifier.height(12.dp))
             NavCard(S.settingsSecurityTitle, S.settingsSecuritySub) { route = SettingsRoute.Security }
             Spacer(modifier = Modifier.height(12.dp))
@@ -5084,6 +5088,12 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Background -> BackgroundPage()
 
             SettingsRoute.Editor -> EditorPage()
+
+            SettingsRoute.Cloud -> CloudSettingsPage(
+                repo = repo,
+                showToast = { msg -> LucentToast.show(context, msg) },
+                onBack = { route = SettingsRoute.Root }
+            )
 
             SettingsRoute.Security -> SecurityPage()
 

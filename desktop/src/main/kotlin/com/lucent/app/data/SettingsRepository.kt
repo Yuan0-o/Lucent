@@ -97,6 +97,14 @@ class SettingsRepository(private val context: Context) {
         const val CUSTOM_TEMPLATES = "custom_templates"
         const val TEMPLATE_DRAFT = "template_draft"
         const val HIDDEN_TEMPLATES = "hidden_templates"
+        // v2.7.5: cloud storage module (WebDAV). Password stored encrypted via CryptoUtil.
+        const val CLOUD_ENABLED = "cloud_enabled"
+        const val CLOUD_PROVIDER = "cloud_provider"
+        const val CLOUD_URL = "cloud_url"
+        const val CLOUD_USER = "cloud_user"
+        const val CLOUD_PASSWORD_ENC = "cloud_password_enc"
+        const val CLOUD_FOLDER = "cloud_folder"
+        const val CLOUD_AUTO_BACKUP = "cloud_auto_backup"
         const val LINKS_ENABLED = "links_enabled"
         const val BACKGROUND_ANIMATION_ENABLED = "background_animation_enabled"
         const val APP_LOCK_ENABLED = "app_lock_enabled"
@@ -483,6 +491,21 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTemplateDraftJson(json: String) { edit { it[K.TEMPLATE_DRAFT] = json } }
     val hiddenTemplatesJson: Flow<String> = state.map { str(it, K.HIDDEN_TEMPLATES) ?: "" }
     suspend fun setHiddenTemplatesJson(json: String) { edit { it[K.HIDDEN_TEMPLATES] = json } }
+    // ---- v2.7.5: cloud storage (WebDAV) ----
+    val cloudEnabled: Flow<Boolean> = state.map { bool(it, K.CLOUD_ENABLED) ?: false }
+    suspend fun setCloudEnabled(value: Boolean) { edit { it[K.CLOUD_ENABLED] = value } }
+    val cloudProvider: Flow<String> = state.map { str(it, K.CLOUD_PROVIDER) ?: "Nutstore" }
+    suspend fun setCloudProvider(value: String) { edit { it[K.CLOUD_PROVIDER] = value } }
+    val cloudUrl: Flow<String> = state.map { str(it, K.CLOUD_URL) ?: "" }
+    suspend fun setCloudUrl(value: String) { edit { it[K.CLOUD_URL] = value } }
+    val cloudUser: Flow<String> = state.map { str(it, K.CLOUD_USER) ?: "" }
+    suspend fun setCloudUser(value: String) { edit { it[K.CLOUD_USER] = value } }
+    val cloudPasswordEnc: Flow<String> = state.map { str(it, K.CLOUD_PASSWORD_ENC) ?: "" }
+    suspend fun setCloudPasswordEnc(value: String) { edit { it[K.CLOUD_PASSWORD_ENC] = value } }
+    val cloudFolder: Flow<String> = state.map { str(it, K.CLOUD_FOLDER) ?: "Lucent" }
+    suspend fun setCloudFolder(value: String) { edit { it[K.CLOUD_FOLDER] = value } }
+    val cloudAutoBackup: Flow<Boolean> = state.map { bool(it, K.CLOUD_AUTO_BACKUP) ?: false }
+    suspend fun setCloudAutoBackup(value: Boolean) { edit { it[K.CLOUD_AUTO_BACKUP] = value } }
 
     // Mutually exclusive — see the note on RICH_TEXT_ENABLED in SettingsKeys. Both flags move in a
     // single edit so there is never an instant where both read as on.
