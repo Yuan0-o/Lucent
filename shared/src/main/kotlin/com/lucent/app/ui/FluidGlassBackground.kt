@@ -133,6 +133,36 @@ private const val SQUASH_AMOUNT = 0.07f
 // squares spinning opposite ways, which stops the motion from looking mechanically synchronised.
 private val PERIOD_ROTATE = floatArrayOf(21000f, 24000f, 27000f, 30000f, 33000f, 36000f)
 
+/**
+ * The exact oscillator math one blob frame uses, exposed for the Android isolated renderer
+ * (v2.7.4). [out] receives per-blob `cx, cy, radius, corner, squash, angleDeg` in the same layout
+ * the native path (and this file's own fallback) produce - the formulas below are kept in lockstep
+ * with the fallback branch of [FluidGlassBackground]'s draw loop, so the two paths can never
+ * diverge. The native fast path is untouched: it is byte-identical output, computed in Rust.
+ */
+fun computeBlobFrameParams(t: Float, width: Float, height: Float, out: FloatArray) {
+    val baseRadius = minOf(width, height) * 0.42f
+    for (i in 0 until BLOB_COUNT) {
+        val o = i * 6
+        val ax = TAU * (t / PERIOD_X[i]) + PHASE_X[i]
+        val ay = TAU * (t / PERIOD_Y[i]) + PHASE_Y[i]
+        val pulsePhase = (t / (2f * PERIOD_PULSE[i])) % 1f
+        val triangle = if (pulsePhase < 0.5f) pulsePhase * 2f else (1f - pulsePhase) * 2f
+        val eased = triangle * triangle * (3f - 2f * triangle)
+        val pulse = 0.82f + 0.36f * eased
+        out[o] = (BASE_X[i] + AMP_X[i] * cos(ax)) * width
+        out[o + 1] = (BASE_Y[i] + AMP_Y[i] * sin(ay)) * height
+        out[o + 2] = baseRadius * SIZE_FACTOR[i] * pulse
+        val morphRaw = 0.62f * sin(TAU * (t / PERIOD_MORPH_A[i]) + PHASE_MORPH[i]) +
+            0.38f * sin(TAU * (t / PERIOD_MORPH_B[i]))
+        val morph01 = ((morphRaw + 1f) * 0.5f).coerceIn(0f, 1f)
+        val morph = morph01 * morph01 * (3f - 2f * morph01)
+        out[o + 3] = CORNER_CIRCLE + (CORNER_SQUARE - CORNER_CIRCLE) * morph
+        out[o + 4] = 1f + SQUASH_AMOUNT * sin(TAU * (t / PERIOD_SQUASH[i]) + PHASE_MORPH[i])
+        val dir = if (i % 2 == 0) 1f else -1f
+        out[o + 5] = dir * (t / PERIOD_ROTATE[i]) * 360f
+    }
+}
 @Composable
 fun FluidGlassBackground(
     palette: List<Color>,
@@ -260,36 +290,6 @@ fun FluidGlassBackground(
     }
 
 
-/**
- * The exact oscillator math one blob frame uses, exposed for the Android isolated renderer
- * (v2.7.4). [out] receives per-blob `cx, cy, radius, corner, squash, angleDeg` in the same layout
- * the native path (and this file's own fallback) produce - the formulas below are kept in lockstep
- * with the fallback branch of [FluidGlassBackground]'s draw loop, so the two paths can never
- * diverge. The native fast path is untouched: it is byte-identical output, computed in Rust.
- */
-fun computeBlobFrameParams(t: Float, width: Float, height: Float, out: FloatArray) {
-    val baseRadius = minOf(width, height) * 0.42f
-    for (i in 0 until BLOB_COUNT) {
-        val o = i * 6
-        val ax = TAU * (t / PERIOD_X[i]) + PHASE_X[i]
-        val ay = TAU * (t / PERIOD_Y[i]) + PHASE_Y[i]
-        val pulsePhase = (t / (2f * PERIOD_PULSE[i])) % 1f
-        val triangle = if (pulsePhase < 0.5f) pulsePhase * 2f else (1f - pulsePhase) * 2f
-        val eased = triangle * triangle * (3f - 2f * triangle)
-        val pulse = 0.82f + 0.36f * eased
-        out[o] = (BASE_X[i] + AMP_X[i] * cos(ax)) * width
-        out[o + 1] = (BASE_Y[i] + AMP_Y[i] * sin(ay)) * height
-        out[o + 2] = baseRadius * SIZE_FACTOR[i] * pulse
-        val morphRaw = 0.62f * sin(TAU * (t / PERIOD_MORPH_A[i]) + PHASE_MORPH[i]) +
-            0.38f * sin(TAU * (t / PERIOD_MORPH_B[i]))
-        val morph01 = ((morphRaw + 1f) * 0.5f).coerceIn(0f, 1f)
-        val morph = morph01 * morph01 * (3f - 2f * morph01)
-        out[o + 3] = CORNER_CIRCLE + (CORNER_SQUARE - CORNER_CIRCLE) * morph
-        out[o + 4] = 1f + SQUASH_AMOUNT * sin(TAU * (t / PERIOD_SQUASH[i]) + PHASE_MORPH[i])
-        val dir = if (i % 2 == 0) 1f else -1f
-        out[o + 5] = dir * (t / PERIOD_ROTATE[i]) * 360f
-    }
-}
 
     val canvasModifier = modifier
         .fillMaxSize()
