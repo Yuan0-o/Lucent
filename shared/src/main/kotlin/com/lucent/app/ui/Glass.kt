@@ -407,7 +407,7 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup, val f
     MIDNIGHT(listOf(Color(0xFF16213E), Color(0xFF0F3460), Color(0xFF533483)), PaletteGroup.VELVET),
 
     // ---- Solid (elegant single-hue) ----
-    (listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.BLOSSOM, featured = false),
+    BLUSH(listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.BLOSSOM, featured = false),
     LAVENDER(listOf(Color(0xFF4B3A6B), Color(0xFF8A6FB0), Color(0xFFCBB6E8)), PaletteGroup.VIVID),
     SAGE(listOf(Color(0xFF2F4A3C), Color(0xFF5E8B6F), Color(0xFFAFCBB4)), PaletteGroup.EVERGREEN),
     SAND(listOf(Color(0xFF7A5C36), Color(0xFFC1996A), Color(0xFFEAD6B8)), PaletteGroup.DAWN),
@@ -481,13 +481,13 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup, val f
     // different greys.
     STONE(listOf(Color(0xFF403E3A), Color(0xFF807A70), Color(0xFFD2CBC0)), PaletteGroup.EARTH),
     // Cold slate navy. MIDNIGHT's light member (0xFF533483) is violet; NOCTURNE never leaves blue.
-    (listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.AQUA, featured = false),
+    NOCTURNE(listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.AQUA, featured = false),
     // Cool red-pink. CRIMSON is pushed to the ORANGE side of red; BLUSH is a soft rose ramp —
     // CHERRY is the blue side of red and darker than either.
     CHERRY(listOf(Color(0xFF450F1E), Color(0xFF94263F), Color(0xFFE2A0B4)), PaletteGroup.BLOSSOM),
     // Burnt orange. EMBERGLOW's mids are saturated fire, AMBER (SOLID) is gold: TANGERINE sits
     // between them as a deep orange with a lighter, warmer light member.
-    (listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.SUNFIRE, featured = false),
+    TANGERINE(listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.SUNFIRE, featured = false),
     // True blue. INDIGO (SOLID) is violet-blue; OCEAN runs teal-blue to cyan. ROYAL is the plain
     // primary blue neither of them is.
     ROYAL(listOf(Color(0xFF17275C), Color(0xFF3E63B0), Color(0xFF9DB8EE)), PaletteGroup.AQUA),
@@ -496,10 +496,10 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup, val f
     AMETHYST(listOf(Color(0xFF34164A), Color(0xFF6E3D9E), Color(0xFFC3A2E0)), PaletteGroup.VELVET),
     // Cool grey-green. SAGE leans yellow-green; FOREST's light member is lime — ALPINE keeps the
     // green cool and muted at every step.
-    (listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.EARTH, featured = false),
+    ALPINE(listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.EARTH, featured = false),
     // Pearl: the lightest neutral of all. STONE is warm grey, MISTY (below) is blue-grey;
     // PEARL carries a faint violet cast and sits apart from both.
-    (listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.EARTH, featured = false),
+    PEARL(listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.EARTH, featured = false),
 
     // ---- SOLID addition ----
     // Eggshell: a cream-khaki single hue. SAND is a tan-brown; EGGSHELL is yellower, softer and
@@ -511,7 +511,7 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup, val f
     CONFETTI(listOf(Color(0xFFFF5E5B), Color(0xFFFFC24B), Color(0xFF6DD5ED)), PaletteGroup.SUNFIRE),
     // Plum -> orchid. NEBULA is magenta-to-deep-blue; GRAPEVINE stays in the violet half and
     // travels dark-to-light instead of light-to-dark.
-    (listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.BLOSSOM, featured = false),
+    GRAPEVINE(listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.BLOSSOM, featured = false),
     // Deep blue -> cyan light. OCEAN ends on bright teal and GLACIER runs pale-to-deep; SEABREEZE
     // is deep-to-pale with a lighter middle than either.
     SEABREEZE(listOf(Color(0xFF123A54), Color(0xFF2F8FB3), Color(0xFFA8E2E0)), PaletteGroup.EVERGREEN),
