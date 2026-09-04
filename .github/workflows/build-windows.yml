@@ -157,7 +157,7 @@ jobs:
       - name: Run desktop unit tests (shared logic)
         shell: pwsh
         run: |
-          .\gradlew.bat :desktop:test --console=plain
+          gradle :desktop:test --no-daemon --console=plain
       - name: Prefetch llama.cpp (pinned b9888)
         shell: pwsh
         run: |
