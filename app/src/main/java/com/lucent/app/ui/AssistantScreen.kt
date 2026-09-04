@@ -1738,16 +1738,7 @@ fun AssistantScreen(active: Boolean = true) {
                     )
                     DropdownMenuItem(
                         text = {
-                            Column {
-                                Text(com.lucent.app.i18n.S.attachFromCloud)
-                                if (!cloudStorageAvailable) {
-                                    Text(
-                                        com.lucent.app.i18n.S.attachCloudUnavailable,
-                                        color = onGradientMuted,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
+                            Text(com.lucent.app.i18n.S.attachFromCloud)
                         },
                         leadingIcon = { Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         enabled = cloudStorageAvailable,

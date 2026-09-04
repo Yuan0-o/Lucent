@@ -109,10 +109,11 @@ fun CloudSettingsPage(
         )
     }
 
+    // The settings root already scrolls; adding verticalScroll here nested a scrollable inside a
+    // scrollable and was measured with infinite constraints (crash on open). No scroll of our own.
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
