@@ -151,6 +151,13 @@ jobs:
       # ---- llama.cpp source, fetched up front with retries (pinned b9888) ----
       # Cloned into the directory desktop/native/CMakeLists.txt pre-seeds from, so the compile step
       # never has to hit the network mid-build. PowerShell here because the runner is Windows.
+      # v2.7.3 (code-review report, Phase 1): the shared business logic's unit tests run on the
+      # JVM here, before any native work - a broken data shape or lockout rule fails in minutes,
+      # not after the DLL builds.
+      - name: Run desktop unit tests (shared logic)
+        shell: pwsh
+        run: |
+          .\gradlew.bat :desktop:test --console=plain
       - name: Prefetch llama.cpp (pinned b9888)
         shell: pwsh
         run: |

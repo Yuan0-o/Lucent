@@ -61,6 +61,12 @@ dependencies {
     // The shared code (ApiProfiles, AppLock, BackupManager, …) uses org.json.JSONObject throughout.
     implementation("org.json:json:20260814")
 
+    // v2.7.3 (code-review report, Phase 1): unit tests for the shared business logic (data shapes,
+    // brute-force ladder, palette uniqueness). They compile and run on the JVM next to the same
+    // shared sources :desktop compiles, so CI can run them without an Android device.
+    testImplementation(kotlin("test"))
+    tasks.withType<Test> { useJUnitPlatform() }
+
     // SQLite JDBC driver — io.github.willena:sqlite-jdbc, the drop-in Xerial build whose SQLite
     // core is SQLite3MultipleCiphers, i.e. it speaks the SQLCipher scheme Db.kt keys with. This is
     // what makes the desktop database encrypted at rest, restoring parity with Android.
@@ -148,7 +154,9 @@ compose.desktop {
             // skipped as planned); bumped so WiX upgrades 2.4.0 installs in place.
                         // 2.7.2 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.0
             // installs in place.
-            packageVersion = "2.7.2"
+                        // 2.7.3 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.2
+            // installs in place.
+            packageVersion = "2.7.3"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with

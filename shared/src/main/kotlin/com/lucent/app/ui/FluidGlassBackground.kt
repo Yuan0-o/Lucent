@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -207,15 +208,49 @@ fun FluidGlassBackground(
     // static frame rather than spinning.
     val inspection = LocalInspectionMode.current
     var elapsedMs by remember { mutableFloatStateOf(0f) }
+    // v2.7.3: the quality level the governor is running at (0 = full). Mirrored into the draw
+    // path so degraded tiers can shed expensive parts of the pipeline (the dark-mode offscreen
+    // fusion layer) instead of only slowing down.
+    var degradeLevel by remember { mutableIntStateOf(0) }
     if (!inspection) {
         LaunchedEffect(Unit) {
             var startNanos = -1L
             var lastWriteMs = 0f
+            // v2.7.3 adaptive frame budget. Fixed 33 ms works when a device can deliver it, but on
+            // a weaker GPU the redraws arrive LATE and the animation becomes a fight: the frame the
+            // background owes is the frame a page transition needs. The governor below watches the
+            // actual delivery gap instead of asserting a budget: six consecutive redraws that land
+            // more than 8 ms late drop one tier (30 -> 24 -> 20 fps; blob motion at 20 fps is
+            // sub-2% of a blob diameter per frame, invisible on these slow curves), and eighteen
+            // on-time redraws climb back up. This is what makes the background keep its *regular*
+            // cadence on weak hardware instead of stuttering at a cadence it cannot hold.
+            var tier = 0
+            val budgetTiers = floatArrayOf(DRIFT_FRAME_BUDGET_MS, 41.7f, 50f)
+            var slowStreak = 0
+            var fastStreak = 0
             while (true) {
                 withInfiniteAnimationFrameNanos { frameNanos ->
                     if (startNanos < 0L) startNanos = frameNanos
                     val ms = (frameNanos - startNanos) / 1_000_000f
-                    if (ms - lastWriteMs >= DRIFT_FRAME_BUDGET_MS) {
+                    val budget = budgetTiers[tier]
+                    if (ms - lastWriteMs >= budget) {
+                        val gap = ms - lastWriteMs
+                        if (gap > budget + 8f) {
+                            slowStreak++
+                            fastStreak = 0
+                            if (slowStreak >= 6 && tier < budgetTiers.size - 1) {
+                                tier++
+                                slowStreak = 0
+                            }
+                        } else {
+                            fastStreak++
+                            slowStreak = 0
+                            if (fastStreak >= 18 && tier > 0) {
+                                tier--
+                                fastStreak = 0
+                            }
+                        }
+                        if (tier != degradeLevel) degradeLevel = tier
                         elapsedMs = ms
                         lastWriteMs = ms
                     }
@@ -231,7 +266,10 @@ fun FluidGlassBackground(
         // as a compositing strategy lets Compose manage and reuse the layer instead of us allocating
         // a screen-sized one by hand every frame, which is what the old saveLayer() did.
         .then(
-            if (additive) Modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+            // v2.7.3: the offscreen fusion pass is the most expensive single part of the dark-mode
+            // background; a device that cannot keep up sheds it on the degraded tiers (the blob
+            // overlaps brighten slightly — a subtler change than the jank it replaces).
+            if (additive && degradeLevel == 0) Modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
             else Modifier
         )
 

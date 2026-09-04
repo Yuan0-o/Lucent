@@ -87,6 +87,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -1432,37 +1435,44 @@ fun NotesScreen(active: Boolean = true) {
                                     )
                                 }
                                 customTemplates.forEach { t ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
-                                            .background(onGradient.copy(alpha = 0.10f))
-                                            .border(
-                                                1.dp,
-                                                onGradient.copy(alpha = 0.22f),
-                                                androidx.compose.foundation.shape.RoundedCornerShape(50)
-                                            )
-                                            .combinedClickable(
-                                                onClick = { applyCustomTemplate(t) },
-                                                onLongClick = { pendingTemplateDeleteId = t.id }
-                                            )
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    // v2.7.3: a custom template chip wears EXACTLY the built-ins'
+                                    // FilterChip look - same token shape, same rounded rectangle,
+                                    // same fill and outline - so the two families are twins on the
+                                    // strip. FilterChip itself cannot take a long-press, so the
+                                    // chip surface is a Surface dressed in FilterChipDefaults and
+                                    // given combinedClickable (tap = apply, long-press = delete).
+                                    val chipColors = androidx.compose.material3.FilterChipDefaults.filterChipColors()
+                                    Surface(
+                                        shape = androidx.compose.material3.FilterChipDefaults.shape,
+                                        color = chipColors.containerColor,
+                                        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
+                                            enabled = true,
+                                            selected = false
+                                        ),
+                                        modifier = Modifier.combinedClickable(
+                                            onClick = { applyCustomTemplate(t) },
+                                            onLongClick = { pendingTemplateDeleteId = t.id }
+                                        )
                                     ) {
-                                        Icon(
-                                            Icons.Default.Star,
-                                            contentDescription = null,
-                                            tint = onGradientMuted,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(5.dp))
-                                        Text(
-                                            t.name,
-                                            color = onGradient,
-                                            fontSize = 13.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.widthIn(max = 170.dp)
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Star,
+                                                contentDescription = null,
+                                                tint = chipColors.iconColor,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                t.name,
+                                                color = chipColors.labelColor,
+                                                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
                                     }
                                 }
                                 // The "+" that starts authoring a user template, after the built-ins.
@@ -1627,6 +1637,8 @@ fun NotesScreen(active: Boolean = true) {
                             }
                         }
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
                     MoreOptionsFold(
                         expanded = composerMoreOpen,
                         onToggle = { composerMoreOpen = !composerMoreOpen }
@@ -2607,7 +2619,7 @@ private fun NoteCard(
     // Cache the formatted timestamp keyed on the raw value (settings task 8). formatTimestamp
     // allocates a Date + formatter; recomputing it on every recomposition (a scroll can trigger
     // many) is pure waste when the underlying updatedAt hasn't changed. Keyed so an edit refreshes.
-    val formattedTimestamp = remember(note.updatedAt) { formatTimestamp(note.updatedAt) }
+    val formattedTimestamp = rememberFormattedTimestamp(note.updatedAt)
     Column(
         modifier = reorderVisualModifier
             .fillMaxWidth()

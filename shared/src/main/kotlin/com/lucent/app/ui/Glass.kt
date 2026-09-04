@@ -221,6 +221,24 @@ fun formatTimestamp(millis: Long): String {
     return zoned.format(timestampFormatter)
 }
 
+/**
+ * A [formatTimestamp] result cached for composition, keyed on BOTH the value and the active
+ * language (v2.7.3).
+ *
+ * The plain `remember(value) { formatTimestamp(value) }` pattern is exactly the bug the v2.7.0
+ * date work was meant to kill: the formatter cache inside [LDates] is language-aware, but the
+ * *caller's* remember key was not, so a language switch left every already-composed card speaking
+ * the old language until its key changed (an edit, a scroll-recycle, a screen reopen). Reading
+ * [com.lucent.app.i18n.L.current] here puts the language into the key: flipping the language
+ * invalidates every cached card on the same recomposition, and the value alone stays the cheap
+ * "don't re-format on every scroll" guard.
+ */
+@androidx.compose.runtime.Composable
+fun rememberFormattedTimestamp(millis: Long): String {
+    val language = com.lucent.app.i18n.L.current
+    return androidx.compose.runtime.remember(millis, language) { formatTimestamp(millis) }
+}
+
 // Date-only formatter used by the date-search chips (no time of day, since the filter matches a
 // whole calendar day rather than a specific instant).
 private val dateFormatter get() = com.lucent.app.i18n.LDates.of(com.lucent.app.i18n.S.patternDateFull)

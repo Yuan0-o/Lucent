@@ -50,7 +50,12 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // Material You hiding, smooth random crossfade, user templates with interrupted-authoring draft,
 // assistant "+" new conversation, backup v13 (dynamic-colour flag, chat multi-attachments,
 // templates) and the GitHub Actions workflows restored. See the v2.7.2 release notes.
-val MARKETING_VERSION = "2.7.2"
+// 2.7.3: card dates re-key on the active language (no more stale-language captions after a
+// language switch), composer fold spaced from attachments, custom template chips look exactly like
+// the built-ins, an adaptive frame-budget governor keeps the blob background regular on weak GPUs,
+// and the first shared-logic unit tests run in CI (code-review report, Phase 1). See the v2.7.3
+// release notes.
+val MARKETING_VERSION = "2.7.3"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

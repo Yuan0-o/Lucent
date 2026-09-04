@@ -1217,6 +1217,8 @@ fun TasksScreen(active: Boolean = true) {
                             }
                         }
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
                     MoreOptionsFold(
                         expanded = composerMoreOpen,
                         onToggle = { composerMoreOpen = !composerMoreOpen }
@@ -2078,7 +2080,7 @@ private fun TaskCard(
     val repeats = remember(task.repeatRule) { RepeatRule.fromKey(task.repeatRule) != RepeatRule.NONE }
     // Cache the "created" label keyed on the raw value (task 8): same rationale as NoteCard — avoid
     // re-formatting a Date on every recomposition during a scroll when the value hasn't changed.
-    val createdLabel = remember(task.createdAt) { formatTimestamp(task.createdAt) }
+    val createdLabel = rememberFormattedTimestamp(task.createdAt)
     val overdue = isOverdue(task.dueAt, task.isDone)
     val selShape = RoundedCornerShape(20.dp)
 
