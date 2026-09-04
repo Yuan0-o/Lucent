@@ -1843,17 +1843,34 @@ fun NotesScreen(active: Boolean = true) {
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = newCustomTag,
-                                onValueChange = { newCustomTag = it },
-                                placeholder = { Text(com.lucent.app.i18n.S.newTag) },
-                                singleLine = true,
-                                // v2.7.5: compact 0.8-height box - the default vertical padding
-                                // (16 dp) does not fit 45 dp and clips the placeholder's top half,
-                                // so the vertical padding is tightened to match the shrunken box.
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                modifier = Modifier.weight(1f).height(45.dp)
-                            )
+                            // v2.7.5: the compact 0.8-height new-tag box. A stock OutlinedTextField's
+                            // fixed vertical padding clips the placeholder below ~48 dp (and the
+                            // desktop variant of the String overload has no contentPadding at all),
+                            // so the box is a slim BasicTextField in a bordered shell: 45 dp tall,
+                            // text vertically centred, placeholder intact on both platforms.
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(45.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                    .background(onGradient.copy(alpha = 0.05f))
+                                    .border(1.dp, onGradient.copy(alpha = 0.25f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                androidx.compose.foundation.text.BasicTextField(
+                                    value = newCustomTag,
+                                    onValueChange = { newCustomTag = it },
+                                    textStyle = androidx.compose.ui.text.TextStyle(color = onGradient, fontSize = 14.sp),
+                                    singleLine = true,
+                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(onGradient),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (newCustomTag.isEmpty()) {
+                                        Text(com.lucent.app.i18n.S.newTag, color = onGradientMuted, fontSize = 14.sp)
+                                    }
+                                }
+                            }
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(onClick = {
                                 // Canonicalised on the way in, so typing "Study" (or "学习") by hand
