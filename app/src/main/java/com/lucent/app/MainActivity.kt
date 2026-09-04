@@ -374,7 +374,7 @@ class MainActivity : FragmentActivity() {
                 } else if (paletteName == PALETTE_CYCLE) {
                     // Auto-cycling background: drifts smoothly through every palette over time. The
                     // backdrop and text colours stay theme-based (below), so contrast is unaffected.
-                    rememberCyclingPaletteColors(LucentPalette.entries.map { it.colors })
+                    rememberCyclingPaletteColors(LucentPalette.pickerEntries.map { it.colors })
                 } else {
                     LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
                         ?: LucentPalette.SUNSET.colors

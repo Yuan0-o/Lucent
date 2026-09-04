@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -276,6 +278,13 @@ fun NotesScreen(active: Boolean = true) {
     // to be remembered for the lifetime of the whole screen: expand it once, save, open anything
     // else, and the ring was still fanned out over a page the user had not asked it to cover.
     var quickActionsOpen by remember(composing) { mutableStateOf(false) }
+    // v2.7.2: the "More options" fold of the composer. rememberSaveable so rotation keeps it open
+    // while a fresh composer always starts collapsed (same rule as the fold's doc comment).
+    var composerMoreOpen by rememberSaveable(composing) { mutableStateOf(false) }
+    // v2.7.2: authoring a USER template from the template strip, and the id of a custom template
+    // whose chip was long-pressed (delete confirm). Neither survives leaving the screen.
+    var templateAuthoring by remember { mutableStateOf(false) }
+    var pendingTemplateDeleteId by remember { mutableStateOf<String?>(null) }
     // One undo stack per composer session, following the body/details field. Seeded from whatever
     // the field holds when the editor opens, so the first undo returns to the text as it was found
     // rather than to an empty string.
@@ -289,6 +298,12 @@ fun NotesScreen(active: Boolean = true) {
     // name from another screen. Same construction the rest of the app uses.
     val repo = remember { com.lucent.app.data.SettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
+    // v2.7.2: user templates + interrupted-authoring draft (see data/CustomTemplates.kt).
+    val customTemplatesJson by repo.customTemplatesJson.collectAsState(initial = "[]")
+    val customTemplates = remember(customTemplatesJson) {
+        com.lucent.app.data.CustomTemplates.parse(customTemplatesJson)
+    }
+    val templateDraftJson by repo.templateDraftJson.collectAsState(initial = "")
     // Deliberately NOT keyed on `composing`, unlike every other piece of composer state around it.
     //
     // It used to be `remember(composing) { ... }`, and that was quietly destructive. `startEdit`
@@ -411,6 +426,113 @@ fun NotesScreen(active: Boolean = true) {
         selectedTags = prefill.tags
         isChecklistMode = prefill.isChecklist
         checklistItems = prefill.checklist
+    }
+
+    // ================= v2.7.2: user-defined templates =================
+
+    /** The composer's current fields as a template draft (mirrors [CustomTemplates.Draft]). */
+    fun currentTemplateDraft(): com.lucent.app.data.CustomTemplates.Draft =
+        com.lucent.app.data.CustomTemplates.Draft(
+            title = newTitle,
+            body = newBody,
+            tags = selectedTags.toList(),
+            colorKey = selectedColor.key,
+            pinned = pinned,
+            isChecklist = isChecklistMode,
+            checklistTexts = checklistItems.map { it.text }
+        )
+
+    /** Restore the composer from a stored draft and enter authoring mode. */
+    fun startTemplateAuthoring(fromDraft: com.lucent.app.data.CustomTemplates.Draft?) {
+        resetComposer()
+        if (fromDraft != null) {
+            newTitle = fromDraft.title
+            newBody = fromDraft.body
+            selectedTags = fromDraft.tags.toSet()
+            pinned = fromDraft.pinned
+            selectedColor = fromDraft.colorKey?.let { key ->
+                NoteColor.entries.firstOrNull { it.key == key }
+            } ?: NoteColor.DEFAULT
+            isChecklistMode = fromDraft.isChecklist
+            checklistItems = fromDraft.checklistTexts.map { Checklist.newItem(it) }
+        }
+        templateAuthoring = true
+    }
+
+    /** Leave authoring on purpose: the unfinished fields are discarded and the stored draft cleared. */
+    fun discardTemplateAuthoring() {
+        templateAuthoring = false
+        resetComposer()
+        scope.launch { repo.setTemplateDraftJson("") }
+    }
+
+    /** Persist the interrupted authoring session (or clear it when nothing is left to keep). */
+    fun persistTemplateDraft() {
+        val draft = currentTemplateDraft()
+        if (com.lucent.app.data.CustomTemplates.draftEmpty(draft)) {
+            scope.launch { repo.setTemplateDraftJson("") }
+        } else {
+            scope.launch { repo.setTemplateDraftJson(com.lucent.app.data.CustomTemplates.draftToJson(draft)) }
+        }
+    }
+
+    /** Apply one of the user's saved templates to the blank new-note composer. */
+    fun applyCustomTemplate(t: com.lucent.app.data.CustomTemplates.Template) {
+        newTitle = t.title
+        newBody = t.body
+        selectedTags = t.tags.toSet()
+        pinned = t.pinned
+        selectedColor = t.colorKey?.let { key ->
+            NoteColor.entries.firstOrNull { it.key == key }
+        } ?: NoteColor.DEFAULT
+        isChecklistMode = t.isChecklist
+        checklistItems = t.checklistTexts.map { Checklist.newItem(it) }
+    }
+
+    /** Save the authoring session as a new custom template (name = its title). */
+    fun saveCustomTemplate() {
+        if (newTitle.isBlank()) {
+            LucentToast.show(context, com.lucent.app.i18n.S.tplNeedsTitle)
+            return
+        }
+        val t = com.lucent.app.data.CustomTemplates.Template(
+            id = java.util.UUID.randomUUID().toString(),
+            name = newTitle.trim(),
+            title = newTitle,
+            body = newBody,
+            tags = selectedTags.toList(),
+            colorKey = selectedColor.key,
+            pinned = pinned,
+            isChecklist = isChecklistMode,
+            checklistTexts = checklistItems.map { it.text }
+        )
+        val previous = customTemplatesJson
+        templateAuthoring = false
+        resetComposer()
+        scope.launch {
+            repo.setCustomTemplatesJson(com.lucent.app.data.CustomTemplates.upsert(previous, t))
+            repo.setTemplateDraftJson("")
+        }
+        LucentToast.show(context, com.lucent.app.i18n.S.tplSavedToast)
+    }
+
+    // While authoring, every pause in typing keeps the draft store current, so an app kill cannot
+    // eat an unfinished template any more than a deliberate exit can (the exit paths call
+    // [persistTemplateDraft] directly — this effect is the crash belt).
+    val authoringSignature = if (templateAuthoring && editingId == null) {
+        listOf(
+            newTitle, newBody, selectedTags.joinToString(","),
+            pinned.toString(), selectedColor.key, isChecklistMode.toString(),
+            checklistItems.joinToString("|") { it.text }
+        ).joinToString("\u0001")
+    } else null
+    LaunchedEffect(authoringSignature) {
+        if (authoringSignature != null) {
+            kotlinx.coroutines.delay(400)
+            val draft = currentTemplateDraft()
+            if (com.lucent.app.data.CustomTemplates.draftEmpty(draft)) repo.setTemplateDraftJson("")
+            else repo.setTemplateDraftJson(com.lucent.app.data.CustomTemplates.draftToJson(draft))
+        }
     }
 
     /**
@@ -718,6 +840,10 @@ fun NotesScreen(active: Boolean = true) {
         )
 
     fun discardComposer() {
+        // v2.7.2: leaving while authoring a user template parks the work (see the draft store), so
+        // an accidental exit is an interruption, not a loss.
+        if (templateAuthoring) persistTemplateDraft()
+        templateAuthoring = false
         composing = false
         resetComposer()
     }
@@ -725,6 +851,12 @@ fun NotesScreen(active: Boolean = true) {
     // Leaving the composer (back arrow or system back) while dirty asks first instead of
     // silently discarding what was typed.
     fun leaveComposer() {
+        // v2.7.2: in template-authoring mode the unsaved dialog would offer note actions that do
+        // not apply; leaving simply parks the draft and closes, exactly as the draft copy says.
+        if (templateAuthoring) {
+            discardComposer()
+            return
+        }
         if (noteDirty) showUnsavedDialog = true else discardComposer()
     }
 
@@ -783,7 +915,7 @@ fun NotesScreen(active: Boolean = true) {
     // Registers with the app-lifetime guard so switching bottom-nav tabs, or the system back
     // button closing the app, also asks before losing an in-progress note.
     SideEffect {
-        if (noteDirty) {
+        if (noteDirty && !templateAuthoring) {
             UnsavedChangesGuard.register(
                 owner = "notes",
                 onSave = { saveNote() },
@@ -803,7 +935,7 @@ fun NotesScreen(active: Boolean = true) {
     // the debounce work: identical content means an identical Snapshot means the effect is not
     // restarted, so a pause in typing writes once rather than a write per keystroke. Snapshot's
     // timestamp is deliberately left at zero here and stamped at save time for the same reason.
-    val sessionSnapshot = if (composing && noteDirty) {
+    val sessionSnapshot = if (composing && noteDirty && !templateAuthoring) {
         com.lucent.app.data.SessionRestore.Snapshot(
             kind = com.lucent.app.data.SessionRestore.KIND_NOTE,
             itemId = editingId,
@@ -894,6 +1026,34 @@ fun NotesScreen(active: Boolean = true) {
                         discardComposer()
                     }) { Text(com.lucent.app.i18n.S.actionDiscard) }
                     TextButton(onClick = { showUnsavedDialog = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
+                }
+            }
+        )
+    }
+
+    // v2.7.2: long-press a custom template chip -> confirm before it is removed.
+    val pendingDelete = customTemplates.firstOrNull { it.id == pendingTemplateDeleteId }
+    if (pendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { pendingTemplateDeleteId = null },
+            title = { Text(com.lucent.app.i18n.S.tplDeleteTitle) },
+            text = { Text(com.lucent.app.i18n.S.tplDeleteBody(pendingDelete.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = pendingTemplateDeleteId
+                    pendingTemplateDeleteId = null
+                    if (id != null) {
+                        scope.launch {
+                            repo.setCustomTemplatesJson(
+                                com.lucent.app.data.CustomTemplates.remove(customTemplatesJson, id)
+                            )
+                        }
+                    }
+                }) { Text(com.lucent.app.i18n.S.actionDelete) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTemplateDeleteId = null }) {
+                    Text(com.lucent.app.i18n.S.actionCancel)
                 }
             }
         )
@@ -1204,29 +1364,124 @@ fun NotesScreen(active: Boolean = true) {
                     // Showing them while editing an existing note — or after the user has started
                     // typing — would turn a one-tap convenience into a one-tap way to obliterate your
                     // own work. Pinning or colouring the note is not typing: see [noteContentDirty].
-                    if (editingId == null && !noteContentDirty) {
-                        Text(com.lucent.app.i18n.S.startFromTemplate, color = onGradientMuted, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            NoteTemplate.entries.forEach { template ->
+                    // v2.7.2: the strip also hosts the USER templates (chip after the four
+                    // built-ins, long-press to delete) and the "+ New template" button that turns
+                    // the composer into a template editor; authoring has its own banner and draft
+                    // handling below.
+                    if (templateAuthoring || (editingId == null && !noteContentDirty)) {
+                        if (templateAuthoring) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = onGradientMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    com.lucent.app.i18n.S.tplAuthoringTitle,
+                                    color = onGradient,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { discardTemplateAuthoring() }) {
+                                    Text(com.lucent.app.i18n.S.tplDiscard, color = onGradientMuted)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        } else {
+                            Text(com.lucent.app.i18n.S.startFromTemplate, color = onGradientMuted, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // An interrupted authoring session is offered first, so "continue
+                                // where I left off" is the most reachable chip when it exists.
+                                val pendingDraft = remember(templateDraftJson) {
+                                    com.lucent.app.data.CustomTemplates.parseDraft(templateDraftJson)
+                                }
+                                if (!com.lucent.app.data.CustomTemplates.draftEmpty(pendingDraft)) {
+                                    FilterChip(
+                                        selected = true,
+                                        onClick = { startTemplateAuthoring(pendingDraft) },
+                                        label = { Text(com.lucent.app.i18n.S.tplContinueDraft) },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.Star,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                                NoteTemplate.entries.forEach { template ->
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = { applyTemplate(template) },
+                                        label = { Text(template.label) },
+                                        leadingIcon = {
+                                            Icon(
+                                                templateIcon(template),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                                customTemplates.forEach { t ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                            .background(onGradient.copy(alpha = 0.10f))
+                                            .border(
+                                                1.dp,
+                                                onGradient.copy(alpha = 0.22f),
+                                                androidx.compose.foundation.shape.RoundedCornerShape(50)
+                                            )
+                                            .combinedClickable(
+                                                onClick = { applyCustomTemplate(t) },
+                                                onLongClick = { pendingTemplateDeleteId = t.id }
+                                            )
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = onGradientMuted,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            t.name,
+                                            color = onGradient,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 170.dp)
+                                        )
+                                    }
+                                }
+                                // The "+" that starts authoring a user template, after the built-ins.
                                 FilterChip(
                                     selected = false,
-                                    onClick = { applyTemplate(template) },
-                                    label = { Text(template.label) },
+                                    onClick = { startTemplateAuthoring(null) },
+                                    label = { Text(com.lucent.app.i18n.S.tplCreateCustom) },
                                     leadingIcon = {
                                         Icon(
-                                            templateIcon(template),
+                                            Icons.Default.Add,
                                             contentDescription = null,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
                                 )
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     OutlinedTextField(
@@ -1237,96 +1492,17 @@ fun NotesScreen(active: Boolean = true) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // ---- Round R2, task 2: the two note kinds are no longer rivals ----
-                    //
-                    // They used to be mutually exclusive: each switch turned the other off, on the
-                    // stated reasoning that "both" was an undefined state the save path would have
-                    // to pick a winner for. That reasoning was wrong on its own terms - the row
-                    // already has a column for each kind, and the detail page already rendered both
-                    // - so the exclusion was not protecting anything. What it actually cost was the
-                    // obvious use: sketch a diagram, list the steps that go with it, in one note.
-                    //
-                    // ### Where each thing goes, and why the old layout read as a bug
-                    //
-                    // Both switches used to sit together at the top and the content appeared below
-                    // BOTH of them, so a checklist rendered under the doodle switch - visually
-                    // belonging to the control that had nothing to do with it. Each kind's editor
-                    // now sits directly beneath its own switch:
-                    //
-                    //     [checklist switch]  ->  the items
-                    //     [doodle switch]     ->  the canvases
-                    //     details
-                    //
-                    // Ownership is then readable off the layout instead of having to be remembered,
-                    // and turning a switch on makes something appear where the eye already is.
+                    // Pin toggle: pinned notes float to the top of the home grid, ahead of sort.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.AutoMirrored.Filled.FormatListBulleted,
+                            Icons.Default.PushPin,
                             contentDescription = null,
-                            tint = if (isChecklistMode) onGradient else onGradientMuted
+                            tint = if (pinned) onGradient else onGradientMuted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(com.lucent.app.i18n.S.checklistNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = isChecklistMode,
-                            onCheckedChange = { isChecklistMode = it }
-                        )
+                        Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
-
-                    if (isChecklistMode) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ChecklistEditorSection(
-                            items = checklistItems,
-                            newItemText = newChecklistItemText,
-                            onNewItemTextChange = { newChecklistItemText = it },
-                            onAdd = {
-                                checklistItems = checklistItems + Checklist.newItem(newChecklistItemText)
-                                newChecklistItemText = ""
-                            },
-                            onToggle = { item ->
-                                checklistItems = checklistItems.map { if (it.id == item.id) it.copy(done = !it.done) else it }
-                            },
-                            onRemove = { item -> checklistItems = checklistItems.filterNot { it.id == item.id } },
-                            // Items are editable in place after being added (settings task B3).
-                            onEditText = { item, text ->
-                                checklistItems = checklistItems.map { if (it.id == item.id) it.copy(text = text) else it }
-                            },
-                            addLabel = com.lucent.app.i18n.S.addItem,
-                            // Task A18, checklist notes — same rule as a task's subtasks, because
-                            // the two share this editor and a change to one that fits the other
-                            // should never be made to only one of them.
-                            onInsertAfter = { item ->
-                                val at = checklistItems.indexOfFirst { it.id == item.id }
-                                checklistItems = if (at < 0) checklistItems + Checklist.newItem("")
-                                else checklistItems.toMutableList().also { it.add(at + 1, Checklist.newItem("")) }
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Brush,
-                            contentDescription = null,
-                            tint = if (isDoodleMode) onGradient else onGradientMuted
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(com.lucent.app.i18n.S.doodleNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = isDoodleMode,
-                            onCheckedChange = { isDoodleMode = it }
-                        )
-                    }
-
-                    if (isDoodleMode) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // Task A22 — the whiteboard. The details box below is shared with every
-                        // other mode now, so a sketch can still be captioned without this branch
-                        // carrying a second copy of that field.
-                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData = it })
-                    }
-
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // ---- The details box: ONE field, in every mode ----
@@ -1387,72 +1563,47 @@ fun NotesScreen(active: Boolean = true) {
                         )
                     }
 
+                    if (isChecklistMode) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ChecklistEditorSection(
+                            items = checklistItems,
+                            newItemText = newChecklistItemText,
+                            onNewItemTextChange = { newChecklistItemText = it },
+                            onAdd = {
+                                checklistItems = checklistItems + Checklist.newItem(newChecklistItemText)
+                                newChecklistItemText = ""
+                            },
+                            onToggle = { item ->
+                                checklistItems = checklistItems.map { if (it.id == item.id) it.copy(done = !it.done) else it }
+                            },
+                            onRemove = { item -> checklistItems = checklistItems.filterNot { it.id == item.id } },
+                            // Items are editable in place after being added (settings task B3).
+                            onEditText = { item, text ->
+                                checklistItems = checklistItems.map { if (it.id == item.id) it.copy(text = text) else it }
+                            },
+                            addLabel = com.lucent.app.i18n.S.addItem,
+                            // Task A18, checklist notes — same rule as a task's subtasks, because
+                            // the two share this editor and a change to one that fits the other
+                            // should never be made to only one of them.
+                            onInsertAfter = { item ->
+                                val at = checklistItems.indexOfFirst { it.id == item.id }
+                                checklistItems = if (at < 0) checklistItems + Checklist.newItem("")
+                                else checklistItems.toMutableList().also { it.add(at + 1, Checklist.newItem("")) }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    if (isDoodleMode) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // Task A22 — the whiteboard. The details box below is shared with every
+                        // other mode now, so a sketch can still be captioned without this branch
+                        // carrying a second copy of that field.
+                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData = it })
+                    }
                     // Task A12 anchor. Deliberately *here* — after the body/items, before the pin,
                     // tags and attachment rows. Scrolling to the true bottom of the form would put
                     // the attachment list on screen and the text the user came to edit off it.
                     Spacer(modifier = Modifier.height(12.dp).bringIntoViewRequester(bodyEndRequester))
-
-                    // Pin toggle: pinned notes float to the top of the home grid, ahead of sort.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.PushPin,
-                            contentDescription = null,
-                            tint = if (pinned) onGradient else onGradientMuted
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Switch(checked = pinned, onCheckedChange = { pinned = it })
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(com.lucent.app.i18n.S.labelColour, color = onGradient, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    ColorPickerRow(selected = selectedColor, onSelect = { selectedColor = it })
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(com.lucent.app.i18n.S.labelTags, color = onGradient)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        allTags.forEach { tag ->
-                            FilterChip(
-                                selected = selectedTags.contains(tag),
-                                onClick = {
-                                    selectedTags = if (selectedTags.contains(tag)) selectedTags - tag else selectedTags + tag
-                                },
-                                // Canonical underneath, translated on screen.
-                                label = { Text(com.lucent.app.data.NoteTags.label(tag)) }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = newCustomTag,
-                            onValueChange = { newCustomTag = it },
-                            placeholder = { Text(com.lucent.app.i18n.S.newTag) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = {
-                            // Canonicalised on the way in, so typing "Study" (or "学习") by hand
-                            // selects the built-in chip instead of creating a duplicate beside it.
-                            val tag = com.lucent.app.data.NoteTags.canonical(newCustomTag)
-                            if (tag.isNotBlank()) {
-                                selectedTags = selectedTags + tag
-                                newCustomTag = ""
-                            }
-                        }) {
-                            Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.a11yAddTag, tint = onGradient)
-                        }
-                    }
-
-                    // Attachments close the form as a due-date-style row (matching the task
-                    // composer): icon + label, tap anywhere on it to pick a file, chips listed
-                    // beneath. See [AttachmentSection].
                     Spacer(modifier = Modifier.height(12.dp))
                     AttachmentSection(
                         attachments = pendingAttachments,
@@ -1477,6 +1628,89 @@ fun NotesScreen(active: Boolean = true) {
                             }
                         }
                     )
+                    MoreOptionsFold(
+                        expanded = composerMoreOpen,
+                        onToggle = { composerMoreOpen = !composerMoreOpen }
+                    ) {
+                        // v2.7.2: the note-kind switches live one level down, here in the fold. Flicking
+                        // one on makes its EDITOR appear on the main level, right under the details
+                        // field — content in progress belongs to the page, not to a menu. The two
+                        // kinds remain combinable (a sketch with a checklist of its own parts is a
+                        // legitimate note); the old mutual exclusion is gone for good.
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.FormatListBulleted,
+                                contentDescription = null,
+                                tint = if (isChecklistMode) onGradient else onGradientMuted
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(com.lucent.app.i18n.S.checklistNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = isChecklistMode,
+                                onCheckedChange = { isChecklistMode = it }
+                            )
+                        }
+
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Brush,
+                                contentDescription = null,
+                                tint = if (isDoodleMode) onGradient else onGradientMuted
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(com.lucent.app.i18n.S.doodleNote, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = isDoodleMode,
+                                onCheckedChange = { isDoodleMode = it }
+                            )
+                        }
+
+                        Text(com.lucent.app.i18n.S.labelColour, color = onGradient, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        ColorPickerRow(selected = selectedColor, onSelect = { selectedColor = it })
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(com.lucent.app.i18n.S.labelTags, color = onGradient)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            allTags.forEach { tag ->
+                                FilterChip(
+                                    selected = selectedTags.contains(tag),
+                                    onClick = {
+                                        selectedTags = if (selectedTags.contains(tag)) selectedTags - tag else selectedTags + tag
+                                    },
+                                    // Canonical underneath, translated on screen.
+                                    label = { Text(com.lucent.app.data.NoteTags.label(tag)) }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = newCustomTag,
+                                onValueChange = { newCustomTag = it },
+                                placeholder = { Text(com.lucent.app.i18n.S.newTag) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = {
+                                // Canonicalised on the way in, so typing "Study" (or "学习") by hand
+                                // selects the built-in chip instead of creating a duplicate beside it.
+                                val tag = com.lucent.app.data.NoteTags.canonical(newCustomTag)
+                                if (tag.isNotBlank()) {
+                                    selectedTags = selectedTags + tag
+                                    newCustomTag = ""
+                                }
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.a11yAddTag, tint = onGradient)
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(20.dp))
                     // Task 3. The two actions are now laid out as equal halves of one row: both get
@@ -1494,26 +1728,36 @@ fun NotesScreen(active: Boolean = true) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = { saveNote() },
+                            onClick = { if (templateAuthoring) saveCustomTemplate() else saveNote() },
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(
+                                if (templateAuthoring) Icons.Default.Star else Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
                             Text(
-                                if (editingId != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addNoteBtn,
+                                when {
+                                    templateAuthoring -> " " + com.lucent.app.i18n.S.tplSaveAsTemplate
+                                    editingId != null -> " " + com.lucent.app.i18n.S.saveChanges
+                                    else -> " " + com.lucent.app.i18n.S.addNoteBtn
+                                },
                                 fontSize = 16.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        // Task A10 — "parallel to Save", as asked, and secondary on purpose: it is
-                        // the same commitment in a lower gear ("keep this, I'm not done").
-                        GlassButton(
-                            text = com.lucent.app.i18n.S.saveToDraft,
-                            onClick = { saveNote(asDraft = true) },
-                            modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
-                        )
+                        if (!templateAuthoring) {
+                            // Task A10 — "parallel to Save", as asked, and secondary on purpose: it
+                            // is the same commitment in a lower gear ("keep this, I'm not done").
+                            GlassButton(
+                                text = com.lucent.app.i18n.S.saveToDraft,
+                                onClick = { saveNote(asDraft = true) },
+                                modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
+                            )
+                        }
                     }
                 }
             }

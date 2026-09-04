@@ -3936,29 +3936,33 @@ fun SettingsScreen(active: Boolean = true) {
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
-            // One flat list of every appearance, System/Light/Dark and the four Monet tints
-            // alike (added task 1). They are peers, not a menu with a sub-menu of "extras":
-            // each one is simply an answer to "what should the app look like", and a tint is no
-            // less of an answer than "dark" is. Each row previews the actual backdrop colour it
-            // selects, so the choice can be made by eye rather than by name.
-            val systemDark = isSystemInDarkTheme()
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                LucentThemeMode.entries.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = savedTheme == mode.key,
-                            onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                        )
-                        PaletteSwatch(mode.swatch(systemDark))
-                        Column(modifier = Modifier.padding(start = 10.dp)) {
-                            Text(mode.label, color = onGradient)
-                            Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
+            // v2.7.2: while Material You is on, the tint list is hidden rather than merely paused —
+            // dynamic colour outranks it in the read path, so rows that edit a choice the screen is
+            // not using would only confuse. The banner above explains why the list is gone, and the
+            // rows return the moment the wallpaper mode is switched off. The list is the picker
+            // subset (18 of the 32 tints, see LucentThemeMode.pickerEntries); System/Light/Dark
+            // and the tints are peers, each row previews the actual backdrop colour it selects, and
+            // a tint that is no longer offered still resolves for anyone whose stored choice names it.
+            if (!(dynamicColorOn && dynamicColorSupported)) {
+                val systemDark = isSystemInDarkTheme()
+                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                    LucentThemeMode.pickerEntries.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = savedTheme == mode.key,
+                                onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                            )
+                            PaletteSwatch(mode.swatch(systemDark))
+                            Column(modifier = Modifier.padding(start = 10.dp)) {
+                                Text(mode.label, color = onGradient)
+                                Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -4001,98 +4005,108 @@ fun SettingsScreen(active: Boolean = true) {
             // a tap anywhere on a row answers with a toast at the bottom of the screen saying
             // the drifting background isn't on — instead of silently changing a setting whose
             // result can't be seen (fix task).
-            val paletteEnabled = backgroundAnimationEnabled
-            // One alpha for everything in a disabled row, so swatch and label fade together.
-            val paletteAlpha = if (paletteEnabled) 1f else 0.38f
-           fun pickPalette(name: String) {
-                if (paletteEnabled) {
-                    AppScope.io.launch { repo.setPalette(name) }
-                } else {
-                    LucentToast.show(context, S.backgroundPaletteDisabledHint)
-                }
-            }
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                // Auto-cycle: rotates through every palette over time. Its swatch previews the
-                // spread of colours it moves through.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    // The whole row stays tappable while disabled so the tap can EXPLAIN itself
-                    // (the toast) — a dead row that ignores touches just looks broken.
-                    modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_CYCLE) }
-                ) {
-                    RadioButton(
-                        selected = savedPalette == PALETTE_CYCLE,
-                        enabled = paletteEnabled,
-                        onClick = { pickPalette(PALETTE_CYCLE) }
-                    )
-                    Box(modifier = Modifier.alpha(paletteAlpha)) {
-                        PaletteSwatch(LucentPalette.entries.map { it.colors.first() })
+            // v2.7.2: while Material You is on, the whole palette section below is HIDDEN (the
+            // banner above says why; the rows return when the wallpaper mode is switched off).
+            // The palette list only takes visible effect while the drifting effect is ON, so
+            // with the switch off every colour row is disabled and greyed out rather than
+            // pretending to work: the radio buttons go grey, the swatches and labels fade, and
+            // a tap anywhere on a row answers with a toast at the bottom of the screen saying
+            // the drifting background isn't on — instead of silently changing a setting whose
+            // result can't be seen.
+            if (!(dynamicColorOn && dynamicColorSupported)) {
+                val paletteEnabled = backgroundAnimationEnabled
+                // One alpha for everything in a disabled row, so swatch and label fade together.
+                val paletteAlpha = if (paletteEnabled) 1f else 0.38f
+               fun pickPalette(name: String) {
+                    if (paletteEnabled) {
+                        AppScope.io.launch { repo.setPalette(name) }
+                    } else {
+                        LucentToast.show(context, S.backgroundPaletteDisabledHint)
                     }
-                    Text(
-                        S.paletteCycleAuto,
-                        color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
-                        modifier = Modifier.padding(start = 10.dp)
-                    )
                 }
-
-                // Random (v2.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
-                // Random jumps to a different palette every RANDOM_SWITCH_MS. The row carries the
-                // small hint so the behaviour is discoverable without opening anything.
-                Column(
-                    modifier = Modifier.fillMaxWidth().clickable { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                    // Auto-cycle: rotates through every palette over time. Its swatch previews the
+                    // spread of colours it moves through.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        // The whole row stays tappable while disabled so the tap can EXPLAIN itself
+                        // (the toast) — a dead row that ignores touches just looks broken.
+                        modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_CYCLE) }
+                    ) {
                         RadioButton(
-                            selected = savedPalette == com.lucent.app.ui.PALETTE_RANDOM,
+                            selected = savedPalette == PALETTE_CYCLE,
                             enabled = paletteEnabled,
-                            onClick = { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
+                            onClick = { pickPalette(PALETTE_CYCLE) }
                         )
                         Box(modifier = Modifier.alpha(paletteAlpha)) {
-                            PaletteSwatch(LucentPalette.entries.shuffled().take(4).flatMap { it.colors })
+                            PaletteSwatch(LucentPalette.pickerEntries.map { it.colors.first() })
                         }
                         Text(
-                            S.paletteRandomAuto,
+                            S.paletteCycleAuto,
                             color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
                             modifier = Modifier.padding(start = 10.dp)
                         )
                     }
-                    Text(
-                        S.paletteRandomHint,
-                        color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 28.dp)
-                    )
-                }
 
-                // Palettes grouped by style family (v2.4.0: eight sections), each with a small
-                // colour preview. The sections come straight from the enum, so a new family can
-                // never exist without its title and its picker section.
-                PaletteGroup.entries.forEach { group ->
-                    val heading = group.title()
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        heading,
-                        color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
-                        fontSize = 13.sp
-                    )
-                    LucentPalette.entries.filter { it.group == group }.forEach { p ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable { pickPalette(p.name) }
-                        ) {
+                    // Random (v2.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
+                    // Random jumps to a different palette every RANDOM_SWITCH_MS. The row carries the
+                    // small hint so the behaviour is discoverable without opening anything.
+                    Column(
+                        modifier = Modifier.fillMaxWidth().clickable { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             RadioButton(
-                                selected = savedPalette == p.name,
+                                selected = savedPalette == com.lucent.app.ui.PALETTE_RANDOM,
                                 enabled = paletteEnabled,
-                                onClick = { pickPalette(p.name) }
+                                onClick = { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
                             )
                             Box(modifier = Modifier.alpha(paletteAlpha)) {
-                                PaletteSwatch(p.colors)
+                                PaletteSwatch(LucentPalette.pickerEntries.shuffled().take(4).flatMap { it.colors })
                             }
                             Text(
-                                p.label,
+                                S.paletteRandomAuto,
                                 color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
                                 modifier = Modifier.padding(start = 10.dp)
                             )
+                        }
+                        Text(
+                            S.paletteRandomHint,
+                            color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 28.dp)
+                        )
+                    }
+
+                    // Palettes grouped by style family (v2.4.0: eight sections), each with a small
+                    // colour preview. The sections come straight from the enum, so a new family can
+                    // never exist without its title and its picker section.
+                    PaletteGroup.entries.forEach { group ->
+                        val heading = group.title()
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            heading,
+                            color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
+                            fontSize = 13.sp
+                        )
+                        LucentPalette.pickerEntries.filter { it.group == group }.forEach { p ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { pickPalette(p.name) }
+                            ) {
+                                RadioButton(
+                                    selected = savedPalette == p.name,
+                                    enabled = paletteEnabled,
+                                    onClick = { pickPalette(p.name) }
+                                )
+                                Box(modifier = Modifier.alpha(paletteAlpha)) {
+                                    PaletteSwatch(p.colors)
+                                }
+                                Text(
+                                    p.label,
+                                    color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
+                                    modifier = Modifier.padding(start = 10.dp)
+                                )
+                            }
                         }
                     }
                 }

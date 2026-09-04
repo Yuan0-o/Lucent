@@ -31,7 +31,11 @@ import androidx.compose.ui.graphics.Color
  * palette in front of it and drag the contrast of every piece of text down with it. A wash you notice
  * only when you look for it is the right amount for something the whole app sits on top of.
  */
-enum class LucentThemeMode(val key: String) {
+enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
+    // v2.7.2: the picker offers a hand-tuned subset of the tints (see [pickerEntries]) - 18 boards,
+    // nine light and nine dark - while every entry keeps its full behaviour, so a stored key from
+    // an older install (or an old backup) still resolves to exactly the appearance it always had.
+    // Entries with featured = false are simply no longer OFFERED; nothing else about them changes.
     SYSTEM("system"),
     LIGHT("light"),
     DARK("dark"),
@@ -70,21 +74,21 @@ enum class LucentThemeMode(val key: String) {
     MONET_ORCHID("monet_orchid"),
     MONET_ORCHID_NIGHT("monet_orchid_night"),
     MONET_HONEY("monet_honey"),
-    MONET_MINT("monet_mint"),
-    MONET_PERIWINKLE("monet_periwinkle"),
-    MONET_CORAL("monet_coral"),
-    MONET_SNOWDROP("monet_snowdrop"),
-    MONET_HONEYDEW("monet_honeydew"),
-    MONET_LINEN("monet_linen"),
-    MONET_FROST("monet_frost"),
-    MONET_UMBER("monet_umber"),
-    MONET_DEEP_MOSS("monet_deep_moss"),
+    MONET_MINT("monet_mint", featured = false),
+    MONET_PERIWINKLE("monet_periwinkle", featured = false),
+    MONET_CORAL("monet_coral", featured = false),
+    MONET_SNOWDROP("monet_snowdrop", featured = false),
+    MONET_HONEYDEW("monet_honeydew", featured = false),
+    MONET_LINEN("monet_linen", featured = false),
+    MONET_FROST("monet_frost", featured = false),
+    MONET_UMBER("monet_umber", featured = false),
+    MONET_DEEP_MOSS("monet_deep_moss", featured = false),
     MONET_BLUEBERRY("monet_blueberry"),
-    MONET_BRICK("monet_brick"),
-    MONET_OBSIDIAN("monet_obsidian"),
-    MONET_FIR("monet_fir"),
-    MONET_WALNUT("monet_walnut"),
-    MONET_ABYSS("monet_abyss"),;
+    MONET_BRICK("monet_brick", featured = false),
+    MONET_OBSIDIAN("monet_obsidian", featured = false),
+    MONET_FIR("monet_fir", featured = false),
+    MONET_WALNUT("monet_walnut", featured = false),
+    MONET_ABYSS("monet_abyss", featured = false),;
 
     // Live i18n lookups (localization task); `label`/`detail` call sites are unchanged.
     val label: String
@@ -292,6 +296,13 @@ enum class LucentThemeMode(val key: String) {
         /** Lenient: an unknown or missing key reads as [SYSTEM] rather than throwing. */
         fun fromKey(key: String?): LucentThemeMode =
             entries.firstOrNull { it.key == key } ?: SYSTEM
+
+        /**
+         * The tints the appearance picker offers (v2.7.2): 18 of the 32, nine light and nine dark,
+         * chosen so every hue family keeps a light and a dark member and near-duplicates are gone.
+         * System/Light/Dark are offered separately above this list.
+         */
+        val pickerEntries: List<LucentThemeMode> = entries.filter { it.featured }
     }
 }
 

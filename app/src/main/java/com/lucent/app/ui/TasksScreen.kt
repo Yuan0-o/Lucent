@@ -271,6 +271,8 @@ fun TasksScreen(active: Boolean = true) {
     // to be remembered for the lifetime of the whole screen: expand it once, save, open anything
     // else, and the ring was still fanned out over a page the user had not asked it to cover.
     var quickActionsOpen by remember(composing) { mutableStateOf(false) }
+    // v2.7.2: the "More options" fold of the composer (see MoreOptionsFold).
+    var composerMoreOpen by rememberSaveable(composing) { mutableStateOf(false) }
     // One undo stack per composer session, following the body/details field. Seeded from whatever
     // the field holds when the editor opens, so the first undo returns to the text as it was found
     // rather than to an empty string.
@@ -1115,48 +1117,20 @@ fun TasksScreen(active: Boolean = true) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Subtasks toggle (task 11): like a note's "Checklist" switch, it sits between the
-                    // title and the details and only reveals the subtask editor when switched on, so a
-                    // task that doesn't need a checklist stays uncluttered. The list is kept in composer
-                    // state regardless of the switch, so toggling off and back on never discards it.
+                    // Pin-to-top, exactly like a note's pin switch (task 11) — so the two composers
+                    // line up rather than burying the task's pin far down among the scheduling
+                    // controls.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.AutoMirrored.Filled.FormatListBulleted,
+                            Icons.Default.PushPin,
                             contentDescription = null,
-                            tint = if (subtasksEnabled) onGradient else onGradientMuted
+                            tint = if (pinned) onGradient else onGradientMuted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(com.lucent.app.i18n.S.labelSubtasks, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Switch(checked = subtasksEnabled, onCheckedChange = { subtasksEnabled = it })
-                    }
-                    if (subtasksEnabled) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        ChecklistEditorSection(
-                            items = subtasks,
-                            newItemText = newSubtaskText,
-                            onNewItemTextChange = { newSubtaskText = it },
-                            onAdd = {
-                                subtasks = subtasks + Checklist.newItem(newSubtaskText)
-                                newSubtaskText = ""
-                            },
-                            onToggle = { item -> subtasks = subtasks.map { if (it.id == item.id) it.copy(done = !it.done) else it } },
-                            onRemove = { item -> subtasks = subtasks.filterNot { it.id == item.id } },
-                            // Items are editable in place after being added (settings task B2).
-                            onEditText = { item, text -> subtasks = subtasks.map { if (it.id == item.id) it.copy(text = text) else it } },
-                            addLabel = com.lucent.app.i18n.S.addSubtask,
-                            addRowModifier = Modifier.bringIntoViewRequester(subtaskEndRequester),
-                            // Task A18: a blank step opens directly under the one you were on,
-                            // instead of every new step landing at the very bottom.
-                            onInsertAfter = { item ->
-                                val at = subtasks.indexOfFirst { it.id == item.id }
-                                subtasks = if (at < 0) subtasks + Checklist.newItem("")
-                                else subtasks.toMutableList().also { it.add(at + 1, Checklist.newItem("")) }
-                            }
-                        )
+                        Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-
                     // Details field with the same expand toggle the Notes screen uses, so the two
                     // editors are identical in size and behaviour. "Details" rather than "Notes": on a
                     // task, a field literally labelled "Notes" read as redundant ("this note says note").
@@ -1183,27 +1157,31 @@ fun TasksScreen(active: Boolean = true) {
                     // attachments. Scrolling to the true bottom of the form would land on the
                     // attachment rows rather than the text being edited.
                     Spacer(modifier = Modifier.height(12.dp).bringIntoViewRequester(detailsEndRequester))
-
-                    // Priority sits directly under the details box: how important a task is gets
-                    // decided while it is still being described, so the chips moved up here from
-                    // below the scheduling block (where they used to trail the due date).
-                    PriorityPickerRow(selected = priority, onSelect = { priority = it })
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Pin-to-top, exactly like a note's pin switch (task 11) — so the two composers
-                    // line up rather than burying the task's pin far down among the scheduling
-                    // controls.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.PushPin,
-                            contentDescription = null,
-                            tint = if (pinned) onGradient else onGradientMuted
+                    if (subtasksEnabled) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        ChecklistEditorSection(
+                            items = subtasks,
+                            newItemText = newSubtaskText,
+                            onNewItemTextChange = { newSubtaskText = it },
+                            onAdd = {
+                                subtasks = subtasks + Checklist.newItem(newSubtaskText)
+                                newSubtaskText = ""
+                            },
+                            onToggle = { item -> subtasks = subtasks.map { if (it.id == item.id) it.copy(done = !it.done) else it } },
+                            onRemove = { item -> subtasks = subtasks.filterNot { it.id == item.id } },
+                            // Items are editable in place after being added (settings task B2).
+                            onEditText = { item, text -> subtasks = subtasks.map { if (it.id == item.id) it.copy(text = text) else it } },
+                            addLabel = com.lucent.app.i18n.S.addSubtask,
+                            addRowModifier = Modifier.bringIntoViewRequester(subtaskEndRequester),
+                            // Task A18: a blank step opens directly under the one you were on,
+                            // instead of every new step landing at the very bottom.
+                            onInsertAfter = { item ->
+                                val at = subtasks.indexOfFirst { it.id == item.id }
+                                subtasks = if (at < 0) subtasks + Checklist.newItem("")
+                                else subtasks.toMutableList().also { it.add(at + 1, Checklist.newItem("")) }
+                            }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
                     DueDateRow(
                         dueAt = dueAt,
@@ -1219,11 +1197,6 @@ fun TasksScreen(active: Boolean = true) {
                             }
                         }
                     )
-
-                    // The reminder toggle only appears once a due date/time is set (task 8): there's
-                    // nothing to remind about until then, so an always-visible "remind me at the due
-                    // time" row with no due time was dead UI. It's grouped here with Repeat, which is
-                    // gated the same way.
                     if (dueAt != null) {
                         Spacer(modifier = Modifier.height(8.dp))
                         ReminderToggleRow(
@@ -1237,11 +1210,6 @@ fun TasksScreen(active: Boolean = true) {
                         Spacer(modifier = Modifier.height(12.dp))
                         RepeatRuleRow(selected = repeatRule, onSelect = { repeatRule = it })
                     }
-
-                    // Attachments close the form as a due-date-style row: same icon + label anatomy
-                    // as the rows above, tap anywhere on it to pick a file, chips listed beneath.
-                    // See [AttachmentSection].
-                    Spacer(modifier = Modifier.height(12.dp))
                     AttachmentSection(
                         attachments = pendingAttachments,
                         onPick = { filePicker.launch("*/*") },
@@ -1265,7 +1233,35 @@ fun TasksScreen(active: Boolean = true) {
                             }
                         }
                     )
+                    MoreOptionsFold(
+                        expanded = composerMoreOpen,
+                        onToggle = { composerMoreOpen = !composerMoreOpen }
+                    ) {
+                        // v2.7.2: the task-configuration controls live one level down. Subtasks are
+                        // switched on here; their editor appears on the main level under the details
+                        // field. Priority is a decision you make once per task, not per keystroke, so
+                        // it waits here rather than taking a row from the page the whole task lives on.
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // v2.7.2: the subtask switch lives in the fold; the editor appears on the
+                        // main level under the details field when switched on. The list is kept in
+                        // composer state regardless of the switch, so toggling off and back on never
+                        // discards it.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.FormatListBulleted,
+                                contentDescription = null,
+                                tint = if (subtasksEnabled) onGradient else onGradientMuted
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(com.lucent.app.i18n.S.labelSubtasks, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Switch(checked = subtasksEnabled, onCheckedChange = { subtasksEnabled = it })
+                        }
+                        // v2.7.2: priority waits in the fold with the rest of the configuration —
+                        // decide it once per task, and keep the page for the task itself.
 
+                        PriorityPickerRow(selected = priority, onSelect = { priority = it })
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                     Spacer(modifier = Modifier.height(20.dp))
                     // Task 3. The two actions are now laid out as equal halves of one row: both get
                     // weight(1f) and the same explicit height, so they are identical in size no

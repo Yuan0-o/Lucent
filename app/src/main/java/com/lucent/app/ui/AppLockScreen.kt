@@ -150,7 +150,20 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     // screen (each fresh failure restarts the three-second clock). The lockout countdown is a
     // separate, live line that ticks down once per second and clears itself when it reaches zero.
     var errorClearsAt by remember { mutableStateOf(0L) }
-    var lockoutSeconds by remember { mutableStateOf(0) }
+    // Live lockout state (v2.7.2): read REACTIVELY from the persisted shared counter, exactly like
+    // the Settings gates, so a cooldown charged anywhere is visible — and biometrics are disabled
+    // — from the first frame this screen composes. Previously the countdown was local state that
+    // only started after an attempt on this very composition: leave the app mid-cooldown and come
+    // back, and the fingerprint button came back live until someone tried a password.
+    val attemptJson by repo.passwordAttemptState.collectAsState(initial = "")
+    val attemptState = remember(attemptJson) {
+        com.lucent.app.data.PasswordAttempts.State.fromJson(attemptJson)
+    }
+    var attemptTick by remember { mutableStateOf(0L) }
+    val lockoutMs = remember(attemptState, attemptTick) {
+        com.lucent.app.data.PasswordAttempts.remainingLockoutMs(attemptState)
+    }
+    val lockoutSeconds = ((lockoutMs.coerceAtLeast(0L) + 999L) / 1000L).toInt()
 
     fun showError(msg: String) {
         error = msg
@@ -167,11 +180,13 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
             if (lockoutSeconds == 0 && error.isNotBlank()) error = ""
         }
     }
-    // Live per-second countdown while a lockout is in force.
+    // Live per-second countdown while a lockout is in force: re-derives the remaining time from
+    // the persisted state each tick (the state stores the absolute deadline, so accuracy survives
+    // recompositions and process restarts); clears the transient hint once the round is over.
     LaunchedEffect(lockoutSeconds) {
         while (lockoutSeconds > 0) {
             kotlinx.coroutines.delay(1000)
-            lockoutSeconds--
+            attemptTick++
         }
         error = ""
         errorClearsAt = 0L
@@ -220,7 +235,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
-                            enabled = password.isNotEmpty() && credentials.isNotEmpty(),
+                            enabled = password.isNotEmpty() && credentials.isNotEmpty() && lockoutSeconds == 0,
                             onClick = {
                                 scope.launch {
                                     // R3 report: every attempt goes through the throttling engine.
@@ -234,17 +249,15 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                         repo.passwordAttemptStateOnce())
                                     val wait = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(state)
                                     if (wait > 0L) {
-                                        // Lockout in force: show a LIVE countdown (ticks each second)
-                                        // instead of a stale one-shot message.
+                                        // Lockout in force: the live countdown is already shown
+                                        // reactively from the persisted counter; just reject the try.
                                         error = ""
-                                        lockoutSeconds = ((wait + 999L) / 1000L).toInt().coerceAtLeast(1)
                                         return@launch
                                     }
                                     if (AppLock.verifyPassword(credentials, password)) {
                                         password = ""
                                         error = ""
                                         errorClearsAt = 0L
-                                        lockoutSeconds = 0
                                         repo.setPasswordAttemptState(
                                             com.lucent.app.data.PasswordAttempts.registerSuccess().toJson())
                                         AppLockController.unlock()
@@ -262,13 +275,13 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                                     repo)
                                             }
                                             error = ""
-                                            lockoutSeconds = 0
                                             AppLockController.unlock()
                                         } else {
                                             val remain = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(next)
                                             if (remain > 0L) {
                                                 error = ""
-                                                lockoutSeconds = ((remain + 999L) / 1000L).toInt().coerceAtLeast(1)
+                                                // The countdown appears reactively as soon as the
+                                                // persisted state above lands in the flow.
                                             } else {
                                                 showError(com.lucent.app.i18n.S.lockWrongPassword)
                                             }
@@ -280,8 +293,11 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         ) { Text(com.lucent.app.i18n.S.lockUnlock) }
                         // Optional biometric shortcut. A success clears the lock exactly like a
                         // correct password; a cancel or failure just leaves the password field in
-                        // place, so the fingerprint/face path is never the only way in.
-                        if (biometricEnabled && biometricAvailable && activity != null) {
+                        // place, so the fingerprint/face path is never the only way in. While a
+                        // lockout is in force the button is not offered at all (v2.7.2): the
+                        // cooldown exists because someone may be guessing the password, and a
+                        // fingerprint must not be able to sidestep it.
+                        if (biometricEnabled && biometricAvailable && activity != null && lockoutSeconds == 0) {
                             Spacer(modifier = Modifier.height(8.dp))
                             TextButton(
                                 onClick = {
@@ -291,8 +307,23 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                         subtitle = com.lucent.app.i18n.S.biometricPromptSubtitle,
                                         negativeButtonText = com.lucent.app.i18n.S.biometricUsePassword,
                                         onSuccess = {
-                                            password = ""
-                                            AppLockController.unlock()
+                                            // Re-check the persisted counter before unlocking: a
+                                            // cooldown can begin (or already be running) while a
+                                            // prompt is open, and the fingerprint must not open a
+                                            // door the cooldown is guarding (v2.7.2).
+                                            scope.launch {
+                                                val st = com.lucent.app.data.PasswordAttempts.State.fromJson(
+                                                    repo.passwordAttemptStateOnce())
+                                                if (com.lucent.app.data.PasswordAttempts.remainingLockoutMs(st) > 0L) {
+                                                    // Still cooling down — refuse; the live
+                                                    // countdown on screen explains why.
+                                                } else {
+                                                    password = ""
+                                                    error = ""
+                                                    errorClearsAt = 0L
+                                                    AppLockController.unlock()
+                                                }
+                                            }
                                         },
                                         onError = { msg -> error = msg.ifBlank { com.lucent.app.i18n.S.biometricFailed } }
                                     )

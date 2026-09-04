@@ -93,6 +93,9 @@ class SettingsRepository(private val context: Context) {
         const val CLOSE_TO_TRAY = "close_to_tray"
         // PHASE 3 (review F-1): saved searches, one JSON string — see data/SavedSearches.kt.
         const val SAVED_SEARCHES = "saved_searches"
+        // v2.7.2: user-defined note templates and the interrupted-authoring draft (see CustomTemplates.kt).
+        const val CUSTOM_TEMPLATES = "custom_templates"
+        const val TEMPLATE_DRAFT = "template_draft"
         const val LINKS_ENABLED = "links_enabled"
         const val BACKGROUND_ANIMATION_ENABLED = "background_animation_enabled"
         const val APP_LOCK_ENABLED = "app_lock_enabled"
@@ -473,6 +476,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloseToTray(value: Boolean) { edit { it[K.CLOSE_TO_TRAY] = value } }
     val savedSearches: Flow<String> = state.map { str(it, K.SAVED_SEARCHES) ?: "" }
     suspend fun setSavedSearches(json: String) { edit { it[K.SAVED_SEARCHES] = json } }
+    val customTemplatesJson: Flow<String> = state.map { str(it, K.CUSTOM_TEMPLATES) ?: "[]" }
+    suspend fun setCustomTemplatesJson(json: String) { edit { it[K.CUSTOM_TEMPLATES] = json } }
+    val templateDraftJson: Flow<String> = state.map { str(it, K.TEMPLATE_DRAFT) ?: "" }
+    suspend fun setTemplateDraftJson(json: String) { edit { it[K.TEMPLATE_DRAFT] = json } }
 
     // Mutually exclusive — see the note on RICH_TEXT_ENABLED in SettingsKeys. Both flags move in a
     // single edit so there is never an instant where both read as on.

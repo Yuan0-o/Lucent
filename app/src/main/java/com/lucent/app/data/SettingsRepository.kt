@@ -123,6 +123,10 @@ private object SettingsKeys {
     val RICH_TEXT_ENABLED = booleanPreferencesKey("rich_text_enabled")
     // PHASE 3 (review F-1): saved searches, one JSON string — see data/SavedSearches.kt.
     val SAVED_SEARCHES = stringPreferencesKey("saved_searches")
+    // v2.7.2: user-defined note templates and the interrupted-authoring draft — two JSON strings,
+    // see data/CustomTemplates.kt for the shapes.
+    val CUSTOM_TEMPLATES = stringPreferencesKey("custom_templates")
+    val TEMPLATE_DRAFT = stringPreferencesKey("template_draft")
 
     // Whether tappable links ([[wiki]] and [text](url)) are active inside Markdown mode. A sub-toggle
     // of Markdown: when Markdown is off there are no links regardless. Default OFF — links are now
@@ -721,6 +725,15 @@ class SettingsRepository(private val context: Context) {
     val savedSearches: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.SAVED_SEARCHES] ?: "" }
     suspend fun setSavedSearches(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SAVED_SEARCHES] = json }
+    }
+    // v2.7.2: custom templates + authoring draft (see data/CustomTemplates.kt).
+    val customTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CUSTOM_TEMPLATES] ?: "[]" }
+    suspend fun setCustomTemplatesJson(json: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.CUSTOM_TEMPLATES] = json }
+    }
+    val templateDraftJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TEMPLATE_DRAFT] ?: "" }
+    suspend fun setTemplateDraftJson(json: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.TEMPLATE_DRAFT] = json }
     }
 
     /**

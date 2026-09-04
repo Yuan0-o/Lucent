@@ -3842,7 +3842,7 @@ fun SettingsScreen(active: Boolean = true) {
             // selects, so the choice can be made by eye rather than by name.
             val systemDark = isSystemInDarkTheme()
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                LucentThemeMode.entries.forEach { mode ->
+                LucentThemeMode.pickerEntries.forEach { mode ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3916,7 +3916,7 @@ fun SettingsScreen(active: Boolean = true) {
                         onClick = { pickPalette(PALETTE_CYCLE) }
                     )
                     Box(modifier = Modifier.alpha(paletteAlpha)) {
-                        PaletteSwatch(LucentPalette.entries.map { it.colors.first() })
+                        PaletteSwatch(LucentPalette.pickerEntries.map { it.colors.first() })
                     }
                     Text(
                         S.paletteCycleAuto,
@@ -3938,7 +3938,7 @@ fun SettingsScreen(active: Boolean = true) {
                             onClick = { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
                         )
                         Box(modifier = Modifier.alpha(paletteAlpha)) {
-                            PaletteSwatch(LucentPalette.entries.shuffled().take(4).flatMap { it.colors })
+                            PaletteSwatch(LucentPalette.pickerEntries.shuffled().take(4).flatMap { it.colors })
                         }
                         Text(
                             S.paletteRandomAuto,
@@ -3965,7 +3965,7 @@ fun SettingsScreen(active: Boolean = true) {
                         color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
                         fontSize = 13.sp
                     )
-                    LucentPalette.entries.filter { it.group == group }.forEach { p ->
+                    LucentPalette.pickerEntries.filter { it.group == group }.forEach { p ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth().clickable { pickPalette(p.name) }

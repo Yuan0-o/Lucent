@@ -70,8 +70,10 @@ import kotlin.math.sin
  */
 
 private const val BLOB_COUNT = 6
-// R3 report: minimum spacing between two elapsedMs writes in the drift clock, i.e. the frame
-// budget of the background animation (~30 fps). See the governor comment at the frame loop.
+// v2.7.2: the drift clock writes at most one state value per FRAME-BUDGET (below). The budget is
+// quantized on the display's own frame clock rather than on wall time from a background coroutine:
+// see the frame-loop comment at the clock. 33 ms ≈ exactly 2 frames at 60 Hz, 3 at 90 Hz and 4 at
+// 120 Hz, so redraws land on evenly spaced vsyncs with no scheduler jitter.
 private const val DRIFT_FRAME_BUDGET_MS = 33f
 private const val TAU = (2.0 * Math.PI).toFloat()
 
@@ -181,34 +183,43 @@ fun FluidGlassBackground(
         }
     }
 
-    // A single monotonic clock that does NOT wait for the UI frame callback (v2.4.0 report).
+    // A single monotonic clock that ticks ON the UI thread's own frame callback (v2.7.2).
     //
-    // The previous loop advanced only inside withInfiniteAnimationFrameNanos - i.e. only when the
-    // UI thread actually produced a frame. When anything else on that thread stalled (a page
-    // transition, a heavy list, an editor burst), the clock stalled with it and the blobs froze,
-    // then JUMPED to catch up: the exact stutter this background keeps being reported for. The
-    // clock now runs in its own coroutine on the Default dispatcher, advancing elapsedMs on a
-    // wall-clock schedule that is completely independent of UI-thread health. The canvas itself is
-    // still drawn by the UI thread (a single surface can only be drawn once per frame), but it
-    // always reads the CURRENT position, so whenever frames resume the blobs are exactly where
-    // they should be - no freeze, no jump, no catch-up burst. In a @Preview there is no runtime,
-    // so we render one static frame rather than spinning.
+    // The v2.4.0 loop advanced elapsedMs from a background coroutine on Dispatchers.Default,
+    // gated to a 33 ms wall budget. That fixed "clock stalls when the UI thread stalls", but it
+    // left the background's redraw cadence quantized to the NEXT vsync after each write: a write
+    // that landed just after a vsync waited almost a whole extra frame, so the interval between
+    // two actual redraws jittered between ~one and ~two budgets. On a high-refresh panel the
+    // jitter is plainly visible — the blobs drift at an uneven pace exactly when the UI thread is
+    // busiest (page transitions), which reads as stutter on some devices and not others.
+    //
+    // The loop below writes from the frame callback itself: withInfiniteAnimationFrameNanos
+    // suspends until the display's next frame and hands over that frame's timestamp, so a write
+    // lands at a deterministic point of the frame — never between frames — and the canvas is
+    // redrawn on the very frame the write belongs to. The budget is measured in FRAME time, so
+    // spacing is an exact whole number of vsyncs (2 @ 60 Hz / 3 @ 90 Hz / 4 @ 120 Hz): evenly
+    // spaced redraws at ~30 fps with zero scheduler jitter. When the UI thread is too busy to
+    // produce a frame, nothing is written (the coroutine simply waits for the next frame) and the
+    // blobs freeze in place rather than queueing up catch-up work; positions are pure functions
+    // of elapsed time, so whenever frames resume the blobs are exactly where they should be — no
+    // freeze-then-jump, no burst of stale updates stealing the frame budget back from the page
+    // transition that is actually on screen. In a @Preview there is no runtime, so we render one
+    // static frame rather than spinning.
     val inspection = LocalInspectionMode.current
     var elapsedMs by remember { mutableFloatStateOf(0f) }
     if (!inspection) {
-        // The 30 fps write governor (DRIFT_FRAME_BUDGET_MS) is unchanged; only the SOURCE of the
-        // ticks changed. Waking every ~16 ms and gating writes to 33 ms keeps the coroutine cheap
-        // while never writing slower than the governor allows.
-        var lastWriteMs = 0f
-        LaunchedEffect(kotlinx.coroutines.Dispatchers.Default) {
-            val start = System.nanoTime()
+        LaunchedEffect(Unit) {
+            var startNanos = -1L
+            var lastWriteMs = 0f
             while (true) {
-                val ms = (System.nanoTime() - start) / 1_000_000f
-                if (ms - lastWriteMs >= DRIFT_FRAME_BUDGET_MS) {
-                    elapsedMs = ms
-                    lastWriteMs = ms
+                withInfiniteAnimationFrameNanos { frameNanos ->
+                    if (startNanos < 0L) startNanos = frameNanos
+                    val ms = (frameNanos - startNanos) / 1_000_000f
+                    if (ms - lastWriteMs >= DRIFT_FRAME_BUDGET_MS) {
+                        elapsedMs = ms
+                        lastWriteMs = ms
+                    }
                 }
-                kotlinx.coroutines.delay(DRIFT_FRAME_BUDGET_MS.toLong() / 2)
             }
         }
     }
@@ -356,21 +367,24 @@ fun rememberCyclingPaletteColors(
     val inspection = LocalInspectionMode.current
     var phase by remember { mutableFloatStateOf(0f) } // 0f..n, wrapping
     if (!inspection) {
-        LaunchedEffect(n, secondsPerPalette, kotlinx.coroutines.Dispatchers.Default) {
-            // v2.4.0: like the background clock itself, the cycle phase advances from WALL time on
-            // its own dispatcher instead of waiting for UI frames - page transitions and heavy UI
-            // work can no longer freeze or jump the auto-cycle either.
-            val start = System.nanoTime()
+        // v2.7.2: same frame-clock discipline as the drift loop above. The phase advances from
+        // the display's own frame timestamps and is emitted only when its quantized step actually
+        // changes, so palette steps land on evenly spaced vsyncs with no scheduler jitter — and
+        // never steal work from a busy UI thread (no frames, no writes).
+        LaunchedEffect(n, secondsPerPalette) {
+            var startNanos = -1L
             var lastEmitted = -1
             while (true) {
-                val elapsed = (System.nanoTime() - start) / 1_000_000f
-                val raw = (elapsed / totalMs * n) % n
-                val step = (raw * CYCLE_STEPS_PER_PALETTE).toInt()
-                if (step != lastEmitted) {
-                    lastEmitted = step
-                    phase = step / CYCLE_STEPS_PER_PALETTE.toFloat()
+                withInfiniteAnimationFrameNanos { frameNanos ->
+                    if (startNanos < 0L) startNanos = frameNanos
+                    val elapsed = (frameNanos - startNanos) / 1_000_000f
+                    val raw = (elapsed / totalMs * n) % n
+                    val step = (raw * CYCLE_STEPS_PER_PALETTE).toInt()
+                    if (step != lastEmitted) {
+                        lastEmitted = step
+                        phase = step / CYCLE_STEPS_PER_PALETTE.toFloat()
+                    }
                 }
-                kotlinx.coroutines.delay(DRIFT_FRAME_BUDGET_MS.toLong() / 2)
             }
         }
     }

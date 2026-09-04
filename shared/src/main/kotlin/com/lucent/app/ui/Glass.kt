@@ -286,29 +286,82 @@ const val PALETTE_CYCLE = "CYCLE"
 const val PALETTE_RANDOM = "RANDOM"
 /** How long the "Random" background option keeps one palette before switching to another. */
 const val RANDOM_SWITCH_MS = 20_000L
+/** v2.7.2: how long the switch itself takes — the old palette crossfades into the new one over this. */
+const val RANDOM_FADE_MS = 1_800L
+/** v2.7.2: the fade is delivered in this many quantized steps (perceptually smooth, bounded recompositions). */
+private const val RANDOM_FADE_STEPS = 24
 
 /**
  * Colours for the "Random" background option (v2.4.0): a different palette every
- * [RANDOM_SWITCH_MS], chosen uniformly from all 126 colours' boards and never equal to the one
- * currently showing. The switch itself is a palette change; the drifting blobs continue smoothly
- * around it because they rebuild their brushes from the new palette exactly as a manual pick does.
+ * [RANDOM_SWITCH_MS], chosen uniformly from the [LucentPalette.pickerEntries] boards and never
+ * equal to the one currently showing.
+ *
+ * v2.7.2: the switch is now a *crossfade*, not a cut. Each palette is held for the full
+ * [RANDOM_SWITCH_MS], then takes [RANDOM_FADE_MS] to ease into the next one (the fade is stepped at
+ * [RANDOM_FADE_STEPS] quanta so the palette list — and with it the background's cached brushes —
+ * only changes a handful of times during the fade, never on every frame). Positions of the
+ * drifting blobs are untouched: they are pure functions of time, so the motion is continuous
+ * through the colour change.
  */
 @androidx.compose.runtime.Composable
 fun rememberRandomPaletteColors(): List<Color> {
-    val boards = LucentPalette.entries
+    val boards = LucentPalette.pickerEntries
     // Plain MutableState holders instead of `by` delegates: this file does not import the
     // androidx.compose.runtime getValue/setValue extensions, and full qualification reads better
     // than an import list that exists for two lines.
-    val shown = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-    val colors = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(boards.first().colors) }
+    val colors = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(boards.first().colors)
+    }
+    val seed = androidx.compose.runtime.remember { kotlin.random.Random.nextInt() }
     androidx.compose.runtime.LaunchedEffect(Unit) {
+        // Deterministic pick per cycle index: a 21.8 s (hold + fade) period means the "random" walk
+        // never repeats the same board twice in a row and stays stable however often the screen is
+        // recomposed; the seed varies per process so two installs do not wander in lockstep.
+        var startNanos = -1L
+        var cycle = -1L
+        var prevIdx = -1
+        var holdColors: List<Color> = colors.value
+        var nextColors: List<Color> = holdColors
+        var lastStep = -1
+        val period = (RANDOM_SWITCH_MS + RANDOM_FADE_MS).toDouble()
         while (true) {
-            kotlinx.coroutines.delay(RANDOM_SWITCH_MS)
-            var next = boards.random()
-            var guard = 0
-            while (next.name == shown.value && guard++ < 8) next = boards.random()
-            shown.value = next.name
-            colors.value = next.colors
+            androidx.compose.animation.core.withInfiniteAnimationFrameNanos { frameNanos ->
+                if (startNanos < 0L) {
+                    startNanos = frameNanos
+                    return@withInfiniteAnimationFrameNanos
+                }
+                val t = (frameNanos - startNanos) / 1_000_000.0
+                val cyc = (t / period).toLong()
+                if (cyc != cycle) {
+                    cycle = cyc
+                    var idx = (((cyc * 2_654_435_761L) xor seed.toLong()) % boards.size).toInt()
+                    if (idx < 0) idx = -idx
+                    var guard = 0
+                    while (idx == prevIdx && guard++ < boards.size) idx = (idx + 1) % boards.size
+                    prevIdx = idx
+                    holdColors = colors.value
+                    nextColors = boards[idx].colors
+                    lastStep = -1
+                }
+                val inCycle = t - cycle * period
+                val fade = ((inCycle - RANDOM_SWITCH_MS) / RANDOM_FADE_MS).coerceIn(0.0, 1.0)
+                if (fade <= 0.0) {
+                    if (lastStep != 0 && colors.value !== holdColors) {
+                        lastStep = 0
+                        colors.value = holdColors
+                    }
+                } else {
+                    val eased = fade * fade * (3.0 - 2.0 * fade)
+                    val step = (eased * RANDOM_FADE_STEPS).toInt().coerceAtMost(RANDOM_FADE_STEPS - 1)
+                    if (step != lastStep) {
+                        lastStep = step
+                        val f = eased.toFloat()
+                        colors.value = holdColors.indices.map { i ->
+                            androidx.compose.ui.graphics.lerp(holdColors[i], nextColors[i], f)
+                        }
+                    }
+                }
+            }
         }
     }
     return colors.value
@@ -340,7 +393,12 @@ fun PaletteGroup.title(): String = when (this) {
  * Every palette has exactly three colours so the cycling option can cross-fade between any two of
  * them element by element.
  */
-enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
+enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup, val featured: Boolean = true) {
+    // v2.7.2: the picker offers a hand-tuned subset of the boards (see [pickerEntries]) - 36 of the
+    // 42 - while every entry keeps its full behaviour, so a stored palette key from an older install
+    // (or an old backup) still resolves to exactly the colours it always had. Boards with
+    // featured = false are simply no longer OFFERED; the auto-cycle and the random option only ever
+    // wander through the picker boards too.
     // ---- Classic (original) ----
     SUNSET(listOf(Color(0xFF3A1C71), Color(0xFFD76D77), Color(0xFFFFAF7B)), PaletteGroup.DAWN),
     OCEAN(listOf(Color(0xFF00507A), Color(0xFF3A6EA5), Color(0xFF4FD9C4)), PaletteGroup.AQUA),
@@ -349,7 +407,7 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     MIDNIGHT(listOf(Color(0xFF16213E), Color(0xFF0F3460), Color(0xFF533483)), PaletteGroup.VELVET),
 
     // ---- Solid (elegant single-hue) ----
-    BLUSH(listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.BLOSSOM),
+    (listOf(Color(0xFF7A2E43), Color(0xFFC96A80), Color(0xFFF3B8C6)), PaletteGroup.BLOSSOM, featured = false),
     LAVENDER(listOf(Color(0xFF4B3A6B), Color(0xFF8A6FB0), Color(0xFFCBB6E8)), PaletteGroup.VIVID),
     SAGE(listOf(Color(0xFF2F4A3C), Color(0xFF5E8B6F), Color(0xFFAFCBB4)), PaletteGroup.EVERGREEN),
     SAND(listOf(Color(0xFF7A5C36), Color(0xFFC1996A), Color(0xFFEAD6B8)), PaletteGroup.DAWN),
@@ -423,13 +481,13 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     // different greys.
     STONE(listOf(Color(0xFF403E3A), Color(0xFF807A70), Color(0xFFD2CBC0)), PaletteGroup.EARTH),
     // Cold slate navy. MIDNIGHT's light member (0xFF533483) is violet; NOCTURNE never leaves blue.
-    NOCTURNE(listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.AQUA),
+    (listOf(Color(0xFF101728), Color(0xFF35425F), Color(0xFF8796B8)), PaletteGroup.AQUA, featured = false),
     // Cool red-pink. CRIMSON is pushed to the ORANGE side of red; BLUSH is a soft rose ramp —
     // CHERRY is the blue side of red and darker than either.
     CHERRY(listOf(Color(0xFF450F1E), Color(0xFF94263F), Color(0xFFE2A0B4)), PaletteGroup.BLOSSOM),
     // Burnt orange. EMBERGLOW's mids are saturated fire, AMBER (SOLID) is gold: TANGERINE sits
     // between them as a deep orange with a lighter, warmer light member.
-    TANGERINE(listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.SUNFIRE),
+    (listOf(Color(0xFF5C2A07), Color(0xFFAC5F14), Color(0xFFF0C780)), PaletteGroup.SUNFIRE, featured = false),
     // True blue. INDIGO (SOLID) is violet-blue; OCEAN runs teal-blue to cyan. ROYAL is the plain
     // primary blue neither of them is.
     ROYAL(listOf(Color(0xFF17275C), Color(0xFF3E63B0), Color(0xFF9DB8EE)), PaletteGroup.AQUA),
@@ -438,10 +496,10 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     AMETHYST(listOf(Color(0xFF34164A), Color(0xFF6E3D9E), Color(0xFFC3A2E0)), PaletteGroup.VELVET),
     // Cool grey-green. SAGE leans yellow-green; FOREST's light member is lime — ALPINE keeps the
     // green cool and muted at every step.
-    ALPINE(listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.EARTH),
+    (listOf(Color(0xFF1C2E28), Color(0xFF4F7360), Color(0xFFA8C8B8)), PaletteGroup.EARTH, featured = false),
     // Pearl: the lightest neutral of all. STONE is warm grey, MISTY (below) is blue-grey;
     // PEARL carries a faint violet cast and sits apart from both.
-    PEARL(listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.EARTH),
+    (listOf(Color(0xFF4E4A52), Color(0xFF9C95A6), Color(0xFFE4DEE8)), PaletteGroup.EARTH, featured = false),
 
     // ---- SOLID addition ----
     // Eggshell: a cream-khaki single hue. SAND is a tan-brown; EGGSHELL is yellower, softer and
@@ -453,7 +511,7 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
     CONFETTI(listOf(Color(0xFFFF5E5B), Color(0xFFFFC24B), Color(0xFF6DD5ED)), PaletteGroup.SUNFIRE),
     // Plum -> orchid. NEBULA is magenta-to-deep-blue; GRAPEVINE stays in the violet half and
     // travels dark-to-light instead of light-to-dark.
-    GRAPEVINE(listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.BLOSSOM),
+    (listOf(Color(0xFF3C2A5C), Color(0xFF7A4FA0), Color(0xFFE08FC2)), PaletteGroup.BLOSSOM, featured = false),
     // Deep blue -> cyan light. OCEAN ends on bright teal and GLACIER runs pale-to-deep; SEABREEZE
     // is deep-to-pale with a lighter middle than either.
     SEABREEZE(listOf(Color(0xFF123A54), Color(0xFF2F8FB3), Color(0xFFA8E2E0)), PaletteGroup.EVERGREEN),
@@ -510,4 +568,13 @@ enum class LucentPalette(val colors: List<Color>, val group: PaletteGroup) {
             TWILIGHT -> com.lucent.app.i18n.S.paletteTwilight
             MISTY -> com.lucent.app.i18n.S.paletteMisty
         }
+
+    companion object {
+        /**
+         * The boards the background picker offers (v2.7.2): 36 of the 42, with the six boards whose
+         * hue family already had a stronger representative removed. Auto-cycle and random wander
+         * only through this list, so the background can never show a board the picker hides.
+         */
+        val pickerEntries: List<LucentPalette> = entries.filter { it.featured }
+    }
 }

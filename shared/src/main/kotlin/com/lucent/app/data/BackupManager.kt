@@ -250,7 +250,16 @@ object BackupManager {
     // own keys in the settings block (G2). Each is read back guarded by has(), so a v11 file
     // restores exactly as it always did and a v12 file restores fully on any build that
     // understands the keys.
-    private const val BACKUP_VERSION = 12
+    // 13: the v2.7.2 audit's two real gaps closed, additive as ever. The Material You dynamic
+    // colour flag (dynamic_color_enabled — a v2.7.0 addition that the v12 audit had not caught,
+    // since it was shipped after that audit ran) now travels next to themeMode/palette so a
+    // restore puts the wallpaper-colour switch back exactly where it was. And chat messages now
+    // carry their full multi-attachment JSON ("attachmentList", the v16 column that holds the
+    // second and later files of a message) alongside the legacy single-attachment trio — before
+    // this, restoring a chat that had N files per message kept only the first one. replyToId
+    // remains deliberately excluded (see the import comment): restoring raw row ids without a
+    // message-id remap would make replies point at unrelated content.
+    private const val BACKUP_VERSION = 13
 
     // ---------------------------------------------------------------------------------------
     // Export
@@ -871,6 +880,11 @@ object BackupManager {
                     .put("attachmentMime", it.attachmentMime ?: JSONObject.NULL)
                     .put("attachmentData", it.attachmentData ?: JSONObject.NULL)
                     .put("attachmentName", it.attachmentName ?: JSONObject.NULL)
+                    // The multi-attachment JSON column (backup v13). A chat message can carry N
+                    // files (the legacy trio above holds the first); without this key a restore
+                    // kept only that first file. The payload is plain JSON text — the same base64
+                    // data the trio carries — so nothing new leaves the envelope.
+                    .put("attachmentList", it.attachmentList ?: JSONObject.NULL)
                     .put("conversationId", it.conversationId)
                     // The per-turn token estimate (task F3 completeness). Absent from older files, so
                     // import reads it back with a 0 default — exactly the value a pre-token row had.
@@ -941,6 +955,10 @@ object BackupManager {
         if (wantSettings) settingsObj
             .put("themeMode", settings.themeMode.first())
             .put("palette", settings.palette.first())
+            // The Material You (dynamic colour) flag (v2.7.0). Written next to the choices it
+            // suspends, so a restore puts back not only the stored theme/palette but also the
+            // fact that the wallpaper was overriding them.
+            .put("dynamicColorEnabled", settings.dynamicColorEnabled.first())
             .put("font", settings.font.first())
             // The imported font library's manifest: which fonts exist and what the user named
             // them. The font *files* ride as framed blobs (see exportEncrypted); this is the
@@ -1007,6 +1025,10 @@ object BackupManager {
             // verbatim on both platforms, and neither accessor exists on the Android twin, so
             // naming one here would break the shared build.
             .put("savedSearches", settings.savedSearches.first())
+            // v2.7.2: user-defined note templates and the interrupted-authoring draft (both ride
+            // the SETTINGS module like saved searches; see data/CustomTemplates.kt).
+            .put("customTemplates", settings.customTemplatesJson.first())
+            .put("templateDraft", settings.templateDraftJson.first())
             .put("noteHistoryEnabled", settings.noteHistoryEnabled.first())
             .put("taskHistoryEnabled", settings.taskHistoryEnabled.first())
             .put("pwFirstRoundLimit", settings.pwFirstRoundLimit.first())
@@ -1722,6 +1744,7 @@ object BackupManager {
                         attachmentMime = if (o.isNull("attachmentMime")) null else o.optString("attachmentMime"),
                         attachmentData = if (o.isNull("attachmentData")) null else o.optString("attachmentData"),
                         attachmentName = if (o.isNull("attachmentName")) null else o.optString("attachmentName"),
+                        attachmentList = if (o.isNull("attachmentList")) null else o.optString("attachmentList"),
                         conversationId = newConvId,
                         tokens = o.optInt("tokens", 0)
                         // replyToId (B-group task 12) is deliberately NOT carried across a
@@ -1770,6 +1793,11 @@ object BackupManager {
             if (wholeApi && s.has("model")) settings.setModel(s.optString("model"))
             if (restoreGeneral && s.has("themeMode")) settings.setThemeMode(s.optString("themeMode"))
             if (restoreGeneral && s.has("palette")) settings.setPalette(s.optString("palette"))
+            // The Material You flag, next to the choices it suspends (backup v13). Older files
+            // simply lack the key and leave the current value alone.
+            if (restoreGeneral && s.has("dynamicColorEnabled")) {
+                settings.setDynamicColorEnabled(s.optBoolean("dynamicColorEnabled"))
+            }
             // The imported font library. Adopted BEFORE the font key below, and only for files this
             // restore actually delivered (see FontStore.restoreFromBackup — the blobs were written
             // before importJson was even called), so the key can be validated against what really
@@ -1844,6 +1872,11 @@ object BackupManager {
                 // below, whose file-side values re-assert whatever their setters force (blackout
                 // forces share integration off; crash shield forces logging on).
                 if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
+                // v2.7.2 (backup v13): user-defined note templates + the interrupted-authoring
+                // draft, both settings JSON (see data/CustomTemplates.kt). Old files simply lack
+                // the keys, so this restore leaves the current values alone.
+                if (restoreGeneral && s.has("customTemplates")) settings.setCustomTemplatesJson(s.optString("customTemplates"))
+                if (restoreGeneral && s.has("templateDraft")) settings.setTemplateDraftJson(s.optString("templateDraft"))
                 if (s.has("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s.optBoolean("noteHistoryEnabled", true))
                 if (s.has("taskHistoryEnabled")) settings.setTaskHistoryEnabled(s.optBoolean("taskHistoryEnabled", true))
                 if (s.has("pwFirstRoundLimit")) {

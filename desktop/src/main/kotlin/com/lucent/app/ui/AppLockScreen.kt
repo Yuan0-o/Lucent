@@ -143,7 +143,21 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     // screen (each fresh failure restarts the three-second clock). The lockout countdown is a
     // separate, live line that ticks down once per second and clears itself when it reaches zero.
     var errorClearsAt by remember { mutableStateOf(0L) }
-    var lockoutSeconds by remember { mutableStateOf(0) }
+    // Live lockout state (v2.7.2): read REACTIVELY from the persisted shared counter, exactly like
+    // the Settings gates, so a cooldown charged anywhere is visible — and Windows Hello is
+    // disabled — from the first frame this screen composes. Previously the countdown was local
+    // state that only started after an attempt on this very composition: leave the app
+    // mid-cooldown and come back, and the Hello button came back live until someone tried a
+    // password.
+    val attemptJson by repo.passwordAttemptState.collectAsState(initial = "")
+    val attemptState = remember(attemptJson) {
+        com.lucent.app.data.PasswordAttempts.State.fromJson(attemptJson)
+    }
+    var attemptTick by remember { mutableStateOf(0L) }
+    val lockoutMs = remember(attemptState, attemptTick) {
+        com.lucent.app.data.PasswordAttempts.remainingLockoutMs(attemptState)
+    }
+    val lockoutSeconds = ((lockoutMs.coerceAtLeast(0L) + 999L) / 1000L).toInt()
 
     fun showError(msg: String) {
         error = msg
@@ -160,11 +174,13 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
             if (lockoutSeconds == 0 && error.isNotBlank()) error = ""
         }
     }
-    // Live per-second countdown while a lockout is in force.
+    // Live per-second countdown while a lockout is in force: re-derives the remaining time from
+    // the persisted state each tick (the state stores the absolute deadline, so accuracy survives
+    // recompositions and process restarts); clears the transient hint once the round is over.
     LaunchedEffect(lockoutSeconds) {
         while (lockoutSeconds > 0) {
             kotlinx.coroutines.delay(1000)
-            lockoutSeconds--
+            attemptTick++
         }
         error = ""
         errorClearsAt = 0L
@@ -224,7 +240,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
-                            enabled = password.isNotEmpty() && credentials.isNotEmpty(),
+                            enabled = password.isNotEmpty() && credentials.isNotEmpty() && lockoutSeconds == 0,
                             onClick = {
                                 scope.launch {
                                     // R3 report: every attempt goes through the throttling engine.
@@ -238,17 +254,15 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                         repo.passwordAttemptStateOnce())
                                     val wait = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(state)
                                     if (wait > 0L) {
-                                        // Lockout in force: show a LIVE countdown (ticks each second)
-                                        // instead of a stale one-shot message.
+                                        // Lockout in force: the live countdown is already shown
+                                        // reactively from the persisted counter; just reject the try.
                                         error = ""
-                                        lockoutSeconds = ((wait + 999L) / 1000L).toInt().coerceAtLeast(1)
                                         return@launch
                                     }
                                     if (AppLock.verifyPassword(credentials, password)) {
                                         password = ""
                                         error = ""
                                         errorClearsAt = 0L
-                                        lockoutSeconds = 0
                                         repo.setPasswordAttemptState(
                                             com.lucent.app.data.PasswordAttempts.registerSuccess().toJson())
                                         AppLockController.unlock()
@@ -266,13 +280,13 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                                     repo)
                                             }
                                             error = ""
-                                            lockoutSeconds = 0
                                             AppLockController.unlock()
                                         } else {
                                             val remain = com.lucent.app.data.PasswordAttempts.remainingLockoutMs(next)
                                             if (remain > 0L) {
                                                 error = ""
-                                                lockoutSeconds = ((remain + 999L) / 1000L).toInt().coerceAtLeast(1)
+                                                // The countdown appears reactively as soon as the
+                                                // persisted state above lands in the flow.
                                             } else {
                                                 showError(com.lucent.app.i18n.S.lockWrongPassword)
                                             }
@@ -285,8 +299,11 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
 
                         // Windows Hello: an ADDITIONAL way in, never the only one, so the password
                         // field above always remains. Rendered only when Hello is enabled for the
-                        // lock and present on this machine; on any other PC this whole block is absent.
-                        if (helloAvailable) {
+                        // lock and present on this machine; on any other PC this whole block is
+                        // absent. While a lockout is in force the button is not offered at all
+                        // (v2.7.2): the cooldown exists because someone may be guessing the
+                        // password, and Hello must not be able to sidestep it.
+                        if (helloAvailable && lockoutSeconds == 0) {
                             Spacer(modifier = Modifier.height(10.dp))
                             OutlinedButton(
                                 enabled = !helloBusy,
@@ -296,8 +313,19 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                     scope.launch {
                                         when (WindowsHello.verify(com.lucent.app.i18n.S.lockIsLocked)) {
                                             WindowsHello.Result.VERIFIED -> {
-                                                password = ""
-                                                AppLockController.unlock()
+                                                // Re-check the persisted counter before unlocking: a
+                                                // cooldown can begin (or already be running) while a
+                                                // prompt is open, and Hello must not open a door the
+                                                // cooldown is guarding (v2.7.2).
+                                                val st = com.lucent.app.data.PasswordAttempts.State.fromJson(
+                                                    repo.passwordAttemptStateOnce())
+                                                if (com.lucent.app.data.PasswordAttempts.remainingLockoutMs(st) > 0L) {
+                                                    // Still cooling down — refuse; the live
+                                                    // countdown on screen explains why.
+                                                } else {
+                                                    password = ""
+                                                    AppLockController.unlock()
+                                                }
                                             }
                                             // The user dismissed the prompt on purpose: no error, just
                                             // let them use the password field.

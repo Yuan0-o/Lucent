@@ -110,7 +110,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
     } else if (paletteName == PALETTE_CYCLE) {
         // Auto-cycling background: drifts smoothly through every palette over time. Backdrop and
         // text colours stay theme-based (above), so contrast is unaffected. (Parity with Android.)
-        rememberCyclingPaletteColors(LucentPalette.entries.map { it.colors })
+        rememberCyclingPaletteColors(LucentPalette.pickerEntries.map { it.colors })
     } else {
         LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
             ?: LucentPalette.SUNSET.colors

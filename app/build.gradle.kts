@@ -45,7 +45,12 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // 2.7.0: the v2.7 line (2.5.0/2.6.0 skipped as planned): two-level composers, Material You
 // dynamic colour, attachment-picker fixes, date/language fix, unified password throttling and
 // backup coverage v12. See the v2.7.0 release notes.
-val MARKETING_VERSION = "2.7.0"
+// 2.7.2: the v2.7.0 follow-through — composers' two-level fold actually wired, cooldowns disable
+// biometrics/Windows Hello, display-frame-paced background, theme 18/background 36 pickers with
+// Material You hiding, smooth random crossfade, user templates with interrupted-authoring draft,
+// assistant "+" new conversation, backup v13 (dynamic-colour flag, chat multi-attachments,
+// templates) and the GitHub Actions workflows restored. See the v2.7.2 release notes.
+val MARKETING_VERSION = "2.7.2"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

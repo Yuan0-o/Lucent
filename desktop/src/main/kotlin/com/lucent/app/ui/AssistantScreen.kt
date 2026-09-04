@@ -1173,9 +1173,19 @@ fun AssistantScreen(active: Boolean = true) {
                 ) {
                     Icon(Icons.Default.Archive, contentDescription = com.lucent.app.i18n.S.a11yExportChat, tint = onGradient)
                 }
-                // R3 report: the middle control of the three ("+", start a new conversation) is
-                // removed — with no conversation open the screen already lands on the greeting and
-                // a first message creates one, so the button duplicated what sending already did.
+                // "+": start a new conversation (v2.7.2). Between download and delete, same size as
+                // both. startNewConversation leaves the conversation id null — the greeting shows
+                // and the first message lazily creates the row, so no empty chats accumulate.
+                IconButton(
+                    onClick = {
+                        conversationMenuOpen = false
+                        conversationSearch = ""
+                        pendingJump = null
+                        AssistantController.startNewConversation(context.applicationContext)
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.newConversation, tint = onGradient)
+                }
                 IconButton(
                     onClick = { showClearConfirm = true },
                     enabled = AssistantController.currentConversationId != null && messages.isNotEmpty()
