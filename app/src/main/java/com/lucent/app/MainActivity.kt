@@ -89,7 +89,7 @@ import com.lucent.app.ui.AppLockController
 import com.lucent.app.ui.AssistantConfirmationDialog
 import com.lucent.app.ui.AssistantController
 import com.lucent.app.ui.AssistantScreen
-import com.lucent.app.ui.FluidGlassBackground
+import com.lucent.app.ui.IsolatedBlobBackground
 import com.lucent.app.ui.LocalHazeState
 import com.lucent.app.ui.LocalBottomBarInset
 import com.lucent.app.ui.LocalOnGradient
@@ -745,7 +745,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
             // The drifting blob background is decoration and nothing else. Hiding it from
             // accessibility services means a screen reader starts on the screen's actual content
             // instead of announcing an unlabelled canvas first, every single time.
-            FluidGlassBackground(
+            IsolatedBlobBackground(
                 palette = paletteColors,
                 backdropColor = backdropColor,
                 animated = backgroundAnimated,

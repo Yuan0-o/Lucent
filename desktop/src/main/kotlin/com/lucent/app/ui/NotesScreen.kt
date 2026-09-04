@@ -20,6 +20,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -62,6 +67,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -288,6 +294,10 @@ fun NotesScreen(active: Boolean = true) {
     // whose chip was long-pressed (delete confirm). Neither survives leaving the screen.
     var templateAuthoring by remember { mutableStateOf(false) }
     var pendingTemplateDeleteId by remember { mutableStateOf<String?>(null) }
+    var pendingTemplateMenu by remember { mutableStateOf<TemplateMenu?>(null) }
+    var pendingBuiltinHide by remember { mutableStateOf<NoteTemplate?>(null) }
+    var showRestoreBuiltins by remember { mutableStateOf(false) }
+    var editingTemplateId by remember { mutableStateOf<String?>(null) }
     // One undo stack per composer session, following the body/details field. Seeded from whatever
     // the field holds when the editor opens, so the first undo returns to the text as it was found
     // rather than to an empty string.
@@ -307,6 +317,10 @@ fun NotesScreen(active: Boolean = true) {
         com.lucent.app.data.CustomTemplates.parse(customTemplatesJson)
     }
     val templateDraftJson by repo.templateDraftJson.collectAsState(initial = "")
+    val hiddenTemplatesJson by repo.hiddenTemplatesJson.collectAsState(initial = "")
+    val hiddenBuiltins = remember(hiddenTemplatesJson) {
+        hiddenTemplatesJson.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+    }
     // Deliberately NOT keyed on `composing`, unlike every other piece of composer state around it.
     //
     // It used to be `remember(composing) { ... }`, and that was quietly destructive. `startEdit`
@@ -447,6 +461,7 @@ fun NotesScreen(active: Boolean = true) {
 
     /** Restore the composer from a stored draft and enter authoring mode. */
     fun startTemplateAuthoring(fromDraft: com.lucent.app.data.CustomTemplates.Draft?) {
+        editingTemplateId = null
         resetComposer()
         if (fromDraft != null) {
             newTitle = fromDraft.title
@@ -465,6 +480,7 @@ fun NotesScreen(active: Boolean = true) {
     /** Leave authoring on purpose: the unfinished fields are discarded and the stored draft cleared. */
     fun discardTemplateAuthoring() {
         templateAuthoring = false
+        editingTemplateId = null
         resetComposer()
         scope.launch { repo.setTemplateDraftJson("") }
     }
@@ -477,6 +493,48 @@ fun NotesScreen(active: Boolean = true) {
         } else {
             scope.launch { repo.setTemplateDraftJson(com.lucent.app.data.CustomTemplates.draftToJson(draft)) }
         }
+    }
+
+    /** Enter authoring mode to EDIT an existing custom template (v2.7.4). */
+    fun startTemplateEdit(t: com.lucent.app.data.CustomTemplates.Template) {
+        editingTemplateId = null
+        resetComposer()
+        newTitle = t.title
+        newBody = t.body
+        selectedTags = t.tags.toSet()
+        pinned = t.pinned
+        selectedColor = t.colorKey?.let { key ->
+            NoteColor.entries.firstOrNull { it.key == key }
+        } ?: NoteColor.DEFAULT
+        isChecklistMode = t.isChecklist
+        checklistItems = t.checklistTexts.map { Checklist.newItem(it) }
+        editingTemplateId = t.id
+        templateAuthoring = true
+    }
+
+    /** Author from a BUILT-IN template: its fields load, saving creates a user template (v2.7.4). */
+    fun startTemplateEditBuiltIn(template: NoteTemplate) {
+        val prefill = template.prefill()
+        editingTemplateId = null
+        resetComposer()
+        newTitle = prefill.title
+        newBody = prefill.body
+        selectedTags = prefill.tags
+        isChecklistMode = prefill.isChecklist
+        checklistItems = prefill.checklist
+        templateAuthoring = true
+    }
+
+    /** Hide (delete) one of the built-in templates from the strip (v2.7.4). */
+    fun hideBuiltinTemplate(template: NoteTemplate) {
+        val next = (hiddenBuiltins + template.name).joinToString(",")
+        scope.launch { repo.setHiddenTemplatesJson(next) }
+    }
+
+    /** Restore one (or all) hidden built-in template(s). */
+    fun restoreBuiltinTemplates(names: List<String>?) {
+        val next = (if (names == null) emptySet() else hiddenBuiltins - names.toSet()).joinToString(",")
+        scope.launch { repo.setHiddenTemplatesJson(next) }
     }
 
     /** Apply one of the user's saved templates to the blank new-note composer. */
@@ -499,7 +557,7 @@ fun NotesScreen(active: Boolean = true) {
             return
         }
         val t = com.lucent.app.data.CustomTemplates.Template(
-            id = java.util.UUID.randomUUID().toString(),
+            id = editingTemplateId ?: java.util.UUID.randomUUID().toString(),
             name = newTitle.trim(),
             title = newTitle,
             body = newBody,
@@ -511,6 +569,7 @@ fun NotesScreen(active: Boolean = true) {
         )
         val previous = customTemplatesJson
         templateAuthoring = false
+        editingTemplateId = null
         resetComposer()
         scope.launch {
             repo.setCustomTemplatesJson(com.lucent.app.data.CustomTemplates.upsert(previous, t))
@@ -1033,6 +1092,97 @@ fun NotesScreen(active: Boolean = true) {
         )
     }
 
+    // v2.7.4: long-press a template chip -> action menu (edit / delete), for built-ins and
+    // customs alike.
+    val templateMenu = pendingTemplateMenu
+    if (templateMenu != null) {
+        AlertDialog(
+            onDismissRequest = { pendingTemplateMenu = null },
+            title = {
+                Text(
+                    when (templateMenu) {
+                        is TemplateMenu.BuiltIn -> templateMenu.template.label
+                        is TemplateMenu.Custom -> templateMenu.template.name
+                    }
+                )
+            },
+            text = { Text(com.lucent.app.i18n.S.tplMenuHint) },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = {
+                        when (templateMenu) {
+                            is TemplateMenu.BuiltIn -> startTemplateEditBuiltIn(templateMenu.template)
+                            is TemplateMenu.Custom -> startTemplateEdit(templateMenu.template)
+                        }
+                        pendingTemplateMenu = null
+                    }) { Text(com.lucent.app.i18n.S.actionEdit) }
+                    TextButton(onClick = {
+                        when (templateMenu) {
+                            is TemplateMenu.BuiltIn -> pendingBuiltinHide = templateMenu.template
+                            is TemplateMenu.Custom -> pendingTemplateDeleteId = templateMenu.template.id
+                        }
+                        pendingTemplateMenu = null
+                    }) { Text(com.lucent.app.i18n.S.actionDelete) }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTemplateMenu = null }) {
+                    Text(com.lucent.app.i18n.S.actionCancel)
+                }
+            }
+        )
+    }
+
+    // v2.7.4: hiding a built-in template asks first (it can be restored from the strip).
+    pendingBuiltinHide?.let { builtin ->
+        AlertDialog(
+            onDismissRequest = { pendingBuiltinHide = null },
+            title = { Text(com.lucent.app.i18n.S.tplDeleteTitle) },
+            text = { Text(com.lucent.app.i18n.S.tplDeleteBody(builtin.label)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    hideBuiltinTemplate(builtin)
+                    pendingBuiltinHide = null
+                }) { Text(com.lucent.app.i18n.S.actionDelete) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBuiltinHide = null }) {
+                    Text(com.lucent.app.i18n.S.actionCancel)
+                }
+            }
+        )
+    }
+
+    // v2.7.4: restore hidden built-in templates, one by one or all at once.
+    if (showRestoreBuiltins) {
+        val hiddenList = NoteTemplate.entries.filter { it.name in hiddenBuiltins }
+        AlertDialog(
+            onDismissRequest = { showRestoreBuiltins = false },
+            title = { Text(com.lucent.app.i18n.S.tplRestoreBuiltins) },
+            text = {
+                Column {
+                    hiddenList.forEach { t ->
+                        TextButton(onClick = {
+                            restoreBuiltinTemplates(listOf(t.name))
+                            showRestoreBuiltins = false
+                        }) { Text(t.label) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    restoreBuiltinTemplates(null)
+                    showRestoreBuiltins = false
+                }) { Text(com.lucent.app.i18n.S.tplRestoreAll) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreBuiltins = false }) {
+                    Text(com.lucent.app.i18n.S.actionCancel)
+                }
+            }
+        )
+    }
+
     // v2.7.2: long-press a custom template chip -> confirm before it is removed.
     val pendingDelete = customTemplates.firstOrNull { it.id == pendingTemplateDeleteId }
     if (pendingDelete != null) {
@@ -1420,63 +1570,49 @@ fun NotesScreen(active: Boolean = true) {
                                         }
                                     )
                                 }
-                                NoteTemplate.entries.forEach { template ->
+                                // v2.7.4: EVERY template chip - built-in or custom - is a real
+                                // FilterChip, so colour, size, corner and baseline are identical by
+                                // construction on every theme, light or dark, and no custom token
+                                // can drift from the built-ins again. Long-press opens the action
+                                // menu (edit / delete) via a low-level detector that tolerates the
+                                // chip's own click handling.
+                                NoteTemplate.entries
+                                    .filter { it.name !in hiddenBuiltins }
+                                    .forEach { template ->
+                                        TemplateChipWithMenu(
+                                            label = { Text(template.label) },
+                                            icon = templateIcon(template),
+                                            onClick = { applyTemplate(template) },
+                                            onLongPress = {
+                                                pendingTemplateMenu = TemplateMenu.BuiltIn(template)
+                                            }
+                                        )
+                                    }
+                                customTemplates.forEach { t ->
+                                    TemplateChipWithMenu(
+                                        label = {
+                                            Text(t.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        },
+                                        icon = Icons.Default.Star,
+                                        onClick = { applyCustomTemplate(t) },
+                                        onLongPress = {
+                                            pendingTemplateMenu = TemplateMenu.Custom(t)
+                                        }
+                                    )
+                                }
+                                if (hiddenBuiltins.isNotEmpty()) {
                                     FilterChip(
                                         selected = false,
-                                        onClick = { applyTemplate(template) },
-                                        label = { Text(template.label) },
+                                        onClick = { showRestoreBuiltins = true },
+                                        label = { Text(com.lucent.app.i18n.S.tplRestoreBuiltins) },
                                         leadingIcon = {
                                             Icon(
-                                                templateIcon(template),
+                                                Icons.Default.Restore,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     )
-                                }
-                                customTemplates.forEach { t ->
-                                    // v2.7.3: a custom template chip wears EXACTLY the built-ins'
-                                    // FilterChip look - same token shape, same rounded rectangle,
-                                    // same fill and outline - so the two families are twins on the
-                                    // strip. FilterChip itself cannot take a long-press, so the
-                                    // chip surface is a Surface dressed in FilterChipDefaults and
-                                    // given combinedClickable (tap = apply, long-press = delete).
-                                    // v2.7.3: same tokens the built-in FilterChips resolve to
-                                    // (surfaceContainerLow fill, outline border, onSurfaceVariant
-                                    // label) - the ChipColors accessors are private in this M3
-                                    // version, so the defaults are spelled out instead.
-                                    Surface(
-                                        shape = androidx.compose.material3.FilterChipDefaults.shape,
-                                        color = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow,
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            1.dp,
-                                            androidx.compose.material3.MaterialTheme.colorScheme.outline
-                                        ),
-                                        modifier = Modifier.combinedClickable(
-                                            onClick = { applyCustomTemplate(t) },
-                                            onLongClick = { pendingTemplateDeleteId = t.id }
-                                        )
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Star,
-                                                contentDescription = null,
-                                                tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                t.name,
-                                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
                                 }
                                 // The "+" that starts authoring a user template, after the built-ins.
                                 FilterChip(
@@ -1709,7 +1845,7 @@ fun NotesScreen(active: Boolean = true) {
                                 onValueChange = { newCustomTag = it },
                                 placeholder = { Text(com.lucent.app.i18n.S.newTag) },
                                 singleLine = true,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f).height(45.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(onClick = {
@@ -2749,6 +2885,46 @@ private fun HomeSectionHeader(label: String) {
 
 /** The glyph for a template chip. Kept here so `data/NoteTemplates.kt` stays free of Compose types. */
 @Composable
+/**
+ * v2.7.4: the long-press target of a template chip. A real FilterChip cannot carry a long-press,
+ * so the chip is wrapped in a low-level detector that waits for the hold, consumes the event (which
+ * cancels the chip's own tap) and opens the action menu. Quick taps pass through untouched.
+ */
+@Composable
+private fun TemplateChipWithMenu(
+    label: @Composable () -> Unit,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    val currentLong by rememberUpdatedState(onLongPress)
+    Box(
+        modifier = Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val lp = awaitLongPressOrCancellation(down.id)
+                if (lp != null) {
+                    lp.consume()
+                    currentLong()
+                }
+            }
+        }
+    ) {
+        FilterChip(
+            selected = false,
+            onClick = onClick,
+            label = label,
+            leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) }
+        )
+    }
+}
+
+/** Which template a long-press on the strip refers to (v2.7.4). */
+private sealed class TemplateMenu {
+    data class BuiltIn(val template: NoteTemplate) : TemplateMenu()
+    data class Custom(val template: com.lucent.app.data.CustomTemplates.Template) : TemplateMenu()
+}
+
 private fun templateIcon(template: NoteTemplate) = when (template.iconName) {
     com.lucent.app.data.TemplateIcon.JOURNAL -> Icons.Default.Book
     com.lucent.app.data.TemplateIcon.MEETING -> Icons.Default.Groups

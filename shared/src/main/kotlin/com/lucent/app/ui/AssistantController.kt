@@ -109,6 +109,11 @@ object AssistantController {
     // A tool call awaiting the user's explicit yes/no (issue 13). Non-null means the confirm modal
     // is up and the generation coroutine is parked on the user's decision.
     var pendingConfirmation by mutableStateOf<PendingConfirmation?>(null)
+    // v2.7.4: a proposal the user parked via "keep refining with the assistant". The proposal is
+    // remembered (and injected into the next turn's system prompt) so that after the user answers
+    // "what should change" the model re-proposes the action with their adjustments instead of
+    // dropping it - and never reports "added" for something that wasn't.
+    private var refinementContext: String? = null
         private set
 
     /**
@@ -1018,9 +1023,20 @@ object AssistantController {
                 val compactCrossMemory =
                     if (smallModelMode) crossConversationMemory(db, conversationId, memoryTier, cap = SMALL_MODEL_CROSS_BUDGET)
                     else ""
-                val systemPrompt =
+                // v2.7.4: carry a parked "refine" proposal into this turn once, then let it go.
+                val parkedRefine = refinementContext
+                refinementContext = null
+                val basePrompt =
                     if (smallModelMode) buildCompactSystemPrompt(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory)
                     else buildSystemPrompt(name, style, memoryTier, webSearchEnabled, crossMemory, text)
+                val systemPrompt = if (parkedRefine != null) {
+                    basePrompt +
+                        "\n\nIMPORTANT (the user is refining an earlier proposal of yours): you proposed this before, " +
+                        "the user paused it to ask for changes, and it was NOT executed. Proposal: " + parkedRefine +
+                        "\nThe user has now told you what to change. Re-propose the action with their adjustments by calling " +
+                        "the matching tool again. The app will show them a confirmation dialog - only call the tool; never " +
+                        "claim anything was done, because it only happens after they approve it."
+                } else basePrompt
                 val tools = AppTools.definitions(includeWebSearch = webSearchEnabled)
 
                 // The upload the attach_upload_* tools may store this turn: the file on the
@@ -1102,29 +1118,16 @@ object AssistantController {
                         } else ConfirmedCall(approved = true, argumentsJson = call.argumentsJson)
 
                         if (confirmed.refine) {
-                            // "Keep talking about it" (B-group task 3). The action does NOT run —
-                            // nothing is written — but unlike a refusal the turn continues, with the
-                            // proposal (including whatever the user edited in the dialog before
-                            // choosing this) handed back as the tool's result, so the assistant
-                            // picks the conversation up from there and asks what to change.
-                            //
-                            // Fed back as a normal failed result rather than breaking the loop: the
-                            // existing machinery then does the right thing for free. The per-turn
-                            // dedup means a model that stubbornly re-proposes the identical call
-                            // gets this same note back without re-opening the modal, the round cap
-                            // still applies, and the forced tools-off round below still guarantees
-                            // the turn ends in words rather than in silence.
-                            val r = ToolExecResult(
-                                summary = "The user has not run this yet and wants to refine it first. " +
-                                    "Proposed action: " +
-                                    AppTools.describeToolCall(call.name, confirmed.argumentsJson) +
-                                    ". Do NOT call this tool again until they say what they want. " +
-                                    "Ask them, briefly and in their language, what to change.",
-                                success = false
-                            )
-                            executed[sig] = r
-                            results.add(r)
-                            continue
+                            // v2.7.4 (was B-group task 3): "keep refining". Nothing runs and nothing
+                            // is written - but the follow-up question is no longer left to the model
+                            // (it sometimes reported "added" for an action that never ran). The
+                            // question is written here, deterministically, and the proposal is parked
+                            // in [refinementContext]; the next user message carries it into the
+                            // system prompt so the model re-proposes the action with the adjustments.
+                            val proposal = AppTools.describeToolCall(call.name, confirmed.argumentsJson)
+                            refinementContext = proposal
+                            declinedDetails = "refine\u0001" + proposal
+                            break
                         }
 
                         if (!confirmed.approved) {
@@ -1207,7 +1210,10 @@ object AssistantController {
 
                 if (declinedDetails != null) {
                     // A fixed, honest reply written here rather than asked for — see the break above.
-                    val content = com.lucent.app.i18n.S.assistantDeclinedReply(declinedDetails)
+                    // v2.7.4: the "keep refining" variant asks the deterministic follow-up question.
+                    val content = if (declinedDetails.startsWith("refine\u0001")) {
+                        com.lucent.app.i18n.S.assistantRefineQuestion(declinedDetails.substringAfter("\u0001"))
+                    } else com.lucent.app.i18n.S.assistantDeclinedReply(declinedDetails)
                     turn.thinking = false
                     turn.resetStream(reveal = true)
                     turn.finishTyping(content)
@@ -1473,14 +1479,18 @@ object AssistantController {
                 } else ConfirmedCall(approved = true, argumentsJson = call.argsJson)
 
                 if (confirmed.refine) {
-                    // Same three-way outcome as the cloud loop (B-group task 3): not approved, not
-                    // refused — parked, with the proposal handed back so the conversation continues.
-                    ToolExecResult(
-                        summary = "The user wants to refine this before it runs. Proposed: " +
-                            AppTools.describeToolCall(call.name, confirmed.argumentsJson) +
-                            ". Do not call this tool again; ask them what to change.",
-                        success = false
-                    ).also { executed[sig] = it }
+                    // v2.7.4: deterministic "what would you like to change?" - same reasoning as the
+                    // cloud path; a local round would cost tens of seconds to maybe say "added".
+                    val proposal = AppTools.describeToolCall(call.name, confirmed.argumentsJson)
+                    refinementContext = proposal
+                    val content = com.lucent.app.i18n.S.assistantRefineQuestion(proposal)
+                    turn.thinking = false
+                    turn.resetStream(reveal = true)
+                    turn.finishTyping(content)
+                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content), answeredId)
+                    turn.turnPersisted = true
+                    turn.completionBuzz()
+                    return
                 } else if (!confirmed.approved) {
                     // Same as the cloud path, and it matters more here: one extra local round costs
                     // tens of seconds of on-device decoding, so continuing after a refusal is what

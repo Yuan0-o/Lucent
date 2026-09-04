@@ -193,7 +193,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        FluidGlassBackground(palette = paletteColors, backdropColor = backdropColor, animated = backgroundAnimated, modifier = Modifier.fillMaxSize())
+        IsolatedBlobBackground(palette = paletteColors, backdropColor = backdropColor, animated = backgroundAnimated, modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier
                 .fillMaxSize()

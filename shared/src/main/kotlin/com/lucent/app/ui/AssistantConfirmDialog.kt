@@ -2,6 +2,8 @@ package com.lucent.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import com.lucent.app.i18n.S
 
 /**
@@ -157,30 +160,41 @@ fun AssistantConfirmationDialog() {
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                AssistantController.resolveConfirmation(
-                    approved = true,
-                    edits = draft.toMap()
-                )
-            }) { Text(if (hasForm) S.confirmAddIt else S.actionConfirm) }
-        },
-        dismissButton = {
-            // Two choices share this slot: decline outright, or park it and keep talking. They are
-            // stacked rather than laid out in a row because "keep refining with the assistant" is
-            // too long to sit beside two other buttons on a phone without one of them wrapping to
-            // an unreadable stub.
-            Column(horizontalAlignment = androidx.compose.ui.Alignment.End, verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                TextButton(onClick = {
-                    AssistantController.resolveConfirmation(
-                        approved = false,
-                        edits = draft.toMap(),
-                        refine = true
-                    )
-                }) { Text(S.confirmKeepRefining) }
-                TextButton(onClick = { AssistantController.resolveConfirmation(approved = false) }) {
-                    Text(S.actionCancel)
-                }
+            // v2.7.4: ALL THREE decisions on one row - add, keep refining, decline - on every device,
+            // without shrinking the label font. TextButton keeps its min touch target; the label
+            // padding is tightened so the longest one ("keep refining with the assistant") still fits
+            // a third of a narrow phone screen, and maxLines=1 protects against a wrap rather than
+            // hiding text (text is only ellipsized at absurdly narrow widths as a last resort).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                TextButton(
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    onClick = {
+                        AssistantController.resolveConfirmation(
+                            approved = false,
+                            edits = draft.toMap(),
+                            refine = true
+                        )
+                    }
+                ) { Text(S.confirmKeepRefining, maxLines = 1) }
+                TextButton(
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    onClick = {
+                        AssistantController.resolveConfirmation(
+                            approved = true,
+                            edits = draft.toMap()
+                        )
+                    }
+                ) { Text(if (hasForm) S.confirmAddIt else S.actionConfirm, maxLines = 1) }
+                TextButton(
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    onClick = { AssistantController.resolveConfirmation(approved = false) }
+                ) { Text(S.actionCancel, maxLines = 1) }
             }
-        }
+        },
+        dismissButton = {}
     )
 }

@@ -1029,6 +1029,7 @@ object BackupManager {
             // the SETTINGS module like saved searches; see data/CustomTemplates.kt).
             .put("customTemplates", settings.customTemplatesJson.first())
             .put("templateDraft", settings.templateDraftJson.first())
+            .put("hiddenTemplates", settings.hiddenTemplatesJson.first())
             .put("noteHistoryEnabled", settings.noteHistoryEnabled.first())
             .put("taskHistoryEnabled", settings.taskHistoryEnabled.first())
             .put("pwFirstRoundLimit", settings.pwFirstRoundLimit.first())
@@ -1877,6 +1878,7 @@ object BackupManager {
                 // the keys, so this restore leaves the current values alone.
                 if (restoreGeneral && s.has("customTemplates")) settings.setCustomTemplatesJson(s.optString("customTemplates"))
                 if (restoreGeneral && s.has("templateDraft")) settings.setTemplateDraftJson(s.optString("templateDraft"))
+                if (restoreGeneral && s.has("hiddenTemplates")) settings.setHiddenTemplatesJson(s.optString("hiddenTemplates"))
                 if (s.has("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s.optBoolean("noteHistoryEnabled", true))
                 if (s.has("taskHistoryEnabled")) settings.setTaskHistoryEnabled(s.optBoolean("taskHistoryEnabled", true))
                 if (s.has("pwFirstRoundLimit")) {

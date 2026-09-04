@@ -127,6 +127,7 @@ private object SettingsKeys {
     // see data/CustomTemplates.kt for the shapes.
     val CUSTOM_TEMPLATES = stringPreferencesKey("custom_templates")
     val TEMPLATE_DRAFT = stringPreferencesKey("template_draft")
+    val HIDDEN_TEMPLATES = stringPreferencesKey("hidden_templates")
 
     // Whether tappable links ([[wiki]] and [text](url)) are active inside Markdown mode. A sub-toggle
     // of Markdown: when Markdown is off there are no links regardless. Default OFF — links are now
@@ -734,6 +735,11 @@ class SettingsRepository(private val context: Context) {
     val templateDraftJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TEMPLATE_DRAFT] ?: "" }
     suspend fun setTemplateDraftJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.TEMPLATE_DRAFT] = json }
+    }
+    // v2.7.4: which built-in templates the user deleted (hidden) on the strip.
+    val hiddenTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.HIDDEN_TEMPLATES] ?: "" }
+    suspend fun setHiddenTemplatesJson(json: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.HIDDEN_TEMPLATES] = json }
     }
 
     /**

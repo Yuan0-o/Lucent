@@ -55,7 +55,12 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // the built-ins, an adaptive frame-budget governor keeps the blob background regular on weak GPUs,
 // and the first shared-logic unit tests run in CI (code-review report, Phase 1). See the v2.7.3
 // release notes.
-val MARKETING_VERSION = "2.7.3"
+// 2.7.4: every template chip is a real FilterChip (alignment/colour identical by construction),
+// long-press opens edit/delete (built-ins deletable & restorable), the assistant's "keep refining"
+// path asks what to change deterministically and re-proposes after your answer, the confirm dialog
+// is one row on every device, the new-tag field is 0.8 tall, and on Android the blob background
+// renders fully off the UI thread (isolated renderer at half resolution). See the v2.7.4 notes.
+val MARKETING_VERSION = "2.7.4"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

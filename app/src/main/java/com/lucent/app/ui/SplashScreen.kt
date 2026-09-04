@@ -184,7 +184,7 @@ fun LucentSplash(
         // The same living background the app itself uses, so the splash is the app arriving rather
         // than a separate screen shown in front of it — including whether it drifts at all, which
         // follows the user's "drifting background" setting exactly like the app behind it.
-        FluidGlassBackground(
+        IsolatedBlobBackground(
             palette = paletteColors,
             backdropColor = backdropColor,
             animated = backgroundAnimated,
