@@ -39,138 +39,106 @@ every feature lands on every platform it ships to. Today that means your pocket 
 - **`:desktop`** — the desktop application, Windows today (Compose for Desktop, pure JVM, the same
   shared Kotlin de-Android-ified with a thin shim layer, SQLite over JDBC, llama.cpp compiled as a
   DLL). Built by `.github/workflows/build-windows.yml` into a double-click `.exe` installer.
+- **`:shared`** — the single source tree both platforms compile. Business logic, data, most UI, one
+  translation catalogue in four languages. Edit once; both platforms change.
 
-The desktop module is self-contained: it carries its own copies of the shared screens and data
-layer, small `android.*`/`androidx.*` shims for the platform APIs Compose Desktop doesn't have, and
-native replacements where the platform genuinely differs — file dialogs instead of SAF pickers, a
-system tray instead of a foreground service, and **Windows Hello** standing in for fingerprint
-unlock on the app lock. The same pattern — shared core, thin shell — is what lets the product reach
-further afield without rewriting itself each time.
+## The assistant with hands, not merely opinions
+
+This is the feature that defines Lucent. Bring your own model — OpenAI, Anthropic and Google request
+shapes are spoken fluently, several profiles kept and switched with one tap — or run the whole thing
+on the device. Say nothing at all and the assistant simply isn't there; the notes app loses nothing.
+
+What makes the assistant worth having is that it can *act*: create, read, edit, colour, pin, archive
+and delete notes; create, complete, reopen, schedule, prioritise and delete tasks; work through
+checklist items item by item on notes and tasks alike; search with a real filter language; and
+attach, rename or remove files. Crucially, before it changes anything it shows you precisely what it
+intends — in your own language, in a dialog that is itself the editor, with every arguable field
+editable before anything is written. Your answer is always the final word. Someone with an opinion and no hands is a chat; this is a butler who has been told to knock first.
+
+Conversations go on as long as you like, switch by tapping the title, and travel with you, several
+files per message included. Memory can be single-turn, per-conversation, or a digest of other
+conversations; web search is a toggle, off by default and in your control.
 
 ## Notes that remember what they used to be
 
-A note is a title, a body, some tags, a colour, and — should prose feel like too much commitment on
-a Monday — a checklist instead. Checklist items are first-class citizens: they can be reworded in
-place after the fact, opened in a roomy pop-out editor when a "quick item" turns into a paragraph,
-and an item you typed but never got around to confirming with "+" is still saved rather than
-quietly abandoned. Beyond the basics, notes do the things you only miss once they're gone:
+Every meaningful edit is snapshotted, so you can read exactly what a note said last Tuesday and
+restore it when today's confident rewrite turns out to have been wrong. Type `[[Shopping list]]` and
+it becomes a tappable link; point at a title that doesn't exist yet and the link glows red until a
+tap politely brings the note into existence. Markdown renders when you want it and stays exactly as
+typed when you don't. Checklists are first-class citizens — reword items in place, open a roomy
+pop-out editor when a "quick item" develops ambitions, and nothing you typed is lost to a forgotten
+plus. Tags, colours, pinning, attachments (each encrypted on disk), rich text, a doodle canvas for
+thoughts words can't reach, and a private area with its own lock. Drafts sit beside the trash, so an
+unfinished thought is never an abandoned one.
 
-- **Version history.** Every meaningful edit is snapshotted, so you can read exactly what a note
-  said last Tuesday and restore it when today's confident rewrite turns out to have been a mistake.
-  It usually was.
-- **Links between notes.** Type `[[Shopping list]]` and it becomes tappable; the note you pointed at
-  grows a *linked from* reference in return. Point at a title that doesn't exist yet and the link
-  shows red — tap it, and that note is politely brought into existence.
-- **Markdown, entirely optional.** Headings, bold, code and lists render when you want them and stay
-  exactly as typed when you don't.
-- **Templates.** Four one-tap starters — journal, meeting notes, project idea, checklist — offered
-  only on a blank note and never, ever over your actual work.
-- **Archive and trash, kept firmly separate**, because "I am finished with this" and "I would like
-  this gone" are different sentiments, and conflating them is how things you wanted end up in the
-  bin.
+A blank note offers four one-tap starters — journal, meeting, project idea, checklist — and then the
+real trick: templates of your own. Write one the way you like it, save it, and it greets you on every
+future blank page; long-press to edit or retire any template, built-ins included.
 
 ## Tasks with due dates that actually mean something
 
 Subtasks, priorities, repeat schedules, and reminders that survive a reboot. Due dates are parsed
-from ordinary language, so *next Friday at 6* becomes a genuine timestamp with a genuine alarm
-attached. Subtasks get the same grown-up checklist treatment notes do — editable in place, pop-out
-editing, never lost to a forgotten "+" — and marking a task complete ticks its whole checklist off
-with it, because a "done" task with three unticked steps is a contradiction wearing a checkmark.
-Completed tasks take themselves off to their own screen instead of loitering at the bottom of the
-list; if one turns out not to be finished after all, it can be sent back.
-
-## An assistant with hands, not merely opinions
-
-Bring your own model. Lucent speaks the OpenAI, Anthropic, and Google request shapes fluently,
-fetches the live model list from whichever endpoint you point it at, and lets you keep **several
-API profiles** to switch between with a single tap.
-
-What makes it genuinely useful is that it can *act*. A large and growing set of tools is wired to
-your real data, and the assistant can do essentially everything you can do by hand: create, read,
-edit, colour, archive, pin and delete notes; create, complete, reopen, schedule, prioritise and
-delete tasks; work through checklists item by item — on tasks *and* on checklist notes — adding,
-ticking, rewording and removing entries; search with proper filters; and attach or remove files.
-Crucially, before it changes anything it shows you precisely what it intends to do, in your own
-language, and waits for a yes like a butler hovering at a respectful distance. Replies stream in as
-they're written, conversations are kept and switchable, and you decide how much history rides along
-with each message.
+from ordinary language — *next Friday at 6* becomes a genuine timestamp with a genuine alarm — and
+repeat cadences are first-class rather than a clever sentence that eventually gives up. Marking a
+task complete ticks its whole checklist off with it; completed tasks take themselves off to their
+own screen.
 
 ## Or run the whole thing on the device itself
 
-Feeling anti-social, or simply on a train through a tunnel? Import a `.gguf` file — or a `.zip`
-with one inside, which is unpacked for you — and the assistant answers using **llama.cpp running
-directly on the device**. No account, no API key, no network. The model is unloaded the moment you
-leave the app. Roughly 1–4 GB Q4 models hit the sweet spot on a typical phone; a desktop with more
-RAM can afford more optimism.
-
-Two things about on-device mode are yours to decide, and both default to the cautious option:
-
-- **Tools are opt-in.** Off by default, because driving the tool protocol costs extra thinking per
-  reply. Turn them on in Settings — after a short, honest warning — and the local assistant can edit
-  your notes and tasks exactly like the cloud one, network or no network.
-- **CPU or GPU, your call.** It runs on the CPU by default, which works everywhere and whose
-  worst-case behaviour is "a bit slow" rather than "a bit on fire". Switch it to the GPU (Vulkan) —
-  again after a warning — and if your particular graphics driver disagrees with the whole idea, it
-  quietly falls back to the CPU. On Windows the installer ships a CPU engine and, where the build
-  can produce it, a second Vulkan-enabled engine; the app picks the GPU build only on machines that
-  actually have the Vulkan runtime, so nothing ever breaks on the ones that don't.
-
-Web search and cross-conversation memory stay off on device throughout, on purpose.
+Import a `.gguf` file (or a `.zip` with one inside, which is unpacked for you) and the assistant
+answers using llama.cpp running directly on the device — no account, no API key, no network, and
+the model is unloaded the moment you leave the app. Roughly 1–4 GB Q4 models hit the sweet spot on a
+phone; a desktop can afford more optimism. Tools are opt-in in local mode and GPU acceleration is a
+choice made after a plain warning; the CPU always works, and a GPU that disagrees falls back
+gracefully. Vision is optional too: import an mmproj file and the assistant will look at a photograph and
+discuss it like a mildly clairvoyant librarian.
 
 ## Four languages, switched without ceremony
 
-English, Simplified Chinese, Japanese, and Korean — the entire interface, every dialog, toast, and
-accessibility label, with English as the sensible default and the others a tap away. Switching
-is immediate: no restart, no reload. It studiously never touches your content — your notes, your
-tasks, and the assistant's replies stay in whatever language you wrote them. Type is yours to
-choose too: Lucent ships no fonts of its own and follows your device's font out of the box, and you
-can **import your own font files** (.ttf / .otf / .ttc) in Settings — each under a name you give it,
-previewed in its own face, switchable instantly, carried along in backups, and deletable the moment
-you tire of it.
+English, 中文, 日本語, 한국어 — every screen, dialog, date format and template. Switch the language
+and the whole app follows on the same frame, because there is one translation catalogue and it is
+what the UI reads.
+
+## The look of it: made, unashamedly, of glass
+
+Soft blobs of colour drift behind frosted panels that blur whatever passes beneath them, on a
+background that keeps its own schedule, so the blobs drift at their own pace even when the page
+under them is sprinting. A generous spread of palettes across eight style families, with an
+auto-cycle or random companion that ambles through them in smooth transitions. Light, dark, system,
+and a gallery of Monet-tinted themes — and on Android 12+ the palette can politely borrow your
+wallpaper's plan for the day. Widgets bring the same glassy surface to your launcher; on Windows the
+app slips into the tray and the sidebar takes over from the bottom tab bar, because a large monitor
+deserves better than a phone layout stretched sideways.
+
+## The lock that counts, and the backup that leaves with you
+
+The app lock is a real brute-force policy, not a polite request: escalating cooldowns, a persisted
+counter that survives reboots, an optional security question, an optional self-destruct, and a
+fingerprint (Android) or Windows Hello (Windows) that is politely out of office for the whole
+cooldown. The database is encrypted at rest; attachments are encrypted individually; backups are a
+single password-protectable `.lcb` file carrying notes, tasks, history, chats, attachments and
+settings across devices, previewed before a single item is changed, and armed to run automatically.
 
 ## Privacy that is structural, not merely promised
 
-- The database is **encrypted at rest** — SQLCipher on Android — and attachments are encrypted
-  individually on disk.
-- **App lock** with an optional security question, where neither the password nor the answer is
-  ever stored — only a salted hash. On Android the lock opens to your fingerprint; on Windows, to
-  **Windows Hello**.
-- **Backups** are a single encrypted `.lcb` file holding notes, tasks, history, chats, attachments
-  and settings — portable between devices, password-protectable, and previewed before a single item
-  is changed on import.
-- Share-sheet integration is off by default, and diagnostic logging is both off by default and
-  stubbornly local-only.
-- Exports are the one deliberate exception — **Markdown, Word, PDF, or Excel**, unencrypted —
-  because a file you cannot open anywhere else is not an export; it is a hostage.
-
-## Made, rather unashamedly, of glass
-
-Soft blobs of colour drift behind frosted panels that blur whatever passes beneath them. A generous
-spread of palettes across solid, gradient, and classic families, or an auto-cycle that ambles
-through the lot; light, dark, system, and Monet-tinted themes. On Android, home-screen widgets carry
-the same glassy surface out to your launcher; on Windows, the app minimises to a tray icon and the
-sidebar takes over from the bottom tab bar, because a 27-inch monitor deserves better than a phone
-layout stretched sideways.
+Nothing leaves the device until you export it or give a model a reason to look. Share-sheet
+integration is off by default; diagnostics are off by default and locally kept; the assistant
+services you connect are entirely your choice; and the one deliberate exception to encryption —
+exporting to Markdown, Word, PDF or Excel — is a file you can open anywhere else, which is the whole
+point. Good manners and good safety tend to arrive together.
 
 ## Rust, but only where it earns its keep
 
-Two hot paths are written in Rust and reached through JNI from the shared code: the PBKDF2 +
-AES-256-GCM routines behind backups and attachment encryption, and the maths that keeps the
-background animation drifting smoothly. Both fall back to identical Kotlin automatically when the
-native library isn't present.
+Two hot paths are written in Rust: two hot paths are written in Rust and reached through JNI —
+the PBKDF2 and AES-256-GCM routines behind backups and attachment encryption, and the maths behind
+the drifting background. Both fall back to identical Kotlin automatically when the native library
+isn't present.
 
 ## Building it (yes, from a phone, in your dressing gown)
 
-No Android Studio, no local SDK, no command line.
-
-- **Android:** push to GitHub, open **Actions → Build signed release APK → Run workflow**, and
-  download the signed APK when the tick turns green. The final step runs `apksigner` and refuses
-  the build if the result isn't a properly signed release. The signing key lives in encrypted
-  repository secrets.
-- **Windows:** open **Actions → Build Windows desktop → Run workflow**, and download the `.exe`
-  installer artifact. The workflow compiles the llama.cpp engine (CPU always; Vulkan GPU
-  best-effort) and the Rust accelerator on the runner — all three native builds are optional, so a
-  hiccup in any of them still leaves you with a working installer.
+No Android Studio, no local SDK, no command line. Push to GitHub, open **Actions**, run the workflow
+you want, and download the result — a properly signed release or a double-click installer — with the
+workflows themselves living in the repository, so the build is as inspectable as the code.
 
 ## Project layout
 
@@ -185,17 +153,11 @@ rust/         The Rust accelerator (shared across platforms)
 .github/      build.yml (Android APK) and build-windows.yml (Windows installer)
 ```
 
-Everything user-visible is localised through `i18n/I18n.kt` — one catalogue, four languages,
-compile-checked keys — and those translation tables are where the interface's every word actually
-lives. The catalogue itself is a SINGLE shared file now: the Android and desktop copies were
-merged, so a new string is added exactly once.
-
 ## Toolchain
 
-Everything builds on the newest official versions (September 2026): Gradle 9.7.1, AGP 9.4.0,
-Kotlin 2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2. Android compiles against API 36:
-the API 37 platform is not yet on any SDK channel, so Android-facing dependencies are pinned to the
-newest versions whose AAR metadata still accepts compileSdk 36.
+Everything builds on the newest official versions of the stack: Gradle 9.7.1, AGP 9.4.0, Kotlin
+2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2. Android compiles against API 36, with
+Android-facing dependencies pinned to the newest versions whose AAR metadata accepts it.
 
 ## What stays per platform, and why
 
@@ -255,3 +217,4 @@ A: Currently, Lucent is available for Android and Windows. We may explore iOS an
 
 **Q: Can I use this app entirely offline?**
 A: Yes! By importing a `.gguf` model, you can use the assistant locally without an internet connection. Web search and some cloud features won't be available, but core functionalities like managing notes and tasks work perfectly offline.
+
