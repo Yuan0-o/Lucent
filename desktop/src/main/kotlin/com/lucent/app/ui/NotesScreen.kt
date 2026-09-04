@@ -1441,13 +1441,16 @@ fun NotesScreen(active: Boolean = true) {
                                     // strip. FilterChip itself cannot take a long-press, so the
                                     // chip surface is a Surface dressed in FilterChipDefaults and
                                     // given combinedClickable (tap = apply, long-press = delete).
-                                    val chipColors = androidx.compose.material3.FilterChipDefaults.filterChipColors()
+                                    // v2.7.3: same tokens the built-in FilterChips resolve to
+                                    // (surfaceContainerLow fill, outline border, onSurfaceVariant
+                                    // label) - the ChipColors accessors are private in this M3
+                                    // version, so the defaults are spelled out instead.
                                     Surface(
                                         shape = androidx.compose.material3.FilterChipDefaults.shape,
-                                        color = chipColors.containerColor,
-                                        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
-                                            enabled = true,
-                                            selected = false
+                                        color = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            androidx.compose.material3.MaterialTheme.colorScheme.outline
                                         ),
                                         modifier = Modifier.combinedClickable(
                                             onClick = { applyCustomTemplate(t) },
@@ -1461,13 +1464,13 @@ fun NotesScreen(active: Boolean = true) {
                                             Icon(
                                                 Icons.Default.Star,
                                                 contentDescription = null,
-                                                tint = chipColors.iconColor,
+                                                tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 t.name,
-                                                color = chipColors.labelColor,
+                                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                                                 style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
