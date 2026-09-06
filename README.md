@@ -129,7 +129,7 @@ point. Good manners and good safety tend to arrive together.
 
 ## Rust, but only where it earns its keep
 
-Two hot paths are written in Rust: two hot paths are written in Rust and reached through JNI —
+Two hot paths are written in Rust and reached through JNI —
 the PBKDF2 and AES-256-GCM routines behind backups and attachment encryption, and the maths behind
 the drifting background. Both fall back to identical Kotlin automatically when the native library
 isn't present.
@@ -227,4 +227,4 @@ the same spirit and everyone stays friends.
 
 ## Contributing
 
-We welcome contributions! If you have suggestions or bug reports, please feel free to open an issue or submit a pull request. We strive to create an inclusive and welcoming community for everyone.
+Should you be seized by the urge to improve Lucent, we should be quietly delighted. Bug reports, thoughtful suggestions, and pull requests submitted with good grace are entirely welcome. We ask only that everyone remain strictly civil, keep the tea warm, and treat fellow contributors with the courtesy one expects in a respectable reading room.
