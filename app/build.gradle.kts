@@ -64,7 +64,17 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // 0.8 with its label intact; a cloud storage module (WebDAV: Nutstore/Nextcloud/Koofr/custom) sits
 // in Settings between Editor and Security with test, auto-backup mirroring, backup-now and
 // restore-from-cloud; Huawei claim removed from the 2.7.0 notes. See the v2.7.5 notes.
-val MARKETING_VERSION = "2.7.5"
+// 2.7.6: Notebooks — select several notes or tasks and file them together under a custom name.
+// A notebook is pure organization: it holds no content and never modifies the items inside, so the
+// same note or task can live in several notebooks and archiving/editing/trashing keep working
+// exactly as before. New notes-independent tables notebooks + notebook_items (schema v17, additive
+// migration on both Android Room and desktop SQLite). A shared Notebooks screen (list + detail) is
+// reachable from the overflow menu of both the Notes and Tasks pages, with per-row rename/delete
+// and per-item remove. An "add to notebook" button on the Notes and Tasks selection bars opens a
+// picker that files the selection into an existing notebook or creates one on the spot. Notebooks
+// and their membership travel through .lcb backups and are re-linked to restored notes/tasks on
+// import. Full English / 中文 / 日本語 / 한국어 strings. See the v2.7.6 notes.
+val MARKETING_VERSION = "2.7.6"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
