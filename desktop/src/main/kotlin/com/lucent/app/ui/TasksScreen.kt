@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -175,6 +176,10 @@ fun TasksScreen(active: Boolean = true) {
     // Task A21 — the hidden area. Only offered while HiddenArea.visible, which the Privacy switch
     // sets and which resets itself on every launch.
     var showHidden by remember { mutableStateOf(false) }
+    // Notebooks — the shared collection area, reached from the same overflow menu.
+    var showNotebooks by remember { mutableStateOf(false) }
+    // Whether the "add the selected tasks to a notebook" picker is open (selection mode).
+    var showNotebookPicker by remember { mutableStateOf(false) }
     // Task A10 — how many drafts are waiting, for the once-per-launch restore prompt below.
     val draftCount by db.taskDao().getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
@@ -648,6 +653,9 @@ fun TasksScreen(active: Boolean = true) {
     BackHandler(enabled = !composing && viewingId == null && (showDrafts || showHidden)) {
         if (showDrafts) showDrafts = false else showHidden = false
     }
+    // The notebook area is the same kind of sub-page; back closes it (the internal list/detail
+    // transition is handled inside NotebooksScreen itself).
+    BackHandler(enabled = !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden && showNotebooks) { showNotebooks = false }
     // On the home list, back first exits multi-select rather than leaving the screen.
     BackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
@@ -667,6 +675,7 @@ fun TasksScreen(active: Boolean = true) {
             showTrash = false
             showSearch = false
             showOverflowMenu = false
+            showNotebooks = false
             // Collapse the header's action cluster too (task): leaving the tab and coming back should
             // find it tucked away again, not still expanded.
             actionsExpanded = false
@@ -1033,6 +1042,17 @@ fun TasksScreen(active: Boolean = true) {
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
             dismissButton = { TextButton(onClick = { showBatchDeleteConfirm = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
+        )
+    }
+
+    // The "add the selected tasks to a notebook" picker. After the write the selection is
+    // cleared — the batch action has served its purpose.
+    if (showNotebookPicker) {
+        AddToNotebookDialog(
+            noteIds = emptySet(),
+            taskIds = selectedTaskIds,
+            onDismiss = { showNotebookPicker = false },
+            onAdded = { showNotebookPicker = false; exitSelection() }
         )
     }
 
@@ -1789,6 +1809,18 @@ fun TasksScreen(active: Boolean = true) {
             )
         }
 
+        showNotebooks -> {
+            // ---- Notebooks ----
+            // The shared collection area. A task tapped inside a notebook opens its detail page on
+            // this tab (viewingId, so closing returns here); a note lives on the other tab and is
+            // opened there via AppNavigation, which returns to this tab on close.
+            NotebooksScreen(
+                onBack = { showNotebooks = false },
+                onOpenTask = { task -> openDetail(task) },
+                onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Tasks) }
+            )
+        }
+
         showSearch -> {
             // The same unified search the Notes tab hosts — one screen, reachable from either side,
             // because "where did I put that" is not a question that knows which tab it belongs to.
@@ -1849,6 +1881,13 @@ fun TasksScreen(active: Boolean = true) {
                             selectedTaskIds = if (selectedTaskIds.containsAll(allIds)) emptySet() else allIds
                         }) {
                             Text(if (selectedTaskIds.containsAll(sortedActive.map { it.id }.toSet()) && sortedActive.isNotEmpty()) com.lucent.app.i18n.S.clearAllSelection else com.lucent.app.i18n.S.selectAll)
+                        }
+                        // File the selected tasks into a notebook (existing one, or create on the fly).
+                        IconButton(
+                            onClick = { if (selectedTaskIds.isNotEmpty()) showNotebookPicker = true },
+                            enabled = selectedTaskIds.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Book, contentDescription = com.lucent.app.i18n.S.notebookA11yAddItems, tint = onGradient)
                         }
                         IconButton(
                             onClick = { if (selectedTaskIds.isNotEmpty()) showBatchDeleteConfirm = true },
@@ -1918,6 +1957,11 @@ fun TasksScreen(active: Boolean = true) {
                                         text = { Text(com.lucent.app.i18n.S.screenDrafts) },
                                         leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showDrafts = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(com.lucent.app.i18n.S.screenNotebooks) },
+                                        leadingIcon = { Icon(Icons.Default.Book, contentDescription = null) },
+                                        onClick = { showOverflowMenu = false; showNotebooks = true }
                                     )
                                     // Task A21: absent, not disabled. A greyed-out "Hidden" entry
                                     // would announce that a hidden area exists to anyone holding

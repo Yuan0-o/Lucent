@@ -60,6 +60,10 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getByIdOnce(id: Long): Note?
 
+    /** Resolve a batch of note ids in one query — used by the notebook detail screen. */
+    @Query("SELECT * FROM notes WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<Note>
+
     /**
      * The coarse half of a search, run **inside SQLite** rather than over an in-memory list.
      *
@@ -269,6 +273,10 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun getByIdOnce(id: Long): Task?
 
+    /** Resolve a batch of task ids in one query — used by the notebook detail screen. */
+    @Query("SELECT * FROM tasks WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<Task>
+
     /**
      * The task side of the global search. Same reasoning as [NoteDao.searchNotes]: SQL narrows,
      * Kotlin refines.
@@ -463,4 +471,93 @@ interface ChatConversationDao {
 
     @Query("DELETE FROM chat_conversations")
     suspend fun clearAll()
+}
+
+/** Per-notebook item count, projected by the list query so the notebook grid can show sizes. */
+data class NotebookCount(val notebookId: Long, val count: Int)
+
+/**
+ * Notebooks and their membership rows (see [Notebook] / [NotebookItem]).
+ *
+ * The list query ([getAll]) sorts by `updatedAt` so a notebook you just filed something into
+ * floats to the top, mirroring how notes behave on their home page. Membership is read per
+ * notebook ([getItems]) and resolved by the caller against NoteDao/TaskDao, because a join
+ * across three tables would force every list emission to rebuild both item tables.
+ */
+@Dao
+interface NotebookDao {
+    /** All notebooks, most recently touched first. */
+    @Query("SELECT * FROM notebooks ORDER BY updatedAt DESC")
+    fun getAll(): Flow<List<Notebook>>
+
+    @Query("SELECT * FROM notebooks ORDER BY updatedAt DESC")
+    suspend fun getAllOnce(): List<Notebook>
+
+    @Query("SELECT * FROM notebooks WHERE id = :id")
+    suspend fun getByIdOnce(id: Long): Notebook?
+
+    @Query("SELECT notebookId AS notebookId, COUNT(*) AS count FROM notebook_items GROUP BY notebookId")
+    fun itemCounts(): Flow<List<NotebookCount>>
+
+    /** Everything in one notebook, most recently added first. */
+    @Query("SELECT * FROM notebook_items WHERE notebookId = :notebookId ORDER BY addedAt DESC")
+    fun getItems(notebookId: Long): Flow<List<NotebookItem>>
+
+    @Query("SELECT * FROM notebook_items WHERE notebookId = :notebookId ORDER BY addedAt DESC")
+    suspend fun getItemsOnce(notebookId: Long): List<NotebookItem>
+
+    /** All membership rows of one kind, across every notebook — for the orphan sweep. */
+    @Query("SELECT * FROM notebook_items WHERE itemKind = :kind")
+    suspend fun getItemsByKindOnce(kind: String): List<NotebookItem>
+
+    @Query("SELECT COUNT(*) FROM notebook_items WHERE notebookId = :notebookId AND itemKind = :kind AND itemId = :itemId")
+    suspend fun membershipExistsOnce(notebookId: Long, kind: String, itemId: Long): Int
+
+    @Insert
+    suspend fun insert(notebook: Notebook): Long
+
+    @Update
+    suspend fun update(notebook: Notebook)
+
+    @Insert
+    suspend fun insertItem(item: NotebookItem): Long
+
+    @Query("DELETE FROM notebook_items WHERE id = :itemId")
+    suspend fun deleteItemById(itemId: Long)
+
+    /**
+     * Delete a notebook and every membership row pointing at it, in one statement each. Room runs
+     * the two on the caller's dispatcher, not in a transaction — deleting the memberships first
+     * keeps the pair safe even if the second statement were to fail, since orphaned membership
+     * rows are pruned on read anyway ([pruneOrphans]).
+     */
+    @Query("DELETE FROM notebook_items WHERE notebookId = :notebookId")
+    suspend fun deleteItemsForNotebook(notebookId: Long)
+
+    @Query("DELETE FROM notebooks WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM notebooks")
+    suspend fun clearAll()
+
+    @Query("DELETE FROM notebook_items")
+    suspend fun clearAllItems()
+}
+
+/**
+ * Drop membership rows whose target note or task no longer exists. Called after any permanent
+ * item deletion path (trash purge, single delete) so a notebook never quietly points at a ghost —
+ * the detail screen would otherwise filter it every render without ever cleaning up.
+ */
+suspend fun NotebookDao.pruneOrphans(noteDao: NoteDao, taskDao: TaskDao) {
+    val noteMembers = getItemsByKindOnce(NotebookItem.KIND_NOTE)
+    if (noteMembers.isNotEmpty()) {
+        val alive = noteDao.getByIds(noteMembers.map { it.itemId }.toSet().toList()).map { it.id }.toHashSet()
+        noteMembers.filter { it.itemId !in alive }.forEach { deleteItemById(it.id) }
+    }
+    val taskMembers = getItemsByKindOnce(NotebookItem.KIND_TASK)
+    if (taskMembers.isNotEmpty()) {
+        val alive = taskDao.getByIds(taskMembers.map { it.itemId }.toSet().toList()).map { it.id }.toHashSet()
+        taskMembers.filter { it.itemId !in alive }.forEach { deleteItemById(it.id) }
+    }
 }

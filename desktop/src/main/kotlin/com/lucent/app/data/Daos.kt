@@ -124,6 +124,15 @@ class NoteDao internal constructor(private val db: Db) {
             .executeQuery().mapAll(::noteOf).firstOrNull()
     }
 
+    /** Resolve a batch of note ids in one query — used by the notebook detail screen. */
+    suspend fun getByIds(ids: List<Long>): List<Note> {
+        if (ids.isEmpty()) return emptyList()
+        val list = ids.distinct().joinToString(",")
+        return db.use { c ->
+            c.createStatement().executeQuery("SELECT * FROM notes WHERE id IN ($list)").mapAll(::noteOf)
+        }
+    }
+
     suspend fun searchNotes(text: String, tag: String, archived: Int, trashed: Int, limit: Int): List<Note> =
         db.use { c ->
             c.prepareStatement(
@@ -410,6 +419,15 @@ class TaskDao internal constructor(private val db: Db) {
             .executeQuery().mapAll(::taskOf).firstOrNull()
     }
 
+    /** Resolve a batch of task ids in one query — used by the notebook detail screen. */
+    suspend fun getByIds(ids: List<Long>): List<Task> {
+        if (ids.isEmpty()) return emptyList()
+        val list = ids.distinct().joinToString(",")
+        return db.use { c ->
+            c.createStatement().executeQuery("SELECT * FROM tasks WHERE id IN ($list)").mapAll(::taskOf)
+        }
+    }
+
     suspend fun searchTasks(
         text: String,
         done: Int,
@@ -681,5 +699,152 @@ class ChatConversationDao internal constructor(private val db: Db) {
         db.write("chat_conversations") { c ->
             c.createStatement().use { it.executeUpdate("DELETE FROM chat_conversations") }
         }
+    }
+}
+
+private fun notebookOf(rs: ResultSet) = Notebook(
+    id = rs.getLong("id"),
+    title = rs.getString("title"),
+    createdAt = rs.getLong("createdAt"),
+    updatedAt = rs.getLong("updatedAt")
+)
+
+private fun notebookItemOf(rs: ResultSet) = NotebookItem(
+    id = rs.getLong("id"),
+    notebookId = rs.getLong("notebookId"),
+    itemKind = rs.getString("itemKind"),
+    itemId = rs.getLong("itemId"),
+    addedAt = rs.getLong("addedAt")
+)
+
+/** Per-notebook item count, projected by the list query — mirrors the Android projection. */
+data class NotebookCount(val notebookId: Long, val count: Int)
+
+/**
+ * Notebooks and their membership rows (see [Notebook] / [NotebookItem]). Desktop twin of the
+ * Android Room DAO — same method names, same signatures, same reactive behaviour through
+ * Db.watch. Membership is resolved by the caller against NoteDao/TaskDao, exactly as on Android.
+ */
+class NotebookDao internal constructor(private val db: Db) {
+
+    fun getAll(): Flow<List<Notebook>> = db.watch("notebooks") { getAllOnce() }
+
+    suspend fun getAllOnce(): List<Notebook> = db.use { c ->
+        c.prepareStatement("SELECT * FROM notebooks ORDER BY updatedAt DESC").executeQuery().mapAll(::notebookOf)
+    }
+
+    suspend fun getByIdOnce(id: Long): Notebook? = db.use { c ->
+        c.prepareStatement("SELECT * FROM notebooks WHERE id = ?").apply { setLong(1, id) }
+            .executeQuery().mapAll(::notebookOf).firstOrNull()
+    }
+
+    fun itemCounts(): Flow<List<NotebookCount>> = db.watch("notebook_items") {
+        db.use { c ->
+            c.createStatement().executeQuery(
+                "SELECT notebookId AS notebookId, COUNT(*) AS count FROM notebook_items GROUP BY notebookId"
+            ).mapAll { rs -> NotebookCount(rs.getLong("notebookId"), rs.getInt("count")) }
+        }
+    }
+
+    fun getItems(notebookId: Long): Flow<List<NotebookItem>> =
+        db.watch("notebook_items") { getItemsOnce(notebookId) }
+
+    suspend fun getItemsOnce(notebookId: Long): List<NotebookItem> = db.use { c ->
+        c.prepareStatement("SELECT * FROM notebook_items WHERE notebookId = ? ORDER BY addedAt DESC")
+            .apply { setLong(1, notebookId) }.executeQuery().mapAll(::notebookItemOf)
+    }
+
+    /** All membership rows of one kind, across every notebook — for the orphan sweep. */
+    suspend fun getItemsByKindOnce(kind: String): List<NotebookItem> = db.use { c ->
+        c.prepareStatement("SELECT * FROM notebook_items WHERE itemKind = ?")
+            .apply { setString(1, kind) }.executeQuery().mapAll(::notebookItemOf)
+    }
+
+    suspend fun membershipExistsOnce(notebookId: Long, kind: String, itemId: Long): Int = db.use { c ->
+        c.prepareStatement(
+            "SELECT COUNT(*) FROM notebook_items WHERE notebookId = ? AND itemKind = ? AND itemId = ?"
+        ).apply { setLong(1, notebookId); setString(2, kind); setLong(3, itemId) }
+            .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+    }
+
+    suspend fun insert(notebook: Notebook): Long = db.write("notebooks", "notebook_items") { c ->
+        val ps = c.prepareStatement(
+            "INSERT INTO notebooks (title, createdAt, updatedAt) VALUES (?,?,?)",
+            java.sql.Statement.RETURN_GENERATED_KEYS
+        )
+        ps.setString(1, notebook.title); ps.setLong(2, notebook.createdAt); ps.setLong(3, notebook.updatedAt)
+        ps.executeUpdate()
+        ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
+    }
+
+    suspend fun update(notebook: Notebook) {
+        db.write("notebooks") { c ->
+            c.prepareStatement("UPDATE notebooks SET title=?, createdAt=?, updatedAt=? WHERE id=?")
+                .apply {
+                    setString(1, notebook.title); setLong(2, notebook.createdAt)
+                    setLong(3, notebook.updatedAt); setLong(4, notebook.id)
+                }.executeUpdate()
+        }
+    }
+
+    suspend fun insertItem(item: NotebookItem): Long = db.write("notebook_items", "notebooks") { c ->
+        val ps = c.prepareStatement(
+            "INSERT INTO notebook_items (notebookId, itemKind, itemId, addedAt) VALUES (?,?,?,?)",
+            java.sql.Statement.RETURN_GENERATED_KEYS
+        )
+        ps.setLong(1, item.notebookId); ps.setString(2, item.itemKind)
+        ps.setLong(3, item.itemId); ps.setLong(4, item.addedAt)
+        ps.executeUpdate()
+        ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
+    }
+
+    suspend fun deleteItemById(itemId: Long) {
+        db.write("notebook_items", "notebooks") { c ->
+            c.prepareStatement("DELETE FROM notebook_items WHERE id=?")
+                .apply { setLong(1, itemId) }.executeUpdate()
+        }
+    }
+
+    /** Delete every membership row of one notebook. */
+    suspend fun deleteItemsForNotebook(notebookId: Long) {
+        db.write("notebook_items", "notebooks") { c ->
+            c.prepareStatement("DELETE FROM notebook_items WHERE notebookId=?")
+                .apply { setLong(1, notebookId) }.executeUpdate()
+        }
+    }
+
+    /** Delete one notebook row (call [deleteItemsForNotebook] first, or the memberships orphan). */
+    suspend fun deleteById(notebookId: Long) {
+        db.write("notebooks") { c ->
+            c.prepareStatement("DELETE FROM notebooks WHERE id=?")
+                .apply { setLong(1, notebookId) }.executeUpdate()
+        }
+    }
+
+    suspend fun clearAll() {
+        db.write("notebooks", "notebook_items") { c ->
+            c.createStatement().use {
+                it.executeUpdate("DELETE FROM notebook_items")
+                it.executeUpdate("DELETE FROM notebooks")
+            }
+        }
+    }
+}
+
+/**
+ * Drop membership rows whose target note or task no longer exists — mirrors the Android extension
+ * of the same name. Called after any permanent item deletion path so a notebook never quietly
+ * points at a ghost.
+ */
+suspend fun NotebookDao.pruneOrphans(noteDao: NoteDao, taskDao: TaskDao) {
+    val noteMembers = getItemsByKindOnce(NotebookItem.KIND_NOTE)
+    if (noteMembers.isNotEmpty()) {
+        val alive = noteDao.getByIds(noteMembers.map { it.itemId }.toSet().toList()).map { it.id }.toHashSet()
+        noteMembers.filter { it.itemId !in alive }.forEach { deleteItemById(it.id) }
+    }
+    val taskMembers = getItemsByKindOnce(NotebookItem.KIND_TASK)
+    if (taskMembers.isNotEmpty()) {
+        val alive = taskDao.getByIds(taskMembers.map { it.itemId }.toSet().toList()).map { it.id }.toHashSet()
+        taskMembers.filter { it.itemId !in alive }.forEach { deleteItemById(it.id) }
     }
 }

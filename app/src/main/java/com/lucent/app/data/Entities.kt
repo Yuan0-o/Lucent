@@ -195,6 +195,63 @@ data class TaskVersion(
     val savedAt: Long = System.currentTimeMillis()
 )
 
+/**
+ * A notebook: a user-named collection of notes and tasks, grouped for convenience.
+ *
+ * A notebook is pure organization — it owns no content of its own. Membership lives in the
+ * [NotebookItem] join table, so the same note or task can appear in several notebooks (a note
+ * about a trip can live in "Trips 2026" and in "Ideas" at once), and adding/removing an item
+ * never touches the note or task row itself. This is deliberately the same shape the rest of the
+ * app uses for "grouping that must not disturb the grouped thing": like tags, a notebook is an
+ * annotation on an item, not a home for it — archiving, trashing or editing an item keeps
+ * working exactly as it did, wherever it is also filed.
+ *
+ * Notebooks are local to this device and do not travel through cloud sync (which moves notes and
+ * tasks between devices, not their local arrangement). They DO travel through .lcb backups, so a
+ * restore puts your filing back too.
+ */
+@Entity(
+    tableName = "notebooks",
+    indices = [Index(value = ["updatedAt"])]
+)
+data class Notebook(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    // Bumped whenever membership or the title changes, so the notebook list can sort by activity.
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * One membership row: "notebook X contains item Y", where the item is either a note or a task.
+ *
+ * [itemKind] is "NOTE" or "TASK" — a string rather than a bool or an enum column because the two
+ * tables it points into have no common key space: a note id and a task id can collide (both are
+ * autoincrement), so the kind is what disambiguates which table [itemId] names. The target rows
+ * are deliberately NOT foreign keys: notes and tasks can be permanently deleted through their own
+ * flows, and a dead membership is simply pruned on read (see [NotebookDao.pruneOrphans]) rather
+ * than letting a FK constraint block a trash purge the user already confirmed.
+ */
+@Entity(
+    tableName = "notebook_items",
+    indices = [
+        Index(value = ["notebookId"]),
+        Index(value = ["itemKind", "itemId"])
+    ]
+)
+data class NotebookItem(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val notebookId: Long,
+    val itemKind: String,
+    val itemId: Long,
+    val addedAt: Long = System.currentTimeMillis()
+) {
+    companion object {
+        const val KIND_NOTE = "NOTE"
+        const val KIND_TASK = "TASK"
+    }
+}
+
 @Entity(tableName = "chat_messages")
 data class ChatMessage(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

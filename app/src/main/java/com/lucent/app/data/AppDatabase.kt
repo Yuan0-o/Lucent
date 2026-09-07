@@ -270,6 +270,37 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
     }
 }
 
+/**
+ * 16 → 17: notebooks. Two brand-new tables (`notebooks`, `notebook_items`) — see Entities.kt for
+ * the design. Pure additive DDL: no existing table or row is touched, so a database at v16
+ * upgrades without rewriting a single byte of user content. The table shapes below must match what
+ * Room generates for the entities on a fresh install byte-for-byte (column order, types,
+ * nullability, index names), because Room validates a migrated schema against the generated one on
+ * first open — a mismatch here is what turns an upgrade into a crash on launch.
+ */
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `notebooks` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`title` TEXT NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_notebooks_updatedAt` ON `notebooks` (`updatedAt`)")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `notebook_items` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`notebookId` INTEGER NOT NULL, " +
+                "`itemKind` TEXT NOT NULL, " +
+                "`itemId` INTEGER NOT NULL, " +
+                "`addedAt` INTEGER NOT NULL)"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_notebook_items_notebookId` ON `notebook_items` (`notebookId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_notebook_items_itemKind_itemId` ON `notebook_items` (`itemKind`, `itemId`)")
+    }
+}
+
 @Database(
     entities = [
         Note::class,
@@ -277,9 +308,11 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
         NoteVersion::class,
         TaskVersion::class,
         ChatMessage::class,
-        ChatConversation::class
+        ChatConversation::class,
+        Notebook::class,
+        NotebookItem::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -289,6 +322,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskVersionDao(): TaskVersionDao
     abstract fun chatDao(): ChatDao
     abstract fun chatConversationDao(): ChatConversationDao
+    abstract fun notebookDao(): NotebookDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -327,7 +361,8 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                    MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+                    MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+                    MIGRATION_16_17
                 )
                 // dropAllTables = true preserves the old no-arg behaviour (every table is
                 // recreated) while using the non-deprecated overload.

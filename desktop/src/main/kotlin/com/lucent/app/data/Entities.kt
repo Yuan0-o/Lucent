@@ -127,3 +127,34 @@ data class ChatConversation(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * A notebook: a user-named collection of notes and tasks. Desktop twin of the Android entity;
+ * field-for-field identical so the shared screens and BackupManager compile against one shape.
+ * Membership lives in the [NotebookItem] join table, so the same note or task can appear in
+ * several notebooks and adding/removing never touches the item's own row.
+ */
+data class Notebook(
+    val id: Long = 0,
+    val title: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * One membership row — "notebook X contains item Y". [itemKind] is "NOTE" or "TASK"; the kind
+ * disambiguates which table [itemId] names, because note ids and task ids both autoincrement and
+ * can collide. Desktop twin of the Android entity.
+ */
+data class NotebookItem(
+    val id: Long = 0,
+    val notebookId: Long,
+    val itemKind: String,
+    val itemId: Long,
+    val addedAt: Long = System.currentTimeMillis()
+) {
+    companion object {
+        const val KIND_NOTE = "NOTE"
+        const val KIND_TASK = "TASK"
+    }
+}

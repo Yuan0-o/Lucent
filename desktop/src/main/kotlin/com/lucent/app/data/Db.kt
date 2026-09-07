@@ -77,13 +77,13 @@ class Db private constructor(private val connection: Connection) {
     companion object {
 
         /**
-         * Schema version this build writes. Matches the Android Room schema (version 15).
+         * Schema version this build writes. Matches the Android Room schema (version 17).
          *
          * INTEGRATION NOTE: group A took 12 and 13 (drafts / hidden / manual order / task history /
          * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
          * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
          */
-        private const val SCHEMA_VERSION = 16
+        private const val SCHEMA_VERSION = 17
 
         fun open(context: Context): Db {
             val file = File(context.applicationContext.filesDir, "lucent.db")
@@ -340,6 +340,31 @@ class Db private constructor(private val connection: Connection) {
                         // v16 (R3 task #15): multi-attachment chat messages — a nullable JSON list
                         // beside the legacy single-attachment trio (see ChatMessage.allAttachments).
                         16 -> addColumnIfMissing(conn, "chat_messages", "attachmentList", "TEXT")
+                        // v17: notebooks — two brand-new tables (notebooks, notebook_items). Pure
+                        // additive DDL; every statement is IF NOT EXISTS so replaying is a no-op.
+                        17 -> {
+                            conn.createStatement().use { st ->
+                                st.executeUpdate(
+                                    "CREATE TABLE IF NOT EXISTS notebooks (" +
+                                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                                        "title TEXT NOT NULL, " +
+                                        "createdAt INTEGER NOT NULL, " +
+                                        "updatedAt INTEGER NOT NULL)"
+                                )
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebooks_updatedAt ON notebooks (updatedAt)")
+                                st.executeUpdate(
+                                    "CREATE TABLE IF NOT EXISTS notebook_items (" +
+                                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                                        "notebookId INTEGER NOT NULL, " +
+                                        "itemKind TEXT NOT NULL, " +
+                                        "itemId INTEGER NOT NULL, " +
+                                        "addedAt INTEGER NOT NULL)"
+                                )
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_notebookId ON notebook_items (notebookId)")
+                                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_itemKind_itemId ON notebook_items (itemKind, itemId)")
+                            }
+                            true
+                        }
                         else -> true   // no step for this version
                     }
                 } catch (t: Throwable) {
@@ -484,6 +509,22 @@ class Db private constructor(private val connection: Connection) {
                         "createdAt INTEGER NOT NULL, " +
                         "updatedAt INTEGER NOT NULL)"
                 )
+                // v17 — notebooks: pure organization over notes/tasks, see Entities.kt.
+                st.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS notebooks (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "title TEXT NOT NULL, " +
+                        "createdAt INTEGER NOT NULL, " +
+                        "updatedAt INTEGER NOT NULL)"
+                )
+                st.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS notebook_items (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "notebookId INTEGER NOT NULL, " +
+                        "itemKind TEXT NOT NULL, " +
+                        "itemId INTEGER NOT NULL, " +
+                        "addedAt INTEGER NOT NULL)"
+                )
                 // Same list-query indices Room's schema carries, under Room's own names.
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_updatedAt ON notes (updatedAt)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_archived ON notes (archived)")
@@ -497,6 +538,10 @@ class Db private constructor(private val connection: Connection) {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_hidden ON notes (hidden)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDraft ON tasks (isDraft)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_hidden ON tasks (hidden)")
+                // v17 — notebook list/membership indices, under Room's own names.
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebooks_updatedAt ON notebooks (updatedAt)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_notebookId ON notebook_items (notebookId)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_itemKind_itemId ON notebook_items (itemKind, itemId)")
                 // The version stamp moved to migrateSchema, which is the only place that knows the
                 // store is genuinely at the current shape. Stamping here would mark an existing
                 // database as up to date after doing nothing to it — every statement above is

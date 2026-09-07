@@ -241,6 +241,10 @@ fun NotesScreen(active: Boolean = true) {
     // Task A21 — the hidden area. Only offered while HiddenArea.visible, which the Privacy switch
     // sets and which resets itself on every launch.
     var showHidden by remember { mutableStateOf(false) }
+    // Notebooks — the shared collection area, reached from the same overflow menu.
+    var showNotebooks by remember { mutableStateOf(false) }
+    // Whether the "add the selected notes to a notebook" picker is open (selection mode).
+    var showNotebookPicker by remember { mutableStateOf(false) }
     // Task A10 — how many drafts are waiting, for the once-per-launch restore prompt below.
     val draftCount by db.noteDao().getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
@@ -393,6 +397,7 @@ fun NotesScreen(active: Boolean = true) {
             showSearch = false
             showArchive = false
             showTrash = false
+            showNotebooks = false
             viewingId = id
             // Consumed together with the id, so closing this note returns to the tab the user was
             // actually on when they went looking for it.
@@ -432,6 +437,7 @@ fun NotesScreen(active: Boolean = true) {
             showSearch = false
             showArchive = false
             showTrash = false
+            showNotebooks = false
             viewingId = null
             startCreate()
         }
@@ -940,6 +946,10 @@ fun NotesScreen(active: Boolean = true) {
     BackHandler(enabled = !composing && historyForId == null && viewingId == null && (showDrafts || showHidden)) {
         if (showDrafts) showDrafts = false else showHidden = false
     }
+    // The notebook area is the same kind of sub-page; back closes it (the internal list/detail
+    // transition is handled inside NotebooksScreen itself).
+    BackHandler(enabled = !composing && historyForId == null && viewingId == null &&
+        !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden && showNotebooks) { showNotebooks = false }
     // On the home grid, a back press first exits multi-select mode rather than leaving the screen.
     BackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
@@ -957,6 +967,7 @@ fun NotesScreen(active: Boolean = true) {
             showTrash = false
             showSearch = false
             showOverflowMenu = false
+            showNotebooks = false
             // Collapse the header's action cluster too (task): leaving the tab and coming back should
             // find it tucked away again, not still expanded.
             actionsExpanded = false
@@ -1405,6 +1416,17 @@ fun NotesScreen(active: Boolean = true) {
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
             dismissButton = { TextButton(onClick = { showBatchDeleteConfirm = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
+        )
+    }
+
+    // The "add the selected notes to a notebook" picker. After the write the selection is
+    // cleared — the batch action has served its purpose.
+    if (showNotebookPicker) {
+        AddToNotebookDialog(
+            noteIds = selectedNoteIds,
+            taskIds = emptySet(),
+            onDismiss = { showNotebookPicker = false },
+            onAdded = { showNotebookPicker = false; exitSelection() }
         )
     }
 
@@ -2476,6 +2498,18 @@ fun NotesScreen(active: Boolean = true) {
             )
         }
 
+        showNotebooks -> {
+            // ---- Notebooks ----
+            // The shared collection area. A note tapped inside a notebook opens its detail page on
+            // this tab (viewingId, so closing returns here); a task lives on the other tab and is
+            // opened there via AppNavigation, which returns to this tab on close.
+            NotebooksScreen(
+                onBack = { showNotebooks = false },
+                onOpenNote = { note -> openDetail(note) },
+                onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Notes) }
+            )
+        }
+
         showSearch -> {
             // ---- Unified search ----
             // Notes *and* tasks in one pass, archived/completed/trashed included. A task result routes
@@ -2541,6 +2575,13 @@ fun NotesScreen(active: Boolean = true) {
                             selectedNoteIds = if (selectedNoteIds.containsAll(allIds)) emptySet() else allIds
                         }) {
                             Text(if (selectedNoteIds.containsAll(sortedNotes.map { it.id }.toSet()) && sortedNotes.isNotEmpty()) com.lucent.app.i18n.S.clearAllSelection else com.lucent.app.i18n.S.selectAll)
+                        }
+                        // File the selected notes into a notebook (existing one, or create on the fly).
+                        IconButton(
+                            onClick = { if (selectedNoteIds.isNotEmpty()) showNotebookPicker = true },
+                            enabled = selectedNoteIds.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Book, contentDescription = com.lucent.app.i18n.S.notebookA11yAddItems, tint = onGradient)
                         }
                         IconButton(
                             onClick = { if (selectedNoteIds.isNotEmpty()) showBatchDeleteConfirm = true },
@@ -2616,6 +2657,11 @@ fun NotesScreen(active: Boolean = true) {
                                         text = { Text(com.lucent.app.i18n.S.screenDrafts) },
                                         leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
                                         onClick = { showOverflowMenu = false; showDrafts = true }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(com.lucent.app.i18n.S.screenNotebooks) },
+                                        leadingIcon = { Icon(Icons.Default.Book, contentDescription = null) },
+                                        onClick = { showOverflowMenu = false; showNotebooks = true }
                                     )
                                     // Task A21: absent, not disabled. A greyed-out "Hidden" entry
                                     // would announce that a hidden area exists to anyone holding

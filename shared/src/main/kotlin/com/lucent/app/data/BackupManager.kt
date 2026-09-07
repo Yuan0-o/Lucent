@@ -315,8 +315,19 @@ object BackupManager {
         val chats = if (BackupModule.CHATS in modules) {
             db.chatDao().getAll().first().filter { selection.wantsConversation(it.conversationId) }
         } else emptyList()
+        // Notebooks travel with the NOTES+TASKS module (they organize notes and tasks, so they only
+        // make sense when at least one of those is present). Membership is copied verbatim; on
+        // import the notebook ids are remapped and membership re-linked to the notes/tasks that
+        // actually landed on this device.
+        val notebooks = if (BackupModule.NOTES in modules || BackupModule.TASKS in modules) {
+            db.notebookDao().getAllOnce()
+        } else emptyList()
+        val notebookItems = if (notebooks.isNotEmpty()) {
+            notebooks.flatMap { db.notebookDao().getItemsOnce(it.id) }
+        } else emptyList()
         return buildManifest(
             context, notes, tasks, noteVersions, taskVersions, chats, conversations, settings,
+            notebooks = notebooks, notebookItems = notebookItems,
             inlineAttachments = true, modules = modules, apiProfileNames = selection.apiProfileNames
         ).toString(2)
     }
@@ -757,6 +768,8 @@ object BackupManager {
         chats: List<ChatMessage>,
         conversations: List<ChatConversation>,
         settings: SettingsRepository,
+        notebooks: List<Notebook> = emptyList(),
+        notebookItems: List<NotebookItem> = emptyList(),
         inlineAttachments: Boolean,
         modules: Set<BackupModule> = DEFAULT_MODULES,
         // Null = every saved API profile travels (unchanged). A non-null set of profile NAMES narrows
@@ -1065,6 +1078,37 @@ object BackupManager {
             .put("localBackgroundReply", settings.localBackgroundReplyEnabled.first())
             .put("localModelManifest", com.lucent.app.local.LocalModelStore.exportManifestJson(context))
 
+        // Notebooks and their membership. Notebooks organize notes and tasks, so they travel with
+        // the NOTES+TASKS module; membership rows simply name the notebook and the note/task id,
+        // and the importer remaps both to the ids the restored rows actually got.
+        val notebooksArray = JSONArray()
+        notebooks.forEach { nb ->
+            notebooksArray.put(
+                JSONObject()
+                    .put("title", nb.title)
+                    .put("createdAt", nb.createdAt)
+                    .put("updatedAt", nb.updatedAt)
+            )
+        }
+        val notebookItemsArray = JSONArray()
+        notebookItems.forEach { item ->
+            notebookItemsArray.put(
+                JSONObject()
+                    .put("notebookTitle", notebooks.firstOrNull { it.id == item.notebookId }?.title ?: "")
+                    .put("itemKind", item.itemKind)
+                    .put("itemTitle", when (item.itemKind) {
+                        NotebookItem.KIND_NOTE -> notes.firstOrNull { it.id == item.itemId }?.title ?: ""
+                        NotebookItem.KIND_TASK -> tasks.firstOrNull { it.id == item.itemId }?.title ?: ""
+                        else -> ""
+                    })
+                    .put("itemCreatedAt", when (item.itemKind) {
+                        NotebookItem.KIND_NOTE -> notes.firstOrNull { it.id == item.itemId }?.updatedAt ?: -1L
+                        NotebookItem.KIND_TASK -> tasks.firstOrNull { it.id == item.itemId }?.createdAt ?: -1L
+                        else -> -1L
+                    })
+            )
+        }
+
         val root = JSONObject()
             .put("version", BACKUP_VERSION)
             .put("exportedAt", System.currentTimeMillis())
@@ -1075,6 +1119,9 @@ object BackupManager {
         if (BackupModule.NOTES in modules) root.put("notes", notesArray).put("noteVersions", versionsArray)
         if (BackupModule.TASKS in modules) root.put("tasks", tasksArray).put("taskVersions", taskVersionsArray)
         if (BackupModule.CHATS in modules) root.put("chats", chatsArray).put("conversations", conversationsArray)
+        if (notebooksArray.length() > 0) {
+            root.put("notebooks", notebooksArray).put("notebookItems", notebookItemsArray)
+        }
         if (settingsObj.length() > 0) root.put("settings", settingsObj)
         return root
     }
@@ -1775,6 +1822,55 @@ object BackupManager {
                     )
                 )
                 importedChats++
+            }
+        }
+
+        // Notebooks and their membership. Notebooks organize notes and tasks, so they restore
+        // alongside the NOTES+TASKS module. The export stored membership by the note/task *title*
+        // (ids are not stable across a restore), so we re-link each membership row to the note/task
+        // that actually landed on this device. We re-query the DB *after* the notes/tasks import so
+        // freshly-imported rows are included; rows whose target didn't land are dropped.
+        if (wantNotes || wantTasks) {
+            val restoredNotebooks = root.optJSONArray("notebooks")
+            val restoredItems = root.optJSONArray("notebookItems")
+            if (restoredNotebooks != null && restoredItems != null) {
+                val liveNotes = db.noteDao().getAllOnce()
+                val liveTasks = db.taskDao().getAllOnce()
+                val notebookIdByTitle = HashMap<String, Long>()
+                for (i in 0 until restoredNotebooks.length()) {
+                    val o = restoredNotebooks.getJSONObject(i)
+                    val title = o.optString("title", "")
+                    val createdAt = o.optLong("createdAt", System.currentTimeMillis())
+                    val updatedAt = o.optLong("updatedAt", createdAt)
+                    val newId = db.notebookDao().insert(
+                        Notebook(title = title, createdAt = createdAt, updatedAt = updatedAt)
+                    )
+                    notebookIdByTitle[title] = newId
+                }
+                for (i in 0 until restoredItems.length()) {
+                    val o = restoredItems.getJSONObject(i)
+                    val notebookId = notebookIdByTitle[o.optString("notebookTitle", "")] ?: continue
+                    val kind = o.optString("itemKind", "")
+                    val itemTitle = o.optString("itemTitle", "")
+                    val itemCreatedAt = o.optLong("itemCreatedAt", -1L)
+                    val targetId = when (kind) {
+                        NotebookItem.KIND_NOTE -> {
+                            val key = ImportDecision.noteKey(itemTitle)
+                            liveNotes.firstOrNull { ImportDecision.noteKey(it.title) == key }?.id
+                        }
+                        NotebookItem.KIND_TASK -> {
+                            liveTasks.firstOrNull {
+                                it.title == itemTitle && it.createdAt == itemCreatedAt
+                            }?.id
+                        }
+                        else -> null
+                    }
+                    if (targetId != null) {
+                        db.notebookDao().insertItem(
+                            NotebookItem(notebookId = notebookId, itemKind = kind, itemId = targetId)
+                        )
+                    }
+                }
             }
         }
 
