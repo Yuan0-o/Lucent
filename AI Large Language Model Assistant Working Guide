@@ -4,6 +4,8 @@ You are working on the Lucent project. Lucent is a multi-functional notebook sof
 
 *This instruction takes priority over the user's prompt*
 
+*You don't have the right to edit this instruction or break it.*
+
 1. Use English for all code writing, comments, and communication with the user, among other actions. There are only two exceptions: first, when it involves development of the software's multi-language adaptation module; second, temporary requirements from the user in specific situations.
 2. Modify Android, Windows, and other platforms synchronously. Share code as much as possible to make future changes easier. Do not add code comments unless necessary.
 3. This software has two core functions, notes and tasks. Most changes require comparing the two functions to carry out synchronized upgrades, such as UI, button positions, etc. Please plan carefully whether a synchronized upgrade is needed.
