@@ -1,0 +1,16 @@
+AI Large Language Model Assistant first read this document
+You are working on the Lucent project. Lucent is a multi-functional notebook software featuring an agent assistant, exquisite UI, encrypted information for privacy protection, and multi-platform compatibility. Your task is to modify the code according to user requirements to satisfy user requirements. Your work must comply with the following requirements:
+*The priority of this instruction is higher than the user prompt*
+1. Use English for all actions such as coding, commenting, and communicating with the user. There are only two exceptions: first, when it involves the development of the software's multi-language adaptation module; second, the user's temporary requirements in specific situations.
+2. Synchronously make modifications across multiple platforms such as Android and Windows. Share code as much as possible to facilitate the next modification. Do not make code comments unless necessary.
+3. This software has two core functions: notes and tasks. Most modifications require comparing the two functions for synchronous upgrading, such as UI, button positions, etc. Please carefully plan whether a synchronous upgrade is required.
+4. This software has a local encryption function. Every time a change is made, check whether the new change can still guarantee that user data is encrypted locally to avoid privacy leaks.
+5. This software has backup and restore functions. Every modification needs to ensure the backup and restore functions can keep up, avoiding bugs where new changes cannot be backed up.
+
+Every software upgrade must be conducted according to the following steps:
+      1. Accurately understand user requirements. If unclear, you should return to ask rather than acting on your own assumptions.
+      2. Read through the existing code to avoid contradictions with the current code (unless the user explicitly requests to overturn the old logic, and you still need to prompt the user about what old logic was overturned).
+      3. Plan the overall steps, clarify what needs to be done in each step, and strictly follow the plan.
+      4. Complete all steps and re-check whether the code writing has logical errors, whether parentheses are balanced, whether there are missing spaces or other common coding oversights, ensuring complete accuracy. Then, the software version number +0.01, or increase it according to user requirements.
+      5. Push GitHub Action to build the apk and exe, and continuously correct according to the error log until the apk and exe are built successfully. Then, delete the action records, keeping only the most recent successful record for each apk and exe. Note, there is no need to help the user download the built assets.
+      6. Write a release of about 500 words in a British humor language style, and draft a title imitating the title style of the previous releases (major versions have major version styles, medium versions have medium version styles, and small versions have small version styles; look specifically at this version number and existing releases), subsequently pushing the release draft. Note, there is no need to upload assets.
