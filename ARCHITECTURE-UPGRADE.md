@@ -77,3 +77,22 @@ state-holder (P0-4) so pages can move to per-section files without visual change
 - No UI, encryption or `.lcb` backup format changes.
 - No Gradle wrapper exists in the repo and this container has no Java/Gradle: all compilation and
   test verification goes through the GitHub Actions workflows (manual dispatch).
+
+## Delivery status — v2.7.7 (architecture release)
+
+- Version bumped 2.7.6 -> 2.7.7 in app/build.gradle.kts (MARKETING_VERSION) and
+  desktop/build.gradle.kts (WiX packageVersion) at commit `9ef8696`.
+- Final verification: signed-release-APK and Windows-desktop workflows both green on `9ef8696`.
+- Actions history cleaned per the working guide: only the newest successful run of each workflow
+  remains.
+- Release draft `v2.7.7` ("Nothing to See Here (That's the Point)", ~510 words) created; assets are
+  intentionally not attached, per the working guide.
+
+### Not done (needs device/UI validation)
+
+The stateful UI-layer work — AssistantController's turn registry/generation coordinator split
+(P0-1d), page-level SettingsScreen decomposition (P0-2), Repository boundaries (P0-3) and
+ViewModel/StateFlow adoption (P0-4) — is deliberately parked. It rewrites live UI state flow
+across both platforms, and this environment has no local compiler or device to validate it;
+shipping that unvalidated would risk exactly the regressions the upgrade is meant to prevent.
+The pure-logic layers those refactors would stand on are extracted, shared and tested above.
