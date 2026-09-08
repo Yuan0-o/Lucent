@@ -74,7 +74,14 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // picker that files the selection into an existing notebook or creates one on the spot. Notebooks
 // and their membership travel through .lcb backups and are re-linked to restored notes/tasks on
 // import. Full English / 中文 / 日本語 / 한국어 strings. See the v2.7.6 notes.
-val MARKETING_VERSION = "2.7.6"
+// 2.7.7: the architecture release — no new user-facing features, and the point of it is that you
+// cannot tell. AssistantController's pure logic moved into testable units (tool-call parsing,
+// reply polishing, system prompts), the shared settings components stopped being two drifting
+// copies, BackupManager's framing/manifest/import layers became separate files, desktop schema
+// migrations and the .lcb round trip are now automated tests, and the desktop test suite grew
+// from 4 files to 14 (121 tests) with every refactor verified byte-identical first. See the
+// v2.7.7 notes and ARCHITECTURE-UPGRADE.md.
+val MARKETING_VERSION = "2.7.7"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
