@@ -15,7 +15,15 @@ name: check
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'THIRD-PARTY-NOTICES.md'
+      - 'HANDOFF-REPORT.md'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'THIRD-PARTY-NOTICES.md'
+      - 'HANDOFF-REPORT.md'
 
 jobs:
   jvm-check:
