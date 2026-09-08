@@ -1,6 +1,6 @@
 # Lucent 升级任务交接报告（HANDOFF REPORT）
 
-> 目标版本 **3.0.0** · 更新于 2026-09-08
+> 目标版本 **3.0.0** · 更新于 2026-09-08（最新一次）
 >
 > 本文档记录升级任务的完整状态：总任务、约束要求、已完成项、当前阻塞点、剩余工作与总体计划。供后续会话（人或 AI）无缝接续。
 
@@ -68,23 +68,31 @@
 
 ---
 
-## 4. 当前阻塞点（已修复，等待 CI 验证）
+## 4. 当前阻塞点
 
-最新提交 `a03ab46` 修复了之前 `d682eda` CI 的 **3 个测试失败**（`jvm-check` 的桌面单元测试），正在等待 CI 验证：
+最新提交 `6ce34e45` 的 CI 仍有 **2 个失败点**：
 
-### 4.1 `DbMigrationTest` — 期望 18 但得到 17 ✅ 已修复
-- **根因**：FTS5 虚拟表定义用 `title, content` 列名，但 `notes` 表实际是 `title, body`，导致 `CREATE VIRTUAL TABLE` 或 `rebuild` 失败，v18 分支抛异常，`user_version` 停在 17。
-- **修复**：把 `notes_fts` 改为 `fts5(title, body, ...)`、`tasks_fts` 改为 `fts5(title, notes, ...)`，匹配实际表结构；同步修正所有触发器的 `INSERT INTO *_fts` 列名。
+### 4.1 `jvm-check` → Run detekt ❌ 失败
+- **CI 日志错误**：
+  ```
+  Property 'buildUponDefaultConfig' is misspelled or does not exist.
+  Property 'exceptions>EmptyCatchBlock' is misspelled or does not exist.
+  ```
+- **根因**：`config/detekt/detekt.yml` 配置格式与 detekt 1.23.8 不兼容：
+  - `buildUponDefaultConfig` 是 Gradle 插件属性，不应出现在 YAML 中（已在 `desktop/build.gradle.kts` 第 29 行正确设置）
+  - `exceptions` 规则集在 detekt 1.23.x 中不存在；`EmptyCatchBlock` 属于 `empty-blocks` 规则集
+- **修复方向**：从 YAML 中删除 `buildUponDefaultConfig: false`、将 `exceptions:` 改为 `empty-blocks:`。
 
-### 4.2 `DbEncryptionTest` — `no such column: archived` ✅ 已修复
-- **根因**：测试构造的 legacy plaintext 表只有 4 列（`id/title/body/updatedAt`），而 `createIndices` 期望 v11 完整列（含 `archived`）。`migrateSchema` 的 v12+ 分支只补新增列，不补 v11 已有的列。
-- **修复**：让测试的 legacy 表匹配真实 v11 schema（补全 `tags, attachments, archived, archivedAt, pinned, color, isChecklist, checklist, trashedAt`），使其通过 `migrateSchema` 后 `createIndices` 能正常工作。
+### 4.2 `android-jvm-check` → Run Android JVM unit tests ❌ 失败
+- 具体错误信息待获取（CI artifact 未下载成功）
+- 可能原因：`app/src/main/java/com/lucent/app/data/Daos.kt` 中新加的 `rebuildFts()` 方法可能导致 Room 编译错误，或者 `@Query` 返回类型需要调整
 
-### 4.3 `DataKeysTest` — 异常消息缺少 `.lcb` ✅ 已修复
-- **根因**：`DataKeys.databasePassphrase` 抛出的 `IllegalStateException` 消息是 `"restore from a backup"`，测试断言期望包含 `.lcb`。
-- **修复**：把异常消息改为 `"restore from a .lcb backup"`，匹配测试断言并引导用户恢复。
+### 4.3 已修复并确认通过的 3 个桌面测试
+- `DbMigrationTest`（FTS5 列名修复 ✅）
+- `DbEncryptionTest`（legacy 表补列 ✅）
+- `DataKeysTest`（异常消息含 `.lcb` ✅）
 
-> ⚠️ **重要**：这 3 个测试在本次会话之前从未真正运行过（此前 CI 在编译阶段就因 `getApplicationContext` 报错而失败），因此这些是**预存缺陷**，不是本次改动引入的。
+> ⚠️ 这 3 个测试在本次会话之前从未真正运行过（此前 CI 在编译阶段就因 `getApplicationContext` 报错而失败），因此是**预存缺陷**，不是本次改动引入的。
 
 ---
 
@@ -128,8 +136,9 @@
 
 ## 8. 交接给下一位执行者的第一件事
 
-1. 拉取最新 `main`（当前 HEAD = `6ce34e4`）。
-2. 查看 CI 结果（[Actions](https://github.com/Yuan0-o/Lucent/actions)）— 如果 `6ce34e4` 的 CI **通过**（jvm-check 和 android-jvm-check 都绿），则：
-   - ✅ **P2-1 完整完成**，开始 **P1-1**（KMP 模块拆分 + expect/actual 重构）。
-3. 如果 CI **仍失败**，下载 test-results artifact 分析新的失败点，修复后再推。
+1. 拉取最新 `main`（当前 HEAD = `6ce34e45`）。
+2. 查看 CI 结果（[Actions](https://github.com/Yuan0-o/Lucent/actions)）— 当前已知 2 个失败：
+   - **detekt 配置**：修 `config/detekt/detekt.yml`：删 `buildUponDefaultConfig: false`（已在 Gradle 中），改 `exceptions:` 为 `empty-blocks:`。
+   - **Android 测试**：查阅 CI 日志确认具体错误，多半是 `app/src/main/java/com/lucent/app/data/Daos.kt` 中 `rebuildFts()` 的 Room 注解问题。
+3. 修复后提交、push，等 CI 全绿。
 4. CI 全绿后，按计划推进：P1-1 → P1-2 → P1-3 → P2-2 → P3-1 → P3-2 → 版本号收尾。
