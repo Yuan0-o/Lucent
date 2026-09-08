@@ -29,8 +29,8 @@ class TokenEstimatorTest {
     @Test
     fun cjkGlyphsAreOneTokenEach() {
         assertEquals(4, TokenEstimator.estimate("你好世界"))
-        assertEquals(2, TokenEstimator.estimate("日本語"))
-        assertEquals(2, TokenEstimator.estimate("한국어"))
+        assertEquals(3, TokenEstimator.estimate("日本語"))
+        assertEquals(3, TokenEstimator.estimate("한국어"))
     }
 
     @Test
