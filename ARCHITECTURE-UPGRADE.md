@@ -44,6 +44,11 @@ P0-5 test guardrail work done so far (all JVM, run by the Windows workflow on ev
   (BackupManifestBuilder); BackupManager now at ~1405 lines (from 2125). CI caught and fixed two
   extraction breaks: BACKUP_VERSION needed qualifying, and the flow.first import I dropped was
   still used by remaining code. (CI green on both platforms.)
+- `e8a2bcf` + `d997654` — P0-7 third cut: `importJson` + its inline-attachment migrator moved
+  verbatim into `data/BackupImport.kt` (BackupImporter); BackupManager.importJson delegates with an
+  unchanged public signature, vacated imports dropped. BackupManager now at ~800 lines (from 2125,
+  -62%), with export (`BackupManifestBuilder`), framing (`BackupFrames`) and import (`BackupImporter`)
+  as separate units. (CI green on both platforms.)
 
 Notes:
 
