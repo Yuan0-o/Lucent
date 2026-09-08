@@ -315,6 +315,37 @@ jobs:
             -PversionCode=${{ github.run_number }} \
             -PversionName='${{ inputs.version_name }}'
 
+      # P2-4: report the release APK size in the build summary and upload the R8 mapping file.
+      # The mapping.txt is what lets a crash from a minified release build be de-obfuscated back
+      # to source names — without it every obfuscated stack trace is a dead end. It is harmless to
+      # users (it is never shipped in the APK) but invaluable for triage.
+      - name: Report APK size and upload R8 mapping
+        run: |
+          set -eu
+          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          if [ -n "$APK" ]; then
+            SIZE_BYTES="$(stat -c%s "$APK")"
+            SIZE_MB="$(python3 -c "print(f'{$SIZE_BYTES/1048576:.2f}')")"
+            echo "Release APK size: ${SIZE_MB} MiB (${SIZE_BYTES} bytes)"
+            echo "::notice::APK size ${SIZE_MB} MiB — compare against previous builds to catch bloat."
+          else
+            echo "::warning::no APK found yet to measure (expected before assembleRelease)."
+          fi
+          # mapping.txt lives under build/outputs/mapping/<variant>/ when minify is on.
+          if [ -f app/build/outputs/mapping/release/mapping.txt ]; then
+            echo "mapping.txt found ($(stat -c%s app/build/outputs/mapping/release/mapping.txt) bytes)"
+          else
+            echo "::warning::no mapping.txt at app/build/outputs/mapping/release/mapping.txt"
+          fi
+
+      - name: Upload R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r8-mapping-release
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: ignore
+
       - name: Verify the APK is a signed release (not debug, not unsigned)
         # The proof the build did what it claims: locate the release APK, then run apksigner. It
         # fails the job if the APK is unsigned or the signature is invalid, and prints the signer
