@@ -83,7 +83,7 @@ class Db private constructor(private val connection: Connection) {
          * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
          * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
          */
-        private const val SCHEMA_VERSION = 17
+        internal const val SCHEMA_VERSION = 17
 
         fun open(context: Context): Db {
             val file = File(context.applicationContext.filesDir, "lucent.db")
@@ -274,12 +274,26 @@ class Db private constructor(private val connection: Connection) {
          * version behind, and every column added here is optional at each of its read sites.
          */
         private fun migrateSchema(context: Context, conn: Connection) {
+            // All interesting work is in the testable runner below; this wrapper only routes its
+            // diagnostic lines into StartupLog (P0-6: schema migrations are verified on the JVM by
+            // DbMigrationTest, which passes a no-op logger).
+            runSchemaMigrations(conn) { StartupLog.event(context, it) }
+        }
+
+        /**
+         * Bring [conn]'s database up to [SCHEMA_VERSION], logging progress through [eventLog]
+         * instead of StartupLog so a test can drive a real SQLite file directly.
+         *
+         * Public enough for desktop/src/test (internal) — see DbMigrationTest, which builds a v11
+         * store, runs this, and asserts the data survived every step to v17.
+         */
+        internal fun runSchemaMigrations(conn: Connection, eventLog: (String) -> Unit = {}) {
             val current = try {
                 conn.createStatement().use { st ->
                     st.executeQuery("PRAGMA user_version").use { rs -> if (rs.next()) rs.getInt(1) else 0 }
                 }
             } catch (t: Throwable) {
-                StartupLog.event(context, "db: could not read user_version (${t.message}); skipping migrations")
+                eventLog("db: could not read user_version (${t.message}); skipping migrations")
                 return
             }
             if (current >= SCHEMA_VERSION) return
@@ -368,17 +382,17 @@ class Db private constructor(private val connection: Connection) {
                         else -> true   // no step for this version
                     }
                 } catch (t: Throwable) {
-                    StartupLog.event(context, "db: migration to v$next FAILED (${t.message}); will retry next launch")
+                    eventLog("db: migration to v$next FAILED (${t.message}); will retry next launch")
                     false
                 }
                 if (!ok) return
                 try {
                     conn.createStatement().use { it.executeUpdate("PRAGMA user_version=$next") }
                 } catch (t: Throwable) {
-                    StartupLog.event(context, "db: could not stamp user_version=$next (${t.message})")
+                    eventLog("db: could not stamp user_version=$next (${t.message})")
                     return
                 }
-                StartupLog.event(context, "db: migrated to schema v$next")
+                eventLog("db: migrated to schema v$next")
                 version = next
             }
         }
@@ -388,7 +402,7 @@ class Db private constructor(private val connection: Connection) {
          * release, and every step from here on is written to survive being applied to a store that
          * already has it — so starting low is free and starting high can strand a column.
          */
-        private const val BASE_MIGRATABLE_VERSION = 11
+        internal const val BASE_MIGRATABLE_VERSION = 11
 
         /** Add [column] to [table] unless it is already there. Returns false only on a real failure. */
         private fun addColumnIfMissing(
