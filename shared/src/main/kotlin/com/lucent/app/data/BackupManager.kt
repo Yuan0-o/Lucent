@@ -2,14 +2,12 @@ package com.lucent.app.data
 
 import android.content.Context
 import android.util.Base64
-import com.lucent.app.reminders.ReminderScheduler
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStream
 
