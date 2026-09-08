@@ -20,6 +20,14 @@ plugins {
     // needs it exactly as the Android module does.
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
+    // P0-6: static analysis — deliberately minimal rule set, see config/detekt/detekt.yml.
+    id("io.gitlab.arturbosch.detekt")
+}
+
+detekt {
+    toolVersion = "1.23.8"
+    buildUponDefaultConfig = false
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
 }
 
 kotlin {

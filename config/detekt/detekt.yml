@@ -1,0 +1,19 @@
+# Lucent detekt configuration (UPGRADE-PLAN-2.8 P0-6).
+#
+# Deliberately minimal: complexity + empty-catch only. The codebase has many INTENTIONAL
+# `catch (t: Throwable)` degradation paths (the "degrade one notch, never strand the data"
+# policy), and a maximalist rule set would drown the signal in false positives on code that is
+# correct by design. buildUponDefaultConfig is false so nothing beyond what is listed here runs.
+buildUponDefaultConfig: false
+
+complexity:
+  active: true
+
+exceptions:
+  active: true
+  EmptyCatchBlock:
+    active: true
+    # A catch bound to `_` (or an ignore/expected-named variable) is an acknowledged no-op —
+    # the idiomatic way to swallow a deliberately-ignored throw. Anything else that is empty is
+    # reported.
+    allowedExceptionNameRegex: '^(_|(ignore|expected).*)$'

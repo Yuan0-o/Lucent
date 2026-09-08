@@ -42,6 +42,10 @@ jobs:
       - name: Run desktop unit tests (shared logic)
         run: ./gradlew :desktop:test --no-daemon --console=plain
 
+      # P0-6: static analysis gate (detekt, minimal rule set — see config/detekt/detekt.yml).
+      - name: Run detekt
+        run: ./gradlew :desktop:detekt --no-daemon --console=plain
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v6
