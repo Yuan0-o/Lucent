@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * P0-4: the two desktop database paths that can destroy data silently — the plaintext rekey and
@@ -45,7 +46,7 @@ class DbEncryptionTest {
     }
 
     @Test
-    fun freshStoreIsEncryptedAtRest() {
+    fun freshStoreIsEncryptedAtRest() = runBlocking {
         val dir = freshDir()
         use(dir) {
             val db = Db.open(TestContext(dir))
@@ -62,7 +63,7 @@ class DbEncryptionTest {
     }
 
     @Test
-    fun plaintextStoreIsRekeyedInPlaceAndEveryRowSurvives() {
+    fun plaintextStoreIsRekeyedInPlaceAndEveryRowSurvives() = runBlocking {
         val dir = freshDir()
         use(dir) {
             // Build a legacy plaintext store exactly as the pre-release org.xerial era left them:
@@ -98,7 +99,7 @@ class DbEncryptionTest {
     }
 
     @Test
-    fun wrongKeyOnExistingEncryptedStoreThrowsActionableError() {
+    fun wrongKeyOnExistingEncryptedStoreThrowsActionableError() = runBlocking {
         // Two installs: each mints its own database key. Take the first install's encrypted store
         // and try to open it with the second install's key — the exact "restored the db but not
         // the keys" accident. It must throw a message a person can act on, and it must NOT create

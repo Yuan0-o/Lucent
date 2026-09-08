@@ -313,7 +313,10 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
         NotebookItem::class
     ],
     version = 17,
-    exportSchema = false
+    // P0-3: export the schema JSON (room.schemaLocation in app/build.gradle.kts writes it to
+    // app/schemas, committed) so Room can validate migrations mechanically instead of relying on
+    // hand-written MIGRATION_* objects and a reviewer's eyes.
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao

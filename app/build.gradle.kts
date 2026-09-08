@@ -239,6 +239,15 @@ kotlin {
     }
 }
 
+// ---- P0-3: Room exported schema ----
+// Room writes the machine-checkable schema JSON for every version into app/schemas (committed),
+// so migrations can be validated against what each version ACTUALLY was — by MigrationTestHelper
+// on a device and by reviewers in a PR. Previously the Android schema history existed only as
+// hand-written MIGRATION_* objects with no record of the real shape.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // ---- Rust acceleration library (rust/ at the repo root) ----
 //
 // Built with cargo-ndk when — and only when — the toolchain is on the PATH. The library is a pure
@@ -324,4 +333,8 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.haze.materials)
+
+    // P0-3: Android JVM unit tests for the pure-logic pieces of the most security-critical code
+    // (RecoverableSecret envelope, LocalSecrets prefix handling) — no device, no emulator.
+    testImplementation(kotlin("test"))
 }
