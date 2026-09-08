@@ -21,7 +21,6 @@ class DbEncryptionTest {
 
     private class TestContext(private val dir: File) : Context() {
         override val filesDir: File get() = dir
-        override fun getApplicationContext(): Context = this
     }
 
     private fun freshDir(): File =

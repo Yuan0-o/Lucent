@@ -31,7 +31,7 @@ object DataKeys {
     @Volatile private var databaseKeyHex: String? = null
 
     private fun keyDir(context: Context): File =
-        File(context.applicationContext.filesDir, KEY_DIR).apply { if (!exists()) mkdirs() }
+        File(context.filesDir, KEY_DIR).apply { if (!exists()) mkdirs() }
 
     private fun decodeKey(base64: String): ByteArray? {
         if (base64.isEmpty()) return null
@@ -126,7 +126,7 @@ object DataKeys {
 
     /** Whether a database key already exists — i.e. whether this install has ever been encrypted. */
     fun hasDatabaseKey(context: Context): Boolean =
-        File(keyDir(context.applicationContext), DATABASE_KEY_FILE).exists()
+        File(keyDir(context), DATABASE_KEY_FILE).exists()
 
     /** Test seam: forget the cached keys so the next call re-reads them from disk. */
     fun resetCacheForTesting() {

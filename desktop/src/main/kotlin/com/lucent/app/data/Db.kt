@@ -86,7 +86,7 @@ class Db private constructor(private val connection: Connection) {
         internal const val SCHEMA_VERSION = 17
 
         fun open(context: Context): Db {
-            val file = File(context.applicationContext.filesDir, "lucent.db")
+            val file = File(context.filesDir, "lucent.db")
             file.parentFile?.mkdirs()
             // Load the driver class explicitly so a missing dependency fails with a clear message.
             Class.forName("org.sqlite.JDBC")

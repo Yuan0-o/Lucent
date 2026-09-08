@@ -301,6 +301,58 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
     }
 }
 
+// P2-1: FTS5 full-text search index. Derived tables (never source of truth), synced via triggers.
+// Both SQLCipher (Android) and SQLite3MultipleCiphers (desktop) support FTS5, and an FTS5 table
+// inside an encrypted database inherits its at-rest encryption.
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Notes FTS index — title and body are the searchable content columns.
+        db.execSQL(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS `notes_fts` USING fts5(" +
+                "title, content, " +
+                "content='notes', content_rowid='id')"
+        )
+        // Tasks FTS index — title and notes (the task description) are searchable.
+        db.execSQL(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS `tasks_fts` USING fts5(" +
+                "title, content, " +
+                "content='tasks', content_rowid='id')"
+        )
+        // Sync triggers: keep the FTS index in sync with the source tables.
+        // Notes
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `notes_fts_ai` AFTER INSERT ON `notes` BEGIN " +
+                "INSERT INTO `notes_fts`(rowid, title, content) VALUES (new.id, new.title, new.body); END"
+        )
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `notes_fts_ad` AFTER DELETE ON `notes` BEGIN " +
+                "INSERT INTO `notes_fts`(`notes_fts`, rowid, title, content) VALUES ('delete', old.id, old.title, old.body); END"
+        )
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `notes_fts_au` AFTER UPDATE ON `notes` BEGIN " +
+                "INSERT INTO `notes_fts`(`notes_fts`, rowid, title, content) VALUES ('delete', old.id, old.title, old.body); " +
+                "INSERT INTO `notes_fts`(rowid, title, content) VALUES (new.id, new.title, new.body); END"
+        )
+        // Tasks
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `tasks_fts_ai` AFTER INSERT ON `tasks` BEGIN " +
+                "INSERT INTO `tasks_fts`(rowid, title, content) VALUES (new.id, new.title, new.notes); END"
+        )
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `tasks_fts_ad` AFTER DELETE ON `tasks` BEGIN " +
+                "INSERT INTO `tasks_fts`(`tasks_fts`, rowid, title, content) VALUES ('delete', old.id, old.title, old.notes); END"
+        )
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `tasks_fts_au` AFTER UPDATE ON `tasks` BEGIN " +
+                "INSERT INTO `tasks_fts`(`tasks_fts`, rowid, title, content) VALUES ('delete', old.id, old.title, old.notes); " +
+                "INSERT INTO `tasks_fts`(rowid, title, content) VALUES (new.id, new.title, new.notes); END"
+        )
+        // Rebuild the FTS index for existing data.
+        db.execSQL("INSERT INTO `notes_fts`(`notes_fts`) VALUES('rebuild')")
+        db.execSQL("INSERT INTO `tasks_fts`(`tasks_fts`) VALUES('rebuild')")
+    }
+}
+
 @Database(
     entities = [
         Note::class,
