@@ -37,5 +37,12 @@ class AppDatabase private constructor(db: Db) {
                 return created
             }
         }
+
+        /**
+         * Test seam (P0-4): a fresh instance for a specific context, bypassing the process-wide
+         * singleton — each BackupRoundTripTest store must be its own database.
+         */
+        internal fun createForTesting(context: Context): AppDatabase =
+            AppDatabase(Db.open(context.applicationContext))
     }
 }
