@@ -89,7 +89,7 @@ object DataKeys {
             // everything it protects. Same policy as Android.
             throw IllegalStateException(
                 "The encryption key in $fileName could not be read. Data protected by it cannot " +
-                    "be decrypted on this machine; restore from a backup."
+                    "be decrypted on this machine; restore from a .lcb backup."
             )
         }
         val fresh = ByteArray(KEY_BYTES).also { SecureRandom().nextBytes(it) }

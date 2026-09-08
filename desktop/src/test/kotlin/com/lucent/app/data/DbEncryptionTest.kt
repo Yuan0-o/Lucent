@@ -69,7 +69,8 @@ class DbEncryptionTest {
         val dir = freshDir()
         use(dir) {
             // Build a legacy plaintext store exactly as the pre-release org.xerial era left them:
-            // a real SQLite file, no cipher, with user data inside.
+            // a real SQLite file, no cipher, with user data inside. The table matches the genuine
+            // v11 schema (full column set) so Db.open's createSchema + migrateSchema can run.
             Class.forName("org.sqlite.JDBC")
             val plainFile = File(dir, "lucent.db")
             DriverManager.getConnection("jdbc:sqlite:${plainFile.absolutePath}").use { conn ->
@@ -77,7 +78,12 @@ class DbEncryptionTest {
                     st.executeUpdate(
                         "CREATE TABLE notes (" +
                             "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                            "title TEXT NOT NULL, body TEXT NOT NULL, updatedAt INTEGER NOT NULL)"
+                            "title TEXT NOT NULL, body TEXT NOT NULL, updatedAt INTEGER NOT NULL, " +
+                            "tags TEXT NOT NULL DEFAULT '', attachments TEXT NOT NULL DEFAULT '[]', " +
+                            "archived INTEGER NOT NULL DEFAULT 0, archivedAt INTEGER, " +
+                            "pinned INTEGER NOT NULL DEFAULT 0, color TEXT NOT NULL DEFAULT '', " +
+                            "isChecklist INTEGER NOT NULL DEFAULT 0, checklist TEXT NOT NULL DEFAULT '[]', " +
+                            "trashedAt INTEGER)"
                     )
                     st.executeUpdate("INSERT INTO notes (title, body, updatedAt) VALUES ('legacy', 'row', 1700000000000)")
                 }
