@@ -62,13 +62,17 @@ class BackupCryptoTest {
     }
 
     @Test
-    fun passwordModeWithBlankPasswordFallsBackToAppKey() {
-        // A blank or null password selects APP_KEY mode; only a non-blank password engages
-        // PASSWORD mode. This documents the real v2.7.6 contract.
-        val blob = BackupCrypto.encrypt(payload, password = "   ")
-        val header = BackupCrypto.readHeader(blob)
-        assertNotNull(header)
-        assertEquals(BackupCrypto.Mode.APP_KEY, header!!.mode)
+    fun passwordModeIsChosenForAnyNonNullNonEmptyPassword() {
+        // The mode decision is isNullOrEmpty only: a whitespace-only password still counts as a
+        // password (the user gets what they typed, including spaces). Null and "" select APP_KEY.
+        val spaced = BackupCrypto.encrypt(payload, password = "   ")
+        assertEquals(BackupCrypto.Mode.PASSWORD, BackupCrypto.readHeader(spaced)!!.mode)
+
+        val empty = BackupCrypto.encrypt(payload, password = "")
+        assertEquals(BackupCrypto.Mode.APP_KEY, BackupCrypto.readHeader(empty)!!.mode)
+
+        val none = BackupCrypto.encrypt(payload, password = null)
+        assertEquals(BackupCrypto.Mode.APP_KEY, BackupCrypto.readHeader(none)!!.mode)
     }
 
     // ---- Foreign / damaged bytes ----
