@@ -135,6 +135,40 @@ class NoteDao internal constructor(private val db: Db) {
 
     suspend fun searchNotes(text: String, tag: String, archived: Int, trashed: Int, limit: Int): List<Note> =
         db.use { c ->
+            // P2-1: Try FTS5 MATCH first (fast for word-boundary languages), fall back to LIKE if
+            // FTS is unavailable or the query fails (e.g., CJK substring search, FTS syntax error).
+            if (text.isNotBlank()) {
+                try {
+                    val ftsResults = c.prepareStatement(
+                        """
+                        SELECT notes.* FROM notes
+                        INNER JOIN notes_fts ON notes.id = notes_fts.rowid
+                        WHERE notes_fts MATCH ?
+                          AND (? = '' OR tags LIKE '%' || ? || '%')
+                          AND isDraft = 0
+                          AND hidden = 0
+                          AND (? = -1 OR archived = ?)
+                          AND (? = -1
+                                OR (? = 1 AND trashedAt IS NOT NULL)
+                                OR (? = 0 AND trashedAt IS NULL))
+                        ORDER BY pinned DESC, updatedAt DESC
+                        LIMIT ?
+                        """.trimIndent()
+                    ).apply {
+                        // FTS5 expects a query expression; wrap in quotes for phrase/substring match
+                        setString(1, "\"$text\"")
+                        setString(2, tag); setString(3, tag)
+                        setInt(4, archived); setInt(5, archived)
+                        setInt(6, trashed); setInt(7, trashed); setInt(8, trashed)
+                        setInt(9, limit)
+                    }.executeQuery().mapAll(::noteOf)
+                    return@use ftsResults
+                } catch (_: Exception) {
+                    // FTS unavailable or query failed; fall through to LIKE
+                }
+            }
+
+            // Fallback: LIKE-based search (works for all scripts, including CJK substrings)
             c.prepareStatement(
                 """
                 SELECT * FROM notes
@@ -246,6 +280,15 @@ class NoteDao internal constructor(private val db: Db) {
 
     suspend fun clearAll() {
         db.write("notes") { c -> c.createStatement().use { it.executeUpdate("DELETE FROM notes") } }
+    }
+
+    /** P2-1: Rebuild the FTS5 full-text index after a bulk import. */
+    suspend fun rebuildFts() {
+        db.use { c ->
+            c.createStatement().use { st ->
+                st.executeUpdate("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')")
+            }
+        }
     }
 }
 
@@ -437,6 +480,43 @@ class TaskDao internal constructor(private val db: Db) {
         dueAfter: Long,
         limit: Int
     ): List<Task> = db.use { c ->
+        // P2-1: Try FTS5 MATCH first (fast for word-boundary languages), fall back to LIKE if
+        // FTS is unavailable or the query fails (e.g., CJK substring search, FTS syntax error).
+        if (text.isNotBlank()) {
+            try {
+                val ftsResults = c.prepareStatement(
+                    """
+                    SELECT tasks.* FROM tasks
+                    INNER JOIN tasks_fts ON tasks.id = tasks_fts.rowid
+                    WHERE tasks_fts MATCH ?
+                      AND isDraft = 0
+                      AND hidden = 0
+                      AND (? = -1 OR isDone = ?)
+                      AND (? = -1
+                            OR (? = 1 AND trashedAt IS NOT NULL)
+                            OR (? = 0 AND trashedAt IS NULL))
+                      AND (? = -1 OR priority >= ?)
+                      AND (? = -1 OR (dueAt IS NOT NULL AND dueAt <= ?))
+                      AND (? = -1 OR (dueAt IS NOT NULL AND dueAt >= ?))
+                    ORDER BY pinned DESC, priority DESC, COALESCE(dueAt, 9223372036854775807) ASC, createdAt DESC
+                    LIMIT ?
+                    """.trimIndent()
+                ).apply {
+                    setString(1, "\"$text\"")
+                    setInt(2, done); setInt(3, done)
+                    setInt(4, trashed); setInt(5, trashed); setInt(6, trashed)
+                    setInt(7, minPriority); setInt(8, minPriority)
+                    setLong(9, dueBefore); setLong(10, dueBefore)
+                    setLong(11, dueAfter); setLong(12, dueAfter)
+                    setInt(13, limit)
+                }.executeQuery().mapAll(::taskOf)
+                return@use ftsResults
+            } catch (_: Exception) {
+                // FTS unavailable or query failed; fall through to LIKE
+            }
+        }
+
+        // Fallback: LIKE-based search (works for all scripts, including CJK substrings)
         c.prepareStatement(
             """
             SELECT * FROM tasks
@@ -576,6 +656,15 @@ class TaskDao internal constructor(private val db: Db) {
 
     suspend fun clearAll() {
         db.write("tasks") { c -> c.createStatement().use { it.executeUpdate("DELETE FROM tasks") } }
+    }
+
+    /** P2-1: Rebuild the FTS5 full-text index after a bulk import. */
+    suspend fun rebuildFts() {
+        db.use { c ->
+            c.createStatement().use { st ->
+                st.executeUpdate("INSERT INTO tasks_fts(tasks_fts) VALUES('rebuild')")
+            }
+        }
     }
 }
 

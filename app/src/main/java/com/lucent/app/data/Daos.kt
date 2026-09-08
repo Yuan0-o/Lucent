@@ -142,6 +142,13 @@ interface NoteDao {
 
     @Query("DELETE FROM notes")
     suspend fun clearAll()
+
+    /**
+     * P2-1: Rebuild the FTS5 full-text index after a bulk import. Room doesn't let raw SQL return
+     * Unit, so we SELECT the result of the special command.
+     */
+    @Query("SELECT * FROM notes_fts WHERE notes_fts = 'rebuild'")
+    suspend fun rebuildFts(): List<String>
 }
 
 /**
@@ -373,6 +380,13 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks")
     suspend fun clearAll()
+
+    /**
+     * P2-1: Rebuild the FTS5 full-text index after a bulk import. Room doesn't let raw SQL return
+     * Unit, so we SELECT the result of the special command.
+     */
+    @Query("SELECT * FROM tasks_fts WHERE tasks_fts = 'rebuild'")
+    suspend fun rebuildFts(): List<String>
 }
 
 /**

@@ -602,6 +602,15 @@ internal object BackupImporter {
             if (replacedNotes > 0 || replacedTasks > 0)
                 "\n" + com.lucent.app.i18n.S.importReplacedSummary(replacedNotes, replacedTasks)
             else ""
+
+        // P2-1: Rebuild FTS5 full-text index after bulk import so new/updated notes/tasks are searchable.
+        if (importedNotes > 0 || replacedNotes > 0) {
+            try { db.noteDao().rebuildFts() } catch (_: Exception) { /* FTS unavailable, ignore */ }
+        }
+        if (importedTasks > 0 || replacedTasks > 0) {
+            try { db.taskDao().rebuildFts() } catch (_: Exception) { /* FTS unavailable, ignore */ }
+        }
+
         return com.lucent.app.i18n.S.importSummary(importedNotes, importedTasks, importedChats) +
             settingsNote + historyNote + dedupNote + replacedNote
     }
