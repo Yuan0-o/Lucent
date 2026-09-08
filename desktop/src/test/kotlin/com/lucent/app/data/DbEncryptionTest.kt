@@ -27,7 +27,7 @@ class DbEncryptionTest {
         File(System.getProperty("java.io.tmpdir"), "lucent-db-enc-${System.nanoTime()}")
             .apply { mkdirs() }
 
-    private fun use(dir: File, block: suspend () -> Unit) {
+    private suspend fun use(dir: File, block: suspend () -> Unit) {
         LocalSecrets.filesDirOverride = dir
         LocalSecrets.resetForTesting()
         try {

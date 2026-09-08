@@ -346,7 +346,8 @@ dependencies {
 
     // P0-3: Android JVM unit tests for the pure-logic pieces of the most security-critical code
     // (RecoverableSecret envelope, LocalSecrets prefix handling) — no device, no emulator.
-    // Explicit coordinate: AGP 9's built-in Kotlin does not expose the kotlin("test") helper, and
-    // the version must match the Kotlin the build uses (root build.gradle.kts).
-    testImplementation("org.jetbrains.kotlin:kotlin-test:2.4.0")
+    // Explicit -junit variant: AGP 9's built-in Kotlin does not expose the kotlin("test") helper,
+    // and the bare kotlin-test artifact has no content without a test-framework variant selected
+    // (AGP's unit-test runner is JUnit4 and does not add junit itself).
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
 }
