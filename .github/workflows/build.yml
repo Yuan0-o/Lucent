@@ -85,9 +85,10 @@ jobs:
         # reads it. Every Maven/Google artifact used to re-download on every run; the accepted
         # trade-off is that a rare GitHub cache-service hiccup can now surface as a build warning
         # (never a failure). Set cache-disabled: true to return to the old always-download mode.
+        # The Gradle version now comes from the committed wrapper (P0-5); this action only wires
+        # the dependency cache and honours ./gradlew.
         uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '9.7.1'
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # ---- Android SDK components (pinned) ----
@@ -310,7 +311,7 @@ jobs:
         # The GPU (Vulkan) backend is built by default; add -PcpuOnly for a smaller CPU-only APK.
         run: |
           set -eu
-          gradle assembleRelease --no-daemon --stacktrace \
+          ./gradlew assembleRelease --no-daemon --stacktrace \
             -PversionCode=${{ github.run_number }} \
             -PversionName='${{ inputs.version_name }}'
 
