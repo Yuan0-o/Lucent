@@ -255,7 +255,7 @@ object BackupManager {
     // this, restoring a chat that had N files per message kept only the first one. replyToId
     // remains deliberately excluded (see the import comment): restoring raw row ids without a
     // message-id remap would make replies point at unrelated content.
-    private const val BACKUP_VERSION = 13
+    internal const val BACKUP_VERSION = 13
 
     // ---------------------------------------------------------------------------------------
     // Export

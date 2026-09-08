@@ -380,7 +380,7 @@ internal object BackupManifestBuilder {
         }
 
         val root = JSONObject()
-            .put("version", BACKUP_VERSION)
+            .put("version", BackupManager.BACKUP_VERSION)
             .put("exportedAt", System.currentTimeMillis())
             // Which modules this file actually claims to carry. Import shows it, so a restore can
             // say "this backup has no tasks in it" instead of silently restoring nothing and
