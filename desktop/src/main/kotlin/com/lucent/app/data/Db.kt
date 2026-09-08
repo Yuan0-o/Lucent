@@ -83,7 +83,7 @@ class Db private constructor(private val connection: Connection) {
          * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
          * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
          */
-        internal const val SCHEMA_VERSION = 17
+        internal const val SCHEMA_VERSION = 18
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -379,6 +379,48 @@ class Db private constructor(private val connection: Connection) {
                             }
                             true
                         }
+                        // v18 (P2-1): FTS5 full-text search index.
+                        18 -> {
+                            conn.createStatement().use { st ->
+                                st.executeUpdate(
+                                    "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(" +
+                                        "title, content, content='notes', content_rowid='id')"
+                                )
+                                st.executeUpdate(
+                                    "CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(" +
+                                        "title, content, content='tasks', content_rowid='id')"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS notes_fts_ai AFTER INSERT ON notes BEGIN " +
+                                        "INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.body); END"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS notes_fts_ad AFTER DELETE ON notes BEGIN " +
+                                        "INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES ('delete', old.id, old.title, old.body); END"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS notes_fts_au AFTER UPDATE ON notes BEGIN " +
+                                        "INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES ('delete', old.id, old.title, old.body); " +
+                                        "INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.body); END"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS tasks_fts_ai AFTER INSERT ON tasks BEGIN " +
+                                        "INSERT INTO tasks_fts(rowid, title, content) VALUES (new.id, new.title, new.notes); END"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS tasks_fts_ad AFTER DELETE ON tasks BEGIN " +
+                                        "INSERT INTO tasks_fts(tasks_fts, rowid, title, content) VALUES ('delete', old.id, old.title, old.notes); END"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS tasks_fts_au AFTER UPDATE ON tasks BEGIN " +
+                                        "INSERT INTO tasks_fts(tasks_fts, rowid, title, content) VALUES ('delete', old.id, old.title, old.notes); " +
+                                        "INSERT INTO tasks_fts(rowid, title, content) VALUES (new.id, new.title, new.notes); END"
+                                )
+                                st.executeUpdate("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')")
+                                st.executeUpdate("INSERT INTO tasks_fts(tasks_fts) VALUES('rebuild')")
+                            }
+                            true
+                        }
                         else -> true   // no step for this version
                     }
                 } catch (t: Throwable) {
@@ -556,6 +598,15 @@ class Db private constructor(private val connection: Connection) {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebooks_updatedAt ON notebooks (updatedAt)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_notebookId ON notebook_items (notebookId)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_itemKind_itemId ON notebook_items (itemKind, itemId)")
+                // v18 — FTS5 full-text search index (P2-1). Created for fresh installs.
+                st.executeUpdate(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(" +
+                        "title, content, content='notes', content_rowid='id')"
+                )
+                st.executeUpdate(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(" +
+                        "title, content, content='tasks', content_rowid='id')"
+                )
                 // The version stamp moved to migrateSchema, which is the only place that knows the
                 // store is genuinely at the current shape. Stamping here would mark an existing
                 // database as up to date after doing nothing to it — every statement above is
