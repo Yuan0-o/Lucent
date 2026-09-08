@@ -25,7 +25,7 @@ class DataKeysTest {
         File(System.getProperty("java.io.tmpdir"), "lucent-datakeys-test-${System.nanoTime()}")
             .apply { mkdirs() }
 
-    private suspend fun use(dir: File, block: suspend () -> Unit) {
+    private fun use(dir: File, block: () -> Unit) {
         LocalSecrets.filesDirOverride = dir
         LocalSecrets.resetForTesting()
         try {
