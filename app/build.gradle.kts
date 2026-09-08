@@ -294,32 +294,34 @@ if (cargoNdkReady) {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.04.01"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.core:core-ktx:1.15.0")
+    // Versions live in gradle/libs.versions.toml (P0-5). The shared group (OkHttp, coroutines,
+    // Haze, org.json) is identical on :desktop by construction.
+    implementation(platform(libs.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
+    implementation(libs.activity.compose)
+    implementation(libs.core.ktx)
 
     // Biometric unlock for the App Lock. BiometricPrompt requires the host Activity to be a
     // FragmentActivity, so fragment-ktx is pinned to a version that pairs with activity 1.9.x.
-    implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.fragment:fragment-ktx:1.8.5")
-    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation(libs.biometric)
+    implementation(libs.fragment.ktx)
+    debugImplementation(libs.androidx.ui.tooling)
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation(libs.kotlinx.coroutines.android)
 
-    implementation("androidx.room:room-runtime:2.8.4")
-    ksp("androidx.room:room-compiler:2.8.4")
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
 
-    implementation("net.zetetic:sqlcipher-android:4.6.1")
-    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+    implementation(libs.sqlcipher.android)
+    implementation(libs.sqlite.ktx)
 
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation(libs.datastore.preferences)
 
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(libs.okhttp)
 
-    implementation("dev.chrisbanes.haze:haze:1.7.2")
-    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 }

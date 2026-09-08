@@ -9,9 +9,10 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 // swaps only the genuinely platform-bound pieces for desktop implementations of the SAME package,
 // name, and API. See the handover document for the architecture in full.
 //
-// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.2, okhttp 5.5.0) and the
+// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.2, okhttp 4.12.0) and the
 // desktop toolchain the root build declares (Compose Multiplatform 1.12.0). Keeping them in lockstep
-// is what lets the shared source compile identically on both sides.
+// is what lets the shared source compile identically on both sides. Dependency coordinates now come
+// from gradle/libs.versions.toml (P0-5), which enforces the shared group's identity by construction.
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -46,20 +47,23 @@ dependencies {
     implementation(compose.materialIconsExtended)
 
     // Coroutines: -core is the engine; -swing supplies Dispatchers.Main on the desktop (the Swing/AWT
-    // event thread Compose for Desktop renders on). Same 1.8.1 line as :app's -android artifact.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
+    // event thread Compose for Desktop renders on). Versions live in the catalogue (P0-5) — unified
+    // with :app at 1.8.1.
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.swing)
 
     // Frosted-glass blur, identical to :app so Glass.kt compiles unchanged.
-    implementation("dev.chrisbanes.haze:haze:1.7.2")
-    implementation("dev.chrisbanes.haze:haze-materials:1.7.2")
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 
-    // Networking for the cloud assistant — same version as :app.
-    implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    // Networking for the cloud assistant — the same shared-group OkHttp :app uses (P0-5 unified
+    // desktop's former 5.5.0 down to the Android-proven 4.12.0; the shared code uses the API
+    // intersection of the two lines).
+    implementation(libs.okhttp)
 
     // Android ships org.json in the platform; the desktop JVM does not, so bring it in explicitly.
     // The shared code (ApiProfiles, AppLock, BackupManager, …) uses org.json.JSONObject throughout.
-    implementation("org.json:json:20260814")
+    implementation(libs.org.json)
 
     // v2.7.3 (code-review report, Phase 1): unit tests for the shared business logic (data shapes,
     // brute-force ladder, palette uniqueness). They compile and run on the JVM next to the same
@@ -83,17 +87,17 @@ dependencies {
     // (latest as of 2026-09 is 3.53.4.0).
     // NEVER fall back to org.xerial here — that silently ships an unencrypted store, and the
     // self-check below will (rightly) fail the build in red if anyone tries.
-    implementation("io.github.willena:sqlite-jdbc:3.53.4.0")
+    implementation(libs.sqlite.jdbc)
 
     // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
-    implementation("org.apache.pdfbox:pdfbox:3.0.8")
+    implementation(libs.pdfbox)
 
     // P0-1: Windows DPAPI (CryptProtectData / CryptUnprotectData) via JNA, to bind the master key
     // to the user account instead of leaving it as a plaintext Base64 file beside the data it
     // protects. Pure JVM, no custom native code: jna-platform already binds Crypt32. Windows-only
     // at runtime — on other OSes the wrapper is unavailable and LocalSecrets stores the legacy
     // form and reports the missing binding. EXACT PIN, on purpose; see LocalSecrets.kt.
-    implementation("net.java.dev.jna:jna-platform:5.19.0")
+    implementation(libs.jna.platform)
 
     // ---- C-group task 10: the bundled CJK face for PDF export ----
     //
