@@ -83,6 +83,20 @@ jobs:
       - name: Generate Room exported schemas
         run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
 
+      # P0-6: lint gate. The committed lint-baseline.xml absorbs pre-existing findings; anything
+      # new fails the build. The first run (baseline absent) makes lint write the baseline file,
+      # which this job then uploads for the maintainer to commit.
+      - name: Run Android lint
+        run: ./gradlew :app:lintRelease --no-daemon --console=plain
+
+      - name: Upload lint baseline
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lint-baseline
+          path: app/lint-baseline.xml
+          if-no-files-found: ignore
+
       - name: Upload Room schema JSON
         if: always()
         uses: actions/upload-artifact@v6
