@@ -49,7 +49,9 @@
 | `0f651ad` | 迁移后创建索引，修复 legacy 库缺列问题（P2-1） |
 | `d682eda` | 测试间重置 DataKeys 缓存（P2-1） |
 | `0fe665e` | 添加本交接报告 |
-| `a03ab46` | 修复 FTS5 列名、legacy 测试 schema、异常措辞（P2-1，**待 CI 验证**） |
+| `a03ab46` | 修复 FTS5 列名、legacy 测试 schema、异常措辞（P2-1） |
+| `2646a07` | CI 跳过纯 Markdown 改动 |
+| `6ce34e4` | 完成 FTS5 全文检索接入（P2-1，**待 CI 验证**） |
 
 **已完成的具体工作：**
 - ✅ **P2-3**：`LlmClient.kt` 拆分为 `ProviderAdapter` 密封接口（OpenAI/Anthropic/Google 三个实现）+ `StreamAccumulator`，LlmClient 仅保留传输与重试逻辑，含单元测试。
@@ -57,7 +59,12 @@
 - ✅ **P2-4**：构建后上报 APK 体积、上传 R8 mapping 作为 CI artifact。
 - ✅ **P0-6**：提交 lint baseline（`app/lint-baseline.xml`，约 55KB），CI lint 门禁通过。
 - ✅ **测试修复**：修复 4 个预存测试的编译与运行时问题（DataKeys/Db 改用 `filesDir` 直接访问、测试间缓存重置、manifest key 名匹配）。
-- ✅ **P2-1（部分）**：FTS5 全文索引 schema —— Room `MIGRATION_17_18` + 桌面 schema v18，含 `notes_fts`/`tasks_fts` 虚拟表、同步触发器、初始 rebuild；`@Database(version=18)`、`SCHEMA_VERSION=18`。
+- ✅ **P2-1（完整）**：FTS5 全文索引 —— 
+  - schema v18（`notes_fts`/`tasks_fts` 虚拟表、同步触发器、初始 rebuild）
+  - 修复 FTS 列名匹配实际表结构（`title, body` / `title, notes`）
+  - 桌面 `searchNotes`/`searchTasks` 优先用 FTS `MATCH`，失败回退 LIKE
+  - Android/桌面 DAO 增加 `rebuildFts()` 方法
+  - `BackupImport` 导入后自动重建 FTS 索引
 
 ---
 
@@ -85,11 +92,10 @@
 
 | 编号 | 任务 | 状态 | 依赖 |
 |---|---|---|---|
-| P2-1（剩余） | FTS5 检索接入：`NoteDao.searchNotes` / `TaskDao.searchTasks` 使用 `MATCH` 的 FTS 分支 + 回退到 LIKE；`BackupImport` 导入后重建 FTS 索引 | 🔴 未开始 | 需先让 schema v18 的 CI 绿 |
 | P1-1 | KMP 模块拆分 + `expect/actual` 重构（约 6 组文件、~7400 行） | 🔴 未开始 | — |
 | P1-2 | `AssistantController` 状态与逻辑分离 | 🟡 未开始 | — |
 | P1-3 | `SettingsScreen` 双平台分解 | 🟡 未开始 | — |
-| P2-2 | 语义召回（embedding + 向量检索） | 🟡 未开始 | P2-1 |
+| P2-2 | 语义召回（embedding + 向量检索） | 🟡 未开始 | P2-1 ✅ |
 | P3-1 | Room KMP 原型验证（SQLCipher 兼容性） | 🔵 未开始 | — |
 | P3-2 | 隔离进程（`GenerationService`） | 🔵 未开始 | — |
 | 版本号 | 全部子项目升级到 3.0.0 | 🟡 未开始 | 收尾时 |
@@ -98,14 +104,11 @@
 
 ## 6. 总体计划（剩余路径）
 
-1. **先打通 CI 绿**（当前最高优先级）：
-   - 修复 4.1 / 4.2 / 4.3 三个测试失败，确保 `jvm-check` 和 `android-jvm-check` 都通过。
-2. **完成 P2-1 剩余部分**：
-   - DAO 层 FTS5 `MATCH` 检索 + LIKE 回退；`BackupImport` 导入后 rebuild FTS。
-3. **推进 P1 架构现代化**（P1-1 → P1-2 → P1-3），每步提交并验证 CI。
-4. **推进 P2-2 语义召回**。
-5. **推进 P3-1 / P3-2**。
-6. **收尾**：全部子项目版本号升到 `3.0.0`，跑全量 CI，确认通过后标记完成。
+1. **等待 CI 验证 `6ce34e4`**（P2-1 完整实现），确保 jvm-check 和 android-jvm-check 都通过。
+2. **推进 P1 架构现代化**（P1-1 → P1-2 → P1-3），每步提交并验证 CI。
+3. **推进 P2-2 语义召回**（embedding + 向量检索）。
+4. **推进 P3-1 / P3-2**（Room KMP 验证 / 隔离进程）。
+5. **收尾**：全部子项目版本号升到 `3.0.0`，跑全量 CI，确认通过后标记完成。
 
 > 每完成一个可独立验证的里程碑就 `git push`，避免一次性堆积大量未验证改动。
 
@@ -125,8 +128,8 @@
 
 ## 8. 交接给下一位执行者的第一件事
 
-1. 拉取最新 `main`（当前 HEAD = `a03ab46`）。
-2. 查看 CI 结果（[Actions](https://github.com/Yuan0-o/Lucent/actions)）— 如果 `a03ab46` 的 CI **通过**（jvm-check 和 android-jvm-check 都绿），则：
-   - ✅ 阻塞点已清除，开始 **P2-1 剩余部分**（DAO FTS5 `MATCH` 检索 + LIKE 回退 + BackupImport rebuild）。
+1. 拉取最新 `main`（当前 HEAD = `6ce34e4`）。
+2. 查看 CI 结果（[Actions](https://github.com/Yuan0-o/Lucent/actions)）— 如果 `6ce34e4` 的 CI **通过**（jvm-check 和 android-jvm-check 都绿），则：
+   - ✅ **P2-1 完整完成**，开始 **P1-1**（KMP 模块拆分 + expect/actual 重构）。
 3. 如果 CI **仍失败**，下载 test-results artifact 分析新的失败点，修复后再推。
-4. CI 全绿后，按计划推进 P1 → P2-2 → P3 → 版本号收尾。
+4. CI 全绿后，按计划推进：P1-1 → P1-2 → P1-3 → P2-2 → P3-1 → P3-2 → 版本号收尾。
