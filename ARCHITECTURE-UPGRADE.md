@@ -39,6 +39,11 @@ P0-5 test guardrail work done so far (all JVM, run by the Windows workflow on ev
   both platforms.)
 - `7a02dbd` — `BackupFramesTest`: legacy-JSON scan, framed model/font counting, onBlob walk order,
   hostile length rejection, truncated-tail tolerance, primitive round trips. (CI green.)
+- `ab1bcc4` + `f1260cd` + `7a147e9` — P0-7 second cut: `buildManifest` + the inline-attachment
+  helper moved verbatim (function-by-function verified) into `data/BackupManifest.kt`
+  (BackupManifestBuilder); BackupManager now at ~1405 lines (from 2125). CI caught and fixed two
+  extraction breaks: BACKUP_VERSION needed qualifying, and the flow.first import I dropped was
+  still used by remaining code. (CI green on both platforms.)
 
 Notes:
 
