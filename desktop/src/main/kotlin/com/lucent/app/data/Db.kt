@@ -100,6 +100,7 @@ class Db private constructor(private val connection: Connection) {
             // comment. Group A's introspective upgrade and group B's versioned walker were merged
             // into this one function during integration.
             migrateSchema(context, conn)
+            createIndices(conn)
             return Db(conn)
         }
 
@@ -472,6 +473,33 @@ class Db private constructor(private val connection: Connection) {
             }
         }
 
+        /**
+         * Create the list-query and search indices after the schema is at its final shape. This runs
+         * after [migrateSchema] so a legacy store whose columns were just added can be indexed;
+         * creating these before migration would fail on old tables that lack the columns.
+         */
+        private fun createIndices(conn: Connection) {
+            conn.createStatement().use { st ->
+                // Same list-query indices Room's schema carries, under Room's own names.
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_updatedAt ON notes (updatedAt)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_archived ON notes (archived)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_trashedAt ON notes (trashedAt)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_createdAt ON tasks (createdAt)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDone ON tasks (isDone)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_trashedAt ON tasks (trashedAt)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_note_versions_noteId ON note_versions (noteId)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_task_versions_taskId ON task_versions (taskId)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_isDraft ON notes (isDraft)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_hidden ON notes (hidden)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDraft ON tasks (isDraft)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_hidden ON tasks (hidden)")
+                // v17 — notebook list/membership indices, under Room's own names.
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebooks_updatedAt ON notebooks (updatedAt)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_notebookId ON notebook_items (notebookId)")
+                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_itemKind_itemId ON notebook_items (itemKind, itemId)")
+            }
+        }
+
         private fun createSchema(conn: Connection) {
             conn.createStatement().use { st ->
                 st.executeUpdate(
@@ -581,23 +609,6 @@ class Db private constructor(private val connection: Connection) {
                         "itemId INTEGER NOT NULL, " +
                         "addedAt INTEGER NOT NULL)"
                 )
-                // Same list-query indices Room's schema carries, under Room's own names.
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_updatedAt ON notes (updatedAt)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_archived ON notes (archived)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_trashedAt ON notes (trashedAt)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_createdAt ON tasks (createdAt)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDone ON tasks (isDone)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_trashedAt ON tasks (trashedAt)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_note_versions_noteId ON note_versions (noteId)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_task_versions_taskId ON task_versions (taskId)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_isDraft ON notes (isDraft)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_hidden ON notes (hidden)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDraft ON tasks (isDraft)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_hidden ON tasks (hidden)")
-                // v17 — notebook list/membership indices, under Room's own names.
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebooks_updatedAt ON notebooks (updatedAt)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_notebookId ON notebook_items (notebookId)")
-                st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_itemKind_itemId ON notebook_items (itemKind, itemId)")
                 // v18 — FTS5 full-text search index (P2-1). Created for fresh installs.
                 st.executeUpdate(
                     "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(" +
