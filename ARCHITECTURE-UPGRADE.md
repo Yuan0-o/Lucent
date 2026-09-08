@@ -21,9 +21,17 @@ P0-5 test guardrail work done so far (all JVM, run by the Windows workflow on ev
   wrong/missing password → `WrongPasswordException`, foreign/truncated bytes refused, v2 recovery
   envelope semantics, and the real password-mode contract (isNullOrEmpty decides; whitespace-only
   passwords still engage PASSWORD mode — CI caught the initial wrong assumption).
-- `b80f6d6` — `SettingsRepositoryTest`: plain-key disk round trip, secret keys encrypted at rest
-  (no plaintext in the JSON file), corrupt-file degradation to defaults, local-model park/restore.
-- Both files still pending green CI as of this note (`7254db6` running).
+- `b80f6d6` + `b82cb46` — `SettingsRepositoryTest`: plain-key disk round trip, secret keys
+  encrypted at rest (no plaintext in the JSON file), corrupt-file degradation to defaults,
+  local-model park/restore. (CI green at `b82cb46`, 64 tests.)
+- `7bb5b9d` — P0-6: `DbMigrationTest` + `runSchemaMigrations` extraction: a real v11 SQLite store
+  walks to v17 with every row preserved, new columns default correctly, re-runs are silent no-ops
+  and partial stores with later columns still finish. (CI green.)
+- `1abf544` — `AppToolsTest`: web_search withholding, read-only vs mutating split, editable-argument
+  ordering/multiline, blank-edit skipping and malformed-JSON fallbacks. (CI green.)
+- `33579e9` — `DueParsingTest` / `TokenEstimatorTest` / `SearchQueryTest`: due-date grammar and
+  round-trip, script-aware token math, search grammar + matcher + ranking. (CI pending at time of
+  writing.)
 
 Notes:
 
