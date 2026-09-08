@@ -123,7 +123,7 @@ class LocalToolCallParserTest {
         assertNull(LocalToolCallParser.parseLocalToolCall("   ", valid))
         // JSON-shaped prose that names no valid tool still falls through to null.
         assertNull(
-            LocalToolCallParser.parseLocalToolCall("Try {"tool": "nonsense"} later.", valid)
+            LocalToolCallParser.parseLocalToolCall("""Try {"tool": "nonsense"} later.""", valid)
         )
     }
 
