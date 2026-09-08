@@ -22,6 +22,7 @@ import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import com.lucent.app.network.ToolResultTurn
 import com.lucent.app.assistant.tools.LocalToolCallParser
+import com.lucent.app.assistant.text.ReplyPolish
 import com.lucent.app.tools.AppTools
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -515,7 +516,7 @@ object AssistantController {
 
         val convId = turn.conversationId
         val ctx = appContextRef
-        val cleaned = deRobotify(turn.snapshotBuffer()).trim()
+        val cleaned = ReplyPolish.deRobotify(turn.snapshotBuffer()).trim()
 
         turn.job?.cancel()
         turn.job = null
@@ -1240,7 +1241,7 @@ object AssistantController {
                     }
                     if (!errored) finalReply?.let { reply ->
                         val img = reply.imageData?.takeIf { it.isNotBlank() }
-                        val content = replyContent(reply.text, img != null, lastToolResults, userText = text)
+                        val content = ReplyPolish.replyContent(reply.text, img != null, lastToolResults, userText = text)
                         // Hand off from the "thinking" bubble to the typewriter with no overlap.
                         turn.thinking = false
                         // The final round was buffered silently; reveal it now so it types out.
@@ -1459,7 +1460,7 @@ object AssistantController {
                     continue
                 }
                 // Plain prose → this is the final answer.
-                finalText = deRobotify(raw).trim()
+                finalText = ReplyPolish.deRobotify(raw).trim()
                 break
             }
 
@@ -1536,7 +1537,7 @@ object AssistantController {
             val finalEpoch = turn.streamEpoch
             val rc = com.lucent.app.local.LocalLlm.generate(messages) { piece -> turn.onDelta(finalEpoch, piece) }
             if (rc == 1) return
-            finalText = deRobotify(turn.snapshotBuffer()).trim()
+            finalText = ReplyPolish.deRobotify(turn.snapshotBuffer()).trim()
         }
 
         // A model that never recovered can leave tool-JSON standing as its "answer". Raw JSON must
@@ -1555,7 +1556,7 @@ object AssistantController {
 
         // Honest final text: the model's own words if it wrote any, otherwise a summary of what the
         // tools actually did (or a friendly retry line in the user's language) — never a bare "done".
-        val content = replyContent(finalText, hasImage = false, toolResults = toolResults, userText = lastUserText)
+        val content = ReplyPolish.replyContent(finalText, hasImage = false, toolResults = toolResults, userText = lastUserText)
         turn.thinking = false
         turn.resetStream(reveal = true)
         turn.finishTyping(content)
@@ -1693,8 +1694,8 @@ object AssistantController {
         if (rc == 1) return   // Stopped by the user; stopGeneration saved any partial.
         if (rc != 0) { turn.thinking = false; postError(turn, com.lucent.app.i18n.S.localModelGenerateFailed + " [" + rc + "]"); return }
 
-        val content = replyContent(
-            deRobotify(turn.snapshotBuffer()).trim(),
+        val content = ReplyPolish.replyContent(
+            ReplyPolish.deRobotify(turn.snapshotBuffer()).trim(),
             hasImage = false, toolResults = emptyList(), userText = lastUserText
         )
         turn.thinking = false
@@ -2002,70 +2003,12 @@ object AssistantController {
                 content = content,
                 attachmentMime = if (hasImage) mime else null,
                 attachmentData = data?.takeIf { it.isNotBlank() },
-                attachmentName = if (hasImage) imageFileName(mime) else null,
+                attachmentName = if (hasImage) ReplyPolish.imageFileName(mime) else null,
                 conversationId = conversationId,
                 tokens = tokens,
                 replyToId = replyToId
             )
         )
-    }
-
-    /**
-     * What to show/persist for a reply, keeping the "no reply"/"done" placeholder bug (issue 10) from
-     * ever reaching the screen.
-     *
-     * A real written reply is used as-is (after stripping markdown). But a blank reply — or a terse
-     * non-answer like a bare "done", "ok", or literally "no reply", which some models emit after a
-     * tool runs — is treated as *no useful text* and replaced by something honest and specific: the
-     * failure message if something failed, the actual action taken if something succeeded (e.g.
-     * "Created note \"Groceries\"." rather than "Done."), or a friendly request to rephrase if there
-     * is genuinely nothing to report. The placeholder "(no reply)" is gone entirely.
-     */
-    private fun replyContent(text: String?, hasImage: Boolean, toolResults: List<ToolExecResult>, userText: String = ""): String {
-        val cleaned = text?.let { deRobotify(it).trim() }
-        // A small model sometimes answers a SUCCESSFUL tool run with "i cant" — the transcript
-        // confused it, the task exists, and the words flatly contradict what just happened (the
-        // reported "created the task, replied i can't" bug). When a short bare refusal denies an
-        // action the results prove, the honest tool summary below wins over the model's words.
-        val deniesRealSuccess =
-            !cleaned.isNullOrBlank() && toolResults.any { it.success } && isBareRefusal(cleaned)
-        if (!cleaned.isNullOrBlank() && !isTerseNonAnswer(cleaned) && !deniesRealSuccess) return cleaned
-
-        val failures = toolResults.filter { !it.success }
-        if (failures.isNotEmpty()) return failures.joinToString(" ") { it.summary }
-        val phrases = FallbackPhrases.forText(userText)
-        if (hasImage) return phrases.image
-        val successes = toolResults.filter { it.success }
-        if (successes.isNotEmpty()) return successes.joinToString(" ") { it.summary }
-        return phrases.retry
-    }
-
-    /**
-     * A tiny per-script set of fallback lines. Not a translation system — just enough that the two
-     * things the assistant may have to say when it produced no words itself land in the language the
-     * user is actually writing, instead of always English, in step with the dynamic-language rule.
-     *
-     * The app ships exactly four locales — English, Chinese, Japanese, Korean — so these cover every
-     * language the product supports and nothing else. Text in any other script falls through to
-     * English, which is the correct behaviour for an unsupported language.
-     */
-    private data class FallbackPhrases(val image: String, val retry: String) {
-        companion object {
-            private val EN = FallbackPhrases("Here's the image you asked for.", "Sorry, I didn't quite catch that — could you say it another way?")
-            private val ZH = FallbackPhrases("这是你要的图片。", "抱歉，我没太明白，可以换个说法再说一遍吗？")
-            private val JA = FallbackPhrases("ご希望の画像です。", "ごめんなさい、うまく理解できませんでした。別の言い方でもう一度お願いできますか？")
-            private val KO = FallbackPhrases("요청하신 이미지예요.", "죄송해요, 잘 이해하지 못했어요. 다른 방식으로 다시 말씀해 주시겠어요?")
-
-            fun forText(text: String): FallbackPhrases {
-                for (ch in text) {
-                    val c = ch.code
-                    if (c in 0xAC00..0xD7AF) return KO                        // Hangul
-                    if (c in 0x3040..0x30FF) return JA                        // Kana
-                    if (c in 0x4E00..0x9FFF || c in 0x3400..0x4DBF) return ZH // CJK ideographs
-                }
-                return EN
-            }
-        }
     }
 
     /**
@@ -2076,73 +2019,7 @@ object AssistantController {
      * succeeded this turn (see replyContent), so it can never suppress a legitimate "I can't"
      * about something the assistant truly cannot do.
      */
-    private fun isBareRefusal(s: String): Boolean {
-        val t = s.trim()
-        if (t.isEmpty() || t.length > 64) return false
-        val latin = t.lowercase().replace(NON_LATIN, " ").replace(MULTI_WHITESPACE, " ").trim()
-        if (REFUSAL_OPENER.containsMatchIn(latin)) return true
-        return CJK_REFUSALS.any { t.contains(it) }
-    }
 
-    // Compiled/built once — isBareRefusal is consulted after every successful tool turn.
-    private val NON_LATIN = Regex("[^a-z ]")
-    private val MULTI_WHITESPACE = Regex("\\s+")
-    private val REFUSAL_OPENER = Regex("^(sorry )?(but )?i (just )?(really )?(can ?no ?t|can ?t|cannot|am unable to|am not able to)\\b")
-    private val CJK_REFUSALS = arrayOf("我不能", "我无法", "无法完成", "做不到", "帮不了", "できません", "できかねます", "私にはできません", "할 수 없", "못해요", "못합니다")
-
-    /** A reply that's technically present but says nothing — the exact shapes issue 10 shows. */
-    private fun isTerseNonAnswer(s: String): Boolean {
-        val t = s.trim().trimEnd('.', '!', ' ').lowercase()
-        return t in setOf("done", "ok", "okay", "no reply", "none", "null", "n/a", "")
-    }
-
-    /**
-     * Belt-and-suspenders cleanup of markdown artifacts the model was told never to produce. The
-     * system prompt forbids them, but if one slips through it would render as literal punctuation
-     * in the app's plain-text bubbles and instantly look robotic. This strips only unambiguous
-     * markdown so it can't damage ordinary prose:
-     *  - bold/italic/inline-code wrappers around a span: **x**, *x*, __x__, _x_, `x`
-     *  - stage-direction asterisks around a whole clause: *smiles*, *laughs*
-     *  - leading heading hashes (# , ## ) and leading list bullets (-, *, •) at the start of a line
-     * It deliberately leaves apostrophes, hyphens between words, arithmetic, and lone symbols alone.
-     */
-    private fun deRobotify(text: String): String {
-        var s = text
-        // Bold/italic/code spans: keep the inner text, drop the markers. Non-greedy, must have
-        // non-space content, so it won't eat across unrelated asterisks.
-        s = BOLD_SPAN.replace(s) { it.groupValues[1] }
-        s = STAR_SPAN.replace(s) { it.groupValues[1] }
-        s = DUNDER_SPAN.replace(s) { it.groupValues[1] }
-        s = UNDERSCORE_SPAN.replace(s) { it.groupValues[1] }
-        s = CODE_SPAN.replace(s) { it.groupValues[1] }
-        // Line-leading markdown: heading hashes and list bullets.
-        s = s.lineSequence().joinToString("\n") { line ->
-            var l = line
-            l = HEADING_PREFIX.replace(l, "")
-            l = BULLET_PREFIX.replace(l, "")
-            l
-        }
-        return s
-    }
-
-    // Compiled once — deRobotify runs on every finished reply (and again on the stop/cancel
-    // paths). The two line-leading patterns used to be re-compiled for every LINE of every
-    // reply, which is the kind of thing a profiler notices on a long, chatty conversation.
-    private val BOLD_SPAN = Regex("\\*\\*(?=\\S)(.+?)(?<=\\S)\\*\\*")
-    private val STAR_SPAN = Regex("(?<![\\w*])\\*(?=\\S)([^*\\n]+?)(?<=\\S)\\*(?![\\w*])")
-    private val DUNDER_SPAN = Regex("__(?=\\S)(.+?)(?<=\\S)__")
-    private val UNDERSCORE_SPAN = Regex("(?<![\\w_])_(?=\\S)([^_\\n]+?)(?<=\\S)_(?![\\w_])")
-    private val CODE_SPAN = Regex("`([^`\\n]+?)`")
-    private val HEADING_PREFIX = Regex("^\\s{0,3}#{1,6}\\s+")
-    private val BULLET_PREFIX = Regex("^\\s{0,3}[-*•]\\s+")
-
-    private fun imageFileName(mime: String?): String = when {
-        mime == null -> "image.png"
-        mime.contains("jpeg", ignoreCase = true) || mime.contains("jpg", ignoreCase = true) -> "image.jpg"
-        mime.contains("webp", ignoreCase = true) -> "image.webp"
-        mime.contains("gif", ignoreCase = true) -> "image.gif"
-        else -> "image.png"
-    }
 
     /**
      * Route a failure to the right surface (issue 19). A genuine connectivity fault (any
