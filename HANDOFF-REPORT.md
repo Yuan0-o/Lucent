@@ -48,6 +48,8 @@
 | `a19f37f` | schema 升级到 v18 + FTS5 索引（P2-1 部分 2） |
 | `0f651ad` | 迁移后创建索引，修复 legacy 库缺列问题（P2-1） |
 | `d682eda` | 测试间重置 DataKeys 缓存（P2-1） |
+| `0fe665e` | 添加本交接报告 |
+| `a03ab46` | 修复 FTS5 列名、legacy 测试 schema、异常措辞（P2-1，**待 CI 验证**） |
 
 **已完成的具体工作：**
 - ✅ **P2-3**：`LlmClient.kt` 拆分为 `ProviderAdapter` 密封接口（OpenAI/Anthropic/Google 三个实现）+ `StreamAccumulator`，LlmClient 仅保留传输与重试逻辑，含单元测试。
@@ -59,24 +61,21 @@
 
 ---
 
-## 4. 当前阻塞点（正在解决）
+## 4. 当前阻塞点（已修复，等待 CI 验证）
 
-最新提交 `d682eda` 的 CI 仍有 **3 个测试失败**（`jvm-check` 的桌面单元测试）：
+最新提交 `a03ab46` 修复了之前 `d682eda` CI 的 **3 个测试失败**（`jvm-check` 的桌面单元测试），正在等待 CI 验证：
 
-### 4.1 `DbMigrationTest` — 期望 18 但得到 17
-- 现象：`assertEquals(Db.SCHEMA_VERSION, userVersion(conn))` 报 `expected 18 but was 17`。
-- 根因推断：`runSchemaMigrations` 的 v18 分支在测试用的普通 SQLite（`jdbc:sqlite:`，org.xerial 驱动）上执行时抛异常，导致循环提前 `return`，`user_version` 停在 17。
-- 待验证：v18 分支里的 `CREATE VIRTUAL TABLE ... USING fts5`、`CREATE TRIGGER` 或 `INSERT ... VALUES('rebuild')` 中哪一步在测试驱动上失败。**重点怀疑：测试驱动是否支持 FTS5 / `rebuild` 在 legacy 表上是否因缺列失败**。
+### 4.1 `DbMigrationTest` — 期望 18 但得到 17 ✅ 已修复
+- **根因**：FTS5 虚拟表定义用 `title, content` 列名，但 `notes` 表实际是 `title, body`，导致 `CREATE VIRTUAL TABLE` 或 `rebuild` 失败，v18 分支抛异常，`user_version` 停在 17。
+- **修复**：把 `notes_fts` 改为 `fts5(title, body, ...)`、`tasks_fts` 改为 `fts5(title, notes, ...)`，匹配实际表结构；同步修正所有触发器的 `INSERT INTO *_fts` 列名。
 
-### 4.2 `DbEncryptionTest` — `no such column: archived`
-- 现象：legacy plaintext 库（只有 4 列 `id/title/body/updatedAt`）在 `Db.open` 时报 `no such column: archived`。
-- 根因推断：`createSchema` 里 `CREATE INDEX IF NOT EXISTS index_notes_archived ON notes(archived)` 在 `migrateSchema` 补列之前执行。已尝试把索引移入 `createSchema` 之后的 `createIndices()`（commit `0f651ad`），但 **CI 仍报同样错误**，说明修复未生效或 `migrateSchema` 未真正补列。
-- **下一步**：确认 `0f651ad` 是否真的把索引移出了 `createSchema`；检查 `migrateSchema` 的 v12..v17 分支是否在 legacy 表上成功补列（尤其 `archived`）。
+### 4.2 `DbEncryptionTest` — `no such column: archived` ✅ 已修复
+- **根因**：测试构造的 legacy plaintext 表只有 4 列（`id/title/body/updatedAt`），而 `createIndices` 期望 v11 完整列（含 `archived`）。`migrateSchema` 的 v12+ 分支只补新增列，不补 v11 已有的列。
+- **修复**：让测试的 legacy 表匹配真实 v11 schema（补全 `tags, attachments, archived, archivedAt, pinned, color, isChecklist, checklist, trashedAt`），使其通过 `migrateSchema` 后 `createIndices` 能正常工作。
 
-### 4.3 `DataKeysTest` — 异常消息缺少 `.lcb`
-- 现象：`assertTrue(err.message.contains(".lcb"))` 失败。
-- 根因推断：`DataKeys.databasePassphrase` 抛出的 `IllegalStateException` 消息里没有 `.lcb` 提法，与测试断言不符（可能是消息文案与测试预期不一致）。
-- **下一步**：核对 `DataKeys.kt` 中异常消息文案，使其包含 `.lcb` 或调整测试断言。
+### 4.3 `DataKeysTest` — 异常消息缺少 `.lcb` ✅ 已修复
+- **根因**：`DataKeys.databasePassphrase` 抛出的 `IllegalStateException` 消息是 `"restore from a backup"`，测试断言期望包含 `.lcb`。
+- **修复**：把异常消息改为 `"restore from a .lcb backup"`，匹配测试断言并引导用户恢复。
 
 > ⚠️ **重要**：这 3 个测试在本次会话之前从未真正运行过（此前 CI 在编译阶段就因 `getApplicationContext` 报错而失败），因此这些是**预存缺陷**，不是本次改动引入的。
 
@@ -126,7 +125,8 @@
 
 ## 8. 交接给下一位执行者的第一件事
 
-1. 拉取最新 `main`（当前 HEAD = `d682eda`）。
-2. 查看 CI 日志（`jvm-check`），定位 4.1 / 4.2 / 4.3 三个失败。
-3. 优先验证 `0f651ad` 是否真的把索引移出了 `createSchema`；确认 `migrateSchema` 在 legacy 表上补列的逻辑。
-4. 修复后提交、push，等 CI 全绿再进入 P2-1 剩余部分。
+1. 拉取最新 `main`（当前 HEAD = `a03ab46`）。
+2. 查看 CI 结果（[Actions](https://github.com/Yuan0-o/Lucent/actions)）— 如果 `a03ab46` 的 CI **通过**（jvm-check 和 android-jvm-check 都绿），则：
+   - ✅ 阻塞点已清除，开始 **P2-1 剩余部分**（DAO FTS5 `MATCH` 检索 + LIKE 回退 + BackupImport rebuild）。
+3. 如果 CI **仍失败**，下载 test-results artifact 分析新的失败点，修复后再推。
+4. CI 全绿后，按计划推进 P1 → P2-2 → P3 → 版本号收尾。
