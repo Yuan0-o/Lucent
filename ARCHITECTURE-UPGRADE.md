@@ -29,9 +29,16 @@ P0-5 test guardrail work done so far (all JVM, run by the Windows workflow on ev
   and partial stores with later columns still finish. (CI green.)
 - `1abf544` — `AppToolsTest`: web_search withholding, read-only vs mutating split, editable-argument
   ordering/multiline, blank-edit skipping and malformed-JSON fallbacks. (CI green.)
-- `33579e9` — `DueParsingTest` / `TokenEstimatorTest` / `SearchQueryTest`: due-date grammar and
-  round-trip, script-aware token math, search grammar + matcher + ranking. (CI pending at time of
-  writing.)
+- `33579e9` + `55597f2` — `DueParsingTest` / `TokenEstimatorTest` / `SearchQueryTest`: due-date
+  grammar and round-trip, script-aware token math (CJK per-glyph), search grammar + matcher +
+  ranking. (CI green, 111 tests.)
+- `f5d196d` — P0-7 first cut: `.lcb` payload framing (format constants, bounded big-endian
+  primitives, streaming payload scan, blob restore, decrypted-source opener) extracted verbatim
+  from BackupManager into `data/BackupFrames.kt`; BackupManager keeps its public API and drops from
+  2125 to ~1820 lines. Function-by-function byte-identical comparison against HEAD. (CI green on
+  both platforms.)
+- `7a02dbd` — `BackupFramesTest`: legacy-JSON scan, framed model/font counting, onBlob walk order,
+  hostile length rejection, truncated-tail tolerance, primitive round trips. (CI green.)
 
 Notes:
 
