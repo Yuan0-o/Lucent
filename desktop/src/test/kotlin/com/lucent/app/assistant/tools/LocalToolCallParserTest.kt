@@ -164,4 +164,45 @@ class LocalToolCallParserTest {
         assertTrue(!call.argsJson.contains("priority"))
         assertTrue(!call.argsJson.contains("repeat"))
     }
+
+    @Test
+    fun normalisesWhitespaceAndDashesInToolName() {
+        // A weak model may write "create task" or "create-task" instead of "create_task".
+        val spaced = LocalToolCallParser.parseLocalToolCall(
+            """{"tool": "create task", "arguments": {"title": "x"}}""",
+            valid
+        )
+        assertNotNull(spaced)
+        assertEquals("create_task", spaced!!.name)
+
+        val dashed = LocalToolCallParser.parseLocalToolCall(
+            """{"tool": "create-task", "arguments": {"title": "x"}}""",
+            valid
+        )
+        assertNotNull(dashed)
+        assertEquals("create_task", dashed!!.name)
+    }
+
+    @Test
+    fun renderSurvivesMalformedArgs() {
+        // Malformed args JSON must not crash the serialiser; it falls back to an empty object.
+        val out = LocalToolCallParser.renderLocalToolCall(
+            LocalToolCallParser.LocalToolCall("list_tasks", "not json")
+        )
+        val parsed = org.json.JSONObject(out)
+        assertEquals("list_tasks", parsed.getString("tool"))
+        assertEquals(0, parsed.getJSONObject("arguments").length())
+    }
+
+    @Test
+    fun rendersCompactCanonicalJson() {
+        val out = LocalToolCallParser.renderLocalToolCall(
+            LocalToolCallParser.LocalToolCall("create_task", """{"title":"Buy milk","due":"2026-01-01"}""")
+        )
+        val parsed = org.json.JSONObject(out)
+        assertEquals("create_task", parsed.getString("tool"))
+        val args = parsed.getJSONObject("arguments")
+        assertEquals("Buy milk", args.getString("title"))
+        assertEquals("2026-01-01", args.getString("due"))
+    }
 }
