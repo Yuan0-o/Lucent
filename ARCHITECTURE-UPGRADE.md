@@ -15,6 +15,16 @@ modules (behaviour unchanged; controllers delegate). All commits verified green 
 | `4d6663b` | `assistant/text/ReplyPolish` — deRobotify markdown scrub, refusal/terse detection, reply-content fallback chain | `ReplyPolishTest` (11 tests) |
 | `6a34873` | `assistant/prompts/SystemPrompts` — local/compact/full system-prompt builders | `SystemPromptsTest` (8 tests) |
 
+P0-5 test guardrail work done so far (all JVM, run by the Windows workflow on every push):
+
+- `b89aaad` + `7254db6` — `BackupCryptoTest`: .lcb round trips in APP_KEY and PASSWORD modes,
+  wrong/missing password → `WrongPasswordException`, foreign/truncated bytes refused, v2 recovery
+  envelope semantics, and the real password-mode contract (isNullOrEmpty decides; whitespace-only
+  passwords still engage PASSWORD mode — CI caught the initial wrong assumption).
+- `b80f6d6` — `SettingsRepositoryTest`: plain-key disk round trip, secret keys encrypted at rest
+  (no plaintext in the JSON file), corrupt-file degradation to defaults, local-model park/restore.
+- Both files still pending green CI as of this note (`7254db6` running).
+
 Notes:
 
 - `desktop/src/test` runs inside the Windows workflow (`:desktop:test`), so these tests run in CI
