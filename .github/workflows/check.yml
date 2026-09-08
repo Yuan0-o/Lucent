@@ -46,6 +46,16 @@ jobs:
       - name: Run detekt
         run: ./gradlew :desktop:detekt --no-daemon --console=plain
 
+      # P3-3: i18n generation check — run the generator and verify the committed
+      # I18n.kt matches the catalogs exactly. A drift means translations were edited
+      # directly in the generated file or the catalog was updated without running the
+      # generator; either way the fix is to edit catalog.py (or catalog_desktop.py)
+      # and re-run gen_i18n.py.
+      - name: Check i18n generation is up-to-date
+        run: |
+          python3 tools/i18n/gen_i18n.py
+          git diff --exit-code -- shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v6

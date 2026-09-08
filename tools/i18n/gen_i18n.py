@@ -201,7 +201,7 @@ def lang_object_for(entries, name, idx):
     for e in entries:
         if isinstance(e, str):
             continue  # comments are emitted into Tr only
-        d = override_decl(e[0], e[idx])
+        d = override_decl_for(e, idx)
         if d:
             lines.append(d)
     lines.append("}")
@@ -214,7 +214,7 @@ def emit(entries, path):
         if isinstance(e, str):
             out.append("    " + e if e else "")
         else:
-            out.append(base_decl(e[0], e[1]))
+            out.append(base_decl_for(e))
     out.append("}")
     out.append("")
     out.append("object En : Tr()")
@@ -233,6 +233,29 @@ def emit(entries, path):
 # The consolidated layout (post shared-merge): ONE generated catalog compiled by every module,
 # shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt, carrying the shared entries plus the
 # desktop-only section (desktop-only keys are harmless on Android and keep one source of truth).
+#
+# P3-3: conditional (if/else) entries. A tiny number of entries cannot be expressed as a flat
+# template (e.g. notebookItemsCount: "1 item" vs "N items"). They live in catalog.py's
+# CONDITIONAL_ENTRIES dict, keyed by their full signature, with per-language raw Kotlin
+# expressions as the value ([en, zh, ja, ko]). The generator emits them verbatim (they ARE
+# Kotlin), so the source of truth stays the catalog and the committed file is reproducible.
+CONDITIONAL = getattr(cat, "CONDITIONAL_ENTRIES", {})
+
+def base_decl_for(e):
+    key = e[0]
+    if key in CONDITIONAL:
+        return f"    open fun {key}: String = {CONDITIONAL[key][0]}"
+    return base_decl(key, e[1])
+
+def override_decl_for(e, idx):
+    key = e[0]
+    if key in CONDITIONAL:
+        expr = CONDITIONAL[key][idx - 1]  # idx 2,3,4 -> [zh, ja, ko]
+        if expr is None:
+            return None
+        return f"    override fun {key}: String = {expr}"
+    return override_decl(key, e[idx])
+
 all_entries = list(ENTRIES)
 all_entries.append("")
 all_entries.append("// ---- Desktop-only entries (catalog_desktop.py) ----")
