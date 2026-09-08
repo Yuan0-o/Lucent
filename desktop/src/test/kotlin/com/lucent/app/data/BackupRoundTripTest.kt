@@ -29,11 +29,13 @@ class BackupRoundTripTest {
     private suspend fun use(dir: File, block: suspend () -> Unit) {
         LocalSecrets.filesDirOverride = dir
         LocalSecrets.resetForTesting()
+        DataKeys.resetCacheForTesting()
         try {
             block()
         } finally {
             LocalSecrets.filesDirOverride = null
             LocalSecrets.resetForTesting()
+            DataKeys.resetCacheForTesting()
         }
     }
 

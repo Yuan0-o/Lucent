@@ -28,11 +28,13 @@ class DataKeysTest {
     private fun use(dir: File, block: () -> Unit) {
         LocalSecrets.filesDirOverride = dir
         LocalSecrets.resetForTesting()
+        DataKeys.resetCacheForTesting()
         try {
             block()
         } finally {
             LocalSecrets.filesDirOverride = null
             LocalSecrets.resetForTesting()
+            DataKeys.resetCacheForTesting()
         }
     }
 
