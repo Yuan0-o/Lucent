@@ -18,7 +18,7 @@ import org.json.JSONObject
  */
 class SettingsRepositoryTest {
 
-    private class TestContext(dir: File) : Context() {
+    private class TestContext(private val dir: File) : Context() {
         override val filesDir: File get() = dir
     }
 
