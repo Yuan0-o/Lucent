@@ -88,6 +88,13 @@ dependencies {
     // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
     implementation("org.apache.pdfbox:pdfbox:3.0.8")
 
+    // P0-1: Windows DPAPI (CryptProtectData / CryptUnprotectData) via JNA, to bind the master key
+    // to the user account instead of leaving it as a plaintext Base64 file beside the data it
+    // protects. Pure JVM, no custom native code: jna-platform already binds Crypt32. Windows-only
+    // at runtime — on other OSes the wrapper is unavailable and LocalSecrets stores the legacy
+    // form and reports the missing binding. EXACT PIN, on purpose; see LocalSecrets.kt.
+    implementation("net.java.dev.jna:jna-platform:5.19.0")
+
     // ---- C-group task 10: the bundled CJK face for PDF export ----
     //
     // PDFBox embeds only the fonts it is handed, and its built-in Helvetica has no CJK coverage.
