@@ -20,6 +20,7 @@ class BackupRoundTripTest {
 
     private class TestContext(private val dir: File) : Context() {
         override val filesDir: File get() = dir
+        override fun getApplicationContext(): Context = this
     }
 
     private fun freshDir(): File =
@@ -150,10 +151,10 @@ class BackupRoundTripTest {
         val backable = setOf(
             "themeMode", "palette", "dynamicColorEnabled", "font", "fontLibrary",
             "assistantName", "assistantStyle",
-            "memoryTier", "webSearchEnabled", "typingHapticsEnabled", "markdownEnabled",
+            "memoryTier", "webSearchEnabled", "typingHaptics", "markdownEnabled",
             "linksEnabled", "backgroundAnimationEnabled", "appLanguage", "notesSort",
             "tasksSort", "systemIntegrationEnabled", "startupLoggingEnabled",
-            "savedSearches", "customTemplatesJson", "templateDraftJson", "hiddenTemplatesJson",
+            "savedSearches", "customTemplates", "templateDraft", "hiddenTemplates",
             "cloudEnabled", "cloudProvider", "cloudUrl", "cloudUser", "cloudPasswordEnc",
             "cloudFolder", "cloudAutoBackup",
             "noteHistoryEnabled", "taskHistoryEnabled",
@@ -163,7 +164,7 @@ class BackupRoundTripTest {
             "assistantConfirmToolsEnabled", "smallModelModeEnabled",
             "crashShieldEnabled", "blackoutEnabled",
             "localModelEnabled", "localToolsEnabled", "localGpuEnabled",
-            "localBackgroundReplyEnabled", "localModelManifest",
+            "localBackgroundReply", "localModelManifest",
             // API block
             "baseUrl", "apiSpec", "apiKeyEncrypted", "model", "apiProfiles", "apiProfileSelected"
         )
