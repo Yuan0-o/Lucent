@@ -3,13 +3,19 @@
 # Deliberately minimal: complexity + empty-catch only. The codebase has many INTENTIONAL
 # `catch (t: Throwable)` degradation paths (the "degrade one notch, never strand the data"
 # policy), and a maximalist rule set would drown the signal in false positives on code that is
-# correct by design. buildUponDefaultConfig is false so nothing beyond what is listed here runs.
-buildUponDefaultConfig: false
+# correct by design. buildUponDefaultConfig is set to false in the Gradle detekt {} block (see
+# desktop/build.gradle.kts) so nothing beyond what is listed here runs.
 
 complexity:
   active: true
 
-exceptions:
+# EmptyCatchBlock belongs to the empty-blocks rule set, not exceptions — detekt's config
+# validator rejected the old placement under `exceptions` as an unknown property. Every sibling
+# rule in empty-blocks is explicitly turned off here because, without buildUponDefaultConfig,
+# merely activating the empty-blocks section would otherwise leave each of those siblings on its
+# own compiled-in default (active), which is exactly the maximalist, false-positive-prone result
+# the comment above says this file exists to avoid.
+empty-blocks:
   active: true
   EmptyCatchBlock:
     active: true
@@ -17,3 +23,31 @@ exceptions:
     # the idiomatic way to swallow a deliberately-ignored throw. Anything else that is empty is
     # reported.
     allowedExceptionNameRegex: '^(_|(ignore|expected).*)$'
+  EmptyClassBlock:
+    active: false
+  EmptyDefaultConstructor:
+    active: false
+  EmptyDoWhileBlock:
+    active: false
+  EmptyElseBlock:
+    active: false
+  EmptyFinallyBlock:
+    active: false
+  EmptyForBlock:
+    active: false
+  EmptyFunctionBlock:
+    active: false
+  EmptyIfBlock:
+    active: false
+  EmptyInitBlock:
+    active: false
+  EmptyKtFile:
+    active: false
+  EmptySecondaryConstructor:
+    active: false
+  EmptyTryBlock:
+    active: false
+  EmptyWhenBlock:
+    active: false
+  EmptyWhileBlock:
+    active: false
