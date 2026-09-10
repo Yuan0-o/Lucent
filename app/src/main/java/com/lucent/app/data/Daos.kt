@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.SkipQueryVerification
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -146,7 +147,12 @@ interface NoteDao {
     /**
      * P2-1: Rebuild the FTS5 full-text index after a bulk import. Room doesn't let raw SQL return
      * Unit, so we SELECT the result of the special command.
+     *
+     * `notes_fts` is created by raw SQL in MIGRATION_17_18 rather than a Room @Entity, so KSP has
+     * no schema to check this query against; @SkipQueryVerification opts it out of that
+     * compile-time check instead of failing the build over a table Room was never told about.
      */
+    @SkipQueryVerification
     @Query("SELECT * FROM notes_fts WHERE notes_fts = 'rebuild'")
     suspend fun rebuildFts(): List<String>
 }
@@ -384,7 +390,12 @@ interface TaskDao {
     /**
      * P2-1: Rebuild the FTS5 full-text index after a bulk import. Room doesn't let raw SQL return
      * Unit, so we SELECT the result of the special command.
+     *
+     * `tasks_fts` is created by raw SQL in MIGRATION_17_18 rather than a Room @Entity, so KSP has
+     * no schema to check this query against; @SkipQueryVerification opts it out of that
+     * compile-time check instead of failing the build over a table Room was never told about.
      */
+    @SkipQueryVerification
     @Query("SELECT * FROM tasks_fts WHERE tasks_fts = 'rebuild'")
     suspend fun rebuildFts(): List<String>
 }
