@@ -35,8 +35,17 @@ object DataCache {
     fun warm(db: AppDatabase) {
         if (started) return
         started = true
-        AppScope.io.launch { db.noteDao().getAll().collect { notes = it } }
-        AppScope.io.launch { db.taskDao().getActive().collect { activeTasks = it } }
-        AppScope.io.launch { db.taskDao().getCompleted().collect { completedTasks = it } }
+        AppScope.io.launch {
+            runCatching { db.noteDao().getAll().collect { notes = it } }
+                .onFailure { android.util.Log.e("LucentDataCache", "note cache collector failed", it) }
+        }
+        AppScope.io.launch {
+            runCatching { db.taskDao().getActive().collect { activeTasks = it } }
+                .onFailure { android.util.Log.e("LucentDataCache", "active-task cache collector failed", it) }
+        }
+        AppScope.io.launch {
+            runCatching { db.taskDao().getCompleted().collect { completedTasks = it } }
+                .onFailure { android.util.Log.e("LucentDataCache", "completed-task cache collector failed", it) }
+        }
     }
 }
