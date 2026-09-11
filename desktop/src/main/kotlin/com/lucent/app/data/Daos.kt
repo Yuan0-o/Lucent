@@ -135,40 +135,22 @@ class NoteDao internal constructor(private val db: Db) {
 
     suspend fun searchNotes(text: String, tag: String, archived: Int, trashed: Int, limit: Int): List<Note> =
         db.use { c ->
-            // P2-1: Try FTS5 MATCH first (fast for word-boundary languages), fall back to LIKE if
-            // FTS is unavailable or the query fails (e.g., CJK substring search, FTS syntax error).
-            if (text.isNotBlank()) {
-                try {
-                    val ftsResults = c.prepareStatement(
-                        """
-                        SELECT notes.* FROM notes
-                        INNER JOIN notes_fts ON notes.id = notes_fts.rowid
-                        WHERE notes_fts MATCH ?
-                          AND (? = '' OR tags LIKE '%' || ? || '%')
-                          AND isDraft = 0
-                          AND hidden = 0
-                          AND (? = -1 OR archived = ?)
-                          AND (? = -1
-                                OR (? = 1 AND trashedAt IS NOT NULL)
-                                OR (? = 0 AND trashedAt IS NULL))
-                        ORDER BY pinned DESC, updatedAt DESC
-                        LIMIT ?
-                        """.trimIndent()
-                    ).apply {
-                        // FTS5 expects a query expression; wrap in quotes for phrase/substring match
-                        setString(1, "\"$text\"")
-                        setString(2, tag); setString(3, tag)
-                        setInt(4, archived); setInt(5, archived)
-                        setInt(6, trashed); setInt(7, trashed); setInt(8, trashed)
-                        setInt(9, limit)
-                    }.executeQuery().mapAll(::noteOf)
-                    return@use ftsResults
-                } catch (_: Exception) {
-                    // FTS unavailable or query failed; fall through to LIKE
-                }
-            }
-
-            // Fallback: LIKE-based search (works for all scripts, including CJK substrings)
+            // P2-1 follow-up (found during the 2.8 audit, not by a test — none existed): this used to
+            // try notes_fts MATCH first and fall through to LIKE on a thrown exception. That fallback
+            // never fires for the two cases that actually matter, because neither one throws:
+            //  1. CJK queries. unicode61/simple tokenise a whole run of Han/Kana/Hangul as ONE token
+            //     (see the class doc on SearchQuery), so MATCH silently returns too few or zero rows
+            //     instead of erroring — exactly the "stops finding the user's notes" failure SearchQuery
+            //     warns about, for an app whose owner writes in Chinese.
+            //  2. notes_fts only indexes (title, body) — tags and checklist text were never added to
+            //     it — so a match that lives only in a tag or a checklist item is silently dropped even
+            //     for plain-ASCII queries, FTS succeeds, just against an incomplete index.
+            // SearchQuery's own header already settled this: matching stays substring-based so it
+            // behaves identically in every script. This method now agrees with that decision (and with
+            // the Android twin, which never tried FTS) instead of quietly overriding it. The notes_fts
+            // table and its sync triggers are left in place — harmless, kept current by the existing
+            // AFTER triggers — as a foundation for a future pass that indexes every searched column and
+            // is proven safe for CJK before it's used to serve a query again.
             c.prepareStatement(
                 """
                 SELECT * FROM notes
@@ -480,43 +462,11 @@ class TaskDao internal constructor(private val db: Db) {
         dueAfter: Long,
         limit: Int
     ): List<Task> = db.use { c ->
-        // P2-1: Try FTS5 MATCH first (fast for word-boundary languages), fall back to LIKE if
-        // FTS is unavailable or the query fails (e.g., CJK substring search, FTS syntax error).
-        if (text.isNotBlank()) {
-            try {
-                val ftsResults = c.prepareStatement(
-                    """
-                    SELECT tasks.* FROM tasks
-                    INNER JOIN tasks_fts ON tasks.id = tasks_fts.rowid
-                    WHERE tasks_fts MATCH ?
-                      AND isDraft = 0
-                      AND hidden = 0
-                      AND (? = -1 OR isDone = ?)
-                      AND (? = -1
-                            OR (? = 1 AND trashedAt IS NOT NULL)
-                            OR (? = 0 AND trashedAt IS NULL))
-                      AND (? = -1 OR priority >= ?)
-                      AND (? = -1 OR (dueAt IS NOT NULL AND dueAt <= ?))
-                      AND (? = -1 OR (dueAt IS NOT NULL AND dueAt >= ?))
-                    ORDER BY pinned DESC, priority DESC, COALESCE(dueAt, 9223372036854775807) ASC, createdAt DESC
-                    LIMIT ?
-                    """.trimIndent()
-                ).apply {
-                    setString(1, "\"$text\"")
-                    setInt(2, done); setInt(3, done)
-                    setInt(4, trashed); setInt(5, trashed); setInt(6, trashed)
-                    setInt(7, minPriority); setInt(8, minPriority)
-                    setLong(9, dueBefore); setLong(10, dueBefore)
-                    setLong(11, dueAfter); setLong(12, dueAfter)
-                    setInt(13, limit)
-                }.executeQuery().mapAll(::taskOf)
-                return@use ftsResults
-            } catch (_: Exception) {
-                // FTS unavailable or query failed; fall through to LIKE
-            }
-        }
-
-        // Fallback: LIKE-based search (works for all scripts, including CJK substrings)
+        // P2-1 follow-up: see the comment on NoteDao.searchNotes above — the same MATCH-first attempt
+        // lived here with the same two silent failure modes (CJK tokenisation, and tasks_fts indexing
+        // only title+notes while subtasks text was never added to it), and for the same reason it's
+        // gone: this now matches SearchQuery's documented design and the Android twin, both of which
+        // stay LIKE-based. tasks_fts and its triggers are left in place, unread, for a future pass.
         c.prepareStatement(
             """
             SELECT * FROM tasks
