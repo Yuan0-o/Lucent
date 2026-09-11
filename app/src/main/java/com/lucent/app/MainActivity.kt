@@ -294,10 +294,26 @@ class MainActivity : FragmentActivity() {
         // AppReady below), so no composition can stumble into a half-built database and block the
         // main thread anyway.
         AppScope.io.launch {
-            val db = com.lucent.app.data.AppDatabase.getInstance(applicationContext)
-            com.lucent.app.data.DataCache.warm(db)
-            AssistantController.ensureMessagesLoaded(applicationContext)
-            com.lucent.app.ui.AppReady.databaseReady = true
+            try {
+                val db = com.lucent.app.data.AppDatabase.getInstance(applicationContext)
+                com.lucent.app.data.DataCache.warm(db)
+                AssistantController.ensureMessagesLoaded(applicationContext)
+                com.lucent.app.ui.AppReady.databaseReady = true
+            } catch (t: Throwable) {
+                // AppScope.io carries a SupervisorJob but no CoroutineExceptionHandler, so an
+                // uncaught throwable here used to propagate straight to the process's default
+                // handler — an unconditional crash on every single launch, for exactly the kind
+                // of database hiccup that DatabaseEncryption.ensureReady() already goes to great
+                // lengths to never let surface as a crash (see its class doc). Logging it here
+                // keeps that same guarantee for the one call site that didn't have it, and leaves
+                // AppReady.databaseReady false so the splashDone failsafe below still lets the app
+                // appear instead of taking the whole process down.
+                android.util.Log.e("LucentStartup", "database init failed at startup", t)
+                StartupLog.event(
+                    applicationContext,
+                    "db: startup init failed (${t::class.simpleName}: ${t.message})"
+                )
+            }
         }
         StartupLog.event(applicationContext, "Startup tasks dispatched; composing UI")
 
