@@ -81,7 +81,18 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // migrations and the .lcb round trip are now automated tests, and the desktop test suite grew
 // from 4 files to 14 (121 tests) with every refactor verified byte-identical first. See the
 // v2.7.7 notes and ARCHITECTURE-UPGRADE.md.
-val MARKETING_VERSION = "2.7.7"
+// 2.7.8: UPGRADE-PLAN-2.8, phase P0 closed out (desktop master key bound to the Windows user
+// account via DPAPI, check.yml gates every push/PR, the wrapper and a real version catalogue are
+// committed, detekt and a lint baseline run in CI, and the two data-loss paths — plaintext rekey
+// and a corrupted key file — are now tests, not just careful code) plus the first two P1-1 seams:
+// SplashScreen and the export picker moved into shared/, retiring their :app/:desktop twins behind
+// small named platform functions (splashTopInset/SplashBackground, rememberExportPdfFontHint)
+// instead of a wide impersonated-Android shim. Also fixed along the way, not proposed by the
+// original plan: desktop full-text search tried FTS5 MATCH before LIKE and only fell back on a
+// thrown exception, which a CJK query never raises — searchNotes/searchTasks are LIKE-only again,
+// matching Android and SearchQuery's own documented design; the FTS5 schema and triggers stay,
+// unread, for a future pass that indexes every searched column and is proven safe for CJK first.
+val MARKETING_VERSION = "2.7.8"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
