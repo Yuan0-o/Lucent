@@ -108,7 +108,7 @@ object DatabaseEncryption {
      * default handler **deletes the database**. Here, a failed open means "we could not decrypt
      * this", and the only correct response to that is to leave the file exactly where it is.
      */
-    private val neverDelete = DatabaseErrorHandler { /* deliberately does nothing */ }
+    private val neverDelete = DatabaseErrorHandler { _, _ -> /* deliberately does nothing */ }
 
     private fun isPlaintextSqlite(file: File): Boolean {
         if (!file.exists() || file.length() < SQLITE_MAGIC.size) return false
