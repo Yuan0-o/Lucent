@@ -183,7 +183,7 @@ compose.desktop {
             // installs in place.
                         // 2.7.7 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.6
             // installs in place.
-            packageVersion = "2.7.7"
+            packageVersion = "2.7.8"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with
