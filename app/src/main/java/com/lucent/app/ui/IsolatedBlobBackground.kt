@@ -101,8 +101,13 @@ fun IsolatedBlobBackground(
         // compositing is never the one being rasterized underneath it (tearing would flicker).
         var caches = arrayOfNulls<android.graphics.Bitmap>(2)
         var cacheIndex = 0
-        var cacheW = 0
-        var cacheH = 0
+        // P0-7: one dimension pair per SLOT, not one shared pair for both. The two buffers can be
+        // asked for different sizes across a resize (rotation, multi-window) that lands between two
+        // renders — a single shared cacheW/cacheH would then compare the slot about to be reused
+        // against the OTHER slot's last-known size, so a stale, wrongly-sized bitmap could pass the
+        // "size unchanged" check instead of being recreated.
+        val cacheW = IntArray(2)
+        val cacheH = IntArray(2)
         val rect = RectF(-1f, -1f, 1f, 1f)
         val paint = Paint()
         val radius = FloatArray(6)
@@ -122,10 +127,10 @@ fun IsolatedBlobBackground(
                     computeBlobFrameParams(t, w.toFloat(), h.toFloat(), buffer)
                     val sw = w / 2
                     val sh = h / 2
-                    if (caches[cacheIndex] == null || cacheW != sw || cacheH != sh) {
+                    if (caches[cacheIndex] == null || cacheW[cacheIndex] != sw || cacheH[cacheIndex] != sh) {
                         caches[cacheIndex] = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888)
-                        cacheW = sw
-                        cacheH = sh
+                        cacheW[cacheIndex] = sw
+                        cacheH[cacheIndex] = sh
                     }
                     val bmp = caches[cacheIndex]!!
                     val canvas = Canvas(bmp)
