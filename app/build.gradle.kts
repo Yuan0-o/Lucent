@@ -190,6 +190,16 @@ android {
             // shared tree is added there (previously it rode along via java.srcDir under KGP).
             kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
         }
+        // P0-3: androidx.room.testing.MigrationTestHelper reads each version's exported schema
+        // JSON from the androidTest assets at instrumentation runtime, not from the app/schemas
+        // directory directly — this is what wires the ksp { room.schemaLocation } output (see the
+        // ksp block near the top of this file) into that assets lookup. Additive only; does not
+        // touch the "main" source set above. See AppDatabaseMigrationTest's class doc for the
+        // separate, more important prerequisite this does NOT solve: schema JSON for versions 2-17
+        // does not exist yet and a plain kspDebugKotlin run will not backfill it.
+        getByName("androidTest") {
+            assets.srcDirs(files("$projectDir/schemas"))
+        }
     }
 
     // ---- Release signing, fed entirely by environment variables ----
@@ -361,4 +371,13 @@ dependencies {
     // and the bare kotlin-test artifact has no content without a test-framework variant selected
     // (AGP's unit-test runner is JUnit4 and does not add junit itself).
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
+
+    // P0-3: instrumented tests under app/src/androidTest (Room migration coverage via
+    // MigrationTestHelper, plus a real-device SQLCipher open/write/reopen + rekey cycle). These
+    // need a device or emulator to run — see AppDatabaseMigrationTest's and DataKeysSqlCipherTest's
+    // class docs for what else is (and isn't yet) in place for that.
+    androidTestImplementation(libs.room.testing)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }
