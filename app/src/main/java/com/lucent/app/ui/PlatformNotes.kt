@@ -1,8 +1,12 @@
 package com.lucent.app.ui
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
@@ -12,11 +16,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lucent.app.data.Attachment
 import com.lucent.app.data.AttachmentStore
+import com.lucent.app.reminders.Notifications
+import java.util.Calendar
 
 /**
  * Android seams for the shared [NotesScreen] (and, where noted, reused by [TasksScreen] once that
@@ -78,29 +85,25 @@ fun OnAppHidden(action: () -> Unit) {
 /**
  * Android counterpart to desktop's `DesktopShare.shareText` — pops the system share sheet via a
  * plain ACTION_SEND, matching that function's call shape so a screen can write
- * `shareText(context, subject = ..., text = ...)` once and have it work on both platforms. Entirely
- * local: no account, no Lucent server, no link that outlives the tap.
- *
- * [subject] currently always uses the notes-specific chooser label ([com.lucent.app.i18n.S.shareNoteChooser]);
- * if this is reused from a non-notes screen (e.g. once TasksScreen is unified) and a different
- * chooser title is wanted, that's the point to add a parameter rather than a second function.
+ * `shareText(context, subject = ..., text = ..., chooserTitle = ...)` once and have it work on both
+ * platforms. Entirely local: no account, no Lucent server, no link that outlives the tap.
  */
-fun shareText(context: Context, subject: String? = null, text: String) {
+fun shareText(context: Context, subject: String? = null, text: String, chooserTitle: String) {
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         subject?.let { putExtra(Intent.EXTRA_SUBJECT, it) }
         putExtra(Intent.EXTRA_TEXT, text)
     }
-    context.startActivity(Intent.createChooser(sendIntent, com.lucent.app.i18n.S.shareNoteChooser))
+    context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
 }
 
 /**
- * The notes screen's overflow-menu "search everything" entry. Present on Android because this menu
- * is the only route to global search here. Must be called from within a [androidx.compose.material3.DropdownMenu]'s
- * content.
+ * The notes/tasks screens' overflow-menu "search everything" entry. Present on Android because this
+ * menu is the only route to global search here. Must be called from within a
+ * [androidx.compose.material3.DropdownMenu]'s content.
  */
 @Composable
-fun NotesOverflowSearchItem(onClick: () -> Unit) {
+fun OverflowMenuSearchItem(onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(com.lucent.app.i18n.S.searchEverything) },
         leadingIcon = { Icon(Icons.Default.TravelExplore, contentDescription = null) },
@@ -110,3 +113,69 @@ fun NotesOverflowSearchItem(onClick: () -> Unit) {
 
 /** Notes grid columns on a phone-width Android screen. */
 internal val notesGridColumns: Int = 2
+
+/**
+ * Registers the Android runtime notification permission (API 33+) request, and returns a callback
+ * that fires it only if posting isn't already allowed. Declining is never re-prompted automatically
+ * — a rationale toast explains why reminders won't alert — but the reminder preference itself is
+ * still stored either way, so the setting is recoverable once the permission is granted later rather
+ * than being silently discarded over one dialog answer.
+ */
+@Composable
+fun rememberNotificationPermissionRequester(): () -> Unit {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            LucentToast.show(context, com.lucent.app.i18n.S.notifPermissionRationale, longDuration = true)
+        }
+    }
+    return {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Notifications.canPost(context)) {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+}
+
+/**
+ * Registers Android's native, nested `DatePickerDialog` → `TimePickerDialog` flow for picking a
+ * due date/time, and returns a callback that fires it. [initialMillis] and [minMillis] are read
+ * fresh from the enclosing composable on every recomposition (this function isn't `remember`-cached),
+ * so the returned callback always opens on the current due date, not whatever it was when first
+ * composed. The floor is enforced twice: `datePicker.minDate` blocks picking an earlier calendar day
+ * outright, and `coerceAtLeast` catches the one case that slips through it (same day, earlier time
+ * of day) once a time is chosen.
+ */
+@Composable
+fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
+    val context = LocalContext.current
+    return {
+        val base = Calendar.getInstance().apply { timeInMillis = initialMillis }
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                val chosen = Calendar.getInstance().apply {
+                    timeInMillis = base.timeInMillis
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, day)
+                }
+                TimePickerDialog(
+                    context,
+                    { _, hour, minute ->
+                        chosen.set(Calendar.HOUR_OF_DAY, hour)
+                        chosen.set(Calendar.MINUTE, minute)
+                        chosen.set(Calendar.SECOND, 0)
+                        chosen.set(Calendar.MILLISECOND, 0)
+                        onChange(chosen.timeInMillis.coerceAtLeast(minMillis))
+                    },
+                    base.get(Calendar.HOUR_OF_DAY),
+                    base.get(Calendar.MINUTE),
+                    android.text.format.DateFormat.is24HourFormat(context)
+                ).show()
+            },
+            base.get(Calendar.YEAR),
+            base.get(Calendar.MONTH),
+            base.get(Calendar.DAY_OF_MONTH)
+        ).apply { datePicker.minDate = minMillis }.show()
+    }
+}
