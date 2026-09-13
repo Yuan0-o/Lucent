@@ -3,10 +3,16 @@ package com.lucent.app.ui
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import com.lucent.app.data.Attachment
 import com.lucent.desktop.platform.DesktopFiles
 import com.lucent.desktop.platform.DesktopShare
+import com.lucent.desktop.platform.LucentDateTimePickerFlow
 import java.io.File
 
 /**
@@ -66,18 +72,19 @@ fun OnAppHidden(action: () -> Unit) {
  * as a leading line, when present) to the clipboard and confirm with a toast. Matches
  * [DesktopShare.shareText]'s own call shape exactly — this just gives shared code a bare top-level
  * `shareText(...)` that resolves to it, the same way the Android seam gives one that pops the share
- * sheet.
+ * sheet. [chooserTitle] is unused here (there is no chooser to title) but kept in the signature so
+ * both platforms take the same call.
  */
-fun shareText(context: Context, subject: String? = null, text: String) =
+fun shareText(context: Context, subject: String? = null, text: String, chooserTitle: String) =
     DesktopShare.shareText(context, subject = subject, text = text)
 
 /**
- * The notes screen's overflow menu has no "search everything" entry on desktop: the sidebar already
- * carries a dedicated Search destination, so repeating it here would be redundant. A deliberate
- * per-platform difference, not a missing feature — see the Android implementation.
+ * The notes/tasks screens' overflow menu has no "search everything" entry on desktop: the sidebar
+ * already carries a dedicated Search destination, so repeating it here would be redundant. A
+ * deliberate per-platform difference, not a missing feature — see the Android implementation.
  */
 @Composable
-fun NotesOverflowSearchItem(onClick: () -> Unit) {
+fun OverflowMenuSearchItem(onClick: () -> Unit) {
     // Intentionally empty.
 }
 
@@ -86,3 +93,32 @@ fun NotesOverflowSearchItem(onClick: () -> Unit) {
  * monitor rather than a phone list stretched sideways (Android stays at two).
  */
 internal val notesGridColumns: Int = 4
+
+/**
+ * Desktop has no runtime notification permission — the OS lets the app post notifications without a
+ * per-app grant — so requesting one is unnecessary. A no-op, kept purely so its call site reads the
+ * same as it does on Android.
+ */
+@Composable
+fun rememberNotificationPermissionRequester(): () -> Unit = {}
+
+/**
+ * Desktop counterpart of Android's native date/time dialogs: no OS-level picker exists, so the app
+ * ships its own Compose flow ([LucentDateTimePickerFlow]), driven by a visibility flag rather than
+ * fired imperatively. [minMillis] and [initialMillis] are read fresh on every recomposition of this
+ * function's caller, same as the Android seam.
+ */
+@Composable
+fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
+    var showPicker by remember { mutableStateOf(false) }
+    if (showPicker) {
+        LucentDateTimePickerFlow(
+            initialMillis = initialMillis,
+            minMillis = minMillis,
+            is24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current),
+            onDismiss = { showPicker = false },
+            onConfirm = { millis -> showPicker = false; onChange(millis) }
+        )
+    }
+    return { showPicker = true }
+}
