@@ -2253,7 +2253,7 @@ fun NotesScreen(active: Boolean = true) {
                             // no such sheet, so it copies to the clipboard and confirms with a toast
                             // (DesktopShare.shareText). Either way it's entirely local — no account, no
                             // Lucent server, no link that outlives the tap.
-                            shareText(context, subject = note.title.ifBlank { "Note" }, text = shareTextForNote(note))
+                            shareText(context, subject = note.title.ifBlank { "Note" }, text = shareTextForNote(note), chooserTitle = com.lucent.app.i18n.S.shareNoteChooser)
                         }) {
                             Icon(Icons.Default.Share, contentDescription = com.lucent.app.i18n.S.actionShare, tint = onGradient)
                         }
@@ -2624,9 +2624,9 @@ fun NotesScreen(active: Boolean = true) {
                                     // difference, not a capability gap: on Android this menu is the only
                                     // route to global search, so it's here. On desktop the sidebar
                                     // already carries a dedicated Search destination, so repeating it in
-                                    // this menu would be redundant — NotesOverflowSearchItem is a no-op
+                                    // this menu would be redundant — OverflowMenuSearchItem is a no-op
                                     // there. See each platform's PlatformNotes.kt.
-                                    NotesOverflowSearchItem(onClick = { showOverflowMenu = false; showSearch = true })
+                                    OverflowMenuSearchItem(onClick = { showOverflowMenu = false; showSearch = true })
                                     DropdownMenuItem(
                                         text = { Text(com.lucent.app.i18n.S.screenArchivedNotes) },
                                         leadingIcon = { Icon(Icons.Default.Inventory2, contentDescription = null) },
