@@ -32,11 +32,75 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/**
+ * A pending function-call confirmation: a short header, a one-line summary of what will happen,
+ * and — when the call has one — the single argument the user may correct before approving.
+ *
+ * [editKey] null means the action is a plain yes/no (a delete, a pin, a completion). When it is
+ * non-null the modal shows a text field pre-filled with [editValue]; approving with a changed
+ * value rewrites that argument and runs the corrected call. See [AppTools.editableArgument].
+ *
+ * Top-level (P1-2) rather than nested in [AssistantControllerImpl] or [AssistantController]
+ * because it is genuinely shared by both: the impl builds it, the object's delegated property
+ * exposes it, and [AssistantUiState] carries it — nesting it in either would make the other
+ * qualify every reference for no benefit.
+ */
+data class PendingConfirmation(
+    val actionTitle: String,
+    val details: String,
+    val toolName: String,
+    // Every argument worth reviewing before the call runs, in display order (B-group task 3).
+    // Empty for a plain yes/no action (a delete, a pin, a completion), which shows no form.
+    val edits: List<AppTools.EditableArgument> = emptyList(),
+    // Non-null when the call would create or edit a note/task the app can open. It no longer
+    // drives an "approve and then fine-tune" button — the fine-tuning now happens BEFORE
+    // anything is written — but it still tells the dialog it is looking at a whole item rather
+    // than a single field, which is what earns the fuller layout.
+    val editorKind: EditorKind? = null
+)
+
+/** The kind of item an approved call would create or edit, for the dialog's editor entry. */
+enum class EditorKind { NOTE, TASK }
+
+/**
+ * One immutable snapshot of every piece of assistant state a screen reads, collected behind a
+ * single [kotlinx.coroutines.flow.StateFlow] (P1-2 step 1) so it can be observed with no Compose
+ * runtime and no Android environment — which is what makes it possible to write a plain JVM test
+ * for the send → tool-call → confirm → persist chain (see `AssistantControllerTest`).
+ *
+ * Every field here mirrors an existing top-level property of [AssistantControllerImpl] one for
+ * one; see that property's own doc comment for what it means and who reads it. This class adds no
+ * new meaning of its own, only a way to read all of them at once.
+ *
+ * [AssistantControllerImpl] (and the [AssistantController] object that delegates to it) still
+ * expose every one of these as its own Compose-observable property too, completely unchanged from
+ * before this refactor — every existing screen (`AssistantScreen` on both platforms,
+ * `AssistantConfirmationDialog`, `MainActivity`) reads them directly today and relies on that for
+ * recomposition, and none of those call sites should have to change for this. [state] is an
+ * ADDITIONAL way to read the same data, not a replacement for those properties; new code —
+ * including the tests this refactor exists for — should prefer it.
+ */
+data class AssistantUiState(
+    val sending: Boolean = false,
+    val errorText: String = "",
+    val errorConversationId: Long? = null,
+    val networkErrorMessage: String? = null,
+    val pendingConfirmation: PendingConfirmation? = null,
+    val messages: List<ChatMessage> = emptyList(),
+    val currentConversationId: Long? = null,
+    val conversations: List<ChatConversation> = emptyList(),
+    val localTurnInFlight: Boolean = false,
+    val variantSelection: Map<Long, Int> = emptyMap()
+)
 
 /**
  * Owns the assistant's send/stream lifecycle *outside* of any composable, so a reply keeps
@@ -54,17 +118,51 @@ import kotlinx.coroutines.sync.withLock
  * Tool results carry a success flag. If the model produces no text of its own, the reply falls
  * back to a clean confirmation on success, or to the tool's honest failure message on failure —
  * never to the raw bracketed tool summary.
+ *
+ * ### P1-2: state surface + dependency injection
+ * This class used to be `object AssistantController` itself — a true process-wide singleton that
+ * reached for `AppDatabase.getInstance(...)`, the `LlmClient` object, and a lazily-latched
+ * [Context] field directly. That is exactly what made the send → tool-call → confirm → persist
+ * chain impossible to exercise from a JVM test: there was no seam to put a fake behind. [db],
+ * [llmClient] and [context] are constructor parameters instead now, which is what lets a test build
+ * a fully-formed instance with no Android environment and no real network — see
+ * `AssistantControllerTest`. [state] (above, [AssistantUiState]) is the other half: every piece of
+ * state a screen reads, collected behind one [StateFlow] a non-Compose test can observe.
+ *
+ * The `object AssistantController` below this class is what every existing screen still calls —
+ * it owns exactly one of these and forwards every call to it, so none of those call sites changed.
  */
-object AssistantController {
+class AssistantControllerImpl(
+    // Flow observation used to run on a hardcoded `SupervisorJob() + Dispatchers.Main.immediate`.
+    // The object below still builds it exactly that way, so production behaviour is unchanged;
+    // injecting it is what lets a test supply a scope that never touches a platform Main
+    // dispatcher (registered via kotlinx-coroutines-swing here, which a plain JVM test process
+    // has no running event loop for) at all.
+    private val appScope: CoroutineScope,
+    private val db: AppDatabase,
+    private val llmClient: AssistantLlmClient,
+    // Kept as a plain Context rather than narrowed to e.g. "a files directory": besides the
+    // database, this class hands it to Haptics, GenerationService, LocalLlm, LocalModelStore,
+    // StartupLog, AssistantDraftBridge and AppTools.execute, several of which use it for more than
+    // file paths. Narrowing it would mean widening this refactor into all of those too.
+    private val context: Context
+) {
 
-    // Flow observation (message/conversation streams) stays on the main dispatcher.
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Flow observation (message/conversation streams) stays on whatever dispatcher [appScope] was
+    // built with. The object below constructs [appScope] with Dispatchers.Main.immediate, so this
+    // is behaviourally identical to the field this replaced.
+    private val scope: CoroutineScope = appScope
 
     // Generation runs on its own process-lifetime scope on a background dispatcher, deliberately NOT
     // tied to any composable or the Activity. Leaving the Assistant tab, or the app going to the
     // background, disposes the screen but not this scope, so a reply keeps generating and saving to
     // the database (issue 17). A foreground service (see GenerationService) additionally keeps the
     // process alive while a reply is in flight so the OS is far less likely to kill it.
+    //
+    // Deliberately NOT derived from [appScope]: Dispatchers.Default needs no platform service and
+    // works the same in production and in a test, so there is nothing to gain from routing it
+    // through the injected scope, and every reason to leave the one line that matters here
+    // unchanged from before this refactor.
     private val genScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Typewriter cadence (issue 11). One code point is revealed every [REVEAL_STEP_MS], which reads
@@ -72,8 +170,8 @@ object AssistantController {
     // because the unit is a glyph, not a word. For long replies the whole text is already buffered,
     // so [stepFor] widens the stride to clear a big backlog smoothly instead of crawling, keeping the
     // *visible speed* consistent whether the reply is one line or twenty.
-    private const val REVEAL_STEP_MS = 22L
-    private const val MAX_TOOL_ROUNDS = 6
+    private val REVEAL_STEP_MS = 22L
+    private val MAX_TOOL_ROUNDS = 6
 
     // ---- Observable UI state (read from AssistantScreen composition) ----
     //
@@ -98,51 +196,30 @@ object AssistantController {
     /** Whether [conversationId]'s in-flight LOCAL reply is waiting on the model load. */
     fun loadingModelFor(conversationId: Long?): Boolean = turnFor(conversationId)?.loadingModel == true
 
-    var errorText by mutableStateOf("")
+    // P1-2: SyncedState (defined near the end of this class) is a drop-in replacement for
+    // mutableStateOf that additionally republishes AssistantUiState on every write, which is what
+    // keeps `state` a faithful mirror of these fields with no other line in this file needing to
+    // change — every existing `errorText = "..."`-style assignment already runs through this.
+    var errorText by SyncedState("")
         private set
     // The conversation the inline error banner belongs to. With several turns possible, a
     // background turn's failure must show up in ITS conversation, not under whichever chat the
     // user happens to be reading; the screen compares this id before rendering [errorText].
-    var errorConversationId by mutableStateOf<Long?>(null)
+    var errorConversationId by SyncedState<Long?>(null)
         private set
     // A genuine connectivity failure (not an HTTP/status error), surfaced as a modal rather than an
     // inline banner (issue 19). Null when there's nothing to show.
-    var networkErrorMessage by mutableStateOf<String?>(null)
+    var networkErrorMessage by SyncedState<String?>(null)
         private set
     // A tool call awaiting the user's explicit yes/no (issue 13). Non-null means the confirm modal
     // is up and the generation coroutine is parked on the user's decision.
-    var pendingConfirmation by mutableStateOf<PendingConfirmation?>(null)
+    var pendingConfirmation by SyncedState<PendingConfirmation?>(null)
     // v2.7.4: a proposal the user parked via "keep refining with the assistant". The proposal is
     // remembered (and injected into the next turn's system prompt) so that after the user answers
     // "what should change" the model re-proposes the action with their adjustments instead of
     // dropping it - and never reports "added" for something that wasn't.
     private var refinementContext: String? = null
         private set
-
-    /**
-     * A pending function-call confirmation: a short header, a one-line summary of what will happen,
-     * and — when the call has one — the single argument the user may correct before approving.
-     *
-     * [editKey] null means the action is a plain yes/no (a delete, a pin, a completion). When it is
-     * non-null the modal shows a text field pre-filled with [editValue]; approving with a changed
-     * value rewrites that argument and runs the corrected call. See [AppTools.editableArgument].
-     */
-    data class PendingConfirmation(
-        val actionTitle: String,
-        val details: String,
-        val toolName: String,
-        // Every argument worth reviewing before the call runs, in display order (B-group task 3).
-        // Empty for a plain yes/no action (a delete, a pin, a completion), which shows no form.
-        val edits: List<AppTools.EditableArgument> = emptyList(),
-        // Non-null when the call would create or edit a note/task the app can open. It no longer
-        // drives an "approve and then fine-tune" button — the fine-tuning now happens BEFORE
-        // anything is written — but it still tells the dialog it is looking at a whole item rather
-        // than a single field, which is what earns the fuller layout.
-        val editorKind: EditorKind? = null
-    )
-
-    /** The kind of item an approved call would create or edit, for the dialog's editor entry. */
-    enum class EditorKind { NOTE, TASK }
 
     /** The user's answer to a confirmation, plus any edits they made to the proposed arguments. */
     private data class ConfirmationOutcome(
@@ -161,7 +238,7 @@ object AssistantController {
         val refine: Boolean = false
     )
 
-    var messages by mutableStateOf<List<ChatMessage>>(emptyList())
+    var messages by SyncedState<List<ChatMessage>>(emptyList())
         private set
     private var messagesJob: Job? = null
 
@@ -187,6 +264,10 @@ object AssistantController {
             // The keep-alive service spans ALL turns: up with the first, down with the last.
             if (first) startGenerationService(assistantName)
         }
+        // `sending`/`localTurnInFlight` are derived from `turns`; a plain SnapshotStateList mutation
+        // like add()/remove() doesn't go through a property setter, so unlike the SyncedState fields
+        // above, this one call site (and unregisterTurn's below) has to publish explicitly.
+        publishState()
     }
 
     private fun unregisterTurn(turn: Turn) {
@@ -194,11 +275,15 @@ object AssistantController {
             turns.remove(turn)
             if (turns.isEmpty()) stopGenerationService()
         }
+        publishState()
     }
 
     // Held so background work (haptics, the foreground service) has an application context even when
-    // no composable is currently alive.
-    private var appContextRef: Context? = null
+    // no composable is currently alive. Starts equal to the constructor-injected [context] (P1-2)
+    // rather than null: every call site below that reassigns or null-checks this still works
+    // unchanged, since in production a reassignment is always to that same application context, and
+    // it is simply never null to begin with now.
+    private var appContextRef: Context? = context
 
     // Several turns can want a confirmation at once now; the modal is one. Turns take this mutex
     // for the whole ask-and-wait, so questions are posed one at a time in arrival order, and
@@ -210,18 +295,17 @@ object AssistantController {
     // The conversation currently shown/active. Null until resolved on first load (we pick the
     // most-recent conversation, or lazily create one when the first message is sent). Everything
     // the assistant screen renders and everything send() writes is scoped to this id.
-    var currentConversationId by mutableStateOf<Long?>(null)
+    var currentConversationId by SyncedState<Long?>(null)
         private set
 
 
     // The list of all conversations, for the switcher UI. Most-recent first.
-    var conversations by mutableStateOf<List<ChatConversation>>(emptyList())
+    var conversations by SyncedState<List<ChatConversation>>(emptyList())
         private set
     private var conversationsJob: Job? = null
 
     fun ensureMessagesLoaded(appContext: Context) {
         appContextRef = appContext.applicationContext
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         if (conversationsJob == null) {
             conversationsJob = scope.launch {
                 db.chatConversationDao().getAll().collect { conversations = it }
@@ -271,7 +355,6 @@ object AssistantController {
         // history the user just cleared. Stop them all silently and land on the fresh greeting
         // (task 4).
         stopAllGeneration(silent = true)
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         currentConversationId = null
         // Every conversation an error could have belonged to is gone; clear unconditionally.
         clearError()
@@ -332,7 +415,6 @@ object AssistantController {
         // when it finishes — each turn owns its state outright and the screen looks turns up by
         // conversation id, so nothing can leak into the fresh chat.
         localTurnOrNull()?.let { stopTurn(it, silent = true) }
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         currentConversationId = null
         // Errors are tagged with the conversation they belong to and shown only there, so an error
         // from some other chat's turn must SURVIVE this navigation for the user to find. The one
@@ -360,7 +442,6 @@ object AssistantController {
             if (localTurn.conversationId == id) return
             stopTurn(localTurn)
         }
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         currentConversationId = id
         // Deliberately NOT clearing errorText here (the old single-turn code did): errors are
         // tagged with the conversation they belong to and rendered only there, so clearing on
@@ -387,7 +468,6 @@ object AssistantController {
         // OTHER conversations, local or cloud, are left alone: deleting an unrelated chat is no
         // reason to lose an answer.
         turnFor(id)?.let { stopTurn(it, silent = true) }
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         // An error belonging to the deleted chat disappears together with it (issue 14); one
         // belonging to some other conversation survives, to be seen there.
         if (errorConversationId == id) clearError()
@@ -407,7 +487,6 @@ object AssistantController {
      * is intentionally avoided so renaming doesn't reshuffle the list order.
      */
     fun renameConversation(appContext: Context, id: Long, newTitle: String) {
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         scope.launch {
             db.chatConversationDao().getById(id)?.let { conv ->
                 val title = newTitle.trim().ifBlank { conv.title }
@@ -438,7 +517,6 @@ object AssistantController {
      */
     fun deleteMessages(appContext: Context, ids: Set<Long>) {
         if (ids.isEmpty()) return
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         AppScope.io.launch {
             try {
                 db.chatDao().deleteByIds(ids.toList())
@@ -550,7 +628,6 @@ object AssistantController {
         val marker = reason ?: com.lucent.app.i18n.S.replyStopped
         if (!turn.turnPersisted && convId != null && ctx != null) {
             turn.turnPersisted = true
-            val db = AppDatabase.getInstance(ctx)
             val body = if (cleaned.isBlank()) marker else "$cleaned\n\n$marker"
             val tokens = TokenEstimator.estimate(body)
             AppScope.io.launch { insertAssistant(db, convId, body, null, null, tokens) }
@@ -647,7 +724,13 @@ object AssistantController {
      * stream's last chunk, a stopping local decode's last token) carries a stale epoch and is
      * dropped rather than contaminating the round that replaced it.
      */
-    private class Turn(
+    // P1-2: inner (not a plain nested class) because its methods reach outer-instance members
+    // (appContextRef, genScope, typingHapticsOn, currentConversationId, REVEAL_STEP_MS, stepFor) —
+    // see resetStream/completionBuzz below. That worked with a bare qualified name
+    // (`AssistantController.appContextRef`) while the outer type was a singleton object; now that
+    // it is an instance of AssistantControllerImpl (potentially more than one, e.g. in tests), Turn
+    // needs an actual reference to ITS OUTER INSTANCE, which is exactly what `inner` provides.
+    private inner class Turn(
         // Null only for a send into a brand-new conversation, until the row is lazily created;
         // resolved — and never changed again — the moment the id exists.
         initialConversationId: Long?,
@@ -706,8 +789,8 @@ object AssistantController {
                 typewriterJob = null
                 return
             }
-            val ctx = AssistantController.appContextRef
-            typewriterJob = AssistantController.genScope.launch {
+            val ctx = appContextRef
+            typewriterJob = genScope.launch {
                 // Within one epoch the buffer is strictly append-only (onDelta only appends, and
                 // every path that clears it also cancels this job first), so a copied-out String is
                 // always a valid prefix of the live buffer. The old loop did buffer.toString() on
@@ -729,7 +812,7 @@ object AssistantController {
                         snapshot = synchronized(lock) { buffer.toString() }
                     }
                     val len = snapshot.length
-                    val step = AssistantController.stepFor(len - shown)
+                    val step = stepFor(len - shown)
                     var moved = 0
                     while (moved < step && shown < len) {
                         val cp = snapshot.codePointAt(shown)
@@ -742,12 +825,12 @@ object AssistantController {
                     // keep the device vibrating for as long as it types — so a turn may only buzz
                     // while it IS the conversation being looked at.
                     if (ctx != null &&
-                        AssistantController.typingHapticsOn &&
-                        conversationId == AssistantController.currentConversationId
+                        typingHapticsOn &&
+                        conversationId == currentConversationId
                     ) {
                         Haptics.typingTick(ctx)
                     }
-                    delay(AssistantController.REVEAL_STEP_MS)
+                    delay(REVEAL_STEP_MS)
                 }
             }
         }
@@ -793,9 +876,9 @@ object AssistantController {
         fun completionBuzz() {
             typewriterJob?.cancel()
             typewriterJob = null
-            if (!AssistantController.typingHapticsOn) return
-            if (conversationId != AssistantController.currentConversationId) return
-            AssistantController.appContextRef?.let { Haptics.finishBuzz(it) }
+            if (!typingHapticsOn) return
+            if (conversationId != currentConversationId) return
+            appContextRef?.let { Haptics.finishBuzz(it) }
         }
     }
 
@@ -857,6 +940,7 @@ object AssistantController {
         )
         // Show the new answer as it arrives; the older one is still reachable from the switcher.
         variantSelection.remove(message.id)
+        publishState()
     }
 
     /**
@@ -873,6 +957,7 @@ object AssistantController {
     /** Page to a specific variant within one answer group. */
     fun selectVariant(replyToId: Long, index: Int) {
         variantSelection[replyToId] = index
+        publishState()
     }
 
     fun send(
@@ -941,7 +1026,6 @@ object AssistantController {
             errorConversationId = null
         }
         networkErrorMessage = null
-        val db = AppDatabase.getInstance(appContext.applicationContext)
         // First turn in brings the keep-alive service up; the last one out takes it down.
         registerTurn(turn, name)
 
@@ -1068,7 +1152,7 @@ object AssistantController {
                     // Bind this round's deltas to the epoch armed above: late arrivals from a
                     // cancelled stream can then never contaminate a newer turn's buffer.
                     val roundEpoch = turn.streamEpoch
-                    val result = LlmClient.streamChat(
+                    val result = llmClient.streamChat(
                         url, spec, key, model, history, systemPrompt, tools
                     ) { delta -> turn.onDelta(roundEpoch, delta) }
 
@@ -1230,7 +1314,7 @@ object AssistantController {
                         turn.thinking = true
                         turn.resetStream(reveal = false)
                         val forcedEpoch = turn.streamEpoch
-                        val forced = LlmClient.streamChat(
+                        val forced = llmClient.streamChat(
                             url, spec, key, model, history, systemPrompt, emptyList()
                         ) { delta -> turn.onDelta(forcedEpoch, delta) }
                         if (forced.isFailure) {
@@ -1982,9 +2066,235 @@ object AssistantController {
      * when the HIGH memory tier is selected (R3 report). A quarter of the full budget: still a
      * real cross-chat memory, small enough for a model with a tight context window.
      */
-    private const val SMALL_MODEL_CROSS_BUDGET = 10
+    private val SMALL_MODEL_CROSS_BUDGET = 10
 
-    
+    // -----------------------------------------------------------------------------------------
+    // P1-2 step 1 — the AssistantUiState surface.
+    //
+    // _state/state/publishState are the only genuinely new pieces of machinery this refactor
+    // adds; everything above this point is the pre-existing implementation, either untouched or
+    // (per the comments at each change) adjusted to keep working as a constructor-injected class
+    // instead of a singleton object.
+    // -----------------------------------------------------------------------------------------
 
+    private val _state = MutableStateFlow(AssistantUiState())
 
+    /** See [AssistantUiState]'s own doc comment for what this is and how it relates to the individual properties above. */
+    val state: StateFlow<AssistantUiState> = _state.asStateFlow()
+
+    /**
+     * Rebuild [state] from the live fields above. Called from every place those fields actually
+     * change — [SyncedState]'s [SyncedState.setValue] for the seven that are simple `var`s, plus
+     * [registerTurn]/[unregisterTurn] and [selectVariant]/[resend] by hand, since a
+     * [androidx.compose.runtime.snapshots.SnapshotStateList]/`SnapshotStateMap` mutation
+     * (`add`/`remove`/`set` on [turns]/[variantSelection]) doesn't go through a property setter
+     * the way a `var x = y` assignment does.
+     */
+    private fun publishState() {
+        _state.value = AssistantUiState(
+            sending = sending,
+            errorText = errorText,
+            errorConversationId = errorConversationId,
+            networkErrorMessage = networkErrorMessage,
+            pendingConfirmation = pendingConfirmation,
+            messages = messages,
+            currentConversationId = currentConversationId,
+            conversations = conversations,
+            localTurnInFlight = localTurnInFlight,
+            variantSelection = variantSelection.toMap()
+        )
+    }
+
+    /**
+     * A `var ... by SyncedState(default)` behaves exactly like `by mutableStateOf(default)` for
+     * every existing reader — get/set both go through a real Compose [MutableState] ([backing]),
+     * so a direct property read inside a composable (every screen in this app reads [errorText],
+     * [pendingConfirmation], [messages], [currentConversationId] and [conversations] directly,
+     * not through [state]) keeps recomposing exactly as it did before this refactor. The one
+     * thing it adds is calling [publishState] on every write, which is what keeps [state] a
+     * faithful mirror with no OTHER line in this file needing to change: every existing
+     * `errorText = "..."`-style assignment already runs through this delegate.
+     *
+     * `inner` so it can reach [publishState] on the enclosing [AssistantControllerImpl] instance.
+     */
+    private inner class SyncedState<T>(initial: T) {
+        private val backing = mutableStateOf(initial)
+        operator fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>): T = backing.value
+        operator fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: T) {
+            backing.value = value
+            publishState()
+        }
+    }
+}
+
+/**
+ * The facade every existing screen calls — `MainActivity`, `AssistantScreen` and `SettingsScreen`
+ * on both platforms, `AssistantConfirmDialog` — completely unchanged by the P1-2 refactor. It owns
+ * exactly one [AssistantControllerImpl] and forwards every call to it.
+ *
+ * ### Why a lazily-built instance instead of one built eagerly at object-init time
+ *
+ * This object has no constructor — it is still a singleton `object`, precisely so none of the
+ * existing call sites have to change — so it has no way to be handed a [Context] up front. That
+ * was already true before this refactor: [AssistantControllerImpl.appContextRef] (née this
+ * object's own field) started `null` and was only ever populated by the first caller that had a
+ * real [Context] to give it, typically [ensureMessagesLoaded]. [impl] mirrors that exactly: the
+ * first Context-bearing call builds the one [AssistantControllerImpl] instance and every call
+ * after that — Context-bearing or not — reuses it.
+ *
+ * ### Why the no-Context members can't just call [impl]
+ *
+ * Properties like [state] or functions like [resolveConfirmation] take no [Context] and are only
+ * ever meaningful after some earlier call already built [backing] (a confirmation can't be
+ * pending, for instance, before a [send] has run). Rather than invent a placeholder [Context] to
+ * force-construct one, these fall back to a harmless default ([fallbackState], an empty
+ * [AssistantUiState]) or a no-op, exactly matching what the pre-refactor code already did in this
+ * situation — e.g. the old [resolveConfirmation] guarded its draft-clear with
+ * `appContextRef?.let { ... }`, a silent no-op when nothing had run yet.
+ */
+object AssistantController {
+
+    @Volatile private var backing: AssistantControllerImpl? = null
+
+    private fun impl(appContext: Context): AssistantControllerImpl {
+        backing?.let { return it }
+        synchronized(this) {
+            backing?.let { return it }
+            val created = AssistantControllerImpl(
+                appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+                db = AppDatabase.getInstance(appContext.applicationContext),
+                llmClient = RealAssistantLlmClient,
+                context = appContext.applicationContext
+            )
+            backing = created
+            return created
+        }
+    }
+
+    private val fallbackState = MutableStateFlow(AssistantUiState()).asStateFlow()
+    private val fallbackVariantSelection = androidx.compose.runtime.mutableStateMapOf<Long, Int>()
+
+    // ---- Read-only derived state (no Context needed to read) ----
+
+    val sending: Boolean get() = backing?.sending ?: false
+    fun isGenerating(conversationId: Long?): Boolean = backing?.isGenerating(conversationId) ?: false
+    fun streamingTextFor(conversationId: Long?): String? = backing?.streamingTextFor(conversationId)
+    fun thinkingFor(conversationId: Long?): Boolean = backing?.thinkingFor(conversationId) ?: false
+    fun loadingModelFor(conversationId: Long?): Boolean = backing?.loadingModelFor(conversationId) ?: false
+    val localTurnInFlight: Boolean get() = backing?.localTurnInFlight ?: false
+
+    // ---- The state surface (P1-2 step 1) ----
+
+    val state: StateFlow<AssistantUiState> get() = backing?.state ?: fallbackState
+
+    // ---- Compose-observable properties every screen reads directly today ----
+    // Read-only from here exactly as before: only AssistantControllerImpl's own methods
+    // (clearError, postError, resolveConfirmation, ...) ever assign these, pendingConfirmation
+    // excepted, which was — and still is — a plain externally-settable var.
+
+    val errorText: String get() = backing?.errorText ?: ""
+    val errorConversationId: Long? get() = backing?.errorConversationId
+    val networkErrorMessage: String? get() = backing?.networkErrorMessage
+    var pendingConfirmation: PendingConfirmation?
+        get() = backing?.pendingConfirmation
+        set(value) { backing?.pendingConfirmation = value }
+    val messages: List<ChatMessage> get() = backing?.messages ?: emptyList()
+    val currentConversationId: Long? get() = backing?.currentConversationId
+    val conversations: List<ChatConversation> get() = backing?.conversations ?: emptyList()
+    val variantSelection get() = backing?.variantSelection ?: fallbackVariantSelection
+
+    // ---- Calls that carry their own Context (these build [backing] on first use) ----
+
+    fun ensureMessagesLoaded(appContext: Context) = impl(appContext).ensureMessagesLoaded(appContext)
+    fun onAllChatsCleared(appContext: Context) = impl(appContext).onAllChatsCleared(appContext)
+    fun startNewConversation(appContext: Context) = impl(appContext).startNewConversation(appContext)
+    fun switchConversation(appContext: Context, id: Long) = impl(appContext).switchConversation(appContext, id)
+    fun deleteConversation(appContext: Context, id: Long) = impl(appContext).deleteConversation(appContext, id)
+    fun renameConversation(appContext: Context, id: Long, newTitle: String) =
+        impl(appContext).renameConversation(appContext, id, newTitle)
+    fun deleteMessages(appContext: Context, ids: Set<Long>) = impl(appContext).deleteMessages(appContext, ids)
+
+    fun resend(
+        appContext: Context,
+        message: ChatMessage,
+        url: String,
+        spec: ApiSpec,
+        key: String,
+        model: String,
+        name: String,
+        style: String,
+        memoryTier: MemoryTier,
+        webSearchEnabled: Boolean,
+        typingHapticsEnabled: Boolean,
+        useLocalModel: Boolean,
+        useLocalTools: Boolean,
+        useLocalGpu: Boolean,
+        confirmTools: Boolean,
+        smallModelMode: Boolean
+    ) = impl(appContext).resend(
+        appContext, message, url, spec, key, model, name, style, memoryTier, webSearchEnabled,
+        typingHapticsEnabled, useLocalModel, useLocalTools, useLocalGpu, confirmTools, smallModelMode
+    )
+
+    fun send(
+        appContext: Context,
+        text: String,
+        attachmentMime: String?,
+        attachmentData: String?,
+        attachmentName: String?,
+        url: String,
+        spec: ApiSpec,
+        key: String,
+        model: String,
+        name: String,
+        style: String,
+        memoryTier: MemoryTier,
+        webSearchEnabled: Boolean,
+        typingHapticsEnabled: Boolean = true,
+        insertUserMessage: Boolean = true,
+        useLocalModel: Boolean = false,
+        useLocalTools: Boolean = false,
+        useLocalGpu: Boolean = false,
+        confirmTools: Boolean = true,
+        smallModelMode: Boolean = false,
+        answersMessageId: Long = 0,
+        targetConversationId: Long? = null,
+        attachmentListJson: String? = null,
+        attachments: List<com.lucent.app.data.Attachment> = emptyList()
+    ) = impl(appContext).send(
+        appContext = appContext, text = text, attachmentMime = attachmentMime,
+        attachmentData = attachmentData, attachmentName = attachmentName, url = url, spec = spec,
+        key = key, model = model, name = name, style = style, memoryTier = memoryTier,
+        webSearchEnabled = webSearchEnabled, typingHapticsEnabled = typingHapticsEnabled,
+        insertUserMessage = insertUserMessage, useLocalModel = useLocalModel,
+        useLocalTools = useLocalTools, useLocalGpu = useLocalGpu, confirmTools = confirmTools,
+        smallModelMode = smallModelMode, answersMessageId = answersMessageId,
+        targetConversationId = targetConversationId, attachmentListJson = attachmentListJson,
+        attachments = attachments
+    )
+
+    // ---- Calls with no Context: no-ops until some earlier call has built [backing] ----
+
+    fun clearError() { backing?.clearError() }
+    fun clearNetworkError() { backing?.clearNetworkError() }
+
+    fun resolveConfirmation(approved: Boolean, edits: Map<String, String> = emptyMap(), refine: Boolean = false) {
+        backing?.resolveConfirmation(approved, edits, refine)
+    }
+
+    fun stopGeneration(reason: String? = null, silent: Boolean = false) {
+        backing?.stopGeneration(reason, silent)
+    }
+
+    fun stopAllGeneration(reason: String? = null, silent: Boolean = false) {
+        backing?.stopAllGeneration(reason, silent)
+    }
+
+    fun onAppBackgrounded(backgroundRepliesEnabled: Boolean) {
+        backing?.onAppBackgrounded(backgroundRepliesEnabled)
+    }
+
+    fun retryLast() { backing?.retryLast() }
+
+    fun selectVariant(replyToId: Long, index: Int) { backing?.selectVariant(replyToId, index) }
 }
