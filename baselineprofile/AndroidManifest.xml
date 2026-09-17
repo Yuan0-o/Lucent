@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Deliberately near-empty: this is a com.android.test module, so AGP generates the
+     <instrumentation> tag and package attribution from the `android { }` block in
+     build.gradle.kts (namespace, targetProjectPath) rather than from anything declared here.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
