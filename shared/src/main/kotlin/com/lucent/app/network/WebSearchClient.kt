@@ -106,7 +106,7 @@ object WebSearchClient {
 
         val sb = StringBuilder()
         sb.append("Web search results for \"").append(trimmed).append("\":\n")
-        if (hasInstant) sb.append("\nSummary: ").append(instant!!.trim()).append("\n")
+        if (hasInstant) sb.append("\nSummary: ").append(instant.trim()).append("\n")
         if (results.isNotEmpty()) {
             sb.append("\nTop results:\n")
             results.take(MAX_RESULTS).forEachIndexed { i, r ->

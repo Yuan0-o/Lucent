@@ -69,6 +69,50 @@ object LlmClient {
         }
     }
 
+    /**
+     * P2-2: one text's embedding vector from a cloud provider. Deliberately narrower than the rest
+     * of this file — there is no [ProviderAdapter] member for this because only [ApiSpec.OPENAI]
+     * (and OpenAI-compatible endpoints, which is most of what users actually point [baseUrl] at) is
+     * implemented. [ApiSpec.ANTHROPIC] has no public embeddings endpoint to call, and
+     * [ApiSpec.GOOGLE]'s `embedContent` uses a different request/response shape entirely — rather
+     * than guess at either and risk silently storing a garbage vector, both return
+     * [Result.failure] with a message the caller can surface as-is. Extending this to Google is the
+     * natural next step if it turns out to matter; it needs its own request/response handling, not
+     * a guess bolted onto this one.
+     *
+     * This function's only caller is expected to be [com.lucent.app.data.EmbeddingProvider], which
+     * is also where the "does the user even want note text leaving the device" decision is made —
+     * this function itself has no opinion about that, it just makes the one HTTP call it's asked to.
+     */
+    suspend fun fetchEmbedding(
+        baseUrl: String,
+        spec: ApiSpec,
+        apiKey: String,
+        model: String,
+        text: String
+    ): Result<FloatArray> = withContext(Dispatchers.IO) {
+        if (spec != ApiSpec.OPENAI) {
+            return@withContext Result.failure(
+                UnsupportedOperationException("Cloud embeddings aren't implemented for $spec yet.")
+            )
+        }
+        try {
+            val url = baseUrl.trimEnd('/') + "/embeddings"
+            val body = JSONObject().put("model", model).put("input", text)
+            val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
+            adapterFor(spec).addAuthHeaders(requestBuilder, apiKey)
+            val response = client.newCall(requestBuilder.build()).execute()
+            val bodyStr = response.body?.string() ?: ""
+            if (!response.isSuccessful) return@withContext Result.failure(Exception("HTTP ${response.code}: $bodyStr"))
+            val json = JSONObject(bodyStr)
+            val embeddingJson = json.getJSONArray("data").getJSONObject(0).getJSONArray("embedding")
+            val vec = FloatArray(embeddingJson.length()) { i -> embeddingJson.getDouble(i).toFloat() }
+            Result.success(vec)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun sendChat(
         baseUrl: String, spec: ApiSpec, apiKey: String, model: String,
         history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>
