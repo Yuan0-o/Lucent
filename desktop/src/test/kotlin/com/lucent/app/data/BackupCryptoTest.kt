@@ -28,7 +28,7 @@ class BackupCryptoTest {
         assertTrue(BackupCrypto.looksEncrypted(blob))
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)
-        assertEquals(BackupCrypto.Mode.APP_KEY, header!!.mode)
+        assertEquals(BackupCrypto.Mode.APP_KEY, header.mode)
         assertFalse(header.needsPassword)
         assertContentEquals(payload, BackupCrypto.decrypt(blob, password = null))
     }
@@ -40,7 +40,7 @@ class BackupCryptoTest {
         val blob = BackupCrypto.encrypt(payload, password = "hunter2-secret")
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)
-        assertEquals(BackupCrypto.Mode.PASSWORD, header!!.mode)
+        assertEquals(BackupCrypto.Mode.PASSWORD, header.mode)
         assertTrue(header.needsPassword)
         assertContentEquals(payload, BackupCrypto.decrypt(blob, password = "hunter2-secret"))
     }
@@ -118,7 +118,7 @@ class BackupCryptoTest {
         val blob = BackupCrypto.encrypt(payload, password = "pw", recovery = envelope)
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)
-        assertTrue(header!!.needsPassword)
+        assertTrue(header.needsPassword)
         assertTrue(header.hasRecovery)
         assertEquals("Your first pet?", header.recovery?.question)
         assertContentEquals(envelope.salt, header.recovery?.salt)
@@ -138,7 +138,7 @@ class BackupCryptoTest {
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)
         // APP_KEY mode never carries a recovery envelope: the key is not a secret worth wrapping.
-        assertNull(header!!.recovery)
+        assertNull(header.recovery)
         assertFalse(header.hasRecovery)
         assertContentEquals(payload, BackupCrypto.decrypt(blob, password = null))
     }
@@ -151,7 +151,7 @@ class BackupCryptoTest {
         val blob = BackupCrypto.encrypt(payload, password = null)
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)
-        assertEquals(16, header!!.salt.size)
+        assertEquals(16, header.salt.size)
         assertTrue(header.iterations > 0)
     }
 }
