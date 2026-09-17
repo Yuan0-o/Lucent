@@ -831,6 +831,13 @@ ENTRIES = [
     # =====================================================================================
     # Settings — Memory & web page
     # =====================================================================================
+    # P2-2
+    ("embeddingProviderTitle", "Semantic search", "语义搜索", "セマンティック検索", "의미 기반 검색"),
+    ("embeddingProviderDesc", "How the assistant finds notes by meaning instead of exact words — used by recall_notes, e.g. \"what did I write about the Osaka trip\".", "助手按含义而非精确字词查找笔记的方式——用于语义回忆，例如「我写过关于大阪旅行的什么」。", "アシスタントが正確な単語ではなく意味でノートを見つける方法です。例:「大阪旅行について何を書いたか」。", "어시스턴트가 정확한 단어가 아닌 의미로 노트를 찾는 방식입니다. 예: \"오사카 여행에 대해 뭐라고 썼더라\"."),
+    ("embeddingProviderLocalTitle", "On-device", "本机", "デバイス上", "기기 내"),
+    ("embeddingProviderLocalDesc", "Nothing ever leaves your device. Not available in this build yet.", "任何内容都不会离开你的设备。此版本暂未提供。", "何もデバイスの外に出ません。このビルドではまだ利用できません。", "아무것도 기기 밖으로 나가지 않습니다. 이 빌드에서는 아직 사용할 수 없습니다."),
+    ("embeddingProviderCloudTitle", "Cloud", "云端", "クラウド", "클라우드"),
+    ("embeddingProviderCloudDesc", "Uses your configured AI provider. Note text is sent to it to generate each vector.", "使用你配置的 AI 服务商。笔记文本会被发送给它以生成每个向量。", "設定済みのAIプロバイダーを使用します。各ベクトルを生成するためにノートのテキストが送信されます。", "설정된 AI 제공업체를 사용합니다. 각 벡터를 생성하기 위해 노트 텍스트가 전송됩니다."),
     ("memoryCostTitle", "Memory & cost", "记忆与成本", "記憶とコスト", "메모리와 비용"),
     ("memoryCostDesc", "How much past conversation is sent with each message. More memory gives better continuity but costs more tokens per reply. Changing this never deletes anything — your messages are always saved.", "决定每条消息随附多少历史对话。记忆越多，连贯性越好，但每次回复消耗的 token 也越多。更改此设置不会删除任何内容——你的消息始终会被保存。", "各メッセージと一緒に送る過去の会話量です。多いほど文脈は保たれますが、返信ごとのトークン消費も増えます。この設定を変えても何も削除されません。メッセージは常に保存されます。", "각 메시지와 함께 보내는 과거 대화의 양입니다. 많을수록 맥락은 좋아지지만 답변당 토큰 비용이 늘어납니다. 이 설정을 바꿔도 아무것도 삭제되지 않으며 메시지는 항상 저장됩니다."),
     ("memoryLowTitle", "Low · single message", "低 · 单条消息", "低 · 1メッセージのみ", "낮음 · 단일 메시지"),
