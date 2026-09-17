@@ -1,3 +1,4 @@
+import org.jetbrains.compose.ComposeBuildConfig
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 // ============================================================================================
@@ -47,12 +48,15 @@ dependencies {
     // The Compose for Desktop bundle for whatever OS the build runs on (Windows in CI). Pulls in the
     // runtime, ui, foundation, material and material3 for the desktop (Skiko) backend.
     implementation(compose.desktop.currentOs)
-    implementation(compose.material3)
-    // Extended Material icons. The shared UI uses a wide set of them (Icons.Default.*,
-    // Icons.AutoMirrored.Filled.*). This accessor tracks the Compose plugin's aligned version; if CI
-    // can't resolve it, pin the explicit coordinate instead (see the work report's first-run notes):
-    //   implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
-    implementation(compose.materialIconsExtended)
+    // compose.material3 (Gradle plugin alias) is deprecated in favour of a direct coordinate.
+    // material3's version is decoupled from the Compose Multiplatform plugin version, so it's read
+    // from ComposeBuildConfig.composeMaterial3Version rather than pinned in the catalog — this is
+    // the same value the now-deprecated alias resolved to internally.
+    implementation("org.jetbrains.compose.material3:material3:${ComposeBuildConfig.composeMaterial3Version}")
+    // compose.materialIconsExtended (Gradle plugin alias) is also deprecated. Unlike material3, this
+    // artifact is intentionally frozen upstream at 1.7.3 (no newer version is published for it), so
+    // it's pinned explicitly via the catalog rather than tracked dynamically.
+    implementation(libs.compose.material.icons.extended)
 
     // Coroutines: -core is the engine; -swing supplies Dispatchers.Main on the desktop (the Swing/AWT
     // event thread Compose for Desktop renders on). Versions live in the catalogue (P0-5) — unified
