@@ -34,7 +34,7 @@ class RecoverableSecretTest {
         val blob = RecoverableSecret.seal(materialA, "key-from-device-a".toByteArray())
         assertNotNull(blob)
         // Device B must NOT be able to recover A's key — this is what makes the blob device-bound.
-        assertNull(RecoverableSecret.open(materialB, blob!!))
+        assertNull(RecoverableSecret.open(materialB, blob))
     }
 
     @Test
@@ -65,6 +65,6 @@ class RecoverableSecretTest {
         // what is exercised here; a zero-length key string must seal and open cleanly.
         val blob = RecoverableSecret.seal(materialA, ByteArray(0))
         assertNotNull(blob)
-        assertEquals(0, RecoverableSecret.open(materialA, blob!!)!!.size)
+        assertEquals(0, RecoverableSecret.open(materialA, blob)!!.size)
     }
 }
