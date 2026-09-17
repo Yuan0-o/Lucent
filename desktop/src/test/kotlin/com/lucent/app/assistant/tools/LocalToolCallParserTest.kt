@@ -25,7 +25,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("create_task", call!!.name)
+        assertEquals("create_task", call.name)
         assertTrue(call.argsJson.contains("Buy milk"))
     }
 
@@ -39,7 +39,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("complete_task", call!!.name)
+        assertEquals("complete_task", call.name)
     }
 
     @Test
@@ -49,7 +49,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("list_tasks", call!!.name)
+        assertEquals("list_tasks", call.name)
     }
 
     @Test
@@ -59,7 +59,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("read_note", call!!.name)
+        assertEquals("read_note", call.name)
         assertTrue(call.argsJson.contains("Trip"))
     }
 
@@ -70,7 +70,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("create_note", call!!.name)
+        assertEquals("create_note", call.name)
         assertTrue(call.argsJson.contains("A note"))
     }
 
@@ -81,7 +81,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("update_note", call!!.name)
+        assertEquals("update_note", call.name)
         assertTrue(call.argsJson.contains("New"))
     }
 
@@ -93,7 +93,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("create_task", call!!.name)
+        assertEquals("create_task", call.name)
     }
 
     @Test
@@ -103,7 +103,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertEquals("list_tasks", call!!.name)
+        assertEquals("list_tasks", call.name)
     }
 
     @Test
@@ -147,7 +147,7 @@ class LocalToolCallParserTest {
         val rendered = LocalToolCallParser.renderLocalToolCall(call)
         val reparsed = LocalToolCallParser.parseLocalToolCall(rendered, valid)
         assertNotNull(reparsed)
-        assertEquals("create_task", reparsed!!.name)
+        assertEquals("create_task", reparsed.name)
         assertTrue(reparsed.argsJson.contains("Buy milk"))
         assertTrue(reparsed.argsJson.contains("high"))
     }
@@ -159,7 +159,7 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(call)
-        assertTrue(call!!.argsJson.contains("Real"))
+        assertTrue(call.argsJson.contains("Real"))
         assertTrue(!call.argsJson.contains("due"))
         assertTrue(!call.argsJson.contains("priority"))
         assertTrue(!call.argsJson.contains("repeat"))
@@ -173,14 +173,14 @@ class LocalToolCallParserTest {
             valid
         )
         assertNotNull(spaced)
-        assertEquals("create_task", spaced!!.name)
+        assertEquals("create_task", spaced.name)
 
         val dashed = LocalToolCallParser.parseLocalToolCall(
             """{"tool": "create-task", "arguments": {"title": "x"}}""",
             valid
         )
         assertNotNull(dashed)
-        assertEquals("create_task", dashed!!.name)
+        assertEquals("create_task", dashed.name)
     }
 
     @Test
