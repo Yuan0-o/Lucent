@@ -77,7 +77,7 @@ object AppTools {
      * an explicit confirm before it executes.
      */
     private val READ_ONLY_TOOLS = setOf(
-        "list_notes", "read_note", "list_tasks", "read_task", "search_items", "web_search",
+        "list_notes", "read_note", "list_tasks", "read_task", "search_items", "recall_notes", "web_search",
         "read_attachment", "list_note_versions", "list_trash", "list_drafts"
     )
 
@@ -616,6 +616,13 @@ object AppTools {
             params = listOf(
                 ToolParam("query", "string", "The search query, e.g. \"budget tag:work\" or \"priority:high due:week\""),
                 ToolParam("type", "string", "What to search: notes, tasks, or both. Defaults to both.", required = false)
+            )
+        ),
+        ToolDefinition(
+            name = "recall_notes",
+            description = "Find notes by MEANING rather than exact wording — use this for a vague or conceptual question like \"what did I write about the Osaka trip\" where you don't know the exact words the note uses. Prefer search_items instead whenever the user gives you specific words, tags, or filters to match. May report that it isn't available yet, depending on the user's embedding provider setting — if so, fall back to search_items with your best guess at keywords.",
+            params = listOf(
+                ToolParam("query", "string", "A natural-language description of what to find, e.g. \"notes about the Osaka trip\"")
             )
         )
     )
@@ -1799,6 +1806,47 @@ object AppTools {
                             taskHits.forEach { sb.append("- ").append(summarize(it)).append("\n") }
                         }
                         ToolExecResult(sb.toString().trim())
+                    }
+                }
+            }
+
+            "recall_notes" -> {
+                val query = args.optString("query", "")
+                if (query.isBlank()) {
+                    ToolExecResult("No query was provided.", success = false)
+                } else {
+                    when (val outcome = com.lucent.app.data.EmbeddingProvider.embed(appContext, query)) {
+                        is com.lucent.app.data.EmbeddingProvider.Outcome.Unavailable -> ToolExecResult(
+                            "${outcome.reason} Try search_items with your best-guess keywords instead.",
+                            success = false
+                        )
+                        is com.lucent.app.data.EmbeddingProvider.Outcome.Failed -> ToolExecResult(
+                            "Semantic search failed: ${outcome.error.message ?: outcome.error.toString()}. " +
+                                "Try search_items with your best-guess keywords instead.",
+                            success = false
+                        )
+                        is com.lucent.app.data.EmbeddingProvider.Outcome.Success -> {
+                            val hits = com.lucent.app.data.EmbeddingStore.search(
+                                appContext, outcome.vector, outcome.model, topK = 8
+                            )
+                            // EmbeddingStore doesn't know about trash/hidden/draft state — a note can
+                            // sit trashed for up to 30 days (see the delete_note tool's own note)
+                            // with its embedding still on disk, since only a hard delete's trigger
+                            // (MIGRATION_18_19) clears it. Filter the same way every other read tool
+                            // in this file does, and re-apply the similarity order afterwards since
+                            // getByIds does not promise to preserve it.
+                            val byId = db.noteDao().getByIds(hits.map { it.noteId })
+                                .filter { it.trashedAt == null && !it.hidden && !it.isDraft }
+                                .associateBy { it.id }
+                            val ranked = hits.mapNotNull { byId[it.noteId] }
+                            if (ranked.isEmpty()) {
+                                ToolExecResult("Nothing seems related to \"$query\".")
+                            } else {
+                                val sb = StringBuilder("Notes related to \"$query\" (${ranked.size}):\n")
+                                ranked.forEach { sb.append("- ").append(summarize(it)).append("\n") }
+                                ToolExecResult(sb.toString().trim())
+                            }
+                        }
                     }
                 }
             }
