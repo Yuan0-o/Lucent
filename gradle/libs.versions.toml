@@ -46,6 +46,24 @@ androidxTestExtJunit = "1.3.0"
 sqliteJdbc = "3.53.4.0"
 pdfbox = "3.0.8"
 jnaPlatform = "5.19.0"
+# P2-4: installs :app's generated Baseline Profile into ART at runtime. Required specifically
+# because Lucent ships as a directly-downloaded/sideloaded APK (GitHub Releases), not through
+# Google Play — there's no Play-side "cloud profile" precompilation step to fall back on here, so
+# without this dependency the profile that :baselineprofile generates would sit in the APK unused.
+# 1.4.1 is the current latest (checked against
+# https://developer.android.com/jetpack/androidx/releases/profileinstaller — no release since).
+profileInstaller = "1.4.1"
+# compose.materialIconsExtended (Gradle-plugin alias) is deprecated; org.jetbrains.compose.material:
+# material-icons-extended is intentionally frozen at 1.7.3 upstream (no newer version is published),
+# unlike material3 which tracks the Compose Multiplatform release and so is NOT pinned here — see the
+# ComposeBuildConfig.composeMaterial3Version reference used directly in desktop/build.gradle.kts.
+composeMaterialIconsExtended = "1.7.3"
+
+# ---- baselineprofile module only (see :baselineprofile) ----
+# Matched to the androidx.baselineprofile Gradle plugin version in the root build.gradle.kts —
+# the plugin and this macrobenchmark artifact are cut from the same androidx.benchmark release train
+# and are meant to move together.
+benchmarkMacroJunit4 = "1.5.0"
 
 [libraries]
 # ---- shared group (identical on both platforms — do not diverge) ----
@@ -83,3 +101,8 @@ androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "a
 sqlite-jdbc = { module = "io.github.willena:sqlite-jdbc", version.ref = "sqliteJdbc" }
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jnaPlatform" }
+androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "profileInstaller" }
+compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "composeMaterialIconsExtended" }
+
+# ---- baselineprofile module only ----
+benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "benchmarkMacroJunit4" }
