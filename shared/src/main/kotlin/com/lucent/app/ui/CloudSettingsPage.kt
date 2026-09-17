@@ -111,10 +111,16 @@ fun CloudSettingsPage(
 
     // The settings root already scrolls; adding verticalScroll here nested a scrollable inside a
     // scrollable and was measured with infinite constraints (crash on open). No scroll of our own.
+    //
+    // No .padding(16.dp) here either, for a related reason: the settings root Column that hosts
+    // every page (SettingsScreen.kt's rootScroll container) already applies .padding(16.dp) once,
+    // the same 16dp every other page — CloudSettingsPage included — sits inside. This page used to
+    // add a second, redundant .padding(16.dp) of its own on top of that, stacking to 32dp of inset
+    // instead of 16dp, which is why this page visibly read as narrower than every other settings
+    // page (its cards' fillMaxWidth() was filling a narrower box). fillMaxWidth() alone is correct
+    // here — it fills whatever width the root already handed down, exactly like every other page.
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack) {

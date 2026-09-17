@@ -1631,7 +1631,7 @@ class AssistantControllerImpl(
         // ask-again line — both in the user's language.
         run {
             val ft = finalText
-            if (ft != null && LocalToolCallParser.attemptedToolCallName(ft) != null) {
+            if (LocalToolCallParser.attemptedToolCallName(ft) != null) {
                 val shape = ft.trim()
                 if (shape.startsWith("{") || shape.startsWith("<tool_call") || shape.startsWith("```")) {
                     finalText = ""
