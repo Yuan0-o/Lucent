@@ -97,7 +97,7 @@ class AppToolsTest {
         val args = """{"title": "A", "due": "2026-02-01"}"""
         val first = AppTools.editableArgument("create_task", args)
         assertNotNull(first)
-        assertEquals("title", first!!.key)
+        assertEquals("title", first.key)
     }
 
     @Test
