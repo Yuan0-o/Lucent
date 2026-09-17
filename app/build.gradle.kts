@@ -4,6 +4,10 @@ plugins {
     // org.jetbrains.kotlin.android plugin is deliberately NOT applied any more.
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    // P2-4: wires this module up as the CONSUMER of :baselineprofile's generated profile. Applying
+    // this plugin is also what makes AGP create the benchmarkRelease/nonMinifiedRelease build types
+    // used to generate and verify the profile — they're not hand-declared below.
+    id("androidx.baselineprofile")
 }
 
 // ---- Versioning ----
@@ -179,7 +183,9 @@ android {
             // Where the cargo-ndk hook below drops liblucent_native.so per ABI. When the Rust
             // toolchain isn't present this directory simply stays empty and the app runs on its
             // Kotlin fallbacks — building without Rust must always keep working.
-            jniLibs.srcDir(layout.buildDirectory.dir("rustJniLibs"))
+            // srcDir(Any)/srcDirs(vararg Any) on AndroidSourceDirectorySet are deprecated (AGP 9);
+            // `directories` is the replacement mutable collection of path strings.
+            jniLibs.directories += layout.buildDirectory.dir("rustJniLibs").get().asFile.path
             // ---- The single shared source tree ----
             // The business logic and most UI live ONCE in shared/src/main/kotlin and are compiled
             // by BOTH this module and :desktop (which adds the same directory to its own source
@@ -188,7 +194,7 @@ android {
             // is gone. Only genuinely platform-bound files remain in this module's own src dir.
             // AGP 9's built-in Kotlin reads Kotlin directories from the kotlin source set, so the
             // shared tree is added there (previously it rode along via java.srcDir under KGP).
-            kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
+            kotlin.directories += rootProject.file("shared/src/main/kotlin").path
         }
         // P0-3: androidx.room.testing.MigrationTestHelper reads each version's exported schema
         // JSON from the androidTest assets at instrumentation runtime, not from the app/schemas
@@ -198,7 +204,7 @@ android {
         // separate, more important prerequisite this does NOT solve: schema JSON for versions 2-17
         // does not exist yet and a plain kspDebugKotlin run will not backfill it.
         getByName("androidTest") {
-            assets.srcDirs(files("$projectDir/schemas"))
+            assets.directories += "$projectDir/schemas"
         }
     }
 
@@ -251,6 +257,10 @@ android {
 
     buildFeatures {
         compose = true
+        // P3-2: AGP has defaulted `aidl` to false since AGP 8.0 (confirmed by search before
+        // adding this — not assumed), so app/src/main/aidl/**/*.aidl (ILocalLlmEngine,
+        // ILocalLlmCallback) silently would not compile without this line.
+        aidl = true
     }
 
     // ---- P0-6: lint as a gate, with a committed baseline ----
@@ -262,6 +272,27 @@ android {
         abortOnError = true
         baseline = file("lint-baseline.xml")
     }
+}
+
+// ---- P2-4: Baseline Profile ----
+//
+// Config only — this block cannot generate the actual profile by itself. Generation is an
+// instrumented test (see :baselineprofile) that has to run on a real device or emulator, which
+// isn't available wherever this was written. Until someone runs it once, this block is inert:
+// no baseline-prof.txt exists yet, so it changes nothing about the shipped APK.
+//
+// automaticGenerationDuringBuild is deliberately left at its default (false). Turning it on would
+// make a plain `./gradlew assembleRelease` also spin up an instrumentation test on every run —
+// including the one in .github/workflows/build.yml, which builds on ubuntu-latest with no device
+// or emulator attached. That would break the existing release workflow, not just slow it down.
+// Generation instead stays the explicit, manual step described in P2-4-BASELINE-PROFILE-NOTES.md.
+//
+// mergeIntoMain and saveInSrc are left at their (app) defaults — false and true respectively —
+// which already do the right thing here: one profile for the "release" variant (this app has no
+// product flavors to merge across), written to src/release/generated/baselineProfiles/ so it's a
+// normal file that gets committed, not a build/ intermediate that regenerates silently.
+baselineProfile {
+    automaticGenerationDuringBuild = false
 }
 
 kotlin {
@@ -380,4 +411,14 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
+
+    // P2-4: reads and installs src/release/generated/baselineProfiles/baseline-prof.txt (once it
+    // exists) into ART on first run. Needed because Lucent is sideloaded from a GitHub Release
+    // rather than distributed through Google Play, so there's no Play-side profile install path to
+    // rely on instead — see the version note in gradle/libs.versions.toml.
+    implementation(libs.androidx.profileinstaller)
+    // Points :app at :baselineprofile as the producer of that profile. This is what makes the
+    // plugin's benchmarkRelease/nonMinifiedRelease build types and the generateBaselineProfile
+    // task exist at all.
+    baselineProfile(project(":baselineprofile"))
 }
