@@ -39,6 +39,8 @@ suspend fun wipeAllData(
     db.taskDao().clearAll()
     db.chatDao().clearAll()
     db.chatConversationDao().clearAll()
+    // P2-2: a cache table, not user content, but "erase everything" should still mean everything.
+    com.lucent.app.data.EmbeddingStore.clearAll(context)
 
     // ---- Preferences ----
     repo.clearAll()
