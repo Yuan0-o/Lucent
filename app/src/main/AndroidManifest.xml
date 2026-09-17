@@ -150,11 +150,38 @@
         <!-- The short-lived foreground service that keeps a reply generating while the app is in the
              background (issue 17). foregroundServiceType="dataSync" matches the type passed to
              startForeground on Android 14+; exported=false because nothing outside the app should
-             ever start it. -->
+             ever start it.
+
+             P3-2: android:process=":llm" runs this Service — and, as of P3-2, the local-model
+             engine it now also hosts (see GenerationService.kt) — in its own process, separate
+             from the UI. This is the plain android:process attribute, NOT android:isolatedProcess:
+             the isolated engine still needs to read the .gguf files LocalModelStore manages
+             through ordinary file APIs, which a true isolatedProcess (a different UID, no shared
+             file access, tighter SELinux confinement — see the P3-2 delivery notes for the
+             research this is based on) would block. A native fault in this process (an OOM, a bad
+             Vulkan driver) can now only take down ":llm" — the main/UI process observes it via
+             ServiceConnection#onServiceDisconnected (see LocalLlmProxy.kt) instead of dying with
+             it, which is the whole point of this task. Nothing else in this manifest shares this
+             process name, so no other component is affected by this line. -->
         <service
             android:name=".GenerationService"
             android:exported="false"
+            android:process=":llm"
             android:foregroundServiceType="dataSync" />
+
+        <!-- P3-2: captures the application Context for LocalLlmProxy (the main-process side of
+             local-model process isolation) the moment this process starts, before anything else
+             in the app runs — see LocalLlmContextHolder.kt's class doc for exactly why this is
+             needed and why a ContentProvider (rather than an Application subclass, which this app
+             does not otherwise have) is the right tool. No android:process override, so — per
+             Android's documented behaviour — this is instantiated only in the app's default
+             process; the isolated ":llm" process above never creates it and does not need to,
+             since GenerationService already has a Context of its own. Holds no data and answers
+             no queries, so exported=false and a plain, package-scoped authority are all it needs. -->
+        <provider
+            android:name=".local.LocalLlmInitProvider"
+            android:authorities="${applicationId}.localllminit"
+            android:exported="false" />
 
         <!-- Hands out content:// URIs for attachments the user wants to open in another app, save to
              their device, or share. Attachments are stored encrypted (chunked AES-256-GCM), and no
