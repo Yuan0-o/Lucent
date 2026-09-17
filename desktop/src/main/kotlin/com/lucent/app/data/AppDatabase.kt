@@ -16,6 +16,7 @@ class AppDatabase private constructor(db: Db) {
     private val chats = ChatDao(db)
     private val conversations = ChatConversationDao(db)
     private val notebooks = NotebookDao(db)
+    private val noteEmbeddings = NoteEmbeddingDao(db)
 
     fun noteDao(): NoteDao = notes
     fun taskDao(): TaskDao = tasks
@@ -24,6 +25,7 @@ class AppDatabase private constructor(db: Db) {
     fun chatDao(): ChatDao = chats
     fun chatConversationDao(): ChatConversationDao = conversations
     fun notebookDao(): NotebookDao = notebooks
+    fun noteEmbeddingDao(): NoteEmbeddingDao = noteEmbeddings
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

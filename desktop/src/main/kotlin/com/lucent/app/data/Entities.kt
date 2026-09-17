@@ -158,3 +158,38 @@ data class NotebookItem(
         const val KIND_TASK = "TASK"
     }
 }
+
+/**
+ * P2-2 (data layer only): one cached embedding vector for a note, keyed by which model produced it.
+ * Desktop twin of the Android `@Entity` — see MIGRATION_18_19's KDoc on the Android side for the
+ * full reasoning (composite key, no foreign key, the AFTER-DELETE trigger, and why this table is
+ * deliberately excluded from `.lcb` backups). [vec] is the raw float vector serialized as bytes (4
+ * bytes per dimension, little-endian) — see EmbeddingStore for the encode/decode and the similarity
+ * search that reads it back out.
+ */
+data class NoteEmbedding(
+    val noteId: Long,
+    val model: String,
+    val dim: Int,
+    val vec: ByteArray,
+    val updatedAt: Long
+) {
+    // Same reasoning as the Android entity: ByteArray does not get content equals/hashCode for
+    // free from a data class, and reference equality on two independently-decoded arrays is never
+    // what a caller means.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is NoteEmbedding) return false
+        return noteId == other.noteId && model == other.model && dim == other.dim &&
+            vec.contentEquals(other.vec) && updatedAt == other.updatedAt
+    }
+
+    override fun hashCode(): Int {
+        var result = noteId.hashCode()
+        result = 31 * result + model.hashCode()
+        result = 31 * result + dim
+        result = 31 * result + vec.contentHashCode()
+        result = 31 * result + updatedAt.hashCode()
+        return result
+    }
+}

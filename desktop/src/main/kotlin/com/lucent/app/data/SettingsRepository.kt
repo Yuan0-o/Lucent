@@ -103,6 +103,10 @@ class SettingsRepository(private val context: Context) {
         const val CLOUD_URL = "cloud_url"
         const val CLOUD_USER = "cloud_user"
         const val CLOUD_PASSWORD_ENC = "cloud_password_enc"
+        // P2-2: which embedding backend note_embeddings vectors are generated with. "local"
+        // (default) never sends note text anywhere; "cloud" means the configured LLM provider's
+        // embedding endpoint sees it. See EmbeddingProvider.kt for the values this key takes.
+        const val EMBEDDING_PROVIDER = "embedding_provider"
         const val CLOUD_FOLDER = "cloud_folder"
         const val CLOUD_AUTO_BACKUP = "cloud_auto_backup"
         const val LINKS_ENABLED = "links_enabled"
@@ -502,6 +506,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloudUser(value: String) { edit { it[K.CLOUD_USER] = value } }
     val cloudPasswordEnc: Flow<String> = state.map { str(it, K.CLOUD_PASSWORD_ENC) ?: "" }
     suspend fun setCloudPasswordEnc(value: String) { edit { it[K.CLOUD_PASSWORD_ENC] = value } }
+    /** "local" (default, on-device, nothing leaves the device) or "cloud" (opt-in). */
+    val embeddingProvider: Flow<String> = state.map { str(it, K.EMBEDDING_PROVIDER) ?: "local" }
+    suspend fun setEmbeddingProvider(value: String) { edit { it[K.EMBEDDING_PROVIDER] = value } }
     val cloudFolder: Flow<String> = state.map { str(it, K.CLOUD_FOLDER) ?: "Lucent" }
     suspend fun setCloudFolder(value: String) { edit { it[K.CLOUD_FOLDER] = value } }
     val cloudAutoBackup: Flow<Boolean> = state.map { bool(it, K.CLOUD_AUTO_BACKUP) ?: false }

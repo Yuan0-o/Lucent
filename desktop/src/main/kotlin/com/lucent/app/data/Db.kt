@@ -83,7 +83,7 @@ class Db private constructor(private val connection: Connection) {
          * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
          * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
          */
-        internal const val SCHEMA_VERSION = 18
+        internal const val SCHEMA_VERSION = 19
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -422,6 +422,29 @@ class Db private constructor(private val connection: Connection) {
                             }
                             true
                         }
+                        // v19 (P2-2, data layer only — no embedding generation lands with this
+                        // migration): note_embeddings, a cache table for semantic search vectors.
+                        // See the matching MIGRATION_18_19 KDoc on the Android side for the full
+                        // reasoning (composite key so more than one model's vector can coexist per
+                        // note, no foreign key — this schema doesn't use them anywhere, same as the
+                        // FTS5 tables just above — and the AFTER-DELETE trigger that is this table's
+                        // explicit cleanup instead). Deliberately excluded from .lcb backups: a
+                        // vector is reconstructible from the note text, which is already backed up.
+                        19 -> {
+                            conn.createStatement().use { st ->
+                                st.executeUpdate(
+                                    "CREATE TABLE IF NOT EXISTS note_embeddings (" +
+                                        "noteId INTEGER NOT NULL, model TEXT NOT NULL, dim INTEGER NOT NULL, " +
+                                        "vec BLOB NOT NULL, updatedAt INTEGER NOT NULL, " +
+                                        "PRIMARY KEY (noteId, model))"
+                                )
+                                st.executeUpdate(
+                                    "CREATE TRIGGER IF NOT EXISTS note_embeddings_cleanup AFTER DELETE ON notes BEGIN " +
+                                        "DELETE FROM note_embeddings WHERE noteId = old.id; END"
+                                )
+                            }
+                            true
+                        }
                         else -> true   // no step for this version
                     }
                 } catch (t: Throwable) {
@@ -617,6 +640,23 @@ class Db private constructor(private val connection: Connection) {
                 st.executeUpdate(
                     "CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(" +
                         "title, notes, content='tasks', content_rowid='id')"
+                )
+                // v19 — note_embeddings cache table for semantic search (P2-2, data layer only).
+                // Created for fresh installs; see MIGRATION_18_19's Android-side KDoc for the full
+                // reasoning. Unlike the FTS5 tables just above, the cleanup trigger IS included
+                // here even though nothing reads this table yet either — an orphaned embedding row
+                // is silent, load-bearing-looking cruft the moment the feature that reads this table
+                // lands, so there is no reason to defer it the way the (still fully inert) FTS5
+                // sync triggers were for a fresh install.
+                st.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS note_embeddings (" +
+                        "noteId INTEGER NOT NULL, model TEXT NOT NULL, dim INTEGER NOT NULL, " +
+                        "vec BLOB NOT NULL, updatedAt INTEGER NOT NULL, " +
+                        "PRIMARY KEY (noteId, model))"
+                )
+                st.executeUpdate(
+                    "CREATE TRIGGER IF NOT EXISTS note_embeddings_cleanup AFTER DELETE ON notes BEGIN " +
+                        "DELETE FROM note_embeddings WHERE noteId = old.id; END"
                 )
                 // The version stamp moved to migrateSchema, which is the only place that knows the
                 // store is genuinely at the current shape. Stamping here would mark an existing

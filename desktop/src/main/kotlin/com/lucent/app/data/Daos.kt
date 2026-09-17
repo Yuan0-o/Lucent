@@ -35,6 +35,14 @@ private fun noteOf(rs: ResultSet) = Note(
     bodySpans = rs.getString("bodySpans") ?: ""
 )
 
+private fun noteEmbeddingOf(rs: ResultSet) = NoteEmbedding(
+    noteId = rs.getLong("noteId"),
+    model = rs.getString("model"),
+    dim = rs.getInt("dim"),
+    vec = rs.getBytes("vec"),
+    updatedAt = rs.getLong("updatedAt")
+)
+
 private fun taskOf(rs: ResultSet) = Task(
     id = rs.getLong("id"),
     title = rs.getString("title"),
@@ -271,6 +279,59 @@ class NoteDao internal constructor(private val db: Db) {
                 st.executeUpdate("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')")
             }
         }
+    }
+}
+
+/**
+ * P2-2 (data layer only): read/write access to [NoteEmbedding] rows. Desktop twin of the Android
+ * Room DAO of the same name — same names, same signatures. [getForModel] is the one the similarity
+ * search actually uses — see EmbeddingStore, which does the cosine-similarity ranking in shared/ so
+ * this DAO only has to hand back rows, never rank them.
+ */
+class NoteEmbeddingDao internal constructor(private val db: Db) {
+
+    suspend fun upsert(embedding: NoteEmbedding): Unit = db.write("note_embeddings") { c ->
+        c.prepareStatement(
+            "INSERT OR REPLACE INTO note_embeddings (noteId, model, dim, vec, updatedAt) VALUES (?, ?, ?, ?, ?)"
+        ).apply {
+            setLong(1, embedding.noteId)
+            setString(2, embedding.model)
+            setInt(3, embedding.dim)
+            setBytes(4, embedding.vec)
+            setLong(5, embedding.updatedAt)
+        }.executeUpdate()
+        Unit
+    }
+
+    /** Every stored vector for [model], for a similarity search against that model's space. */
+    suspend fun getForModel(model: String): List<NoteEmbedding> = db.use { c ->
+        c.prepareStatement("SELECT * FROM note_embeddings WHERE model = ?").apply { setString(1, model) }
+            .executeQuery().mapAll(::noteEmbeddingOf)
+    }
+
+    /** Every model a note currently has a cached vector for — used to decide what's stale. */
+    suspend fun getForNote(noteId: Long): List<NoteEmbedding> = db.use { c ->
+        c.prepareStatement("SELECT * FROM note_embeddings WHERE noteId = ?").apply { setLong(1, noteId) }
+            .executeQuery().mapAll(::noteEmbeddingOf)
+    }
+
+    suspend fun delete(noteId: Long, model: String): Unit = db.write("note_embeddings") { c ->
+        c.prepareStatement("DELETE FROM note_embeddings WHERE noteId = ? AND model = ?").apply {
+            setLong(1, noteId)
+            setString(2, model)
+        }.executeUpdate()
+        Unit
+    }
+
+    /** Drops every vector for one model — for when a model is retired or replaced. */
+    suspend fun deleteAllForModel(model: String): Unit = db.write("note_embeddings") { c ->
+        c.prepareStatement("DELETE FROM note_embeddings WHERE model = ?").apply { setString(1, model) }.executeUpdate()
+        Unit
+    }
+
+    suspend fun clearAll(): Unit = db.write("note_embeddings") { c ->
+        c.createStatement().use { st -> st.executeUpdate("DELETE FROM note_embeddings") }
+        Unit
     }
 }
 
