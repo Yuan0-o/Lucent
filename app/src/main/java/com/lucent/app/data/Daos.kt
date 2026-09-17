@@ -3,6 +3,7 @@ package com.lucent.app.data
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.SkipQueryVerification
 import androidx.room.Update
@@ -155,6 +156,35 @@ interface NoteDao {
     @SkipQueryVerification
     @Query("SELECT * FROM notes_fts WHERE notes_fts = 'rebuild'")
     suspend fun rebuildFts(): List<String>
+}
+
+/**
+ * P2-2 (data layer only): read/write access to [NoteEmbedding] rows. [getForModel] is the one the
+ * similarity search actually uses — see EmbeddingStore, which does the cosine-similarity ranking in
+ * shared/ so this DAO only has to hand back rows, never rank them.
+ */
+@Dao
+interface NoteEmbeddingDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(embedding: NoteEmbedding)
+
+    /** Every stored vector for [model], for a similarity search against that model's space. */
+    @Query("SELECT * FROM note_embeddings WHERE model = :model")
+    suspend fun getForModel(model: String): List<NoteEmbedding>
+
+    /** Every model a note currently has a cached vector for — used to decide what's stale. */
+    @Query("SELECT * FROM note_embeddings WHERE noteId = :noteId")
+    suspend fun getForNote(noteId: Long): List<NoteEmbedding>
+
+    @Query("DELETE FROM note_embeddings WHERE noteId = :noteId AND model = :model")
+    suspend fun delete(noteId: Long, model: String)
+
+    /** Drops every vector for one model — for when a model is retired or replaced. */
+    @Query("DELETE FROM note_embeddings WHERE model = :model")
+    suspend fun deleteAllForModel(model: String)
+
+    @Query("DELETE FROM note_embeddings")
+    suspend fun clearAll()
 }
 
 /**

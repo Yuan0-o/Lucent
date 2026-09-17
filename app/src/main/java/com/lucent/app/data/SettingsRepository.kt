@@ -134,6 +134,10 @@ private object SettingsKeys {
     val CLOUD_URL = stringPreferencesKey("cloud_url")
     val CLOUD_USER = stringPreferencesKey("cloud_user")
     val CLOUD_PASSWORD_ENC = stringPreferencesKey("cloud_password_enc")
+    // P2-2: which embedding backend note_embeddings vectors are generated with. "local" (default)
+    // never sends note text anywhere; "cloud" means the configured LLM provider's embedding
+    // endpoint sees it. See EmbeddingProvider.kt for the values this key actually takes.
+    val EMBEDDING_PROVIDER = stringPreferencesKey("embedding_provider")
     val CLOUD_FOLDER = stringPreferencesKey("cloud_folder")
     val CLOUD_AUTO_BACKUP = booleanPreferencesKey("cloud_auto_backup")
 
@@ -757,6 +761,13 @@ class SettingsRepository(private val context: Context) {
     val cloudProvider: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PROVIDER] ?: "Nutstore" }
     suspend fun setCloudProvider(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PROVIDER] = value }
+    }
+    /** "local" (default, on-device, nothing leaves the device) or "cloud" (opt-in). */
+    val embeddingProvider: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.EMBEDDING_PROVIDER] ?: "local"
+    }
+    suspend fun setEmbeddingProvider(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.EMBEDDING_PROVIDER] = value }
     }
     val cloudUrl: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_URL] ?: "" }
     suspend fun setCloudUrl(value: String) {

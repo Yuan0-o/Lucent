@@ -76,6 +76,43 @@ data class Note(
     val doodle: String = ""
 )
 
+/**
+ * P2-2 (data layer only): one cached embedding vector for a note, keyed by which model produced it
+ * — see MIGRATION_18_19's doc comment for the full reasoning (composite key, no foreign key, the
+ * AFTER-DELETE trigger that keeps this table from outliving its notes, and why it is deliberately
+ * excluded from `.lcb` backups). [vec] is the raw float vector serialized as bytes (4 bytes per
+ * dimension, little-endian) — see EmbeddingStore for the encode/decode and the similarity search
+ * that reads it back out. Written and read only by EmbeddingStore; nothing else should touch this
+ * table directly.
+ */
+@Entity(tableName = "note_embeddings", primaryKeys = ["noteId", "model"])
+data class NoteEmbedding(
+    val noteId: Long,
+    val model: String,
+    val dim: Int,
+    val vec: ByteArray,
+    val updatedAt: Long
+) {
+    // Room needs equals/hashCode for its own change-detection machinery; the default data-class
+    // ones would compare `vec` (a ByteArray) by reference, which is always false for two separately
+    // decoded arrays with identical content. Content equality is what every actual caller means.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is NoteEmbedding) return false
+        return noteId == other.noteId && model == other.model && dim == other.dim &&
+            vec.contentEquals(other.vec) && updatedAt == other.updatedAt
+    }
+
+    override fun hashCode(): Int {
+        var result = noteId.hashCode()
+        result = 31 * result + model.hashCode()
+        result = 31 * result + dim
+        result = 31 * result + vec.contentHashCode()
+        result = 31 * result + updatedAt.hashCode()
+        return result
+    }
+}
+
 @Entity(
     tableName = "tasks",
     // Indices for the list queries (settings task 8): the active list filters isDone + trashedAt

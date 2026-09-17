@@ -356,6 +356,46 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
     }
 }
 
+/**
+ * P2-2 (data layer only — no embedding generation lands with this migration; see EmbeddingStore).
+ *
+ * `note_embeddings` holds one row per (note, embedding model): [noteId] identifies the note,
+ * [model] identifies which local or cloud embedding model produced [vec] (comparing vectors from
+ * two different models is meaningless, so the model that made a vector travels with it rather than
+ * being assumed), [dim] is `vec`'s length in floats (a cheap sanity check before any similarity
+ * math touches the blob), and [updatedAt] lets a caller decide a stored vector is stale relative to
+ * the note's own `updatedAt` without deserialising it. The composite primary key means switching
+ * embedding models does not destroy the old model's vectors — both can coexist until whichever is
+ * no longer wanted is cleaned up explicitly.
+ *
+ * No FOREIGN KEY: this schema does not use them anywhere (cleanup is deliberate and explicit, same
+ * reasoning as the FTS5 tables above). The AFTER-DELETE trigger below is that explicit cleanup —
+ * the same mechanism, on the same hook, as the notes_fts/tasks_fts triggers just above it — so a
+ * note's embeddings cannot silently outlive the note itself.
+ *
+ * This table is a cache, not a source of truth, and is treated that way end to end: it lives inside
+ * the encrypted database (Working Guide rule 4), but P0-4/BackupRoundTripTest's reflective coverage
+ * test only enforces that every *settings key* reaches BackupManifestBuilder — this is a database
+ * table, a different mechanism entirely, and rule 5 is satisfied the other way round, by *not*
+ * shipping it: a vector is reconstructible from the note text (which is already backed up) the next
+ * time embeddings run, so `.lcb` deliberately never carries this table. See EmbeddingStore's own doc
+ * comment for where that exclusion is enforced.
+ */
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `note_embeddings` (" +
+                "`noteId` INTEGER NOT NULL, `model` TEXT NOT NULL, `dim` INTEGER NOT NULL, " +
+                "`vec` BLOB NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`noteId`, `model`))"
+        )
+        db.execSQL(
+            "CREATE TRIGGER IF NOT EXISTS `note_embeddings_cleanup` AFTER DELETE ON `notes` BEGIN " +
+                "DELETE FROM `note_embeddings` WHERE `noteId` = old.id; END"
+        )
+    }
+}
+
 @Database(
     entities = [
         Note::class,
@@ -365,9 +405,10 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
         ChatMessage::class,
         ChatConversation::class,
         Notebook::class,
-        NotebookItem::class
+        NotebookItem::class,
+        NoteEmbedding::class
     ],
-    version = 18,
+    version = 19,
     // P0-3: export the schema JSON (room.schemaLocation in app/build.gradle.kts writes it to
     // app/schemas, committed) so Room can validate migrations mechanically instead of relying on
     // hand-written MIGRATION_* objects and a reviewer's eyes.
@@ -381,6 +422,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun chatConversationDao(): ChatConversationDao
     abstract fun notebookDao(): NotebookDao
+    abstract fun noteEmbeddingDao(): NoteEmbeddingDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -420,7 +462,7 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                     MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-                    MIGRATION_16_17, MIGRATION_17_18
+                    MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
                 )
                 // dropAllTables = true preserves the old no-arg behaviour (every table is
                 // recreated) while using the non-deprecated overload.
