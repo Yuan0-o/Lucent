@@ -478,7 +478,7 @@ private fun ZoomableImage(
         return ((drawnW - vw).coerceAtLeast(0f) / 2f) to ((drawnH - vh).coerceAtLeast(0f) / 2f)
     }
 
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+    val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceIn(1f, 6f)
         val (maxX, maxY) = panLimits()
         offsetX = (offsetX + panChange.x).coerceIn(-maxX, maxX)

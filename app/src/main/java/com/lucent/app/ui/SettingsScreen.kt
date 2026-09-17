@@ -1,21 +1,15 @@
 package com.lucent.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,21 +23,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -62,7 +52,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -70,26 +59,35 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.AppLock
 import com.lucent.app.data.AttachmentLimits
-import com.lucent.app.data.BiometricAuth
 import com.lucent.app.data.BackupManager
 import com.lucent.app.data.FontStore
-import com.lucent.app.data.MemoryTier
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.ShareIntegration
 import com.lucent.app.data.StartupLog
-import com.lucent.app.i18n.AppLanguage
 import com.lucent.app.i18n.S
 import com.lucent.app.local.LocalLlm
 import com.lucent.app.local.LocalModelStore
-import com.lucent.app.network.ApiSpec
-import com.lucent.app.network.LlmClient
+import com.lucent.app.ui.settings.ApiSettingsPage
+import com.lucent.app.ui.settings.AppearanceSettingsPage
+import com.lucent.app.ui.settings.AssistantSettingsPage
+import com.lucent.app.ui.settings.BackgroundSettingsPage
+import com.lucent.app.ui.settings.DataSettingsPage
+import com.lucent.app.ui.settings.EditorSettingsPage
+import com.lucent.app.ui.settings.LanguageSettingsPage
+import com.lucent.app.ui.settings.LocalModelSettingsPage
+import com.lucent.app.ui.settings.MemorySettingsPage
+import com.lucent.app.ui.settings.NetworkSettingsPage
+import com.lucent.app.ui.settings.PersonalizationSettingsPage
+import com.lucent.app.ui.settings.PrivacySettingsPage
+import com.lucent.app.ui.settings.RootSettingsPage
+import com.lucent.app.ui.settings.SecuritySettingsPage
+import com.lucent.app.ui.settings.ThemeSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -117,22 +115,13 @@ import androidx.compose.ui.text.style.TextAlign
 //   - LocalModel: the on-device GGUF assistant — import, enable, inspect, delete. It lives under
 //     Assistant beside API and Memory, because it IS an assistant backend: the fourth answer to
 //     "where do replies come from".
-private enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data }
 
 /** Which kind of item the selective Markdown-export picker is currently choosing. */
-private enum class ExportKind { NOTES, TASKS }
+internal enum class ExportKind { NOTES, TASKS }
 
 /** Sentinel distinguishing "wrong password, try again" from "this file is damaged". */
 private const val WRONG_PASSWORD = "__wrong_password__"
-
-/**
- * The vertical gap between two frosted cards on a settings page (round R2, task 1).
- *
- * Named rather than repeated as a literal because the bug it fixes was a *missing* gap:
- * spacing that lives in one place can be forgotten in one place, and a card boundary with
- * no space around it does not look like a mistake, it looks like one taller card.
- */
-private val CARD_GAP = 24.dp
 
 // ModalBottomSheet (the post-restore result sheet) is still experimental in Material 3.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -149,39 +138,14 @@ fun SettingsScreen(active: Boolean = true) {
     val savedSpec by repo.apiSpec.collectAsState(initial = "openai")
     val savedKey by repo.apiKey.collectAsState(initial = "")
     val savedModel by repo.model.collectAsState(initial = "")
-    val savedTheme by repo.themeMode.collectAsState(initial = "system")
-    val savedPalette by repo.palette.collectAsState(initial = "SUNSET")
     val savedFont by repo.font.collectAsState(initial = "system")
     val savedAssistantName by repo.assistantName.collectAsState(initial = "Lucent")
     val savedAssistantStyle by repo.assistantStyle.collectAsState(initial = "")
-    val savedMemoryTier by repo.memoryTier.collectAsState(initial = MemoryTier.DEFAULT.key)
-    val savedWebSearch by repo.webSearchEnabled.collectAsState(initial = false)
-    val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = true)
-    val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(initial = true)
-    // Small-model mode (B-group task 4), plus the one-shot warning shown when switching it ON.
-    val savedSmallModelMode by repo.smallModelModeEnabled.collectAsState(initial = false)
+    // One-shot warning shown when small-model mode is switched on (B-group task 4); the switch's
+    // own state is read directly from SettingsRepository by MemorySettingsPage now.
     var showSmallModelWarn by remember { mutableStateOf(false) }
-    // Editor: whether note bodies are treated as Markdown. Off by default. See SettingsRepository.
-    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = false)
-    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
-    // Editor: whether links are active (task 8). A sub-toggle of Markdown — only live when both are
-    // on. Defaults to OFF (opt-in).
-    val linksEnabled by repo.linksEnabled.collectAsState(initial = false)
-    // Whether the drifting background animates (background on/off task). Default on.
-    val backgroundAnimationEnabled by repo.backgroundAnimationEnabled.collectAsState(initial = true)
-    // Task 2 — Material You dynamic colour (Android 12+ wallpaper palette). Whether the user has
-    // switched it on in Appearance; `dynamicColorSupported` gates the whole feature on the OS the
-    // app is running on (API < 31 devices show the row disabled with an unsupported hint instead).
-    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = false)
-    val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    // The in-app UI language (localization task). "system" resolves against the device locale.
-    val savedLanguage by repo.appLanguage.collectAsState(initial = "system")
     // Whether the assistant answers with the imported on-device model (local-model task).
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
-    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = false)
-    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = false)
-    // Whether a local reply survives the app going to the background (task 2). Off by default.
-    val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(initial = false)
 
     // Working copies of the *active* profile's connection fields, used by the API editor page.
     // These mirror the flat saved values; the API page saves through saveApiProfiles (which also
@@ -225,22 +189,12 @@ fun SettingsScreen(active: Boolean = true) {
     var models by remember { mutableStateOf(listOf<String>()) }
     var loading by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf("") }
-    var menuExpanded by remember { mutableStateOf(false) }
     var backupStatus by remember { mutableStateOf("") }
 
     // --- Privacy toggles: App Lock (task 2), System integration (task 6), Startup logging (task 15) ---
     val appLockOn by repo.appLockEnabled.collectAsState(initial = false)
-    // Biometric unlock: whether the device can do it (checked once) and whether the user opted in.
-    // The toggle for it is shown in Security only when the lock is on AND the hardware is available.
-    val biometricAvailable = remember { BiometricAuth.isAvailable(context) }
-    val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = false)
-    val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(initial = false)
-    val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = false)
 
     // ---- C-group tasks 1, 3, 6, 18 ----
-    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = false)
-    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = false)
-    val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = false)
     val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
     )
@@ -368,8 +322,6 @@ fun SettingsScreen(active: Boolean = true) {
     var selfDestructTyped by remember { mutableStateOf("") }
     // Result of the on-demand at-rest encryption self-check (task 17). Null = not run yet.
     var encryptionCheckResult by remember { mutableStateOf<String?>(null) }
-    val noteHistoryOn by repo.noteHistoryEnabled.collectAsState(initial = true)
-    val taskHistoryOn by repo.taskHistoryEnabled.collectAsState(initial = true)
     // Task 3.1 — the self-check result used to stay on screen forever. It is the answer to a
     // question the user asked by pressing a button one second ago, not a property of the page, and
     // once read it is just a line of stale text sitting under a control that now looks like it did
@@ -2970,2124 +2922,106 @@ fun SettingsScreen(active: Boolean = true) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rootScroll).hazeSource(state = LocalHazeState.current).padding(16.dp).padding(bottom = LocalBottomBarInset.current)
     ) {
-        @Composable
-        @NonRestartableComposable
-        fun RootPage() {
-            // Section order (task 11), and it is deliberately a journey from the cosmetic to the
-            // irreversible: how it looks, what language it speaks, what it can do for you, how
-            // you write, who can get in, what leaves the device, and finally the page that can
-            // erase everything. The destructive page being last is the point — it is the one you
-            // should have to travel to rather than the one you land on.
-            NavCard(S.settingsAppearanceTitle, S.settingsAppearanceSub) { route = SettingsRoute.Appearance }
-            Spacer(modifier = Modifier.height(12.dp))
-            // Language sits beside Appearance because it answers the same kind of question —
-            // "how does this app present itself to me" — and a user hunting for it will look
-            // near the top, not under a technical heading (localization task).
-            NavCard(S.settingsLanguageTitle, S.settingsLanguageSub) { route = SettingsRoute.Language }
-            Spacer(modifier = Modifier.height(12.dp))
-            // The subtitle lists what is actually behind this card. It used to stop at the API,
-            // which quietly under-sold the section: memory and web search live here too, and a
-            // subtitle that names three of four things reads as a complete list rather than a
-            // truncated one — so the fourth looks like it isn't there.
-            NavCard(S.settingsAssistantTitle, S.settingsAssistantSub) { route = SettingsRoute.Assistant }
-            Spacer(modifier = Modifier.height(12.dp))
-            NavCard(S.settingsEditorTitle, S.settingsEditorSub) { route = SettingsRoute.Editor }
-            Spacer(modifier = Modifier.height(12.dp))
-            // v2.7.5: cloud storage lives between Editor and Security - a capability of the app's
-            // data (backup) side, not a privacy/security guarantee, hence the position.
-            NavCard(S.cloudTitle, S.cloudSub) { route = SettingsRoute.Cloud }
-            Spacer(modifier = Modifier.height(12.dp))
-            NavCard(S.settingsSecurityTitle, S.settingsSecuritySub) { route = SettingsRoute.Security }
-            Spacer(modifier = Modifier.height(12.dp))
-            NavCard(S.settingsPrivacyTitle, S.settingsPrivacySub) { route = SettingsRoute.Privacy }
-            Spacer(modifier = Modifier.height(12.dp))
-            NavCard(S.settingsDataTitle, S.settingsDataSub) { route = SettingsRoute.Data }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun LanguagePage() {
-            BackHeader(S.settingsLanguageTitle) { route = SettingsRoute.Root }
-
-            // One flat radio list: "follow the system", then the four languages, each shown in
-            // its OWN language (the one universal convention for language pickers — a reader who
-            // can't parse the current UI language can still find their own name). Selecting
-            // writes the setting; MainActivity's collector applies it, and because the catalog
-            // is snapshot state every S-reading text in the app — including this list —
-            // recomposes in the new language on the very next frame. No restart, no flash.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(S.langPageHint, color = onGradientMuted, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { AppScope.io.launch { repo.setAppLanguage(AppLanguage.SYSTEM.key) } }
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = savedLanguage == AppLanguage.SYSTEM.key,
-                        onClick = { AppScope.io.launch { repo.setAppLanguage(AppLanguage.SYSTEM.key) } }
-                    )
-                    Column(modifier = Modifier.padding(start = 4.dp)) {
-                        Text(S.langSystem, color = onGradient)
-                        Text(
-                            S.langSystemDetail(AppLanguage.systemDefault().label),
-                            color = onGradientMuted,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-
-                listOf(AppLanguage.EN, AppLanguage.ZH, AppLanguage.JA, AppLanguage.KO).forEach { lang ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { AppScope.io.launch { repo.setAppLanguage(lang.key) } }
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = savedLanguage == lang.key,
-                            onClick = { AppScope.io.launch { repo.setAppLanguage(lang.key) } }
-                        )
-                        Text(lang.label, color = onGradient, modifier = Modifier.padding(start = 4.dp))
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // Font sits inline here, parallel to the language picker above rather than behind a
-            // further tap: a typeface is a writing/language choice as much as a visual one. The app
-            // bundles no fonts (font library task): out of the box it follows the platform font,
-            // and every other row is a font the user imported, shown under the name they gave it
-            // and drawn in its own face so the list doubles as a live preview. Selecting saves
-            // immediately; the trailing icon deletes an imported font (after confirming).
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(S.settingsFontTitle, color = onGradient, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(S.settingsFontSub, color = onGradientMuted, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // The system-default row. Also selected when the saved key is a dangling id (a
-                // state only reachable by hand-editing storage): the app *renders* the system font
-                // then, and the radio must tell the truth about what is on screen.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        AppScope.io.launch { repo.setFont(SYSTEM_FONT_KEY) }
-                    }
-                ) {
-                    RadioButton(
-                        selected = savedFont == SYSTEM_FONT_KEY || importedFonts.none { it.id == savedFont },
-                        onClick = { AppScope.io.launch { repo.setFont(SYSTEM_FONT_KEY) } }
-                    )
-                    Text(
-                        S.fontSystemLabel,
-                        color = onGradient,
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(start = 10.dp)
-                    )
-                }
-
-                // One row per imported font: radio + the user's name for it + delete. Same anatomy
-                // as the system row, plus the trailing delete — an imported font is the user's to
-                // remove, the platform default is not.
-                importedFonts.forEach { slot ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable {
-                            AppScope.io.launch { repo.setFont(slot.id) }
-                        }
-                    ) {
-                        RadioButton(
-                            selected = savedFont == slot.id,
-                            onClick = { AppScope.io.launch { repo.setFont(slot.id) } }
-                        )
-                        Text(
-                            slot.name.ifBlank { slot.fileName },
-                            color = onGradient,
-                            fontFamily = LucentFontResolver.resolve(context, slot.id),
-                            fontSize = 16.sp,
-                            modifier = Modifier.weight(1f).padding(start = 10.dp)
-                        )
-                        IconButton(onClick = { fontPendingDelete = slot }) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = S.fontDeleteA11y,
-                                tint = onGradientMuted
-                            )
-                        }
-                    }
-                }
-                if (importedFonts.isEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.fontNoneImportedHint, color = onGradientMuted, fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                if (fontImporting) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(S.fontImporting, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                } else if (fontCanImportMore) {
-                    GlassButton(
-                        text = S.fontImportButton,
-                        icon = Icons.Default.Add,
-                        onClick = { fontImportLauncher.launch(arrayOf("*/*")) }
-                    )
-                } else {
-                    Text(S.fontSlotsFullHint(FontStore.MAX_FONTS), color = onGradientMuted, fontSize = 12.sp)
-                }
-                if (fontError.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(fontError, color = Color(0xFFFFC1C1), fontSize = 13.sp)
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun AssistantPage() {
-            BackHeader(S.settingsAssistantTitle) { route = SettingsRoute.Root }
-
-            // Order (task 10): Personalization, API, Memory & web, then Local model. The local
-            // model comes last because it is the alternative to everything above it: with it on,
-            // the API page's connection and the memory tier simply stop being consulted.
-            NavCard(S.settingsPersonalizationTitle, S.settingsPersonalizationSub) { route = SettingsRoute.Personalization }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // API is its own hierarchical page. The subtitle shows which profile is active so
-            // the user can see their current connection at a glance without opening it — except
-            // while the local model is on, when that would be a small lie: the named profile is
-            // exactly what the app is NOT using. The card then states the freeze instead, matching
-            // the "Cloud API frozen" notice the page itself shows when opened.
-            val activeName = profiles.getOrNull(selectedProfileIdx)?.name ?: ""
-            NavCard(
-                S.settingsApiTitle,
-                if (localModelEnabled) S.settingsApiSubFrozen else S.settingsApiSub(activeName)
-            ) { route = SettingsRoute.Api }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Memory and Networking are now two separate cards: one page for how much the
-            // assistant remembers (the memory tier), and a distinct page for going online (the
-            // web-search toggle). They used to share a single "Memory & web" card.
-            NavCard(S.settingsMemoryTitle, S.settingsMemorySub) { route = SettingsRoute.Memory }
-            Spacer(modifier = Modifier.height(12.dp))
-            NavCard(S.settingsNetworkTitle, S.settingsNetworkSub) { route = SettingsRoute.Network }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // On-device GGUF assistant (local-model task).
-            NavCard(S.settingsLocalModelTitle, S.settingsLocalModelSub) { route = SettingsRoute.LocalModel }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun LocalModelPage() {
-            BackHeader(S.settingsLocalModelTitle) { route = SettingsRoute.Assistant }
-
-            if (!LocalLlm.isSupported()) {
-                // The .so wasn't packaged for this ABI (or failed to load). Everything below
-                // would be a dead end, so say why once, plainly, instead of offering buttons
-                // that can only disappoint.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.lmUnsupportedAbiNote, color = onGradientMuted, fontSize = 13.sp)
-                }
-            } else {
-                // =========================================================================
-                // The master switch — and, until it is on, nothing else (task 15)
-                // =========================================================================
-                //
-                // The page used to open with the importer: pick a multi-gigabyte file first,
-                // then decide whether you wanted the feature at all. That is backwards. Importing
-                // is the expensive, irreversible-feeling step, and asking for it before the user
-                // has said yes to anything makes the whole page read as a commitment. Worse, the
-                // enable switch sat *below* the importer and was disabled until a model existed,
-                // so the one control that explains what the page is for was the last thing you
-                // reached and the only one you couldn't touch.
-                //
-                // So the order is now the order of the decision: do you want the assistant to run
-                // on this device — yes — now here is what that involves. Everything below the
-                // switch is hidden while it is off, which also settles task 1 more firmly than
-                // greying would: a control that isn't there cannot be operated by accident, and
-                // the page stops presenting four questions when only the first one is live.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    // The experimental badge belongs to the FEATURE, so it moved here from the
-                    // models card (task 1) — it is the first thing read by someone deciding
-                    // whether to turn this on, rather than a note attached to the importer.
-                    Text(S.lmExperimentalNote, color = onGradient, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.lmUseLocalToggle, color = onGradient, fontSize = 16.sp)
-                            Text(S.lmUseLocalToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        // Switchable ON with no model imported, which the old build forbade.
-                        // It has to be: the importer only appears once this is on, so gating it
-                        // on a model that can only be imported afterwards was a deadlock. If it
-                        // is on with no model the page says so (lmNeedModelNotice below) and the
-                        // assistant answers with a clear "no model" error rather than silently
-                        // falling back to the cloud API.
-                        Switch(
-                            checked = localModelEnabled,
-                            onCheckedChange = { on ->
-                                if (on) lmConfirmUseLocalOn = true
-                                else AppScope.io.launch { repo.setLocalModelEnabled(false) }
-                            }
-                        )
-                    }
-                    // The "local mode is text only" paragraph that used to sit here has been
-                    // removed: on-device multimodal is supported now (see the mmproj projector
-                    // setting below), so the note described a limitation that no longer exists.
-                    // A stale warning is worse than no warning — it talks a user out of a feature
-                    // that works.
-                    if (!localModelEnabled) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(S.lmEnableToConfigureNote, color = onGradientMuted, fontSize = 12.sp)
-                    }
-                }
-
-                if (localModelEnabled) {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // ---------------------------------------------------------------
-                    // Models: import, choose the active one, rename, delete
-                    // ---------------------------------------------------------------
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(S.lmModelsTitle, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                            Text("${lmModels.size}/${LocalModelStore.MAX_MODELS}", color = onGradientMuted, fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.lmPageIntro, color = onGradientMuted, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.lmSizeHint, color = onGradientMuted, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        if (lmModels.isEmpty()) {
-                            // Local mode is on with nothing to run: the single most confusing
-                            // state this feature can be in, so it is named rather than implied.
-                            Text(S.lmNeedModelNotice, color = onGradient, fontSize = 14.sp)
-                        } else {
-                            // One row per imported model: a radio picks the ACTIVE model (only it
-                            // is ever loaded), its name and size are shown, and each has rename +
-                            // delete. Switching the radio releases the loaded model right away.
-                            lmModels.forEach { slot ->
-                                val active = slot.id == lmActiveId
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                    RadioButton(selected = active, onClick = { selectLocalModel(slot.id) })
-                                    Column(
-                                        modifier = Modifier.weight(1f).clickable { selectLocalModel(slot.id) }.padding(vertical = 4.dp)
-                                    ) {
-                                        Text(slot.name.ifBlank { "model.gguf" }, color = onGradient, fontSize = 14.sp)
-                                        Text(
-                                            AttachmentLimits.formatBytes(LocalModelStore.modelSizeBytes(context, slot.id)) +
-                                                (if (active) " · " + S.lmActiveTag else ""),
-                                            color = onGradientMuted,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        lmRenameText = slot.name
-                                        lmRenameTarget = slot
-                                    }) {
-                                        Icon(Icons.Default.Edit, contentDescription = S.lmRenameA11y, tint = onGradientMuted)
-                                    }
-                                    IconButton(onClick = { lmSlotPendingDelete = slot }) {
-                                        Icon(Icons.Default.Delete, contentDescription = S.lmDeleteA11y, tint = onGradientMuted)
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        if (lmImporting) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator()
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(S.lmImporting, color = onGradientMuted, fontSize = 13.sp)
-                            }
-                        } else if (lmCanImportMore) {
-                            GlassButton(
-                                text = S.lmImportButton,
-                                icon = Icons.Default.Add,
-                                onClick = { lmImportLauncher.launch(arrayOf("*/*")) }
-                            )
-                        } else {
-                            Text(S.lmSlotsFullHint(LocalModelStore.MAX_MODELS), color = onGradientMuted, fontSize = 12.sp)
-                        }
-                        if (lmError.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(lmError, color = Color(0xFFFFC1C1), fontSize = 13.sp)
-                        }
-
-                        // ---- PHASE 4: multimodal projector (mmproj) for the active model ----
-                        // Two files make a vision-capable local model: the model .gguf above and a
-                        // projector .gguf from the SAME model family (a Qwen projector cannot serve
-                        // a Gemma model). The description string carries that rule to the user; the
-                        // status line says which state the active slot is in.
-                        if (lmActiveId != null) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(S.lmMmprojTitle, color = onGradient, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(S.lmMmprojDesc, color = onGradientMuted, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val lmMmprojFile = remember(lmRefresh, lmActiveId) { LocalModelStore.activeMmprojFile(context) }
-                            Text(
-                                lmMmprojFile?.let { "${it.length() / (1024 * 1024)} MB" } ?: S.lmMmprojMissing,
-                                color = onGradientMuted, fontSize = 13.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                GlassButton(
-                                    text = S.lmMmprojImport,
-                                    icon = Icons.Default.Add,
-                                    onClick = { lmMmprojLauncher.launch(arrayOf("*/*")) }
-                                )
-                                if (lmMmprojFile != null) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    GlassButton(text = S.lmMmprojRemove, onClick = { removeMmproj() })
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // The reset rule is stated ONCE, above both switches it governs (task 1),
-                    // rather than repeated inside each card. It is a property of the pair.
-                    Text(
-                        S.lmSubTogglesResetNote,
-                        color = onGradientMuted,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // ---- Opt-in: let the on-device model act on notes/tasks ----
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(S.lmToolsToggle, color = onGradient, fontSize = 16.sp)
-                                Text(S.lmToolsToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Switch(
-                                checked = localToolsEnabled,
-                                onCheckedChange = { on ->
-                                    if (on) lmConfirmToolsOn = true
-                                    else AppScope.io.launch { repo.setLocalToolsEnabled(false) }
-                                }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // ---- Opt-in: run the model on the GPU instead of the CPU ----
-                    // No "(experimental)" on this one any more (task 7): the page already opens
-                    // with an experimental badge on the feature, and stamping the word onto a
-                    // sub-option as well starts to read as noise rather than as a warning.
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(S.lmGpuToggle, color = onGradient, fontSize = 16.sp)
-                                Text(S.lmGpuToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Switch(
-                                checked = localGpuEnabled,
-                                onCheckedChange = { on ->
-                                    if (on) lmConfirmGpuOn = true
-                                    // Turning OFF also only records: an in-flight reply (if any)
-                                    // finishes on the GPU and the next one loads on the CPU.
-                                    else AppScope.io.launch { repo.setLocalGpuEnabled(false) }
-                                }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // ---- Opt-in: keep generating after the app leaves the foreground ----
-                    // Hidden with the rest of this section when local mode is off, because it
-                    // describes something only the local model does (task 2).
-                    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(S.lmBackgroundToggle, color = onGradient, fontSize = 16.sp)
-                                Text(S.lmBackgroundToggleDesc, color = onGradientMuted, fontSize = 13.sp)
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Switch(
-                                checked = localBackgroundReply,
-                                onCheckedChange = { on ->
-                                    if (on) lmConfirmBackgroundOn = true
-                                    else AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun PersonalizationPage() {
-            BackHeader(S.settingsPersonalizationTitle) { leavePersonalization() }
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                OutlinedTextField(
-                    value = assistantName,
-                    onValueChange = { assistantName = it },
-                    label = { Text(S.fieldAssistantName) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = assistantStyle,
-                    onValueChange = { assistantStyle = it },
-                    label = { Text(S.fieldChatStyle) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                GlassButton(text = S.actionSave, onClick = { persistAssistantSettings() })
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Typing haptics lives here now (task 4). It's part of how the chat feels rather than
-            // anything to do with memory or the web, so it moved onto Personalization when the old
-            // combined "Memory & web" page was split apart. It writes immediately and isn't part
-            // of the name/style "unsaved changes" tracking, so leaving without pressing Save above
-            // never affects it.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.typingHapticsTitle, color = onGradient, fontSize = 16.sp)
-                        Text(
-                            S.typingHapticsDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = savedTypingHaptics,
-                        onCheckedChange = { on -> AppScope.io.launch { repo.setTypingHapticsEnabled(on) } }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Whether the assistant must ask before EVERY tool call — reads as well as writes,
-            // cloud and on-device alike. Default ON. Turning it off removes the confirmation
-            // modal entirely; the subtitle says so in plain words, because the switch trades
-            // oversight for convenience and that trade should never be made by accident.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.assistantConfirmToolsTitle, color = onGradient, fontSize = 16.sp)
-                        Text(
-                            S.assistantConfirmToolsSub,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = savedConfirmTools,
-                        onCheckedChange = { on -> AppScope.io.launch { repo.setAssistantConfirmTools(on) } }
-                    )
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun MemoryPage() {
-            BackHeader(S.settingsMemoryTitle) { route = SettingsRoute.Assistant }
-
-            // Memory tier. Each option explains both what the assistant will remember and the
-            // rough cost trade-off, since more context means more tokens per reply.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(S.memoryCostTitle, color = onGradient, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.memoryCostDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
-                // Local mode changes what this page is allowed to offer (task 8): an on-device
-                // model works from a short prompt, so the high tier is withdrawn while it is on.
-                // Saying that here, before the rows, means the greyed row below is explained
-                // before it is touched rather than only after.
-                if (localModelEnabled) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(S.memoryLocalTierNote, color = onGradientMuted, fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                val current = MemoryTier.fromKey(savedMemoryTier)
-
-                MemoryTierRow(
-                    selected = current == MemoryTier.LOW,
-                    title = S.memoryLowTitle,
-                    detail = S.memoryLowDesc,
-                    onGradient = onGradient,
-                    onGradientMuted = onGradientMuted,
-                    onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.LOW.key) } }
-                )
-                MemoryTierRow(
-                    selected = current == MemoryTier.MEDIUM,
-                    title = S.memoryMediumTitle,
-                    detail = S.memoryMediumDesc,
-                    onGradient = onGradient,
-                    onGradientMuted = onGradientMuted,
-                    onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) } }
-                )
-                // The high tier stays visible but greyed, and — importantly — stays TAPPABLE.
-                // A control that simply ignores touches teaches the user nothing except that the
-                // app is broken; this one answers with a bottom toast explaining why it's off and
-                // that their previous choice is being held for them (task 8: a toast, never a
-                // dialog — a modal for "you can't do that" is a punishment, not an explanation).
-                MemoryTierRow(
-                    selected = current == MemoryTier.HIGH,
-                    title = S.memoryHighTitle,
-                    detail = S.memoryHighDesc,
-                    onGradient = onGradient,
-                    onGradientMuted = onGradientMuted,
-                    dimmed = localModelEnabled,
-                    onClick = {
-                        if (localModelEnabled) LucentToast.show(context, S.memoryHighLocalDisabledHint)
-                        else AppScope.io.launch { repo.setMemoryTier(MemoryTier.HIGH.key) }
-                    }
-                )
-            }
-
-            // ---- Optimize for small models (R3 report) ----
-            // Moved here from Personalization so every knob about WHAT the assistant is fed — how
-            // much history, and how the prompt is trimmed for a weak model — lives on the same
-            // page, directly under the tier it modifies. Kept as its own glass card on purpose:
-            // the two blocks must never merge, and the trade-off warning reads against the memory
-            // choice made just above.
-            Spacer(modifier = Modifier.height(12.dp))
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
-                        Text(S.smallModelModeSub, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = savedSmallModelMode,
-                        onCheckedChange = { on ->
-                            // Only turning it ON warns. Turning it off restores the full prompt,
-                            // which needs no explanation and no permission.
-                            if (on) showSmallModelWarn = true
-                            else AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
-                        }
-                    )
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun NetworkPage() {
-            BackHeader(S.settingsNetworkTitle) { route = SettingsRoute.Assistant }
-
-            // Web search toggle: lets the cloud assistant look things up online.
-            //
-            // Unavailable while the local model is on (tasks 3/8) — it answers with no network
-            // at all, so a web-search switch in that mode would be a promise the app cannot
-            // keep. The row is dimmed rather than removed: hiding it would leave the user
-            // wondering where their setting went, and the value they had is coming back the
-            // moment local mode is switched off (SettingsRepository parks it).
-            val webSearchLocked = localModelEnabled
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // The whole row answers when it's locked, so a tap anywhere near the
-                        // switch — not only exactly on it — gets the explanation.
-                        .then(
-                            if (webSearchLocked) Modifier.clickable {
-                                LucentToast.show(context, S.webSearchLocalDisabledHint)
-                            } else Modifier
-                        )
-                ) {
-                    Column(modifier = Modifier.weight(1f).alpha(if (webSearchLocked) 0.38f else 1f)) {
-                        Text(S.webSearchTitle, color = onGradient, fontSize = 16.sp)
-                        Text(
-                            S.webSearchDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = savedWebSearch && !webSearchLocked,
-                        enabled = !webSearchLocked,
-                        onCheckedChange = { on -> AppScope.io.launch { repo.setWebSearchEnabled(on) } }
-                    )
-                }
-                if (webSearchLocked) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(S.webSearchLocalDisabledHint, color = onGradientMuted, fontSize = 12.sp)
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun ApiPage() {
-            BackHeader(S.settingsApiTitle) { route = SettingsRoute.Assistant }
-
-            // When local model mode is on, the cloud API is FROZEN — the assistant answers
-            // on-device and never calls the API. Say so plainly at the top of the page, with a
-            // one-tap way back to the Local model page to turn it off. That link matters more
-            // than usual now that the rest of the page is hidden behind the freeze: it is the
-            // only route out, so it has to be right here in the explanation.
-            if (localModelEnabled) {
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.apiFrozenTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.apiFrozenBody, color = onGradientMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    // Glass, like every other page-level button in Settings. This was one of
-                    // the last Material 3 controls left on a page made entirely of glass.
-                    GlassButton(text = S.apiFrozenManage, onClick = { route = SettingsRoute.LocalModel })
-                }
-            }
-
-            // Task 18: while the freeze is on, the blocks below are HIDDEN rather than shown
-            // greyed. They were disabled before, which left a full API editor sitting under a
-            // banner saying it would never be used — fields you could type in, a Save button you
-            // could not press, a model list that would not load. Disabling communicates "not
-            // now"; the honest message here is "not while this mode is on", and the way a screen
-            // says that is by not offering the controls at all. Nothing is lost: every profile,
-            // key and model stays saved, and flipping local mode off brings this page back
-            // exactly as it was.
-            if (!localModelEnabled) {
-
-            // ---- API Selection: pick which saved profile is active ----
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(S.apiSelectionTitle, color = onGradient, modifier = Modifier.weight(1f))
-                    Text("${profiles.size}/${com.lucent.app.data.ApiProfiles.MAX}", color = onGradientMuted, fontSize = 13.sp)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.apiSelectionDesc(com.lucent.app.data.ApiProfiles.MAX), color = onGradientMuted, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                if (profiles.isEmpty()) {
-                    // Deleting the last API is allowed now (task 6), so this state is reachable
-                    // and has to be a place the user can stand: it names what happened and both
-                    // ways forward, rather than an empty card that looks like a rendering bug.
-                    Text(S.apiNoneTitle, color = onGradient, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.apiNoneBody, color = onGradientMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-                profiles.forEachIndexed { idx, p ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        RadioButton(selected = idx == selectedProfileIdx, onClick = { selectProfile(idx) })
-                        Column(modifier = Modifier.weight(1f).clickable { selectProfile(idx) }.padding(vertical = 4.dp)) {
-                            Text(p.name.ifBlank { S.apiFallbackName(idx + 1) }, color = onGradient)
-                            Text(
-                                "${specLabel(p.spec)} · ${if (p.model.isBlank()) S.apiNoModel else p.model}",
-                                color = onGradientMuted,
-                                fontSize = 12.sp
-                            )
-                        }
-                        // The delete icon is shown on every row, the only profile included, and
-                        // every delete goes through the confirmation dialog below first — there
-                        // is no quiet path that removes a saved key (task 6).
-                        IconButton(onClick = { profilePendingDelete = idx }) {
-                            Icon(Icons.Default.Delete, contentDescription = S.apiDeleteA11y, tint = onGradientMuted)
-                        }
-                    }
-                }
-                if (profiles.size < com.lucent.app.data.ApiProfiles.MAX) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    GlassButton(text = S.apiAddButton, icon = Icons.Default.Add, onClick = { addProfile() })
-                }
-            }
-
-            // Nothing selected means nothing to edit, so the editor block is hidden entirely
-            // rather than bound to a phantom profile (task 6).
-            if (profiles.isNotEmpty()) {
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // ---- Editor for the selected profile ----
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(S.apiEditTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = editingProfileName,
-                    onValueChange = { editingProfileName = it },
-                    label = { Text(S.fieldName) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = key,
-                    onValueChange = {
-                        key = it
-                        typingReveal = true
-                        keystrokeSeq++
-                    },
-                    label = { Text(S.fieldApiKey) },
-                    visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { manualReveal = true }) {
-                            Icon(
-                                if (keyVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = S.a11yToggleKeyVisibility
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(S.apiSpecTitle, color = onGradient)
-                Row {
-                    RadioButton(selected = spec == "openai", onClick = { spec = "openai" })
-                    Text(S.apiSpecOpenAi, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-                }
-                Row {
-                    RadioButton(selected = spec == "anthropic", onClick = { spec = "anthropic" })
-                    Text(S.apiSpecAnthropic, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-                }
-                Row {
-                    RadioButton(selected = spec == "google", onClick = { spec = "google" })
-                    Text(S.apiSpecGoogle, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(S.apiConnectionTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(S.fieldBaseUrl) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    when (spec) {
-                        "anthropic" -> S.apiUrlExampleAnthropic
-                        "google" -> S.apiUrlExampleGoogle
-                        else -> S.apiUrlExampleOpenAi
-                    },
-                    color = onGradientMuted
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                // No `enabled = !localModelEnabled` guard any more: this whole block is hidden
-                // while the API is frozen (task 18), so the only way to reach this button is
-                // with local mode off.
-                GlassButton(text = S.fetchModels, onClick = {
-                    if (url.trim().isEmpty()) {
-                        // No address yet: say so plainly instead of letting the HTTP client throw a
-                        // technical "malformed URL" style error the user can't act on.
-                        errorText = S.apiUrlRequired
-                    } else {
-                        loading = true
-                        errorText = ""
-                        scope.launch {
-                            val apiSpecEnum = when (spec) {
-                                "anthropic" -> ApiSpec.ANTHROPIC
-                                "google" -> ApiSpec.GOOGLE
-                                else -> ApiSpec.OPENAI
-                            }
-                            val result = LlmClient.fetchModels(url.trim(), apiSpecEnum, key.trim())
-                            loading = false
-                            result.onSuccess { models = it }
-                                .onFailure { errorText = S.errorWithDetail(it.javaClass.simpleName, it.message ?: S.noDetails) }
-                        }
-                    }
-                })
-
-                if (loading) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    CircularProgressIndicator()
-                }
-                if (errorText.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(errorText, color = Color(0xFFFFC1C1))
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(S.fieldModel, color = onGradient)
-                Box {
-                    GlassButton(
-                        text = if (selectedModel.isBlank()) S.chooseModel else selectedModel,
-                        onClick = { menuExpanded = true },
-                        enabled = models.isNotEmpty()
-                    )
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        // R3 report: a manual FUZZY model search on top of the list, sharing the
-                        // same ranking rules as the chat model switcher (ModelSearch.rankModels):
-                        // typing part of a name — case, separators and even exact order optional —
-                        // reorders the list best-match first. The query resets with each open.
-                        var query by remember(menuExpanded) { mutableStateOf("") }
-                        Column(modifier = Modifier.width(280.dp)) {
-                            androidx.compose.material3.OutlinedTextField(
-                                value = query,
-                                onValueChange = { query = it },
-                                placeholder = { Text(S.actionSearch) },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .heightIn(max = 320.dp)
-                                    .verticalScroll(rememberScrollState())
-                            ) {
-                                val shown = com.lucent.app.data.ModelSearch.rankModels(models, query)
-                                shown.forEach { m ->
-                                    DropdownMenuItem(text = { Text(m) }, onClick = {
-                                        selectedModel = m
-                                        menuExpanded = false
-                                    })
-                                }
-                            }
-                        }
-                    }
-                }
-                if (models.isEmpty() && selectedModel.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.currentModelHint(selectedModel), color = onGradientMuted, fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                // Saving writes the edits into the selected profile and activates it, so the
-                // assistant uses it right away.
-                GlassButton(text = S.saveApi, onClick = { saveActiveProfile(selectedProfileIdx) })
-            }
-            } // profiles.isNotEmpty()
-            } // !localModelEnabled
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun AppearancePage() {
-            BackHeader(S.settingsAppearanceTitle) { route = SettingsRoute.Root }
-            // ---- Material You dynamic colour (task 2): pinned, highest priority ----
-            //
-            // Sits ABOVE the Theme and Background cards on purpose: while it is on, the wallpaper
-            // palette outranks both of them (override in the read path — the stored theme and
-            // palette are never rewritten). Android 12+ only; below that the switch is disabled
-            // with a plain-language reason instead of a dead control.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.dynamicColorTitle, color = onGradient, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            when {
-                                !dynamicColorSupported -> S.dynamicColorUnsupported
-                                dynamicColorOn -> S.dynamicColorOnSub
-                                else -> S.dynamicColorSub
-                            },
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = dynamicColorOn,
-                        enabled = dynamicColorSupported,
-                        onCheckedChange = { on ->
-                            AppScope.io.launch { repo.setDynamicColorEnabled(on) }
-                        }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            // Two hierarchical entries, mirroring the Assistant screen's structure. (Font moved
-            // to the Language screen — it's as much a writing choice as a visual one.)
-            NavCard(S.settingsThemeTitle, S.settingsThemeSub) { route = SettingsRoute.Theme }
-            Spacer(modifier = Modifier.height(12.dp))
-            NavCard(S.settingsBackgroundTitle, S.settingsBackgroundSub) { route = SettingsRoute.Background }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun ThemePage() {
-            BackHeader(S.settingsThemeTitle) { route = SettingsRoute.Appearance }
-            if (dynamicColorOn && dynamicColorSupported) {
-                // Material You has priority while it is on: the list below still edits the STORED
-                // choice (so turning dynamic off restores exactly this), but nothing here changes
-                // what is on screen until then. Say so instead of pretending the list is live.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.dynamicColorPausedTheme, color = onGradientMuted, fontSize = 13.sp)
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            // v2.7.2: while Material You is on, the tint list is hidden rather than merely paused —
-            // dynamic colour outranks it in the read path, so rows that edit a choice the screen is
-            // not using would only confuse. The banner above explains why the list is gone, and the
-            // rows return the moment the wallpaper mode is switched off. The list is the picker
-            // subset (18 of the 32 tints, see LucentThemeMode.pickerEntries); System/Light/Dark
-            // and the tints are peers, each row previews the actual backdrop colour it selects, and
-            // a tint that is no longer offered still resolves for anyone whose stored choice names it.
-            if (!(dynamicColorOn && dynamicColorSupported)) {
-                val systemDark = isSystemInDarkTheme()
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    LucentThemeMode.pickerEntries.forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = savedTheme == mode.key,
-                                onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                            )
-                            PaletteSwatch(mode.swatch(systemDark))
-                            Column(modifier = Modifier.padding(start = 10.dp)) {
-                                Text(mode.label, color = onGradient)
-                                Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun BackgroundPage() {
-            BackHeader(S.settingsBackgroundTitle) { route = SettingsRoute.Appearance }
-            if (dynamicColorOn && dynamicColorSupported) {
-                // Material You has priority while it is on: the controls below still edit the
-                // STORED choices (so turning dynamic off restores exactly these), but nothing here
-                // changes what is on screen until then. Say so instead of pretending it is live.
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.dynamicColorPausedBackground, color = onGradientMuted, fontSize = 13.sp)
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            // At the very top: the master switch for the drifting effect. Off = a still, flat
-            // theme colour, and the palette choice below only takes visible effect once it's on.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.backgroundAnimationTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.backgroundAnimationDesc, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = backgroundAnimationEnabled,
-                        onCheckedChange = { checked -> scope.launch { repo.setBackgroundAnimationEnabled(checked) } }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            // The palette list only takes visible effect while the drifting effect is ON, so
-            // with the switch off every colour row is disabled and greyed out rather than
-            // pretending to work: the radio buttons go grey, the swatches and labels fade, and
-            // a tap anywhere on a row answers with a toast at the bottom of the screen saying
-            // the drifting background isn't on — instead of silently changing a setting whose
-            // result can't be seen (fix task).
-            // v2.7.2: while Material You is on, the whole palette section below is HIDDEN (the
-            // banner above says why; the rows return when the wallpaper mode is switched off).
-            // The palette list only takes visible effect while the drifting effect is ON, so
-            // with the switch off every colour row is disabled and greyed out rather than
-            // pretending to work: the radio buttons go grey, the swatches and labels fade, and
-            // a tap anywhere on a row answers with a toast at the bottom of the screen saying
-            // the drifting background isn't on — instead of silently changing a setting whose
-            // result can't be seen.
-            if (!(dynamicColorOn && dynamicColorSupported)) {
-                val paletteEnabled = backgroundAnimationEnabled
-                // One alpha for everything in a disabled row, so swatch and label fade together.
-                val paletteAlpha = if (paletteEnabled) 1f else 0.38f
-               fun pickPalette(name: String) {
-                    if (paletteEnabled) {
-                        AppScope.io.launch { repo.setPalette(name) }
-                    } else {
-                        LucentToast.show(context, S.backgroundPaletteDisabledHint)
-                    }
-                }
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    // Auto-cycle: rotates through every palette over time. Its swatch previews the
-                    // spread of colours it moves through.
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        // The whole row stays tappable while disabled so the tap can EXPLAIN itself
-                        // (the toast) — a dead row that ignores touches just looks broken.
-                        modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_CYCLE) }
-                    ) {
-                        RadioButton(
-                            selected = savedPalette == PALETTE_CYCLE,
-                            enabled = paletteEnabled,
-                            onClick = { pickPalette(PALETTE_CYCLE) }
-                        )
-                        Box(modifier = Modifier.alpha(paletteAlpha)) {
-                            PaletteSwatch(LucentPalette.pickerEntries.map { it.colors.first() })
-                        }
-                        Text(
-                            S.paletteCycleAuto,
-                            color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
-                            modifier = Modifier.padding(start = 10.dp)
-                        )
-                    }
-
-                    // Random (v2.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
-                    // Random jumps to a different palette every RANDOM_SWITCH_MS. The row carries the
-                    // small hint so the behaviour is discoverable without opening anything.
-                    Column(
-                        modifier = Modifier.fillMaxWidth().clickable { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            RadioButton(
-                                selected = savedPalette == com.lucent.app.ui.PALETTE_RANDOM,
-                                enabled = paletteEnabled,
-                                onClick = { pickPalette(com.lucent.app.ui.PALETTE_RANDOM) }
-                            )
-                            Box(modifier = Modifier.alpha(paletteAlpha)) {
-                                PaletteSwatch(LucentPalette.pickerEntries.shuffled().take(4).flatMap { it.colors })
-                            }
-                            Text(
-                                S.paletteRandomAuto,
-                                color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
-                                modifier = Modifier.padding(start = 10.dp)
-                            )
-                        }
-                        Text(
-                            S.paletteRandomHint,
-                            color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(start = 28.dp)
-                        )
-                    }
-
-                    // Palettes grouped by style family (v2.4.0: eight sections), each with a small
-                    // colour preview. The sections come straight from the enum, so a new family can
-                    // never exist without its title and its picker section.
-                    PaletteGroup.entries.forEach { group ->
-                        val heading = group.title()
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            heading,
-                            color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
-                            fontSize = 13.sp
-                        )
-                        LucentPalette.pickerEntries.filter { it.group == group }.forEach { p ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { pickPalette(p.name) }
-                            ) {
-                                RadioButton(
-                                    selected = savedPalette == p.name,
-                                    enabled = paletteEnabled,
-                                    onClick = { pickPalette(p.name) }
-                                )
-                                Box(modifier = Modifier.alpha(paletteAlpha)) {
-                                    PaletteSwatch(p.colors)
-                                }
-                                Text(
-                                    p.label,
-                                    color = onGradient.copy(alpha = onGradient.alpha * paletteAlpha),
-                                    modifier = Modifier.padding(start = 10.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun EditorPage() {
-            BackHeader(S.settingsEditorTitle) { route = SettingsRoute.Root }
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.markdownFormattingTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            S.markdownFormattingDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = markdownEnabled,
-                        onCheckedChange = { checked -> scope.launch { repo.setMarkdownEnabled(checked) } }
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                // ---- INTEGRATION: rich text (C-group task 20) ----
-                // Placed directly under Markdown because the two are alternatives, and adjacency is
-                // how a settings page says "pick one of these" without a radio group. The exclusivity
-                // is enforced in SettingsRepository rather than here, so it holds no matter which
-                // surface flips the flag.
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.richTextTitle, color = onGradient)
-                        Text(S.richTextSub, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
-                        // Both consequences are stated up front, per the brief's "tell the user the
-                        // upside and the downside": what it costs them (Markdown goes off) and what
-                        // survives an export (highlights in PDF/DOCX, not in Markdown/plain text).
-                        Text(S.richTextExclusiveHint, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
-                        Text(S.richTextExportNote, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = richTextEnabled,
-                        onCheckedChange = { checked -> scope.launch { repo.setRichTextEnabled(checked) } }
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                // Links is a fully independent switch now (task 8). It used to be a sub-toggle:
-                // greyed out and forced off whenever Markdown was off, on the theory that links
-                // are a Markdown feature. They aren't. Markdown decides whether text is
-                // *formatted*; links decide whether notes are *connected*. Anyone who wanted to
-                // see their text exactly as typed was made to give up their note graph as well —
-                // every [[link]] they had written went dead, and the switch that would have
-                // fixed it was greyed out with no explanation.
-                //
-                // All four combinations are now real and behave sensibly, plain-text-with-links
-                // included (see ui/Markdown.kt, LinkedPlainText).
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.linksTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            S.linksDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = linksEnabled,
-                        onCheckedChange = { checked -> scope.launch { repo.setLinksEnabled(checked) } }
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                // ---- Task 9: "open web links in your browser" moves here from Privacy ----
-                //
-                // It was filed under Privacy on the reasoning that the switch decides whether a tap
-                // hands an address to another app. True, but it is not how anyone looks for it. The
-                // switch turns text in the editor into something you can tap, it belongs to the same
-                // family as Markdown, rich text and [[links]] directly above it, and every one of
-                // those four answers the same question: what does typing this into a note do? A user
-                // who has just turned Links on and wants http:// addresses to work too should find
-                // that here, not two pages away under a heading about what leaves the device.
-                //
-                // The privacy consequence has not been swept under the carpet — it is still stated
-                // in full, and turning the switch ON still opens the same consent dialog
-                // ([OpenLinksWarningDialog]) with the same argument for and against. Blackout Mode
-                // still outranks it, and the switch still says so.
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.openLinksTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.openLinksDesc, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = openLinksExternallyOn,
-                        // Blackout overrides this outright, so while it is on the switch is shown
-                        // but inert — the frozen-UI treatment the rest of the app uses for a
-                        // control that a higher-ranking setting has taken over.
-                        enabled = !blackoutOn,
-                        onCheckedChange = { turnOn ->
-                            if (turnOn) showOpenLinksWarning = true
-                            else scope.launch { repo.setOpenLinksExternally(false) }
-                        }
-                    )
-                }
-                if (blackoutOn) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.openLinksBlockedByBlackout, color = onGradientMuted, fontSize = 12.sp)
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun SecurityPage() {
-            BackHeader(S.settingsSecurityTitle) { route = SettingsRoute.Root }
-
-            // ================================================================================
-            //  C-GROUP TASK 2 — the Security / Privacy split, restated
-            // ================================================================================
-            //
-            // The two pages had drifted into overlap: "app lock" sat in Security while "startup
-            // logging" sat in Privacy, and neither heading explained why. The line that actually
-            // separates them, and that both pages are now organised around, is:
-            //
-            //   SECURITY  = keeping other people OUT of data that stays here.
-            //               (app lock, biometrics, unlock attempt limits, self-destruct,
-            //                crash shield, at-rest encryption status)
-            //
-            //   PRIVACY   = controlling what LEAVES this device, or gets written down about you.
-            //               (Blackout Mode, system share integration, diagnostic logging,
-            //                opening links in another app)
-            //
-            // Read that way every control has exactly one home, and the two questions a worried
-            // user actually asks — "can someone else get in?" and "where does my stuff go?" — each
-            // have a page that answers them completely.
-            //
-            // Blackout Mode is filed under Privacy despite forcing the app lock on, because the
-            // lock is a MEANS for it, not its purpose: it exists to stop data leaving.
-            //
-            // Sections within the page are ordered by how much damage getting them wrong does.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                // ---- App Lock ----
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.appLockTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            S.appLockDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = appLockOn,
-                        onCheckedChange = { turnOn ->
-                            if (turnOn) {
-                                // Capture credentials before enabling; the lock isn't turned on
-                                // until the setup dialog is completed.
-                                lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
-                                lockSetupError = ""
-                                showAppLockSetup = true
-                            } else {
-                                // Don't disable straight away: a dialog confirms the password
-                                // first and explains the risk of removing the lock (task).
-                                disablePw = ""; disableError = ""
-                                showAppLockDisable = true
-                            }
-                        }
-                    )
-                }
-
-                // ---- Biometric unlock ----
-                // Shown only once the lock is on AND the device actually has enrolled biometrics, so
-                // it reads as a follow-on choice to "App lock" rather than a dead control on phones
-                // that can't use it. Turning the lock off hides this again (and clears the opt-in via
-                // setAppLock), so re-enabling the lock always starts from "off".
-                if (appLockOn && biometricAvailable) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.biometricUnlockTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                S.biometricUnlockDesc,
-                                color = onGradientMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = biometricOn,
-                            onCheckedChange = { turnOn ->
-                                scope.launch { repo.setAppLockBiometricEnabled(turnOn) }
-                            }
-                        )
-                    }
-                }
-
-                // ---- C-group task 18: unlock attempt limits ----
-                //
-                // Shown only while the lock is on. A throttle for a password that does not exist is
-                // a setting with nothing to configure, and a page full of inert controls is how
-                // people learn to skim past the ones that matter.
-                if (appLockOn) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(S.attemptLimitsTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.attemptLimitsDesc, color = onGradientMuted, fontSize = 13.sp)
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    StepperRow(
-                        label = S.attemptFirstRound,
-                        value = pwFirstRound,
-                        range = com.lucent.app.data.PasswordAttempts.ROUND_LIMIT_RANGE,
-                        onChange = { scope.launch { repo.setPwFirstRoundLimit(it) } }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    StepperRow(
-                        label = S.attemptLaterRounds,
-                        value = pwLaterRound,
-                        range = com.lucent.app.data.PasswordAttempts.ROUND_LIMIT_RANGE,
-                        onChange = { scope.launch { repo.setPwLaterRoundLimit(it) } }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    // The escalation ladder itself is fixed, not configurable. A user-editable
-                    // backoff curve is a backoff curve that whoever reaches this screen can flatten.
-                    Text(S.attemptLadderNote, color = onGradientMuted, fontSize = 12.sp)
-
-                    // ---- Self-destruct: OFF by default, typed confirmation to turn on ----
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(S.selfDestructTitle, color = onGradient)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(S.selfDestructDesc, color = onGradientMuted, fontSize = 13.sp)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = selfDestructOn,
-                            onCheckedChange = { turnOn ->
-                                if (turnOn) {
-                                    selfDestructTyped = ""
-                                    showSelfDestructWarning = true
-                                } else {
-                                    // Turning a destructive feature OFF needs no ceremony. Only
-                                    // arming it does.
-                                    scope.launch { repo.setPwSelfDestructEnabled(false) }
-                                }
-                            }
-                        )
-                    }
-                    if (selfDestructOn) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        StepperRow(
-                            label = S.selfDestructThreshold,
-                            value = selfDestructThreshold,
-                            range = com.lucent.app.data.PasswordAttempts.SELF_DESTRUCT_RANGE,
-                            step = 5,
-                            onChange = { scope.launch { repo.setPwSelfDestructThreshold(it) } }
-                        )
-                    }
-                }
-
-                // ---- C-group task 3: Crash Shield ----
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.crashShieldTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.crashShieldDesc, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = crashShieldOn,
-                        onCheckedChange = { turnOn ->
-                            if (turnOn) showCrashShieldInfo = true
-                            else scope.launch { repo.setCrashShieldEnabled(false) }
-                        }
-                    )
-                }
-                if (crashShieldOn) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    // Two honest notes rather than one reassuring one: the switch does not take
-                    // effect until relaunch, and logging is now held on and cannot be turned off
-                    // from the Privacy page while this is running.
-                    //
-                    // The "next launch" note is a PENDING notice, not a permanent caption: once a
-                    // later launch has actually installed the shield (CrashShield.isInstalled), the
-                    // promise in the note has been kept, so the note disappears instead of telling
-                    // the user forever that a change is still coming (R3 report).
-                    if (!com.lucent.app.data.CrashShield.isInstalled()) {
-                        Text(S.crashShieldNextLaunch, color = onGradientMuted, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(2.dp))
-                    }
-                    Text(S.crashShieldLoggingLocked, color = onGradientMuted, fontSize = 12.sp)
-                    if (com.lucent.app.data.CrashShield.isInstalled() &&
-                        com.lucent.app.data.CrashShield.caughtCount > 0
-                    ) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            S.crashShieldCaught(com.lucent.app.data.CrashShield.caughtCount),
-                            color = onGradientMuted,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-
-                // ---- C-group task 17: at-rest encryption readout ----
-                //
-                // Placed last because it is a STATUS, not a switch — nothing here is configurable,
-                // and mixing a readout in among controls invites people to look for the toggle that
-                // isn't there. It is on this page rather than Privacy because encryption is about
-                // keeping others out of data that stays here, which is exactly this page's job.
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(S.encryptionStatusTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    when {
-                        com.lucent.app.data.EncryptionStatus.lockedOut -> S.encryptionStatusLockedOut
-                        com.lucent.app.data.EncryptionStatus.degraded -> S.encryptionStatusDegraded
-                        else -> S.encryptionStatusHealthy
-                    },
-                    color = if (com.lucent.app.data.EncryptionStatus.degraded ||
-                        com.lucent.app.data.EncryptionStatus.lockedOut
-                    ) OverdueColor else onGradientMuted,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                // The machine-readable summary, verbatim. It is the same line written to the
-                // startup log, so what a user reads here and what they send in a bug report cannot
-                // disagree.
-                Text(
-                    com.lucent.app.data.EncryptionStatus.summaryLine(),
-                    color = onGradientMuted,
-                    fontSize = 11.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    GlassButton(text = S.encryptionRunCheck, onClick = {
-                        // A status flag records what a code path BELIEVED. This does the work.
-                        val failure = com.lucent.app.data.EncryptionStatus.probeSecrets()
-                        encryptionCheckResult = failure ?: ""
-                    })
-                }
-                encryptionCheckResult?.let { result ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        if (result.isEmpty()) S.encryptionCheckPassed else S.encryptionCheckFailed(result),
-                        color = if (result.isEmpty()) onGradientMuted else OverdueColor,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun PrivacyPage() {
-            BackHeader(S.settingsPrivacyTitle) { route = SettingsRoute.Root }
-
-            // Privacy is the other half of the old combined page (task 10): not "who can get in"
-            // but "what gets out, or written down". Both switches here are off by default and
-            // both are about visibility beyond this screen — one makes Lucent visible to other
-            // apps, the other records a local file about what the app did.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                // ---- C-group task 1: Blackout Mode ----
-                //
-                // First on the page, and deliberately so: it is the only control here that
-                // OUTRANKS the ones below it. Someone who turns it on has settled every question
-                // the rest of the page asks, and burying it under three lesser switches would mean
-                // the user configures each of them and only then discovers one switch did it all.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.blackoutTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.blackoutSub, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = blackoutOn,
-                        onCheckedChange = { turnOn ->
-                            if (turnOn) {
-                                showBlackoutWarning = true
-                            } else {
-                                scope.launch {
-                                    repo.setBlackoutEnabled(false)
-                                    com.lucent.app.data.BlackoutMode.hydrate(false)
-                                    LucentToast.show(context, S.blackoutOffToast)
-                                }
-                            }
-                        }
-                    )
-                }
-                if (blackoutOn) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        S.blackoutOverridesTitle,
-                        color = onGradient,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(S.blackoutDesc, color = onGradientMuted, fontSize = 12.sp)
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-                // ---- System share / intent integration ----
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.systemIntegrationTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            S.systemIntegrationDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = systemIntegrationOn,
-                        onCheckedChange = { turnOn ->
-                            if (turnOn) {
-                                // Show the privacy warning first; only enable on explicit confirm.
-                                showShareWarning = true
-                            } else {
-                                scope.launch { repo.setSystemIntegrationEnabled(false) }
-                                ShareIntegration.setEnabled(context, false)
-                                // Disabling now gets the same bottom notification enabling does
-                                // (task): an acknowledgement that the change took effect. No dialog
-                                // — turning a feature *off* needs confirming, not warning about.
-                                LucentToast.show(context, S.systemIntegrationOffToast)
-                            }
-                        }
-                    )
-                }
-
-                // ---- Local diagnostic logging ----
-                Spacer(modifier = Modifier.height(20.dp))
-                // Turning logging ON asks for consent first — it can capture technical detail and
-                // the text you type to the assistant. Turning it OFF is immediate (no dialog).
-                var showLoggingConsent by remember { mutableStateOf(false) }
-                if (showLoggingConsent) {
-                    AlertDialog(
-                        onDismissRequest = { showLoggingConsent = false },
-                        title = { Text(S.loggingConsentTitle) },
-                        text = { Text(S.loggingConsentBody) },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                showLoggingConsent = false
-                                scope.launch { repo.setStartupLoggingEnabled(true) }
-                                StartupLog.setEnabled(true)
-                                // Log lines stay English on purpose so a bug report reads the same
-                                // regardless of the UI language at the time.
-                                StartupLog.event(context, "Logging enabled from Settings")
-                            }) { Text(S.loggingConsentConfirm) }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showLoggingConsent = false }) { Text(S.actionCancel) }
-                        }
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.startupLoggingTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            S.startupLoggingDesc,
-                            color = onGradientMuted,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = startupLoggingOn,
-                        // C-group task 3: Crash Shield holds logging ON. Frozen, not hidden — a
-                        // control that vanishes leaves the user wondering whether they imagined it,
-                        // while a visibly disabled one with a reason beside it teaches them which
-                        // other switch is responsible.
-                        enabled = !crashShieldOn,
-                        onCheckedChange = { turnOn ->
-                            if (turnOn) {
-                                showLoggingConsent = true          // enable only after consent
-                            } else {
-                                scope.launch { repo.setStartupLoggingEnabled(false) }
-                                StartupLog.setEnabled(false)
-                            }
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-                if (crashShieldOn) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.crashShieldLoggingLocked, color = onGradientMuted, fontSize = 12.sp)
-                }
-                if (startupLoggingOn) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row {
-                        GlassButton(text = S.exportLogs, onClick = { logsExportLauncher.launch("lucent-startup-log.txt") })
-                        Spacer(modifier = Modifier.width(12.dp))
-                        GlassButton(text = S.clearLogs, onClick = {
-                            StartupLog.clear(context)
-                            // Toast rather than the Data page's backupStatus line, which isn't
-                            // shown on this page (task 5 moved these controls here).
-                            LucentToast.show(context, S.logsClearedToast)
-                        })
-                    }
-                }
-            }
-
-            // Round R2, task 1: one gap, stated once. This was two consecutive 12dp spacers with
-            // nothing between them — a leftover of something removed — which is why the gap ABOVE
-            // this card was 24dp while the gap below it was zero.
-            Spacer(modifier = Modifier.height(CARD_GAP))
-
-            // ================================================================================
-            //  Task 4 — version history ("flash records")
-            // ================================================================================
-            //
-            // On by default, and switched off without a confirmation dialog: turning it off costs
-            // nothing that exists yet — it only stops FUTURE snapshots — so a prompt would be
-            // ceremony. What the page does owe the user is an explanation of what the feature is and
-            // what its limit does, because "flash record" means nothing on its own and silent
-            // deletion of an old version would otherwise look like data loss.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(S.historyTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.historyDesc, color = onGradientMuted, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.historyCapNote(com.lucent.app.data.NoteHistory.MAX_VERSIONS_PER_NOTE),
-                    color = onGradientMuted,
-                    fontSize = 12.sp
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(S.historyNotes, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = noteHistoryOn,
-                        onCheckedChange = { on ->
-                            com.lucent.app.data.NoteHistory.enabled = on
-                            scope.launch { repo.setNoteHistoryEnabled(on) }
-                        }
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(S.historyTasks, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = taskHistoryOn,
-                        onCheckedChange = { on ->
-                            com.lucent.app.data.TaskHistory.enabled = on
-                            scope.launch { repo.setTaskHistoryEnabled(on) }
-                        }
-                    )
-                }
-            }
-
-            // Round R2, task 1: the history card and the hidden-area card below it had NO spacer
-            // between them at all, so the two frosted panels met edge to edge and read as one
-            // card with a rule through it. Same gap as every other pair on this page.
-            Spacer(modifier = Modifier.height(CARD_GAP))
-
-            // ================================================================================
-            //  Task 10 — "Show hidden area" is its own module, and it is the last thing on
-            //  this page
-            // ================================================================================
-            //
-            // It used to be the FIRST card here, which pushed Blackout Mode — the one control that
-            // outranks everything else on this page — below the fold. Two things were wrong with
-            // that. It read as the headline privacy setting when it is in fact a temporary,
-            // session-scoped reveal; and a switch that exposes deliberately concealed content was
-            // the first thing a thumb met on the way into the page.
-            //
-            // Bottom of the page, in a card of its own, fixes both. The controls that decide what
-            // leaves this device come first, in rank order, and the reveal is where a deliberate
-            // scroll takes you rather than where an idle one lands. It is still gated by the app
-            // lock when one is set, and it still closes itself on the next launch.
-            // ---- Task A21: the hidden area switch ----
-            //
-            // It lives here, off by default, and closes itself on the next launch (see
-            // [HiddenArea]). When an app lock is set, turning it ON asks for that password first:
-            // the lock is the user's statement that reaching this data requires proof, and a switch
-            // that reveals a deliberately hidden area is exactly where that statement applies.
-            // Turning it OFF is never gated — closing something is not a privileged act.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                var hiddenPw by remember { mutableStateOf("") }
-                var hiddenPwError by remember { mutableStateOf(false) }
-                var askingHiddenPw by remember { mutableStateOf(false) }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.hiddenSettingTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.hiddenSettingDesc, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = HiddenArea.visible,
-                        onCheckedChange = { turnOn ->
-                            when {
-                                !turnOn -> HiddenArea.close()
-                                appLockCreds.isBlank() -> HiddenArea.open()
-                                else -> { hiddenPw = ""; hiddenPwError = false; askingHiddenPw = true }
-                            }
-                        }
-                    )
-                }
-
-                if (askingHiddenPw) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(S.hiddenUnlockPrompt, color = onGradientMuted, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = hiddenPw,
-                        onValueChange = { hiddenPw = it; hiddenPwError = false },
-                        singleLine = true,
-                        isError = hiddenPwError,
-                        enabled = !gateLockedOut && !gateWiping,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (hiddenPwError) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.hiddenWrongPassword, color = onGradientMuted, fontSize = 12.sp)
-                    }
-                    SettingsGateFeedback()
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row {
-                        GlassButton(
-                            text = S.actionConfirm,
-                            compact = true,
-                            enabled = !gateLockedOut && !gateWiping,
-                            onClick = {
-                                if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
-                                    settingsGateSuccess()
-                                    HiddenArea.open()
-                                    askingHiddenPw = false
-                                    hiddenPw = ""
-                                } else {
-                                    hiddenPwError = false
-                                    chargeSettingsGate()
-                                }
-                            })
-                        Spacer(modifier = Modifier.width(8.dp))
-                        GlassButton(text = S.actionCancel, compact = true, onClick = {
-                            askingHiddenPw = false; hiddenPw = ""
-                        })
-                    }
-                }
-            }
-        }
-
-        @Composable
-        @NonRestartableComposable
-        fun DataPage() {
-            BackHeader(S.settingsDataTitle) { route = SettingsRoute.Root }
-
-            // Shown only in the (rare, alarming) case where the database couldn't be decrypted.
-            // Nothing was deleted — the old file was set aside — but silence here would leave
-            // someone staring at an empty app with no idea why, and no idea what to do.
-            if (lockedNotice != null && !lockedDismissed) {
-                Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    Text(S.lockedNoticeTitle, color = Color(0xFFFF8A80))
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        if (lockedNoticeFileName != null) S.lockedNoticeBody(lockedNoticeFileName)
-                        else lockedNotice,
-                        color = onGradientMuted,
-                        fontSize = 13.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row {
-                        GlassButton(text = S.importBackup, onClick = { importLauncher.launch(arrayOf("*/*")) })
-                        Spacer(modifier = Modifier.width(12.dp))
-                        GlassButton(text = S.actionDismiss, onClick = {
-                            com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
-                            lockedDismissed = true
-                        })
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // ================================================================================
-            //  Task 14 — automatic backup
-            // ================================================================================
-            //
-            // [AutoBackup] has always held the policy — when a run is due, what to call the file,
-            // which old ones may be deleted — and until now nothing called any of it. This card and
-            // [AutoBackupRunner] are the two halves that were missing.
-            //
-            // A folder is not optional and the switch says so rather than failing quietly later:
-            // AutoBackup.State.runnable is `enabled && folderUri.isNotBlank()`, and that is exactly
-            // what starts the loop below.
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                // Task 7 — the retention and interval controls used to show the DEFAULTS for a
-                // beat and then snap to the stored values.
-                //
-                // `collectAsState(initial = EMPTY)` has to render something before DataStore has
-                // read anything back, and EMPTY is "12 hours, keep 5" — so every visit to this page
-                // displayed a number the user had not chosen, then corrected itself. Collecting into
-                // a nullable and drawing the numbers only once something real has arrived removes
-                // the wrong value entirely; there is nothing to flash back from.
-                var loadedAuto by remember { mutableStateOf<com.lucent.app.data.AutoBackup.State?>(null) }
-                LaunchedEffect(Unit) { repo.autoBackup.collect { loadedAuto = it } }
-                val autoState = loadedAuto ?: com.lucent.app.data.AutoBackup.State.EMPTY
-                val autoLoaded = loadedAuto != null
-                // The tree grant must be persisted, or the folder stops being writable the moment the
-                // process dies — which for a feature that runs on a schedule is every time it
-                // matters.
-                val folderPicker = rememberLauncherForActivityResult(
-                    ActivityResultContracts.OpenDocumentTree()
-                ) { uri: Uri? ->
-                    if (uri != null) {
-                        runCatching {
-                            context.contentResolver.takePersistableUriPermission(
-                                uri,
-                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                            )
-                        }
-                        scope.launch { repo.setAutoBackup(autoState.copy(folderUri = uri.toString())) }
-                    }
-                }
-                fun pickBackupFolder() = folderPicker.launch(null)
-                // Starting the loop from here is safe to repeat: ensureStarted() is idempotent, so
-                // every visit to this page simply confirms what is already running.
-                LaunchedEffect(autoState.runnable) {
-                    if (autoState.runnable) com.lucent.app.data.AutoBackupRunner.ensureStarted(context)
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.autoBackupTitle, color = onGradient)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(S.autoBackupDesc, color = onGradientMuted, fontSize = 13.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Switch(
-                        checked = autoState.enabled,
-                        // Task 3.6 — turning this on without a folder used to be allowed, and it
-                        // produced a switch that read as ON while AutoBackup.State.runnable was
-                        // false, so nothing ever ran and nothing ever said why. The switch now
-                        // refuses and names the missing piece.
-                        onCheckedChange = { on ->
-                            if (on && autoState.folderUri.isBlank()) {
-                                LucentToast.show(context, S.autoBackupNeedsFolder)
-                            } else {
-                                scope.launch { repo.setAutoBackup(autoState.copy(enabled = on)) }
-                            }
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(S.autoBackupFolder, color = onGradient, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    autoState.folderUri.ifBlank { S.autoBackupNeedsFolder },
-                    color = onGradientMuted,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                GlassButton(text = S.autoBackupChooseFolder, compact = true, onClick = { pickBackupFolder() })
-
-                Spacer(modifier = Modifier.height(12.dp))
-                // Fixed choices, not free entry: AutoBackup.MIN_INTERVAL_HOURS is a floor rather than
-                // a suggestion, and offering a number the feature would silently clamp is worse than
-                // not offering it.
-                Text(S.autoBackupInterval, color = onGradient, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(6.dp))
-                // ---- Task 3: four chips, all the same size, in every language ----
-                //
-                // One row of four cannot do it. The longest label ("Once a week" — 일주일에 한 번 in
-                // Korean) needs roughly half a phone's width on its own, so four of them across can
-                // only be achieved by squeezing, which is the defect this started as.
-                //
-                // Two rows of two, each cell weighted, gives the requirement exactly: every chip is
-                // one half of the row, so all four are identical in size regardless of how many
-                // characters their label happens to have — which is the point of a chip group. The
-                // label is capped at one line (see GlassButton) and shortens if it ever has to,
-                // rather than the chip changing shape around it.
-                if (autoLoaded) {
-                    com.lucent.app.data.AutoBackup.INTERVAL_CHOICES.chunked(2).forEach { pair ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            pair.forEach { hours ->
-                                GlassButton(
-                                    // The catalogue already names the two round numbers ("Once a
-                                    // day", "Once a week") and falls back to "Every N hours" for the
-                                    // rest, so the chips read as language rather than as arithmetic.
-                                    text = when (hours) {
-                                        24 -> S.autoBackupEveryDay
-                                        24 * 7 -> S.autoBackupEveryWeek
-                                        else -> S.autoBackupEvery(hours)
-                                    },
-                                    compact = true,
-                                    enabled = autoState.intervalHours != hours,
-                                    modifier = Modifier.weight(1f),
-                                    onClick = {
-                                        scope.launch { repo.setAutoBackup(autoState.copy(intervalHours = hours)) }
-                                    }
-                                )
-                            }
-                            // An odd count would leave the last chip double width; balance it.
-                            if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                if (autoLoaded) {
-                    StepperRow(
-                        label = S.autoBackupKeep,
-                        value = autoState.keep,
-                        range = com.lucent.app.data.AutoBackup.KEEP_RANGE
-                    ) { v -> scope.launch { repo.setAutoBackup(autoState.copy(keep = v)) } }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    if (autoState.lastRunAt > 0L) S.autoBackupLastRun(formatTimestamp(autoState.lastRunAt))
-                    else S.autoBackupNever,
-                    color = onGradientMuted,
-                    fontSize = 12.sp
-                )
-                // A backup feature that has been failing in silence for a month is worse than none,
-                // which at least nobody was relying on. So the last failure is shown, not swallowed.
-                if (autoState.lastError.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.autoBackupFailed(autoState.lastError), color = Color(0xFFFF8A80), fontSize = 12.sp)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.autoBackupOnlyWhileOpen, color = onGradientMuted, fontSize = 12.sp)
-
-                Spacer(modifier = Modifier.height(12.dp))
-                GlassButton(
-                    text = S.autoBackupRunNow,
-                    compact = true,
-                    enabled = autoState.folderUri.isNotBlank(),
-                    onClick = {
-                        scope.launch {
-                            val err = com.lucent.app.data.AutoBackupRunner.runNow(context)
-                            // Report the OUTCOME, not the button label: a toast that echoes the
-                            // button ("Back up now") after the user pressed it says nothing about
-                            // whether the backup actually happened. runNow returns null on success
-                            // and the error text otherwise, so the message is chosen from that.
-                            LucentToast.show(context, if (err == null) S.backupNowSucceeded else S.backupNowFailed)
-                        }
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                Text(S.backupRestoreTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.backupRestoreDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row {
-                    GlassButton(text = S.exportBackup, onClick = { showExportDialog = true })
-                    Spacer(modifier = Modifier.width(12.dp))
-                    // Allow any file so a beginner can always locate their .lcb even when the
-                    // device reports an unexpected MIME type for it. The import path validates the
-                    // content itself — it requires a Lucent .lcb envelope and rejects anything else
-                    // with a clear message (legacy ZIP/JSON support has been removed, task 5).
-                    GlassButton(text = S.importBackup, onClick = { importLauncher.launch(arrayOf("*/*")) })
-                }
-                if (backupStatus.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(backupStatus, color = onGradientMuted)
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(S.exportNotesTasksTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.exportNotesTasksDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                // Two full-width buttons, tasks first (task 9). They line up cleanly instead of the
-                // old mismatched row, and each opens the pick-items-and-format screen.
-                GlassButton(
-                    text = S.chooseTasksToExport,
-                    onClick = { exportKind = ExportKind.TASKS },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                GlassButton(
-                    text = S.chooseNotesToExport,
-                    onClick = { exportKind = ExportKind.NOTES },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(S.dangerZone, color = onGradient)
-                Spacer(modifier = Modifier.height(8.dp))
-                // Targeted clears, then the full wipe. All four are identical full-width glass
-                // pills in the danger tint; each asks for confirmation. Labels are kept short so
-                // they fit on one line while still making each button's function obvious.
-                //
-                // These are the buttons task 11 was pointing at: they were solid Material red,
-                // the only fully opaque objects on a page otherwise made of glass. They keep the
-                // red — a destructive action should look destructive — but wear it as a tint on
-                // the app's own material instead of arriving in someone else's.
-                GlassButton(
-                    text = S.clearNotesBtn,
-                    onClick = { showClearNotes = true },
-                    danger = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                GlassButton(
-                    text = S.clearTasksBtn,
-                    onClick = { showClearTasks = true },
-                    danger = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                GlassButton(
-                    text = S.clearChatsBtn,
-                    onClick = { showClearChats = true },
-                    danger = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                GlassButton(
-                    text = S.clearAllDataBtn,
-                    onClick = { showClearData = true },
-                    danger = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
         when (route) {
-            SettingsRoute.Root -> RootPage()
+            SettingsRoute.Root -> RootSettingsPage(onRoute = { route = it })
 
-            SettingsRoute.Language -> LanguagePage()
+            SettingsRoute.Language -> LanguageSettingsPage(
+                repo = repo,
+                importedFonts = importedFonts,
+                fontCanImportMore = fontCanImportMore,
+                fontImporting = fontImporting,
+                fontError = fontError,
+                onRequestDeleteFont = { fontPendingDelete = it },
+                onImportFontClick = { fontImportLauncher.launch(arrayOf("*/*")) },
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.Assistant -> AssistantPage()
+            SettingsRoute.Assistant -> AssistantSettingsPage(
+                repo = repo,
+                profiles = profiles,
+                selectedProfileIdx = selectedProfileIdx,
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.LocalModel -> LocalModelPage()
+            SettingsRoute.LocalModel -> LocalModelSettingsPage(
+                repo = repo,
+                lmModels = lmModels,
+                lmActiveId = lmActiveId,
+                lmImporting = lmImporting,
+                lmCanImportMore = lmCanImportMore,
+                lmError = lmError,
+                lmRefresh = lmRefresh,
+                onSelectLocalModel = { selectLocalModel(it) },
+                onRequestRenameModel = { lmRenameText = it.name; lmRenameTarget = it },
+                onRequestDeleteModel = { lmSlotPendingDelete = it },
+                onImportModelClick = { lmImportLauncher.launch(arrayOf("*/*")) },
+                onImportMmprojClick = { lmMmprojLauncher.launch(arrayOf("*/*")) },
+                onRemoveMmproj = { removeMmproj() },
+                onRequestUseLocalOn = { lmConfirmUseLocalOn = true },
+                onRequestToolsOn = { lmConfirmToolsOn = true },
+                onRequestGpuOn = { lmConfirmGpuOn = true },
+                onRequestBackgroundOn = { lmConfirmBackgroundOn = true },
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.Personalization -> PersonalizationPage()
+            SettingsRoute.Personalization -> PersonalizationSettingsPage(
+                repo = repo,
+                assistantName = assistantName,
+                onAssistantNameChange = { assistantName = it },
+                assistantStyle = assistantStyle,
+                onAssistantStyleChange = { assistantStyle = it },
+                onSave = { persistAssistantSettings() },
+                onBack = { leavePersonalization() }
+            )
 
-            SettingsRoute.Memory -> MemoryPage()
+            SettingsRoute.Memory -> MemorySettingsPage(
+                repo = repo,
+                onRequestSmallModelWarning = { showSmallModelWarn = true },
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.Network -> NetworkPage()
+            SettingsRoute.Network -> NetworkSettingsPage(repo = repo, onRoute = { route = it })
 
-            SettingsRoute.Api -> ApiPage()
+            SettingsRoute.Api -> ApiSettingsPage(
+                repo = repo,
+                profiles = profiles,
+                selectedProfileIdx = selectedProfileIdx,
+                editingProfileName = editingProfileName,
+                onEditingProfileNameChange = { editingProfileName = it },
+                url = url,
+                onUrlChange = { url = it },
+                spec = spec,
+                onSpecChange = { spec = it },
+                key = key,
+                onKeyChange = { key = it; typingReveal = true; keystrokeSeq++ },
+                keyVisible = keyVisible,
+                onRevealKey = { manualReveal = true },
+                selectedModel = selectedModel,
+                onSelectedModelChange = { selectedModel = it },
+                models = models,
+                onModelsChange = { models = it },
+                loading = loading,
+                onLoadingChange = { loading = it },
+                errorText = errorText,
+                onErrorTextChange = { errorText = it },
+                onRequestDeleteProfile = { profilePendingDelete = it },
+                onSelectProfile = { selectProfile(it) },
+                onAddProfile = { addProfile() },
+                onSaveProfile = { saveActiveProfile(selectedProfileIdx) },
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.Appearance -> AppearancePage()
+            SettingsRoute.Appearance -> AppearanceSettingsPage(repo = repo, onRoute = { route = it })
 
-            SettingsRoute.Theme -> ThemePage()
+            SettingsRoute.Theme -> ThemeSettingsPage(repo = repo, onRoute = { route = it })
 
-            SettingsRoute.Background -> BackgroundPage()
+            SettingsRoute.Background -> BackgroundSettingsPage(repo = repo, onRoute = { route = it })
 
-            SettingsRoute.Editor -> EditorPage()
+            SettingsRoute.Editor -> EditorSettingsPage(
+                repo = repo,
+                onRequestOpenLinksWarning = { showOpenLinksWarning = true },
+                onRoute = { route = it }
+            )
 
             SettingsRoute.Cloud -> CloudSettingsPage(
                 repo = repo,
@@ -5095,11 +3029,56 @@ fun SettingsScreen(active: Boolean = true) {
                 onBack = { route = SettingsRoute.Root }
             )
 
-            SettingsRoute.Security -> SecurityPage()
+            SettingsRoute.Security -> SecuritySettingsPage(
+                repo = repo,
+                onRequestEnableAppLock = {
+                    lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
+                    lockSetupError = ""
+                    showAppLockSetup = true
+                },
+                onRequestDisableAppLock = {
+                    disablePw = ""; disableError = ""
+                    showAppLockDisable = true
+                },
+                onRequestEnableSelfDestruct = {
+                    selfDestructTyped = ""
+                    showSelfDestructWarning = true
+                },
+                onRequestCrashShieldInfo = { showCrashShieldInfo = true },
+                encryptionCheckResult = encryptionCheckResult,
+                onEncryptionCheckResultChange = { encryptionCheckResult = it },
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.Privacy -> PrivacyPage()
+            SettingsRoute.Privacy -> PrivacySettingsPage(
+                repo = repo,
+                gateLockedOut = gateLockedOut,
+                gateWiping = gateWiping,
+                onSettingsGateSuccess = { settingsGateSuccess() },
+                onChargeSettingsGate = { chargeSettingsGate() },
+                settingsGateFeedback = { SettingsGateFeedback() },
+                onRequestBlackoutWarning = { showBlackoutWarning = true },
+                onRequestShareWarning = { showShareWarning = true },
+                onExportLogsClick = { logsExportLauncher.launch("lucent-startup-log.txt") },
+                onRoute = { route = it }
+            )
 
-            SettingsRoute.Data -> DataPage()
+            SettingsRoute.Data -> DataSettingsPage(
+                repo = repo,
+                lockedNotice = lockedNotice,
+                lockedNoticeFileName = lockedNoticeFileName,
+                lockedDismissed = lockedDismissed,
+                onLockedDismissedChange = { lockedDismissed = it },
+                backupStatus = backupStatus,
+                onImportBackupClick = { importLauncher.launch(arrayOf("*/*")) },
+                onRequestExportBackup = { showExportDialog = true },
+                onRequestExportKind = { exportKind = it },
+                onRequestClearNotes = { showClearNotes = true },
+                onRequestClearTasks = { showClearTasks = true },
+                onRequestClearChats = { showClearChats = true },
+                onRequestClearData = { showClearData = true },
+                onRoute = { route = it }
+            )
         }
     }
 }
