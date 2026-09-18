@@ -115,9 +115,9 @@ class EmbeddingStoreTest {
             val cloudHit = EmbeddingStore.search(context, floatArrayOf(0f, 1f), "cloud-model", topK = 5)
             assertEquals(listOf(noteId), localHit.map { it.noteId })
             assertEquals(listOf(noteId), cloudHit.map { it.noteId })
-            // Searching cloud-model's space with local-model's query direction must not surface the
-            // note stored under a different model — the two vector spaces are not comparable.
-            assertTrue(EmbeddingStore.search(context, floatArrayOf(1f, 0f), "cloud-model", topK = 5).isEmpty())
+            // A model this note has no stored vector for must not surface a hit just because the
+            // same note has vectors under other models — models are isolated, never merged.
+            assertTrue(EmbeddingStore.search(context, floatArrayOf(1f, 0f), "another-model", topK = 5).isEmpty())
         }
     }
 
