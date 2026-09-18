@@ -20,7 +20,7 @@ import com.lucent.app.ui.SettingsRoute
  * the header and the two navigation cards, was already byte-identical.
  */
 @Composable
-fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+internal fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     BackHeader(S.settingsAppearanceTitle) { onRoute(SettingsRoute.Root) }
 
     // Material You dynamic colour (task 2): pinned, highest priority — sits ABOVE the Theme and

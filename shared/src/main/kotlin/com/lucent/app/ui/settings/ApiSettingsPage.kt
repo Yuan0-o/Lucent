@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
  * import don't expose *how* a file gets picked.
  */
 @Composable
-fun ApiSettingsPage(
+internal fun ApiSettingsPage(
     repo: SettingsRepository,
     profiles: List<ApiProfile>,
     selectedProfileIdx: Int,

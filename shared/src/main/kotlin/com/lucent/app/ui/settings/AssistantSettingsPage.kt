@@ -28,7 +28,7 @@ import com.lucent.app.ui.SettingsRoute
  * directly rather than threaded through as a parameter.
  */
 @Composable
-fun AssistantSettingsPage(
+internal fun AssistantSettingsPage(
     repo: SettingsRepository,
     profiles: List<ApiProfile>,
     selectedProfileIdx: Int,

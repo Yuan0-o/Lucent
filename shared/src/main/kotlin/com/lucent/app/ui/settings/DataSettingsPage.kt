@@ -69,7 +69,7 @@ import kotlinx.coroutines.launch
  * rendered outside this page entirely.
  */
 @Composable
-fun DataSettingsPage(
+internal fun DataSettingsPage(
     repo: SettingsRepository,
     lockedNotice: String?,
     lockedNoticeFileName: String?,

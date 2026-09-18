@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
  * ever receives read values and one-way callbacks, never owns the state itself.
  */
 @Composable
-fun LocalModelSettingsPage(
+internal fun LocalModelSettingsPage(
     repo: SettingsRepository,
     lmModels: List<LocalModelStore.ModelSlot>,
     lmActiveId: String?,

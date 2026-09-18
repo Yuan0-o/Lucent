@@ -17,7 +17,7 @@ import com.lucent.app.ui.SettingsRoute
  * the only thing this page needs from its caller.
  */
 @Composable
-fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+internal fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     // Section order (task 11), and it is deliberately a journey from the cosmetic to the
     // irreversible: how it looks, what language it speaks, what it can do for you, how
     // you write, who can get in, what leaves the device, and finally the page that can

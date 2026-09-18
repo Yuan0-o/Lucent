@@ -54,7 +54,7 @@ import kotlinx.coroutines.launch
  * moment after a passing check, the same reveal-timer shape as the API key's `keyVisible`.
  */
 @Composable
-fun SecuritySettingsPage(
+internal fun SecuritySettingsPage(
     repo: SettingsRepository,
     onRequestEnableAppLock: () -> Unit,
     onRequestDisableAppLock: () -> Unit,

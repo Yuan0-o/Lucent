@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
  * navigation without this page needing to know how routing is stored.
  */
 @Composable
-fun MemorySettingsPage(
+internal fun MemorySettingsPage(
     repo: SettingsRepository,
     onRequestSmallModelWarning: () -> Unit,
     onRoute: (SettingsRoute) -> Unit

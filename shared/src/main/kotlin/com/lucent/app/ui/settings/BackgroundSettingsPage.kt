@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
  * for the same underlying fact.
  */
 @Composable
-fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current

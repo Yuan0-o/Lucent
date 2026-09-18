@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
  * dialog) reads and writes them too.
  */
 @Composable
-fun LanguageSettingsPage(
+internal fun LanguageSettingsPage(
     repo: SettingsRepository,
     importedFonts: List<FontStore.FontSlot>,
     fontCanImportMore: Boolean,

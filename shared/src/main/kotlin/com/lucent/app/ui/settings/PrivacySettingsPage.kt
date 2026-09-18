@@ -66,7 +66,7 @@ import kotlinx.coroutines.launch
  * way the app-lock/self-destruct reset flows are on that page.
  */
 @Composable
-fun PrivacySettingsPage(
+internal fun PrivacySettingsPage(
     repo: SettingsRepository,
     gateLockedOut: Boolean,
     gateWiping: Boolean,

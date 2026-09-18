@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
  * this codebase). One toggle: whether the cloud assistant may search the web.
  */
 @Composable
-fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current

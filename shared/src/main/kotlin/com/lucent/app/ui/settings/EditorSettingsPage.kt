@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
  * `onRequestSmallModelWarning` on the Memory page.
  */
 @Composable
-fun EditorSettingsPage(
+internal fun EditorSettingsPage(
     repo: SettingsRepository,
     onRequestOpenLinksWarning: () -> Unit,
     onRoute: (SettingsRoute) -> Unit

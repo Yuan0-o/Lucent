@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
  * read the same way on both platforms and reproduce each one's original behaviour exactly.
  */
 @Composable
-fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val savedTheme by repo.themeMode.collectAsState(initial = "system")
