@@ -99,7 +99,7 @@ internal object LocalLlmProxy {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             engineStub = ILocalLlmEngine.Stub.asInterface(service)
-            connectWaiter?.let { if (it.isActive) it.resume(true) }
+            connectWaiter?.let { if (it.isActive) it.resume(true, onCancellation = null) }
             connectWaiter = null
         }
 
@@ -120,7 +120,7 @@ internal object LocalLlmProxy {
 
     private fun failPendingGenerate(rc: Int) {
         cachedIsGenerating = false
-        pendingGenerate.getAndSet(null)?.let { cont -> if (cont.isActive) cont.resume(rc) }
+        pendingGenerate.getAndSet(null)?.let { cont -> if (cont.isActive) cont.resume(rc, onCancellation = null) }
     }
 
     // ====================================================================================
@@ -217,7 +217,7 @@ internal object LocalLlmProxy {
                             onDelta(piece)
                         }
                         override fun onDone(rc: Int) {
-                            pendingGenerate.getAndSet(null)?.let { c -> if (c.isActive) c.resume(rc) }
+                            pendingGenerate.getAndSet(null)?.let { c -> if (c.isActive) c.resume(rc, onCancellation = null) }
                         }
                     }
                     try {
@@ -225,7 +225,7 @@ internal object LocalLlmProxy {
                     } catch (e: RemoteException) {
                         Log.e(TAG, "generate RPC failed", e)
                         pendingGenerate.getAndSet(null)?.let { c ->
-                            if (c.isActive) c.resume(RC_ENGINE_PROCESS_DIED)
+                            if (c.isActive) c.resume(RC_ENGINE_PROCESS_DIED, onCancellation = null)
                         }
                     }
                 }
@@ -292,7 +292,7 @@ internal object LocalLlmProxy {
                     }
                     if (!requested) {
                         connectWaiter = null
-                        cont.resume(false)
+                        cont.resume(false, onCancellation = null)
                     }
                     cont.invokeOnCancellation { connectWaiter = null }
                 }
