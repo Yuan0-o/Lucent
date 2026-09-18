@@ -757,7 +757,6 @@ open class Tr {
     open val typingHapticsDesc: String = "A faint vibration as each character of a reply appears, and a single firmer pulse when the reply finishes."
     open val settingsUnsavedBody: String = "You have unsaved changes to your assistant settings. Save them before leaving?"
     open val apiSavedToast: String = "API saved"
-    // P2-2
     open val embeddingProviderTitle: String = "Semantic search"
     open val embeddingProviderDesc: String = "How the assistant finds notes by meaning instead of exact words — used by recall_notes, e.g. \"what did I write about the Osaka trip\"."
     open val embeddingProviderLocalTitle: String = "On-device"
@@ -2086,7 +2085,6 @@ object Zh : Tr() {
     override val typingHapticsDesc: String = "回复的每个字符出现时轻微震动，回复结束时给出一次更明显的震动。"
     override val settingsUnsavedBody: String = "你的助手设置有尚未保存的更改。要在离开前保存吗？"
     override val apiSavedToast: String = "API 已保存"
-    // P2-2
     override val embeddingProviderTitle: String = "语义搜索"
     override val embeddingProviderDesc: String = "助手按含义而非精确字词查找笔记的方式——用于语义回忆，例如「我写过关于大阪旅行的什么」。"
     override val embeddingProviderLocalTitle: String = "本机"
@@ -3400,7 +3398,6 @@ object Ja : Tr() {
     override val typingHapticsDesc: String = "返信の文字が表示されるたびにかすかに振動し、返信が完了すると一度だけはっきり振動します。"
     override val settingsUnsavedBody: String = "アシスタント設定に未保存の変更があります。移動する前に保存しますか？"
     override val apiSavedToast: String = "APIを保存しました"
-    // P2-2
     override val embeddingProviderTitle: String = "セマンティック検索"
     override val embeddingProviderDesc: String = "アシスタントが正確な単語ではなく意味でノートを見つける方法です。例:「大阪旅行について何を書いたか」。"
     override val embeddingProviderLocalTitle: String = "デバイス上"
@@ -4714,7 +4711,6 @@ object Ko : Tr() {
     override val typingHapticsDesc: String = "답변의 글자가 나타날 때마다 약하게 진동하고, 답변이 끝나면 한 번 더 뚜렷하게 진동합니다."
     override val settingsUnsavedBody: String = "어시스턴트 설정에 저장되지 않은 변경 사항이 있습니다. 나가기 전에 저장할까요?"
     override val apiSavedToast: String = "API가 저장되었습니다"
-    // P2-2
     override val embeddingProviderTitle: String = "의미 기반 검색"
     override val embeddingProviderDesc: String = "어시스턴트가 정확한 단어가 아닌 의미로 노트를 찾는 방식입니다. 예: \"오사카 여행에 대해 뭐라고 썼더라\"."
     override val embeddingProviderLocalTitle: String = "기기 내"
