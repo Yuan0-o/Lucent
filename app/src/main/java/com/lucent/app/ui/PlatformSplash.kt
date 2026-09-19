@@ -11,14 +11,8 @@ import androidx.compose.ui.graphics.Color
  */
 fun Modifier.splashTopInset(): Modifier = statusBarsPadding()
 
-/**
- * The splash's animated backdrop. This stays [IsolatedBlobBackground] — Android's off-UI-thread,
- * half-resolution renderer — rather than the shared [FluidGlassBackground] the desktop twin uses:
- * the splash runs exactly when the JIT is coldest, which is the one place on this screen where
- * that isolation earns its cost. Losing it here was a silent regression in the first merge of this
- * file, caught by diffing against both platform originals before the duplicate files were deleted.
- */
+/** The splash uses the same bounded, off-main-thread diffuse field as the app and desktop. */
 @Composable
 fun SplashBackground(palette: List<Color>, backdropColor: Color, modifier: Modifier, animated: Boolean) {
-    IsolatedBlobBackground(palette = palette, backdropColor = backdropColor, modifier = modifier, animated = animated)
+    FluidGlassBackground(palette = palette, backdropColor = backdropColor, modifier = modifier, animated = animated)
 }

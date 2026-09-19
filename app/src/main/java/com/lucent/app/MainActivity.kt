@@ -89,7 +89,9 @@ import com.lucent.app.ui.AppLockController
 import com.lucent.app.ui.AssistantConfirmationDialog
 import com.lucent.app.ui.AssistantController
 import com.lucent.app.ui.AssistantScreen
-import com.lucent.app.ui.IsolatedBlobBackground
+import com.lucent.app.ui.FluidGlassBackground
+import com.lucent.app.ui.LocalBackgroundEnvironment
+import com.lucent.app.ui.rememberBackgroundEnvironment
 import com.lucent.app.ui.LocalHazeState
 import com.lucent.app.ui.LocalBottomBarInset
 import com.lucent.app.ui.LocalOnGradient
@@ -321,15 +323,15 @@ class MainActivity : FragmentActivity() {
             val themeMode by settingsRepo.themeMode.collectAsState(initial = initialThemeMode)
             val paletteName by settingsRepo.palette.collectAsState(initial = initialPalette)
             val fontKey by settingsRepo.font.collectAsState(initial = initialFont)
-            // Whether the drifting background animates (task: background on/off toggle). The
-            // initial value comes from the synchronous startup read, NOT a hard-coded `true`:
-            // with `initial = true`, a user who had switched the effect OFF still got one or two
-            // frames of drifting blobs behind the splash cat before the async DataStore emission
-            // arrived — the splash and the app disagreed about the setting. Seeding with the real
-            // stored value keeps splash and app in step from the very first frame.
+            // Seed the diffuse background switch from the saved value so splash and app agree
+            // from their first frame, without briefly enabling an effect the user turned off.
             val backgroundAnimated by settingsRepo.backgroundAnimationEnabled.collectAsState(
                 initial = startup.backgroundAnimationEnabled
             )
+            val backgroundEnvironment = rememberBackgroundEnvironment()
+            // Save across rotation, but replay on a genuine cold start. Hidden content below the
+            // splash stays composed without running a second background renderer.
+            var splashDone by rememberSaveable { mutableStateOf(false) }
 
             // Material You dynamic colour (task 2): whether the user has the wallpaper-palette mode
             // on. The initial value comes from the same synchronous startup read as the theme
@@ -386,11 +388,18 @@ class MainActivity : FragmentActivity() {
                 backdropColor = themeChoice.backdrop(systemDark)
                 paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
                     // v2.4.0: self-switching random palette (see rememberRandomPaletteColors).
-                    com.lucent.app.ui.rememberRandomPaletteColors()
+                    com.lucent.app.ui.rememberRandomPaletteColors(
+                        animated = backgroundAnimated,
+                        environment = backgroundEnvironment
+                    )
                 } else if (paletteName == PALETTE_CYCLE) {
                     // Auto-cycling background: drifts smoothly through every palette over time. The
                     // backdrop and text colours stay theme-based (below), so contrast is unaffected.
-                    rememberCyclingPaletteColors(LucentPalette.pickerEntries.map { it.colors })
+                    rememberCyclingPaletteColors(
+                        LucentPalette.pickerEntries.map { it.colors },
+                        animated = backgroundAnimated,
+                        environment = backgroundEnvironment
+                    )
                 } else {
                     LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
                         ?: LucentPalette.SUNSET.colors
@@ -401,17 +410,13 @@ class MainActivity : FragmentActivity() {
             MaterialTheme(colorScheme = colors, typography = lucentTypography(fontKey)) {
                 CompositionLocalProvider(
                     LocalOnGradient provides onGradient,
-                    LocalOnGradientMuted provides onGradientMuted
+                    LocalOnGradientMuted provides onGradientMuted,
+                    LocalBackgroundEnvironment provides backgroundEnvironment
                 ) {
                     // Keep the controller's mirror of the setting current, so toggling App Lock in
                     // Settings takes effect on the next background/relaunch without a restart (task 2).
                     val appLockOn by settingsRepo.appLockEnabled.collectAsState(initial = lockEnabled)
                     LaunchedEffect(appLockOn) { AppLockController.enabled = appLockOn }
-
-                    // The launch animation (added task). Saved rather than plain state, so a
-                    // rotation doesn't replay it — but not persisted beyond the process, so a genuine
-                    // cold start (the only time there is a gap to cover) always gets it.
-                    var splashDone by rememberSaveable { mutableStateOf(false) }
 
                     // Deliberately a Box with the splash LAYERED OVER the app rather than an
                     // either/or. The whole point is that the real content composes *underneath*
@@ -437,9 +442,17 @@ class MainActivity : FragmentActivity() {
                             // be read or interacted with. Unlocking flips the flag and the real app
                             // slides in.
                             if (AppLockController.locked) {
-                                LockScreen(paletteColors = paletteColors, backdropColor = backdropColor, backgroundAnimated = backgroundAnimated)
+                                LockScreen(
+                                    paletteColors = paletteColors,
+                                    backdropColor = backdropColor,
+                                    backgroundAnimated = backgroundAnimated && splashDone
+                                )
                             } else {
-                                LucentApp(paletteColors = paletteColors, backdropColor = backdropColor, backgroundAnimated = backgroundAnimated)
+                                LucentApp(
+                                    paletteColors = paletteColors,
+                                    backdropColor = backdropColor,
+                                    backgroundAnimated = backgroundAnimated && splashDone
+                                )
                             }
                         }
 
@@ -449,7 +462,7 @@ class MainActivity : FragmentActivity() {
                                 backdropColor = backdropColor,
                                 onFinished = { splashDone = true },
                                 // The cat's backdrop follows the SAME setting as the app behind it:
-                                // drifting off in Settings means a still splash too (fix task).
+                                // living gradient off in Settings means a still splash too.
                                 backgroundAnimated = backgroundAnimated
                             )
                         }
@@ -758,10 +771,9 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // The drifting blob background is decoration and nothing else. Hiding it from
-            // accessibility services means a screen reader starts on the screen's actual content
-            // instead of announcing an unlabelled canvas first, every single time.
-            IsolatedBlobBackground(
+            // The diffuse gradient is decorative. Accessibility starts on the actual content
+            // instead of announcing an unlabelled background image.
+            FluidGlassBackground(
                 palette = paletteColors,
                 backdropColor = backdropColor,
                 animated = backgroundAnimated,

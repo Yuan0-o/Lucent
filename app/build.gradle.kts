@@ -96,7 +96,9 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // thrown exception, which a CJK query never raises — searchNotes/searchTasks are LIKE-only again,
 // matching Android and SearchQuery's own documented design; the FTS5 schema and triggers stay,
 // unread, for a future pass that indexes every searched column and is proven safe for CJK first.
-val MARKETING_VERSION = "2.7.8"
+// 2.7.9: one full-screen diffuse gradient renderer for Android and Windows, with bounded
+// off-main-thread frames, adaptive quality, and lifecycle/system-motion-aware animation.
+val MARKETING_VERSION = "2.7.9"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

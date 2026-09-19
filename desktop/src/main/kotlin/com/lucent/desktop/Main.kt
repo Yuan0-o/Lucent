@@ -91,6 +91,7 @@ fun main() {
     // Language + lock decided before anything composes (prevents the startup "blink").
     com.lucent.app.i18n.L.apply(startup.appLanguage)
     AppLockController.markProcessStarted(startup.appLockEnabled)
+    com.lucent.app.data.StartupLog.setEnabled(startup.startupLoggingEnabled)
 
     // PHASE 3 (C-4): one Lucent, ever. If an instance is already running, this launch asks it to
     // surface its window and exits before any startup chore, scheduler, or model touches disk —
@@ -248,7 +249,7 @@ fun main() {
                     window.toFront()
                 }
             }
-            DesktopApp(startup)
+            DesktopApp(startup, active = windowVisible && !windowState.isMinimized)
         }
     }
 

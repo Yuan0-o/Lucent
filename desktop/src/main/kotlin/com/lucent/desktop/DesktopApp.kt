@@ -29,6 +29,8 @@ import com.lucent.app.AppNavigation
 import com.lucent.app.Screen
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.ui.FluidGlassBackground
+import com.lucent.app.ui.LocalBackgroundEnvironment
+import com.lucent.app.ui.rememberBackgroundEnvironment
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.LockScreen
@@ -60,7 +62,7 @@ import kotlinx.coroutines.delay
  * the drifting background starts OFF on desktop (see [SettingsRepository]).
  */
 @Composable
-fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
+fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val context = DesktopContext
     val repo = remember { SettingsRepository(context) }
     val systemDark = isSystemInDarkTheme()
@@ -71,6 +73,9 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
     val backgroundAnimated by repo.backgroundAnimationEnabled.collectAsState(
         initial = startup.backgroundAnimationEnabled
     )
+    val backgroundEnvironment = rememberBackgroundEnvironment(active)
+    // Keep the shell composed under the splash, but animate only the visible background.
+    var splashDone by remember { mutableStateOf(false) }
 
     // Task 2 — Material You dynamic colour (Android 12+). There is no wallpaper API on Windows, so
     // this flag is deliberately IGNORED here: even when it is true (e.g. after restoring a backup
@@ -106,11 +111,18 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
     val backdropColor = themeChoice.backdrop(systemDark)
     val paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
         // v2.4.0: self-switching random palette (see rememberRandomPaletteColors).
-        com.lucent.app.ui.rememberRandomPaletteColors()
+        com.lucent.app.ui.rememberRandomPaletteColors(
+            animated = backgroundAnimated,
+            environment = backgroundEnvironment
+        )
     } else if (paletteName == PALETTE_CYCLE) {
         // Auto-cycling background: drifts smoothly through every palette over time. Backdrop and
         // text colours stay theme-based (above), so contrast is unaffected. (Parity with Android.)
-        rememberCyclingPaletteColors(LucentPalette.pickerEntries.map { it.colors })
+        rememberCyclingPaletteColors(
+            LucentPalette.pickerEntries.map { it.colors },
+            animated = backgroundAnimated,
+            environment = backgroundEnvironment
+        )
     } else {
         LucentPalette.entries.firstOrNull { it.name == paletteName }?.colors
             ?: LucentPalette.SUNSET.colors
@@ -119,7 +131,11 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
     MaterialTheme(colorScheme = colors, typography = lucentTypography(fontKey)) {
         CompositionLocalProvider(
             LocalOnGradient provides onGradient,
-            LocalOnGradientMuted provides onGradientMuted
+            LocalOnGradientMuted provides onGradientMuted,
+            // The renderer and every palette clock read the window's own visibility and the
+            // system's animation preference from here, so a hidden or minimized window costs
+            // nothing and a reduced-motion setting is honoured once, not per call site.
+            LocalBackgroundEnvironment provides backgroundEnvironment
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // The lock stands entirely in front of the app: while locked, the shell isn't composed,
@@ -128,23 +144,23 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs) {
                     LockScreen(
                         paletteColors = paletteColors,
                         backdropColor = backdropColor,
-                        backgroundAnimated = backgroundAnimated
+                        // The shell below the splash stays composed (it pre-warms the first real
+                        // frame) but only the visible background animates.
+                        backgroundAnimated = backgroundAnimated && splashDone
                     )
                 } else {
                     DesktopShell(
                         repo = repo,
                         paletteColors = paletteColors,
                         backdropColor = backdropColor,
-                        backgroundAnimated = backgroundAnimated
+                        backgroundAnimated = backgroundAnimated && splashDone
                     )
                 }
 
                 ToastOverlay()
 
                 // The launch animation, layered OVER everything (lock screen + shell) so the real
-                // content composes underneath while it plays — same idea as Android's splash. Kept in
-                // plain process state, so it shows once per launch and a recomposition doesn't replay it.
-                var splashDone by remember { mutableStateOf(false) }
+                // content composes underneath while it plays — same idea as Android's splash.
                 if (!splashDone) {
                     LucentSplash(
                         paletteColors = paletteColors,

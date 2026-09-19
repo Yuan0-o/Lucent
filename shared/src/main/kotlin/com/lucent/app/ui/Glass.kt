@@ -320,9 +320,16 @@ private const val RANDOM_FADE_STEPS = 24
  * only changes a handful of times during the fade, never on every frame). Positions of the
  * drifting blobs are untouched: they are pure functions of time, so the motion is continuous
  * through the colour change.
+ *
+ * v2.7.9: the walk is gated by the shared [BackgroundEnvironment] plus the user's own switch, so a
+ * hidden window, a stopped activity or a reduced-motion preference leaves the first board in place
+ * and costs nothing. A still gradient is still a gradient; a spinning clock nobody watches is not.
  */
 @androidx.compose.runtime.Composable
-fun rememberRandomPaletteColors(): List<Color> {
+fun rememberRandomPaletteColors(
+    animated: Boolean = true,
+    environment: BackgroundEnvironment = LocalBackgroundEnvironment.current
+): List<Color> {
     val boards = LucentPalette.pickerEntries
     // Plain MutableState holders instead of `by` delegates: this file does not import the
     // androidx.compose.runtime getValue/setValue extensions, and full qualification reads better
@@ -330,6 +337,9 @@ fun rememberRandomPaletteColors(): List<Color> {
     val colors = androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf(boards.first().colors)
     }
+    val running = animated && environment.active && environment.motionEnabled &&
+        !androidx.compose.ui.platform.LocalInspectionMode.current
+    if (!running) return colors.value
     val seed = androidx.compose.runtime.remember { kotlin.random.Random.nextInt() }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         // Deterministic pick per cycle index: a 21.8 s (hold + fade) period means the "random" walk
