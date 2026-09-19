@@ -6,10 +6,6 @@ import androidx.compose.ui.platform.LocalContext
 import com.lucent.app.data.FontStore
 import com.lucent.app.i18n.S
 
-/**
- * Desktop seam for the shared export picker. The PDF hint reflects the fonts currently available
- * to the desktop document exporter.
- */
 @Composable
 fun rememberExportPdfFontHint(): String? {
     val context = LocalContext.current

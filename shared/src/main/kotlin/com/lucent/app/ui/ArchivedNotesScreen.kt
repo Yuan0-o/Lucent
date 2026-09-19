@@ -44,33 +44,10 @@ import com.lucent.app.data.Note
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * How the archive groups its notes. TIME is a single, flat most-recently-archived-first list (the
- * default). TAG groups notes under each of their tags, and the notes within every tag group are
- * themselves ordered by archive time (newest first). A note with several tags appears once under
- * each of its tags; an untagged note is collected under a synthetic "Untagged" heading so nothing
- * is ever hidden.
- */
 private enum class ArchiveGrouping { TIME, TAG }
 
-// Sentinel key for the "no tags" bucket; its visible label is localized at the display site.
 private const val UNTAGGED_KEY = "\u0000untagged"
 
-/**
- * The dedicated archive screen for notes. Reached from the archive icon in the Notes header.
- *
- * Only archived notes appear here — the Notes home page queries `noteDao().getAll()` (WHERE
- * archived = 0), so the moment a note is archived it leaves the home list and shows up here
- * instead. Mirrors the Completed-tasks page in look and structure (back button, search box,
- * frosted cards, empty state) so the app feels consistent, but instead of a date filter it offers
- * a Time / Tag grouping toggle, defaulting to Time.
- *
- * Owned by [NotesScreen]: opening a note's detail and deleting a note both delegate back to the
- * parent so the one detail-page and the one delete-confirmation dialog live in a single place. The
- * action this screen implements directly is "unarchive" (restore), which clears the archive flag
- * and sends the note back to the home list — the mirror of the undo-complete button on the
- * completed-tasks page.
- */
 @Composable
 fun ArchivedNotesScreen(
     onBack: () -> Unit,
@@ -87,7 +64,6 @@ fun ArchivedNotesScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var grouping by remember { mutableStateOf(ArchiveGrouping.TIME) }
-    // The note whose restore is awaiting confirmation (task 7). Nothing is written until Confirm.
     var noteToRestore by remember { mutableStateOf<Note?>(null) }
 
     noteToRestore?.let { note ->
@@ -108,7 +84,6 @@ fun ArchivedNotesScreen(
         )
     }
 
-    // Text search matches the title, body, or any tag — the same fields the home search covers.
     val filtered = remember(archived, searchQuery) {
         archived.filter { note ->
             searchQuery.isBlank() ||
@@ -136,7 +111,6 @@ fun ArchivedNotesScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Grouping toggle: Time (flat, newest first) or Tag (grouped by tag). Time is the default.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(com.lucent.app.i18n.S.groupBy, color = onGradientMuted, fontSize = 13.sp)
             Spacer(modifier = Modifier.width(8.dp))
@@ -166,18 +140,13 @@ fun ArchivedNotesScreen(
             return
         }
 
-        // Restoring asks first (task 7): it moves the note off this page and back into the home
-        // grid, so a mis-tap on a small icon silently rearranges two lists. The state is declared
-        // here beside its only use; the dialog itself is rendered further down.
         val restore: (Note) -> Unit = { note -> noteToRestore = note }
 
         when (grouping) {
             ArchiveGrouping.TIME -> {
-                // A single flat list; `filtered` is already archive-time ordered by the DAO query.
                 LazyColumn(
                     modifier = Modifier.hazeSource(state = hazeState),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    // Reserve the floating capsule's height so the last row clears the pill.
                     contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
                 ) {
                     items(filtered, key = { it.id }) { note ->
@@ -193,14 +162,10 @@ fun ArchivedNotesScreen(
                 }
             }
             ArchiveGrouping.TAG -> {
-                // Build tag -> notes, preserving the archive-time order within each tag (filtered is
-                // already sorted, so appending in-order keeps each group sorted). Tags are shown
-                // alphabetically, with the synthetic "Untagged" group last.
                 val groups = remember(filtered) { buildTagGroups(filtered) }
                 LazyColumn(
                     modifier = Modifier.hazeSource(state = hazeState),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    // Reserve the floating capsule's height so the last row clears the pill.
                     contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
                 ) {
                     groups.forEach { (tag, notesForTag) ->
@@ -229,11 +194,6 @@ fun ArchivedNotesScreen(
     }
 }
 
-/**
- * Groups notes by tag for the Tag view. Returns an ordered list of (tag, notes) pairs: real tags
- * first in alphabetical order, then the "Untagged" bucket last if any untagged notes exist. The
- * incoming [notes] list is assumed already sorted by archive time, so each group keeps that order.
- */
 private fun buildTagGroups(notes: List<Note>): List<Pair<String, List<Note>>> {
     val tagged = linkedMapOf<String, MutableList<Note>>()
     val untagged = mutableListOf<Note>()
@@ -257,10 +217,6 @@ private fun buildTagGroups(notes: List<Note>): List<Pair<String, List<Note>>> {
     return result
 }
 
-/**
- * A single archived-note card: title, when it was archived, a short body preview, and its tags,
- * plus restore (unarchive) and delete actions. Tapping the card opens the note's detail page.
- */
 @Composable
 private fun ArchivedNoteCard(
     note: Note,
@@ -308,8 +264,6 @@ private fun ArchivedNoteCard(
                 Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
             }
         }
-        // A checklist note has no body to preview, so show its progress instead — "3/5 done" is the
-        // only thing worth knowing about a checklist you're not currently looking at.
         val preview = if (note.isChecklist) {
             val items = Checklist.parse(note.checklist)
             if (items.isEmpty()) "" else com.lucent.app.i18n.S.checklistDoneCount(items.count { it.done }, items.size)

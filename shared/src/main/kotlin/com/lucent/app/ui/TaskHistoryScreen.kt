@@ -46,18 +46,6 @@ import com.lucent.app.data.TaskVersion
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * A task's local revision history (task A19) — the exact counterpart of [NoteHistoryScreen], down
- * to the layout, so the two features are learned once rather than twice.
- *
- * The only real difference is *what a version is made of*. A note version is title + body + tags;
- * a task version is title + details + subtasks + priority + due date. So the preview line reports
- * a subtask count where the note version reports body text, and the read-only preview renders the
- * subtask list rather than Markdown.
- *
- * Restoring is recorded as an edit of its own (see [TaskHistory.applyTo] and the restore path
- * below), which makes restoring undoable in turn.
- */
 @Composable
 fun TaskHistoryScreen(
     task: Task,
@@ -80,9 +68,6 @@ fun TaskHistoryScreen(
 
     fun restore(version: TaskVersion) {
         AppScope.io.launch {
-            // Re-read the live row rather than trusting the copy this screen was composed with: the
-            // assistant could have edited the task while the history page sat open, and restoring
-            // over a stale snapshot would silently throw that edit away without recording it.
             val current = db.taskDao().getByIdOnce(task.id) ?: return@launch
             val restored = TaskHistory.applyTo(current, version)
             TaskHistory.recordIfChanged(
@@ -111,9 +96,6 @@ fun TaskHistoryScreen(
         )
     }
 
-    // Task A19 also asks for *manual* deletion. Automatic trimming answers "don't grow forever"; it
-    // does not answer "I don't want that one kept", which is a different and entirely reasonable
-    // request — a revision can contain a sentence someone would rather not keep a copy of.
     confirmDelete?.let { version ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
@@ -132,7 +114,6 @@ fun TaskHistoryScreen(
 
     val preview = previewing
     if (preview != null) {
-        // ---- Read-only preview of one old version ----
         Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()).padding(bottom = LocalBottomBarInset.current)) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { previewing = null }) {
@@ -149,9 +130,6 @@ fun TaskHistoryScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(com.lucent.app.i18n.S.historyAsOf(formatTimestamp(preview.savedAt)), color = onGradientMuted, fontSize = 12.sp)
 
-                // Priority and due date belong in the preview because they are part of what this
-                // version *was* — restoring puts them back, so seeing them first is the difference
-                // between an informed restore and a surprise.
                 val priority = remember(preview.priority) { TaskPriority.fromValue(preview.priority) }
                 if (priority != TaskPriority.NONE) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -172,8 +150,6 @@ fun TaskHistoryScreen(
                 val items = remember(preview.subtasks) { Checklist.parse(preview.subtasks) }
                 if (items.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    // Read-only: this is a photograph of the past, not a live list, and offering a
-                    // checkbox that could not persist anywhere would be a lie.
                     ChecklistView(
                         items = items,
                         onToggle = null,
@@ -192,7 +168,6 @@ fun TaskHistoryScreen(
         return
     }
 
-    // ---- The list of versions ----
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -230,15 +205,6 @@ fun TaskHistoryScreen(
     }
 }
 
-/**
- * One revision in the list: when it was current, and enough of its content to recognise it by.
- *
- * The preview line is what makes the list usable at all — a column of bare timestamps forces the
- * user to open every one to find what they are after, which is exactly the frustration the feature
- * exists to remove. For a task that means the details text when there is one, and the subtask
- * count when there isn't, because a task whose content lives entirely in its checklist is common
- * and would otherwise render as a blank row.
- */
 @Composable
 private fun TaskVersionCard(
     version: TaskVersion,
@@ -283,9 +249,6 @@ private fun TaskVersionCard(
             IconButton(onClick = onRestore) {
                 Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.restoreThisVersion, tint = onGradient)
             }
-            // Task A19 — muted, and second: deleting a revision is a rarer intent than restoring
-            // one, and on a screen full of things you might want back, the destructive control
-            // should not be the loudest thing on the row.
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.DeleteOutline, contentDescription = com.lucent.app.i18n.S.deleteThisVersion, tint = onGradientMuted)
             }

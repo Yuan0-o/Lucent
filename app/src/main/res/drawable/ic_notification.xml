@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Small icon shown in the status bar and notification shade for task reminders (see
-     reminders/ReminderReceiver.kt). A notification icon must be a flat silhouette on a transparent
-     background: the OS masks it to its own shape and applies its own tint, so any colour or detail
-     here is discarded on most surfaces. Keeping it a plain white bell is therefore not a
-     simplification — it's the only thing that renders correctly everywhere. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"

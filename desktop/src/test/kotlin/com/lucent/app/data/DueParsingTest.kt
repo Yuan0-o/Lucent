@@ -11,11 +11,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Characterisation tests for [DueParsing] (P0-5 domain group): the assistant-facing due-date
- * grammar must accept the absolute forms the tools are told to write, default a bare date to 9am
- * local time, round-trip through [DueParsing.format], and recognise the clear-date words.
- */
 class DueParsingTest {
 
     private val zone = ZoneId.systemDefault()
@@ -55,7 +50,6 @@ class DueParsingTest {
 
     @Test
     fun formatRoundTripsParsedValue() {
-        // The reported shape the tools accept is exactly what they read back: no ambiguity.
         val parsed = DueParsing.parse("2026-03-15 14:45")!!
         val formatted = DueParsing.format(parsed)
         assertEquals(parsed, DueParsing.parse(formatted))

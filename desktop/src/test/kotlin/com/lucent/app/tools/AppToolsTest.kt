@@ -7,16 +7,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Characterisation tests for the assistant's in-app tool catalogue (P0-5 "tool parser"): the
- * definitions a model is allowed to call, the read-only set that skips confirmation, and the
- * argument-editing helpers that rewrite a proposed call before it runs. Assertions stick to
- * structure (names, keys, order, flags, JSON semantics) rather than localised labels, so the tests
- * stay valid in every locale CI runs in.
- */
 class AppToolsTest {
 
-    // ---- Tool catalogue ----
 
     @Test
     fun definitionsExcludeWebSearchByDefault() {
@@ -41,13 +33,11 @@ class AppToolsTest {
         assertTrue(title.required)
         val deleteNote = AppTools.definitions().first { it.name == "delete_note" }
         assertTrue(deleteNote.params.any { it.name == "title" })
-        // Every definition must have a non-blank description for the model.
         for (d in AppTools.definitions()) {
             assertTrue(d.description.isNotBlank(), "blank description on ${d.name}")
         }
     }
 
-    // ---- Read-only / mutating split ----
 
     @Test
     fun readOnlyToolsAreNotMutating() {
@@ -63,13 +53,11 @@ class AppToolsTest {
         }
     }
 
-    // ---- Argument editing (what the confirm dialog can rewrite) ----
 
     @Test
     fun editableArgumentsOrderAndKeysForCreateTask() {
         val args = """{"title": "Call dentist", "due": "2026-02-01", "priority": "high"}"""
         val edits = AppTools.editableArguments("create_task", args)
-        // title, notes, due, subtasks is the display order; only provided keys appear.
         assertEquals(listOf("title", "due"), edits.map { it.key })
         assertFalse(edits.any { it.multiline })
         assertEquals("Call dentist", edits[0].value)
@@ -85,7 +73,6 @@ class AppToolsTest {
 
     @Test
     fun updateUsesNewTitleNotLookupTitle() {
-        // The lookup title identifies the item and must not be a field; the NEW title is.
         val args = """{"title": "Old note", "new_title": "Fresh title", "body": "new body"}"""
         val edits = AppTools.editableArguments("update_note", args)
         assertEquals(listOf("new_title", "body"), edits.map { it.key })
@@ -108,7 +95,7 @@ class AppToolsTest {
         )
         val parsed = org.json.JSONObject(out)
         assertEquals("B", parsed.getString("title"))
-        assertEquals("2026-02-01", parsed.getString("due")) // blank edit skipped
+        assertEquals("2026-02-01", parsed.getString("due"))
         assertEquals("added", parsed.getString("notes"))
     }
 
@@ -122,7 +109,6 @@ class AppToolsTest {
     fun withArgumentSetsSingleKey() {
         val out = AppTools.withArgument("""{"title": "A"}""", "title", "B")
         assertEquals("B", org.json.JSONObject(out).getString("title"))
-        // A call we cannot read is a call we must not silently rewrite.
         assertEquals("{broken", AppTools.withArgument("{broken", "title", "B"))
     }
 }

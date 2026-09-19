@@ -46,23 +46,6 @@ import com.lucent.app.data.NoteVersion
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * A note's local revision history: every earlier version of its text, newest first, each one
- * previewable and restorable.
- *
- * ### What this is for
- *
- * The failure it exists to prevent is mundane and unrecoverable: you select all, you type over it,
- * you tap Save, and the paragraph you'd been building for a week is gone. There is no undo across
- * an app restart, no OS-level file history for a row in a SQLite database, and no cloud to fall
- * back on — by design, since nothing here leaves the phone. So the app has to be the thing that
- * remembers, and it has to remember locally.
- *
- * Restoring is itself recorded as an edit (see [NoteHistory.applyTo] and the restore path below),
- * which means restoring is *also* undoable. That matters more than it sounds: a one-way restore
- * that destroys whatever you had before you restored just moves the cliff edge rather than removing
- * it, and someone browsing their own history is by definition already unsure what they want.
- */
 @Composable
 fun NoteHistoryScreen(
     note: Note,
@@ -79,17 +62,12 @@ fun NoteHistoryScreen(
 
     var previewing by remember { mutableStateOf<NoteVersion?>(null) }
     var confirmRestore by remember { mutableStateOf<NoteVersion?>(null) }
-    // Task A19 — automatic trimming answers "don't grow forever"; it does not answer
-    // "I don't want that one kept", which is a different and entirely reasonable request.
     var confirmDelete by remember { mutableStateOf<NoteVersion?>(null) }
 
     BackHandler(enabled = previewing != null) { previewing = null }
 
     fun restore(version: NoteVersion) {
         AppScope.io.launch {
-            // Re-read the live row rather than trusting the copy this screen was composed with: the
-            // assistant could have edited the note while the history page sat open, and restoring
-            // over a stale snapshot would silently throw that edit away without recording it.
             val current = db.noteDao().getByIdOnce(note.id) ?: return@launch
             val restored = NoteHistory.applyTo(current, version)
             NoteHistory.recordIfChanged(
@@ -100,9 +78,6 @@ fun NoteHistoryScreen(
                 newTags = restored.tags,
                 newIsChecklist = restored.isChecklist,
                 newChecklist = restored.checklist,
-                // R3 report: the pre-restore snapshot is a brand-new history entry made NOW, not a
-                // record of an old saved-at time — without this it could read as "nothing was
-                // recorded" in the newest-first list (see NoteHistory.recordIfChanged).
                 savedAt = System.currentTimeMillis()
             )
             db.noteDao().update(restored)
@@ -142,7 +117,6 @@ fun NoteHistoryScreen(
 
     val preview = previewing
     if (preview != null) {
-        // ---- Read-only preview of one old version ----
         Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()).padding(bottom = LocalBottomBarInset.current)) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { previewing = null }) {
@@ -158,9 +132,6 @@ fun NoteHistoryScreen(
                 Text(preview.title.ifBlank { com.lucent.app.i18n.S.untitled }, color = onGradient, fontSize = 22.sp)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(com.lucent.app.i18n.S.historyAsOf(formatTimestamp(preview.savedAt)), color = onGradientMuted, fontSize = 12.sp)
-                // A quiet size read-out for this revision, so "how much did I have written on July 3rd"
-                // is answerable at a glance. Checklist versions store their items separately, so count
-                // the checklist text for those and the body for plain-text ones.
                 val statsText = if (preview.isChecklist) {
                     Checklist.parse(preview.checklist).joinToString("\n") { it.text }
                 } else preview.body
@@ -175,8 +146,6 @@ fun NoteHistoryScreen(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 if (preview.isChecklist) {
-                    // Rendered read-only: this is a photograph of the past, not a live checklist,
-                    // and offering a checkbox that couldn't persist anywhere would be a lie.
                     ChecklistView(
                         items = Checklist.parse(preview.checklist),
                         onToggle = null,
@@ -199,7 +168,6 @@ fun NoteHistoryScreen(
         return
     }
 
-    // ---- The list of versions ----
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -223,7 +191,6 @@ fun NoteHistoryScreen(
         LazyColumn(
             modifier = Modifier.hazeSource(state = hazeState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            // Reserve the floating capsule's height so the last row clears the pill.
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
         ) {
             items(versions, key = { it.id }) { version ->
@@ -238,13 +205,6 @@ fun NoteHistoryScreen(
     }
 }
 
-/**
- * One revision in the list: when it was current, and enough of its text to recognise it by.
- *
- * The preview line is what makes the list usable at all — a column of bare timestamps forces the
- * user to open every one to find the paragraph they're after, which is exactly the frustration the
- * feature exists to remove.
- */
 @Composable
 private fun VersionCard(
     version: NoteVersion,
@@ -289,9 +249,6 @@ private fun VersionCard(
             IconButton(onClick = onRestore) {
                 Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.restoreThisVersion, tint = onGradient)
             }
-            // Muted, and second: deleting a revision is a rarer intent than restoring one, and on a
-            // screen full of things you might want back the destructive control should not be the
-            // loudest thing on the row.
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.DeleteOutline, contentDescription = com.lucent.app.i18n.S.deleteThisVersion, tint = onGradientMuted)
             }

@@ -3,25 +3,8 @@ package com.lucent.app.data
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * v2.7.2 — user-defined note templates, persisted as settings JSON.
- *
- * The four built-in templates live in [NoteTemplate] and stay there; this module is the storage
- * arithmetic for templates the user makes from the composer, exactly the way [SavedSearches] holds
- * its list: one JSON string in the settings store, no schema change, no new table. A template is
- * the same thing [NoteTemplate.prefill] hands the composer — title, body, tags, checklist mode and
- * items — plus the two choices a composed note can carry that the built-ins never touch (pin and
- * colour), so a saved template restores the note exactly as it was when it was captured.
- *
- * Identity is a string id (UUID) rather than a name, because unlike saved searches two templates
- * may legitimately share a title; the list is capped so the chip row stays a row.
- *
- * The interrupted-authoring draft rides the same JSON shape under its own settings key (see
- * [Draft]); writing it is the UI's job — this file only defines the shape and the arithmetic.
- */
 object CustomTemplates {
 
-    /** Enough for a chips row. */
     const val MAX = 24
 
     data class Template(
@@ -36,7 +19,6 @@ object CustomTemplates {
         val checklistTexts: List<String> = emptyList()
     )
 
-    /** The interrupted-authoring record: the composer fields of an unfinished template. */
     data class Draft(
         val title: String = "",
         val body: String = "",
@@ -99,17 +81,14 @@ object CustomTemplates {
         return (0 until a.length()).mapNotNull { i -> a.optString(i, "").ifBlank { null } }
     }
 
-    /** Add (or replace, by id) and cap at [MAX]. Returns the new JSON. */
     fun upsert(json: String?, t: Template): String {
         val without = parse(json).filterNot { it.id == t.id }
         return serialize((without + t).takeLast(MAX))
     }
 
-    /** Remove by id. Returns the new JSON. */
     fun remove(json: String?, id: String): String =
         serialize(parse(json).filterNot { it.id == id })
 
-    // ---- Draft shape ----
 
     fun draftToJson(d: Draft): String = JSONObject()
         .put("title", d.title)
@@ -139,7 +118,6 @@ object CustomTemplates {
         }
     }
 
-    /** Whether a draft holds anything worth continuing. */
     fun draftEmpty(d: Draft): Boolean =
         d.title.isBlank() && d.body.isBlank() && d.tags.isEmpty() &&
             !d.pinned && d.colorKey == null && !d.isChecklist && d.checklistTexts.isEmpty()

@@ -1,22 +1,3 @@
-//! lucent_native — the Rust half of Lucent's performance-critical paths.
-//!
-//! Two things live here, both chosen because they are the app's real CPU hot spots and both under
-//! one iron rule: **identical observable behaviour** to the Kotlin they accelerate. Kotlin keeps
-//! its original implementations as automatic fallbacks; this library only changes *speed*.
-//!
-//! 1. **Crypto primitives** (`pbkdf2_sha256`, `aes_gcm_seal`, `aes_gcm_open`).
-//!    PBKDF2-HMAC-SHA256 and AES-256-GCM are standardized functions: for any given input the
-//!    output is bit-identical no matter who computes it, which is exactly what makes swapping the
-//!    engine safe. Every format decision (salt|iv|ciphertext layouts, frame AAD, headers) stays in
-//!    Kotlin, untouched — Rust is handed (key, nonce, aad, data) and returns bytes.
-//!
-//! 2. **Background-animation frame math** (`blob_frame`). The exact oscillator arithmetic of
-//!    FluidGlassBackground — same constants, same formulas, evaluated in f64 like the JVM does —
-//!    computed for all six blobs in a single JNI call per frame.
-//!
-//! Every export is wrapped in `catch_unwind`: a panic degrades to a "failed" return value that
-//! Kotlin answers by using its own implementation. This library can therefore make the app faster
-//! but can never make it crash.
 
 use jni::objects::{JByteArray, JClass, JFloatArray};
 use jni::sys::{jboolean, jbyteArray, jfloat, jint, JNI_FALSE, JNI_TRUE};
@@ -29,9 +10,6 @@ use sha2::Sha256;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-// ------------------------------------------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------------------------------------------
 
 fn bytes(env: &JNIEnv, arr: &JByteArray) -> Option<Vec<u8>> {
     env.convert_byte_array(arr).ok()
@@ -44,14 +22,6 @@ fn to_jbyte_array(env: &JNIEnv, data: &[u8]) -> jbyteArray {
     }
 }
 
-// ------------------------------------------------------------------------------------------------
-// PBKDF2-HMAC-SHA256
-//
-// Mirrors `SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")` with a `PBEKeySpec`: Android's
-// provider encodes the password chars as UTF-8, so Kotlin passes the UTF-8 bytes here and the
-// derived key is byte-identical. This is the single most expensive routine in the app (210,000
-// rounds for a password-protected backup) and the biggest honest win of the rewrite.
-// ------------------------------------------------------------------------------------------------
 
 #[no_mangle]
 pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativePbkdf2Sha256(
@@ -78,10 +48,6 @@ pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativePbkdf
     }
 }
 
-// ------------------------------------------------------------------------------------------------
-// AES-256-GCM (128-bit tag), matching "AES/GCM/NoPadding" exactly:
-// seal returns ciphertext || 16-byte tag; open takes ciphertext || tag and fails on any mismatch.
-// ------------------------------------------------------------------------------------------------
 
 fn gcm_cipher(key: &[u8]) -> Option<Aes256Gcm> {
     if key.len() != 32 {
@@ -142,20 +108,10 @@ pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeAesGc
     }));
     match result {
         Ok(Some(pt)) => to_jbyte_array(&env, &pt),
-        // Auth failure and any other problem both surface as null; Kotlin turns null into the
-        // same IOException path its own cipher would have thrown.
         _ => std::ptr::null_mut(),
     }
 }
 
-// ------------------------------------------------------------------------------------------------
-// FluidGlassBackground frame math — constants and formulas copied verbatim from
-// ui/FluidGlassBackground.kt. All trig is evaluated in f64 and narrowed to f32 at the end,
-// which is precisely what `kotlin.math.sin(Float)` (→ Math.sin(double).toFloat()) does, so the
-// values match the Kotlin path bit-for-bit in practice.
-//
-// Output layout per blob i (stride 6): [cx, cy, radius, corner, squash, angleDeg]
-// ------------------------------------------------------------------------------------------------
 
 const BLOB_COUNT: usize = 6;
 const TAU: f64 = std::f64::consts::PI * 2.0;
@@ -184,8 +140,6 @@ const SQUASH_AMOUNT: f64 = 0.07;
 
 const PERIOD_ROTATE: [f64; 6] = [21000.0, 24000.0, 27000.0, 30000.0, 33000.0, 36000.0];
 
-/// Fills `out` (length >= 36) with the six blobs' draw parameters at elapsed time `t_ms`.
-/// Returns JNI_TRUE on success.
 #[no_mangle]
 pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeBlobFrame(
     env: JNIEnv,
@@ -209,7 +163,7 @@ pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeBlobF
 
             let pulse_phase = (t / (2.0 * PERIOD_PULSE[i])) % 1.0;
             let triangle = if pulse_phase < 0.5 { pulse_phase * 2.0 } else { (1.0 - pulse_phase) * 2.0 };
-            let eased = triangle * triangle * (3.0 - 2.0 * triangle); // smoothstep
+            let eased = triangle * triangle * (3.0 - 2.0 * triangle);
             let pulse = 0.82 + 0.36 * eased;
 
             let cx = (BASE_X[i] + AMP_X[i] * ax.cos()) * w;
@@ -219,7 +173,7 @@ pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeBlobF
             let morph_raw = 0.62 * (TAU * (t / PERIOD_MORPH_A[i]) + PHASE_MORPH[i]).sin()
                 + 0.38 * (TAU * (t / PERIOD_MORPH_B[i])).sin();
             let morph01 = ((morph_raw + 1.0) * 0.5).clamp(0.0, 1.0);
-            let morph = morph01 * morph01 * (3.0 - 2.0 * morph01); // smoothstep
+            let morph = morph01 * morph01 * (3.0 - 2.0 * morph01);
             let corner = CORNER_CIRCLE + (CORNER_SQUARE - CORNER_CIRCLE) * morph;
 
             let squash = 1.0 + SQUASH_AMOUNT * (TAU * (t / PERIOD_SQUASH[i]) + PHASE_MORPH[i]).sin();
@@ -243,12 +197,6 @@ pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeBlobF
     }
 }
 
-// ------------------------------------------------------------------------------------------------
-// Tests: pin the primitives to independently-generated reference vectors so the "byte-identical
-// to the JVM" promise is checked by `cargo test`, not by hope. The PBKDF2/AES-GCM vectors below
-// were produced with Python's hashlib / cryptography (same standards the Android providers
-// implement); the blob vector re-evaluates the Kotlin formulas literally.
-// ------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -260,7 +208,6 @@ mod tests {
 
     #[test]
     fn pbkdf2_matches_reference() {
-        // hashlib.pbkdf2_hmac('sha256', b'Lucent-backup-passphrase-v1', bytes(range(16)), 10000, 32)
         let salt: Vec<u8> = (0u8..16).collect();
         let mut out = [0u8; 32];
         pbkdf2_hmac::<Sha256>(b"Lucent-backup-passphrase-v1", &salt, 10_000, &mut out);
@@ -272,7 +219,6 @@ mod tests {
 
     #[test]
     fn aes_gcm_matches_reference_and_round_trips() {
-        // AESGCM(bytes(range(32))).encrypt(bytes(range(12)), b'hello lucent', b'\x01\x00\x00\x00\x07')
         let key: Vec<u8> = (0u8..32).collect();
         let iv: Vec<u8> = (0u8..12).collect();
         let aad = [1u8, 0, 0, 0, 7];
@@ -285,7 +231,6 @@ mod tests {
             .decrypt(Nonce::from_slice(&iv), Payload { msg: &ct, aad: &aad })
             .unwrap();
         assert_eq!(pt, b"hello lucent");
-        // Flip one bit -> the open must fail (the tag check).
         let mut bad = ct.clone();
         bad[0] ^= 1;
         assert!(cipher
@@ -295,8 +240,6 @@ mod tests {
 
     #[test]
     fn blob_math_matches_kotlin_formulas() {
-        // Evaluate blob 0 at t = 1234.5ms, 1000x2000 the way FluidGlassBackground.kt does and
-        // compare against the same arithmetic here.
         let t = 1234.5f64;
         let (w, h) = (1000.0f64, 2000.0f64);
         let i = 0usize;
@@ -309,7 +252,6 @@ mod tests {
         let expected_cx = ((BASE_X[i] + AMP_X[i] * ax.cos()) * w) as f32;
         let expected_radius = ((w.min(h)) * 0.42 * SIZE_FACTOR[i] * pulse) as f32;
 
-        // Re-run through the same block the JNI export uses.
         let min_dim = w.min(h);
         let base_radius = min_dim * 0.42;
         let cx = ((BASE_X[i] + AMP_X[i] * ax.cos()) * w) as f32;
@@ -321,19 +263,6 @@ mod tests {
     }
 }
 
-// ------------------------------------------------------------------------------------------------
-// CPU capability probe (Windows backlog W-1)
-//
-// The desktop LLM engine DLLs are compiled /arch:AVX2 (see desktop/native/CMakeLists.txt): on a
-// CPU without AVX2 the DLL LOADS fine — no AVX instruction runs at load — and the first inference
-// call then dies with an illegal-instruction fault that takes the whole JVM down. Not an
-// exception; a process death. This export lets Kotlin ask the question BEFORE loading the engine,
-// from the one native library that is safe to call anywhere: lucent_native itself is built for
-// plain x86-64, so running this probe can never be the thing that faults.
-//
-// On non-x86_64 targets (the Android ABIs of this same crate) the question is meaningless — those
-// engine builds are compiled per-ABI correctly — so the probe answers "fine" and gates nothing.
-// ------------------------------------------------------------------------------------------------
 
 #[no_mangle]
 pub extern "system" fn Java_com_lucent_app_nativebridge_LucentNative_nativeCpuHasAvx2(

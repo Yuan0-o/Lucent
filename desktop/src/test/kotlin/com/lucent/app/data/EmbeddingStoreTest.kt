@@ -7,15 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
-/**
- * P2-2 (data layer only): [EmbeddingStore] never calls an embedding model in this test file either
- * — every vector below is hand-written, chosen to make the expected similarity ordering obvious by
- * construction, not computed. What this actually verifies: the byte encoding round-trips exactly,
- * search ranks by cosine similarity and not by insertion order, two models' vectors for the same
- * note coexist instead of colliding (the reason the primary key is `(noteId, model)`, not just
- * `noteId` — see MIGRATION_18_19's doc comment), and the AFTER-DELETE trigger from that same
- * migration actually fires — a note's embeddings do not outlive the note.
- */
 class EmbeddingStoreTest {
 
     private class TestContext(private val dir: File) : Context() {
@@ -67,20 +58,16 @@ class EmbeddingStoreTest {
             val noteB = db.noteDao().insert(Note(title = "B", body = "close to the query"))
             val noteC = db.noteDao().insert(Note(title = "C", body = "identical to the query"))
 
-            // Inserted deliberately out of similarity order (A, B, C) so a search that returned rows
-            // in insertion order rather than similarity order would still pass a naively-written
-            // test — the assertions below check the actual ranking, not just set membership.
             EmbeddingStore.store(context, noteA, "test-model", floatArrayOf(1f, 0f, 0f))
             EmbeddingStore.store(context, noteB, "test-model", floatArrayOf(0.9f, 0.1f, 0f))
             EmbeddingStore.store(context, noteC, "test-model", floatArrayOf(0f, 1f, 0f))
 
-            val query = floatArrayOf(0f, 1f, 0f) // identical direction to noteC's vector
+            val query = floatArrayOf(0f, 1f, 0f)
             val results = EmbeddingStore.search(context, query, "test-model", topK = 3)
 
             assertEquals(listOf(noteC, noteB, noteA), results.map { it.noteId })
             assertTrue(results[0].similarity > results[1].similarity)
             assertTrue(results[1].similarity > results[2].similarity)
-            // noteC's vector is exactly the query direction: cosine similarity 1.0 (within float error).
             assertTrue(kotlin.math.abs(results[0].similarity - 1f) < 0.0001f)
         }
     }
@@ -115,8 +102,6 @@ class EmbeddingStoreTest {
             val cloudHit = EmbeddingStore.search(context, floatArrayOf(0f, 1f), "cloud-model", topK = 5)
             assertEquals(listOf(noteId), localHit.map { it.noteId })
             assertEquals(listOf(noteId), cloudHit.map { it.noteId })
-            // A model this note has no stored vector for must not surface a hit just because the
-            // same note has vectors under other models — models are isolated, never merged.
             assertTrue(EmbeddingStore.search(context, floatArrayOf(1f, 0f), "another-model", topK = 5).isEmpty())
         }
     }

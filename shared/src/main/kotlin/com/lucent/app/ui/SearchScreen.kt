@@ -57,38 +57,10 @@ import com.lucent.app.data.TaskPriority
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 
-/**
- * How many candidate rows SQLite hands back per kind before Kotlin refines them. Far past what
- * anyone scrolls; it exists so a pathological query can't materialise an unbounded list.
- */
 private const val CANDIDATE_LIMIT = 300
 
-/** How many refined results are actually rendered. */
 private const val RESULT_LIMIT = 100
 
-/**
- * Search everything, from one place.
- *
- * ### Why this exists
- *
- * Search used to live *inside* each list and could only see what that list already held. The Notes
- * screen filtered the notes it had in memory; the Tasks screen filtered its active tasks; neither
- * could see the other, or anything archived, completed, or trashed. That is fine at ten notes and
- * useless at a thousand — and it fails hardest at exactly the moment search matters most, when you
- * half-remember something and don't know where you put it.
- *
- * This screen looks at **every note and every task there is**, whatever state it's in, and says so
- * on each result. A note you archived in March, a task you finished last week, something you deleted
- * on Tuesday and now want back: all findable, all labelled, all one tap from being open.
- *
- * ### How it runs
- *
- * SQLite does the coarse pass — the text `LIKE` and the structural filters — so the whole database is
- * never dragged into memory to be thrown away. Kotlin then applies what SQL can't express (quoted
- * phrases, `has:`, `link:`, and relevance ranking) to the small candidate set that comes back. See
- * [SearchQuery] for why this is substring matching and not a full-text index — the short version is
- * that no built-in FTS tokeniser segments Chinese, so an index would quietly stop finding CJK notes.
- */
 @Composable
 fun SearchScreen(
     onOpenNote: (Note) -> Unit,
@@ -102,10 +74,6 @@ fun SearchScreen(
     val hazeState = LocalHazeState.current
 
     var raw by remember { mutableStateOf("") }
-    // ---- PHASE 3 (review F-1): saved searches ----
-    // The parser already speaks a real filter language; these chips make a good query a one-tap
-    // view instead of something to retype. Stored as settings JSON (data/SavedSearches.kt) — no
-    // schema, and the same store on both platforms.
     val repo = remember { SettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val savedJson by repo.savedSearches.collectAsState(initial = "")
@@ -120,10 +88,6 @@ fun SearchScreen(
 
     val query = remember(raw) { SearchQuery.parse(raw) }
 
-    // Debounced, so a fast typist doesn't fire a database query per keystroke. LaunchedEffect cancels
-    // the previous delay whenever the query changes, so only the pause after the *last* keystroke
-    // actually reaches SQLite. 180ms is below where a search box starts to feel laggy and comfortably
-    // above the cost of the queries themselves.
     LaunchedEffect(query) {
         if (query.isEmpty) {
             noteResults = emptyList()
@@ -136,9 +100,6 @@ fun SearchScreen(
 
         val now = System.currentTimeMillis()
 
-        // A filter only one kind of item can satisfy suppresses the other kind entirely. Searching
-        // `is:overdue` and getting back every note containing the word is not a smaller kind of
-        // right — it's wrong, and it teaches people not to trust the search box.
         noteResults = if (query.isTaskOnly) {
             emptyList()
         } else {
@@ -150,9 +111,6 @@ fun SearchScreen(
                     trashed = query.sqlTrashed,
                     limit = CANDIDATE_LIMIT
                 )
-                // SQL narrowed; Kotlin now enforces everything SQL can't say, and ranks what's left.
-                // Rank is computed once per candidate (decorate-sort-undecorate) rather than inside
-                // the comparator, where it would be re-evaluated O(n log n) times per sort.
                 .filter { query.matches(it) }
                 .map { it to query.rank(it) }
                 .sortedWith(compareByDescending<Pair<Note, Int>> { it.second }.thenByDescending { it.first.updatedAt })
@@ -174,7 +132,6 @@ fun SearchScreen(
                     limit = CANDIDATE_LIMIT
                 )
                 .filter { query.matches(it, now) }
-                // Same one-rank-per-candidate treatment as the notes above.
                 .map { it to query.rank(it) }
                 .sortedWith(compareByDescending<Pair<Task, Int>> { it.second }.thenByDescending { it.first.createdAt })
                 .take(RESULT_LIMIT)
@@ -189,8 +146,6 @@ fun SearchScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
             }
             Text(com.lucent.app.i18n.S.searchEverything, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
-            // F-1: only offered once there is something to save — an always-on bookmark button
-            // that opens a dialog to save an empty query would be a button that manufactures work.
             if (raw.isNotBlank()) {
                 IconButton(onClick = {
                     saveName = raw.trim().take(24)
@@ -217,10 +172,6 @@ fun SearchScreen(
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        // F-1: the saved views. Tapping applies the whole stored query (replacing, not appending —
-        // a saved view IS the query, and merging it into whatever was half-typed would produce a
-        // search nobody asked for). The trailing x removes just that entry; a saved search is a
-        // one-line string, so deletion needs no confirmation ceremony.
         if (savedList.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -253,11 +204,6 @@ fun SearchScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // The operator chips double as toggles: tapping an inactive one adds it to the query, and
-        // tapping an *active* one removes it again — the same tap-to-select/tap-to-deselect
-        // behaviour any chip should have. Previously each tap blindly appended the token, so a
-        // second tap gave you "is:pinned is:pinned" instead of clearing it. The chip is shown as
-        // selected while its token is present, so it always reflects the live query.
         val activeTokens = remember(raw) { raw.split(WHITESPACE).filter { it.isNotBlank() }.toSet() }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -267,8 +213,6 @@ fun SearchScreen(
                 FilterChip(
                     selected = token in activeTokens,
                     onClick = { raw = toggleSearchToken(raw, token) },
-                    // Label is localized; the query token stays the ASCII literal (`is:pinned`, …) so
-                    // the parser and any typed query are unchanged — only the on-chip text is translated.
                     label = { Text(searchChipLabel(token), fontSize = 12.sp) }
                 )
             }
@@ -305,7 +249,6 @@ fun SearchScreen(
                 LazyColumn(
                     modifier = Modifier.hazeSource(state = hazeState),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    // Reserve the floating capsule's height so the last row clears the pill.
                     contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
                 ) {
                     if (noteResults.isNotEmpty()) {
@@ -329,9 +272,6 @@ fun SearchScreen(
         }
     }
 
-    // F-1: name-and-save. The query is shown verbatim so the user confirms WHAT gets saved, not
-    // just what it will be called; saving under an existing name replaces that entry (the name is
-    // the identity — see SavedSearches.add).
     if (showSaveDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
@@ -367,13 +307,6 @@ fun SearchScreen(
 }
 private val WHITESPACE = Regex("\\s+")
 
-/**
- * Add [token] to the query if it isn't already a standalone token, or remove it if it is — the
- * toggle behaviour behind the operator chips. Whitespace-delimited, so it acts on whole operators
- * (`is:pinned`, `has:due`); a value-taking prefix like `tag:` no longer stands alone once you've
- * typed a value after it, and simply appends again, which is the sensible behaviour there. Always
- * leaves a trailing space so the user can keep typing.
- */
 internal fun toggleSearchToken(raw: String, token: String): String {
     val parts = raw.split(WHITESPACE).filter { it.isNotBlank() }.toMutableList()
     val idx = parts.indexOf(token)
@@ -385,11 +318,6 @@ internal fun toggleSearchToken(raw: String, token: String): String {
     return if (parts.isEmpty()) "" else parts.joinToString(" ") + " "
 }
 
-/**
- * The translated label to show ON a filter chip. The chip still toggles the ASCII query token
- * (kept as-is so the parser and any hand-typed query are unaffected); only this display text is
- * localized. Falls back to the raw token if a new HINT is ever added without a label.
- */
 private fun searchChipLabel(token: String): String = when (token) {
     "tag:" -> com.lucent.app.i18n.S.searchChipTag
     "is:pinned" -> com.lucent.app.i18n.S.searchChipPinned
@@ -421,13 +349,6 @@ private fun SectionHeader(label: String, count: Int, icon: ImageVector) {
     }
 }
 
-/**
- * A note result, annotated with whatever state would otherwise be surprising.
- *
- * The "Archived" / "In trash" label is not decoration. This screen deliberately surfaces things the
- * user cannot see anywhere else, and tapping a result that silently turns out to be in the bin —
- * with no warning — is exactly the sort of small betrayal that makes an app feel untrustworthy.
- */
 @Composable
 private fun NoteResultRow(note: Note, onOpen: () -> Unit) {
     val onGradient = LocalOnGradient.current
@@ -485,7 +406,6 @@ private fun NoteResultRow(note: Note, onOpen: () -> Unit) {
     }
 }
 
-/** A task result, showing the state that made it findable — done, due, priority, progress. */
 @Composable
 private fun TaskResultRow(task: Task, onOpen: () -> Unit) {
     val onGradient = LocalOnGradient.current

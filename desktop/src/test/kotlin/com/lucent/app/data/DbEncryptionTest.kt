@@ -10,13 +10,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
-/**
- * P0-4: the two desktop database paths that can destroy data silently — the plaintext rekey and
- * the wrong-key open — plus proof that a fresh store is really encrypted at rest.
- *
- * Each test uses its own directory and its own key material (DataKeys mints per-context), and the
- * master-key store is pointed at the same directory so nothing touches a real profile.
- */
 class DbEncryptionTest {
 
     private class TestContext(private val dir: File) : Context() {
@@ -59,7 +52,6 @@ class DbEncryptionTest {
             }
             val file = File(dir, "lucent.db")
             assertTrue(file.exists())
-            // Page 1 of an encrypted store never begins with the plain-SQLite magic header.
             assertFalse(headerIsPlaintext(file), "fresh store must be encrypted at rest")
         }
     }
@@ -68,9 +60,6 @@ class DbEncryptionTest {
     fun plaintextStoreIsRekeyedInPlaceAndEveryRowSurvives() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            // Build a legacy plaintext store exactly as the pre-release org.xerial era left them:
-            // a real SQLite file, no cipher, with user data inside. The table matches the genuine
-            // v11 schema (full column set) so Db.open's createSchema + migrateSchema can run.
             Class.forName("org.sqlite.JDBC")
             val plainFile = File(dir, "lucent.db")
             DriverManager.getConnection("jdbc:sqlite:${plainFile.absolutePath}").use { conn ->
@@ -90,7 +79,6 @@ class DbEncryptionTest {
             }
             assertTrue(headerIsPlaintext(plainFile))
 
-            // Opening through Db must encrypt it in place, not copy data out or refuse to start.
             val db = Db.open(TestContext(dir))
             val (title, body) = db.use { conn ->
                 conn.createStatement().use { st ->
@@ -108,10 +96,6 @@ class DbEncryptionTest {
 
     @Test
     fun wrongKeyOnExistingEncryptedStoreThrowsActionableError() = runBlocking {
-        // Two installs: each mints its own database key. Take the first install's encrypted store
-        // and try to open it with the second install's key — the exact "restored the db but not
-        // the keys" accident. It must throw a message a person can act on, and it must NOT create
-        // a second, empty database over the existing one.
         val dirA = freshDir()
         val dirB = freshDir()
         use(dirA) { Db.open(TestContext(dirA)) }
@@ -130,7 +114,6 @@ class DbEncryptionTest {
             )
             assertTrue(err.message!!.contains(".lcb"), "message should point at the .lcb backup")
 
-            // The original bytes were not overwritten by a fresh empty database.
             assertEquals(preCopyBytes.toList(), File(dirB, "lucent.db").readBytes().toList())
         }
     }

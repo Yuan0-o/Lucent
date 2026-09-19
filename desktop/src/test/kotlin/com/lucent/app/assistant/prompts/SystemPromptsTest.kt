@@ -7,11 +7,6 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * Characterisation tests for [SystemPrompts], extracted verbatim from AssistantController
- * (v2.7.6). They pin down the structure of the cloud/local/compact system prompts so a later
- * prompt edit cannot silently drop the behavioural rules the model depends on.
- */
 class SystemPromptsTest {
 
     private val tools = listOf(
@@ -34,7 +29,6 @@ class SystemPromptsTest {
     @Test
     fun localCompactPromptTrimsDescriptions() {
         val p = SystemPrompts.local(tools, userText = "hello", compact = true)
-        // Compact mode keeps only the first sentence of each description (120 chars max).
         assertFalse(p.contains("Create a new task. Pass the title, an optional due date"))
         assertTrue(p.contains("Create a new task"))
     }
@@ -43,7 +37,7 @@ class SystemPromptsTest {
     fun localPromptOrdersReplyInUserLanguage() {
         val en = SystemPrompts.local(tools, userText = "hello", compact = false)
         val zh = SystemPrompts.local(tools, userText = "你好", compact = false)
-        assertTrue(zh != en) // a language instruction is appended for CJK text
+        assertTrue(zh != en)
     }
 
     @Test
@@ -57,7 +51,6 @@ class SystemPromptsTest {
         assertTrue(p.contains("Never use asterisks"))
         assertTrue(p.contains("NOTES are pieces of information"))
         assertTrue(p.contains("TASKS are actionable to-do items"))
-        // No web access branch must be present when disabled.
         assertTrue(p.contains("You do NOT have web access"))
     }
 
@@ -112,7 +105,6 @@ class SystemPromptsTest {
             name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
             webSearchEnabled = false, crossMemory = "", userText = "hello"
         )
-        // The date formatter writes yyyy-MM-dd somewhere in the prompt.
         assertTrue(Regex("\\d{4}-\\d{2}-\\d{2}").containsMatchIn(p))
     }
 }

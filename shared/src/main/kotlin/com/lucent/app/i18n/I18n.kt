@@ -4,28 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-/**
- * The app's runtime localization system (localization task: Chinese, English, Japanese, Korean).
- *
- * ### Why a Kotlin catalog instead of res/values-xx strings
- *
- * Lucent's UI text lives inline in composables, and the language is an *in-app* setting that must
- * switch instantly, for the whole app, without recreating the Activity and without depending on
- * the device locale. So the catalog is Kotlin: [Tr] declares every string in English, and each
- * language object overrides them. What that buys, concretely:
- *
- *  - **A missing translation can never blank the UI.** An un-overridden entry inherits its English
- *    base — the safety net is structural, not a runtime lookup that can miss.
- *  - **A typo cannot ship.** `S.saev` fails compilation; `override val saev` fails compilation.
- *  - **Instant switching.** [L.current] is Compose snapshot state, so every composable that reads
- *    [S] recomposes the moment the setting changes — no restart, no flash of the old language.
- *
- * (The launcher widgets are the one surface that can't read app state, so they localize the
- * classic way through res/values-*; see res/values-zh-rCN|ja|ko/strings.xml.)
- *
- * This file is GENERATED from the translation catalog (see returned project notes); edit
- * translations there, not here, or the two will drift.
- */
 enum class AppLanguage(val key: String, val label: String) {
     SYSTEM("system", "System"),
     EN("en", "English"),
@@ -36,7 +14,6 @@ enum class AppLanguage(val key: String, val label: String) {
     companion object {
         fun fromKey(key: String?): AppLanguage = entries.firstOrNull { it.key == key } ?: SYSTEM
 
-        /** What "follow the system" resolves to on this device right now. */
         fun systemDefault(): AppLanguage {
             val tag = java.util.Locale.getDefault().language.lowercase()
             return when {
@@ -49,7 +26,6 @@ enum class AppLanguage(val key: String, val label: String) {
     }
 }
 
-/** Language state holder. [current] is snapshot state so composables follow it automatically. */
 object L {
     var current: Tr by mutableStateOf(resolve(AppLanguage.SYSTEM))
         private set
@@ -72,10 +48,8 @@ object L {
     }
 }
 
-/** The string table for the active language. `S.key` anywhere; recomposes on switch. */
 val S: Tr get() = L.current
 
-/** The java.util.Locale matching the ACTIVE UI language (after resolving "system"). */
 fun lucentLocale(): java.util.Locale = when (
     if (L.language == AppLanguage.SYSTEM) AppLanguage.systemDefault() else L.language
 ) {
@@ -85,13 +59,6 @@ fun lucentLocale(): java.util.Locale = when (
     else -> java.util.Locale.ENGLISH
 }
 
-/**
- * Date formatters that follow the app language. Patterns themselves are catalog entries (see
- * Tr.patternMonthDay etc.), so Chinese gets its own month-day shape rather than an English
- * pattern rendered with a Chinese locale. Cached per pattern and invalidated when the language
- * changes, so list rows can
- * call this every bind without re-parsing patterns.
- */
 object LDates {
     private var cachedFor: Tr? = null
     private val cache = HashMap<String, java.time.format.DateTimeFormatter>()
@@ -865,7 +832,6 @@ open class Tr {
     open val backupPasswordBody: String = "This backup was protected with a password when it was exported. Enter it to see what's inside."
     open val wrongPassword: String = "Wrong password"
     open val restoreBackupTitle: String = "Restore this backup?"
-    // Titles for the bottom sheet that announces the outcome the moment a restore finishes.
     open val restoreDoneTitle: String = "Restore complete"
     open val restoreFailedTitle: String = "Restore failed"
     open val exportingBackup: String = "Exporting backup…"
@@ -1027,12 +993,6 @@ open class Tr {
     open fun importVersionsRestored(count: Int): String = " (${count} note versions restored.)"
     open fun importDuplicatesSkipped(count: Int): String = " (${count} duplicate entries skipped.)"
     open fun attachmentTooLarge(size: String, limit: String): String = "That file is ${size}, over the ${limit} limit for a single attachment. It wasn't added."
-    // TODO(local-multimodal): this note describes a TEMPORARY gap, not a permanent design decision.
-    // The on-device engine currently loads text-only GGUF models, so images, PDFs and audio are not
-    // passed to it. Multimodal on-device support (an mmproj/vision projector alongside the model,
-    // and an attachment path into LocalLlm.generate) is planned for a future release. When it lands,
-    // rewrite this string in all four languages and remove the "for now" framing — leaving a
-    // temporary limitation described as permanent is how a shipped feature stays hidden.
     open val lmTextOnlyNote: String = "Text only, for now: the local assistant reads and writes text, and cannot yet see images, PDFs, audio or other attachments. This is a current limitation of on-device mode rather than a permanent one — multimodal support for local models is planned for a future version. Until then, attach files to the cloud assistant instead."
     open val lmEnableToConfigureNote: String = "Turn on the switch above to import a model and configure the local assistant."
     open val lmNeedModelNotice: String = "The local assistant is on but no model is imported yet. Import a GGUF model below — until then the assistant has nothing to answer with."
@@ -1050,8 +1010,6 @@ open class Tr {
     open val apiNoneTitle: String = "No API saved"
     open val apiNoneBody: String = "You've deleted every saved API. Add one to use the cloud assistant, or import a local model to chat offline."
     open val helpLocalizedFilters: String = "Filters also work in your own language — type 完成 / 完了 / 완료 instead of is:done. Wrap a word in quotes to search for it literally."
-
-    // ---- Editable tool confirmations, declined actions, and modular backup ----
     open fun assistantDeclinedReply(details: String): String = "You said no, so I didn’t do it — ${details}. Nothing was changed. Tell me if you’d like it done differently."
     open val confirmEditTitleLabel: String = "Title"
     open val confirmEditNewTitleLabel: String = "New title"
@@ -1077,8 +1035,6 @@ open class Tr {
     open val bkImportedFonts: String = "Imported fonts"
     open fun backupFontsRestored(count: Int): String = " Restored ${count} imported font(s)."
     open fun backupModSettingsFontsDesc(size: String): String = "Includes your imported font files (${size}), so a restore brings your fonts back too."
-
-    // ---- Per-item backup selection (second-level picker) ----
     open val backupChooseItems: String = "Choose…"
     open fun backupNOfM(chosen: Int, total: Int): String = "${chosen} of ${total} selected"
     open val backupPickNotesTitle: String = "Which notes?"
@@ -1365,7 +1321,6 @@ open class Tr {
     open val tplSaveAsTemplate: String = "Save as template"
     open val tplSavedToast: String = "Template saved"
 
-    // ---- Desktop-only entries (catalog_desktop.py) ----
     open val closeToTraySub: String = "Closing the window hides Lucent to the system tray instead of quitting, so reminders keep firing on time. Use Exit in the tray menu to really quit. Turn this off to make the close button quit as before — reminders then only fire while the window is open."
     open val closeToTrayTitle: String = "Keep running in the tray"
     open val exportPdfFontHint: String = "PDF text is drawn with your imported fonts (tried in list order). Characters none of them cover appear as \"·\"."

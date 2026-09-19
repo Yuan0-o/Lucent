@@ -1,23 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Combined "quick actions" widget: note / task / assistant in one compact bar. Each cell is its
-     own tap target.
 
-     C-GROUP TASK 9 — the small-size overflow.
 
-     This widget is resizable down to 1x1 (see widget_quick_actions_info.xml: minResizeWidth 40dp),
-     but its three cells were built only for the 3x1 default. Each carried a 26dp icon, 8dp padding,
-     4dp margin and a 12sp caption. At 3x1 that fits; squeezed toward 1x1 the weights shrink the
-     cells while every one of those dp values stays put, so the icons collided and the captions were
-     clipped mid-word.
 
-     Fixed by making the parts that must shrink able to shrink:
-       - the caption is `layout_weight=0` with `autoSizeTextType=uniform`, so it steps down from
-         12sp to 8sp and only then ellipsizes, instead of being cut off at full size;
-       - `layout_width` on the caption is 0dp + weight, so it can never push its cell wider than the
-         cell has;
-       - icon and paddings are reduced enough to leave room at the narrow end while staying legible
-         at the wide one. A widget that is resizable to 1x1 has to be designed for 1x1; declaring
-         the resize range and then laying out only for the default size is the actual bug here. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"

@@ -1,55 +1,5 @@
 package com.lucent.app.ui
 
-/*
- * ============================================================================================
- *  C-GROUP TASK 20 — RICH TEXT SWITCH: PLACEHOLDER ONLY, DELIBERATELY NOT IMPLEMENTED
- * ============================================================================================
- *
- * A separate "Rich text" switch is planned for Settings -> Editor, independent of the Markdown
- * switch above it. Scope as specified:
- *
- *   - three weights (light / regular / bold)
- *   - italic
- *   - five highlighter colours
- *
- * and explicitly NOT Markdown syntax — the user types nothing, they select text and press a
- * button.
- *
- * ### Why there is no code here yet
- *
- * The controls live in the bottom-right editor button, which is A-GROUP's surface (the draft-area
- * work). Building the toolbar here would collide with that on the first merge, so C-group stops at
- * this note by instruction.
- *
- * ### What A-group needs to know before wiring it up
- *
- * 1. **Storage.** Rich text needs somewhere to put spans. `notes.body` and `tasks.notes` are plain
- *    TEXT columns, and the assistant tools, the export path (`MarkdownExport`, `DocumentExport`),
- *    the backup engine and the `[[wiki]]` link scanner all read them as plain strings. Adding
- *    inline markup to those columns would change what every one of those sees. The
- *    non-destructive option is a SIDECAR column holding span ranges as JSON, leaving `body`
- *    readable as plain text for everything that already consumes it.
- *
- * 2. **Schema.** A new column is a Room schema bump (currently v11) plus the matching
- *    `CREATE TABLE` in the desktop `Db.createSchema`, which is hand-written to match. Both must
- *    move together or the two platforms stop being interchangeable.
- *
- * 3. **Notes AND tasks.** Task 20 says "notes or tasks". Task bodies use the same editor path, so
- *    whatever is added must be added for both — a rich-text note that becomes plain when pasted
- *    into a task is the kind of asymmetry this project has been careful to avoid.
- *
- * 4. **Export.** Every export format has to decide what to do with a highlight: Markdown has no
- *    highlight syntax, PDF does, plain text does not. Decide per format rather than dropping spans
- *    silently.
- *
- * 5. **Interaction with Markdown mode.** Both switches on at once means two systems styling the
- *    same string. Decide whether rich text wins, Markdown wins, or the two are mutually exclusive
- *    in the UI — before shipping, not after a user reports bold-inside-asterisks.
- *
- * 6. **Four languages.** The toolbar's labels (weights, italic, five colour names) need catalog
- *    entries in en/zh/ja/ko like everything else; add them to tools/i18n/catalog.py and re-run
- *    the generator, then hand-sync the desktop fork.
- */
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -81,37 +31,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * A small, deliberately incomplete Markdown renderer for note bodies.
- *
- * ### Why hand-rolled, and why this little
- *
- * Pulling in a full CommonMark parser plus a Compose bridge would add a dependency, a transitive
- * tree, and a rendering model that has to be fought into the app's glass-and-gradient styling —
- * all to support syntax nobody writes in a phone note. Tables, footnotes, reference links, HTML
- * blocks: none of it survives contact with a thumb keyboard.
- *
- * What people *do* write is headings, bold, bullets, the occasional bit of `code`, and links. So
- * that is exactly what this handles, in about a page of code with no dependency and complete
- * control over how it looks. Anything it doesn't recognise is simply rendered as the literal text
- * the user typed — which is the correct behaviour for a renderer this size, because a note is not
- * a document that has to compile. Nothing is ever destroyed or hidden; the raw text is always
- * exactly what's in the editor, and the detail page is just a nicer view of it.
- *
- * ### Wiki links
- *
- * `[[Another note]]` is Lucent's own addition and the reason this renderer exists at all rather
- * than a `Text(note.body)`. It renders as a tappable link that opens the note with that title (see
- * [com.lucent.app.data.NoteLinks]), and turns red when it points at nothing — a broken link that
- * looks identical to a working one is worse than no link, so it says so and offers to create the
- * missing note.
- *
- * ### Known limits, stated plainly
- *
- * Inline styles don't nest (`**bold with *italic* inside**` renders the inner asterisks literally),
- * and lists don't support nested indentation levels. Both are fixable and neither is worth the code
- * until someone actually asks.
- */
 private sealed interface MdBlock {
     data class Heading(val level: Int, val text: String) : MdBlock
     data class Paragraph(val text: String) : MdBlock
@@ -129,11 +48,6 @@ private val QUOTE = Regex("""^\s*>\s?(.*)$""")
 private val RULE = Regex("""^\s*(-{3,}|\*{3,}|_{3,})\s*$""")
 private const val FENCE = "```"
 
-/**
- * Split raw text into blocks. Blank lines end a paragraph; a fenced code block swallows everything
- * verbatim until it closes (or until the text runs out, so an unterminated fence — which is what a
- * half-typed note looks like — still renders sensibly instead of eating the rest of the note).
- */
 private fun parseBlocks(text: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()
     val lines = text.lines()
@@ -158,7 +72,7 @@ private fun parseBlocks(text: String): List<MdBlock> {
                 code += lines[i]
                 i++
             }
-            i++ // step past the closing fence (or past the end, which is fine)
+            i++
             blocks += MdBlock.Code(code)
             continue
         }
@@ -204,8 +118,6 @@ private fun parseBlocks(text: String): List<MdBlock> {
     return blocks
 }
 
-// One alternation over every inline form we support. Order matters: [[wiki]] must be tried before
-// [text](url), and ** before *, or the shorter form would win and eat half the marker.
 private val INLINE = Regex(
     """\[\[([^\[\]]+)]]""" +
         """|\[([^\]]+)]\(([^)\s]+)\)""" +
@@ -217,13 +129,6 @@ private val INLINE = Regex(
         """|_([^_\n]+)_"""
 )
 
-/**
- * Turn one line of inline Markdown into a styled, link-annotated string.
- *
- * [brokenLinks] is the set of `[[targets]]` that resolve to nothing, matched case-insensitively.
- * Rendering those differently is the difference between a link graph you can trust and one that
- * quietly does nothing when you tap it.
- */
 @Composable
 private fun inlineAnnotated(
     line: String,
@@ -245,8 +150,6 @@ private fun inlineAnnotated(
             val g = match.groupValues
             when {
                 g[1].isNotEmpty() -> {
-                    // [[Wiki link]]. With links turned off (task 3) the target is still shown, but as
-                    // plain text with no styling and no tap target — the link "does nothing".
                     val target = g[1].trim()
                     if (!linksEnabled) {
                         append(target)
@@ -263,9 +166,6 @@ private fun inlineAnnotated(
                     }
                 }
                 g[2].isNotEmpty() && g[3].isNotEmpty() -> {
-                    // [text](url) — LinkAnnotation.Url is opened by the platform's own UriHandler,
-                    // so there's no custom navigation to get wrong and no browser to bundle. With
-                    // links off (task 3), just the visible text is shown, unstyled and inert.
                     if (!linksEnabled) {
                         append(g[2])
                     } else {
@@ -289,26 +189,8 @@ private fun inlineAnnotated(
     }
 }
 
-/** Just the two link forms, for the links-without-Markdown mode (task 8). */
 private val LINKS_ONLY = Regex("""\[\[([^\[\]]+)]]|\[([^\]]+)]\(([^)\s]+)\)""")
 
-/**
- * Render [text] verbatim — no headings, no bold, no code — but with `[[wiki links]]` and
- * `[text](url)` still live and tappable.
- *
- * ### Why this exists
- *
- * Links used to be a sub-toggle of Markdown: turning Markdown off turned links off too, whether you
- * wanted that or not. But the two settings answer completely different questions. Markdown is about
- * *formatting* — do I want `**this**` to render bold or to stay as the asterisks I typed. Links are
- * about *navigation* — is my note graph connected. Tying them together meant anyone who preferred to
- * see their text exactly as written also silently lost every connection between their notes, and got
- * no explanation for it beyond a greyed-out switch.
- *
- * So this is the fourth combination the app was missing: plain text that is still a graph. Everything
- * outside a link is emitted exactly as typed, including any Markdown syntax, which is precisely what
- * "Markdown off" is supposed to mean.
- */
 @Composable
 fun LinkedPlainText(
     text: String,
@@ -354,22 +236,12 @@ fun LinkedPlainText(
     Text(annotated, color = onGradient, modifier = modifier)
 }
 
-/**
- * Render [text] as Markdown.
- *
- * [brokenLinks] should hold the lowercased `[[targets]]` that don't resolve; [onWikiLink] is
- * invoked with the raw target when one is tapped (working or broken — the caller decides whether
- * that means "open it" or "offer to create it").
- */
 @Composable
 fun MarkdownText(
     text: String,
     modifier: Modifier = Modifier,
     brokenLinks: Set<String> = emptySet(),
     onWikiLink: (String) -> Unit = {},
-    // Sub-toggle of Markdown (task 3). When false, [[wiki]] and [text](url) render as inert plain
-    // text; everything else about Markdown rendering is unchanged. Defaults to true so callers that
-    // don't care about links keep the original behaviour.
     linksEnabled: Boolean = true
 ) {
     val onGradient = LocalOnGradient.current
@@ -437,8 +309,6 @@ fun MarkdownText(
                         .background(onGradient.copy(alpha = 0.08f))
                         .padding(10.dp)
                 ) {
-                    // Code is shown verbatim — no inline parsing inside a fence, which is the
-                    // entire reason someone typed a fence.
                     Text(
                         block.lines.joinToString("\n"),
                         color = onGradient,

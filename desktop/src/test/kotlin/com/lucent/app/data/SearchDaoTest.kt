@@ -6,16 +6,6 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
-/**
- * P2-1 follow-up: regression coverage for [NoteDao.searchNotes] / [TaskDao.searchTasks] at the
- * actual SQL layer — the level [SearchQueryTest] never reaches, because [SearchQuery.matches] is
- * pure Kotlin over rows the database already returned. No test exercised that boundary before this
- * file, which is exactly how the FTS5-MATCH-first attempt shipped, ran in CI green, and still
- * silently dropped results for the two cases below.
- *
- * Both cases mirror a real failure, not a hypothetical one: a MATCH-based query never throws for
- * either, so a fallback that only triggers `catch (_: Exception)` never fires.
- */
 class SearchDaoTest {
 
     private class TestContext(private val dir: File) : Context() {
@@ -39,14 +29,6 @@ class SearchDaoTest {
         }
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Case 1: a CJK substring buried inside a longer, unspaced run of Han characters.
-    //
-    // unicode61/simple (SQLite's built-in FTS5 tokenisers) have no CJK word boundaries, so a whole
-    // run of Han characters becomes ONE token. `notes_fts MATCH '"两个字"'` against a row whose only
-    // token is the full 13-character sentence below does not error — it just matches nothing, which
-    // is why the old code's `catch (_: Exception)` never saw it.
-    // -----------------------------------------------------------------------------------------
 
     @Test
     fun searchNotesFindsCjkSubstringBuriedInLongerRun() = runBlocking {
@@ -85,12 +67,6 @@ class SearchDaoTest {
         }
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Case 2: a match that lives only in a column notes_fts/tasks_fts never indexed (tags and
-    // checklist for notes; subtasks for tasks). Plain ASCII, no CJK involved — this one is purely
-    // about index coverage. FTS still returns a (empty, wrong) result set without throwing, so the
-    // same unreachable fallback problem applies.
-    // -----------------------------------------------------------------------------------------
 
     @Test
     fun searchNotesFindsMatchInTagsWhenTitleAndBodyDoNotContainIt() = runBlocking {

@@ -24,20 +24,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/**
- * The small fixed palette a note can be tinted with — Keep-style colour coding.
- *
- * The swatches are washed through frosted glass at 14% alpha (see [frostedGlass]) as the card tint,
- * so the constraint is real: too pale and neighbouring colours become indistinguishable, too dark
- * and a colour disappears into the backdrop. The earlier palette erred pale — several colours read
- * as "faintly tinted white" once behind the glass and were hard to tell apart. These are the deeper,
- * more saturated Material 600–800 tones: distinctly different from one another even at 14% alpha,
- * while still being genuine colour *through* the glass rather than a flat sticker on top of it.
- *
- * [DEFAULT]'s swatch is plain white, which is exactly [frostedGlass]'s own untinted default — so
- * any [NoteColor.swatch] can be passed straight through as the card tint with no "if no colour"
- * branch at any call site.
- */
 enum class NoteColor(val key: String, val swatch: Color) {
     DEFAULT("", Color.White),
     RED("red", Color(0xFFD32F2F)),
@@ -49,7 +35,6 @@ enum class NoteColor(val key: String, val swatch: Color) {
     PURPLE("purple", Color(0xFF8E24AA)),
     PINK("pink", Color(0xFFC2185B));
 
-    // Live i18n lookup (localization task); call sites keep reading `color.label`.
     val label: String
         get() = when (this) {
             DEFAULT -> com.lucent.app.i18n.S.colorDefault
@@ -68,17 +53,6 @@ enum class NoteColor(val key: String, val swatch: Color) {
     }
 }
 
-/**
- * A row of tappable colour swatches for the note composer.
- *
- * Wraps to a second line rather than overflowing, because nine swatches plus spacing exceeds a
- * small phone's width once the composer's padding is subtracted — a Row would have silently clipped
- * the last two colours off the screen on exactly the devices most likely to be used.
- *
- * [NoteColor.DEFAULT] is drawn as an outlined ring rather than a solid white disc, so it stays
- * visible against a light background instead of vanishing into it. The selected swatch carries a
- * check mark, and each one announces its own name and selected state to a screen reader.
- */
 @Composable
 fun ColorPickerRow(selected: NoteColor, onSelect: (NoteColor) -> Unit, modifier: Modifier = Modifier) {
     val onGradientMuted = LocalOnGradientMuted.current
@@ -112,8 +86,6 @@ fun ColorPickerRow(selected: NoteColor, onSelect: (NoteColor) -> Unit, modifier:
                 contentAlignment = Alignment.Center
             ) {
                 if (isSelected) {
-                    // Pick a check colour that contrasts with the (now deeper) swatch: white on a
-                    // dark swatch, dark on a light one, so the tick stays visible on every colour.
                     val checkTint = when {
                         option == NoteColor.DEFAULT -> onGradientMuted
                         option.swatch.luminance() < 0.5f -> Color.White
@@ -131,11 +103,6 @@ fun ColorPickerRow(selected: NoteColor, onSelect: (NoteColor) -> Unit, modifier:
     }
 }
 
-/**
- * A small accent dot for places where a full tint isn't available — the archive and trash lists,
- * where cards are already carrying restore/delete affordances and a tinted card would compete with
- * them. Renders nothing at all when the note has no colour.
- */
 @Composable
 fun NoteColorDot(colorKey: String, modifier: Modifier = Modifier, size: Dp = 9.dp) {
     val color = NoteColor.fromKey(colorKey)

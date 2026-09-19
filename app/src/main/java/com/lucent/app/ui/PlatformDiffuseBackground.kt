@@ -19,11 +19,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-/** createBitmap copies the reusable scratch pixels into a new immutable frame. */
 fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap =
     Bitmap.createBitmap(pixels, edge, edge, Bitmap.Config.ARGB_8888).asImageBitmap()
 
-/** Share one lifecycle and system-motion snapshot with the renderer and palette clocks. */
 @Composable
 fun rememberBackgroundEnvironment(): BackgroundEnvironment {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -37,8 +35,6 @@ fun rememberBackgroundEnvironment(): BackgroundEnvironment {
 
     DisposableEffect(lifecycle, resolver) {
         fun refreshMotionPreference() {
-            // Read the notified setting directly: ValueAnimator's cached scale can be updated by
-            // a different observer after this callback. The framework remains the safe fallback.
             val frameworkEnabled = ValueAnimator.areAnimatorsEnabled()
             motionEnabled = runCatching {
                 Settings.Global.getFloat(

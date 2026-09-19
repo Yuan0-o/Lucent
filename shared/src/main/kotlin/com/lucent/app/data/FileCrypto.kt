@@ -13,52 +13,8 @@ import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/**
- * Streaming, authenticated encryption for files on disk — used for attachments and for the backup
- * payload.
- *
- * ### Why not just AES-GCM the whole file
- *
- * Because attachments can be enormous. A single-shot `Cipher.doFinal(file.readBytes())` needs the
- * entire plaintext *and* the entire ciphertext in memory at once, so a 300 MB video would be 600 MB
- * of heap and an immediate OOM on a phone. And `CipherInputStream` — the obvious streaming answer —
- * is a well-known trap with GCM: several JDK/Android versions swallow the `AEADBadTagException`
- * thrown at the end of the stream, which means a *tampered file decrypts silently into garbage*
- * instead of failing. An authenticated cipher whose authentication can be silently skipped is not
- * an authenticated cipher.
- *
- * So the file is split into 64 KiB frames, each independently sealed with AES-256-GCM. Memory use
- * is one frame, whatever the file size, and every frame's tag is checked as it is read — a
- * corrupted or tampered frame throws immediately rather than at some later `close()` nobody checks.
- *
- * ### Format
- *
- * ```
- *   header   MAGIC(8) | version(1) | baseNonce(8)
- *   frame    final(1) | length(4, big-endian) | ciphertext+tag(length)
- *   ...
- * ```
- *
- * Each frame's nonce is `baseNonce(8) || counter(4)`, so no nonce is ever reused under one key —
- * the fatal mistake with GCM, and the reason the counter is part of the nonce rather than being
- * left to chance.
- *
- * The `final` flag is *plaintext* (the reader must know before it decrypts) but it is fed into the
- * frame's AAD, so it is still authenticated: flipping it fails the tag check. That is what makes
- * **truncation** detectable. Without it, an attacker — or a half-finished write interrupted by a
- * dead battery — could lop the tail off a file and every remaining frame would still verify
- * perfectly, handing back a plausible, silently incomplete note. A stream that ends before a final
- * frame is an error, and this says so.
- *
- * ### Why the key is a parameter
- *
- * Nothing here reaches for the Android Keystore. The caller passes the key in, which keeps this
- * file pure `javax.crypto` — so it runs, and is *tested*, on a plain JVM. Crypto that can only be
- * exercised on a device is crypto that never gets exercised.
- */
 object FileCrypto {
 
-    /** Eight bytes, so a plaintext file cannot plausibly be mistaken for an encrypted one. */
     private val MAGIC = "LCNTCRY1".toByteArray(Charsets.US_ASCII)
     private const val VERSION: Byte = 1
 
@@ -66,26 +22,14 @@ object FileCrypto {
     private const val GCM_TAG_BITS = 128
     private const val GCM_TAG_BYTES = 16
 
-    /** Plaintext bytes per frame. 64 KiB keeps peak memory trivial and framing overhead ~0.03%. */
     const val CHUNK = 64 * 1024
 
-    private const val HEADER_LEN = 8 + 1 + NONCE_PREFIX_LEN // 17
-    private const val FRAME_HEADER_LEN = 1 + 4              // 5
+    private const val HEADER_LEN = 8 + 1 + NONCE_PREFIX_LEN
+    private const val FRAME_HEADER_LEN = 1 + 4
 
     private val random = SecureRandom()
 
-    // -----------------------------------------------------------------------------------------
-    // Detection
-    // -----------------------------------------------------------------------------------------
 
-    /**
-     * Whether [file] carries our header.
-     *
-     * This is what lets encryption arrive without a migration: an attachment written by an older
-     * build is plaintext, has no magic, and is simply read as-is. Files are re-encrypted lazily as
-     * they're rewritten, and swept in the background at startup — but nothing ever *has* to be
-     * converted for the app to keep working, so there is no big-bang conversion step to get wrong.
-     */
     fun isEncrypted(file: File): Boolean {
         if (!file.exists() || file.length() < HEADER_LEN) return false
         return try {
@@ -99,33 +43,16 @@ object FileCrypto {
         }
     }
 
-    /**
-     * The plaintext size of an encrypted file, derived from its length rather than by decrypting it.
-     *
-     * Used only by the 800 MB attachment cap, which sums thousands of files and must stay cheap —
-     * decrypting every attachment to measure it would turn opening Settings into a stall. The result
-     * is exact whenever the last frame is full and at most 20 bytes over otherwise, which against an
-     * 800 MB ceiling is not a rounding error worth paying for.
-     */
     fun plaintextSizeOf(file: File): Long {
         val total = file.length()
         if (total <= HEADER_LEN) return 0
         val body = total - HEADER_LEN
         val perFrame = (FRAME_HEADER_LEN + GCM_TAG_BYTES).toLong()
-        // Each frame carries CHUNK plaintext bytes plus a fixed overhead; solve for the frame count.
         val frames = ((body + CHUNK + perFrame - 1) / (CHUNK + perFrame)).coerceAtLeast(1)
         return (body - frames * perFrame).coerceAtLeast(0)
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Streams
-    // -----------------------------------------------------------------------------------------
 
-    /**
-     * Wrap [out] so everything written to it is encrypted. **The returned stream must be closed** —
-     * that's when the final frame (and its end-of-stream marker) is written. A stream that is never
-     * closed produces a file that will be correctly rejected as truncated.
-     */
     fun encryptingStream(out: OutputStream, key: SecretKey): OutputStream {
         val noncePrefix = ByteArray(NONCE_PREFIX_LEN).also { random.nextBytes(it) }
         out.write(MAGIC)
@@ -134,7 +61,6 @@ object FileCrypto {
         return EncryptingOutputStream(out, key, noncePrefix)
     }
 
-    /** Wrap [input] so reads come back decrypted. Throws [IOException] on a bad tag or truncation. */
     fun decryptingStream(input: InputStream, key: SecretKey): InputStream {
         val head = ByteArray(HEADER_LEN)
         readFully(input, head, head.size)
@@ -145,9 +71,6 @@ object FileCrypto {
         return DecryptingInputStream(input, key, noncePrefix)
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Convenience
-    // -----------------------------------------------------------------------------------------
 
     fun encrypt(plain: ByteArray, key: SecretKey): ByteArray {
         val buffer = ByteArrayOutputStream(plain.size + 64)
@@ -158,9 +81,6 @@ object FileCrypto {
     fun decrypt(cipherText: ByteArray, key: SecretKey): ByteArray =
         decryptingStream(cipherText.inputStream(), key).use { it.readBytes() }
 
-    // -----------------------------------------------------------------------------------------
-    // Internals
-    // -----------------------------------------------------------------------------------------
 
     private fun nonceFor(prefix: ByteArray, counter: Int): ByteArray {
         val nonce = ByteArray(12)
@@ -172,13 +92,6 @@ object FileCrypto {
         return nonce
     }
 
-    // ---- Frame primitives, Rust-accelerated (see nativebridge/LucentNative) ----
-    //
-    // AES-256-GCM is a standardized primitive: the Rust engine and javax.crypto produce
-    // byte-identical frames for identical (key, nonce, aad, data), so which one ran is
-    // undetectable in the file. The Cipher path below is kept verbatim and used whenever the
-    // native library is absent (plain-JVM unit tests, an unbundled ABI), whenever a key's raw
-    // bytes aren't extractable, or if a native call fails — behaviour is unchanged in every case.
 
     private fun sealFrame(key: SecretKey, nonce: ByteArray, aad: ByteArray, plain: ByteArray, len: Int): ByteArray {
         key.encoded?.let { raw ->
@@ -194,9 +107,6 @@ object FileCrypto {
     private fun openFrame(key: SecretKey, nonce: ByteArray, aad: ByteArray, sealed: ByteArray): ByteArray {
         key.encoded?.let { raw ->
             com.lucent.app.nativebridge.LucentNative.aesGcmOpen(raw, nonce, aad, sealed)?.let { return it }
-            // Null from the native open means EITHER "library unavailable" or "tag failed";
-            // both fall through to Cipher, whose own tag check reproduces the exact original
-            // accept-or-throw decision — a forged frame is still always rejected.
         }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, nonce))
@@ -204,7 +114,6 @@ object FileCrypto {
         return cipher.doFinal(sealed)
     }
 
-    /** AAD binds the frame's position *and* its end-of-stream flag to its tag. */
     private fun aadFor(counter: Int, isFinal: Boolean) = byteArrayOf(
         if (isFinal) 1 else 0,
         (counter ushr 24).toByte(),
@@ -244,8 +153,6 @@ object FileCrypto {
                 filled += take
                 offset += take
                 remaining -= take
-                // Only flush a *full* frame here. The last frame is written by close(), because
-                // only close() knows it is the last — which is the entire point of the final flag.
                 if (filled == CHUNK) writeFrame(isFinal = false)
             }
         }
@@ -267,8 +174,6 @@ object FileCrypto {
         override fun close() {
             if (closed) return
             closed = true
-            // Always emit a final frame, even for an empty file — an empty payload still has to be
-            // distinguishable from a file that was truncated to nothing.
             writeFrame(isFinal = true)
             out.flush()
             out.close()
@@ -296,7 +201,6 @@ object FileCrypto {
             if (offset >= plain.size) {
                 if (sawFinal) return -1
                 if (!readFrame()) return -1
-                // A final frame may legitimately be empty (an empty file). Signal EOF, not a hang.
                 if (plain.isEmpty()) return -1
             }
             val take = minOf(len, plain.size - offset)
@@ -305,13 +209,9 @@ object FileCrypto {
             return take
         }
 
-        /** Read and authenticate one frame. Returns false at a clean end of stream. */
         private fun readFrame(): Boolean {
             val flag = `in`.read()
             if (flag < 0) {
-                // The stream ran out without ever presenting a final frame. Refusing here is the
-                // whole reason the flag exists: silently returning what we already decoded would
-                // hand the caller a convincing, incomplete file.
                 throw IOException("Encrypted stream is truncated — no end-of-stream frame")
             }
             val isFinal = flag == 1
@@ -322,8 +222,6 @@ object FileCrypto {
                 ((lenBytes[1].toInt() and 0xFF) shl 16) or
                 ((lenBytes[2].toInt() and 0xFF) shl 8) or
                 (lenBytes[3].toInt() and 0xFF)
-            // A frame can never exceed one chunk plus its tag. Rejecting anything larger stops a
-            // corrupt length field from provoking a multi-gigabyte allocation.
             if (length < GCM_TAG_BYTES || length > CHUNK + GCM_TAG_BYTES) {
                 throw IOException("Encrypted stream is corrupt — implausible frame length")
             }
@@ -334,8 +232,6 @@ object FileCrypto {
             plain = try {
                 openFrame(key, nonceFor(noncePrefix, counter), aadFor(counter, isFinal), sealed)
             } catch (t: Throwable) {
-                // Wrong key, tampered bytes, or a reordered frame. All of them mean the same thing
-                // to the caller: this data cannot be trusted, and must not be handed back.
                 throw IOException("Could not decrypt — wrong key, or the file has been altered", t)
             }
             offset = 0

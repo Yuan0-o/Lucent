@@ -132,37 +132,15 @@ private data class PendingAttachment(val mime: String, val data: String, val nam
 
 private const val MAX_CHAT_UPLOAD_BYTES = 1_000_000L
 
-/**
- * Known cloud-storage apps that register a DocumentsProvider with the Storage Access Framework,
- * i.e. the apps the SAF "OpenDocument" picker can actually navigate into when the user taps
- * "Cloud storage" in the attach menu. Package names, not authorities: the app being installed is
- * what we can check cheaply and reliably, and an installed Drive/OneDrive/Dropbox is what makes a
- * cloud root appear in the picker. Devices with none of these (a Google-free phone, say) have no
- * cloud surface to navigate to at all, so the menu entry is shown disabled with a plain-language
- * reason instead of opening a picker that has nothing to offer.
- */
 private val CLOUD_STORAGE_PACKAGES = listOf(
-    "com.google.android.apps.docs",   // Google Drive
-    "com.microsoft.skydrive",         // Microsoft OneDrive
-    "com.dropbox.android",            // Dropbox
-    "com.box.android",                // Box
-    "com.yandex.disk",                // Yandex Disk
-    "mega.privacy.android.app"        // MEGA
+    "com.google.android.apps.docs",
+    "com.microsoft.skydrive",
+    "com.dropbox.android",
+    "com.box.android",
+    "com.yandex.disk",
+    "mega.privacy.android.app"
 )
 
-/**
- * A FileProvider URI the system camera can write a photo into (B-group task 16).
- *
- * Lives under `cache/camera-capture/`, which res/xml/file_paths.xml exposes and nothing else does.
- * The cache directory is the right home for it: the photo is read into the pending attachment
- * immediately, so the file on disk is scratch the moment the shutter closes, and the OS is free to
- * reclaim it whenever it likes. Nothing sensitive is exposed either — the provider still cannot
- * address the encrypted attachment store or the key files, because those paths are not in the
- * allow-list.
- *
- * Returns null if the directory or the URI cannot be produced, which the caller surfaces rather
- * than launching a camera that would have nowhere to put the result.
- */
 private fun newCameraCaptureUri(context: Context): Uri? = try {
     val dir = java.io.File(context.cacheDir, "camera-capture").apply { mkdirs() }
     val file = java.io.File(dir, "camera_${System.currentTimeMillis()}.jpg")
@@ -184,41 +162,10 @@ private fun queryFileName(context: Context, uri: Uri): String? {
     return name
 }
 
-/**
- * Scrolls to the **true** end of the chat: the last scrollable pixel, not merely the last message.
- *
- * ### Why the old version stopped short
- *
- * It tried to compute the landing position itself: take the last item, work out how much taller than
- * the viewport it is, and use that as a scroll offset so the item's bottom edge meets the viewport's
- * bottom edge. The arithmetic was right about the item and wrong about the list, because an item's
- * `size` is only the item. The chat's LazyColumn also has `contentPadding = PaddingValues(vertical =
- * 8.dp)` and `Arrangement.spacedBy(8.dp)`, and neither of those belongs to any item — so the scroll
- * consistently finished ~8dp above the real bottom. Close enough to look like it worked, close enough
- * to be irritating, and just far enough that the list could still scroll forward, which is why the
- * "jump to latest" button often stayed on screen after you had pressed it.
- *
- * There was a second, worse case hiding behind the same code: when the last item was *not currently
- * visible* — precisely the situation the jump button exists for — it fell back to `Int.MAX_VALUE` as
- * the scroll offset, i.e. it stopped computing and hoped the list would clamp a nonsensical number
- * into something sensible.
- *
- * ### What it does now
- *
- * It stops doing geometry and lets the list answer the question it alone can answer. `scrollToItem`
- * brings the final message into view, then a deliberately oversized `scrollBy` is clamped by the
- * LazyColumn at its own content bounds — which by definition include the bottom padding, the item
- * spacing, and anything else the layout added. Landing on the clamp *is* landing on the bottom.
- *
- * The loop is bounded because the content can still be growing while a reply streams in; it exists
- * to absorb a size change between the two calls, not to chase a moving target forever.
- */
 private suspend fun LazyListState.scrollToLatest() {
     val lastIndex = layoutInfo.totalItemsCount - 1
     if (lastIndex < 0) return
-    // Get the last message on screen first. Cheap, and it makes the real measurements available.
     scrollToItem(lastIndex)
-    // Then push past the end and let the list stop us exactly at it.
     var passes = 0
     while (canScrollForward && passes < 4) {
         if (scrollBy(100_000f) == 0f) break
@@ -237,20 +184,6 @@ fun AssistantScreen(active: Boolean = true) {
 
     LaunchedEffect(Unit) { AssistantController.ensureMessagesLoaded(context) }
     val messages = AssistantController.messages
-    /**
-     * Every attachment in this conversation, oldest first (tasks A1, A3, A24).
-     *
-     * The chat used to render its own attachments — an inline `Image` for the user's, a
-     * download-on-tap strip for the assistant's — which meant chat attachments got none of what the
-     * note and task viewer had: no zoom, no swipe between files, no Markdown/Word/PDF preview, and
-     * a Share action that could not follow a swipe because there was nothing to swipe.
-     *
-     * They can all use the shared viewer as-is, because a [com.lucent.app.data.Attachment] does not
-     * have to be a stored file: [com.lucent.app.data.Attachments.readBytes] falls back to decoding
-     * `data` as Base64 whenever it is not an AttachmentStore id, which is exactly the shape a chat
-     * message keeps its attachment in. So the chat's rows are wrapped, not copied or re-imported,
-     * and one viewer now serves all three surfaces.
-     */
     val chatAttachments = remember(messages) {
         messages.flatMap { m ->
             com.lucent.app.data.ChatAttachments.all(
@@ -261,50 +194,29 @@ fun AssistantScreen(active: Boolean = true) {
     val savedSpecStr by repo.apiSpec.collectAsState(initial = "openai")
     val savedKey by repo.apiKey.collectAsState(initial = "")
     val savedModel by repo.model.collectAsState(initial = "")
-    // B-group task 9: seeded from the synchronous startup read rather than the literal "Lucent",
-    // which every renamed assistant briefly wore on open. Nullable on purpose — null means "not
-    // read yet", and the bubbles below draw NO name tag for that frame rather than a wrong one.
-    // See data/SettingsCache.
     val assistantNameOrNull by repo.assistantName.collectAsState(initial = SettingsCache.assistantName)
     val assistantName = assistantNameOrNull.orEmpty()
     val assistantStyle by repo.assistantStyle.collectAsState(initial = "")
-    // Assistant memory & web settings, read live so a change in Settings takes effect on the next
-    // send without reopening the screen (issues 9 and 16).
     val memoryTierKey by repo.memoryTier.collectAsState(initial = MemoryTier.DEFAULT.key)
     val webSearchEnabled by repo.webSearchEnabled.collectAsState(initial = false)
     val typingHapticsEnabled by repo.typingHapticsEnabled.collectAsState(initial = true)
-    // Whether every assistant tool call is confirmed in a dialog first (Settings toggle, default ON).
     val confirmToolsEnabled by repo.assistantConfirmToolsEnabled.collectAsState(initial = true)
-    // Local-model routing (task: on-device GGUF assistant), read live like the rows above so
-    // flipping the toggle in Settings changes where the very next send goes.
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
     val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = false)
     val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = false)
-    // Models the user has recently switched to, for the quick switcher next to Send (B-group task 5).
     val modelRecents by repo.modelRecents.collectAsState(initial = emptyList())
-    // Small-model mode (B-group task 4): trims the prompt so a weak model can keep up. Read live
-    // like every other assistant setting, so a change applies to the very next send.
     val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = false)
 
     var input by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf("") }
     var pendingAttachments by remember { mutableStateOf<List<PendingAttachment>>(emptyList()) }
-    // Tasks A1/A3/A24. Which chat attachment, if any, is open in the shared full-screen viewer.
     var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
 
-    // Which attachment source the user is choosing between (B-group task 16).
     var attachMenuOpen by remember { mutableStateOf(false) }
 
-    // ---- Multi-select over chat history (B-group task 11) ----
-    //
-    // Entered by long-pressing a message. While active, the conversation bar is replaced by a
-    // selection bar, tapping a bubble toggles it, and the two batch actions (delete, export) work
-    // on the whole selection. Cleared on leaving the tab and on switching conversations, because a
-    // selection that outlives the list it points into is a selection nobody can see.
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<Long>() }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
-    // The message currently switched into text-selection mode (task 13), or null.
     var selectingTextIn by remember { mutableStateOf<Long?>(null) }
 
     fun exitSelection() {
@@ -313,44 +225,24 @@ fun AssistantScreen(active: Boolean = true) {
     }
     var showClearConfirm by remember { mutableStateOf(false) }
     var conversationMenuOpen by remember { mutableStateOf(false) }
-    // Search over chat *history*. The effect below finds every place the query occurs across all
-    // conversations (task 9) so the results list can point at each individual hit.
     var conversationSearch by remember { mutableStateOf("") }
-    // Rename dialog state: which conversation is being renamed and the working text.
     var renameTarget by remember { mutableStateOf<com.lucent.app.data.ChatConversation?>(null) }
     var renameText by remember { mutableStateOf("") }
-    // The conversation whose "⋮" was tapped (task 4), and the one awaiting a delete confirmation.
     var convoActions by remember { mutableStateOf<com.lucent.app.data.ChatConversation?>(null) }
     var convoToDelete by remember { mutableStateOf<com.lucent.app.data.ChatConversation?>(null) }
     var pendingSaveText by remember { mutableStateOf("") }
     var pendingSaveImage by remember { mutableStateOf<Pair<String, String>?>(null) }
-    // Per-reply "download files" modal (issue 6): the assistant message whose files are being
-    // offered for download, or null when the modal is closed.
     var downloadDialogMsg by remember { mutableStateOf<ChatMessage?>(null) }
-    // Payloads staged for a Storage-Access-Framework save. A single selected file saves directly; a
-    // multi-file selection (or a whole-chat export, issue 7) is zipped.
     var pendingFileSave by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }
     var pendingZipSave by remember { mutableStateOf<List<Pair<String, ByteArray>>?>(null) }
 
-    // ---- History-search "jump to the exact hit" (task 9) ----
-    // Every individual occurrence of the query across all chats, newest first. Drives the results
-    // list while a search is active; each row jumps to one specific message.
     var deepMatches by remember { mutableStateOf<List<ChatSearch.MessageMatch>>(emptyList()) }
-    // A tapped result waiting to be shown. Kept across the conversation switch it may trigger, until
-    // that conversation's messages have loaded and we can scroll to the message.
     var pendingJump by remember { mutableStateOf<ChatSearch.MessageMatch?>(null) }
-    // The message currently highlighted from a jump, and the exact character run within it to shade.
     var highlightMessageId by remember { mutableStateOf<Long?>(null) }
     var highlightStart by remember { mutableStateOf(0) }
     var highlightLen by remember { mutableStateOf(0) }
-    // Bumped on every jump so the bounce animation re-fires even when re-selecting the same message.
     var highlightPulse by remember { mutableStateOf(0) }
 
-    // History search (task 9). Debounced: each keystroke re-scans all messages for every place the
-    // query occurs, so the results list can point at each individual hit.
-    // Leaving the tab closes anything that was open over the chat (task 3): the conversation
-    // switcher, its search, and any dialog. The chat itself *is* this tab's root, so it stays — you
-    // should come back to your conversation, just not to a menu you left hanging over it.
     LaunchedEffect(active) {
         if (!active) {
             conversationMenuOpen = false
@@ -359,8 +251,6 @@ fun AssistantScreen(active: Boolean = true) {
             convoActions = null
             convoToDelete = null
             showClearConfirm = false
-            // A selection that outlives the visit it was made in is a selection nobody remembers
-            // making (B-group task 11).
             selectionMode = false
             selectedIds.clear()
             selectingTextIn = null
@@ -373,7 +263,7 @@ fun AssistantScreen(active: Boolean = true) {
             deepMatches = emptyList()
             return@LaunchedEffect
         }
-        kotlinx.coroutines.delay(180) // debounce so we don't query on every keystroke
+        kotlinx.coroutines.delay(180)
         val titles = AssistantController.conversations.associate { it.id to it.title }
         val matches = withContext(Dispatchers.IO) {
             val messageDocs = try {
@@ -394,48 +284,23 @@ fun AssistantScreen(active: Boolean = true) {
         deepMatches = matches
     }
 
-    // Per-conversation turn state: several conversations can generate at once now, and this view
-    // must see exactly the turn belonging to the conversation ON SCREEN — the lookup by id IS the
-    // isolation, so a background conversation's reply can neither show its bubbles here nor block
-    // sending here. `sending` means "THIS conversation is generating" and drives its Stop/Send
-    // button; stopping only stops this conversation's reply.
     val streamingText = AssistantController.streamingTextFor(AssistantController.currentConversationId)
     val sending = AssistantController.isGenerating(AssistantController.currentConversationId)
     val thinking = AssistantController.thinkingFor(AssistantController.currentConversationId)
-    // While the on-device model is being loaded into memory, the thinking bubble says so explicitly,
-    // so the (expected, multi-second) first-load wait reads as loading rather than a stall.
     val loadingModel = AssistantController.loadingModelFor(AssistantController.currentConversationId)
     val pendingConfirmation = AssistantController.pendingConfirmation
     val networkError = AssistantController.networkErrorMessage
-    // A background turn's failure is tagged with ITS conversation; only show it there.
     val controllerError =
         if (AssistantController.errorConversationId == AssistantController.currentConversationId) {
             AssistantController.errorText
         } else ""
     val shownError = if (controllerError.isNotBlank()) controllerError else localError
 
-    // Transient state is visit-scoped, not tab-scoped. On Android, KeepAliveTabs keeps this
-    // screen composed across tab switches, so plain `remember` state — rightly kept alive for the
-    // draft input and pending attachment — also keeps every notice, menu, and highlight alive:
-    // they would still be sitting there the next time the tab was opened. Fold them the moment
-    // the screen stops being the active tab, the same leave-rule Notes, Tasks, and Settings
-    // already apply. This also restores the intent of the onDispose { clearError() } below, which
-    // keep-alive quietly defeated — tab switches no longer dispose this screen, so that cleanup
-    // only runs when the whole host goes away. (On desktop the `when` host disposes the screen on
-    // switch, which resets local state and fires onDispose anyway; `active` simply never goes
-    // false there today.)
     LaunchedEffect(active) {
         if (!active) {
             localError = ""
-            // A background failure should still greet the user on their next visit if it hasn't
-            // been seen; this clear runs on LEAVING, so an error raised while away is untouched
-            // and shows on arrival — it just no longer outlives the visit that saw it.
             AssistantController.clearError()
-            // The search-hit highlight was set on jump and never cleared anywhere.
             highlightMessageId = null
-            // Fold the conversation switcher and its history search, like the header clusters
-            // elsewhere: leaving the tab should find them tucked away again. deepMatches empties
-            // itself via the effect keyed on these two.
             conversationMenuOpen = false
             conversationSearch = ""
         }
@@ -445,20 +310,6 @@ fun AssistantScreen(active: Boolean = true) {
         onDispose { AssistantController.clearError() }
     }
 
-    // ---- Variant collapsing (B-group task 12) ----
-    //
-    // The chat list always shows the full current conversation; history search only affects the
-    // conversation switcher, so nothing is filtered by content here.
-    //
-    // What IS collapsed is answer groups. Asking the same question again appends another assistant
-    // row carrying the same replyToId, so the raw list can hold several answers to one question.
-    // Rendering them all stacked would be unreadable and would make the thread grow every time
-    // someone asked for a second opinion — so each group contributes exactly ONE row, and the
-    // bubble carries a 1/2 switcher to page between them.
-    //
-    // Everything with replyToId == 0 — every user message, and every reply from before this
-    // feature existed — passes through untouched, which is what keeps old conversations rendering
-    // exactly as they always did.
     val variantGroups = remember(messages) {
         messages.filter { it.role == "assistant" && it.replyToId != 0L }.groupBy { it.replyToId }
     }
@@ -467,9 +318,6 @@ fun AssistantScreen(active: Boolean = true) {
         messages.mapNotNull { msg ->
             val group = if (msg.role == "assistant" && msg.replyToId != 0L) variantGroups[msg.replyToId] else null
             if (group == null || group.size <= 1) return@mapNotNull msg
-            // One row per group, at the position of its FIRST answer: a later variant should
-            // replace the original in place, not jump to the bottom of the thread and orphan the
-            // question above it.
             if (!emitted.add(msg.replyToId)) return@mapNotNull null
             val index = (AssistantController.variantSelection[msg.replyToId] ?: (group.size - 1))
                 .coerceIn(0, group.size - 1)
@@ -477,101 +325,40 @@ fun AssistantScreen(active: Boolean = true) {
         }
     }
 
-    // Start the list already at the newest record. Messages are cached in the controller before
-    // this screen composes, so reading messages.size here lets LazyColumn lay out with the last
-    // item on-screen from the very first frame — no "show the oldest, then jump to the bottom"
-    // step. Any value past the end is clamped by LazyColumn to the last valid index.
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = AssistantController.messages.size.coerceAtLeast(0)
     )
 
-    // ---- Follow mode ----
-    //
-    // While `autoScroll` is on, the list tracks the newest content: each streamed token and each new
-    // message pulls the view to the bottom. Touching the list turns it off, and *only* the user can
-    // turn it back on. That second half is the fix (task 1).
-    //
-    // ### Why it used to yank you back down
-    //
-    // Follow mode was re-armed by `LaunchedEffect(atBottom) { if (atBottom) autoScroll = true }` —
-    // i.e. by the *observation* "the list currently can't scroll any further", regardless of how it
-    // came to be in that state. That reads as reasonable and isn't, because `canScrollForward` is
-    // derived from the current layout, and the layout is briefly unusual at exactly the wrong
-    // moment: when a reply finishes, the streaming bubble is swapped for the stored message, and
-    // during that swap there is a frame where the list reports nothing further to scroll to. One
-    // such frame flipped `autoScroll` back on permanently — and the very next state change (the new
-    // message landing) scrolled the user to the bottom, out of whatever they had scrolled up to read.
-    // From the user's side this looks exactly like what was reported: it happens *when the reply
-    // completes*, and scrolling up again doesn't help, because the same thing will happen next time.
-    //
-    // So the re-arm no longer trusts a snapshot of the layout. It waits for a **scroll that comes to
-    // rest** at the bottom — `isScrollInProgress` falling back to false — which is something only a
-    // real gesture (or a deliberate programmatic scroll, which can only run while already following)
-    // produces. A transient layout state emits no such event and therefore cannot re-arm anything.
-    //
-    // The user keeps three explicit ways back into follow mode, all unchanged: scroll to the bottom,
-    // tap the jump-to-latest button, or send a message.
     var autoScroll by remember { mutableStateOf(true) }
 
     val atBottom by remember { derivedStateOf { !listState.canScrollForward } }
 
-    // Any touch on the list hands the scroll position to the user.
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
             if (interaction is DragInteraction.Start) autoScroll = false
         }
     }
-    // ...and only a scroll settling at the bottom hands it back.
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
             if (!scrolling && !listState.canScrollForward) autoScroll = true
         }
     }
-    // B-group task 15: `thinking` and the presence of a confirmation are part of what decides how
-    // TALL this list is, so they belong in the follow-mode keys alongside the message count.
-    //
-    // The bug they fix: asking for a confirmation sets thinking = false and puts the modal up, which
-    // REMOVES the "thinking" item from the end of the list. Approving puts both back — thinking goes
-    // true again and the item returns. LazyColumn anchors on the first visible item, not the last, so
-    // an item reappearing at the end lands below the fold and the chat reads as having scrolled up by
-    // one bubble the instant you press Confirm. Neither messages.size nor streamingText changes
-    // across that swap, so the old key set never re-ran and follow mode silently lost the bottom.
-    //
-    // `pendingConfirmation != null` rather than the object itself: the identity changes on every
-    // field of every question, and only its presence/absence moves the layout.
     LaunchedEffect(messages.size, streamingText, autoScroll, thinking, pendingConfirmation != null) {
-        // Don't yank the list to the bottom while a history-search jump is pending/landing (task 9).
         if (autoScroll && pendingJump == null) listState.scrollToLatest()
     }
-    // Switching conversations should always land on the newest message, even when the two
-    // conversations happen to have the same message count (so messages.size doesn't change).
-    // Keying on the conversation id guarantees a jump-to-latest on every switch and re-enables
-    // follow mode, which keeps the transition smooth and flicker-free (issue 15).
     LaunchedEffect(AssistantController.currentConversationId) {
-        // The selection points at message ids in the OLD conversation; carrying it across would let
-        // a batch delete act on rows the user can no longer see (B-group task 11).
         selectionMode = false
         selectedIds.clear()
-        // A history-search jump may switch conversations on purpose to reach a hit; in that case we
-        // want to scroll to the hit, not to the bottom, so we defer to the jump resolver (task 9).
         if (pendingJump == null) {
             autoScroll = true
             listState.scrollToLatest()
         }
     }
-    // Resolves a tapped search result (task 9): once the target conversation's messages are loaded,
-    // scroll that message into view, highlight the matched characters, and trigger the bounce. Keyed
-    // on the message list too, so it re-runs after a conversation switch finishes loading.
     LaunchedEffect(pendingJump, AssistantController.currentConversationId, messages) {
         val jump = pendingJump ?: return@LaunchedEffect
-        // Still on the old conversation — wait for the switch to bring in the right messages.
         if (AssistantController.currentConversationId != jump.conversationId) return@LaunchedEffect
-        // Index within the RENDERED list, not the raw one: variant collapsing (B-group task 12)
-        // means the two can differ, and scrolling to a raw index would land on the wrong bubble.
         val idx = filteredMessages.indexOfFirst { it.id == jump.messageId }
-        if (idx < 0) return@LaunchedEffect   // messages for the target chat haven't arrived yet
-        // With messages present there are no leading items in the list, so the message's position in
-        // `messages` is its item index. Bring it to the top of the viewport.
+        if (idx < 0) return@LaunchedEffect
         listState.animateScrollToItem(idx.coerceAtLeast(0))
         highlightMessageId = jump.messageId
         highlightStart = jump.matchStart
@@ -579,10 +366,6 @@ fun AssistantScreen(active: Boolean = true) {
         highlightPulse++
         pendingJump = null
     }
-    // When an error banner appears (e.g. an API failure), always bring it fully into view at the
-    // very bottom, even if the user had scrolled up — otherwise a long chat hides the error code
-    // off-screen and they have to hunt for it. (The existing "clear error on leaving" logic in
-    // the DisposableEffect above is left untouched.)
     LaunchedEffect(shownError) {
         if (shownError.isNotBlank()) {
             autoScroll = true
@@ -590,14 +373,6 @@ fun AssistantScreen(active: Boolean = true) {
         }
     }
 
-    // ---- Attachment sources (B-group task 16) ----
-    //
-    // Four ways in, one implementation. Local file was the only source before; camera, gallery and
-    // cloud storage are added as PARALLEL entries rather than replacements, so nothing that worked
-    // before behaves differently. Every one of them ends at [ingestAttachment], which is the exact
-    // body the single old launcher used to hold — extracted rather than copied, because four copies
-    // of the size cap, the image downscale and the text inlining would diverge the first time any
-    // one of them was touched.
     suspend fun ingestAttachment(uri: Uri) {
         val resolver = context.contentResolver
         val mime = resolver.getType(uri) ?: "application/octet-stream"
@@ -605,7 +380,6 @@ fun AssistantScreen(active: Boolean = true) {
             val prepared = uriToChatImage(context, uri)
             if (prepared != null) {
                 val (outMime, base64, name) = prepared
-                // R3 task #15: attachments queue up instead of replacing one another.
                 pendingAttachments = pendingAttachments + PendingAttachment(outMime, base64, name)
             }
         } else {
@@ -642,19 +416,10 @@ fun AssistantScreen(active: Boolean = true) {
         }
     }
 
-    // 1. Any local file(s) — multiple selection now queues them all (R3 task #15).
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
-    // 2. Gallery — the system photo picker. GetContent("image/*") routinely failed to wake the
-    // device's real gallery app on OEM phones (notably Huawei): the chooser either omitted the
-    // album app or listed it in a state that never opened its albums. PickVisualMedia is a system
-    // surface that resolves to SOMETHING that can actually show the photo library on every API
-    // level this app supports — the native photo picker on Android 13+, the Google backport
-    // picker on 8.0–12 with Play services, and the SAF documents UI's image root everywhere else
-    // (the contract handles that fallback chain itself). The multi-pick content launcher stays as
-    // the last-resort fallback for the (practically impossible) case where launch itself throws.
     val photoPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
             if (uri != null) scope.launch { ingestAttachment(uri) }
@@ -663,11 +428,6 @@ fun AssistantScreen(active: Boolean = true) {
         uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
-    // 3. Cloud storage — Google Drive, OneDrive, Dropbox and anything else that ships a
-    // DocumentsProvider. OpenDocument (the Storage Access Framework) is what enumerates those
-    // providers; GetContent lists apps that can hand over content and often hides them, which is
-    // precisely why "attach from Drive" was not reachable before. Whether the entry is *offered*
-    // depends on whether any such provider is actually installed (see CLOUD_STORAGE_PACKAGES).
     val cloudStorageAvailable = remember(context) {
         CLOUD_STORAGE_PACKAGES.any { pkg ->
             try {
@@ -682,14 +442,6 @@ fun AssistantScreen(active: Boolean = true) {
         uris.forEach { uri -> scope.launch { ingestAttachment(uri) } }
     }
 
-    // 4. Camera. The photo is written to a FileProvider URI under cache/camera-capture (see
-    // res/xml/file_paths.xml) and then goes through the same ingest path as any other image.
-    //
-    // No CAMERA permission is declared anywhere in this app, and that is deliberate rather than an
-    // oversight: TakePicture hands off to the system camera app, which needs no permission from us.
-    // Declaring android.permission.CAMERA would actually make things WORSE — once declared, the
-    // platform requires it to be granted before the same intent will run, so we would have invented
-    // a runtime permission prompt for a capability we already had without one.
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok: Boolean ->
         val uri = pendingCameraUri
@@ -717,8 +469,6 @@ fun AssistantScreen(active: Boolean = true) {
         pendingSaveImage = null
     }
 
-    // Generic single-file save (issue 6): used when the user picks exactly one file to download from
-    // a reply — e.g. just an attachment. The bytes are staged in [pendingFileSave].
     val fileSaveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         val payload = pendingFileSave
         if (uri != null && payload != null) {
@@ -732,8 +482,6 @@ fun AssistantScreen(active: Boolean = true) {
         pendingFileSave = null
     }
 
-    // Zip save (issues 6 and 7): a multi-file reply download, or a whole-conversation export. The
-    // entries (filename → bytes) are staged in [pendingZipSave] and written as a single .zip.
     val zipSaveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri: Uri? ->
         val entries = pendingZipSave
         if (uri != null && entries != null) {
@@ -771,10 +519,6 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // The per-conversation actions sheet (task 4). Two full-width rows rather than dialog buttons,
-    // because "Rename" and "Delete" are choices of what to do, not confirm/cancel of one thing —
-    // and a destructive option deserves to be a deliberate, clearly-labelled target rather than a
-    // word tucked into a button row.
     convoActions?.let { convo ->
         AlertDialog(
             onDismissRequest = { convoActions = null },
@@ -816,8 +560,6 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // Deleting from the list still confirms first — it destroys every message in that conversation,
-    // and unlike the rest of the app there is no trash to fish it back out of.
     convoToDelete?.let { convo ->
         AlertDialog(
             onDismissRequest = { convoToDelete = null },
@@ -838,7 +580,6 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // Rename dialog: opened from the actions sheet above.
     renameTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { renameTarget = null },
@@ -862,13 +603,6 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // Per-reply download modal (issue 6): lists every file on the reply — the reply text and any
-    // attachment — and lets the user choose which to download. One selection saves directly; several
-    // are bundled into a zip.
-    // Tasks A1/A3/A24 — one viewer for notes, tasks and chat. Opening it with the whole
-    // conversation's attachment list (not just the tapped one) is what makes swiping work, and
-    // because every action in the viewer reads the *current* page, Share and Save follow the swipe
-    // instead of staying pinned to whatever was tapped first.
     viewingAttachment?.let { att ->
         AttachmentViewerDialog(
             attachments = chatAttachments,
@@ -900,22 +634,13 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // The function-call confirmation modal is NOT declared here any more (task 3). It is hosted by
-    // LucentApp so it can appear on any tab, because generation outlives this screen — see the
-    // documentation on [AssistantConfirmationDialog] for what went wrong when it lived here.
-    // `pendingConfirmation` is still read above: it suppresses the thinking bubble while a decision
-    // is outstanding, which is this screen's own business.
 
-    // Network-error modal (issue 19): a genuine connectivity failure or timeout, surfaced clearly
-    // rather than as a quiet inline line.
     networkError?.let { message ->
         AlertDialog(
             onDismissRequest = { AssistantController.clearNetworkError() },
             title = { Text(com.lucent.app.i18n.S.connectionProblem) },
             text = { Text(message) },
             confirmButton = {
-                // One-tap recovery (ported from the second assistant variant): re-runs the same
-                // turn without duplicating the already-saved user message.
                 TextButton(onClick = { AssistantController.retryLast() }) { Text(com.lucent.app.i18n.S.actionRetry) }
             },
             dismissButton = {
@@ -924,26 +649,7 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // ---- One long-press, one meaning (integration decision) ----
-    //
-    // Tasks B11 and B13 both claimed long-press on a chat bubble: B13 wanted selectable text, B11
-    // wanted multi-select. Group B reconciled them with a three-item sheet. Group A had meanwhile
-    // set the app-wide convention with task A16 — long-press an item in a LIST starts a multi-select
-    // — and A6 set the other half: long-press BODY TEXT in a detail view selects text.
-    //
-    // Unified here on that convention, at the integrator's instruction. Long-press on a message
-    // means the same thing it means on a note card or a task card: start selecting. The two
-    // single-message actions did not disappear; they moved to the selection bar, where they appear
-    // as soon as the selection is exactly one message. That is also where the note and task list
-    // screens put their single-item actions, so there is now one rule for the whole app instead of
-    // one rule per screen.
-    //
-    // The extra tap the sheet cost is gone, the actions are visible rather than nested behind a
-    // gesture, and "copy the whole message" survives as an explicit button.
 
-    // Batch delete confirms first, and says how many (B-group task 11). Chat messages have no
-    // Trash — unlike every other kind of record in this app, these do not come back — so the
-    // confirmation names the count and the dialog says plainly that it is permanent.
     if (showBatchDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showBatchDeleteConfirm = false },
@@ -963,20 +669,8 @@ fun AssistantScreen(active: Boolean = true) {
         )
     }
 
-    // The whole column reserves the floating capsule's height at its bottom (LocalBottomBarInset),
-    // which keeps the input row sitting just above the pill rather than trapped behind it — exactly
-    // where it was before the capsule was made to float. The chat list fills the space above the
-    // input row.
     Column(modifier = Modifier.fillMaxSize().padding(12.dp).padding(bottom = LocalBottomBarInset.current)) {
-        // Conversation bar: start a new conversation (keeping old ones), switch between saved
-        // conversations, or delete the current one. Kept to a single compact row so the chat
-        // stays the focus.
         if (selectionMode) {
-            // ---- Selection bar (B-group task 11) ----
-            // It REPLACES the conversation row rather than stacking above it: the two are mutually
-            // exclusive modes, and pushing the chat down by a whole row every time a selection
-            // starts would make the list jump under the user's finger at the exact moment they are
-            // pointing at something in it.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -991,19 +685,11 @@ fun AssistantScreen(active: Boolean = true) {
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = {
-                    // Select-all toggles: pressing it when everything is already selected clears,
-                    // which is the fastest way out of an over-broad selection.
                     if (selectedIds.size == messages.size) selectedIds.clear()
                     else { selectedIds.clear(); messages.forEach { selectedIds.add(it.id) } }
                 }) {
                     Icon(Icons.Default.SelectAll, contentDescription = com.lucent.app.i18n.S.selectAll, tint = onGradient)
                 }
-                // ---- Single-message actions (integration: the old long-press sheet's contents) ----
-                // Shown only while the selection is exactly one message, because "copy the whole
-                // message" and "select text in it" have no meaning for five of them. Placed before
-                // the batch actions so the row reads narrow-to-broad, and hidden rather than
-                // disabled — a permanently greyed-out pair of icons is just noise in the common
-                // case, which is a multi-message selection.
                 if (selectedIds.size == 1) {
                     val only = messages.firstOrNull { it.id == selectedIds.first() }
                     if (only != null) {
@@ -1018,10 +704,6 @@ fun AssistantScreen(active: Boolean = true) {
                             )
                         }
                         IconButton(onClick = {
-                            // Text selection replaces the selection mode rather than nesting inside
-                            // it: once the user is picking characters, a message-level selection
-                            // running underneath would leave two highlights on screen meaning two
-                            // different things.
                             selectingTextIn = only.id
                             exitSelection()
                         }) {
@@ -1055,19 +737,6 @@ fun AssistantScreen(active: Boolean = true) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: conversation switcher (label + count), tap to pick another conversation.
-            //
-            // The `weight` here is the fix for the squashed action icons (task 1). A Row measures
-            // its *unweighted* children first, in order, each taking as much of the row as it asks
-            // for — so the title chip, which could ask for up to ~244dp with a long name, was served
-            // first and the three icon buttons on the right divided whatever scraps were left. On a
-            // narrow screen that meant they were handed less than their 48dp and drew squashed,
-            // which is exactly the deformed bin icon in the report.
-            //
-            // Weighting the chip inverts the order of service: the icons are measured first at their
-            // natural size, and the chip is given what remains. It can no longer starve them, and the
-            // title ellipsises instead — the correct thing to sacrifice, since a truncated name is
-            // still readable and a truncated button is not.
             Box(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier
@@ -1085,31 +754,21 @@ fun AssistantScreen(active: Boolean = true) {
                         fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        // `fill = false` so a short title keeps the chip compact; a long one is
-                        // capped by what the row can spare and ellipsised there.
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Icon(
                         Icons.Default.ArrowDropDown,
                         contentDescription = com.lucent.app.i18n.S.a11ySwitchConversation,
                         tint = onGradient,
-                        // Never let the caret be the thing that gets pushed out of the chip.
                         modifier = Modifier.size(24.dp)
                     )
                 }
                 DropdownMenu(expanded = conversationMenuOpen, onDismissRequest = { conversationMenuOpen = false }) {
                     val convos = AssistantController.conversations
-                    // The whole menu is a fixed, compact width. The search field sits OUTSIDE the
-                    // scrolling list below it, so it stays pinned while the conversations scroll
-                    // (issue 1), and is trimmed to a smaller footprint (issue 2).
                     Column(modifier = Modifier.width(210.dp)) {
                         OutlinedTextField(
                             value = conversationSearch,
                             onValueChange = { conversationSearch = it },
-                            // No placeholder here: the field is deliberately short (48.dp) to keep the
-                            // dropdown compact, which clipped a placeholder line and left it looking
-                            // like garbled text behind the caret (task 8). The leading magnifier icon
-                            // already signals that this is the search field, so the label isn't needed.
                             leadingIcon = {
                                 Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                             },
@@ -1124,11 +783,6 @@ fun AssistantScreen(active: Boolean = true) {
 
                         val searching = conversationSearch.isNotBlank()
                         if (searching) {
-                            // ---- Search results: one row per individual hit (task 9) ----
-                            // Each occurrence is listed separately, so the same message can appear
-                            // more than once and several messages in one chat can each appear. Tapping
-                            // a row lands on that exact message (switching chats if needed), where it's
-                            // highlighted and bounced.
                             if (deepMatches.isEmpty()) {
                                 DropdownMenuItem(text = { Text(com.lucent.app.i18n.S.noMatches) }, onClick = { }, enabled = false)
                             } else {
@@ -1145,8 +799,6 @@ fun AssistantScreen(active: Boolean = true) {
                                                     .clickable {
                                                         conversationMenuOpen = false
                                                         conversationSearch = ""
-                                                        // Don't let follow-mode fight the jump; the
-                                                        // resolver scrolls to and highlights the hit.
                                                         autoScroll = false
                                                         pendingJump = match
                                                         if (AssistantController.currentConversationId != match.conversationId) {
@@ -1167,7 +819,6 @@ fun AssistantScreen(active: Boolean = true) {
                                                         fontSize = 11.sp,
                                                         color = onGradientMuted
                                                     )
-                                                    // Preview with the matched run emphasised.
                                                     val previewed = remember(match.snippet, match.hitInSnippetStart, match.hitInSnippetLength) {
                                                         buildAnnotatedString {
                                                             val s = match.hitInSnippetStart.coerceIn(0, match.snippet.length)
@@ -1195,20 +846,12 @@ fun AssistantScreen(active: Boolean = true) {
                         } else if (convos.isEmpty()) {
                             DropdownMenuItem(text = { Text(com.lucent.app.i18n.S.noSavedConversations) }, onClick = { conversationMenuOpen = false }, enabled = false)
                         } else {
-                            // ---- Not searching: the conversation switcher (tap switches, long-press renames) ----
                             Column(
                                 modifier = Modifier
                                     .heightIn(max = 280.dp)
                                     .verticalScroll(rememberScrollState())
                             ) {
                                 convos.forEach { convo ->
-                                    // Tap switches; the "⋮" opens this conversation's actions
-                                    // (task 4). Rename used to be a long-press, which is the classic
-                                    // invisible gesture: nothing on screen said it existed, so the
-                                    // only people who ever renamed a conversation were the ones who
-                                    // long-pressed it by accident. Delete wasn't reachable here at
-                                    // all — you had to switch to a conversation first just to delete
-                                    // it. A visible menu button fixes both.
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
@@ -1231,9 +874,6 @@ fun AssistantScreen(active: Boolean = true) {
                                         }
                                         IconButton(
                                             onClick = {
-                                                // Close the switcher first: the actions sheet is a
-                                                // dialog, and leaving a dropdown open underneath it
-                                                // stacks two popups that fight over dismissal.
                                                 conversationMenuOpen = false
                                                 convoActions = convo
                                             },
@@ -1253,9 +893,6 @@ fun AssistantScreen(active: Boolean = true) {
                 }
             }
 
-            // Right: export chat (issue 7), new conversation, delete current. Export sits to the
-            // LEFT of the "+" as specified. Unweighted, so these are measured first and always get
-            // their full touch target.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End
@@ -1269,9 +906,6 @@ fun AssistantScreen(active: Boolean = true) {
                 ) {
                     Icon(Icons.Default.Archive, contentDescription = com.lucent.app.i18n.S.a11yExportChat, tint = onGradient)
                 }
-                // "+": start a new conversation (v2.7.2). Between download and delete, same size as
-                // both. startNewConversation leaves the conversation id null — the greeting shows
-                // and the first message lazily creates the row, so no empty chats accumulate.
                 IconButton(
                     onClick = {
                         conversationMenuOpen = false
@@ -1293,8 +927,6 @@ fun AssistantScreen(active: Boolean = true) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // The list plus an overlaid "jump to latest" button, so the button floats over the
-        // bottom-right of the chat area only.
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().hazeSource(state = LocalHazeState.current),
@@ -1307,12 +939,6 @@ fun AssistantScreen(active: Boolean = true) {
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.align(Alignment.CenterStart).frostedGlass().padding(12.dp)) {
                                 Text(
-                                    // Allow CJK punctuation to START a line (see
-                                    // withLineStartPunctuationAllowed at the bottom of this
-                                    // file). Without it, the fullwidth comma after 规划问题 must
-                                    // not open a line, so the greedy breaker drags 题 down to
-                                    // the next line with it — leaving a one-character hole that
-                                    // reads as a stray space between 问 and 题.
                                     com.lucent.app.i18n.S.assistantGreeting(assistantName)
                                         .withLineStartPunctuationAllowed(),
                                     color = onGradient
@@ -1323,9 +949,6 @@ fun AssistantScreen(active: Boolean = true) {
                 }
                 items(filteredMessages, key = { it.id }) { msg ->
                     val isUser = msg.role == "user"
-                    // When this message is the target of a history-search jump, shade the matched run
-                    // and bounce the bubble twice (task 9). The Animatable is keyed to the message id
-                    // so it belongs to this bubble; the effect re-fires whenever highlightPulse ticks.
                     val isHighlighted = msg.id == highlightMessageId
                     val bounce = remember(msg.id) { Animatable(1f) }
                     LaunchedEffect(msg.id, isHighlighted, highlightPulse) {
@@ -1341,9 +964,6 @@ fun AssistantScreen(active: Boolean = true) {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // The checkbox lives OUTSIDE the bubble, in its own leading column, so the
-                        // bubble itself keeps the exact geometry it has when nothing is selected —
-                        // entering selection mode must not reflow every message on screen.
                         if (selectionMode) {
                             Checkbox(
                                 checked = isSelected,
@@ -1362,10 +982,6 @@ fun AssistantScreen(active: Boolean = true) {
                                     if (isSelected) Modifier.background(Color.White.copy(alpha = 0.10f))
                                     else Modifier
                                 )
-                                // Long-press starts a multi-select with this message in it — the
-                                // same thing long-press does on a note card and a task card
-                                // (A16). In selection mode a plain tap toggles this message, which
-                                // is the gesture people expect once a selection is running.
                                 .pointerInput(msg.id, selectionMode) {
                                     detectTapGestures(
                                         onLongPress = {
@@ -1374,9 +990,6 @@ fun AssistantScreen(active: Boolean = true) {
                                                 selectionMode = true
                                                 selectedIds.clear()
                                                 selectedIds.add(msg.id)
-                                                // Leaving text-selection mode on the way in: the two
-                                                // are different modes over the same bubble and both
-                                                // at once has no coherent meaning.
                                                 selectingTextIn = null
                                             }
                                         },
@@ -1389,9 +1002,6 @@ fun AssistantScreen(active: Boolean = true) {
                                 }
                                 .padding(12.dp)
                         ) {
-                            // Assistant name tag at the top-left of the bubble (issue 15). Blank
-                            // only in the (usually zero-frame) window before the name has been read
-                            // — drawing nothing beats drawing the wrong name (B-group task 9).
                             if (!isUser && assistantName.isNotBlank()) {
                                 Text(
                                     assistantName,
@@ -1400,9 +1010,6 @@ fun AssistantScreen(active: Boolean = true) {
                                     modifier = Modifier.padding(bottom = 3.dp)
                                 )
                             }
-                            // R3 task #15: a message can carry several files. Render each as a
-                            // compact filename row — never a pixel preview — and a tap opens the
-                            // shared viewer positioned on exactly that file.
                             val attachmentsAll = remember(msg.id, msg.attachmentData, msg.attachmentList) {
                                 com.lucent.app.data.ChatAttachments.all(
                                     msg.attachmentMime, msg.attachmentData, msg.attachmentName, msg.attachmentList)
@@ -1432,12 +1039,6 @@ fun AssistantScreen(active: Boolean = true) {
                                 }
                             }
 
-                            // Long-press the message text to copy it to the clipboard. When this is
-                            // the message a search jumped to, the matched run is shaded amber (task 9).
-                            // Each slice goes through withLineStartPunctuationAllowed on its own,
-                            // so the highlight offsets — which refer to the raw content — still
-                            // land on the right run, and long-press copy keeps using the raw
-                            // msg.content (the transform is display-only and never leaves Text).
                             val contentText = if (isHighlighted && highlightLen > 0) {
                                 buildAnnotatedString {
                                     val s = highlightStart.coerceIn(0, msg.content.length)
@@ -1451,23 +1052,6 @@ fun AssistantScreen(active: Boolean = true) {
                             } else {
                                 buildAnnotatedString { append(msg.content.withLineStartPunctuationAllowed()) }
                             }
-                            // B-group task 13: long-press used to copy the WHOLE message and
-                            // nothing else — all or nothing, with no way to take just the command,
-                            // the URL, or the one line you actually wanted out of a long reply.
-                            //
-                            // SelectionContainer replaces that with the platform's own text
-                            // selection: long-press starts a selection with drag handles, and the
-                            // system Copy toolbar acts on whatever the user actually chose. Copying
-                            // everything is still one gesture away (long-press, Select all), so this
-                            // strictly adds reach rather than trading one behaviour for another.
-                            //
-                            // Per bubble rather than around the whole LazyColumn on purpose: a
-                            // list-wide container would let a selection drag fight the scroll
-                            // gesture, and cross-bubble selection is not what was asked for.
-                            // Text selection is switched on for THIS message from the long-press
-                            // sheet (B-group tasks 11 + 13 — see the sheet's comment for why the
-                            // two had to be reconciled). An always-on SelectionContainer would
-                            // swallow the long-press before multi-select could ever see it.
                             if (selectingTextIn == msg.id) {
                                 SelectionContainer {
                                     Text(contentText, color = onGradient)
@@ -1476,8 +1060,6 @@ fun AssistantScreen(active: Boolean = true) {
                                 Text(contentText, color = onGradient)
                             }
                             if (!isUser) {
-                                // The 1/2 variant switcher (B-group task 12), shown only when this
-                                // answer actually has siblings — a single reply gets no chrome at all.
                                 val siblings = variantGroups[msg.replyToId]
                                 if (msg.replyToId != 0L && siblings != null && siblings.size > 1) {
                                     val current = siblings.indexOfFirst { it.id == msg.id }.coerceAtLeast(0)
@@ -1503,16 +1085,12 @@ fun AssistantScreen(active: Boolean = true) {
                                         }
                                     }
                                 }
-                                // Download opens a modal listing every file on this reply so the user
-                                // picks what to save (issue 6).
                                 IconButton(
                                     onClick = { downloadDialogMsg = msg },
                                     modifier = Modifier.height(28.dp)
                                 ) {
                                     Icon(Icons.Default.Download, contentDescription = com.lucent.app.i18n.S.a11yDownloadReplyFiles, tint = onGradientMuted)
                                 }
-                                // Approximate token cost of this reply, bottom-right (issue 9). Hidden
-                                // for older replies saved before token tracking (tokens == 0).
                                 if (msg.tokens > 0) {
                                     Text(
                                         TokenEstimator.label(msg.tokens),
@@ -1525,11 +1103,6 @@ fun AssistantScreen(active: Boolean = true) {
                         }
                         }
                     }
-                    // ---- R3 report: "Ask again" lives OUTSIDE the user bubble ----
-                    // It used to sit inside the bubble under the text, where it read as part of the
-                    // message. It now hangs beneath the bubble's bottom-right edge, small, outside
-                    // the glass, and only while nothing is mid-send — still one tap from the
-                    // message it re-sends.
                     if (isUser) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             IconButton(
@@ -1565,11 +1138,6 @@ fun AssistantScreen(active: Boolean = true) {
                     }
                 }
                 if (streamingText != null) {
-                    // Stable key (B-group task 15): an unkeyed item is identified by its POSITION,
-                    // so as the tail of the list cycles thinking -> streaming -> stored message the
-                    // list keeps re-binding one positional slot to three different bubbles and its
-                    // scroll anchor moves with it. A constant key makes the streaming bubble one
-                    // identity that appears and disappears cleanly.
                     item(key = "streaming") {
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.align(Alignment.CenterStart).frostedGlass().padding(12.dp)) {
@@ -1586,8 +1154,6 @@ fun AssistantScreen(active: Boolean = true) {
                         }
                     }
                 }
-                // "[name] is thinking…" bubble (issue 14): shown while the assistant is working but
-                // hasn't begun revealing text, and not while a confirmation modal is up.
                 if (thinking && streamingText == null && pendingConfirmation == null) {
                     item(key = "thinking") {
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -1604,10 +1170,6 @@ fun AssistantScreen(active: Boolean = true) {
                 }
                 if (shownError.isNotBlank()) {
                     item(key = "error") {
-                        // R3 report: the error tint used to be a fixed pale pink that vanished
-                        // against the light theme's pale glass. Dark themes ink white (see the
-                        // LocalOnGradient provider), so the tint flips with the ink colour: pale
-                        // on dark, a strong red on light.
                         Text(
                             shownError,
                             color = if (onGradient == Color.White) Color(0xFFFFC1C1) else Color(0xFFC62828),
@@ -1617,11 +1179,6 @@ fun AssistantScreen(active: Boolean = true) {
                 }
             }
 
-            // One-tap return to the newest record, shown only while the user has scrolled up.
-            // Extracted into its own composable so AnimatedVisibility resolves to the top-level
-            // overload: called directly inside this Box (itself nested in a Column), the
-            // ColumnScope/RowScope AnimatedVisibility extension overloads become ambiguous
-            // candidates and the compiler rejects the call.
             JumpToLatestButton(
                 visible = !atBottom,
                 tint = onGradient,
@@ -1633,12 +1190,6 @@ fun AssistantScreen(active: Boolean = true) {
             )
         }
 
-        // Deterministic tool-permission notice (tool-permission feedback fix): while the
-        // on-device model is answering WITHOUT tool permission, say so right where the user is
-        // typing. The system prompt also tells the model to explain this, but a very small local
-        // model can't be relied on to follow it — the failure mode is a bare "your task cannot
-        // be completed" that never mentions the real cause. This line is the guarantee that the
-        // cause (and the exact setting that fixes it) is always visible, whatever the model says.
         if (localModelEnabled && !localToolsEnabled) {
             Text(
                 com.lucent.app.i18n.S.localToolsOffHint,
@@ -1693,9 +1244,6 @@ fun AssistantScreen(active: Boolean = true) {
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Attach: four parallel sources rather than one (B-group task 16). A menu rather than
-            // four buttons — the input row already has to fit a text field, a model switcher and
-            // send on a phone, and three more icons would squeeze all of them.
             Box {
                 IconButton(onClick = { attachMenuOpen = true }, modifier = Modifier.height(56.dp)) {
                     Icon(Icons.Default.AttachFile, contentDescription = com.lucent.app.i18n.S.a11yAttachFile, tint = onGradient)
@@ -1730,8 +1278,6 @@ fun AssistantScreen(active: Boolean = true) {
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
                             } catch (_: android.content.ActivityNotFoundException) {
-                                // No picker surface at all on this ROM (no photo picker, no backport,
-                                // no DocumentsUI): the old content chooser is the last resort.
                                 galleryLauncher.launch("image/*")
                             }
                         }
@@ -1746,25 +1292,9 @@ fun AssistantScreen(active: Boolean = true) {
                     )
                 }
             }
-            // PHASE 4: dictation — speech appends to whatever is already typed; sending stays a
-            // deliberate second tap, so a mis-hearing can be read (and fixed) before it goes out.
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                // ---- Tasks 6 and 12 ----
-                //
-                // The dictation mic used to be a separate button in this Row, sitting OUTSIDE the
-                // text box. Two things were wrong with that. It cost the text box a whole button's
-                // width on the narrowest screen the app runs on — the row already has to hold an
-                // attach button, the field, the model switcher and send — and, placed outside, it
-                // read as an unrelated control that happened to be adjacent rather than as something
-                // the field itself offers. It is the field's own affordance, so it belongs in the
-                // field's trailing slot, and the box now extends across the space it used to take.
-                //
-                // The expand control joins it there. The assistant composer is deliberately a short
-                // box, which means anything longer than a sentence was previously written blind;
-                // this gives it the same full-screen editor the note and task composers have had all
-                // along. Both icons are 34dp inside a 56dp row, so neither crowds the text.
                 trailingIcon = {
                     var inputExpanded by androidx.compose.runtime.remember {
                         androidx.compose.runtime.mutableStateOf(false)
@@ -1804,9 +1334,6 @@ fun AssistantScreen(active: Boolean = true) {
                 textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
                 modifier = Modifier.weight(1f).height(56.dp)
             )
-            // Quick model switch (B-group task 5). Immediately left of send, as specified, and on
-            // both platforms — the composable itself is identical, only this call site differs in
-            // which screen file it lives in. It switches the MODEL only; the API stays put.
             QuickModelSwitcher(
                 currentModel = savedModel,
                 recents = modelRecents,
@@ -1825,8 +1352,6 @@ fun AssistantScreen(active: Boolean = true) {
             )
             Spacer(modifier = Modifier.width(4.dp))
             if (sending) {
-                // While generating, the send button becomes a Stop button that interrupts the reply
-                // (issue 14) — replacing the old non-interactive spinner.
                 IconButton(
                     modifier = Modifier.height(56.dp),
                     onClick = { AssistantController.stopGeneration() }
@@ -1842,12 +1367,6 @@ fun AssistantScreen(active: Boolean = true) {
                             com.lucent.app.data.Attachment(it.mime, it.data, it.name)
                         }
                         if (text.isBlank() && attachments.isEmpty()) return@IconButton
-                        // Local mode is AUTHORITATIVE. Once "use local model" is on, the assistant
-                        // replies on-device and the cloud API is frozen — the send path must never
-                        // silently fall back to it (that was the "it still calls the API" bug). If
-                        // local is on but no model is loaded, the controller surfaces a clear
-                        // "no model" error rather than reaching for the API. The cloud URL/model
-                        // guard below therefore only applies when local mode is OFF.
                         val useLocal = localModelEnabled
                         if (!useLocal && (savedUrl.isBlank() || savedModel.isBlank())) {
                             localError = com.lucent.app.i18n.S.setupApiFirst
@@ -1889,18 +1408,6 @@ fun AssistantScreen(active: Boolean = true) {
     }
 }
 
-/**
- * The floating "jump to latest" button that fades in while the user has scrolled up and taps back
- * to the newest message.
- *
- * Kept as a standalone composable on purpose. At its original call site it sat directly inside a
- * Box that is itself nested in the screen's root Column, which put a ColumnScope in the implicit
- * receiver chain. AnimatedVisibility has ColumnScope and RowScope extension overloads in addition
- * to the top-level one, so the compiler tried to bind the ColumnScope overload to a receiver that
- * wasn't the innermost one and failed ("cannot be called in this context with an implicit
- * receiver"). Inside this function no such scope is present, so AnimatedVisibility resolves
- * unambiguously to the top-level overload. The caller supplies the alignment via [modifier].
- */
 @Composable
 private fun JumpToLatestButton(
     visible: Boolean,
@@ -1928,11 +1435,6 @@ private fun JumpToLatestButton(
     }
 }
 
-/**
- * The "[name] is thinking…" indicator (issue 14): a label followed by three dots that fade in and
- * out in a staggered wave, echoing the familiar chat "typing" animation. Purely decorative and
- * self-contained; it animates only while it's on screen.
- */
 @Composable
 private fun ThinkingBubble(name: String, tint: Color, mutedTint: Color, loadingModel: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "thinking")
@@ -1963,11 +1465,6 @@ private fun ThinkingBubble(name: String, tint: Color, mutedTint: Color, loadingM
             )
         }
     }
-    // A localized word about WHY the first reply is slow (B-group task 10). Loading a multi-GB
-    // model off storage takes real seconds, and an indicator that only spins reads as a hang —
-    // the user has no way to tell "working" from "stuck", and the honest difference between the
-    // two is worth one line. Only shown during the load, and only in local mode, so it never
-    // becomes noise on the fast path.
     if (loadingModel) {
         Text(
             com.lucent.app.i18n.S.lmFirstLoadHint,
@@ -1980,12 +1477,6 @@ private fun ThinkingBubble(name: String, tint: Color, mutedTint: Color, loadingM
     }
 }
 
-/**
- * The per-reply "download files" chooser (issue 6). Lists every downloadable file on a reply — the
- * reply text and any attachment — with a checkbox each. Downloading one selected file saves it
- * directly; downloading several bundles them into a single zip. Checkbox state is keyed to the
- * message id so reopening on a different reply starts fresh.
- */
 @Composable
 private fun DownloadFilesDialog(
     message: ChatMessage,
@@ -1998,7 +1489,6 @@ private fun DownloadFilesDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val hasText = message.content.isNotBlank()
-    // R3 task #15: a reply can carry several files; each gets its own row and its own tick.
     val messageAtts = remember(message.id, message.attachmentData, message.attachmentList) {
         com.lucent.app.data.ChatAttachments.all(
             message.attachmentMime, message.attachmentData, message.attachmentName, message.attachmentList)
@@ -2009,16 +1499,12 @@ private fun DownloadFilesDialog(
     }
     val textFileName = "lucent-reply.txt"
 
-    // Files the reply REFERS to rather than carries (B-group task 7): a generated image, a hosted
-    // document. Parsed out of the reply text; see data/ReplyFiles for why they were unreachable.
     val replyFiles = remember(message.id, message.content) { ReplyFiles.extract(message.content) }
 
     var selText by remember(message.id) { mutableStateOf(hasText) }
-    // Referenced files default to selected: the user opened this dialog because of them.
     val selRemote = remember(message.id) {
         mutableStateMapOf<String, Boolean>().apply { replyFiles.forEach { put(it.url, true) } }
     }
-    // Set while remote files are being fetched, so the buttons can say so and not be pressed twice.
     var working by remember(message.id) { mutableStateOf(false) }
     var failure by remember(message.id) { mutableStateOf("") }
 
@@ -2052,8 +1538,6 @@ private fun DownloadFilesDialog(
                         }
                     }
                 }
-                // Files the reply links to (B-group task 7) — listed exactly like a real attachment,
-                // because from the user's side that is what they are.
                 replyFiles.forEach { file ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -2079,9 +1563,6 @@ private fun DownloadFilesDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(failure, fontSize = 12.sp, color = OverdueColor)
                 }
-                // "Save to a note / task" (the 转存 half of task 7). Creates a new item carrying the
-                // reply text AND the file as a real, encrypted attachment — not the raw Markdown URL
-                // that used to be all that survived.
                 if (replyFiles.isNotEmpty() || hasAttachment) {
                     Spacer(modifier = Modifier.height(10.dp))
                     HorizontalDivider()
@@ -2121,16 +1602,10 @@ private fun DownloadFilesDialog(
             TextButton(
                 enabled = (selText || selAtts.values.any { it } || anyRemote) && !working,
                 onClick = {
-                    // Referenced files have to be FETCHED before anything can be written, and that
-                    // is network work — so the whole assembly moved into a coroutine off the main
-                    // thread (B-group task 7). With nothing remote selected it completes without
-                    // ever touching the network, so the original local-only path is unchanged in
-                    // both behaviour and cost.
                     working = true; failure = ""
                     scope.launch {
                         val entries = mutableListOf<Pair<String, ByteArray>>()
                         if (selText && hasText) entries.add(textFileName to message.content.toByteArray())
-                        // R3 task #15: every ticked local file, not just the legacy first one.
                         messageAtts.forEachIndexed { idx, att ->
                             if (selAtts[idx] != true) return@forEachIndexed
                             val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
@@ -2144,7 +1619,6 @@ private fun DownloadFilesDialog(
                         }
                         working = false
                         if (entries.isEmpty()) {
-                            // Nothing survived — say so instead of closing on a silent no-op.
                             failure = com.lucent.app.i18n.S.downloadFetchFailed
                             return@launch
                         }
@@ -2163,29 +1637,11 @@ private fun DownloadFilesDialog(
     )
 }
 
-/**
- * Build the entries for a whole-conversation export zip (issue 7): a single `chat.txt` transcript in
- * chronological order, followed by each attachment decoded back to its original bytes under a
- * numbered, sanitised filename. The transcript references each attachment by its in-zip name so the
- * two line up.
- */
-/**
- * Create a note or task carrying this reply and its files (B-group task 7).
- *
- * The title is the reply's first line, trimmed — the same shape the app's own "save reply" paths
- * use, so a saved reply looks like anything else in the list. Every SELECTED referenced file is
- * fetched and attached; a reply carrying no file at all still saves as text, because "save this
- * answer" is a reasonable thing to want on its own.
- *
- * Returns false only when something was selected and NOTHING could be produced, which is the one
- * case where silently closing the dialog would look like success.
- */
 private suspend fun saveReplyIntoItem(
     context: android.content.Context,
     message: ChatMessage,
     replyFiles: List<ReplyFiles.ReplyFile>,
     selected: Map<String, Boolean>,
-    // R3 task #15: the message's own ticked files, so a multi-file reply saves every chosen one.
     localAtts: List<com.lucent.app.data.Attachment> = emptyList(),
     asTask: Boolean
 ): Boolean = withContext(Dispatchers.IO) {
@@ -2198,7 +1654,6 @@ private suspend fun saveReplyIntoItem(
         ?: com.lucent.app.i18n.S.conversationFallback
     val wanted = replyFiles.filter { selected[it.url] == true }
     if (wanted.isEmpty() && localAtts.isEmpty()) {
-        // No file to attach: still save the answer itself rather than doing nothing.
         return@withContext ReplyFiles.saveToNewItem(
             context.applicationContext, db, asTask, title, message.content,
             fileName = "", mime = "", bytes = ByteArray(0)
@@ -2235,7 +1690,6 @@ private fun buildChatExportEntries(messages: List<ChatMessage>, assistantName: S
         val time = fmt.format(java.util.Date(m.timestamp))
         sb.append("[").append(time).append("] ").append(who).append(":\n")
         sb.append(m.content).append("\n")
-        // R3 task #15: export every file the message carries, not just the legacy first one.
         com.lucent.app.data.ChatAttachments.all(m.attachmentMime, m.attachmentData, m.attachmentName, m.attachmentList)
             .forEach { att ->
                 val entryName = "%02d_%s".format(attIndex, sanitizeExportName(att.name.ifBlank { "attachment" }))
@@ -2253,52 +1707,24 @@ private fun buildChatExportEntries(messages: List<ChatMessage>, assistantName: S
 private fun sanitizeExportName(name: String): String =
     name.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "file" }
 
-/**
- * Display mapping for a stored conversation title (localization task).
- *
- * A conversation is PERSISTED with the English sentinel "New conversation" until its first reply
- * earns it a real name (AssistantController auto-titles on that exact string — see its comparison
- * at newTitle). The sentinel must therefore stay English in the database; this maps it to the
- * catalog only at the moment it is shown, so a fresh conversation reads as the translated
- * phrase in Japanese while the auto-title logic keeps matching what is actually stored.
- */
 private fun convDisplayTitle(title: String): String =
     if (title == "New conversation") com.lucent.app.i18n.S.newConversation else title
 
-// U+200B ZERO WIDTH SPACE. Unicode line breaking (UAX #14, rule LB8) ALWAYS permits a break
-// right after this character — overriding the kinsoku prohibition that normally keeps CJK
-// closing punctuation off the start of a line.
 private const val ZWSP = '\u200B'
 
-// CJK punctuation that the default line breaker refuses to place at the start of a line. When a
-// line fills up right before one of these, the breaker drags the preceding character down to the
-// next line along with the mark, leaving a one-character hole at the end of the line that reads
-// as a stray space inside a word ("规划问 / 题，" instead of "规划问题 / ，").
 private const val CLINGY_CJK_PUNCT = "，。、；：！？）】》〉」』〕〗〙〛％…‥"
 
-// True for characters whose presence marks CJK text: Han ideographs, kana, Hangul, and the CJK /
-// fullwidth punctuation blocks. Used as the left-hand context test so the transform never touches
-// Western punctuation in Latin text (e.g. the comma in "e.g., this").
 private fun isCjkContext(ch: Char): Boolean {
     val c = ch.code
-    return (c in 0x4E00..0x9FFF) ||   // CJK Unified Ideographs
-        (c in 0x3400..0x4DBF) ||      // CJK Unified Ideographs Extension A
-        (c in 0x3040..0x30FF) ||      // Hiragana and Katakana
-        (c in 0x3000..0x303F) ||      // CJK symbols and punctuation (」。、 …)
-        (c in 0xFF00..0xFFEF) ||      // Fullwidth and halfwidth forms (，！？） …)
-        (c in 0xAC00..0xD7AF) ||      // Hangul syllables
-        (c in 0xF900..0xFAFF)         // CJK Compatibility Ideographs
+    return (c in 0x4E00..0x9FFF) ||
+        (c in 0x3400..0x4DBF) ||
+        (c in 0x3040..0x30FF) ||
+        (c in 0x3000..0x303F) ||
+        (c in 0xFF00..0xFFEF) ||
+        (c in 0xAC00..0xD7AF) ||
+        (c in 0xF900..0xFAFF)
 }
 
-/**
- * Returns a copy of the string in which CJK punctuation is allowed to START a line: a zero-width
- * space goes in front of every clingy mark that follows a CJK character, creating a break
- * opportunity that every Unicode-compliant text engine must honour (UAX #14 rule LB8). The same
- * logic therefore behaves identically on Android and on desktop, on every OS version. A full line
- * can now end with "…规划问题" and the comma simply opens the next line, instead of pulling 题
- * down with it and leaving a hole that reads as a stray space. Display-time only: never persist,
- * copy or send the transformed string.
- */
 private fun String.withLineStartPunctuationAllowed(): String {
     if (isEmpty()) return this
     val sb = StringBuilder(length + 8)

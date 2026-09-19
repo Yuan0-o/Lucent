@@ -10,15 +10,6 @@ import org.json.JSONObject
 import java.io.File
 import kotlin.math.pow
 
-/**
- * Desktop twin of the Android UsageTracker: how often, and how recently, each note and task is
- * opened — the raw material for the "Recent" home sections and the desktop Insights page.
- *
- * Storage is its own small JSON file (`lucent_usage.json`), separate from settings for the same
- * reason Android keeps it in its own DataStore: access counts are throwaway UI state that must
- * never travel in a backup or an export. Scoring math is copied verbatim so the two platforms rank
- * identically for identical histories.
- */
 object UsageTracker {
 
     enum class Kind(val storeKey: String) { NOTE("notes_usage"), TASK("tasks_usage") }
@@ -28,7 +19,6 @@ object UsageTracker {
 
     private data class Entry(val count: Int, val lastOpened: Long)
 
-    // kind.storeKey -> serialized map. One StateFlow keeps scores() live like the DataStore Flow.
     private val state = MutableStateFlow<Map<String, String>>(emptyMap())
     private val mutex = Mutex()
     @Volatile private var loaded = false
@@ -86,7 +76,6 @@ object UsageTracker {
         return obj.toString()
     }
 
-    /** Wipe every recorded open. Used by "Clear all data". */
     suspend fun clearAll(context: Context) {
         ensureLoaded(context)
         mutex.withLock {
@@ -109,7 +98,6 @@ object UsageTracker {
         }
     }
 
-    /** A live map of id → activity score for [kind]. Higher means "more active". */
     fun scores(context: Context, kind: Kind): Flow<Map<Long, Double>> {
         ensureLoaded(context)
         return state.map { values ->
@@ -125,7 +113,6 @@ object UsageTracker {
         return (1.0 + count).pow(0.6) * recency
     }
 
-    /** The final ranking score blending open-activity with edit recency — verbatim Android math. */
     fun score(openActivity: Double, updatedAt: Long, now: Long): Double {
         val ageDays = ((now - updatedAt).coerceAtLeast(0)).toDouble() / DAY_MILLIS
         val editRecency = 0.5.pow(ageDays / RECENCY_HALF_LIFE_DAYS)

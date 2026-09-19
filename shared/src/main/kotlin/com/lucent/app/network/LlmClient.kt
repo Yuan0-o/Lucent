@@ -14,10 +14,6 @@ data class ToolAcc(var id: String = "", var name: String = "", val args: StringB
 
 object LlmClient {
 
-    // retryOnConnectionFailure lets OkHttp transparently re-establish a dropped socket (common on
-    // mobile as the radio flips between wifi and cellular), and the call-level retry below adds a
-    // couple of backed-off attempts on top for timeouts and resets. Together they are the "fix the
-    // underlying connection stability" half of issue 19; the modal is the other half.
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -27,14 +23,10 @@ object LlmClient {
 
     private val JSON = "application/json; charset=utf-8".toMediaType()
 
-    // Call-level retry for transient network faults. HTTP errors are never retried (a 401 won't fix
-    // itself); only connectivity exceptions are.
     private const val MAX_ATTEMPTS = 3
     private val RETRY_BACKOFF_MS = longArrayOf(400L, 1200L)
 
     private fun isTransientNetwork(t: Throwable): Boolean {
-        // The controller-facing error is wrapped in ApiNetworkException; the retry decision cares
-        // about the original cause.
         val e = if (t is ApiNetworkException) (t.cause ?: t) else t
         return when (e) {
             is java.net.SocketTimeoutException,
@@ -69,21 +61,6 @@ object LlmClient {
         }
     }
 
-    /**
-     * P2-2: one text's embedding vector from a cloud provider. Deliberately narrower than the rest
-     * of this file — there is no [ProviderAdapter] member for this because only [ApiSpec.OPENAI]
-     * (and OpenAI-compatible endpoints, which is most of what users actually point [baseUrl] at) is
-     * implemented. [ApiSpec.ANTHROPIC] has no public embeddings endpoint to call, and
-     * [ApiSpec.GOOGLE]'s `embedContent` uses a different request/response shape entirely — rather
-     * than guess at either and risk silently storing a garbage vector, both return
-     * [Result.failure] with a message the caller can surface as-is. Extending this to Google is the
-     * natural next step if it turns out to matter; it needs its own request/response handling, not
-     * a guess bolted onto this one.
-     *
-     * This function's only caller is expected to be [com.lucent.app.data.EmbeddingProvider], which
-     * is also where the "does the user even want note text leaving the device" decision is made —
-     * this function itself has no opinion about that, it just makes the one HTTP call it's asked to.
-     */
     suspend fun fetchEmbedding(
         baseUrl: String,
         spec: ApiSpec,
@@ -139,10 +116,6 @@ object LlmClient {
         onDelta: (String) -> Unit
     ): Result<RawModelReply> = withContext(Dispatchers.IO) {
         val adapter = adapterFor(spec)
-        // Cooperative cancellation for the blocking SSE read below: cancelling this coroutine
-        // cannot interrupt a socket read on its own, so without this poll a "stopped" stream
-        // kept being consumed to its very end — pumping the rest of the old reply into the
-        // caller's buffer long after the user had moved on to another conversation.
         val streamJob = coroutineContext[kotlinx.coroutines.Job]
         var attempt = 0
         while (true) {
@@ -151,7 +124,6 @@ object LlmClient {
             val result: Result<RawModelReply> = try {
                 val url = adapter.chatUrl(baseUrl, model, streaming = true)
                 val body = adapter.buildBody(model, history, systemPrompt, tools, streaming = true)
-                // Google's streaming endpoint is selected by URL; the others signal it in the body.
                 if (spec != ApiSpec.GOOGLE) body.put("stream", true)
 
                 val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
@@ -200,9 +172,6 @@ object LlmClient {
         Result.failure(ApiNetworkException("unreachable", null))
     }
 
-    /**
-     * Consume the SSE stream for one attempt, delegating per-provider parsing to the adapter.
-     */
     private fun streamBody(
         adapter: ProviderAdapter,
         source: okio.BufferedSource,

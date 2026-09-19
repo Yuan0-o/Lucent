@@ -23,15 +23,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Holds a single inbound share until the user decides what to do with it (task 6).
- *
- * `MainActivity.handleShareIntent` parses an ACTION_SEND intent and calls [offer]; the UI shows
- * [ShareIntakeDialog], which asks whether to make it a note or a task and then creates the row and
- * opens it. State lives here (process-global) rather than in the intent so it survives the
- * recomposition that opens the dialog, and so a share that arrives while the app is locked can wait
- * until after unlock to be handled.
- */
 object ShareIntake {
 
     var pending by mutableStateOf<ShareIntegration.Shared?>(null)
@@ -40,7 +31,6 @@ object ShareIntake {
     fun offer(shared: ShareIntegration.Shared) { pending = shared }
     fun clear() { pending = null }
 
-    /** Create a note from the shared payload and return its new id. */
     suspend fun createNote(context: Context, shared: ShareIntegration.Shared): Long {
         val db = AppDatabase.getInstance(context.applicationContext)
         val attachment = shared.streamUri?.let { importStream(context, it, shared.mime) }
@@ -50,13 +40,10 @@ object ShareIntake {
         return db.noteDao().insert(Note(title = title, body = body, attachments = attachmentsJson))
     }
 
-    /** Create a task from the shared payload and return its new id. */
     suspend fun createTask(context: Context, shared: ShareIntegration.Shared): Long {
         val db = AppDatabase.getInstance(context.applicationContext)
         val attachment = shared.streamUri?.let { importStream(context, it, shared.mime) }
         val title = deriveTitle(shared, attachment)
-        // Anything after the first line becomes the task's notes, so a long shared blob isn't crammed
-        // into the title.
         val remainder = shared.text?.substringAfter('\n', "")?.trim().orEmpty()
         val attachmentsJson = attachment?.let { Attachments.serialize(listOf(it)) } ?: "[]"
         return db.taskDao().insert(Task(title = title, notes = remainder, attachments = attachmentsJson))
@@ -71,7 +58,6 @@ object ShareIntake {
         }
     }
 
-    /** Copy a shared file into the encrypted attachment store, returning an Attachment or null. */
     private fun importStream(context: Context, uri: android.net.Uri, mime: String?): Attachment? {
         return try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
@@ -97,10 +83,6 @@ object ShareIntake {
     }
 }
 
-/**
- * Shown while [ShareIntake.pending] holds an inbound share. Lets the user drop it into a new note or
- * task; either choice creates the row, opens it, and clears the pending share.
- */
 @Composable
 fun ShareIntakeDialog() {
     val shared = ShareIntake.pending ?: return
@@ -120,14 +102,6 @@ fun ShareIntakeDialog() {
                 }
             )
         },
-        // C-group task 19: both buttons are TextButtons.
-        //
-        // "New note" was a filled Button and "New task" a TextButton, which is Material's grammar
-        // for "one of these is the recommended action". That is not true here: an inbound share is
-        // equally plausibly a note or a task, and only the user knows which. A filled button reads
-        // as the default and gets tapped by reflex, so the styling was quietly steering the choice
-        // — and steering it identically every time, which is how a shared link ends up in the wrong
-        // place. Two peer actions, two identical affordances.
         confirmButton = {
             TextButton(onClick = {
                 val payload = shared

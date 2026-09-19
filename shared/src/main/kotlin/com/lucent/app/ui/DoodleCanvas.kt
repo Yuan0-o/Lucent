@@ -55,31 +55,8 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Doodle notes (task A22): a whiteboard note kind alongside plain text and checklists.
- *
- * ### The stroke model, and why coordinates are normalised
- *
- * A stroke is a colour, a width, and a list of points. The points are stored as **fractions of the
- * canvas (0..1), not pixels**, and that is the single most important decision in this file.
- * Lucent runs on a phone and on Windows, on screens whose widths differ by a factor of five, and a
- * doodle drawn on one and opened on the other has to be the same drawing. Pixel coordinates would
- * make a note that was legible on a desktop unreadable on a phone and vice versa; fractions make
- * the drawing resolution-independent by construction, and the canvas simply scales them.
- *
- * Widths are normalised the same way, against the canvas width, so a "thin" line stays visually
- * thin rather than becoming a hairline on a large screen.
- *
- * ### Why JSON in a text column
- *
- * The same reasoning `checklist` and `attachments` already follow in this codebase: a small,
- * self-describing blob in a TEXT column travels through the existing backup format, the existing
- * encryption, and the existing migration machinery without any of them needing to learn a new
- * shape. A binary format would be smaller and would need all three taught about it.
- */
 object Doodle {
 
-    /** The palette the task asks for: five colours. Black first because most notes are just ink. */
     val COLORS: List<Color> = listOf(
         Color(0xFF1B1B1F),
         Color(0xFFE53935),
@@ -88,7 +65,6 @@ object Doodle {
         Color(0xFFFFB300)
     )
 
-    /** Three widths, as fractions of the canvas width so they scale with the drawing. */
     val WIDTHS: List<Float> = listOf(0.004f, 0.010f, 0.022f)
 
     data class Stroke(
@@ -97,7 +73,6 @@ object Doodle {
         val points: List<Offset>
     )
 
-    /** Never throws: a corrupt or hand-edited blob yields an empty drawing rather than a crash. */
     fun parse(json: String?): List<Stroke> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
@@ -105,8 +80,6 @@ object Doodle {
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 val pts = o.optJSONArray("p") ?: return@mapNotNull null
-                // Points are flattened [x0,y0,x1,y1,...]: half the JSON overhead of an array of
-                // objects, and a doodle can easily carry a few thousand of them.
                 val points = ArrayList<Offset>(pts.length() / 2)
                 var k = 0
                 while (k + 1 < pts.length()) {
@@ -134,26 +107,11 @@ object Doodle {
     fun isEmpty(json: String?): Boolean = parse(json).isEmpty()
 }
 
-/**
- * Multi-page whiteboards.
- *
- * ### Storage, and why it stays backwards compatible
- *
- * A doodle used to be one JSON array of strokes. It is now an object carrying an array of those
- * arrays — one per canvas — and [parse] still accepts the old bare array as a single page. Nothing
- * has to be migrated, no column changes, and a note written by an older build opens with its one
- * canvas intact and can grow a second one immediately.
- *
- * Pages are identified by position, not by a stored name. "Canvas 2" is simply the second canvas,
- * so deleting or reordering never leaves a name pointing at the wrong drawing — there is no name to
- * point anywhere.
- */
 object DoodlePages {
 
     fun parse(json: String?): List<String> {
         val raw = json?.trim().orEmpty()
         if (raw.isEmpty()) return listOf("")
-        // Legacy: a bare array of strokes is one page.
         if (raw.startsWith("[")) return listOf(raw)
         return try {
             val arr = JSONObject(raw).optJSONArray("pages") ?: return listOf("")
@@ -161,16 +119,12 @@ object DoodlePages {
             for (i in 0 until arr.length()) out.add(arr.optString(i, ""))
             if (out.isEmpty()) listOf("") else out
         } catch (_: Throwable) {
-            // Unreadable container: fall back to treating the whole string as one page rather than
-            // discarding a drawing we merely failed to understand.
             listOf(raw)
         }
     }
 
     fun serialize(pages: List<String>): String {
         val kept = if (pages.isEmpty()) listOf("") else pages
-        // One page and nothing drawn on it is the empty doodle, and must serialise back to "" so
-        // `Note.isDoodle` and every "is this blank?" check keep answering the way they always did.
         if (kept.size == 1 && Doodle.isEmpty(kept.first())) return ""
         if (kept.size == 1) return kept.first()
         val arr = JSONArray()
@@ -178,79 +132,28 @@ object DoodlePages {
         return JSONObject().put("pages", arr).toString()
     }
 
-    /** How many canvases carry anything at all. */
     fun drawnCount(pages: List<String>): Int = pages.count { !Doodle.isEmpty(it) }
 
-    /**
-     * Whether a doodle column holds no strokes at all, across every canvas (round R2, task 2).
-     *
-     * `Doodle.isEmpty` answers this for ONE canvas and understands only a bare stroke array, so
-     * calling it on the column returned true for every multi-canvas note — the container parses as
-     * neither. Anything asking "does this note have a drawing?" therefore had to be told about the
-     * two shapes or be silently wrong; the save path was silently wrong, and discarded doodle-only
-     * notes that had more than one canvas.
-     */
     fun isEmpty(json: String?): Boolean = drawnCount(parse(json)) == 0
 
-    /**
-     * Drop every canvas that has nothing drawn on it (round R2, task 2).
-     *
-     * Same rule the checklist editors now follow for blank rows: a canvas you added, did not draw
-     * on, and saved is not content — it is a leftover of deciding not to. Keeping it would put an
-     * empty white page in the note, in its exported PDF, and in the export picker's file list.
-     *
-     * Serialising an all-blank result yields "" rather than an empty container, which is what
-     * `Note.isDoodle` and every "is this blank?" check already expect to see.
-     */
     fun pruneEmpty(json: String?): String = serialize(parse(json).filter { !Doodle.isEmpty(it) })
 }
 
-/**
- * The editable whiteboard.
- *
- * Drawing is a plain drag: touch down starts a stroke, movement extends it, lifting ends it. There
- * is no eraser tool and no save button — every stroke is committed as it is finished, which is what
- * "the canvas saves itself" means here. What the toolbar does carry is **undo and redo**, and they
- * work on whole-canvas snapshots rather than on individual strokes, so "clear the canvas" is
- * undoable like anything else. A destructive action you cannot take back is the one thing a drawing
- * surface must not have.
- */
 @Composable
 fun DoodleEditor(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    // Task 12. When true the board fills whatever it is given instead of standing at a fixed 340dp,
-    // and the corner control collapses rather than expands. The full-screen editor is this same
-    // composable hosted in a Dialog, so there is exactly one whiteboard implementation and the two
-    // sizes cannot drift apart in behaviour.
     fullScreen: Boolean = false,
     onToggleFullScreen: (() -> Unit)? = null,
-    /** Adds a canvas after this one. Null hides the button (the preview host has no use for it). */
     onAddPage: (() -> Unit)? = null,
-    /** False shows the drawing read-only — the preview mode pages open in until Edit is pressed. */
     editable: Boolean = true
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    // ---- Task 3.3: the toolbar has to be legible against ITS OWN backdrop ----
-    //
-    // In full screen the panel behind this toolbar is near-black, but the icons were tinted with the
-    // app's on-gradient colour — which on every light palette is near-black too. The result was a
-    // row of controls that were technically drawn and effectively invisible.
     val toolTint = if (fullScreen) Color(0xFFEDEDF2) else onGradient
     val toolMuted = if (fullScreen) Color(0xFFEDEDF2).copy(alpha = 0.60f) else onGradientMuted
 
-    // ---- Task 3.5: why the stroke list is NOT keyed on [value] ----
-    //
-    // It used to be `remember(value) { mutableStateOf(...) }`. Every commit changes `value`, which
-    // re-keys the remember and allocates a BRAND NEW MutableState — but the pointerInput block that
-    // owns the drawing gesture is keyed only on the pen settings, so its still-running coroutine
-    // keeps a reference to the OLD state object and the OLD `commit` closure.
-    //
-    // That is the "clear the canvas, draw one stroke, and everything comes back" bug, exactly: clear
-    // wrote an empty list to the *new* state, and the next stroke was committed by the *old* closure
-    // as `oldStrokes + newStroke`, resurrecting every stroke the user had just deleted.
     val strokesState = remember { mutableStateOf(Doodle.parse(value)) }
     var strokes by strokesState
     var lastKnownValue by remember { mutableStateOf(value) }
@@ -258,15 +161,10 @@ fun DoodleEditor(
         lastKnownValue = value
         strokes = Doodle.parse(value)
     }
-    // Whole-canvas snapshots, for the same reason TextUndoStack uses them: an operation log has to
-    // express every writer, and "clear" plus "load a different page" are writers that an
-    // add-one-stroke log cannot describe without desynchronising from the drawing.
     val past = remember { mutableStateOf(listOf<List<Doodle.Stroke>>()) }
     val future = remember { mutableStateOf(listOf<List<Doodle.Stroke>>()) }
     var colorIndex by remember { mutableStateOf(0) }
     var widthIndex by remember { mutableStateOf(1) }
-    // The stroke currently under the finger, kept separate so it can be drawn live without
-    // re-serializing the whole drawing on every pointer sample.
     var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var canvasSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
 
@@ -274,14 +172,12 @@ fun DoodleEditor(
     fun write(updated: List<Doodle.Stroke>) {
         strokes = updated
         val json = Doodle.serialize(updated)
-        // Record what we wrote BEFORE emitting it, so the sync check above recognises the value
-        // coming back as our own and leaves the list alone.
         lastKnownValue = json
         emitValue.value(json)
     }
     fun commit(updated: List<Doodle.Stroke>) {
         past.value = (past.value + listOf(strokes)).takeLast(UNDO_DEPTH)
-        future.value = emptyList()   // a new mark discards the redo branch, as it must
+        future.value = emptyList()
         write(updated)
     }
     fun undo() {
@@ -298,14 +194,10 @@ fun DoodleEditor(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // ---- The board -----------------------------------------------------------------------
         Box(
             modifier = (if (fullScreen) Modifier.fillMaxWidth().weight(1f)
                         else Modifier.fillMaxWidth().height(340.dp))
                 .clip(RoundedCornerShape(16.dp))
-                // Opaque white, not glass: ink needs a surface with a known colour behind it, and
-                // the animated gradient showing through would change what a drawing looks like
-                // depending on where the background happened to be that second.
                 .background(Color.White)
                 .border(1.dp, toolMuted.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
                 .pointerInput(colorIndex, widthIndex, editable) {
@@ -353,7 +245,6 @@ fun DoodleEditor(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
-            // Expand / collapse, top-right, mirroring where ExpandableGlassTextField puts its own.
             if (onToggleFullScreen != null) {
                 IconButton(
                     onClick = onToggleFullScreen,
@@ -368,7 +259,6 @@ fun DoodleEditor(
                     )
                 }
             }
-            // "Add a canvas", bottom-right, the same size as the expand control above it.
             if (onAddPage != null) {
                 IconButton(
                     onClick = onAddPage,
@@ -388,13 +278,6 @@ fun DoodleEditor(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // ---- Pen: five colours, three widths ---------------------------------------------------
-        //
-        // Task 12. This row carries five colours, three widths, undo, redo and clear — twelve
-        // controls. On a phone they do not fit, and the previous answer was to squeeze them: undo
-        // and clear were shrunk to 36dp, well under the 48dp a fingertip actually needs. Shrinking
-        // controls to fit a row is the wrong trade every time; the row scrolls instead, and every
-        // button is back at a size a thumb can land on.
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically
@@ -416,8 +299,6 @@ fun DoodleEditor(
             }
             Spacer(modifier = Modifier.width(4.dp))
             Doodle.WIDTHS.forEachIndexed { index, w ->
-                // The swatch is drawn at the width it selects, so the control shows the outcome
-                // rather than naming it.
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -435,8 +316,6 @@ fun DoodleEditor(
                 }
                 Spacer(modifier = Modifier.width(6.dp))
             }
-            // A fixed gap rather than weight(1f): a horizontally scrolling Row has no bounded
-            // width to hand out, so a weighted spacer cannot be measured here.
             Spacer(modifier = Modifier.width(12.dp))
             IconButton(onClick = { undo() }, modifier = Modifier.size(44.dp)) {
                 Icon(
@@ -465,23 +344,6 @@ fun DoodleEditor(
 
 private const val UNDO_DEPTH = 50
 
-/**
- * The whiteboard, its full-screen mode, and its extra canvases.
- *
- * The expanded canvas is the *same* [DoodleEditor] hosted in a Dialog, not a second implementation:
- * a drawing surface that behaved even slightly differently at two sizes would be a bug factory, and
- * the state it edits is the caller's `value` either way.
- *
- * ### Pages
- *
- * "+" in the board's bottom corner appends a canvas and moves to it. Every canvas is listed as a bar
- * underneath — tapping one **previews** it, and previews are read-only until Edit is pressed. That
- * separation is deliberate: the bars sit directly under a live drawing surface, and a stray tap that
- * silently made a different canvas editable is exactly how someone draws on the wrong page.
- *
- * There is no save button anywhere, by design. Each stroke commits as it is finished, so a canvas is
- * saved the moment it exists, and the only way to lose work is to undo it on purpose.
- */
 @Composable
 fun ExpandableDoodleEditor(
     value: String,
@@ -493,13 +355,6 @@ fun ExpandableDoodleEditor(
     var expanded by remember { mutableStateOf(false) }
     var activeIndex by remember { mutableStateOf(0) }
     var previewIndex by remember { mutableStateOf<Int?>(null) }
-    // Task 3 — whether the drawing surface is out.
-    //
-    // A live canvas sitting in the middle of a scrolling form is a target for every stray thumb, and
-    // a stray thumb on a canvas leaves a mark. "Save" puts it away: the drawing is already stored
-    // (every stroke commits as it is finished, which is why there is no save-to-disk step here), so
-    // this button only decides whether the surface is exposed. Getting back in is a tap on the bar
-    // and then Edit — two deliberate actions, which is exactly one more than an accident performs.
     var editingOpen by remember { mutableStateOf(true) }
 
     val pages = remember(value) { DoodlePages.parse(value) }
@@ -517,16 +372,11 @@ fun ExpandableDoodleEditor(
     fun deletePage(at: Int) {
         if (at !in pages.indices) return
         val left = pages.toMutableList().also { it.removeAt(at) }
-        // Never leave the note with no canvas at all: a doodle note with zero pages has nothing to
-        // draw on and no way to get one back. Deleting the last one empties it instead.
         writePages(if (left.isEmpty()) listOf("") else left)
         activeIndex = activeIndex.coerceAtMost((if (left.isEmpty()) 1 else left.size) - 1)
         previewIndex = null
     }
 
-    // The board takes its Modifier from the call site rather than building one: the full-screen copy
-    // needs `weight(1f)`, and `weight` is a ColumnScope extension that does not resolve inside a
-    // lambda declared out here. Handing the modifier in keeps one board with two hosts.
     val board: @Composable (Boolean, Modifier) -> Unit = { full, boardModifier ->
         DoodleEditor(
             value = pages[index],
@@ -551,10 +401,6 @@ fun ExpandableDoodleEditor(
             }
         }
 
-        // ---- The canvas bars ----
-        //
-        // Always listed, not only once there are two: after Save the bar is the ONLY handle on the
-        // drawing, so hiding it for a single-page note would leave the canvas unreachable.
         Spacer(modifier = Modifier.height(10.dp))
         pages.forEachIndexed { i, page ->
             val current = i == index && editingOpen
@@ -577,7 +423,6 @@ fun ExpandableDoodleEditor(
                 if (Doodle.isEmpty(page)) {
                     Text(com.lucent.app.i18n.S.doodleEmpty, color = onGradientMuted, fontSize = 11.sp)
                 }
-                // Task 2 — "+" had no counterpart, so a canvas added by mistake was permanent.
                 IconButton(onClick = { deletePage(i) }, modifier = Modifier.size(36.dp)) {
                     Icon(
                         Icons.Default.DeleteOutline,
@@ -590,7 +435,6 @@ fun ExpandableDoodleEditor(
         }
     }
 
-    // ---- Full screen ----
     if (expanded) {
         Dialog(
             onDismissRequest = { expanded = false },
@@ -604,7 +448,6 @@ fun ExpandableDoodleEditor(
         }
     }
 
-    // ---- Preview, with an explicit way into editing ----
     previewIndex?.let { i ->
         if (i in pages.indices) {
             Dialog(
@@ -637,7 +480,6 @@ fun ExpandableDoodleEditor(
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    // Read-only on purpose — see the class comment.
                     DoodleView(value = pages[i], height = 460.dp)
                 }
             }
@@ -645,20 +487,8 @@ fun ExpandableDoodleEditor(
     }
 }
 
-/**
- * Read-only rendering for a detail page or a card preview.
- *
- * Round R2, task 2: [value] may be a single canvas OR the whole multi-canvas column, and both are
- * handled here rather than at each call site. It used to hand the raw value straight to
- * `Doodle.parse`, which understands only a bare stroke array — so on the detail page a note with
- * two or more canvases rendered a blank white box, with no error and nothing to suggest the
- * drawing still existed. `DoodlePages.parse` accepts either shape, and every drawn canvas is
- * stacked in order.
- */
 @Composable
 fun DoodleView(value: String, modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp = 260.dp) {
-    // Parsed to strokes once, outside the loop below: `remember` inside a loop keys on position,
-    // which goes wrong the moment the number of canvases changes.
     val canvases = remember(value) {
         DoodlePages.parse(value).filter { !Doodle.isEmpty(it) }.map { Doodle.parse(it) }
     }
@@ -674,7 +504,6 @@ fun DoodleView(value: String, modifier: Modifier = Modifier, height: androidx.co
     }
 }
 
-/** One white board with one canvas's strokes on it — the body [DoodleView] used to be. */
 @Composable
 private fun DoodleCanvasSurface(
     strokes: List<Doodle.Stroke>,
@@ -694,14 +523,6 @@ private fun DoodleCanvasSurface(
     }
 }
 
-/**
- * Paint one stroke, converting the normalised points back into this canvas's pixels.
- *
- * Rounded caps and joins, and a quadratic smoothing between samples: a polyline through raw touch
- * events looks like a seismograph, because the sampling rate is nowhere near the speed of a hand.
- * Averaging consecutive points into control points costs nothing and is the difference between
- * "handwriting" and "a jagged trace".
- */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDoodleStroke(
     points: List<Offset>,
     color: Color,
@@ -731,11 +552,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDoodleStroke(
     )
 }
 
-/** A tap target with no ripple — the swatches are their own visual feedback. */
 private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
     this.pointerInput(Unit) {
-        // First-compile fix (CI 2026-07-26): detectTapGestures is an EXTENSION on
-        // PointerInputScope — Kotlin cannot call an extension through its package name; it must be
-        // imported and called on the receiver, which pointerInput provides right here.
         detectTapGestures(onTap = { onClick() })
     }

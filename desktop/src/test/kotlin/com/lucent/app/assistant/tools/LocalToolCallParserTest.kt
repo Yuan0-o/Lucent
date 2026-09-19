@@ -6,11 +6,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Characterisation tests for [LocalToolCallParser], extracted verbatim from AssistantController
- * (v2.7.6). These lock in the tolerant parser behaviour small GGUF models depend on, so a future
- * refactor can move the code without silently changing what counts as a tool call.
- */
 class LocalToolCallParserTest {
 
     private val valid = setOf(
@@ -87,7 +82,6 @@ class LocalToolCallParserTest {
 
     @Test
     fun mapsSynonymVerbsToRealTools() {
-        // The reported bug: Qwen2.5-0.5B emitting "add_task" for create_task.
         val call = LocalToolCallParser.parseLocalToolCall(
             """{"tool": "add_task", "arguments": {"title": "x"}}""",
             valid
@@ -121,7 +115,6 @@ class LocalToolCallParserTest {
         assertNull(LocalToolCallParser.parseLocalToolCall("Just a friendly chat reply.", valid))
         assertNull(LocalToolCallParser.parseLocalToolCall("", valid))
         assertNull(LocalToolCallParser.parseLocalToolCall("   ", valid))
-        // JSON-shaped prose that names no valid tool still falls through to null.
         assertNull(
             LocalToolCallParser.parseLocalToolCall("""Try {"tool": "nonsense"} later.""", valid)
         )
@@ -129,11 +122,9 @@ class LocalToolCallParserTest {
 
     @Test
     fun attemptedCallNamesShapeOnly() {
-        // A snake_case name plus no args still counts as "tried to call".
         assertEquals("web_search", LocalToolCallParser.attemptedToolCallName("""{"tool": "web_search"}"""))
         assertEquals("web_search", LocalToolCallParser.attemptedToolCallName("""{"tool": "web_search", "arguments": {}}"""))
         assertEquals("(unnamed)", LocalToolCallParser.attemptedToolCallName("""{"arguments": {"q": "x"}}"""))
-        // Prose and empty output are not attempts.
         assertNull(LocalToolCallParser.attemptedToolCallName(""))
         assertNull(LocalToolCallParser.attemptedToolCallName("I would love to help with that."))
     }
@@ -167,7 +158,6 @@ class LocalToolCallParserTest {
 
     @Test
     fun normalisesWhitespaceAndDashesInToolName() {
-        // A weak model may write "create task" or "create-task" instead of "create_task".
         val spaced = LocalToolCallParser.parseLocalToolCall(
             """{"tool": "create task", "arguments": {"title": "x"}}""",
             valid
@@ -185,7 +175,6 @@ class LocalToolCallParserTest {
 
     @Test
     fun renderSurvivesMalformedArgs() {
-        // Malformed args JSON must not crash the serialiser; it falls back to an empty object.
         val out = LocalToolCallParser.renderLocalToolCall(
             LocalToolCallParser.LocalToolCall("list_tasks", "not json")
         )

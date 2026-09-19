@@ -1,14 +1,3 @@
-# ============================================================================================
-#  Lucent — check: the fast, cheap gate that runs on every push and PR (UPGRADE-PLAN-2.8 P0-2)
-# ============================================================================================
-#
-# Deliberately NOT a build. It compiles the whole shared tree on a plain JVM and runs the
-# desktop test suite — the highest value-per-second signal the repository has — plus, once the
-# lint baseline exists (P0-6), the Android lint gate. No NDK, no llama.cpp clone, no WiX, no
-# signing: a broken data shape or a compile error surfaces here in minutes, not at release time.
-#
-# The two release pipelines (build.yml / build-windows.yml) stay manual, as before; this file is
-# what turns "only runs when somebody clicks the button" into "runs on every commit".
 
 name: check
 
@@ -38,27 +27,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # The wrapper is committed (P0-5), so no gradle-version here — setup-gradle only provides
-      # the dependency cache and honours ./gradlew. main writes the cache, other refs read it.
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      # :desktop:test compiles shared/ + desktop/ and runs the whole JVM suite (121 tests as of
-      # v2.7.7) with no Android SDK, no NDK and no native builds. This is the signal that used to
-      # be hidden inside the Windows installer workflow.
       - name: Run desktop unit tests (shared logic)
         run: ./gradlew :desktop:test --no-daemon --console=plain
 
-      # P0-6: static analysis gate (detekt, minimal rule set — see config/detekt/detekt.yml).
       - name: Run detekt
         run: ./gradlew :desktop:detekt --no-daemon --console=plain
 
-      # P3-3: i18n generation check — run the generator and verify the committed
-      # I18n.kt matches the catalogs exactly. A drift means translations were edited
-      # directly in the generated file or the catalog was updated without running the
-      # generator; either way the fix is to edit catalog.py (or catalog_desktop.py)
-      # and re-run gen_i18n.py.
       - name: Check i18n generation is up-to-date
         run: |
           python3 tools/i18n/gen_i18n.py
@@ -72,10 +50,6 @@ jobs:
           path: desktop/build/reports/tests/test
           if-no-files-found: ignore
 
-  # P0-3: Room exported schemas. KSP writes the machine-checkable schema JSON for every version
-  # into app/schemas (committed); this job regenerates it on the cloud and uploads it so the
-  # maintainer can commit any drift. Also runs the Android JVM unit tests (app/src/test), which
-  # compile against the SDK but run on a plain JVM.
   android-jvm-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -105,9 +79,6 @@ jobs:
       - name: Generate Room exported schemas
         run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
 
-      # P0-6: lint gate. The committed lint-baseline.xml absorbs pre-existing findings; anything
-      # new fails the build. The first run (baseline absent) makes lint write the baseline file,
-      # which this job then uploads for the maintainer to commit.
       - name: Run Android lint
         run: ./gradlew :app:lintRelease --no-daemon --console=plain
 

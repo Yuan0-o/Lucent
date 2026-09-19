@@ -19,52 +19,22 @@ import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-/**
- * The desktop persistence core: one SQLite connection, serialized access, and Room-style
- * "invalidation" flows so the DAO surface in Daos.kt can offer the exact same reactive API the
- * Android app gets from Room.
- *
- * ### Encryption at rest
- *
- * The bundled JDBC driver is `io.github.willena:sqlite-jdbc` — a drop-in build of the Xerial driver
- * whose SQLite core is SQLite3MultipleCiphers, which speaks the **SQLCipher** scheme. The database
- * is keyed with the same raw-key form the Android build feeds SQLCipher (`x'<64 hex>'`, minted and
- * stored by [DataKeys]), so the desktop database enjoys the same at-rest encryption the phone has.
- * If the cipher PRAGMAs are ever unavailable (a swapped-in plain driver), the store degrades to an
- * unencrypted file with a loud [StartupLog] entry rather than refusing to start — the same
- * "degrade one notch, never strand the data" policy the Android key handling follows.
- *
- * ### Why one connection and a mutex
- *
- * SQLite serializes writers anyway; funnelling every statement through one connection guarded by a
- * [Mutex] makes cross-thread misuse impossible by construction (the same reasoning LocalLlm applies
- * to its native session) and keeps transactions trivial. All calls run on [Dispatchers.IO].
- */
 class Db private constructor(private val connection: Connection) {
 
     private val mutex = Mutex()
 
-    // Table-change bus. extraBufferCapacity keeps emitters from suspending; watchers conflate, so a
-    // burst of writes collapses into one re-query — exactly Room's invalidation behaviour.
     private val changes = MutableSharedFlow<String>(extraBufferCapacity = 64)
 
-    /** Run [block] with exclusive access to the connection, off the caller's thread. */
     suspend fun <T> use(block: (Connection) -> T): T = withContext(Dispatchers.IO) {
         mutex.withLock { block(connection) }
     }
 
-    /** Run [block] like [use], then announce that [tables] changed so watchers re-query. */
     suspend fun <T> write(vararg tables: String, block: (Connection) -> T): T {
         val result = use(block)
         tables.forEach { changes.tryEmit(it) }
         return result
     }
 
-    /**
-     * A cold flow that emits [query]'s result immediately and again whenever any of [tables]
-     * changes. Conflated and de-duplicated, mirroring Room's Flow queries closely enough that the
-     * shared screens can't tell the difference.
-     */
     fun <T> watch(vararg tables: String, query: suspend () -> T): Flow<T> =
         changes
             .filter { it in tables }
@@ -76,19 +46,11 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        /**
-         * Schema version this build writes. Matches the Android Room schema (version 17).
-         *
-         * INTEGRATION NOTE: group A took 12 and 13 (drafts / hidden / manual order / task history /
-         * doodle) and group B took a second 12 (chat_messages.replyToId). B's step was renumbered
-         * to 14 so the two chains no longer collide; see [migrateSchema] and AppDatabase.kt.
-         */
         internal const val SCHEMA_VERSION = 19
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
             file.parentFile?.mkdirs()
-            // Load the driver class explicitly so a missing dependency fails with a clear message.
             Class.forName("org.sqlite.JDBC")
             val conn = openConnection(context, file)
             conn.createStatement().use { st ->
@@ -96,18 +58,13 @@ class Db private constructor(private val connection: Connection) {
                 st.execute("PRAGMA foreign_keys=ON")
             }
             createSchema(conn)
-            // An EXISTING store gets its new columns here — createSchema cannot, see its closing
-            // comment. Group A's introspective upgrade and group B's versioned walker were merged
-            // into this one function during integration.
             migrateSchema(context, conn)
             createIndices(conn)
             return Db(conn)
         }
 
-        /** The 16-byte header every UNENCRYPTED SQLite file starts with; an encrypted page 1 never has it. */
         private val PLAINTEXT_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
 
-        /** True when [file] exists and carries the plain-SQLite header — i.e. a legacy unencrypted store. */
         private fun isPlaintextDatabase(file: File): Boolean {
             if (!file.exists() || file.length() < PLAINTEXT_HEADER.size) return false
             val head = ByteArray(PLAINTEXT_HEADER.size)
@@ -115,44 +72,10 @@ class Db private constructor(private val connection: Connection) {
             return head.contentEquals(PLAINTEXT_HEADER)
         }
 
-        /**
-         * Open the JDBC connection with at-rest encryption in force.
-         *
-         * The hard-won rule (CI red of 2026-07-22 09:05): this driver's connection constructor runs
-         * `SQLiteConfig.apply` — a batch of init pragmas — the moment the file opens, and preparing
-         * the first of them against an encrypted database already dies with SQLITE_NOTADB. A key
-         * applied by a post-connect `PRAGMA key` therefore arrives TOO LATE for any database that
-         * is already encrypted; it only ever worked for brand-new files. The key must travel IN THE
-         * URL: SQLite3MultipleCiphers reads its `cipher`, `legacy`, and `hexkey` URI parameters
-         * during open itself, so page 1 is decryptable before the driver's own pragmas run — see
-         * [keyedSqliteUrl], which the CI gate (CipherSelfCheck) shares, so the build proves the
-         * exact mechanism the app uses.
-         *
-         * Cases, told apart by the FILE HEADER before anything opens — a plaintext SQLite file
-         * always begins "SQLite format 3\0", an encrypted one never does:
-         *
-         *  1. **Fresh or already-encrypted file** — open with the keyed URL. A connect failure on
-         *     an EXISTING file means a genuinely wrong key (the header already ruled out "it's
-         *     plaintext"), rethrown with a message a person can act on; a brand-new file failing to
-         *     CREATE is a driver problem, not a key problem, and is surfaced raw.
-         *  2. **Plaintext file** — written by a pre-release build from the brief org.xerial era;
-         *     nothing was ever published, so it can only be a developer's own working data. Opened
-         *     plain (a keyed open would refuse it), then encrypted IN PLACE, once, silently: leave
-         *     WAL (rekey refuses a WAL database), set the cipher shape, then `PRAGMA rekey`. Data
-         *     is never copied out or set aside; a failed rekey degrades to plaintext with a loud
-         *     [StartupLog] line rather than stranding the store.
-         *  3. **Diagnostics** — [probeCipherCore] identifies the cipher core for the LOG LINES
-         *     only; behaviour never depends on it. An unidentified core, or a header still
-         *     plaintext after a rekey, is announced loudly so nobody mistakes a plaintext store
-         *     for an encrypted one.
-         */
         private fun openConnection(context: Context, file: File): Connection {
             val passphrase = try {
-                DataKeys.databasePassphrase(context) // "x'<64 hex>'"
+                DataKeys.databasePassphrase(context)
             } catch (t: Throwable) {
-                // C-group task 17: a degradation to plaintext must be RECORDED, not just logged
-                // to a file the user may not have enabled. EncryptionStatus drives the Settings
-                // banner too, so this is visible without reading a log at all.
                 EncryptionStatus.reportDatabase(
                     EncryptionStatus.State.PLAINTEXT, "key unavailable: ${t.message}"
                 )
@@ -169,13 +92,10 @@ class Db private constructor(private val connection: Connection) {
             }
 
             if (isPlaintextDatabase(file)) {
-                // Case 2: pre-release plaintext store — open plain, encrypt in place, keep going.
                 val conn = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
                 val core = probeCipherCore(conn)
                 val rekeyed = try {
                     conn.createStatement().use { st ->
-                        // rekey refuses WAL, and prior (unencrypted) runs always left WAL on;
-                        // switching first also checkpoints any leftover -wal file.
                         st.execute("PRAGMA journal_mode=DELETE")
                         st.execute("PRAGMA cipher='sqlcipher'")
                         st.execute("PRAGMA legacy=4")
@@ -191,7 +111,7 @@ class Db private constructor(private val connection: Connection) {
                     false
                 }
                 when {
-                    !rekeyed -> Unit // already logged; the data stays reachable, exactly as before
+                    !rekeyed -> Unit
                     core == null ->
                         StartupLog.event(context, "db: cipher core NOT identified by any probe — at-rest encryption may not be active on this driver")
                     else ->
@@ -203,7 +123,6 @@ class Db private constructor(private val connection: Connection) {
                 return conn
             }
 
-            // Case 1: fresh file, or an existing encrypted store — the key rides the URL.
             val existed = file.exists()
             val conn = try {
                 DriverManager.getConnection(keyedSqliteUrl(file, hexKey))
@@ -230,64 +149,10 @@ class Db private constructor(private val connection: Connection) {
             return conn
         }
 
-        /**
-         * Create every table and index at the shape Room's schema v11 has on Android — same names,
-         * same columns, same defaults — so the two stores stay structurally interchangeable.
-         * Idempotent: IF NOT EXISTS everywhere, and user_version records what is on disk.
-         */
-        /**
-         * Bring an EXISTING database up to [SCHEMA_VERSION] — the desktop counterpart of Room's
-         * migration chain on Android.
-         *
-         * ### Why this had to exist
-         *
-         * `createSchema` is `CREATE TABLE IF NOT EXISTS` throughout, which is exactly right for a
-         * fresh install and does precisely nothing for an existing one. Adding a column to a table
-         * that already exists was therefore impossible on desktop: the new column would appear on
-         * new installs and be silently missing on every upgrade, and the first query naming it
-         * would throw. `PRAGMA user_version` was already being written but never read.
-         *
-         * ### Integration note (three chains became one)
-         *
-         * Group B introduced the versioned walker; group A independently introduced an
-         * introspection-based `upgradeSchema`. They are merged here, keeping the strengths of both:
-         * the walker's structure (adding a future step is one `when` branch) and the
-         * introspection's safety (every step checks the store before it changes it).
-         *
-         * Two consequences of the merge, both deliberate:
-         *
-         *  1. **The stamp is a fast path, not the source of truth.** Any store not already at
-         *     [SCHEMA_VERSION] replays *every* step from 11, and every step is guarded by
-         *     `PRAGMA table_info` / `IF NOT EXISTS`. B's original rule — "a store stamped 0 is
-         *     current, run only the newest step" — was correct while exactly one step existed and
-         *     becomes wrong the moment there are three: a store written by a build that had only
-         *     some of them would skip the rest forever. Replaying guarded steps costs a handful of
-         *     pragmas per launch and cannot be wrong.
-         *  2. **createSchema no longer stamps.** It used to stamp unconditionally at the end, which
-         *     on an existing store meant "did nothing, then declared itself up to date" — the store
-         *     would be missing columns and permanently marked as migrated. The stamp lives here now,
-         *     written only after the steps have actually run.
-         *
-         * ### Failure policy
-         *
-         * A failed step is logged and swallowed, and the version is NOT stamped, so the next launch
-         * tries again. It never throws: refusing to start is a far worse outcome than running one
-         * version behind, and every column added here is optional at each of its read sites.
-         */
         private fun migrateSchema(context: Context, conn: Connection) {
-            // All interesting work is in the testable runner below; this wrapper only routes its
-            // diagnostic lines into StartupLog (P0-6: schema migrations are verified on the JVM by
-            // DbMigrationTest, which passes a no-op logger).
             runSchemaMigrations(conn) { StartupLog.event(context, it) }
         }
 
-        /**
-         * Bring [conn]'s database up to [SCHEMA_VERSION], logging progress through [eventLog]
-         * instead of StartupLog so a test can drive a real SQLite file directly.
-         *
-         * Public enough for desktop/src/test (internal) — see DbMigrationTest, which builds a v11
-         * store, runs this, and asserts the data survived every step to v17.
-         */
         internal fun runSchemaMigrations(conn: Connection, eventLog: (String) -> Unit = {}) {
             val current = try {
                 conn.createStatement().use { st ->
@@ -299,15 +164,12 @@ class Db private constructor(private val connection: Connection) {
             }
             if (current >= SCHEMA_VERSION) return
 
-            // See point 1 above: the stamp only tells us whether we can skip entirely. Once we are
-            // running at all, we run every guarded step, whatever the stamp claimed.
             var version = BASE_MIGRATABLE_VERSION
 
             while (version < SCHEMA_VERSION) {
                 val next = version + 1
                 val ok = try {
                     when (next) {
-                        // v12 (group A): manual order, drafts, hidden items, task revision history.
                         12 -> {
                             var good = true
                             for ((table, column, decl) in listOf(
@@ -322,7 +184,6 @@ class Db private constructor(private val connection: Connection) {
                             )) {
                                 if (!addColumnIfMissing(conn, table, column, decl)) good = false
                             }
-                            // The table and indices are IF NOT EXISTS, so replaying is a no-op.
                             conn.createStatement().use { st ->
                                 st.executeUpdate(
                                     "CREATE TABLE IF NOT EXISTS task_versions (" +
@@ -343,20 +204,12 @@ class Db private constructor(private val connection: Connection) {
                             }
                             good
                         }
-                        // v13 (group A): doodle notes.
                         13 -> addColumnIfMissing(conn, "notes", "isDoodle", "INTEGER NOT NULL DEFAULT 0") &&
                             addColumnIfMissing(conn, "notes", "doodle", "TEXT NOT NULL DEFAULT ''")
-                        // v14 (group B, originally numbered 12): chat_messages.replyToId — pairs a
-                        // reply to the question it answers, so alternative answers can be grouped.
                         14 -> addColumnIfMissing(conn, "chat_messages", "replyToId", "INTEGER NOT NULL DEFAULT 0")
-                        // v15 (C group task 20, wired up during integration): rich-text sidecars.
                         15 -> addColumnIfMissing(conn, "notes", "bodySpans", "TEXT NOT NULL DEFAULT ''") &&
                             addColumnIfMissing(conn, "tasks", "notesSpans", "TEXT NOT NULL DEFAULT ''")
-                        // v16 (R3 task #15): multi-attachment chat messages — a nullable JSON list
-                        // beside the legacy single-attachment trio (see ChatMessage.allAttachments).
                         16 -> addColumnIfMissing(conn, "chat_messages", "attachmentList", "TEXT")
-                        // v17: notebooks — two brand-new tables (notebooks, notebook_items). Pure
-                        // additive DDL; every statement is IF NOT EXISTS so replaying is a no-op.
                         17 -> {
                             conn.createStatement().use { st ->
                                 st.executeUpdate(
@@ -380,7 +233,6 @@ class Db private constructor(private val connection: Connection) {
                             }
                             true
                         }
-                        // v18 (P2-1): FTS5 full-text search index.
                         18 -> {
                             conn.createStatement().use { st ->
                                 st.executeUpdate(
@@ -422,14 +274,6 @@ class Db private constructor(private val connection: Connection) {
                             }
                             true
                         }
-                        // v19 (P2-2, data layer only — no embedding generation lands with this
-                        // migration): note_embeddings, a cache table for semantic search vectors.
-                        // See the matching MIGRATION_18_19 KDoc on the Android side for the full
-                        // reasoning (composite key so more than one model's vector can coexist per
-                        // note, no foreign key — this schema doesn't use them anywhere, same as the
-                        // FTS5 tables just above — and the AFTER-DELETE trigger that is this table's
-                        // explicit cleanup instead). Deliberately excluded from .lcb backups: a
-                        // vector is reconstructible from the note text, which is already backed up.
                         19 -> {
                             conn.createStatement().use { st ->
                                 st.executeUpdate(
@@ -445,7 +289,7 @@ class Db private constructor(private val connection: Connection) {
                             }
                             true
                         }
-                        else -> true   // no step for this version
+                        else -> true
                     }
                 } catch (t: Throwable) {
                     eventLog("db: migration to v$next FAILED (${t.message}); will retry next launch")
@@ -463,14 +307,8 @@ class Db private constructor(private val connection: Connection) {
             }
         }
 
-        /**
-         * The version every replay starts from. 11 is the last shape that shipped before this
-         * release, and every step from here on is written to survive being applied to a store that
-         * already has it — so starting low is free and starting high can strand a column.
-         */
         internal const val BASE_MIGRATABLE_VERSION = 11
 
-        /** Add [column] to [table] unless it is already there. Returns false only on a real failure. */
         private fun addColumnIfMissing(
             conn: Connection,
             table: String,
@@ -496,14 +334,8 @@ class Db private constructor(private val connection: Connection) {
             }
         }
 
-        /**
-         * Create the list-query and search indices after the schema is at its final shape. This runs
-         * after [migrateSchema] so a legacy store whose columns were just added can be indexed;
-         * creating these before migration would fail on old tables that lack the columns.
-         */
         private fun createIndices(conn: Connection) {
             conn.createStatement().use { st ->
-                // Same list-query indices Room's schema carries, under Room's own names.
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_updatedAt ON notes (updatedAt)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_archived ON notes (archived)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_trashedAt ON notes (trashedAt)")
@@ -516,7 +348,6 @@ class Db private constructor(private val connection: Connection) {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notes_hidden ON notes (hidden)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_isDraft ON tasks (isDraft)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_tasks_hidden ON tasks (hidden)")
-                // v17 — notebook list/membership indices, under Room's own names.
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebooks_updatedAt ON notebooks (updatedAt)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_notebookId ON notebook_items (notebookId)")
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS index_notebook_items_itemKind_itemId ON notebook_items (itemKind, itemId)")
@@ -540,14 +371,12 @@ class Db private constructor(private val connection: Connection) {
                         "isChecklist INTEGER NOT NULL DEFAULT 0, " +
                         "checklist TEXT NOT NULL DEFAULT '[]', " +
                         "trashedAt INTEGER, " +
-                        // 1.1.0 group A (tasks A16 / A10 / A21)
                         "manualOrder INTEGER NOT NULL DEFAULT 0, " +
                         "isDraft INTEGER NOT NULL DEFAULT 0, " +
                         "draftSavedAt INTEGER, " +
                         "hidden INTEGER NOT NULL DEFAULT 0, " +
                         "isDoodle INTEGER NOT NULL DEFAULT 0, " +
                         "doodle TEXT NOT NULL DEFAULT '', " +
-                        // INTEGRATION (C task 20) — rich-text sidecar; see data/RichText.kt.
                         "bodySpans TEXT NOT NULL DEFAULT '')"
                 )
                 st.executeUpdate(
@@ -583,7 +412,6 @@ class Db private constructor(private val connection: Connection) {
                         "checklist TEXT NOT NULL DEFAULT '[]', " +
                         "savedAt INTEGER NOT NULL)"
                 )
-                // Task A19 — task revision history, mirroring note_versions.
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS task_versions (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
@@ -606,7 +434,6 @@ class Db private constructor(private val connection: Connection) {
                         "attachmentName TEXT, " +
                         "conversationId INTEGER NOT NULL DEFAULT 1, " +
                         "tokens INTEGER NOT NULL DEFAULT 0, " +
-                        // B-group task 12 — see ChatMessage.replyToId.
                         "replyToId INTEGER NOT NULL DEFAULT 0)"
                 )
                 st.executeUpdate(
@@ -616,7 +443,6 @@ class Db private constructor(private val connection: Connection) {
                         "createdAt INTEGER NOT NULL, " +
                         "updatedAt INTEGER NOT NULL)"
                 )
-                // v17 — notebooks: pure organization over notes/tasks, see Entities.kt.
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS notebooks (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
@@ -632,7 +458,6 @@ class Db private constructor(private val connection: Connection) {
                         "itemId INTEGER NOT NULL, " +
                         "addedAt INTEGER NOT NULL)"
                 )
-                // v18 — FTS5 full-text search index (P2-1). Created for fresh installs.
                 st.executeUpdate(
                     "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(" +
                         "title, body, content='notes', content_rowid='id')"
@@ -641,13 +466,6 @@ class Db private constructor(private val connection: Connection) {
                     "CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(" +
                         "title, notes, content='tasks', content_rowid='id')"
                 )
-                // v19 — note_embeddings cache table for semantic search (P2-2, data layer only).
-                // Created for fresh installs; see MIGRATION_18_19's Android-side KDoc for the full
-                // reasoning. Unlike the FTS5 tables just above, the cleanup trigger IS included
-                // here even though nothing reads this table yet either — an orphaned embedding row
-                // is silent, load-bearing-looking cruft the moment the feature that reads this table
-                // lands, so there is no reason to defer it the way the (still fully inert) FTS5
-                // sync triggers were for a fresh install.
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS note_embeddings (" +
                         "noteId INTEGER NOT NULL, model TEXT NOT NULL, dim INTEGER NOT NULL, " +
@@ -658,40 +476,12 @@ class Db private constructor(private val connection: Connection) {
                     "CREATE TRIGGER IF NOT EXISTS note_embeddings_cleanup AFTER DELETE ON notes BEGIN " +
                         "DELETE FROM note_embeddings WHERE noteId = old.id; END"
                 )
-                // The version stamp moved to migrateSchema, which is the only place that knows the
-                // store is genuinely at the current shape. Stamping here would mark an existing
-                // database as up to date after doing nothing to it — every statement above is
-                // CREATE ... IF NOT EXISTS, which no-ops against tables that already exist.
             }
         }
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Cipher-core probe — shared by Db.openConnection (for its log lines) and the CI gate
-// (com.lucent.desktop.CipherSelfCheck), so the build verifies the exact probe the app runs.
-// ---------------------------------------------------------------------------------------------
 
-/**
- * Try to positively identify the SQLite3MultipleCiphers core behind [conn]; null when it can't be.
- *
- * Written the hard way after the 2026-07-22 08:36 CI red taught two lessons at once: the cipher
- * core's vocabulary is not SQLCipher's (`PRAGMA cipher_version` goes unanswered), and this JDBC
- * driver's `executeQuery` THROWS ("query does not return ResultSet") for any statement yielding
- * zero columns instead of returning an empty set — which is also what every unknown pragma yields
- * on stock SQLite. So: several vocabularies, most reliable first, each attempt individually
- * caught, and "threw" and "no value" both simply mean "this probe didn't identify it". A null
- * result is "unidentified", not proof of absence — callers treat it as a reason to WARN, never as
- * a reason to skip the keying attempt (which is a harmless no-op on a plain driver).
- */
-/**
- * The JDBC URL that hands SQLite3MultipleCiphers its key AT OPEN TIME, before the driver's own
- * init pragmas run (`SQLiteConfig.apply` prepares statements during the connection constructor —
- * the 2026-07-22 09:05 CI red). `hexkey` takes the raw 64-hex key without quoting acrobatics;
- * `cipher`/`legacy` pin the SQLCipher-compatible on-disk shape, matching Android. The path is
- * percent-encoded just enough for SQLite's URI parser (%, ?, #, and spaces), and backslashes
- * become the forward slashes URIs expect. Shared by Db and the CI gate so both key identically.
- */
 internal fun keyedSqliteUrl(file: File, hexKey: String): String {
     val p = file.absolutePath.replace('\\', '/')
         .replace("%", "%25").replace("?", "%3F").replace("#", "%23").replace(" ", "%20")
@@ -700,9 +490,9 @@ internal fun keyedSqliteUrl(file: File, hexKey: String): String {
 
 internal fun probeCipherCore(conn: Connection): String? {
     val probes = arrayOf(
-        "SELECT sqlite3mc_version()", // the MC core's own SQL function
-        "PRAGMA cipher",              // MC answers with the current cipher's name
-        "PRAGMA cipher_version"       // SQLCipher's word, kept for compat builds that adopt it
+        "SELECT sqlite3mc_version()",
+        "PRAGMA cipher",
+        "PRAGMA cipher_version"
     )
     for (sql in probes) {
         try {
@@ -715,15 +505,11 @@ internal fun probeCipherCore(conn: Connection): String? {
                 }
             }
         } catch (_: Throwable) {
-            // Unanswered in this dialect, or the driver threw on a zero-column statement: try the next.
         }
     }
     return null
 }
 
-// ---------------------------------------------------------------------------------------------
-// Small JDBC helpers shared by the DAOs. Kept here so the DAO bodies read as query + mapping.
-// ---------------------------------------------------------------------------------------------
 
 internal fun PreparedStatement.bindLongOrNull(index: Int, value: Long?) {
     if (value == null) setNull(index, java.sql.Types.INTEGER) else setLong(index, value)

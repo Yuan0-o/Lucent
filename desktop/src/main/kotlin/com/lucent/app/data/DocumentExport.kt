@@ -1,15 +1,5 @@
 package com.lucent.app.data
 
-// C-GROUP TASK 10 — exported documents follow the app's language.
-//
-// Every user-visible label in a generated PDF/DOCX/XLSX used to be a hardcoded English
-// string literal, so a Chinese user exporting a Chinese note received a document headed
-// "Lucent notes" with rows labelled "Updated" and "Subtasks". They now read from the same
-// catalog the rest of the UI does, so an export matches the language on screen.
-//
-// Deliberately NOT localized: the internal `noun` discriminator ("note"/"task") used to pick
-// between the count/empty strings. It is a code-level switch, never shown, and translating it
-// would silently break the branch that reads it.
 
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
@@ -26,14 +16,6 @@ import java.time.format.DateTimeFormatter
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-/**
- * The formats a notes/tasks export can be written in.
- *
- * Markdown was the original (and only) option — see [MarkdownExport]. This adds Word, Excel, and PDF
- * so the same "walk away with your data in a format anything can open" promise extends to the file
- * types people actually have to hand in to work, print, or drop into a spreadsheet. [MarkdownExport]
- * still produces the Markdown; the three office formats are produced here.
- */
 enum class ExportFormat(val label: String, val extension: String, val mime: String) {
     MARKDOWN("Markdown (.md)", "md", "text/markdown"),
     WORD("Word (.docx)", "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
@@ -41,33 +23,12 @@ enum class ExportFormat(val label: String, val extension: String, val mime: Stri
     EXCEL("Excel (.xlsx)", "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 }
 
-/**
- * Builds Word (.docx), Excel (.xlsx), and PDF (.pdf) exports of notes and tasks.
- *
- * ### Why it's written by hand
- * The whole app is deliberately dependency-light, and pulling in Apache POI (Word/Excel) would add
- * many megabytes to the APK for what is, in the end, a handful of paragraphs and a table. So the
- * office files are assembled from scratch: a .docx and a .xlsx are just ZIP archives of a few small
- * XML parts (Office Open XML), which [ZipOutputStream] and string-building handle perfectly well for
- * documents this simple. Desktop adaptation: the PDF section uses Apache PDFBox with the app's
- * bundled CJK typefaces embedded, because the JVM has no platform PDF canvas; the docx/xlsx
- * builders and every string in every format are the Android file verbatim.
- *
- * ### What goes in
- * The content mirrors [MarkdownExport] exactly, so every format tells the same story: trashed items
- * are excluded, archived notes and completed tasks are kept and labelled, and each item carries its
- * metadata, its body/details, its checklist/subtasks, and its attachment *names* (bytes can't ride
- * in these formats any more than in Markdown — the .json backup remains the way to carry files).
- * Word and PDF are laid out as a readable document; Excel is laid out as one row per item so it can
- * be sorted and filtered like a spreadsheet.
- */
 object DocumentExport {
 
     private val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private fun formatTime(millis: Long): String =
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(stamp)
 
-    // ============================ Public entry points ============================
 
     fun exportNotes(notes: List<Note>, format: ExportFormat): ByteArray {
         val live = notes.filter { it.trashedAt == null }
@@ -93,27 +54,12 @@ object DocumentExport {
         }
     }
 
-    // ============================ Shared content model ============================
 
-    // A single item flattened into the pieces every format needs: a title, a one-line metadata
-    // string, the body/details, the checklist/subtask lines, and the attachment names. Building this
-    // once keeps the Word/PDF/Excel writers from each re-deriving the same fields.
     private data class Block(
         val title: String,
         val meta: String,
         val body: String,
-        // INTEGRATION (C task 20): the sidecar for [body], carried through so the DOCX writer can
-        // turn it into runs. Empty for every format that drops it — see docxRichPara.
         val bodySpans: String = "",
-        // Round R1, task 3 — the drawn canvases of a doodle note, one stroke array per canvas,
-        // plus the file name each one takes in the export archive (see data/DoodleExport).
-        //
-        // This was a single String holding the doodle COLUMN, handed straight to `Doodle.parse`.
-        // That parser understands one shape — a bare array of strokes — but the column has held a
-        // multi-canvas container (`{"pages":[...]}`) ever since doodle notes learned to have more
-        // than one page. So the parse threw, was swallowed into an empty list, and every note with
-        // two or more canvases exported with all of its drawings missing and no error anywhere.
-        // Unwrapping once, here, means no writer downstream has to know the column has two shapes.
         val doodlePages: List<String> = emptyList(),
         val doodleNames: List<String> = emptyList(),
         val checklist: List<Pair<Boolean, String>>,
@@ -122,13 +68,11 @@ object DocumentExport {
     )
 
     private fun noteBlock(note: Note): Block {
-        // Round R1, task 3 — resolved once and shared by the metadata line and the writers below.
         val doodleCanvases = DoodleExport.canvasesOf(note)
         val meta = buildList {
             add(com.lucent.app.i18n.S.exportDocUpdated(formatTime(note.updatedAt)))
             if (note.pinned) add(com.lucent.app.i18n.S.exportDocPinned)
             if (note.archived) add(com.lucent.app.i18n.S.exportDocArchived)
-            // Task 3.2 — see MarkdownExport: canonical in the column, local language on the page.
             val tags = NoteTags.parse(note.tags)
             if (tags.isNotEmpty()) add(tags.joinToString(" ") { "#" + NoteTags.label(it) })
         }.joinToString(" · ")
@@ -136,9 +80,6 @@ object DocumentExport {
         return Block(
             title = note.title.ifBlank { com.lucent.app.i18n.S.untitled },
             meta = meta,
-            // Round R2, task 2 — the body is exported whatever else the note carries. Blanking it
-            // for checklist notes dropped the remarks field from every DOCX, PDF and XLSX export,
-            // and with the kinds now free to combine there is no longer even a mode to justify it.
             body = note.body.trim(),
             bodySpans = note.bodySpans,
             doodlePages = doodleCanvases.map { it.strokesJson },
@@ -158,7 +99,7 @@ object DocumentExport {
             RepeatRule.fromKey(task.repeatRule).takeIf { it != RepeatRule.NONE }?.let { add(com.lucent.app.i18n.S.exportDocRepeats(it.label)) }
             add(if (task.isDone) com.lucent.app.i18n.S.exportDocDone else com.lucent.app.i18n.S.exportDocOpen)
         }.joinToString(" · ")
-        val box = if (task.isDone) "\u2611" else "\u2610" // ☑ / ☐
+        val box = if (task.isDone) "\u2611" else "\u2610"
         return Block(
             title = "$box ${task.title.ifBlank { com.lucent.app.i18n.S.exportDocUntitledTask }}",
             meta = meta,
@@ -170,7 +111,6 @@ object DocumentExport {
         )
     }
 
-    // ============================ Word (.docx) ============================
 
     private fun notesDocx(notes: List<Note>): ByteArray =
         docx(com.lucent.app.i18n.S.exportDocNotesTitle, notes.size, "note", notes.map { noteBlock(it) })
@@ -192,9 +132,6 @@ object DocumentExport {
                 if (b.meta.isNotBlank()) body.append(docxPara(b.meta, italic = true, sizeHalfPt = 18))
                 if (b.body.isNotBlank()) body.append(docxRichPara(b.body, b.bodySpans))
                 if (b.doodleNames.isNotEmpty()) {
-                    // Round R1, task 3 — Word cannot hold the strokes, but naming the canvases makes
-                    // the document agree with the archive sitting next to it instead of implying the
-                    // note was empty. Same lines as the Android twin writes.
                     body.append(docxPara(com.lucent.app.i18n.S.exportDocDoodleCanvases(b.doodleNames.size), bold = true, sizeHalfPt = 20))
                     body.append(docxPara(com.lucent.app.i18n.S.exportDocDoodleLine(b.doodleNames.joinToString(", ")), italic = true, sizeHalfPt = 18))
                 }
@@ -222,8 +159,6 @@ object DocumentExport {
         )
     }
 
-    // One paragraph. Line breaks in [text] become soft breaks within the paragraph, so a multi-line
-    // body stays one logical paragraph rather than fragmenting.
     private fun docxPara(
         text: String,
         bold: Boolean = false,
@@ -250,36 +185,12 @@ object DocumentExport {
     }
 
 
-    /**
-     * INTEGRATION (C-group task 20) — one DOCX paragraph carrying rich-text runs.
-     *
-     * ### The per-format decision C's handoff asked for, made explicitly
-     *
-     * | format | highlights and weights |
-     * |---|---|
-     * | DOCX | **kept** — Word has runs, `<w:b/>`, `<w:i/>` and `<w:highlight/>` for exactly this |
-     * | Markdown | dropped, words kept — Markdown has no highlight syntax, and inventing `==x==` |
-     * |          | would emit something most renderers show as literal equals signs |
-     * | plain text / CSV / XLSX | dropped, words kept — no way to express it at all |
-     * | PDF | dropped, words kept — see the note in [pdf]; this is the one gap left open |
-     *
-     * Dropping is never silent: the Settings switch states it before the user turns the feature on.
-     *
-     * Falls back to the plain writer whenever there is nothing to express, so a note without
-     * formatting produces byte-identical XML to before this existed.
-     */
     private fun docxRichPara(text: String, spansJson: String, spaceBeforeTwips: Int = 40): String {
         val spans = RichText.load(spansJson, text)
         if (spans.isEmpty()) return docxPara(text, spaceBeforeTwips = spaceBeforeTwips)
 
-        // Word highlight names, in the same order as the five swatches the editor offers. Word only
-        // accepts a fixed vocabulary here, so these are the nearest named colours rather than exact
-        // matches — a close highlight is the honest rendering; an exact one is not available.
         val highlightNames = listOf("yellow", "green", "cyan", "magenta", "darkYellow")
 
-        // Split at every point where the style changes. Working per character and coalescing is
-        // slower than tracking span boundaries, but it is obviously correct in the presence of
-        // overlaps (bold under a highlight), and a note body is a few thousand characters.
         fun styleAt(i: Int): DocxRunStyle {
             var bold = false; var light = false; var italic = false; var hl = -1
             var col = RichText.TEXT_COLOR_DEFAULT
@@ -292,9 +203,6 @@ object DocumentExport {
                     RichSpan.Kind.COLOR -> col = s.color
                 }
             }
-            // Word has no "light" run property, so light is expressed as "not bold" — the closest
-            // thing the format can say. Recorded here rather than dropped silently so the intent
-            // survives in the file even though the distinction from regular does not.
             return DocxRunStyle(bold && !light, italic, hl, col)
         }
 
@@ -314,8 +222,6 @@ object DocumentExport {
                         append("<w:rPr>")
                         if (bold) append("<w:b/>")
                         if (italic) append("<w:i/>")
-                        // Word takes a plain RRGGBB hex; the alpha byte is dropped because a run
-                        // colour in OOXML has no transparency to give it to.
                         if (argb != null) append("<w:color w:val=\"" + hex6(argb) + "\"/>")
                         if (hl >= 0) append("<w:highlight w:val=\"" +
                             highlightNames[hl.coerceIn(0, highlightNames.lastIndex)] + "\"/>")
@@ -332,14 +238,10 @@ object DocumentExport {
         return "<w:p><w:pPr><w:spacing w:before=\"$spaceBeforeTwips\" w:after=\"40\"/></w:pPr>$runs</w:p>"
     }
 
-    // ============================ Excel (.xlsx) ============================
 
     private fun notesXlsx(notes: List<Note>): ByteArray {
         val header = listOf(com.lucent.app.i18n.S.exportColTitle, com.lucent.app.i18n.S.exportColUpdated, com.lucent.app.i18n.S.exportColTags, com.lucent.app.i18n.S.exportColPinned, com.lucent.app.i18n.S.exportColArchived, com.lucent.app.i18n.S.exportColContent, com.lucent.app.i18n.S.exportColAttachments)
         val rows = notes.map { n ->
-            // Round R1, task 3 — a doodle note has no body text, so its row used to be blank in
-            // the spreadsheet. A spreadsheet cannot hold a drawing, but it can say there is one and
-            // name the file the archive carries it in, which is what every other format now does.
             val canvases = DoodleExport.canvasesOf(n)
             val content = if (n.isChecklist) {
                 Checklist.parse(n.checklist).joinToString("\n") { "${if (it.done) "[x]" else "[ ]"} ${it.text}" }
@@ -354,8 +256,6 @@ object DocumentExport {
                 n.title.ifBlank { com.lucent.app.i18n.S.untitled },
                 formatTime(n.updatedAt),
                 tags,
-                // Round R1, task 3 — these two were the last English literals left in any
-                // export writer; a Chinese spreadsheet had a column of "Yes" in it.
                 if (n.pinned) com.lucent.app.i18n.S.exportDocYes else "",
                 if (n.archived) com.lucent.app.i18n.S.exportDocYes else "",
                 content,
@@ -387,12 +287,10 @@ object DocumentExport {
 
     private fun xlsx(sheetName: String, header: List<String>, rows: List<List<String>>): ByteArray {
         val sheetData = StringBuilder("<sheetData>")
-        // Header row.
         sheetData.append(xlsxRow(1, header))
         rows.forEachIndexed { i, cells -> sheetData.append(xlsxRow(i + 2, cells)) }
         sheetData.append("</sheetData>")
 
-        // A rough column width so the sheet opens legibly rather than every column at default width.
         val cols = StringBuilder("<cols>")
         for (c in header.indices) cols.append("<col min=\"${c + 1}\" max=\"${c + 1}\" width=\"24\" customWidth=\"1\"/>")
         cols.append("</cols>")
@@ -433,14 +331,6 @@ object DocumentExport {
         return sb.toString()
     }
 
-    // ============================ PDF (.pdf) ============================
-    //
-    // Desktop implementation over Apache PDFBox. Layout, wording, sizes, and page metrics mirror
-    // the Android PdfDocument version: A4, 42pt margins, the same heading/meta/body cascade, the
-    // same word-wrap flow with page breaks. Fonts are the app's own bundled TTFs, embedded so
-    // Chinese/Japanese/Korean content renders instead of degrading to placeholder glyphs; a line is
-    // drawn with the first embedded face able to encode it, falling back per line rather than per
-    // document so mixed-language exports come out whole.
 
     private fun notesPdf(notes: List<Note>): ByteArray =
         pdf(com.lucent.app.i18n.S.exportDocNotesTitle, notes.size, "note", notes.map { noteBlock(it) })
@@ -448,12 +338,10 @@ object DocumentExport {
     private fun tasksPdf(tasks: List<Task>): ByteArray =
         pdf(com.lucent.app.i18n.S.exportDocTasksTitle, tasks.size, "task", tasks.map { taskBlock(it) })
 
-    // A4 at 72dpi, in points — same metrics as the Android renderer.
     private const val PAGE_W = 595f
     private const val PAGE_H = 842f
     private const val MARGIN = 42f
 
-    /** A text style: which faces to try (regular set or the same set drawn "bold") and the size. */
     private data class PdfStyle(val size: Float, val bold: Boolean, val gray: Boolean = false)
 
     private fun pdf(heading: String, count: Int, noun: String, blocks: List<Block>): ByteArray {
@@ -480,8 +368,6 @@ object DocumentExport {
                     state.drawWrapped(b.title, itemTitleStyle, 20f)
                     if (b.meta.isNotBlank()) state.drawWrapped(b.meta, metaStyle, 14f)
                     if (b.body.isNotBlank()) {
-                        // INTEGRATION (C task 20): styled when the note carries a sidecar, and the
-                        // untouched old path when it does not.
                         if (b.bodySpans.isBlank()) {
                             for (line in b.body.split("\n")) state.drawWrapped(line, bodyStyle, 15f)
                         } else {
@@ -490,9 +376,6 @@ object DocumentExport {
                             }
                         }
                     }
-                    // Phase 3: doodle strokes as vector lines — see drawDoodle. Round R1, task 3:
-                    // every canvas, not a parse of the raw column that produced nothing whenever a
-                    // note had more than one.
                     b.doodlePages.forEach { state.drawDoodle(it) }
                     if (b.doodleNames.isNotEmpty()) {
                         state.drawWrapped(com.lucent.app.i18n.S.exportDocDoodleLine(b.doodleNames.joinToString(", ")), metaStyle, 14f)
@@ -512,49 +395,11 @@ object DocumentExport {
         }
     }
 
-    /**
-     * Resource path of the bundled CJK face. See [loadPdfFonts].
-     *
-     * The Windows workflow drops the file here before packaging; see the build note in
-     * `desktop/build.gradle.kts`. Absent, everything still works — the PDF is simply Latin-only
-     * again, and [cjkFontMissing] is set so the export can say so instead of silently dropping text.
-     */
     private const val BUNDLED_CJK_FONT = "/fonts/LucentCJK.otf"
 
-    /**
-     * Set when a PDF export needed CJK glyphs and no loaded face could provide them. Read by the
-     * export caller to surface [com.lucent.app.i18n.S.exportPdfMissingCjkFont].
-     */
     @Volatile var cjkFontMissing: Boolean = false
         private set
 
-    /**
-     * The embedded faces, tried in order per line.
-     *
-     * ### C-group task 10: why a CJK face is bundled on desktop
-     *
-     * This was a **silent data-loss bug**, not a cosmetic one. The floor of this list was
-     * Helvetica, which has no CJK coverage at all, and [PdfState.encodable] *drops* characters the
-     * chosen face cannot encode — a deliberate choice so one exotic glyph cannot void a whole line.
-     * Put those two together and a Chinese, Japanese or Korean note exported to PDF on a machine
-     * with no imported CJK font came out **with its text simply missing**. Not mojibake, which a
-     * user would notice and report; blank, which looks like the export worked.
-     *
-     * Android never had this problem: `android.graphics.Paint` draws through the system typeface,
-     * and every Android build ships Noto CJK. PDFBox embeds only what it is given, so the desktop
-     * has to be given something.
-     *
-     * The bundled face is therefore loaded as the LAST resort before Helvetica: a user who imported
-     * their own font still gets their font, and everyone else gets glyphs instead of gaps. Loading
-     * it last also means the ~16 MB face is only ever embedded in the output PDF when a line
-     * actually needs it — PDFBox subsets on save, so a Latin-only document does not carry it.
-     *
-     * ### If the face is absent
-     *
-     * A build without the resource behaves exactly as before, except that [cjkFontMissing] is set
-     * so the caller can tell the user their characters were dropped and offer .docx instead. A
-     * missing optional asset must never fail an export, but it must not fail it *quietly* either.
-     */
     private fun loadPdfFonts(doc: PDDocument): List<PDFont> {
         cjkFontMissing = false
         val faces = mutableListOf<PDFont>()
@@ -567,7 +412,6 @@ object DocumentExport {
             } catch (_: Throwable) {
             }
         }
-        // The bundled CJK fallback, if this build carries one.
         var haveCjk = false
         try {
             DocumentExport::class.java.getResourceAsStream(BUNDLED_CJK_FONT)?.use { stream ->
@@ -581,8 +425,6 @@ object DocumentExport {
         return faces
     }
 
-    // Tracks the current page and vertical cursor, starting new pages as content overflows — the
-    // same shape as the Android PdfState, with PDFBox's bottom-left origin translated internally.
     private class PdfState(val doc: PDDocument, val fonts: List<PDFont>) {
         private var content: PDPageContentStream? = null
         private var y = MARGIN
@@ -614,7 +456,6 @@ object DocumentExport {
             text.length * size * 0.6f
         }
 
-        /** Drop characters the chosen font cannot encode so one exotic glyph never voids a line. */
         private fun encodable(font: PDFont, text: String): String {
             return buildString {
                 for (ch in text) {
@@ -634,11 +475,9 @@ object DocumentExport {
                 if (style.gray) stream.setNonStrokingColor(0.33f, 0.33f, 0.33f)
                 else stream.setNonStrokingColor(0f, 0f, 0f)
                 stream.setFont(font, style.size)
-                // PDFBox's origin is bottom-left; the cursor tracks top-down like Android's.
                 stream.newLineAtOffset(MARGIN, PAGE_H - y)
                 stream.showText(safe)
                 if (style.bold) {
-                    // Faux bold, matching Paint.isFakeBoldText: re-draw nudged right by a hairline.
                     stream.newLineAtOffset(0.35f, 0f)
                     stream.showText(safe)
                 }
@@ -649,18 +488,6 @@ object DocumentExport {
         }
 
 
-        /**
-         * INTEGRATION (C-group task 20) — [drawWrapped]'s rich-text sibling on the PDFBox side.
-         *
-         * Same wrapping rules and the same page-break behaviour as the plain writer; the difference
-         * is that a line is assembled from [RichText.StyledRun]s and drawn segment by segment, with
-         * a filled rectangle behind any highlighted stretch.
-         *
-         * Two things are deliberately kept from the plain path: the font FALLBACK CHAIN (so a CJK
-         * note still finds a face that can encode it, per group C's task 10), and the faux-bold
-         * double-draw. A styled export that silently lost CJK coverage would have re-introduced the
-         * exact data-loss bug C-group fixed.
-         */
         fun drawWrappedRich(runs: List<RichText.StyledRun>, base: PdfStyle, lineAdvance: Float) {
             val maxWidth = PAGE_W - 2 * MARGIN
 
@@ -685,9 +512,6 @@ object DocumentExport {
                 val stream = content
                 if (stream != null) {
                     var x = MARGIN
-                    // Highlights first, as one pass: a fill started between beginText/endText is not
-                    // valid content-stream ordering, so the rectangles cannot be interleaved with
-                    // the glyph drawing.
                     line.forEach { piece ->
                         val w = widthOf(piece)
                         if (piece.run.highlight >= 0) {
@@ -696,8 +520,6 @@ object DocumentExport {
                             val r = ((argb shr 16) and 0xFF) / 255f
                             val g = ((argb shr 8) and 0xFF) / 255f
                             val b = (argb and 0xFF) / 255f
-                            // Lightened towards white rather than drawn with alpha: a transparency
-                            // group would need an ExtGState, and a pale fill reads the same.
                             try {
                                 stream.setNonStrokingColor(
                                     r + (1f - r) * 0.55f, g + (1f - g) * 0.55f, b + (1f - b) * 0.55f
@@ -710,7 +532,6 @@ object DocumentExport {
                         }
                         x += w
                     }
-                    // Then the glyphs.
                     x = MARGIN
                     line.forEach { piece ->
                         val font = fontFor(piece.text)
@@ -718,7 +539,6 @@ object DocumentExport {
                         val size = sizeOf(piece.run)
                         try {
                             stream.beginText()
-                            // Text colour, defaulting to black when the run carries none.
                             val rgb = RichText.textColorArgb(piece.run.color)
                             if (rgb != null) {
                                 stream.setNonStrokingColor(
@@ -756,12 +576,6 @@ object DocumentExport {
         }
 
 
-        /**
-         * INTEGRATION (phase 3) — the PDFBox twin of the Android drawDoodle: same 5:3 full-width
-         * box, same fraction-based coordinates and stroke widths, same page-fit rule (never split a
-         * drawing across a page). PDFBox's origin is bottom-left, so every y is flipped through
-         * PAGE_H, and the path is stroked segment by segment inside one moveTo/lineTo chain.
-         */
         fun drawDoodle(doodleJson: String) {
             val strokes = com.lucent.app.ui.Doodle.parse(doodleJson)
             if (strokes.isEmpty()) return
@@ -780,28 +594,24 @@ object DocumentExport {
                         (argb and 0xFF) / 255f
                     )
                     stream.setLineWidth((stroke.width * boxW).coerceAtLeast(0.5f))
-                    stream.setLineCapStyle(1)   // round — matches the app's StrokeCap.Round
-                    stream.setLineJoinStyle(1)  // round
+                    stream.setLineCapStyle(1)
+                    stream.setLineJoinStyle(1)
                     stroke.points.forEachIndexed { i, pt ->
                         val px = MARGIN + pt.x * boxW
                         val py = PAGE_H - (top + pt.y * boxH)
                         if (i == 0) stream.moveTo(px, py) else stream.lineTo(px, py)
                     }
                     if (stroke.points.size == 1) {
-                        // A tap is a dot; a zero-length stroked path draws nothing, so nudge it.
                         val pt = stroke.points.first()
                         stream.lineTo(MARGIN + pt.x * boxW + 0.1f, PAGE_H - (top + pt.y * boxH))
                     }
                     stream.stroke()
                 } catch (_: Throwable) {
-                    // One bad stroke must not void the page — same policy as drawLine above.
                 }
             }
             y = top + boxH + 10f
         }
 
-        // Word-wrapped drawing with the Android flow, plus character-level splitting for a single
-        // "word" wider than the page — which is what an unbroken CJK sentence is.
         fun drawWrapped(text: String, style: PdfStyle, lineAdvance: Float) {
             val maxWidth = PAGE_W - 2 * MARGIN
             val font = fontFor(text)
@@ -847,7 +657,6 @@ object DocumentExport {
         fun finish() { content?.close(); content = null }
     }
 
-    // ============================ ZIP + XML helpers ============================
 
     private fun zip(vararg entries: Pair<String, String>): ByteArray {
         val baos = ByteArrayOutputStream()
@@ -870,36 +679,18 @@ object DocumentExport {
                 '>' -> sb.append("&gt;")
                 '"' -> sb.append("&quot;")
                 '\'' -> sb.append("&apos;")
-                // Strip control characters that are illegal in XML 1.0 (tab/newline/CR are allowed).
                 else -> if (ch.code < 0x20 && ch != '\t' && ch != '\n' && ch != '\r') sb.append(' ') else sb.append(ch)
             }
         }
         return sb.toString()
     }
 
-    // ============================ Export bundling with attachments ============================
-    //
-    // When the user ticks attachments to embed, the chosen document is written into a .zip next to an
-    // `attachments/` folder holding the actual files. The document itself is unchanged — it still only
-    // *names* its attachments — so a reader gets both the readable export and the files it refers to.
 
-    /**
-     * Build a .zip holding [documentBytes] (written as [documentName], e.g. "lucent-notes.md") plus
-     * the bytes of every attachment in [attachments], each under `attachments/` with a de-duplicated
-     * file name. Attachments that can't be read (missing on disk, oversized) are skipped rather than
-     * failing the whole export — reading each one fully before writing its entry means a skip never
-     * leaves a half-written entry that would corrupt the archive.
-     */
     fun zipWithAttachments(
         context: android.content.Context,
         documentName: String,
         documentBytes: ByteArray,
         attachments: List<Attachment>,
-        // Round R1, task 3 — files that are GENERATED rather than read off disk: the doodle-canvas
-        // PDFs. They ride in the same `attachments/` folder and through the same de-duplicator,
-        // because to the person opening the archive there is no difference between a drawing they
-        // made and a file they attached, and inventing a second folder would insist there is.
-        // Defaulted, so the task export and every other existing caller is untouched.
         extraFiles: List<Pair<String, ByteArray>> = emptyList()
     ): ByteArray {
         val baos = ByteArrayOutputStream()
@@ -926,10 +717,6 @@ object DocumentExport {
         return baos.toByteArray()
     }
 
-    /**
-     * Round R1, task 3 — one doodle canvas as a PDF of its own; the PDFBox twin of the Android
-     * writer. Same reasoning, same page metrics, same heading. See the Android copy for why PDF.
-     */
     fun doodlePdf(canvas: DoodleExport.Canvas, heading: String = ""): ByteArray {
         PDDocument().use { doc ->
             val fonts = loadPdfFonts(doc)
@@ -945,12 +732,6 @@ object DocumentExport {
         }
     }
 
-    /**
-     * One PDF for MANY canvases of the same doodle note (R3 report): a ticked set that spans
-     * several pages is written as a single multi-page document — one page per canvas — instead of
-     * one file per canvas. The heading is repeated on every page, which matches what per-canvas
-     * exports used to produce.
-     */
     fun doodlesPdf(canvases: List<DoodleExport.Canvas>, heading: String = ""): ByteArray {
         PDDocument().use { doc ->
             val fonts = loadPdfFonts(doc)
@@ -968,7 +749,6 @@ object DocumentExport {
         }
     }
 
-    /** Make [name] unique within [used] by inserting " (2)", " (3)", … before the extension. */
     private fun uniqueEntryName(name: String, used: MutableSet<String>): String {
         if (used.add(name)) return name
         val dot = name.lastIndexOf('.')
@@ -983,11 +763,6 @@ object DocumentExport {
     }
 }
 
-/**
- * A DOCX run's styling, as one value. Was a `Triple<Boolean, Boolean, Int>` until text colour
- * arrived and made a fourth component necessary — at which point a tuple of four unnamed fields
- * stops being readable and starts being a place for bugs to hide.
- */
 private data class DocxRunStyle(
     val bold: Boolean,
     val italic: Boolean,
@@ -995,5 +770,4 @@ private data class DocxRunStyle(
     val color: Int
 )
 
-/** ARGB to the six-digit RRGGBB hex OOXML and HTML both want. */
 private fun hex6(argb: Int): String = String.format("%06X", argb and 0xFFFFFF)

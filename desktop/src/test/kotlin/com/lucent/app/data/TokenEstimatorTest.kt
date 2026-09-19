@@ -3,12 +3,6 @@ package com.lucent.app.data
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/**
- * Characterisation tests for [TokenEstimator] (P0-5 domain group): the token estimate that sizes
- * every assistant request — CJK glyphs count one each, other scripts four characters per token
- * with ceiling division, blank text costs nothing, and the human label stays readable at every
- * magnitude.
- */
 class TokenEstimatorTest {
 
     @Test
@@ -20,10 +14,10 @@ class TokenEstimatorTest {
 
     @Test
     fun latinCountsFourCharactersPerToken() {
-        assertEquals(1, TokenEstimator.estimate("abcd"))      // exactly one token
-        assertEquals(2, TokenEstimator.estimate("abcde"))     // ceiling of 5/4
-        assertEquals(0, TokenEstimator.estimate("    "))      // whitespace is free
-        assertEquals(1, TokenEstimator.estimate("a"))         // never rounds to zero
+        assertEquals(1, TokenEstimator.estimate("abcd"))
+        assertEquals(2, TokenEstimator.estimate("abcde"))
+        assertEquals(0, TokenEstimator.estimate("    "))
+        assertEquals(1, TokenEstimator.estimate("a"))
     }
 
     @Test
@@ -35,15 +29,14 @@ class TokenEstimatorTest {
 
     @Test
     fun mixedScriptsSumCorrectly() {
-        // 4 CJK glyphs + "abcd" (1 token) = 5
         assertEquals(5, TokenEstimator.estimate("你好世界 abcd"))
     }
 
     @Test
     fun estimateAllSumsEstimates() {
         assertEquals(0, TokenEstimator.estimateAll(emptyList()))
-        assertEquals(3, TokenEstimator.estimateAll(listOf("ab", "cd", "ef"))) // three separate tokens
-        assertEquals(2, TokenEstimator.estimateAll(listOf("你好")))           // two CJK glyphs
+        assertEquals(3, TokenEstimator.estimateAll(listOf("ab", "cd", "ef")))
+        assertEquals(2, TokenEstimator.estimateAll(listOf("你好")))
     }
 
     @Test

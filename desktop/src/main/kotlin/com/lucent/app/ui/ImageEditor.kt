@@ -63,18 +63,6 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import androidx.compose.foundation.Canvas as ComposeCanvas
 
-/**
- * Desktop twin of the Android ImageEditorDialog: **doodle** (freehand pen), **mosaic** (pixelate a
- * region), and **crop** — the same three touch-ups, the same undo history, the same "write back over
- * the stored attachment on save" behaviour, and the same Compose UI (tool chips, live stroke
- * overlay, crop box, top bar with undo + save).
- *
- * The only thing that changes is the pixel backend: Android painted onto an `android.graphics.Bitmap`
- * with a `Canvas`; desktop paints onto a [java.awt.image.BufferedImage] with `Graphics2D`. The
- * operations map one-to-one (a red round-capped stroke, block-average mosaic cells, a sub-image
- * crop), and the working copy is a full-resolution ARGB image, matching the app's original-quality
- * rule. Undo snapshots are deep copies bounded by the same step and byte budgets.
- */
 private enum class EditTool { DOODLE, MOSAIC, CROP }
 
 @Composable
@@ -89,7 +77,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
     val undoStack = remember(att.data) { mutableStateListOf<BufferedImage>() }
     val canUndo = undoStack.isNotEmpty()
 
-    // Load a mutable, full-resolution ARGB copy to edit.
     LaunchedEffect(att.data) {
         val bmp = withContext(Dispatchers.IO) {
             val bytes = Attachments.readBytes(context, att, maxBytes = 96L * 1024 * 1024) ?: return@withContext null
@@ -174,7 +161,7 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                                                             drawMosaic(bmp, livePath.map { toBitmapSpace(it) })
                                                             version++
                                                         }
-                                                        EditTool.CROP -> { /* applied via the Crop button */ }
+                                                        EditTool.CROP -> {  }
                                                     }
                                                     livePath = emptyList()
                                                 }
@@ -315,9 +302,7 @@ private fun ToolChip(label: String, icon: ImageVector, selected: Boolean, onClic
     }
 }
 
-// ---- Pixel backend (BufferedImage + Graphics2D), mirroring the Android Canvas ops ----
 
-/** A guaranteed-ARGB, independently-backed copy of any decoded image. */
 private fun toArgb(src: BufferedImage): BufferedImage {
     val out = BufferedImage(src.width, src.height, BufferedImage.TYPE_INT_ARGB)
     val g = out.createGraphics()
@@ -334,7 +319,6 @@ private fun deepCopy(src: BufferedImage): BufferedImage {
     return out
 }
 
-/** Encode to PNG in memory and decode via Skia so the working image shows in Compose. */
 private fun BufferedImage.toBitmap(): ImageBitmap {
     val baos = ByteArrayOutputStream()
     javax.imageio.ImageIO.write(this, "png", baos)
@@ -342,7 +326,6 @@ private fun BufferedImage.toBitmap(): ImageBitmap {
         .toComposeImageBitmap()
 }
 
-/** Paint a freehand red stroke onto [bmp] along [points] (bitmap-space). */
 private fun drawDoodle(bmp: BufferedImage, points: List<Offset>) {
     if (points.size < 2) return
     val g = bmp.createGraphics()
@@ -355,7 +338,6 @@ private fun drawDoodle(bmp: BufferedImage, points: List<Offset>) {
     g.dispose()
 }
 
-/** Pixelate [bmp] in blocks along [points]: each cell the stroke passes gets its own average color. */
 private fun drawMosaic(bmp: BufferedImage, points: List<Offset>) {
     if (points.isEmpty()) return
     val block = MOSAIC_BLOCK
@@ -404,7 +386,6 @@ private fun averageColor(bmp: BufferedImage, x: Int, y: Int, w: Int, h: Int): In
     return (0xFF shl 24) or (rr shl 16) or (gg shl 8) or bb
 }
 
-/** A cropped copy of [bmp] between two bitmap-space corners, or null if the box is degenerate. */
 private fun applyCrop(bmp: BufferedImage, topLeft: Offset, bottomRight: Offset): BufferedImage? {
     val left = topLeft.x.toInt().coerceIn(0, bmp.width - 1)
     val top = topLeft.y.toInt().coerceIn(0, bmp.height - 1)
@@ -414,7 +395,6 @@ private fun applyCrop(bmp: BufferedImage, topLeft: Offset, bottomRight: Offset):
     val h = bottom - top
     if (w < 8 || h < 8) return null
     return try {
-        // getSubimage shares the parent raster, so copy into a standalone image.
         val sub = bmp.getSubimage(left, top, w, h)
         val out = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
         val g = out.createGraphics()
@@ -426,13 +406,9 @@ private fun applyCrop(bmp: BufferedImage, topLeft: Offset, bottomRight: Offset):
     }
 }
 
-/**
- * Re-encode [bmp] and write it back over [att]'s stored bytes. JPEG (quality 92) for a JPEG source,
- * PNG otherwise so transparency and the doodle survive losslessly.
- */
 private fun saveEdited(context: android.content.Context, att: Attachment, bmp: BufferedImage): Boolean {
     return try {
-        if (!AttachmentStore.looksLikeId(att.data)) return false // legacy in-row Base64: nothing stable to overwrite
+        if (!AttachmentStore.looksLikeId(att.data)) return false
         val useJpeg = att.mime.equals("image/jpeg", true) || att.mime.equals("image/jpg", true)
         val bytes = if (useJpeg) encodeJpeg(bmp, 0.92f) else encodePng(bmp)
         AttachmentStore.writeBytes(context, att.data, bytes)
@@ -447,7 +423,6 @@ private fun encodePng(bmp: BufferedImage): ByteArray {
     return out.toByteArray()
 }
 
-/** JPEG can't carry alpha; flatten onto white, then write at the requested quality. */
 private fun encodeJpeg(bmp: BufferedImage, quality: Float): ByteArray {
     val rgb = BufferedImage(bmp.width, bmp.height, BufferedImage.TYPE_INT_RGB)
     val g = rgb.createGraphics()
@@ -470,7 +445,6 @@ private fun encodeJpeg(bmp: BufferedImage, quality: Float): ByteArray {
     return out.toByteArray()
 }
 
-/** Keep undo history inside both budgets, dropping the oldest snapshots first. */
 private fun trimUndoStack(stack: MutableList<BufferedImage>) {
     fun bytesOf(b: BufferedImage): Long = b.width.toLong() * b.height.toLong() * 4L
     while (stack.size > UNDO_MAX_STEPS) stack.removeAt(0)

@@ -5,12 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * Characterisation tests for the shared search grammar (P0-5 domain group): [SearchQuery.parse]
- * must split quoted phrases from terms, fold #tag and tag:/is:/has:/priority:/due: filters into
- * their fields, keep unknown tokens searchable as text, and [SearchQuery.matches] must apply every
- * filter to notes and tasks without ever blurring the two kinds.
- */
 class SearchQueryTest {
 
     private fun note(
@@ -44,7 +38,6 @@ class SearchQueryTest {
         subtasks = subtasksJson, attachments = attachments
     )
 
-    // ---- Parsing ----
 
     @Test
     fun blankQueryIsEmptyAndMatchesEverything() {
@@ -59,7 +52,6 @@ class SearchQueryTest {
         val q = SearchQuery.parse("\"exact phrase\" word")
         assertEquals(listOf("word"), q.terms)
         assertEquals(listOf("exact phrase"), q.phrases)
-        // A quoted "tag:x" searches for the text, not the filter.
         val quotedFilter = SearchQuery.parse("\"tag:work\"")
         assertTrue(quotedFilter.tags.isEmpty())
         assertEquals(listOf("tag:work"), quotedFilter.phrases)
@@ -78,13 +70,11 @@ class SearchQueryTest {
     @Test
     fun unknownTokensStaySearchableText() {
         val q = SearchQuery.parse("TODO:fix is:unpinned has:magic")
-        // Unknown filter-shaped tokens are treated as literal text so they stay findable.
         assertEquals(listOf("todo:fix", "is:unpinned", "has:magic"), q.terms)
         assertTrue(q.flags.isEmpty())
         assertTrue(q.has.isEmpty())
     }
 
-    // ---- Note matching ----
 
     @Test
     fun allTermsMustAppearSomewhere() {
@@ -99,7 +89,6 @@ class SearchQueryTest {
         assertTrue(SearchQuery.parse("tag:work").matches(n))
         assertTrue(SearchQuery.parse("tag:home").matches(n))
         assertFalse(SearchQuery.parse("tag:family").matches(n))
-        // #tag shorthand behaves identically.
         assertTrue(SearchQuery.parse("#home").matches(n))
     }
 
@@ -118,12 +107,10 @@ class SearchQueryTest {
 
     @Test
     fun taskOnlyFlagsNeverMatchNotes() {
-        // is:done / is:overdue on the notes side must yield nothing, not everything.
         assertFalse(SearchQuery.parse("is:done").matches(note(title = "Anything")))
         assertFalse(SearchQuery.parse("is:overdue").matches(note(title = "Anything")))
     }
 
-    // ---- Task matching ----
 
     @Test
     fun taskFiltersApplyToTasks() {
@@ -141,14 +128,13 @@ class SearchQueryTest {
 
     @Test
     fun dueWindowsFilterByClock() {
-        val now = 1_700_000_000_000L // a fixed instant for deterministic tests
+        val now = 1_700_000_000_000L
         val overdue = task(title = "Late", dueAt = now - 3_600_000L)
         val todayDue = task(title = "Today", dueAt = now + 3_600_000L)
         val noDue = task(title = "None")
         assertTrue(SearchQuery.parse("due:overdue").matches(overdue, now))
         assertFalse(SearchQuery.parse("due:overdue").matches(todayDue, now))
         assertFalse(SearchQuery.parse("due:overdue").matches(noDue, now))
-        // due:window on a task with no due date can never match.
         assertFalse(SearchQuery.parse("due:today").matches(noDue, now))
     }
 
@@ -170,7 +156,6 @@ class SearchQueryTest {
         assertFalse(SearchQuery.parse("has:attachment").matches(note(title = "Empty")))
     }
 
-    // ---- Ranking ----
 
     @Test
     fun titleHitsOutrankBodyHits() {

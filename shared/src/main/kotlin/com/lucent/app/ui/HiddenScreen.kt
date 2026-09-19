@@ -43,34 +43,11 @@ import com.lucent.app.data.Checklist
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * The hidden area (task A21) — a third holding place beside the trash and the drafts, and the only
- * one that is invisible until asked for.
- *
- * ### Why the switch lives in memory and not in settings storage
- *
- * The requirement is that the area turns itself back off "the next time the software starts". A
- * persisted preference cannot express that: it would survive the restart and have to be actively
- * reset by something, and anything that can reset it can fail to. A plain process-scoped flag gets
- * it right by construction — the flag dies with the process, so a fresh launch is *always* a
- * launch with the hidden area closed. There is no state to migrate, no preference to forget to
- * clear, and no way for a crash to leave it stuck open.
- *
- * The one exception the task calls for — staying open if the user was still editing something
- * hidden — is [stickyForSession]: set while a hidden item is open in an editor, so a trip to
- * another app and back doesn't slam the door on work in progress. It, too, dies with the process.
- */
 object HiddenArea {
 
-    /** True while the user has unlocked the hidden area during *this* run of the app. */
     var visible: Boolean by mutableStateOf(false)
         private set
 
-    /**
-     * Set while a hidden item is open in an editor. The startup close is unconditional either way —
-     * this only prevents the area collapsing underneath an edit that is still in progress within
-     * the same run.
-     */
     var stickyForSession: Boolean = false
 
     fun open() { visible = true }
@@ -81,16 +58,6 @@ object HiddenArea {
     }
 }
 
-/**
- * The hidden notes list. Deliberately plain: no search, no sort, no bulk actions. This is a place
- * you visit to take something out of, and every control that isn't "show me" or "put it back"
- * would be another thing on screen while the screen is open.
- *
- * R3 report: notes are laid out as TWO-COLUMN ROUNDED-SQUARE cards here, the same shape they have
- * on the home grid — not the full-width bars used for tasks below. The hidden area used to render
- * both kinds with the same bar ([HiddenRow]), which made a hidden note visually change shape the
- * moment it was hidden (a "note became a task row" report).
- */
 @Composable
 fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> Unit) {
     val context = LocalContext.current
@@ -126,7 +93,6 @@ fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> 
     RevealConfirmDialog(pending = pendingReveal, onDismiss = { pendingReveal = null })
 }
 
-/** The task side of the hidden area; identical but for the row's own fields. */
 @Composable
 fun HiddenTasksScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Task) -> Unit) {
     val context = LocalContext.current
@@ -161,20 +127,6 @@ fun HiddenTasksScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Task) -> 
     RevealConfirmDialog(pending = pendingReveal, onDismiss = { pendingReveal = null })
 }
 
-/**
- * Task 7 — confirmation before an item leaves the hidden area.
- *
- * The reveal icon sits on every row, a single tap from the same finger that is scrolling past it,
- * and the action it performs is invisible from here: the item vanishes from this list and reappears
- * in a list this screen is not showing. There is no undo and no toast to catch it. Every other
- * one-tap change of this kind in the app already asks (delete, empty trash, batch delete), and this
- * one is the only one where the cost of a mistake is that something the user deliberately hid is now
- * on display — which is precisely the thing the hidden area exists to prevent.
- *
- * Nothing guards the opposite direction: moving an item *into* the hidden area is still immediate.
- * Hiding something by accident is recoverable in one tap from this very screen, so a prompt there
- * would be ceremony rather than protection.
- */
 @Composable
 private fun RevealConfirmDialog(pending: (() -> Unit)?, onDismiss: () -> Unit) {
     if (pending == null) return
@@ -221,13 +173,6 @@ private fun HiddenScaffold(
     }
 }
 
-/**
- * The two-column grid twin of [HiddenScaffold] for notes (R3 report): same header and empty
- * state, but a [LazyVerticalGrid] of rounded-square cards instead of full-width bars, so a note
- * keeps the exact shape it has on the home grid while it sits in the hidden area. Kept as a
- * separate scaffold rather than a flag on [HiddenScaffold] because the two content scopes
- * (LazyListScope vs LazyGridScope) cannot share one lambda type.
- */
 @Composable
 private fun HiddenGridScaffold(
     onBack: () -> Unit,
@@ -258,11 +203,6 @@ private fun HiddenGridScaffold(
     }
 }
 
-/**
- * One hidden note as a rounded-square card (R3 report) — mirrors the home grid's note cards:
- * fixed height, the note's own colour washed through the glass, and the reveal control tucked
- * into the card's top-right corner instead of a separate trailing column.
- */
 @Composable
 private fun HiddenNoteCard(
     title: String,

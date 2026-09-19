@@ -1,5 +1,4 @@
 <resources>
-    <!-- Simplified Chinese widget strings. The app_name brand mark is deliberately not translated. -->
     <string name="widget_ask">提问</string>
     <string name="widget_new_note">新建笔记</string>
     <string name="widget_new_task">新建任务</string>

@@ -1,13 +1,5 @@
 package com.lucent.app.data
 
-// Desktop twin of app/src/main/java/com/lucent/app/data/Entities.kt.
-//
-// Field-for-field identical to the Android Room entities (same names, same defaults, same
-// nullability) so every piece of shared logic — the assistant tools, search, insights, and above
-// all BackupManager — compiles and behaves identically. Only the Room annotations are gone: the
-// desktop build persists these through the hand-rolled SQLite layer in Db.kt/Daos.kt, using the
-// same table and column names Room generates on Android, which keeps the mental model (and any
-// future schema tooling) one-to-one.
 
 data class Note(
     val id: Long = 0,
@@ -15,25 +7,18 @@ data class Note(
     val body: String,
     val updatedAt: Long = System.currentTimeMillis(),
     val tags: String = "",
-    // JSON array of attachments: [{"mime":..,"data":<AttachmentStore id>,"name":..}, ...]
     val attachments: String = "[]",
     val archived: Boolean = false,
     val archivedAt: Long? = null,
     val pinned: Boolean = false,
-    // A NoteColor key ("" = default/no tint) — see ui/NoteColors.kt.
     val color: String = "",
     val isChecklist: Boolean = false,
     val checklist: String = "[]",
-    // Soft-delete: null = not in the trash. See TrashCleanup.
     val trashedAt: Long? = null,
-    // ---- 1.1.0, group A (mirrors the Android entity exactly) ----------------------------------
     val manualOrder: Int = 0,
     val isDraft: Boolean = false,
     val draftSavedAt: Long? = null,
     val hidden: Boolean = false,
-    // Task A22 — mirrors the Android entity: a doodle is a third kind of note, and its strokes live
-    // in their own column so switching kinds never destroys the other kind's content.
-    // INTEGRATION (C task 20) — mirrors the Android entity. See data/RichText.kt.
     val bodySpans: String = "",
     val isDoodle: Boolean = false,
     val doodle: String = ""
@@ -48,25 +33,19 @@ data class Task(
     val dueAt: Long? = null,
     val notes: String = "",
     val completedAt: Long? = null,
-    // A TaskPriority.value (0 none, 1 low, 2 medium, 3 high) — see data/TaskPriority.kt.
     val priority: Int = 0,
     val pinned: Boolean = false,
-    // JSON array of subtask checklist items — see Checklist.kt.
     val subtasks: String = "[]",
-    // A RepeatRule.key (see data/Recurrence.kt). Only meaningful when dueAt is set.
     val repeatRule: String = "NONE",
     val reminderEnabled: Boolean = false,
     val trashedAt: Long? = null,
-    // ---- 1.1.0, group A (mirrors the Android entity exactly) ----------------------------------
     val manualOrder: Int = 0,
     val isDraft: Boolean = false,
     val draftSavedAt: Long? = null,
     val hidden: Boolean = false,
-    // INTEGRATION (C task 20) — the task twin of Note.bodySpans.
     val notesSpans: String = ""
 )
 
-/** One historical revision of a note's text — see the Android original for the full rationale. */
 data class NoteVersion(
     val id: Long = 0,
     val noteId: Long,
@@ -78,10 +57,6 @@ data class NoteVersion(
     val savedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * Task A19 — one historical revision of a task. Desktop twin of the Android entity; field-for-field
- * identical so BackupManager and the history screens compile against one shape on both platforms.
- */
 data class TaskVersion(
     val id: Long = 0,
     val taskId: Long,
@@ -101,23 +76,9 @@ data class ChatMessage(
     val attachmentMime: String? = null,
     val attachmentData: String? = null,
     val attachmentName: String? = null,
-    // Multiple-attachment support (R3 task #15): a JSON array (see Attachments.serialize/parse)
-    // holding EVERY attachment of this message. The three legacy columns above stay populated with
-    // the FIRST attachment so pre-existing readers never break; readers that understand multiple
-    // files use the merged view (see ChatMessage.allAttachments) instead. Null on rows created
-    // before schema v16 and whenever a message has at most one attachment.
     val attachmentList: String? = null,
     val conversationId: Long = 1,
-    // Approximate tokens this turn cost — see data/TokenEstimator.kt.
     val tokens: Int = 0,
-    // Which USER message this assistant reply answers (B-group task 12: resend / multiple replies).
-    //
-    // 0 on user messages, on replies saved before this column existed, and on anything the pairing
-    // could not be established for. A non-zero value groups every reply that answers the same
-    // question: asking again appends another row with the SAME replyToId, and the chat shows one of
-    // them at a time with a 1/2 switcher. Deliberately a plain id rather than a separate
-    // "variants" table — a reply is still exactly one row, so search, export, token accounting and
-    // deletion all keep working with no special-casing at all.
     val replyToId: Long = 0
 )
 
@@ -128,12 +89,6 @@ data class ChatConversation(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * A notebook: a user-named collection of notes and tasks. Desktop twin of the Android entity;
- * field-for-field identical so the shared screens and BackupManager compile against one shape.
- * Membership lives in the [NotebookItem] join table, so the same note or task can appear in
- * several notebooks and adding/removing never touches the item's own row.
- */
 data class Notebook(
     val id: Long = 0,
     val title: String,
@@ -141,11 +96,6 @@ data class Notebook(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * One membership row — "notebook X contains item Y". [itemKind] is "NOTE" or "TASK"; the kind
- * disambiguates which table [itemId] names, because note ids and task ids both autoincrement and
- * can collide. Desktop twin of the Android entity.
- */
 data class NotebookItem(
     val id: Long = 0,
     val notebookId: Long,
@@ -159,14 +109,6 @@ data class NotebookItem(
     }
 }
 
-/**
- * P2-2 (data layer only): one cached embedding vector for a note, keyed by which model produced it.
- * Desktop twin of the Android `@Entity` — see MIGRATION_18_19's KDoc on the Android side for the
- * full reasoning (composite key, no foreign key, the AFTER-DELETE trigger, and why this table is
- * deliberately excluded from `.lcb` backups). [vec] is the raw float vector serialized as bytes (4
- * bytes per dimension, little-endian) — see EmbeddingStore for the encode/decode and the similarity
- * search that reads it back out.
- */
 data class NoteEmbedding(
     val noteId: Long,
     val model: String,
@@ -174,9 +116,6 @@ data class NoteEmbedding(
     val vec: ByteArray,
     val updatedAt: Long
 ) {
-    // Same reasoning as the Android entity: ByteArray does not get content equals/hashCode for
-    // free from a data class, and reference equality on two independently-decoded arrays is never
-    // what a caller means.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is NoteEmbedding) return false

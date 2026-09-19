@@ -26,18 +26,6 @@ import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
-/**
- * P1-3 — extracted from the `PersonalizationPage` local composable that used to live inside
- * `SettingsScreen` (byte-identical on both platforms before this split).
- *
- * The name/style fields are the one place in the whole Settings screen with an unsaved-changes
- * guard, and that guard ([SettingsScreen]'s `assistantDirty`/`leavePersonalization`/the discard
- * dialog) reads and resets the same two variables from outside this page's own composition, so —
- * unlike everywhere else in these extracted pages — their `remember` state deliberately stays
- * owned by the parent rather than moving in here. [onBack] is the existing `leavePersonalization`
- * function, unchanged: this page never needs to know the guard exists, only that back might not
- * navigate immediately.
- */
 @Composable
 fun PersonalizationSettingsPage(
     repo: SettingsRepository,
@@ -73,11 +61,6 @@ fun PersonalizationSettingsPage(
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    // Typing haptics lives here now (task 4). It's part of how the chat feels rather than
-    // anything to do with memory or the web, so it moved onto Personalization when the old
-    // combined "Memory & web" page was split apart. It writes immediately and isn't part
-    // of the name/style "unsaved changes" tracking, so leaving without pressing Save above
-    // never affects it.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
@@ -93,10 +76,6 @@ fun PersonalizationSettingsPage(
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    // Whether the assistant must ask before EVERY tool call — reads as well as writes,
-    // cloud and on-device alike. Default ON. Turning it off removes the confirmation
-    // modal entirely, because the switch trades oversight for convenience — and that
-    // trade should never be made by accident.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {

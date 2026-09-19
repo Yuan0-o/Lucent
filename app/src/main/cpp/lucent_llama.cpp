@@ -1,17 +1,3 @@
-// JNI bridge between Kotlin (local/LocalLlm.kt) and llama.cpp, pinned at tag b9888.
-//
-// Design rules, in order of importance (matching the task):
-//   1. Never crash. Every entry point is wrapped; any native failure surfaces as a Java-side
-//      error string or a 0/false return, never a SIGSEGV or an uncaught C++ exception.
-//   2. Never block the UI. Kotlin calls everything here from one dedicated background thread
-//      (LocalLlm's single-thread dispatcher); this file additionally serializes with a mutex so
-//      even a misuse can't race the context.
-//   3. Release everything. unload() frees sampler → context → model, and Kotlin calls it when
-//      the user leaves the app, so the model's memory is returned the moment the app exits.
-//
-// Streaming is UTF-8-safe: llama tokens can end mid-codepoint (especially for CJK), so bytes are
-// held back until they form complete UTF-8 sequences before being handed to Java — otherwise
-// NewStringUTF would corrupt or reject the text and Chinese/Japanese/Korean output would garble.
 
 #include <jni.h>
 #include <android/log.h>
@@ -24,31 +10,14 @@
 
 #include "llama.h"
 
-// PHASE 4 — multimodal (llama.cpp's official mtmd, tools/mtmd at the pinned b9888). The whole
-// feature is compile-time optional: when the mtmd sources aren't wired in (LUCENT_NO_MTMD,
-// see CMakeLists.txt), every entry point below degrades to "vision unavailable" and the text
-// engine is byte-for-byte what it was — multimodal must never be the reason the engine fails
-// to build or a text chat fails to run.
 #ifndef LUCENT_NO_MTMD
 #include "mtmd.h"
 #include "mtmd-helper.h"
 
-// ------------------------------------------------------------------------------------------------
-// Helper-API adapter (first CI pass, Android job 2026-07-26).
-//
-// The pinned b9888 checkout's mtmd_helper_bitmap_init_from_buf is
-//     mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(ctx, buf, len, bool placeholder)
-// — four arguments, returning a small C wrapper struct — where earlier revisions returned the
-// mtmd_bitmap* directly from three arguments. Written as overload-ranked templates so this file
-// compiles against EITHER shape and extracts the pointer by whichever wrapper member exists:
-// changing the llama.cpp pin someday must not make this call site the thing that breaks.
-// ------------------------------------------------------------------------------------------------
 template <int N> struct lucent_rank : lucent_rank<N - 1> {};
 template <>      struct lucent_rank<0> {};
 
-// A plain pointer passes straight through (the pre-wrapper API shape).
 static inline mtmd_bitmap * lucent_unwrap_bitmap(mtmd_bitmap * p) { return p; }
-// A wrapper yields whichever pointer member it actually declares.
 template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<3>) -> decltype(w.bitmap) { return w.bitmap; }
 template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<2>) -> decltype(w.bmp)    { return w.bmp; }
 template <typename W> static auto lucent_unwrap_impl(W & w, lucent_rank<1>) -> decltype(w.ptr)    { return w.ptr; }
@@ -57,9 +26,6 @@ template <typename W> static inline mtmd_bitmap * lucent_unwrap_bitmap(W w) {
     return lucent_unwrap_impl(w, lucent_rank<3>{});
 }
 
-// Prefer the current 4-argument form (trailing bool = the header's "placeholder" flag, off — we
-// always hand real image bytes); fall back to the older 3-argument form when that is what the
-// header declares.
 template <typename C> static auto lucent_from_buf_impl(C * c, const unsigned char * d, size_t n, lucent_rank<1>)
     -> decltype(lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false))) {
     return lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false));
@@ -85,11 +51,9 @@ struct Session {
     llama_sampler * sampler = nullptr;
     const llama_vocab * vocab = nullptr;
     int             n_ctx   = 0;
-    std::mutex      mutex;              // serializes generate/unload on this session
-    std::atomic<bool> stop{false};      // set by nativeStop(); checked every token
-    std::atomic<bool> busy{false};      // a generation is in flight
-    // PHASE 4: the multimodal projector context (mtmd_context*), or null when this model has no
-    // mmproj loaded. Owned by the session; freed in unload before the model it references.
+    std::mutex      mutex;
+    std::atomic<bool> stop{false};
+    std::atomic<bool> busy{false};
     void *          mtmd    = nullptr;
 };
 
@@ -97,7 +61,6 @@ std::once_flag g_backend_once;
 
 void ensure_backend() {
     std::call_once(g_backend_once, [] {
-        // Quiet llama.cpp's default stderr logging on release devices; keep errors.
         llama_log_set([](ggml_log_level level, const char * text, void *) {
             if (level >= GGML_LOG_LEVEL_ERROR) __android_log_print(ANDROID_LOG_ERROR, TAG, "%s", text);
         }, nullptr);
@@ -105,26 +68,20 @@ void ensure_backend() {
     });
 }
 
-// How many trailing bytes of `s` form an *incomplete* UTF-8 sequence. Those bytes are held back
-// until the next token completes them, so Java only ever receives valid UTF-8.
 size_t utf8_incomplete_tail(const std::string & s) {
     size_t n = s.size();
     size_t look = n < 4 ? n : 4;
     for (size_t back = 1; back <= look; ++back) {
         unsigned char c = (unsigned char) s[n - back];
-        if ((c & 0x80) == 0x00) return 0;                       // ASCII: complete
-        if ((c & 0xC0) == 0xC0) {                               // a lead byte, `back-1` continuations follow
+        if ((c & 0x80) == 0x00) return 0;
+        if ((c & 0xC0) == 0xC0) {
             size_t need = (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
-            return back < need ? back : 0;                      // incomplete if fewer bytes than needed
+            return back < need ? back : 0;
         }
-        // else: a continuation byte, keep scanning backwards for its lead
     }
     return 0;
 }
 
-// NewStringUTF requires *modified* UTF-8 and aborts the VM on invalid input on some devices.
-// Building the String from a byte[] through the String(byte[], "UTF-8") constructor accepts any
-// valid UTF-8 (including 4-byte emoji, which modified UTF-8 does not).
 jstring to_jstring(JNIEnv * env, const std::string & s) {
     jbyteArray bytes = env->NewByteArray((jsize) s.size());
     if (!bytes) return nullptr;
@@ -149,7 +106,7 @@ std::string from_jstring(JNIEnv * env, jstring js) {
 
 std::string piece_of(const llama_vocab * vocab, llama_token tok) {
     char buf[256];
-    int n = llama_token_to_piece(vocab, tok, buf, sizeof(buf), 0, /*special=*/false);
+    int n = llama_token_to_piece(vocab, tok, buf, sizeof(buf), 0, false);
     if (n <= 0) return "";
     return std::string(buf, (size_t) n);
 }
@@ -157,30 +114,23 @@ std::string piece_of(const llama_vocab * vocab, llama_token tok) {
 std::vector<llama_token> tokenize(const llama_vocab * vocab, const std::string & text, bool add_special) {
     int guess = (int) text.size() + 16;
     std::vector<llama_token> out((size_t) guess);
-    int n = llama_tokenize(vocab, text.c_str(), (int) text.size(), out.data(), guess, add_special, /*parse_special=*/true);
+    int n = llama_tokenize(vocab, text.c_str(), (int) text.size(), out.data(), guess, add_special, true);
     if (n < 0) {
         out.resize((size_t) -n);
-        n = llama_tokenize(vocab, text.c_str(), (int) text.size(), out.data(), -n, add_special, /*parse_special=*/true);
+        n = llama_tokenize(vocab, text.c_str(), (int) text.size(), out.data(), -n, add_special, true);
     }
     if (n < 0) n = 0;
     out.resize((size_t) n);
     return out;
 }
 
-} // namespace
+}
 
 extern "C" {
 
-// ---------------------------------------------------------------------------------------------
-// nativeLoad(path, nCtx, nThreads) -> session handle, or 0 on failure
-// ---------------------------------------------------------------------------------------------
 JNIEXPORT jlong JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpath, jint n_ctx, jint n_threads, jint n_gpu_layers) {
     ensure_backend();
-    // Diagnostic, logged once per load: how many compute backends and devices ggml actually
-    // registered for this ABI. If this prints "dev=0" the build shipped no working backend and
-    // nothing can ever decode — it's the one line that tells a broken *build* apart from a broken
-    // *model*, without needing the phone in hand.
     LOGI("backends registered: reg=%zu dev=%zu gpu_offload=%d",
          ggml_backend_reg_count(), ggml_backend_dev_count(), (int) llama_supports_gpu_offload());
     const std::string path = from_jstring(env, jpath);
@@ -190,14 +140,8 @@ Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpa
 
     try {
         llama_model_params mparams = llama_model_default_params();
-        mparams.use_mmap = true;   // page the weights in lazily; cold RAM cost stays low
+        mparams.use_mmap = true;
 
-        // Layers to offload to the GPU, chosen by the user's CPU/GPU setting (0 = CPU, the safe
-        // default; a large value like 999 = offload everything). This only does anything when the
-        // build shipped a GPU backend (LUCENT_ENABLE_VULKAN in CMakeLists.txt): with no backend
-        // compiled there is nothing to offload to, so the engine stays on CPU no matter the value —
-        // which is exactly why the in-app GPU switch is always safe. On Android, GPU (Vulkan) offload
-        // is the biggest source of device-specific crashes, so it is opt-in and warned about in the UI.
         mparams.n_gpu_layers = n_gpu_layers > 0 ? n_gpu_layers : 0;
 
         s->model = llama_model_load_from_file(path.c_str(), mparams);
@@ -206,7 +150,7 @@ Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpa
 
         llama_context_params cparams = llama_context_default_params();
         cparams.n_ctx           = (uint32_t) (n_ctx > 0 ? n_ctx : 2048);
-        cparams.n_batch         = 512;   // prompt is fed in 512-token slices; bounds per-call latency
+        cparams.n_batch         = 512;
         cparams.n_threads       = n_threads > 0 ? n_threads : 4;
         cparams.n_threads_batch = n_threads > 0 ? n_threads : 4;
 
@@ -214,8 +158,6 @@ Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpa
         if (!s->ctx) { LOGE("context init failed"); llama_model_free(s->model); delete s; return 0; }
         s->n_ctx = (int) llama_n_ctx(s->ctx);
 
-        // Same sampling the cloud path uses (LlmClient: temperature 0.6, top_p 0.9) plus a mild
-        // top-k, so switching between cloud and local doesn't change the assistant's character.
         llama_sampler_chain_params sp = llama_sampler_chain_default_params();
         sp.no_perf = true;
         s->sampler = llama_sampler_chain_init(sp);
@@ -239,13 +181,6 @@ Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpa
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// nativeChatPrompt(handle, roles[], texts[], addAssistant) -> templated prompt string
-//
-// Applies the model's own chat template (Qwen/Llama/Gemma/Phi/ChatML/...). If the model ships a
-// template llama.cpp can't render, falls back to plain ChatML, which every instruct model of the
-// last two years at least tolerates.
-// ---------------------------------------------------------------------------------------------
 JNIEXPORT jstring JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeChatPrompt(JNIEnv * env, jobject, jlong handle,
                                                     jobjectArray jroles, jobjectArray jtexts, jboolean add_assistant) {
@@ -285,7 +220,6 @@ Java_com_lucent_app_local_LocalLlm_nativeChatPrompt(JNIEnv * env, jobject, jlong
         if (len > 0) out.assign(buf.data(), (size_t) len);
     }
     if (out.empty()) {
-        // ChatML fallback — plain, predictable, and understood broadly.
         for (jsize i = 0; i < n; ++i) {
             out += "<|im_start|>" + roles[(size_t) i] + "\n" + texts[(size_t) i] + "<|im_end|>\n";
         }
@@ -294,13 +228,6 @@ Java_com_lucent_app_local_LocalLlm_nativeChatPrompt(JNIEnv * env, jobject, jlong
     return to_jstring(env, out);
 }
 
-// ---------------------------------------------------------------------------------------------
-// nativeGenerate(handle, prompt, maxNew, callback) -> 0 ok / 1 stopped / negative = error
-//
-// Streams UTF-8-complete pieces to callback.onPiece(String). Each call starts from a clean
-// context (llama_memory_clear): the *prompt itself* carries whatever history Kotlin decided to
-// include, which keeps this function stateless, simple, and impossible to desynchronize.
-// ---------------------------------------------------------------------------------------------
 JNIEXPORT jint JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong handle,
                                                   jstring jprompt, jint max_new, jobject callback) {
@@ -315,10 +242,6 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
     jmethodID onPiece = env->GetMethodID(cbClass, "onPiece", "(Ljava/lang/String;)V");
     env->DeleteLocalRef(cbClass);
     if (!onPiece) {
-        // A failed lookup leaves a pending NoSuchMethodError in the env; clear it so this reports
-        // the deterministic -2 instead of throwing back into Kotlin as a raw error (-20). Seen when
-        // R8 renames the callback in a minified build — the keep rules in proguard-rules.pro prevent
-        // that, and this keeps the failure mode diagnosable if the rules are ever lost again.
         if (env->ExceptionCheck()) env->ExceptionClear();
         LOGE("generate: callback has no onPiece(String) — check the LocalLlm proguard keep rules");
         s->busy.store(false);
@@ -330,15 +253,13 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
         const std::string prompt = from_jstring(env, jprompt);
         if (!s->vocab) { LOGE("generate: vocab is null — model has no tokenizer"); s->busy.store(false); return -9; }
         LOGI("generate: prompt is %zu chars", prompt.size());
-        std::vector<llama_token> tokens = tokenize(s->vocab, prompt, /*add_special=*/true);
+        std::vector<llama_token> tokens = tokenize(s->vocab, prompt, true);
         if (tokens.empty()) {
             LOGE("generate: tokenize returned 0 tokens for a %zu-char prompt — tokenizer/model mismatch", prompt.size());
             s->busy.store(false); return -3;
         }
 
         const int budget = max_new > 0 ? max_new : 512;
-        // Keep the *tail* of an over-long prompt: the newest turns matter most, and truncating
-        // instead of failing is what "it must not crash" means when a huge history shows up.
         const int max_prompt = s->n_ctx - budget - 8;
         if (max_prompt > 0 && (int) tokens.size() > max_prompt) {
             tokens.erase(tokens.begin(), tokens.end() - max_prompt);
@@ -349,10 +270,6 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
 
         LOGI("generate: prompt=%zu tokens, budget=%d, n_ctx=%d", tokens.size(), (int) budget, s->n_ctx);
 
-        // Explicit-batch decode — the production path. llama.h documents llama_batch_get_one as a
-        // transition helper to be avoided; here we own the token/pos/seq_id/logits arrays outright,
-        // advance the position counter ourselves, and mark for output only the token whose logits we
-        // actually sample. One reusable batch of n_batch slots for the whole turn.
         const int n_batch = 512;
         llama_batch batch = llama_batch_init(n_batch, 0, 1);
         auto put = [&](llama_token id, llama_pos pos, bool want_logits) {
@@ -367,9 +284,6 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
 
         llama_pos n_past = 0;
 
-        // Prefill: feed the prompt in n_batch-sized slices. Only the last token of each slice is
-        // marked for output (the very last one is what the first sample reads); the rest just fill
-        // the KV cache.
         for (size_t i = 0; i < tokens.size(); ) {
             if (s->stop.load()) { llama_batch_free(batch); s->busy.store(false); return 1; }
             size_t end = std::min(i + (size_t) n_batch, tokens.size());
@@ -383,7 +297,7 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
             i = end;
         }
 
-        std::string pending;   // bytes held back until they form complete UTF-8
+        std::string pending;
         int produced = 0;
         llama_token tok;
         while (produced < budget && !s->stop.load()) {
@@ -411,15 +325,8 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
         }
         llama_batch_free(batch);
 
-        // Stop takes precedence over the zero-tokens check: a Stop pressed while the prompt is
-        // still prefilling (common — prefill takes seconds on big prompts) leaves produced == 0
-        // with the stop flag set, and that is a QUIET user stop (rc 1), not an engine error. The
-        // old order turned exactly that case into a spurious "-7 generate failed" banner.
         if (s->stop.load() && rc == 0) rc = 1;
         if (rc == 0 && produced == 0) {
-            // Loaded and decoded cleanly, but the model emitted end-of-turn before any content —
-            // almost always a chat-template mismatch for this specific model rather than an engine
-            // fault. Reported with its own code so it doesn't masquerade as a decode failure.
             LOGE("generate produced 0 tokens (immediate EOG — check the chat template for this model)");
             rc = -7;
         }
@@ -444,8 +351,6 @@ Java_com_lucent_app_local_LocalLlm_nativeUnload(JNIEnv *, jobject, jlong handle)
     if (!s) return;
     s->stop.store(true);
     {
-        // Wait for any in-flight generation to observe the stop flag and release the mutex, so
-        // the context is never freed under a running decode.
         std::lock_guard<std::mutex> guard(s->mutex);
 #ifndef LUCENT_NO_MTMD
         if (s->mtmd)    { mtmd_free((mtmd_context *) s->mtmd); s->mtmd = nullptr; }
@@ -459,14 +364,7 @@ Java_com_lucent_app_local_LocalLlm_nativeUnload(JNIEnv *, jobject, jlong handle)
 }
 
 
-// ---------------------------------------------------------------------------------------------
-// PHASE 4 — multimodal entry points (all no-ops / graceful failures when LUCENT_NO_MTMD)
-// ---------------------------------------------------------------------------------------------
 
-// nativeMtmdLoad(handle, mmprojPath, nThreads) -> true when the projector is ready.
-// The projector runs on CPU on purpose (use_gpu = false): on Android, GPU clip encoders are the
-// crash-prone half of every multimodal report upstream, and encoding one image takes well under a
-// second on CPU — the safe choice costs nothing a user can feel.
 JNIEXPORT jboolean JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeMtmdLoad(JNIEnv * env, jobject, jlong handle, jstring jpath, jint n_threads) {
 #ifdef LUCENT_NO_MTMD
@@ -497,9 +395,6 @@ Java_com_lucent_app_local_LocalLlm_nativeMtmdLoad(JNIEnv * env, jobject, jlong h
 #endif
 }
 
-// nativeMediaMarker() -> the marker string mtmd_tokenize expects at each media position in the
-// prompt text. Kotlin splices it into the *user* message before templating, so the media lands
-// inside the user turn where every multimodal chat template expects it.
 JNIEXPORT jstring JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeMediaMarker(JNIEnv * env, jobject) {
 #ifdef LUCENT_NO_MTMD
@@ -509,13 +404,6 @@ Java_com_lucent_app_local_LocalLlm_nativeMediaMarker(JNIEnv * env, jobject) {
 #endif
 }
 
-// nativeGenerateWithImages(handle, prompt, images[][], maxNew, callback) -> same codes as
-// nativeGenerate, plus -30 (no projector) and -31 (image decode/tokenize failed).
-//
-// A deliberate near-duplicate of nativeGenerate rather than a shared core: the text path is the
-// proven, shipping path, and threading multimodal branches through it would put every text chat
-// behind new code. The prefill differs (mtmd_helper_eval_chunks evaluates text AND image chunks,
-// including the image's encoder pass); the sampling loop after it is the same shape on purpose.
 JNIEXPORT jint JNICALL
 Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobject, jlong handle,
                                                             jstring jprompt, jobjectArray jimages,
@@ -548,7 +436,6 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
     try {
         const std::string prompt = from_jstring(env, jprompt);
 
-        // Decode every image byte[] (png/jpeg/webp/bmp — stb does the decoding inside the helper).
         const jsize n_img = env->GetArrayLength(jimages);
         for (jsize i = 0; i < n_img; ++i) {
             auto jarr = (jbyteArray) env->GetObjectArrayElement(jimages, i);
@@ -561,7 +448,7 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
             if (!bmp) { LOGE("mtmd: image %d failed to decode (%d bytes)", (int) i, (int) len); rc = -31; break; }
             bitmaps.push_back(bmp);
         }
-        if (rc == 0 && bitmaps.empty()) rc = -31; // called with images, none usable
+        if (rc == 0 && bitmaps.empty()) rc = -31;
 
         if (rc == 0) {
             chunks = mtmd_input_chunks_init();
@@ -569,8 +456,6 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
             text.text          = prompt.c_str();
             text.add_special   = true;
             text.parse_special = true;
-            // mtmd_tokenize takes const mtmd_bitmap** (the log's exact words); the owning vector
-            // stays non-const because mtmd_bitmap_free wants the mutable pointer back.
             std::vector<const mtmd_bitmap *> cbitmaps(bitmaps.begin(), bitmaps.end());
             int32_t tok = mtmd_tokenize(mctx, chunks, &text,
                                         cbitmaps.data(), cbitmaps.size());
@@ -578,14 +463,13 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
         }
 
         if (rc == 0) {
-            // Stateless, like the text path: clean memory, replay everything this turn needs.
             llama_memory_clear(llama_get_memory(s->ctx), true);
             llama_sampler_reset(s->sampler);
 
             llama_pos n_past = 0;
             int32_t ev = mtmd_helper_eval_chunks(mctx, s->ctx, chunks,
-                                                 /*n_past*/ 0, /*seq_id*/ 0,
-                                                 /*n_batch*/ 512, /*logits_last*/ true,
+                                                  0,  0,
+                                                  512,  true,
                                                  &n_past);
             if (ev != 0) {
                 LOGE("mtmd: eval_chunks failed rc=%d", (int) ev);
@@ -648,4 +532,4 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
 #endif
 }
 
-} // extern "C"
+}

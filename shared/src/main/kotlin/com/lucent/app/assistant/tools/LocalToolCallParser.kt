@@ -1,47 +1,23 @@
 package com.lucent.app.assistant.tools
 
-/**
- * Parsing helpers for the local (on-device) model's text tool-call protocol.
- *
- * Small GGUF models have no native function-calling channel, so tools run over a small text
- * protocol: the model emits a single JSON object to call a tool, [parseLocalToolCall] extracts it.
- * All logic here was moved verbatim out of AssistantController so it can be unit-tested on the JVM;
- * behaviour is unchanged.
- */
 object LocalToolCallParser {
 
     data class LocalToolCall(val name: String, val argsJson: String)
 
-    /**
-     * Re-serialise a parsed call as compact, well-formed JSON for the assistant turn we feed back.
-     */
     fun renderLocalToolCall(call: LocalToolCall): String {
         val args = try { org.json.JSONObject(call.argsJson) } catch (e: Exception) { org.json.JSONObject() }
         return org.json.JSONObject().put("tool", call.name).put("arguments", args).toString()
     }
 
-    /**
-     * Pull a tool call out of a local model's raw output, tolerantly. Small GGUF models phrase tool
-     * calls every which way, so this copes with: a bare JSON object, one wrapped in ``` fences, one
-     * inside <tool_call>…</tool_call>, arguments under any of several key names, and arguments that
-     * arrive double-encoded as a JSON string. A candidate only counts as a call when its tool name
-     * is one that actually exists ([valid]) — so incidental JSON in a normal prose answer is never
-     * mistaken for a call, and plain chat falls straight through to being the final reply.
-     */
     fun parseLocalToolCall(raw: String, valid: Set<String>): LocalToolCall? {
         if (raw.isBlank()) return null
         val s = stripToolWrappers(raw)
 
         for (candidate in jsonObjectCandidates(s)) {
             var obj = try { org.json.JSONObject(candidate) } catch (e: Exception) { continue }
-            // Some models nest the call one level deep ({"tool_call": {"name": …}}); unwrap it.
-            // optJSONObject is null when the key holds a string, so flat forms pass unchanged.
             for (k in TOOL_WRAPPER_KEYS) obj.optJSONObject(k)?.let { obj = it }
             val rawName = firstJsonString(obj, "tool", "name", "function", "action", "tool_name")?.trim()
             if (rawName.isNullOrBlank()) continue
-            // Exact match first; then alias mapping, because small on-device models routinely
-            // invent near-miss names — the reported bug was Qwen2.5-0.5B emitting "add_task"
-            // for create_task and the raw JSON landing on screen as the reply.
             val name = resolveToolName(rawName, valid) ?: continue
             val argsObj = firstJsonObject(obj, "arguments", "args", "parameters", "input", "params")
             return LocalToolCall(name, stripBlankArguments(argsObj).toString())
@@ -49,12 +25,6 @@ object LocalToolCallParser {
         return null
     }
 
-    /**
-     * The name a model TRIED to call when its output is shaped like a tool call but doesn't parse
-     * into a valid one — snake_case name plus an arguments object, or an arguments object alone.
-     * Null for plain prose. Deliberately stricter than the parser about what counts as "shaped
-     * like a call", so an ordinary answer that happens to contain a JSON example isn't flagged.
-     */
     fun attemptedToolCallName(raw: String): String? {
         if (raw.isBlank()) return null
         val s = stripToolWrappers(raw)
@@ -69,18 +39,14 @@ object LocalToolCallParser {
         return null
     }
 
-    // Wrapper keys some chat templates put around the call object itself.
     private val TOOL_WRAPPER_KEYS = arrayOf("tool_call", "function_call", "call", "tool", "function", "action")
 
-    // Compiled once: shared by resolveToolName and attemptedToolName below.
     private val NAME_SEPARATORS = Regex("[\\s\\-]+")
     private val SNAKE_CASE_NAME = Regex("^[a-z0-9]+(_[a-z0-9]+)+$")
 
-    // Compiled once: this scan runs on every reply a local model produces with tools enabled.
     private val TOOL_CALL_TAG = Regex("(?s)<tool_call>(.*?)</tool_call>")
     private val CODE_FENCE = Regex("(?s)```(?:json|tool_call)?\\s*(.*?)```")
 
-    /** Peel `<tool_call>` tags and code fences off a model's output before scanning it for JSON. */
     private fun stripToolWrappers(raw: String): String {
         var s = raw.trim()
         TOOL_CALL_TAG.find(s)?.let { s = it.groupValues[1].trim() }
@@ -88,14 +54,6 @@ object LocalToolCallParser {
         return s
     }
 
-    /**
-     * Map a model-emitted tool name onto a real one. Exact (after snake_case normalisation) wins;
-     * otherwise the leading verb is swapped through its synonym group and the trailing noun through
-     * singular/plural, and the first candidate that names a real tool is taken ("add_task" →
-     * create_task, "edit_note" → update_note, "list_task" → list_tasks). As a last resort a UNIQUE
-     * containment match is accepted. Anything still unresolved is null — the caller decides whether
-     * to feed an error back to the model rather than guessing at an action on the user's data.
-     */
     private fun resolveToolName(rawName: String, valid: Set<String>): String? {
         val n = rawName.trim().lowercase().replace(NAME_SEPARATORS, "_").trim('_')
         if (n.isBlank()) return null
@@ -130,17 +88,10 @@ object LocalToolCallParser {
         }
         candidates.firstOrNull { it in valid }?.let { return it }
 
-        // e.g. "task_search" or "notes" alone: accept only when exactly ONE real tool matches.
         val containment = valid.filter { it.contains(n) || n.contains(it) }
         return containment.singleOrNull()
     }
 
-    /**
-     * Drop arguments a weak model filled with "" / null instead of omitting (the reported call
-     * carried due:"", priority:"", repeat:"" …). Empty means "not provided" for every tool here —
-     * update_* tools in particular treat an absent field as "leave unchanged", which is exactly
-     * what an empty string was meant to say.
-     */
     private fun stripBlankArguments(argsObj: org.json.JSONObject?): org.json.JSONObject {
         val cleaned = org.json.JSONObject()
         if (argsObj == null) return cleaned
@@ -156,7 +107,6 @@ object LocalToolCallParser {
         return cleaned
     }
 
-    /** Every balanced `{…}` object in [s], scanned so braces inside string literals don't fool it. */
     private fun jsonObjectCandidates(s: String): List<String> {
         val out = mutableListOf<String>()
         var i = 0
@@ -170,20 +120,12 @@ object LocalToolCallParser {
                         esc -> esc = false
                         c == '\\' -> esc = true
                         c == '"' -> inStr = false
-                        // Any other character inside a string literal is just string content —
-                        // consume it and move on. Explicit rather than an implicit silent
-                        // fallthrough, since this scanner only cares about escapes and the
-                        // closing quote and every other character is deliberately a no-op.
                         else -> {}
                     }
                 } else when (c) {
                     '"' -> inStr = true
                     '{' -> depth++
                     '}' -> { depth--; if (depth == 0) { out.add(s.substring(i, j + 1)); break } }
-                    // Everything outside those three characters — letters, digits, whitespace,
-                    // '[', ']', ',', ':' — is irrelevant to brace-depth tracking and deliberately
-                    // ignored; this scanner only needs to find where `{...}` objects start and end,
-                    // not parse the JSON itself. Explicit rather than an implicit silent fallthrough.
                     else -> {}
                 }
                 j++

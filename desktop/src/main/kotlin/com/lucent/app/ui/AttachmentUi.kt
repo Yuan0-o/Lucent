@@ -60,27 +60,9 @@ import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
 import java.io.File
 
-/**
- * Desktop twin of the Android AttachmentUi: decode-and-thumbnail helpers plus the chip/card
- * composables shared by the notes, tasks, and assistant editors.
- *
- * Adaptations, all platform-shaped:
- *  - Decoding runs on Skia ([org.jetbrains.skia.Image]) instead of BitmapFactory. Skia decodes the
- *    same formats the Android path did (including WebP) and the subsampled-decode contract is
- *    preserved: a huge stored image renders as a bounded-size bitmap, never at full resolution.
- *  - `uriToAttachment`/`uriToChatImage` become [fileToAttachment]/[fileToChatImage], taking the
- *    [java.io.File] a desktop file dialog produces.
- *  - The save launcher wraps the AWT save dialog instead of the Storage Access Framework.
- * The composables themselves (chips, inline image cards, chip rows) mirror the Android layouts.
- */
 
 private const val MAX_IMAGE_DIM = 1600
 
-/**
- * Decode [bytes] into an [ImageBitmap] no larger than [maxDim] on its longest side, or null when
- * the bytes are not a decodable image. Downscaling happens on a Skia surface so the full-size
- * pixels live only for the duration of the draw.
- */
 fun decodeSampledBitmap(bytes: ByteArray, maxDim: Int = MAX_IMAGE_DIM): ImageBitmap? = try {
     val image = org.jetbrains.skia.Image.makeFromEncoded(bytes)
     val w = image.width
@@ -106,14 +88,12 @@ fun decodeSampledBitmap(bytes: ByteArray, maxDim: Int = MAX_IMAGE_DIM): ImageBit
     null
 }
 
-/** [decodeSampledBitmap] for a plaintext file on disk (used by the preview cache readers). */
 fun decodeSampledBitmapFromFile(file: File, maxDim: Int = MAX_IMAGE_DIM): ImageBitmap? = try {
     decodeSampledBitmap(file.readBytes(), maxDim)
 } catch (t: Throwable) {
     null
 }
 
-/** Re-encode [bytes] downscaled to [maxDim], preferring JPEG for photos and PNG otherwise. */
 private fun downscaleImageBytes(bytes: ByteArray, mime: String, maxDim: Int = MAX_IMAGE_DIM): Pair<String, ByteArray> {
     return try {
         val image = org.jetbrains.skia.Image.makeFromEncoded(bytes)
@@ -144,7 +124,6 @@ private fun downscaleImageBytes(bytes: ByteArray, mime: String, maxDim: Int = MA
     }
 }
 
-/** A rough mime guess from a file extension — the desktop stand-in for the resolver's type. */
 fun mimeForFileName(name: String): String {
     val ext = name.substringAfterLast('.', "").lowercase()
     return when (ext) {
@@ -177,11 +156,6 @@ fun mimeForFileName(name: String): String {
     }
 }
 
-/**
- * Import a picked [file] into the attachment store and return the row-ready [Attachment], or null
- * when the copy fails or the file exceeds [AttachmentLimits]. Desktop counterpart of Android's
- * `uriToAttachment`; the size gate and disk-backed shape are identical. Call from an IO context.
- */
 fun fileToAttachment(context: Context, file: File): Attachment? {
     if (!file.exists() || !file.isFile) return null
     if (file.length() > AttachmentLimits.MAX_SINGLE_BYTES) return null
@@ -193,11 +167,6 @@ fun fileToAttachment(context: Context, file: File): Attachment? {
     )
 }
 
-/**
- * Import a picked image [file] for a CHAT message: downscaled, re-encoded, Base64'd, because chat
- * rows store their images inline. Returns (mime, base64, name) — same Triple as Android's
- * `uriToChatImage`. Call from an IO context.
- */
 fun fileToChatImage(context: Context, file: File): Triple<String, String, String>? = try {
     if (!file.exists() || file.length() > AttachmentLimits.MAX_SINGLE_BYTES) {
         null
@@ -215,49 +184,14 @@ fun fileToChatImage(context: Context, file: File): Triple<String, String, String
     null
 }
 
-// =============================================================================================
-//  Attachment rows (tasks A2, A4, A11)
-// =============================================================================================
-//
-// ### A2 — one row shape for every attachment
-//
-// Images used to render as a full-width inline thumbnail while everything else got a one-line
-// chip, and the two disagreed about almost everything: how much of the card they consumed, where
-// the actions lived, and what tapping them did. Three photos on a note pushed its text off the
-// screen entirely, which is the wrong trade — an attachment list should say *what is attached*,
-// and the picture itself is one tap away in a viewer that can actually show it properly (zoom,
-// swipe, edit, share).
-//
-// So every attachment — image, video, PDF, document, anything — is now the same row: type icon,
-// file name, one trailing action. Tapping *anywhere* on the row opens the full-screen viewer,
-// which is what the eye button used to do; a second control that duplicates the row's own tap
-// target is just a smaller way to do the same thing, so it is gone. The trailing slot keeps the
-// one action the row can't express — download — so it stays reachable without opening the file.
-//
-// ### A4/A11 — rename and reorder belong to the composer
-//
-// Renaming a file and rearranging the list are *edits to the item*, so they live where the item's
-// other edits live and are committed by the same Save. That keeps one write path (the composer's
-// attachment state, serialized on save) instead of a second one that mutates the row behind the
-// editor's back — which is exactly how a half-finished edit and a renamed attachment end up
-// disagreeing about what the note contains.
 
-/** Row height used by the reorder maths below; also what keeps the list visually even. */
 private val ATTACHMENT_ROW_HEIGHT = 44.dp
 
-/**
- * The attachment rows on a **saved** note or task (task A2): name, type icon, and a download
- * button. The whole row opens the viewer, positioned on the tapped file so the rest of the item's
- * attachments can be swiped through from there.
- */
 @Composable
 fun CardAttachments(
     attachments: List<Attachment>,
     onGradient: Color,
     onGradientMuted: Color,
-    // Task A4, second half. The detail page has no composer state to fold a rename into, so the
-    // caller commits it straight to its own row — which is why this is a callback and not a local
-    // edit: only the screen that owns the note/task knows how to persist one.
     onRename: ((Attachment, String) -> Unit)? = null
 ) {
     if (attachments.isEmpty()) return
@@ -297,12 +231,6 @@ fun CardAttachments(
     }
 
     viewing?.let { att ->
-        // R3 report: resolve the viewer's start page against the CURRENT list by the file's
-        // unique store id, at the moment the dialog is about to open. Resolving by data-class
-        // equality on a list that may have been refreshed between the tap frame and this
-        // composition could land on an older equal element — or on none at all (silently clamped
-        // to 0) — which is exactly the "tapping a just-added attachment shows the old preview
-        // instead" report.
         val idx = attachments.indexOfFirst { it.data == att.data }
         if (idx >= 0) {
             AttachmentViewerDialog(
@@ -323,13 +251,6 @@ fun CardAttachments(
     }
 }
 
-/**
- * The attachment rows inside a **composer** — the same row shape as [CardAttachments], plus the
- * three things that only make sense while editing: a drag handle (A11), rename (A4), and remove.
- *
- * [onReorder] receives (from, to) as indices into the list it was handed. It is optional so the
- * chips still work anywhere reordering has no meaning.
- */
 @Composable
 fun PendingAttachmentChips(
     attachments: List<Attachment>,
@@ -343,24 +264,11 @@ fun PendingAttachmentChips(
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     var renaming by remember { mutableStateOf<Attachment?>(null) }
     val rowHeightPx = with(LocalDensity.current) { ATTACHMENT_ROW_HEIGHT.toPx() }
-    // Task 6 — the gesture below runs in a coroutine keyed on the row's identity, so it outlives
-    // every recomposition and kept whichever `attachments` list it was created with. After the first
-    // swap that list was stale, `indexOfFirst` returned the row's OLD position, and every further
-    // step was computed from the wrong base — which is why dragging one way appeared to work and the
-    // other did not. Read through a state holder so it always sees the current order.
     val liveAttachments = androidx.compose.runtime.rememberUpdatedState(attachments)
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         attachments.forEach { att ->
-            // Task A11: keyed so a row that is being dragged keeps its identity — and therefore its
-            // in-flight gesture — while the list reorders underneath it. Without the key, Compose
-            // reuses slots positionally, the row's data changes mid-drag, and the drag dies on the
-            // first swap.
             key(att.data) {
-                // Task 6 — motion. These rows live in a plain Column, so there is no animateItem to
-                // lean on: when the order changes a row simply appears somewhere else. This is the
-                // FLIP trick done by hand — the moment the index changes, jump back to where the row
-                // used to be and spring to zero, so the eye sees it travel.
                 val position = liveAttachments.value.indexOfFirst { it.data == att.data }
                 var lastPosition by remember { mutableStateOf(position) }
                 val slide = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -384,22 +292,10 @@ fun PendingAttachmentChips(
                     onClick = { Haptics.tick(context); viewing = att },
                     leading = if (onReorder == null) null else {
                         {
-                            // Task 5 — the handle was a 20dp icon, and the drag had to START on it.
-                            //
-                            // 20dp is well under the ~48dp a fingertip actually covers, so most
-                            // attempts landed on the row beside it, where the composer's own
-                            // vertical scroll took the gesture instead — which is why reordering
-                            // "was not implemented" from the outside. The touch target is a 44dp box
-                            // now with the same 20dp glyph drawn inside it: identical to look at,
-                            // more than twice as wide to hit.
                             Box(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .pointerInput(att.data) {
-                                        // Accumulate raw drag distance and commit one swap per row
-                                        // crossed. `travelled` is a plain local, not Compose state:
-                                        // the gesture must survive the recomposition each swap
-                                        // causes, and state written here would restart the effect.
                                         var travelled = 0f
                                         detectDragGestures(
                                             onDragEnd = { travelled = 0f },
@@ -455,12 +351,6 @@ fun PendingAttachmentChips(
     }
 
     viewing?.let { att ->
-        // R3 report: resolve the viewer's start page against the CURRENT list by the file's
-        // unique store id, at the moment the dialog is about to open. Resolving by data-class
-        // equality on a list that may have been refreshed between the tap frame and this
-        // composition could land on an older equal element — or on none at all (silently clamped
-        // to 0) — which is exactly the "tapping a just-added attachment shows the old preview
-        // instead" report.
         val idx = attachments.indexOfFirst { it.data == att.data }
         if (idx >= 0) {
             AttachmentViewerDialog(
@@ -481,11 +371,6 @@ fun PendingAttachmentChips(
     }
 }
 
-/**
- * Move [att] by [step] places, resolving its position against the list as it stands *now* rather
- * than against an index captured when the drag began — the drag reorders the list under itself, so
- * a captured index is stale by the second swap. A move that would fall off either end is dropped.
- */
 private fun moveAttachment(
     attachments: List<Attachment>,
     att: Attachment,
@@ -499,7 +384,6 @@ private fun moveAttachment(
     onReorder?.invoke(from, to)
 }
 
-/** One attachment row: optional leading control, type icon, name, optional trailing controls. */
 @Composable
 private fun AttachmentRow(
     att: Attachment,
@@ -515,8 +399,6 @@ private fun AttachmentRow(
             .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = 0.10f))
-            // A2: the row itself is the "open it" affordance. Placed before the padding so the
-            // whole strip is the tap target, not just the text inside it.
             .pointerInput(att.data) { detectTapGestures(onTap = { onClick() }) }
             .heightIn(min = ATTACHMENT_ROW_HEIGHT)
             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -539,18 +421,6 @@ private fun AttachmentRow(
     }
 }
 
-/**
- * Rename one attachment (task A4).
- *
- * Two rules the field enforces, because both failures are silent otherwise:
- *
- *  - **The extension is kept.** [Attachment.isPdf] and every "can this be previewed" decision reads
- *    the name as well as the MIME type, so a file renamed from `report.pdf` to `report` would stop
- *    being recognised as a PDF. Typing a new extension deliberately still works; only *dropping*
- *    it restores the old one.
- *  - **Names stay unique.** [Attachments.upsert] and [Attachments.removeByName] match on the name,
- *    so two attachments sharing one would make removing either ambiguous.
- */
 @Composable
 private fun AttachmentRenameDialog(
     current: Attachment,
@@ -593,7 +463,6 @@ private fun AttachmentRenameDialog(
     )
 }
 
-/** `report` + `report.pdf` -> `report.pdf`; `report.txt` + `report.pdf` -> `report.txt`. */
 private fun withPreservedExtension(typed: String, original: String): String {
     if (typed.isEmpty()) return ""
     if (typed.substringAfterLast('.', "").isNotEmpty()) return typed
@@ -609,11 +478,6 @@ fun iconForAttachment(att: Attachment) = when {
     else -> Icons.Default.Description
 }
 
-/**
- * A "save this attachment to disk" action: opens the system save dialog pre-filled with the
- * attachment's name and streams the decrypted bytes to the chosen location. Desktop counterpart of
- * the SAF CreateDocument launcher; like it, nothing is written when the user cancels.
- */
 @Composable
 fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
     val context = android.content.DesktopContext

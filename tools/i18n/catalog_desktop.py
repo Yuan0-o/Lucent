@@ -1,22 +1,5 @@
-"""Desktop-only i18n entries (codebase review C-1, step 2).
 
-The desktop I18n.kt is no longer a hand-maintained fork: gen_i18n.py now writes BOTH
-files - the shared entries from catalog.py (minus ANDROID_ONLY below), plus these
-DESKTOP_ONLY entries. Edit translations HERE, run the generator, commit both outputs.
-Same tuple shape as catalog.py: ("key", en, zh, ja, ko) with {param} templates.
-"""
-
-# Keys that exist ONLY in the Android app (biometrics, Android-specific backup hints);
-# the generator omits them from the desktop file so S.<key> there stays a compile error -
-# the same typo-safety the catalog gives everything else.
 ANDROID_ONLY = [
-    "biometricFailed",
-    "biometricPromptSubtitle",
-    "biometricPromptTitle",
-    "biometricUnlockDesc",
-    "biometricUnlockTitle",
-    "biometricUse",
-    "biometricUsePassword",
 ]
 
 DESKTOP_ONLY = [

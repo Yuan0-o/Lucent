@@ -30,15 +30,6 @@ import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
-/**
- * P1-3 — extracted from the `MemoryPage` local composable that used to live inside
- * `SettingsScreen` (byte-identical on both platforms before this split).
- *
- * [onRequestSmallModelWarning] is a write-only trigger for a confirmation dialog that lives in,
- * and stays in, [SettingsScreen] (`showSmallModelWarn`) — this page only ever sets it to true, so
- * it is passed down as a bare callback rather than the state itself, the same way [onRoute] hides
- * navigation without this page needing to know how routing is stored.
- */
 @Composable
 internal fun MemorySettingsPage(
     repo: SettingsRepository,
@@ -76,11 +67,6 @@ internal fun MemorySettingsPage(
             onGradientMuted = onGradientMuted,
             onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) } }
         )
-        // The high tier stays visible but greyed, and — importantly — stays TAPPABLE.
-        // A control that simply ignores touches teaches the user nothing except that the
-        // app is broken; this one answers with a bottom toast explaining why it's off and
-        // that their previous choice is being held for them (task 8: a toast, never a
-        // dialog — a modal for "you can't do that" is a punishment, not an explanation).
         MemoryTierRow(
             selected = current == MemoryTier.HIGH,
             title = S.memoryHighTitle,
@@ -94,12 +80,6 @@ internal fun MemorySettingsPage(
         )
     }
 
-    // ---- Optimize for small models (R3 report) ----
-    // Moved here from Personalization so every knob about WHAT the assistant is fed — how
-    // much history, and how the prompt is trimmed for a weak model — lives on the same
-    // page, directly under the tier it modifies. Kept as its own glass card on purpose:
-    // the two blocks must never merge, and the trade-off warning reads against the memory
-    // choice made just above.
     Spacer(modifier = Modifier.height(12.dp))
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -110,8 +90,6 @@ internal fun MemorySettingsPage(
             Switch(
                 checked = savedSmallModelMode,
                 onCheckedChange = { on ->
-                    // Only turning it ON warns. Turning it off restores the full prompt,
-                    // which needs no explanation and no permission.
                     if (on) onRequestSmallModelWarning()
                     else AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
                 }
@@ -119,11 +97,6 @@ internal fun MemorySettingsPage(
         }
     }
 
-    // ---- Semantic search (P2-2) ----
-    // Its own card, deliberately below memory tier and small-model mode: those two are about
-    // what the assistant is TOLD; this is about how it FINDS a note in the first place, a
-    // different question the user reads as separate even though all three end up feeding the
-    // same conversation.
     Spacer(modifier = Modifier.height(12.dp))
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.embeddingProviderTitle, color = onGradient, fontSize = 16.sp)

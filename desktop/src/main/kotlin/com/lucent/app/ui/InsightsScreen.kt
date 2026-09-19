@@ -26,15 +26,6 @@ import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.TaskInsights
 import com.lucent.app.i18n.S
 
-/**
- * The desktop Insights tab. On Android the same figures were folded into the completed-tasks page;
- * on the desktop, where Insights is its own sidebar destination, it gets a dedicated dashboard.
- *
- * All numbers come straight from [TaskInsights.summarize] over the live task list, so the panel
- * reacts the moment a task is added, completed, or its due date changes — the flow is the same one
- * the Tasks screen subscribes to. No Android APIs are involved; this is pure Compose over the shared
- * data layer.
- */
 @Composable
 fun InsightsScreen() {
     val context = LocalContext.current
@@ -63,8 +54,6 @@ fun InsightsScreen() {
             return@Column
         }
 
-        // A one-line "here's where things stand" summary, when there is anything active to report.
-        // headline() returns null only when there are no active tasks, so guard on that.
         if (headline != null) {
             Box(modifier = Modifier.fillMaxWidth().frostedGlass().padding(24.dp)) {
                 Text(headline, color = onGradient, fontSize = 20.sp, fontWeight = FontWeight.Medium)
@@ -72,8 +61,6 @@ fun InsightsScreen() {
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // The individual counts, as a responsive two-column grid of frosted stat cards. Overdue and
-        // "needs attention" turn warm-red when non-zero so a real backlog stands out at a glance.
         val stats: List<StatCardData> = listOf(
             StatCardData(S.insightsActive, summary.active, alert = false),
             StatCardData(S.insightsNeedsAttention, summary.needsAttention, alert = true),
@@ -97,7 +84,6 @@ fun InsightsScreen() {
                         modifier = Modifier.weight(1f)
                     )
                 }
-                // Keep the last odd card at half width rather than stretching it across the row.
                 if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(16.dp))

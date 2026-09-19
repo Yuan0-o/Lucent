@@ -7,12 +7,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * Schema-migration tests (P0-6): build a real v11 SQLite store — the oldest shape the desktop
- * walker migrates — with sample rows in every table the steps touch, run [Db.runSchemaMigrations],
- * and assert that every step to v17 landed while the data survived untouched. Also proves the
- * walker is idempotent and a current store is skipped without touching anything.
- */
 class DbMigrationTest {
 
     private val log = mutableListOf<String>()
@@ -26,7 +20,6 @@ class DbMigrationTest {
         return conn to file
     }
 
-    /** Create the tables exactly as they shipped at schema v11 (no v12+ columns). */
     private fun createV11Schema(conn: Connection) {
         conn.createStatement().use { st ->
             st.executeUpdate(
@@ -122,10 +115,8 @@ class DbMigrationTest {
             log.clear()
             Db.runSchemaMigrations(conn) { log.add(it) }
 
-            // The store reached the current schema.
             assertEquals(Db.SCHEMA_VERSION, userVersion(conn))
 
-            // Every table that predates v12 still holds its original rows.
             conn.createStatement().use { st ->
                 st.executeQuery("SELECT title, body, trashedAt FROM notes WHERE id=1").use { rs ->
                     rs.next(); assertEquals("Groceries", rs.getString(1)); assertEquals("milk and eggs", rs.getString(2))
@@ -144,7 +135,6 @@ class DbMigrationTest {
                 }
             }
 
-            // v12+ columns arrived on the right tables.
             val noteCols = columnNames(conn, "notes")
             for (c in listOf("manualOrder", "isDraft", "draftSavedAt", "hidden", "isDoodle", "doodle", "bodySpans")) {
                 assertTrue(c in noteCols, "notes.$c missing after migration")
@@ -158,12 +148,10 @@ class DbMigrationTest {
                 assertTrue(c in chatCols, "chat_messages.$c missing after migration")
             }
 
-            // v12 and v17 tables were created.
             assertTrue(tableExists(conn, "task_versions"))
             assertTrue(tableExists(conn, "notebooks"))
             assertTrue(tableExists(conn, "notebook_items"))
 
-            // New columns carry their defaults for rows written after the upgrade.
             conn.createStatement().use { st ->
                 st.executeUpdate("INSERT INTO notes (title, body, updatedAt) VALUES ('new', 'row', 1700000004000)")
                 st.executeQuery("SELECT isDraft, hidden, isDoodle, bodySpans, manualOrder FROM notes WHERE id=3").use { rs ->
@@ -171,7 +159,6 @@ class DbMigrationTest {
                 }
             }
 
-            // Each step announced itself.
             assertTrue(log.any { it.contains("migrated to schema v12") })
             assertTrue(log.any { it.contains("migrated to schema v17") })
         }
@@ -186,13 +173,11 @@ class DbMigrationTest {
             Db.runSchemaMigrations(conn) { log.add(it) }
             assertEquals(Db.SCHEMA_VERSION, userVersion(conn))
 
-            // Re-running on an already-current store must be a silent no-op.
             log.clear()
             Db.runSchemaMigrations(conn) { log.add(it) }
             assertEquals(Db.SCHEMA_VERSION, userVersion(conn))
             assertTrue(log.isEmpty(), "second run produced log lines: $log")
 
-            // Data still intact after the second run.
             conn.createStatement().use { st ->
                 st.executeQuery("SELECT count(*) FROM notes").use { rs -> rs.next(); assertEquals(2, rs.getInt(1)) }
             }
@@ -201,8 +186,6 @@ class DbMigrationTest {
 
     @Test
     fun migratesPartialStoresWithFutureColumnsAlreadyPresent() {
-        // A store upgraded by a newer build then reopened by an older one may already carry some
-        // v13+ columns while stamped below v17 — every step must survive that (additive guards).
         val (conn, _) = freshConnection()
         conn.use {
             createV11Schema(conn)
@@ -216,8 +199,6 @@ class DbMigrationTest {
             log.clear()
             Db.runSchemaMigrations(conn) { log.add(it) }
             assertEquals(Db.SCHEMA_VERSION, userVersion(conn))
-            // A store that was already at 13's shape is not stamped 13 again — the walker stamps
-            // the target of the step it just ran, and addColumnIfMissing returns true immediately.
             conn.createStatement().use { st ->
                 st.executeQuery("SELECT title FROM notes WHERE id=1").use { rs ->
                     rs.next(); assertEquals("Groceries", rs.getString(1))

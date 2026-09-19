@@ -7,7 +7,6 @@ internal class BackgroundTimeline {
 
     fun advance(frameNanos: Long): Double {
         previousNanos?.let { previous ->
-            // Decorations never jump forward after a blocked UI thread or a suspended window.
             elapsedNanos += (frameNanos - previous).coerceIn(0L, 100_000_000L)
         }
         previousNanos = frameNanos

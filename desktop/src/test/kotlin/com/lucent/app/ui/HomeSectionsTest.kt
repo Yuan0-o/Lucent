@@ -4,17 +4,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * The home sections are the only thing that decides which bucket a card is drawn in, and the
- * drag/reorder rules ask the *same* question through `Sectioned.nonEmpty()`. These tests pin the
- * two promises that keeps: every bucket appears in a fixed order, and every item lands in exactly
- * one of them.
- *
- * They exist because of a real bug: the "which section is this card in" map was hand-written from
- * four of the five buckets, so THREE_DAYS items resolved to null and the reorder rules could not
- * tell them apart from "the page is not sectioned at all". Deriving that map from `nonEmpty()` is
- * the fix; these tests keep the source it is derived from honest.
- */
 class HomeSectionsTest {
 
     private data class Item(val id: Long, val at: Long, val pinned: Boolean = false)
@@ -22,13 +11,12 @@ class HomeSectionsTest {
     private val now = 1_700_000_000_000L
     private val day = 24L * 60L * 60L * 1000L
 
-    /** One item per bucket, with the Recent score isolated so membership is unambiguous. */
     private val items = listOf(
-        Item(id = 1, at = now, pinned = true),          // pinned
-        Item(id = 2, at = now - 3_600_000L),            // recent (only one with a score)
-        Item(id = 3, at = now),                         // today
-        Item(id = 4, at = now - 2 * day),               // three days
-        Item(id = 5, at = now - 10 * day)               // older
+        Item(id = 1, at = now, pinned = true),
+        Item(id = 2, at = now - 3_600_000L),
+        Item(id = 3, at = now),
+        Item(id = 4, at = now - 2 * day),
+        Item(id = 5, at = now - 10 * day)
     )
 
     private fun sectioned() = sectionHomeItems(
@@ -65,7 +53,6 @@ class HomeSectionsTest {
 
     @Test
     fun emptyBucketsAreSkipped() {
-        // Nothing is older than three days here, so OLDER must simply not be offered.
         val recentOnly = listOf(Item(id = 7, at = now))
         val sections = sectionHomeItems(
             items = recentOnly,
@@ -83,8 +70,6 @@ class HomeSectionsTest {
 
     @Test
     fun pinnedItemsNeverAppearTwice() {
-        // The pinned card is the one the reorder rules move by hand, so it is the one that must not
-        // be duplicated into a date bucket as well.
         val buckets = sectioned().nonEmpty()
         val pinnedIds = buckets.first { it.first == HomeSection.PINNED }.second.map { it.id }
         assertEquals(listOf(1L), pinnedIds)

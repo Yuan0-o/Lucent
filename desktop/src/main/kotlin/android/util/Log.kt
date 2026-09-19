@@ -1,5 +1,3 @@
-// Desktop compatibility shim for android.util.Log: messages go to stderr, matching the spirit of
-// logcat (developer-facing, never shown in the UI). Return values mirror Android's (ignored anyway).
 package android.util
 
 object Log {

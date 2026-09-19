@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One row in the tasks-list widget. TWO tap targets now (this round): the check on the left asks
-     to complete (or reopen) the task via the in-app confirmation dialog, and the rest of the row
-     opens it. Completed rows stay in the list — muted, struck through, check filled — so the list
-     shows done and not-done alike, exactly as asked. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_task_item_root"
     android:layout_width="match_parent"

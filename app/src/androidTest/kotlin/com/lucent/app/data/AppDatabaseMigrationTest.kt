@@ -9,59 +9,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * P0-3, task 2.1: Room migration coverage for every adjacent step from schema version 2 through the
- * current version (18) via [MigrationTestHelper], plus one test that runs the full production chain
- * in a single call, exactly as [AppDatabase]'s own `Room.databaseBuilder(...).addMigrations(...)`
- * registers it.
- *
- * ### This needs a device or emulator, and it needs schema JSON that does not exist yet
- *
- * This file could not be compiled or run in the sandbox that wrote it (no JDK, no Android SDK, no
- * emulator). It was written by reading every `MIGRATION_x_y` in AppDatabase.kt and the current
- * entity shapes in Entities.kt, then reconstructing each historical version's column set by hand:
- * every migration in this chain is purely additive (a new column with an inline SQL `DEFAULT`, or a
- * new table), so subtracting everything a *later* migration adds from the v18 shape gives exactly
- * the shape at any earlier version. That reconstruction could not be checked against a compiler, so
- * please read a seed `INSERT` once against the migration it precedes before trusting it — if
- * anything here doesn't match `app/schemas/.../<N>.json` once that exists, the schema JSON is the
- * source of truth, not this comment.
- *
- * Two things need to be true before ANY test below can run, and neither is done yet:
- *
- * 1. **[MigrationTestHelper.createDatabase] reads a version's shape from the JSON Room exports for
- *    it** (`app/schemas/com.lucent.app.data.AppDatabase/<version>.json`, per the
- *    `room.schemaLocation` ksp arg in app/build.gradle.kts). That directory is empty right now.
- *    Running `./gradlew :app:kspDebugKotlin` — the fix suggested elsewhere in this P0-3 handoff — is
- *    necessary but **not sufficient**: it only ever regenerates the JSON for whatever version
- *    `@Database(version = ...)` currently says, i.e. only `18.json`. Versions 2 through 17 have
- *    never been exported (schema export is being turned on for the first time in this very change),
- *    so `createDatabase(TEST_DB, N)` for any N below 18 fails outright until those 16 files exist by
- *    some other means — e.g. temporarily walking `@Database(version = N)` and the entities back to
- *    each historical shape and building once per version, or hand-authoring the JSON using each
- *    `MIGRATION_x_y` plus this file's reconstruction below as a cross-check. **Every test here needs
- *    both its start and end version's JSON**, since `runMigrationsAndValidate` also validates the
- *    result against the target version's file.
- * 2. **The androidTest source set needs the schemas directory on its assets path** so
- *    `MigrationTestHelper` can find those JSON files at instrumentation runtime. I added the minimal
- *    wiring for this to app/build.gradle.kts (`sourceSets.androidTest.assets.srcDirs`) alongside
- *    this file — it's a small step outside the "just add test files" framing of this handoff, but
- *    without it these tests cannot pass regardless of (1). Called out again in the delivery notes.
- *
- * Also unverified: the exact [MigrationTestHelper] constructor signature. The two-argument
- * `(instrumentation, databaseClass)` form used below has been the standard, documented one across
- * many Room releases, but I could not compile against the real `room-testing:2.8.4` artifact to
- * confirm it hasn't changed again — worth a quick check against that release's notes before relying
- * on it.
- *
- * ### Why a plain (non-SQLCipher) database here
- *
- * These tests use `MigrationTestHelper`'s default `FrameworkSQLiteOpenHelperFactory` — an
- * unencrypted database — deliberately, to keep "is the schema migration correct" separate from "is
- * SQLCipher wired correctly", the same way this handoff's task 2 already splits them into two
- * numbered items. The SQLCipher-specific behaviour (opening with [DataKeys.databasePassphrase], a
- * write/close/reopen cycle, a raw rekey) lives in [DataKeysSqlCipherTest] instead.
- */
 @RunWith(AndroidJUnit4::class)
 class AppDatabaseMigrationTest {
 
@@ -73,7 +20,6 @@ class AppDatabaseMigrationTest {
         AppDatabase::class.java
     )
 
-    // ---- 2 -> 3: notes.tags -----------------------------------------------------------------
 
     @Test
     fun migrate2To3_addsNotesTagsColumnDefaultingToEmpty() {
@@ -91,7 +37,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 3 -> 4: notes.attachments, tasks.attachments ----------------------------------------
 
     @Test
     fun migrate3To4_addsAttachmentsColumnToNotesAndTasks() {
@@ -111,7 +56,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 4 -> 5: tasks.dueAt (nullable) -------------------------------------------------------
 
     @Test
     fun migrate4To5_addsTasksDueAtColumnDefaultingToNull() {
@@ -130,7 +74,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 5 -> 6: tasks.notes ------------------------------------------------------------------
 
     @Test
     fun migrate5To6_addsTasksNotesColumnDefaultingToEmpty() {
@@ -149,17 +92,14 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 6 -> 7: tasks.completedAt + backfill for already-done tasks -------------------------
 
     @Test
     fun migrate6To7_backfillsCompletedAtForAlreadyDoneTasksOnly() {
         helper.createDatabase(TEST_DB, 6).apply {
-            // Marked done before this column existed: the backfill must stamp completedAt = createdAt.
             execSQL(
                 "INSERT INTO tasks (id, title, isDone, createdAt, attachments, dueAt, notes) " +
                     "VALUES (1, 'Done already', 1, 5000, '[]', NULL, '')"
             )
-            // Still pending: must be left alone (completedAt stays null).
             execSQL(
                 "INSERT INTO tasks (id, title, isDone, createdAt, attachments, dueAt, notes) " +
                     "VALUES (2, 'Still pending', 0, 6000, '[]', NULL, '')"
@@ -177,7 +117,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 7 -> 8: chat_conversations + chat_messages.conversationId ---------------------------
 
     @Test
     fun migrate7To8_seedsOneConversationAndBackfillsExistingMessagesWhenHistoryExists() {
@@ -201,8 +140,6 @@ class AppDatabaseMigrationTest {
 
     @Test
     fun migrate7To8_seedsNoConversationWhenThereIsNoExistingChatHistory() {
-        // The seed is conditional (`if (count > 0)` in MIGRATION_7_8) precisely so a fresh-ish
-        // install that never chatted doesn't get a phantom "Conversation" row with nothing in it.
         helper.createDatabase(TEST_DB, 7).close()
 
         val db = helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
@@ -212,7 +149,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 8 -> 9: notes.archived, notes.archivedAt ----------------------------------------------
 
     @Test
     fun migrate8To9_addsNotesArchivedColumns() {
@@ -233,7 +169,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 9 -> 10: the maturity release (notes x5, tasks x6, note_versions table) --------------
 
     @Test
     fun migrate9To10_addsNoteAndTaskOrganizationColumnsPlusUsableNoteVersionsTable() {
@@ -274,8 +209,6 @@ class AppDatabaseMigrationTest {
             assertTrue(c.isNull(5))
         }
 
-        // note_versions is created empty by this migration; prove it is genuinely usable, not just
-        // present in sqlite_master with the right name.
         db.execSQL(
             "INSERT INTO note_versions (id, noteId, title, body, tags, isChecklist, checklist, savedAt) " +
                 "VALUES (1, 1, 'N', 'B', '', 0, '[]', 1000)"
@@ -285,7 +218,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 10 -> 11: chat_messages.tokens + list-query indices ----------------------------------
 
     @Test
     fun migrate10To11_addsChatMessagesTokensColumnAndListQueryIndices() {
@@ -303,8 +235,6 @@ class AppDatabaseMigrationTest {
         db.query("SELECT tokens FROM chat_messages WHERE id = 1").use { c ->
             assertTrue(c.moveToFirst()); assertEquals(0, c.getInt(0))
         }
-        // runMigrationsAndValidate's own schema comparison already checks every index exhaustively;
-        // this is a cheap spot check that the migration's CREATE INDEX statements actually ran.
         db.query(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'index_notes_updatedAt'"
         ).use { c ->
@@ -312,7 +242,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 11 -> 12: manual order / drafts / hidden (notes x4, tasks x4) + task_versions --------
 
     @Test
     fun migrate11To12_addsDraftAndHiddenColumnsPlusUsableTaskVersionsTable() {
@@ -356,7 +285,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 12 -> 13: notes.isDoodle, notes.doodle ------------------------------------------------
 
     @Test
     fun migrate12To13_addsNotesDoodleColumns() {
@@ -379,7 +307,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 13 -> 14: chat_messages.replyToId -----------------------------------------------------
 
     @Test
     fun migrate13To14_addsChatMessagesReplyToIdColumn() {
@@ -399,7 +326,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 14 -> 15: notes.bodySpans, tasks.notesSpans -------------------------------------------
 
     @Test
     fun migrate14To15_addsRichTextSpanColumnsToNotesAndTasks() {
@@ -429,7 +355,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 15 -> 16: chat_messages.attachmentList (nullable) -------------------------------------
 
     @Test
     fun migrate15To16_addsChatMessagesAttachmentListColumn() {
@@ -449,11 +374,10 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 16 -> 17: notebooks + notebook_items tables --------------------------------------------
 
     @Test
     fun migrate16To17_createsUsableNotebookAndNotebookItemTables() {
-        helper.createDatabase(TEST_DB, 16).close() // pure additive DDL; no existing row is required
+        helper.createDatabase(TEST_DB, 16).close()
 
         val db = helper.runMigrationsAndValidate(TEST_DB, 17, true, MIGRATION_16_17)
 
@@ -473,7 +397,6 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- 17 -> 18: FTS5 search index (optional; must never break the base tables) --------------
 
     @Test
     fun migrate17To18_addsFtsTablesWhenAvailableAndNeverBreaksTheBaseTables() {
@@ -497,8 +420,6 @@ class AppDatabaseMigrationTest {
 
         val db = helper.runMigrationsAndValidate(TEST_DB, 18, true, MIGRATION_17_18)
 
-        // The base rows must survive regardless of whether this device's SQLite has FTS5 compiled
-        // in -- see MIGRATION_17_18's own try/catch, which is exactly the behaviour pinned here.
         db.query("SELECT title FROM notes WHERE id = 1").use { c ->
             assertTrue(c.moveToFirst()); assertEquals("FTS seed", c.getString(0))
         }
@@ -521,13 +442,9 @@ class AppDatabaseMigrationTest {
         }
     }
 
-    // ---- The full, registered chain, in one call ------------------------------------------------
 
     @Test
     fun fullChain2To18_migratesSeedDataThroughEveryRegisteredStepInOrder() {
-        // Exercises the exact migration list AppDatabase.build() registers, in the same order, so a
-        // migration that works alone but was left out of (or misordered in) that list would show up
-        // here even if every individual step test above passes on its own.
         helper.createDatabase(TEST_DB, 2).apply {
             execSQL("INSERT INTO notes (id, title, body, updatedAt) VALUES (1, 'Seed note', 'Seed body', 1000)")
             execSQL("INSERT INTO tasks (id, title, isDone, createdAt) VALUES (1, 'Seed task', 1, 500)")
@@ -550,9 +467,6 @@ class AppDatabaseMigrationTest {
             assertEquals("", c.getString(3))
             assertEquals("", c.getString(4))
         }
-        // The seed task was already marked done back at v2, before completedAt existed at all:
-        // MIGRATION_6_7's backfill must have stamped it, and that stamp must survive the ten
-        // further migrations run after it in this same call.
         db.query("SELECT title, isDone, completedAt, notesSpans FROM tasks WHERE id = 1").use { c ->
             assertTrue(c.moveToFirst())
             assertEquals("Seed task", c.getString(0))

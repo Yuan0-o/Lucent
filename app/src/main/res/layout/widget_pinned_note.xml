@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- "Pinned note" widget: shows the most recently updated pinned note's title and a short preview.
-     Tapping opens that note (or, when there's no pinned note, a new-note composer). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_pinned_root"
     android:layout_width="match_parent"

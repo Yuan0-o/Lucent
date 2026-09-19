@@ -30,12 +30,6 @@ import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
-/**
- * P1-3 — extracted from the `NetworkPage` local composable that used to live inside
- * `SettingsScreen` (byte-identical on both platforms before this split, including the
- * `LucentToast`/`AppScope.io.launch` calls, both of which are already platform seams elsewhere in
- * this codebase). One toggle: whether the cloud assistant may search the web.
- */
 @Composable
 internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val context = LocalContext.current
@@ -46,21 +40,12 @@ internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRou
 
     BackHeader(S.settingsNetworkTitle) { onRoute(SettingsRoute.Assistant) }
 
-    // Web search toggle: lets the cloud assistant look things up online.
-    //
-    // Unavailable while the local model is on (tasks 3/8) — it answers with no network
-    // at all, so a web-search switch in that mode would be a promise the app cannot
-    // keep. The row is dimmed rather than removed: hiding it would leave the user
-    // wondering where their setting went, and the value they had is coming back the
-    // moment local mode is switched off (SettingsRepository parks it).
     val webSearchLocked = localModelEnabled
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                // The whole row answers when it's locked, so a tap anywhere near the
-                // switch — not only exactly on it — gets the explanation.
                 .then(
                     if (webSearchLocked) Modifier.clickable {
                         LucentToast.show(context, S.webSearchLocalDisabledHint)

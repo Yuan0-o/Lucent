@@ -40,13 +40,6 @@ import com.lucent.app.ui.rememberDynamicColorActive
 import com.lucent.app.ui.title
 import kotlinx.coroutines.launch
 
-/**
- * P1-3 — extracted from the `BackgroundPage` local composable that used to live inside
- * `SettingsScreen`. The only difference between the two originals was, again, dynamic colour: the
- * paused banner and the palette-hiding condition existed only on Android. Reuses
- * [rememberDynamicColorActive] from the Appearance/Theme split rather than adding a second seam
- * for the same underlying fact.
- */
 @Composable
 internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val context = LocalContext.current
@@ -59,16 +52,11 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
 
     BackHeader(S.settingsBackgroundTitle) { onRoute(SettingsRoute.Appearance) }
     if (dynamicColorActive) {
-        // Material You has priority while it is on: the controls below still edit the
-        // STORED choices (so turning dynamic off restores exactly these), but nothing here
-        // changes what is on screen until then. Say so instead of pretending it is live.
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.dynamicColorPausedBackground, color = onGradientMuted, fontSize = 13.sp)
         }
         Spacer(modifier = Modifier.height(12.dp))
     }
-    // At the very top: the master switch for the drifting effect. Off = a still, flat
-    // theme colour, and the palette choice below only takes visible effect once it's on.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
@@ -82,17 +70,8 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
         }
     }
     Spacer(modifier = Modifier.height(16.dp))
-    // The palette list only takes visible effect while the drifting effect is ON, so
-    // with the switch off every colour row is disabled and greyed out rather than
-    // pretending to work: the radio buttons go grey, the swatches and labels fade, and
-    // a tap anywhere on a row answers with a toast at the bottom of the screen saying
-    // the drifting background isn't on — instead of silently changing a setting whose
-    // result can't be seen (fix task).
-    // v2.7.2: while Material You is on, the whole palette section below is HIDDEN (the
-    // banner above says why; the rows return when the wallpaper mode is switched off).
     if (!dynamicColorActive) {
         val paletteEnabled = backgroundAnimationEnabled
-        // One alpha for everything in a disabled row, so swatch and label fade together.
         val paletteAlpha = if (paletteEnabled) 1f else 0.38f
         fun pickPalette(name: String) {
             if (paletteEnabled) {
@@ -102,12 +81,8 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
             }
         }
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            // Auto-cycle: rotates through every palette over time. Its swatch previews the
-            // spread of colours it moves through.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                // The whole row stays tappable while disabled so the tap can EXPLAIN itself
-                // (the toast) — a dead row that ignores touches just looks broken.
                 modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_CYCLE) }
             ) {
                 RadioButton(
@@ -125,9 +100,6 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
                 )
             }
 
-            // Random (v2.4.0): sibling of auto-cycle. Auto-cycle walks the palettes in order;
-            // Random jumps to a different palette every RANDOM_SWITCH_MS. The row carries the
-            // small hint so the behaviour is discoverable without opening anything.
             Column(
                 modifier = Modifier.fillMaxWidth().clickable { pickPalette(PALETTE_RANDOM) }
             ) {
@@ -148,9 +120,6 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
                 }
             }
 
-            // Palettes grouped by style family (v2.4.0: eight sections), each with a small
-            // colour preview. The sections come straight from the enum, so a new family can
-            // never exist without its title and its picker section.
             PaletteGroup.entries.forEach { group ->
                 val heading = group.title()
                 Spacer(modifier = Modifier.height(10.dp))

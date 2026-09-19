@@ -13,279 +13,115 @@ import kotlinx.coroutines.flow.map
 private val Context.settingsDataStore by preferencesDataStore(name = "lucent_settings")
 
 private object SettingsKeys {
-    // ---- Display preferences: deliberately NOT encrypted ----
-    //
-    // Theme and palette are drawn from a fixed vocabulary of short strings ("dark", "SUNSET",
-    // "title_az"); the font is either "system" or the opaque random id of a font the user imported
-    // (see data/FontStore). Encrypting any of them would protect nothing — an attacker learns that
-    // you like dark mode — while putting a Keystore round-trip on the startup path, which
-    // MainActivity reads *synchronously before the first frame* precisely to avoid a visible theme
-    // flash. Paying a real cost for zero benefit isn't security, it's superstition, and pretending
-    // otherwise would make the encryption story less honest, not more.
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val PALETTE = stringPreferencesKey("palette")
     val FONT = stringPreferencesKey("font")
-    // ---- Material You dynamic colour (task 2) — Android 12+ wallpaper palette ----
-    // One boolean from a two-word vocabulary, so — exactly like THEME_MODE and PALETTE above —
-    // deliberately NOT encrypted: it says nothing private, and it is read on the pre-first-frame
-    // startup path (the first frame must already be dynamic, or the app would flash the saved theme
-    // before snapping to the wallpaper palette). Key name is identical on desktop so restored
-    // backups stay symmetric across platforms.
     val DYNAMIC_COLOR_ENABLED = booleanPreferencesKey("dynamic_color_enabled")
 
-    // ---- Everything the user wrote or configured: encrypted at rest ----
-    //
-    // Which provider you use, which model, what you named your assistant and how you asked it to
-    // speak — these say something about you, and the endpoint plus the key together are enough to
-    // spend your money. All of them go through LocalSecrets (AES-GCM under an Android Keystore key).
     val BASE_URL_ENC = stringPreferencesKey("base_url_enc")
     val API_SPEC_ENC = stringPreferencesKey("api_spec_enc")
     val MODEL_ENC = stringPreferencesKey("model_enc")
     val ASSISTANT_NAME_ENC = stringPreferencesKey("assistant_name_enc")
     val ASSISTANT_STYLE_ENC = stringPreferencesKey("assistant_style_enc")
 
-    // Legacy plaintext keys, read-only. Kept solely so an existing install keeps working and upgrades
-    // itself on the next save; nothing writes them again.
     val LEGACY_BASE_URL = stringPreferencesKey("base_url")
     val LEGACY_API_SPEC = stringPreferencesKey("api_spec")
     val LEGACY_MODEL = stringPreferencesKey("model")
     val LEGACY_ASSISTANT_NAME = stringPreferencesKey("assistant_name")
     val LEGACY_ASSISTANT_STYLE = stringPreferencesKey("assistant_style")
 
-    // Set once the one-shot Base64 → on-disk attachment migration has moved every legacy
-    // attachment out of the database. See AttachmentMigration.runIfNeeded.
     val ATTACHMENTS_MIGRATED = booleanPreferencesKey("attachments_migrated_v1")
 
-    // ---- Secrets, encrypted at rest with LocalSecrets (AndroidKeyStore) ----
-    //
-    // These replace the previous plaintext `api_key` / `api_profiles_json` entries. The old keys
-    // are still *read* (see below) so an existing install keeps working and silently upgrades to
-    // the encrypted form on its next save; nothing ever writes them again.
     val API_KEY_ENC = stringPreferencesKey("api_key_enc")
     val API_PROFILES_ENC = stringPreferencesKey("api_profiles_json_enc")
 
-    // The optional password used to encrypt exported backups. Stored here, Keystore-encrypted like
-    // every other secret, so exporting stays one tap on this device — and demanded fresh on any
-    // *other* device, which is precisely where it's doing its job. Remembering it here costs nothing:
-    // anyone who can read this file is already inside the app and can read the notes directly.
     val BACKUP_PASSWORD_ENC = stringPreferencesKey("backup_password_enc")
 
-    // Legacy plaintext keys. Read-only, kept solely to migrate existing installs forward.
     val LEGACY_API_KEY = stringPreferencesKey("api_key")
     val LEGACY_API_PROFILES = stringPreferencesKey("api_profiles_json")
 
     val API_PROFILE_SELECTED = intPreferencesKey("api_profile_selected")
 
-    // Remembered sort choice for each home list (a NoteSort/TaskSort key — see ui/SortOptions.kt).
     val NOTES_SORT = stringPreferencesKey("notes_sort")
-    // Round R1, task 5 - the recovery snapshot (data/SessionRestore). A preferences entry rather
-    // than a file of its own: it is small, it is written on the same debounce as everything else
-    // here, and it inherits this store's atomic replace, so a process killed mid-write can never
-    // leave half a snapshot behind.
     val SESSION_SNAPSHOT = stringPreferencesKey("session_snapshot")
     val TASKS_SORT = stringPreferencesKey("tasks_sort")
 
-    // Task 14 — automatic backup. Stored as one JSON string rather than six separate keys because
-    // [AutoBackup.State] is only ever read or written as a whole: an interval without a folder, or
-    // a "last run" without the settings it ran under, describes nothing. One key also means the
-    // feature can gain a field without a migration.
     val AUTO_BACKUP = stringPreferencesKey("auto_backup_state")
 
-    // Task 4 — version history ("flash records"), one switch each for notes and tasks. Default ON;
-    // absent means on, so an existing install keeps the behaviour it already had.
     val NOTE_HISTORY_ENABLED = booleanPreferencesKey("note_history_enabled")
     val TASK_HISTORY_ENABLED = booleanPreferencesKey("task_history_enabled")
 
-    // ---- Assistant behaviour: memory tier & web access (issues 9 and 16) ----
-    //
-    // Deliberately NOT encrypted, exactly like the display preferences above: each is one value
-    // from a tiny fixed vocabulary ("low"/"medium"/"high", true/false). Encrypting them would
-    // protect nothing and only add a Keystore round-trip to a value the assistant reads on every
-    // send. They describe how the assistant behaves, not anything the user wrote.
     val MEMORY_TIER = stringPreferencesKey("memory_tier")
     val WEB_SEARCH_ENABLED = booleanPreferencesKey("web_search_enabled")
     val ASSISTANT_CONFIRM_TOOLS = booleanPreferencesKey("assistant_confirm_tools")
-    // Whether the typewriter's per-character tick and finish pulse fire (assistant issue 11's
-    // haptics, made optional by the second assistant variant). On by default.
     val TYPING_HAPTICS = booleanPreferencesKey("typing_haptics")
 
-    // Whether note/task bodies are treated as Markdown (headings, bold, lists, [[links]]) or as
-    // plain text. Default OFF: not everyone writes Markdown, and someone who doesn't shouldn't see
-    // their asterisks and hashes silently restyled or a "Markdown supported" hint they can't use.
     val MARKDOWN_ENABLED = booleanPreferencesKey("markdown_enabled")
 
-    // ---- INTEGRATION: C-group task 20 — rich text, OFF by default ----
-    // Independent of MARKDOWN_ENABLED, and mutually exclusive with it in the UI. C's handoff note
-    // asked for that decision to be made before shipping rather than after a bug report, and the
-    // answer is exclusivity: both on at once means two systems styling one string, and the first
-    // question anybody asks is what **bold** does inside a bolded span. There is no answer to that
-    // which is not arbitrary, so the switches turn each other off.
     val RICH_TEXT_ENABLED = booleanPreferencesKey("rich_text_enabled")
-    // PHASE 3 (review F-1): saved searches, one JSON string — see data/SavedSearches.kt.
     val SAVED_SEARCHES = stringPreferencesKey("saved_searches")
-    // v2.7.2: user-defined note templates and the interrupted-authoring draft — two JSON strings,
-    // see data/CustomTemplates.kt for the shapes.
     val CUSTOM_TEMPLATES = stringPreferencesKey("custom_templates")
     val TEMPLATE_DRAFT = stringPreferencesKey("template_draft")
     val HIDDEN_TEMPLATES = stringPreferencesKey("hidden_templates")
-    // v2.7.5: cloud storage module (WebDAV). The password is stored encrypted via CryptoUtil.
     val CLOUD_ENABLED = booleanPreferencesKey("cloud_enabled")
     val CLOUD_PROVIDER = stringPreferencesKey("cloud_provider")
     val CLOUD_URL = stringPreferencesKey("cloud_url")
     val CLOUD_USER = stringPreferencesKey("cloud_user")
     val CLOUD_PASSWORD_ENC = stringPreferencesKey("cloud_password_enc")
-    // P2-2: which embedding backend note_embeddings vectors are generated with. "local" (default)
-    // never sends note text anywhere; "cloud" means the configured LLM provider's embedding
-    // endpoint sees it. See EmbeddingProvider.kt for the values this key actually takes.
     val EMBEDDING_PROVIDER = stringPreferencesKey("embedding_provider")
     val CLOUD_FOLDER = stringPreferencesKey("cloud_folder")
     val CLOUD_AUTO_BACKUP = booleanPreferencesKey("cloud_auto_backup")
 
-    // Whether tappable links ([[wiki]] and [text](url)) are active inside Markdown mode. A sub-toggle
-    // of Markdown: when Markdown is off there are no links regardless. Default OFF — links are now
-    // opt-in, so Markdown formatting alone never turns plain-looking text into tappable links until
-    // the user asks for it.
     val LINKS_ENABLED = booleanPreferencesKey("links_enabled")
 
-    // Whether the drifting background (the floating blobs) animates. Default ON. When OFF, the
-    // background is painted as a single flat theme colour instead — cheaper, calmer, and an option
-    // for anyone who finds motion distracting.
     val BACKGROUND_ANIMATION_ENABLED = booleanPreferencesKey("background_animation_enabled")
 
-    // ---- App Lock (task 2) — OFF by default ----
-    // A boolean flag plus one encrypted blob holding the salted password/answer hashes and the
-    // security question. The blob is one-way material (hashes, not the password itself), but it's
-    // stored through LocalSecrets anyway to match every other secret at rest here.
     val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
     val APP_LOCK_CREDENTIALS_ENC = stringPreferencesKey("app_lock_credentials_enc")
-    // Opt-in biometric unlock for the App Lock. Off by default; only meaningful while the lock is on
-    // and the device actually has enrolled biometrics.
     val APP_LOCK_BIOMETRIC_ENABLED = booleanPreferencesKey("app_lock_biometric_enabled")
 
-    // ---- System share / intent integration (task 6) — OFF by default ----
-    // Gates whether Lucent appears in the OS share sheet and accepts shared text/attachments. The
-    // actual manifest component is enabled/disabled in step with this flag (see ShareIntegration).
     val SYSTEM_INTEGRATION_ENABLED = booleanPreferencesKey("system_integration_enabled")
 
-    // ---- Local startup logging (task 15) — OFF by default ----
-    // Purely local diagnostic logging. There is deliberately no "endpoint" or "upload" key anywhere
-    // near this: the logs never leave the device (see StartupLog).
     val STARTUP_LOGGING_ENABLED = booleanPreferencesKey("startup_logging_enabled")
 
-    // ---- UI language (localization task) ----
-    // One value from a five-word vocabulary ("system"/"en"/"zh"/"ja"/"ko"), so — like theme and
-    // palette above — it is deliberately NOT encrypted: it says nothing private and it is read on
-    // the pre-first-frame startup path, where a Keystore round-trip would be pure cost.
     val APP_LANGUAGE = stringPreferencesKey("app_language")
 
-    // ---- Local model (task: on-device GGUF assistant) ----
-    // Whether the assistant runs on the imported local model instead of a cloud API. The model
-    // file itself lives under filesDir/local_model (see LocalModelStore); this flag is just the
-    // routing switch, same tiny-vocabulary reasoning as the toggles above.
     val LOCAL_MODEL_ENABLED = booleanPreferencesKey("local_model_enabled")
 
-    // Whether the on-device model may call tools (create/edit notes and tasks). OFF by default:
-    // driving the text tool-protocol costs extra generation rounds, which a weak phone feels, so it
-    // is opt-in with a warning. When off, local mode is a plain, fast chat that never calls a tool.
     val LOCAL_TOOLS_ENABLED = booleanPreferencesKey("local_tools_enabled")
 
-    // Whether the on-device model offloads its layers to the GPU. OFF (= CPU) by default because CPU
-    // inference runs on every device and never crashes; GPU (Vulkan) can be faster but is unstable on
-    // some Android drivers, so it is opt-in with a warning. Only takes effect when the build ships a
-    // GPU backend (see app/src/main/cpp/CMakeLists.txt); otherwise the engine stays on CPU regardless.
     val LOCAL_GPU_ENABLED = booleanPreferencesKey("local_gpu_enabled")
 
-    // Whether an in-flight local reply keeps generating after the app leaves the foreground. OFF by
-    // default, and deliberately so: a resident multi-gigabyte model is the single heaviest thing
-    // this app can hold, and holding it for a screen the user has walked away from is how a notes
-    // app earns a reputation for making the phone crawl. Off means backgrounding stops the reply and
-    // frees the model; on is opt-in behind a warning (see the Local model page).
     val LOCAL_BACKGROUND_REPLY = booleanPreferencesKey("local_background_reply")
 
-    // ---- What local mode borrowed, so it can give it back ----
-    //
-    // Turning the local model on forces the memory tier down to LOW and web search off (tasks 3/8):
-    // an on-device model answers offline and does badly with a long prompt, so those two settings
-    // cannot mean what they say while it is running. Overwriting them outright would silently
-    // *destroy* the user's cloud-assistant configuration, so the previous values are parked here
-    // first and restored the moment local mode is switched back off. They exist only between those
-    // two events; disabling local mode consumes and removes them.
-    // ---- Quick model switching (B-group task 5) ----
-    // The models the user has recently switched to, newest first, as the JSON array
-    // [ModelRecents] understands. Not encrypted: a model id is a public product name, and this key
-    // is read to build a menu, not to authenticate anything.
     val MODEL_RECENTS = stringPreferencesKey("model_recents")
 
-    // ---- Small-model mode (B-group task 4) ----
-    // Whether the assistant sends its trimmed-down prompt. OFF by default and opt-in behind a
-    // warning: it makes the assistant noticeably plainer, which is a trade nobody should be opted
-    // into silently. Tiny vocabulary, so not encrypted — same reasoning as the toggles above.
     val SMALL_MODEL_MODE = booleanPreferencesKey("small_model_mode")
 
-    // ---- C-group task 8: the tab to reopen on ----
-    // One value from a six-word vocabulary, so — like theme and language above — deliberately NOT
-    // encrypted. Which tab you were last on is not a secret, and this is read on the pre-first-frame
-    // startup path where a Keystore round-trip would be pure cost.
     val LAST_SCREEN = stringPreferencesKey("last_screen")
 
-    // ---- C-group task 1: Blackout Mode — OFF by default ----
-    // The switch itself, plus the two settings Blackout has to overwrite while it is on. Those two
-    // are PARKED here first and handed back when Blackout is switched off, exactly as
-    // MEMORY_TIER_PRELOCAL / WEB_SEARCH_PRELOCAL do for local-model mode. Reusing that shape is
-    // deliberate: two features that behave identically should be implemented identically.
     val BLACKOUT_ENABLED = booleanPreferencesKey("blackout_enabled")
     val APP_LOCK_PREBLACKOUT = booleanPreferencesKey("app_lock_preblackout")
     val SYSTEM_INTEGRATION_PREBLACKOUT = booleanPreferencesKey("system_integration_preblackout")
 
-    // ---- C-group task 3: Crash Shield — OFF by default ----
-    // Takes effect at the next launch (the shield installs itself as the outermost frame of the main
-    // loop and is never torn down mid-run), so this flag is read on the startup path.
     val CRASH_SHIELD_ENABLED = booleanPreferencesKey("crash_shield_enabled")
 
-    // ---- C-group task 18: unlock throttling and self-destruct ----
-    //
-    // The throttle STATE is one JSON blob (see PasswordAttempts.State) so the whole record moves
-    // atomically — a partially-updated throttle is a throttle with a hole in it. It is NOT
-    // encrypted, and that is a considered choice rather than an oversight: it is read on the lock
-    // screen, before any password has been entered, and it contains no secret — only counters and
-    // deadlines. Encrypting it would add a Keystore round-trip to the one screen that must stay
-    // responsive while someone is locked out and impatient.
-    //
-    // Note that "not encrypted" is not "not protected": the blob lives in the app's private data
-    // directory, and PasswordAttempts.State.fromJson fails SAFE (treating an unreadable record as a
-    // full-length lockout) precisely so that corrupting it cannot be used to clear a lockout.
     val PW_ATTEMPT_STATE = stringPreferencesKey("pw_attempt_state")
     val PW_FIRST_ROUND_LIMIT = intPreferencesKey("pw_first_round_limit")
     val PW_LATER_ROUND_LIMIT = intPreferencesKey("pw_later_round_limit")
     val PW_SELF_DESTRUCT_ENABLED = booleanPreferencesKey("pw_self_destruct_enabled")
     val PW_SELF_DESTRUCT_THRESHOLD = intPreferencesKey("pw_self_destruct_threshold")
 
-    // ---- C-group task 6: open links in the system browser — OFF by default ----
-    // Independent of MARKDOWN_ENABLED and LINKS_ENABLED: this one makes a bare URL anywhere in a
-    // note, a task or an assistant reply tappable, with no [text](url) syntax required.
     val OPEN_LINKS_EXTERNALLY = booleanPreferencesKey("open_links_externally")
 
     val MEMORY_TIER_PRELOCAL = stringPreferencesKey("memory_tier_prelocal")
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
 }
 
-// Internal default chat style. Deliberately never surfaced in the Settings UI (the Chat Style
-// field shows no prefilled text and no "e.g." hint for it) — it only takes effect when the user
-// hasn't set a style of their own. Any custom style the user types always takes priority over
-// this default; see AssistantController.buildSystemPrompt, which is where that fallback happens.
-// Note: the "no AI-like tone" rule (no asterisks, no robotic phrasing) is NOT part of this
-// default — it's enforced unconditionally in buildSystemPrompt regardless of style, custom or not.
 const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
 
 class SettingsRepository(private val context: Context) {
 
-    /**
-     * Read an encrypted preference, falling back to its legacy plaintext key.
-     *
-     * [LocalSecrets.decrypt] returns an unprefixed value untouched, so an install that predates
-     * at-rest encryption reads back correctly and is silently re-written encrypted on its next save.
-     * No migration step, no user-visible event, no chance of stranding anyone.
-     */
     private fun secret(
         prefs: androidx.datastore.preferences.core.Preferences,
         encrypted: androidx.datastore.preferences.core.Preferences.Key<String>,
@@ -308,37 +144,19 @@ class SettingsRepository(private val context: Context) {
     val assistantName: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, "Lucent")
     }
-    // Blank until the user customizes it — this Flow feeds the Settings UI directly, so it must
-    // never resolve to DEFAULT_ASSISTANT_STYLE or that text would show up in the Chat Style box.
     val assistantStyle: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, "")
     }
 
     val themeMode: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.THEME_MODE] ?: "system" }
     val palette: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PALETTE] ?: "CYCLE" }
-    // App-wide font choice: "system" (the platform font, and the out-of-the-box state) or the id
-    // of a font imported through data/FontStore. An id that no longer resolves simply renders as
-    // the system font — see ui/LucentFonts.
     val font: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.FONT] ?: "system" }
 
-    // Material You dynamic colour (task 2): when on, the whole app re-resolves from the system
-    // wallpaper palette (Android 12+). Off by default; the OS version is the caller's gate.
     val dynamicColorEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] ?: false }
 
-    /** The three display preferences read together, for the pre-first-frame startup snapshot. */
     data class DisplayPrefs(val themeMode: String, val palette: String, val font: String)
 
-    /**
-     * Read theme, palette, and font in a **single** DataStore access.
-     *
-     * [MainActivity] needs these synchronously before the first frame to avoid a visible theme flash.
-     * Reading the three individual Flows would mean three separate `first()` collections — three
-     * round-trips through DataStore's serialized reader, each blocking the main thread on its own.
-     * Pulling all three from one emission of `data` collapses that to a single read, which is the one
-     * that actually sits on the critical startup path. Defaults match the individual Flows exactly, so
-     * behaviour is unchanged; only the cost differs.
-     */
     suspend fun displayPrefsOnce(): DisplayPrefs {
         val prefs = context.settingsDataStore.data.first()
         return DisplayPrefs(
@@ -348,48 +166,17 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
-    /**
-     * Every preference the *first frame* depends on, in a single DataStore access.
-     *
-     * The same reasoning as [displayPrefsOnce], carried to its conclusion. Startup was reading the
-     * display prefs, then the app-lock flag, then the logging flag, then the share-integration flag —
-     * four separate `first()` collections, each one a serialized round-trip through DataStore, all of
-     * them on the main thread before a single pixel could be drawn. They are one file. Reading it once
-     * and picking four values out of the same emission removes three of those round-trips outright.
-     */
     data class StartupPrefs(
         val display: DisplayPrefs,
         val appLockEnabled: Boolean,
         val startupLoggingEnabled: Boolean,
         val systemIntegrationEnabled: Boolean,
-        // The UI language is first-frame state exactly like the theme: composing the first frame
-        // in one language and snapping to another a beat later would be the same "blink" the display
-        // prefs exist to prevent, so it rides in the same single read. Defaults to "system" — the app
-        // follows the device language out of the box, and the user can pin a specific language in Settings.
         val appLanguage: String = "system",
-        // The assistant's name (B-group task 9). First-frame state for exactly the reason the
-        // theme and language above are: the Assistant screen puts it on every reply bubble, so
-        // reading it asynchronously meant a renamed assistant was briefly labelled "Lucent" on
-        // open. It rides in this same single read at no extra cost. See data/SettingsCache.
         val assistantName: String = "Lucent",
-        // Whether the drifting background animates. First-frame state too: the SPLASH draws the
-        // same background, so if this were read asynchronously the splash of a user who turned the
-        // effect off would open with drifting blobs and only go still a beat later — exactly the
-        // splash/app mismatch this synchronous read exists to prevent.
         val backgroundAnimationEnabled: Boolean = true,
-        // Material You dynamic colour (task 2). First-frame state in the strictest sense: if the
-        // first frame were composed in the saved theme and only snapped to the wallpaper palette a
-        // beat later, the "no theme flash" guarantee this whole read exists for would be broken the
-        // moment the user turns the switch on. Rides here at no extra cost, like every other field.
         val dynamicColor: Boolean = false,
-        // Round R1, task 2. The home lists' sort keys. First-frame state in the strictest sense:
-        // reading them late did not merely show the wrong label, it laid the list out in the wrong
-        // ORDER and then animated it into the right one on every launch. See SettingsCache.
         val notesSort: String = "recent",
         val tasksSort: String = "recent",
-        // Round R1, task 5. The previous run's recovery snapshot, empty when it closed cleanly.
-        // Rides here because the "go back to where you were?" prompt is asked once per launch,
-        // before anything else can navigate, and this costs no extra I/O. See data/SessionRestore.
         val sessionSnapshot: String = ""
     )
 
@@ -414,35 +201,17 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
-    // ---- UI language (localization task) ----
-    /** The chosen UI language key ("system", "en", "zh", "ja", "ko"); defaults to "system". See i18n/I18n.kt. */
 
-    // ---- C-group task 8 ----
     val lastScreen: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.LAST_SCREEN] ?: "" }
     suspend fun lastScreenOnce(): String = context.settingsDataStore.data.first()[SettingsKeys.LAST_SCREEN] ?: ""
     suspend fun setLastScreen(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.LAST_SCREEN] = value }
     }
 
-    // ---- C-group task 1: Blackout Mode ----
     val blackoutEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BLACKOUT_ENABLED] ?: false }
     suspend fun blackoutEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.BLACKOUT_ENABLED] ?: false
 
-    /**
-     * Turn Blackout Mode on or off, parking and restoring what it overrides.
-     *
-     * Two settings are genuinely written rather than merely overridden at the point of use: the app
-     * lock (forced ON, because "re-entering asks for a password" is one of the guarantees) and share
-     * integration (forced OFF, because appearing in the system share sheet is a way for Lucent's
-     * content to leave). Everything else Blackout controls — the network, the cloud assistant, the
-     * recents thumbnail — is gated in the read path by [BlackoutMode], so nothing the user
-     * configured is destroyed by flipping this on.
-     *
-     * Restoring deliberately never *lowers* security: if the app lock is on when Blackout is
-     * switched off, it stays on regardless of what was parked. Parking exists to avoid taking away
-     * something the user had, not to undo a choice they made later.
-     */
     suspend fun setBlackoutEnabled(value: Boolean) {
         context.settingsDataStore.edit { prefs ->
             val wasEnabled = prefs[SettingsKeys.BLACKOUT_ENABLED] ?: false
@@ -454,10 +223,6 @@ class SettingsRepository(private val context: Context) {
                         prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false
                 }
                 prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] = false
-                // NOTE: APP_LOCK_ENABLED is not forced here. The lock cannot be switched on without
-                // credentials, and credentials need a dialog, so the Settings screen collects a
-                // password FIRST and only then calls this. Forcing the flag from the data layer
-                // would produce a lock with no password — an app that can never be opened again.
             } else {
                 prefs[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] =
                     prefs[SettingsKeys.SYSTEM_INTEGRATION_PREBLACKOUT] ?: false
@@ -467,21 +232,13 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /** Whether the app lock was already on before Blackout forced it — drives the restore prompt. */
     suspend fun appLockWasOnBeforeBlackout(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LOCK_PREBLACKOUT] ?: false
 
-    // ---- C-group task 3: Crash Shield ----
     val crashShieldEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false }
     suspend fun crashShieldEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false
 
-    /**
-     * Crash Shield forces diagnostic logging ON and holds it there. A shield that swallows failures
-     * without recording them converts one visible crash into a silent permanent misbehaviour, so
-     * the two are wired together in the data layer rather than merely in the UI — that way the
-     * invariant survives someone adding a second call site for the logging toggle later.
-     */
     suspend fun setCrashShieldEnabled(value: Boolean) {
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.CRASH_SHIELD_ENABLED] = value
@@ -489,7 +246,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    // ---- C-group task 18: unlock throttling ----
     val passwordAttemptState: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PW_ATTEMPT_STATE] ?: "" }
     suspend fun passwordAttemptStateOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.PW_ATTEMPT_STATE] ?: ""
@@ -514,13 +270,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Self-destruct is OFF by default and stays that way unless the user explicitly turns it on.
-     *
-     * This is the only feature in Lucent that destroys data with no recovery path, and a
-     * destructive default is a default nobody consented to. The number (25) is a default; the
-     * *switch* is not.
-     */
     val pwSelfDestructEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.PW_SELF_DESTRUCT_ENABLED] ?: false }
     val pwSelfDestructThreshold: Flow<Int> = context.settingsDataStore.data.map {
@@ -535,7 +284,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    // ---- C-group task 6: open links in the system browser ----
     val openLinksExternally: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] ?: false }
     suspend fun setOpenLinksExternally(value: Boolean) {
@@ -544,43 +292,16 @@ class SettingsRepository(private val context: Context) {
 
     val appLanguage: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "system" }
     suspend fun setAppLanguage(value: String) { context.settingsDataStore.edit { it[SettingsKeys.APP_LANGUAGE] = value } }
-    /** One-shot read for contexts that run without the Activity (e.g. the reminder receiver). */
     suspend fun appLanguageOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LANGUAGE] ?: "system"
 
-    // ---- Local model (task: on-device GGUF assistant) ----
-    /** Whether the assistant answers with the imported on-device model. Off by default. */
     val localModelEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false }
 
-    /**
-     * Flip local-model mode, and apply (or undo) everything that mode implies — in ONE edit.
-     *
-     * Local mode is not just a routing switch; it changes what four other settings are allowed to
-     * be. Rather than leave those rules scattered across the Settings UI, where a future call site
-     * could forget one and leave the app in a state its own screens claim is impossible, they live
-     * here, on the only function that can turn the mode on:
-     *
-     *  - **Tools and GPU reset to off** every time local mode is switched on, even if the user had
-     *    them on before (task 1). Both cost real performance on a phone, and inheriting an expensive
-     *    option from a session weeks ago — invisibly, at the moment a heavy model loads — is exactly
-     *    the kind of surprise that gets blamed on the app rather than on the setting.
-     *  - **Memory drops to LOW and web search goes off** (tasks 3/8), because neither can honestly
-     *    apply: the on-device model has no network, and a long prompt is more than it handles well.
-     *    The *previous* values are parked in the PRELOCAL keys first.
-     *  - **Turning local mode off restores those parked values** and clears the parking slots. The
-     *    user gets their cloud assistant back exactly as they left it, not as local mode reduced it.
-     *
-     * One edit, so no reader can ever observe a half-applied switch: the mode and the constraints it
-     * implies land together or not at all.
-     */
     suspend fun setLocalModelEnabled(value: Boolean) {
         context.settingsDataStore.edit { prefs ->
             val wasEnabled = prefs[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false
             prefs[SettingsKeys.LOCAL_MODEL_ENABLED] = value
             if (value) {
-                // Park the cloud-assistant settings local mode is about to override — but only on a
-                // real off -> on transition. Re-running this while already on would otherwise park
-                // the *constrained* values and lose the originals.
                 if (!wasEnabled) {
                     prefs[SettingsKeys.MEMORY_TIER_PRELOCAL] =
                         prefs[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key
@@ -591,9 +312,6 @@ class SettingsRepository(private val context: Context) {
                 prefs[SettingsKeys.LOCAL_TOOLS_ENABLED] = false
                 prefs[SettingsKeys.LOCAL_GPU_ENABLED] = false
             } else {
-                // Hand back whatever was parked. A missing slot (an install that was already in
-                // local mode before this logic existed) falls back to the shipped defaults rather
-                // than leaving the constrained values stuck on forever.
                 prefs[SettingsKeys.MEMORY_TIER] =
                     prefs[SettingsKeys.MEMORY_TIER_PRELOCAL] ?: MemoryTier.DEFAULT.key
                 prefs[SettingsKeys.WEB_SEARCH_ENABLED] = prefs[SettingsKeys.WEB_SEARCH_PRELOCAL] ?: false
@@ -603,64 +321,32 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Whether an in-flight local reply survives the app going to the background. Off by default —
-     * backgrounding stops the reply and frees the model (see AssistantController.onAppBackgrounded).
-     */
     val localBackgroundReplyEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false }
     suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] = value }
     }
 
-    /**
-     * One-shot read for the lifecycle path. MainActivity.onStop has to decide *immediately* whether
-     * to cut a running reply, with no composition to collect a Flow from, so it reads the value
-     * directly rather than guessing a default.
-     */
     suspend fun localBackgroundReplyEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false
 
-    // ---- Small-model mode (B-group task 4) ----
-    /** Whether the assistant runs on its trimmed-down prompt. Off by default; opt-in with a warning. */
     val smallModelModeEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.SMALL_MODEL_MODE] ?: false }
     suspend fun setSmallModelModeEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.SMALL_MODEL_MODE] = value }
     }
 
-    /** Whether the on-device model may call in-app tools. Off by default (opt-in, perf warning). */
     val localToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false }
     suspend fun setLocalToolsEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_TOOLS_ENABLED] = value } }
 
-    /** Whether the on-device model offloads to the GPU. Off (= CPU, the safe default); opt-in. */
     val localGpuEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_GPU_ENABLED] ?: false }
     suspend fun setLocalGpuEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_GPU_ENABLED] = value } }
 
-    /**
-     * The active API key, decrypted for use.
-     *
-     * Reads the encrypted entry, and falls back to the legacy plaintext one for an install that
-     * predates at-rest encryption — [LocalSecrets.decrypt] returns an unprefixed value untouched,
-     * so a plaintext key still reads correctly and gets re-written encrypted on the next save.
-     * Callers see a plain String either way and never think about which form it was stored in.
-     */
     val apiKey: Flow<String> = context.settingsDataStore.data.map { prefs ->
         val stored = prefs[SettingsKeys.API_KEY_ENC] ?: prefs[SettingsKeys.LEGACY_API_KEY] ?: ""
         LocalSecrets.decrypt(stored)
     }
 
-    /**
-     * The saved API profiles, as the portable JSON [ApiProfiles] understands.
-     *
-     * Two layers of protection are at work and they answer different questions. *Inside* the JSON,
-     * each profile's key is [CryptoUtil]-encrypted, which is what makes the blob safe to drop
-     * verbatim into a backup file that has to be restorable on another phone. The blob as a *whole*
-     * is then [LocalSecrets]-encrypted before it touches the disk, which is what makes the copy on
-     * this device useless to anyone who lifts the preferences file off it. Peeling the outer layer
-     * here means [BackupManager] can keep writing the inner JSON straight into a backup and knows
-     * nothing about either scheme.
-     */
     val apiProfilesJson: Flow<String> = context.settingsDataStore.data.map { prefs ->
         val stored = prefs[SettingsKeys.API_PROFILES_ENC] ?: prefs[SettingsKeys.LEGACY_API_PROFILES] ?: ""
         LocalSecrets.decrypt(stored)
@@ -668,13 +354,8 @@ class SettingsRepository(private val context: Context) {
 
     val apiProfileSelected: Flow<Int> = context.settingsDataStore.data.map { it[SettingsKeys.API_PROFILE_SELECTED] ?: 0 }
 
-    /** Whether the one-shot Base64→on-disk attachment migration has finished. */
     val attachmentsMigrated: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.ATTACHMENTS_MIGRATED] ?: false }
 
-    /**
-     * The backup password, or "" when the user hasn't set one (in which case exports fall back to the
-     * built-in key — see [BackupCrypto]).
-     */
     val backupPassword: Flow<String> = context.settingsDataStore.data.map { prefs ->
         LocalSecrets.decrypt(prefs[SettingsKeys.BACKUP_PASSWORD_ENC] ?: "")
     }
@@ -690,7 +371,6 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[SettingsKeys.TASK_HISTORY_ENABLED] = value }
     }
 
-    /** Task 14 — the automatic-backup configuration. See [AutoBackup.State]. */
     val autoBackup: Flow<AutoBackup.State> = context.settingsDataStore.data
         .map { AutoBackup.State.fromJson(it[SettingsKeys.AUTO_BACKUP] ?: "") }
     suspend fun autoBackupOnce(): AutoBackup.State =
@@ -702,26 +382,18 @@ class SettingsRepository(private val context: Context) {
     val notesSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTES_SORT] ?: "recent" }
     val tasksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TASKS_SORT] ?: "recent" }
 
-    /** The assistant's memory tier (issue 9). Defaults to MEDIUM — remembers the current thread. */
     val memoryTier: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key
     }
 
-    /** Whether the assistant may use the web-search tool (issue 16). Off by default. */
     val webSearchEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[SettingsKeys.WEB_SEARCH_ENABLED] ?: false
     }
 
-    /** Whether the typewriter haptics (per-character tick + finish pulse) fire. On by default. */
     val typingHapticsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[SettingsKeys.TYPING_HAPTICS] ?: true
     }
 
-    /**
-     * Whether every assistant tool call — reads as well as writes, cloud and on-device alike — must
-     * be confirmed by the user in a dialog first. ON by default; turning it off removes the modal
-     * entirely and lets the assistant act directly.
-     */
     val assistantConfirmToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] ?: true
     }
@@ -730,16 +402,13 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] = value }
     }
 
-    /** Whether Markdown formatting is on for notes and tasks. Defaults to OFF (plain text). */
     val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }
     val richTextEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.RICH_TEXT_ENABLED] ?: false }
 
-    // PHASE 3 (review F-1): the saved-searches JSON (see data/SavedSearches.kt for the format).
     val savedSearches: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.SAVED_SEARCHES] ?: "" }
     suspend fun setSavedSearches(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SAVED_SEARCHES] = json }
     }
-    // v2.7.2: custom templates + authoring draft (see data/CustomTemplates.kt).
     val customTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CUSTOM_TEMPLATES] ?: "[]" }
     suspend fun setCustomTemplatesJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CUSTOM_TEMPLATES] = json }
@@ -748,12 +417,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTemplateDraftJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.TEMPLATE_DRAFT] = json }
     }
-    // v2.7.4: which built-in templates the user deleted (hidden) on the strip.
     val hiddenTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.HIDDEN_TEMPLATES] ?: "" }
     suspend fun setHiddenTemplatesJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.HIDDEN_TEMPLATES] = json }
     }
-    // ---- v2.7.5: cloud storage (WebDAV) ----
     val cloudEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_ENABLED] ?: false }
     suspend fun setCloudEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_ENABLED] = value }
@@ -762,7 +429,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloudProvider(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PROVIDER] = value }
     }
-    /** "local" (default, on-device, nothing leaves the device) or "cloud" (opt-in). */
     val embeddingProvider: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.EMBEDDING_PROVIDER] ?: "local"
     }
@@ -790,28 +456,16 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_AUTO_BACKUP] = value }
     }
 
-    /**
-     * Whether links ([[wiki]] / [text](url)) are active. A sub-toggle of Markdown, so links are only
-     * ever live when BOTH this and [markdownEnabled] are on. Defaults to OFF — links are opt-in, so
-     * text stays plain until the user deliberately turns them on.
-     */
     val linksEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LINKS_ENABLED] ?: false }
 
-    /**
-     * Whether the drifting background animates. Default ON. When OFF the app paints a flat theme
-     * colour behind everything instead of the moving blobs.
-     */
     val backgroundAnimationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true }
     suspend fun setBackgroundAnimationEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] = value } }
 
-    // ---- App Lock (task 2) ----
     val appLockEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_ENABLED] ?: false }
-    /** The decrypted app-lock credentials JSON (salt + hashes + security question), or "" if unset. */
     val appLockCredentials: Flow<String> = context.settingsDataStore.data.map { prefs ->
         LocalSecrets.decrypt(prefs[SettingsKeys.APP_LOCK_CREDENTIALS_ENC] ?: "")
     }
 
-    /** Synchronous reads for the pre-first-frame startup path (MainActivity), one emission each. */
     suspend fun appLockEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LOCK_ENABLED] ?: false
     suspend fun appLockCredentialsOnce(): String =
@@ -819,7 +473,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun startupLoggingEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false
 
-    /** Enable/disable the lock and store the credentials blob together, so the two never disagree. */
     suspend fun setAppLock(enabled: Boolean, credentialsJson: String) {
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.APP_LOCK_ENABLED] = enabled
@@ -827,28 +480,21 @@ class SettingsRepository(private val context: Context) {
                 prefs[SettingsKeys.APP_LOCK_CREDENTIALS_ENC] = LocalSecrets.encrypt(credentialsJson)
             } else if (!enabled) {
                 prefs.remove(SettingsKeys.APP_LOCK_CREDENTIALS_ENC)
-                // Biometric unlock only makes sense while the lock is on, so tearing the lock down
-                // also clears the biometric opt-in. Re-enabling the lock then starts from "off",
-                // making the user choose it again rather than silently inheriting an old choice.
                 prefs.remove(SettingsKeys.APP_LOCK_BIOMETRIC_ENABLED)
             }
         }
     }
 
-    /** Replace just the credentials (used by password recovery/change) without touching the flag. */
     suspend fun setAppLockCredentials(credentialsJson: String) {
         context.settingsDataStore.edit { it[SettingsKeys.APP_LOCK_CREDENTIALS_ENC] = LocalSecrets.encrypt(credentialsJson) }
     }
 
-    // ---- Biometric unlock for the App Lock ----
-    /** Whether the user has opted into biometric unlock. Off by default; cleared when the lock is removed. */
     val appLockBiometricEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_BIOMETRIC_ENABLED] ?: false }
     suspend fun setAppLockBiometricEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.APP_LOCK_BIOMETRIC_ENABLED] = enabled }
     }
 
-    // ---- System share / intent integration (task 6) ----
     val systemIntegrationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false }
     suspend fun systemIntegrationEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false
@@ -856,13 +502,11 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] = value }
     }
 
-    // ---- Local startup logging (task 15) ----
     val startupLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false }
     suspend fun setStartupLoggingEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.STARTUP_LOGGING_ENABLED] = value }
     }
 
-    /** Write an encrypted preference and drop its legacy plaintext twin in the same edit. */
     private suspend fun putSecret(
         encrypted: androidx.datastore.preferences.core.Preferences.Key<String>,
         legacy: androidx.datastore.preferences.core.Preferences.Key<String>,
@@ -871,8 +515,6 @@ class SettingsRepository(private val context: Context) {
         val sealed = LocalSecrets.encrypt(value)
         context.settingsDataStore.edit { prefs ->
             prefs[encrypted] = sealed
-            // Removed in the same edit, so an upgrading install stops leaving the old readable copy
-            // lying on disk the moment the value is next saved.
             prefs.remove(legacy)
         }
     }
@@ -881,33 +523,13 @@ class SettingsRepository(private val context: Context) {
     suspend fun setApiSpec(value: String) = putSecret(SettingsKeys.API_SPEC_ENC, SettingsKeys.LEGACY_API_SPEC, value)
     suspend fun setModel(value: String) = putSecret(SettingsKeys.MODEL_ENC, SettingsKeys.LEGACY_MODEL, value)
 
-    // ---- Quick model switching (B-group task 5) ----
 
-    /** Models recently switched to, newest first. Drives the Assistant screen's quick switcher. */
     val modelRecents: Flow<List<String>> =
         context.settingsDataStore.data.map { ModelRecents.parse(it[SettingsKeys.MODEL_RECENTS]) }
 
-    /**
-     * Switch which model the assistant talks to, from outside Settings.
-     *
-     * ### Why this is not just [setModel]
-     *
-     * The active model lives in TWO places: the flat MODEL_ENC key the assistant reads on every
-     * send, and the `model` field of the selected [ApiProfile]. [saveApiProfiles] mirrors the
-     * profile into the flat key, which means writing only the flat key produces a switch that works
-     * until the next time the user opens Settings and saves — at which point the profile's stale
-     * model silently overwrites it and the assistant reverts. That is a bug that would surface
-     * hours later, far from its cause, so this writes both.
-     *
-     * The [ModelRecents] entry is updated in the same edit, so the menu's ordering and the active
-     * model can never disagree. The API profile is otherwise untouched: this switches the MODEL,
-     * never the API — same endpoint, same key, same spec.
-     */
     suspend fun setActiveModel(value: String) {
         val model = value.trim()
         if (model.isBlank()) return
-        // Read and do the crypto outside the edit lambda: DataStore may re-run that lambda under
-        // contention, and this house style keeps real work out of it (see saveApiProfiles).
         val prefs = context.settingsDataStore.data.first()
         val profilesJson = LocalSecrets.decrypt(
             prefs[SettingsKeys.API_PROFILES_ENC] ?: prefs[SettingsKeys.LEGACY_API_PROFILES] ?: ""
@@ -943,7 +565,6 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] = value }
     }
     suspend fun setAttachmentsMigrated(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.ATTACHMENTS_MIGRATED] = value } }
-    /** Set or clear the backup password. A blank value removes it entirely. */
     suspend fun setBackupPassword(value: String) {
         context.settingsDataStore.edit { prefs ->
             if (value.isEmpty()) prefs.remove(SettingsKeys.BACKUP_PASSWORD_ENC)
@@ -953,7 +574,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setNotesSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value } }
 
-    // ---- Round R1, task 5: the crash-recovery snapshot ----
     suspend fun setSessionSnapshot(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SESSION_SNAPSHOT] = value }
     }
@@ -964,8 +584,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setMarkdownEnabled(value: Boolean) {
         context.settingsDataStore.edit {
             it[SettingsKeys.MARKDOWN_ENABLED] = value
-            // Mutually exclusive — see the note on RICH_TEXT_ENABLED. Done in the same edit block so
-            // there is never an instant, however brief, where both read as on.
             if (value) it[SettingsKeys.RICH_TEXT_ENABLED] = false
         }
     }
@@ -982,11 +600,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setWebSearchEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENABLED] = value } }
     suspend fun setTypingHapticsEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.TYPING_HAPTICS] = value } }
 
-    /**
-     * Store the API key, encrypted, and drop any legacy plaintext copy in the same edit — so an
-     * upgrading install stops leaving the old readable value behind the moment the key is next
-     * saved, rather than keeping a shadow copy of it on disk forever.
-     */
     suspend fun setApiKey(value: String) {
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.API_KEY_ENC] = LocalSecrets.encrypt(value)
@@ -994,21 +607,10 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /**
-     * Persist the full profile list and which one is selected, and mirror the selected profile's
-     * connection fields into the flat BASE_URL/API_SPEC/API_KEY/MODEL keys so the assistant (which
-     * reads those) immediately uses the chosen API. All in one edit so a reader never observes a
-     * half-applied switch. [selected] is clamped to a valid index.
-     *
-     * Both secret-bearing values — the profiles blob and the mirrored key — go through
-     * [LocalSecrets] on the way to disk, and the legacy plaintext entries are removed here too.
-     */
     suspend fun saveApiProfiles(profiles: List<ApiProfile>, selected: Int) {
         val safe = profiles.take(ApiProfiles.MAX)
         val idx = if (safe.isEmpty()) 0 else selected.coerceIn(0, safe.size - 1)
         val active = safe.getOrNull(idx)
-        // Serialize (and encrypt the inner keys) outside the edit block: this does real crypto
-        // work, and DataStore's edit lambda can be re-run under contention.
         val profilesJson = ApiProfiles.serialize(safe)
         val profilesEnc = LocalSecrets.encrypt(profilesJson)
         val activeKeyEnc = active?.let { LocalSecrets.encrypt(it.apiKey) }
@@ -1030,12 +632,6 @@ class SettingsRepository(private val context: Context) {
                 prefs.remove(SettingsKeys.LEGACY_API_SPEC)
                 prefs.remove(SettingsKeys.LEGACY_MODEL)
             } else {
-                // The user deleted every profile (task 6: the last API is genuinely deletable now).
-                // The mirrored connection keys have to go with it, or the assistant would keep
-                // calling — and keep spending — the credentials of an API the Settings screen says
-                // no longer exists. Clearing them also makes the send path's "no URL / no model"
-                // guard fire, which is what surfaces the "set up an API or import a local model"
-                // hint instead of a confusing network error.
                 prefs.remove(SettingsKeys.BASE_URL_ENC)
                 prefs.remove(SettingsKeys.MODEL_ENC)
                 prefs.remove(SettingsKeys.API_KEY_ENC)
@@ -1046,11 +642,5 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    // Wipes every stored setting back to its default (used by "clear all data").
-    // The attachments-migrated flag is included in that wipe: after a "clear all data" there
-    // is nothing left to migrate, so the flag flips back to false only for the migrator to
-    // find an empty database and immediately mark it done again on next launch. That's fine.
-    // The Keystore key itself is deliberately left alone: it protects nothing once the encrypted
-    // values are gone, and rotating it would only risk orphaning a value written concurrently.
     suspend fun clearAll() { context.settingsDataStore.edit { it.clear() } }
 }

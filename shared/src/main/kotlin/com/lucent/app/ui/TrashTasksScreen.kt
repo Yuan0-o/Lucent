@@ -46,16 +46,6 @@ import com.lucent.app.tools.TaskActions
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * Tasks the user deleted, held for [TrashCleanup.RETENTION_DAYS] days before they're removed for
- * good. Mirrors [TrashNotesScreen] in shape and reasoning — see that file for why a Trash exists at
- * all and why these cards own their actions rather than opening a detail page.
- *
- * The one thing this screen has that its notes counterpart doesn't is alarms. Trashing a task
- * cancels its reminder (nothing should be nudging you about something you deleted) and restoring it
- * re-arms it — both handled by [TaskActions], so the rule holds no matter which screen or which tool
- * did the trashing.
- */
 @Composable
 fun TrashTasksScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -68,9 +58,6 @@ fun TrashTasksScreen(onBack: () -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
     var taskToPurge by remember { mutableStateOf<Task?>(null) }
     var confirmEmptyTrash by remember { mutableStateOf(false) }
-    // Restoring is confirmed as well (task 7): it puts the task back in the active list *and*
-    // re-arms whatever reminder it had, so it can start notifying again — which is not something
-    // that should be able to happen from a single stray tap next to "delete forever".
     var taskToRestore by remember { mutableStateOf<Task?>(null) }
 
     taskToRestore?.let { task ->
@@ -172,7 +159,6 @@ fun TrashTasksScreen(onBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.hazeSource(state = hazeState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            // Reserve the floating capsule's height so the last row clears the pill.
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
         ) {
             items(filtered, key = { it.id }) { task ->

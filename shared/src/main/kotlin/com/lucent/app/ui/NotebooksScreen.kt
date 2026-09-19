@@ -55,17 +55,6 @@ import com.lucent.app.data.pruneOrphans
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * The Notebooks area: a list of notebooks, each a user-named collection of notes and tasks.
- *
- * This is a shared sub-screen, hosted by both the Notes and Tasks pages (each offers "Notebooks"
- * from its overflow menu). It owns its own state: the list, the create/rename/delete dialogs, and —
- * when a notebook is opened — the detail page, which replaces the list in place so back returns to
- * the list rather than leaving the area.
- *
- * Membership is added from the Notes/Tasks selection mode (see [AddToNotebookDialog]); this screen
- * manages the notebooks themselves: create, rename, delete, and remove individual items.
- */
 @Composable
 fun NotebooksScreen(
     onBack: () -> Unit,
@@ -82,8 +71,6 @@ fun NotebooksScreen(
 
     var openNotebookId by remember { mutableStateOf<Long?>(null) }
 
-    // Entering the area is a good moment to sweep membership rows whose note/task no longer exists
-    // (a trash purge or a permanent delete can't reach into every open screen).
     LaunchedEffect(Unit) {
         runCatching { db.notebookDao().pruneOrphans(db.noteDao(), db.taskDao()) }
     }
@@ -189,7 +176,6 @@ fun NotebooksScreen(
     }
 }
 
-/** One notebook in the list: icon, name, item count, and a per-row rename/delete menu. */
 @Composable
 private fun NotebookRow(
     notebook: Notebook,
@@ -251,7 +237,6 @@ private fun NotebookRow(
     }
 }
 
-/** A shared title-input dialog, used for both creating and renaming a notebook. */
 @Composable
 private fun NotebookNameDialog(
     title: String,
@@ -289,13 +274,6 @@ private fun NotebookNameDialog(
     )
 }
 
-/**
- * A single notebook's contents: every note and task filed in it, most recently added first.
- *
- * Tapping an item opens it through the host screen's callbacks ([onOpenNote]/[onOpenTask]) — the
- * host decides whether that means an in-tab detail page or a cross-tab jump. The trailing button
- * removes the item from this notebook (the note/task itself is untouched).
- */
 @Composable
 fun NotebookDetailScreen(
     notebookId: Long,
@@ -315,8 +293,6 @@ fun NotebookDetailScreen(
     }
     val items by db.notebookDao().getItems(notebookId).collectAsState(initial = emptyList())
 
-    // Resolve membership rows into the notes/tasks they name, preserving the membership order
-    // (newest added first). Rows whose target no longer exists are filtered out and pruned below.
     val noteMembers = remember(items) { items.filter { it.itemKind == NotebookItem.KIND_NOTE } }
     val taskMembers = remember(items) { items.filter { it.itemKind == NotebookItem.KIND_TASK } }
     var notesById by remember { mutableStateOf(emptyMap<Long, Note>()) }
@@ -328,8 +304,6 @@ fun NotebookDetailScreen(
         else db.taskDao().getByIds(taskMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
         notesById = notes
         tasksById = tasks
-        // Permanently-deleted targets (trash purge while this screen was closed) leave ghost rows
-        // behind; sweep them now so the next open doesn't re-resolve and re-hide the same ghosts.
         val ghosts = noteMembers.filter { it.itemId !in notes } + taskMembers.filter { it.itemId !in tasks }
         if (ghosts.isNotEmpty()) ghosts.forEach { db.notebookDao().deleteItemById(it.id) }
     }
@@ -453,14 +427,12 @@ fun NotebookDetailScreen(
     }
 }
 
-/** The one-line preview a notebook item shows: checklist progress for checklist notes, else body. */
 private fun notebookPreview(note: Note): String =
     if (note.isChecklist) {
         val items = Checklist.parse(note.checklist)
         if (items.isEmpty()) "" else com.lucent.app.i18n.S.checklistDoneCount(items.count { it.done }, items.size)
     } else note.body
 
-/** The one-line preview for a task: its notes, or the due date when there are no notes. */
 private fun taskPreview(task: Task): String {
     val notes = task.notes.trim()
     if (notes.isNotEmpty()) return notes
@@ -468,7 +440,6 @@ private fun taskPreview(task: Task): String {
     return if (due != null) com.lucent.app.i18n.S.exportDocDue(formatTimestamp(due)) else ""
 }
 
-/** A single row in the notebook detail: kind badge, title, preview, time, and remove. */
 @Composable
 private fun NotebookItemRow(
     title: String,
@@ -528,16 +499,6 @@ private fun NotebookItemRow(
     }
 }
 
-/**
- * The "add selected items to a notebook" picker, opened from the selection-mode action bar on the
- * Notes and Tasks pages.
- *
- * Lists every notebook; tapping one files the selected notes/tasks into it and dismisses. The last
- * row offers "New notebook…", which reveals a name field and creates the notebook in the same
- * action. Items already in the target notebook are skipped rather than duplicated — a notebook is a
- * set, and adding the same note twice is almost always a mis-tap. [onAdded] is called after the
- * write completes so the host can leave selection mode.
- */
 @Composable
 fun AddToNotebookDialog(
     noteIds: Set<Long>,

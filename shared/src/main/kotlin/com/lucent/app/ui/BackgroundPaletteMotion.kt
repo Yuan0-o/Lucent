@@ -10,23 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalInspectionMode
 
-/**
- * How finely the auto-cycling palette is stepped. At the default twelve seconds per palette this is
- * one update every ~94 ms — about eleven a second instead of sixty, with a colour delta per step
- * that is not visible even side by side.
- */
 private const val CYCLE_STEPS_PER_PALETTE = 128
 
-/**
- * Colours for the "Cycle" background option: slowly rotates through every palette in [palettes],
- * cross-fading from one to the next so the whole background drifts through the full range of
- * colours over time.
- *
- * The clock is deliberately gated by the same [BackgroundEnvironment] the renderer reads, so a
- * hidden window, a stopped activity or a user who prefers reduced motion stops paying for a palette
- * nobody is watching. While gated the first palette is returned unchanged, which keeps the screen a
- * single still gradient rather than an empty one.
- */
 @Composable
 fun rememberCyclingPaletteColors(
     palettes: List<List<Color>>,

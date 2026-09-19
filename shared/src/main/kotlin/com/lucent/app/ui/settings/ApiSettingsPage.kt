@@ -56,20 +56,6 @@ import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.specLabel
 import kotlinx.coroutines.launch
 
-/**
- * P1-3 — extracted from the `ApiPage` local composable that used to live inside `SettingsScreen`.
- * Diffing the two originals found them byte-identical (one trailing blank line aside), so this
- * page needed no seam of any kind.
- *
- * Every editable field here — profile list, the profile currently being edited, the fetched
- * model list, the fetch's own loading/error state — stays owned by [SettingsScreen] and is
- * threaded through as value + setter, because outer-scope functions unrelated to this page's own
- * composition (`saveActiveProfile`, `selectProfile`, `addProfile`, the delete-confirmation dialog,
- * and the two `LaunchedEffect`s that auto-hide a revealed key) read and write the very same state.
- * [keyVisible]/[onRevealKey] intentionally don't expose *why* the key hides itself again — that
- * timer is `SettingsScreen`'s own mechanism, not this page's concern, the same way font/model
- * import don't expose *how* a file gets picked.
- */
 @Composable
 internal fun ApiSettingsPage(
     repo: SettingsRepository,
@@ -107,34 +93,18 @@ internal fun ApiSettingsPage(
 
     BackHeader(S.settingsApiTitle) { onRoute(SettingsRoute.Assistant) }
 
-    // When local model mode is on, the cloud API is FROZEN — the assistant answers
-    // on-device and never calls the API. Say so plainly at the top of the page, with a
-    // one-tap way back to the Local model page to turn it off. That link matters more
-    // than usual now that the rest of the page is hidden behind the freeze: it is the
-    // only route out, so it has to be right here in the explanation.
     if (localModelEnabled) {
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.apiFrozenTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(4.dp))
             Text(S.apiFrozenBody, color = onGradientMuted, fontSize = 13.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            // Glass, like every other page-level button in Settings. This was one of
-            // the last Material 3 controls left on a page made entirely of glass.
             GlassButton(text = S.apiFrozenManage, onClick = { onRoute(SettingsRoute.LocalModel) })
         }
     }
 
-    // Task 18: while the freeze is on, the blocks below are HIDDEN rather than shown
-    // greyed. They were disabled before, which left a full API editor sitting under a
-    // banner saying it would never be used — fields you could type in, a Save button you
-    // could not press, a model list that would not load. Disabling communicates "not
-    // now"; the honest message here is "not while this mode is on", and the way a screen
-    // says that is by not offering the controls at all. Nothing is lost: every profile,
-    // key and model stays saved, and flipping local mode off brings this page back
-    // exactly as it was.
     if (!localModelEnabled) {
 
-    // ---- API Selection: pick which saved profile is active ----
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(S.apiSelectionTitle, color = onGradient, modifier = Modifier.weight(1f))
@@ -142,9 +112,6 @@ internal fun ApiSettingsPage(
         }
         Spacer(modifier = Modifier.height(8.dp))
         if (profiles.isEmpty()) {
-            // Deleting the last API is allowed now (task 6), so this state is reachable
-            // and has to be a place the user can stand: it names what happened and both
-            // ways forward, rather than an empty card that looks like a rendering bug.
             Text(S.apiNoneTitle, color = onGradient, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(4.dp))
             Text(S.apiNoneBody, color = onGradientMuted, fontSize = 13.sp)
@@ -161,9 +128,6 @@ internal fun ApiSettingsPage(
                         fontSize = 12.sp
                     )
                 }
-                // The delete icon is shown on every row, the only profile included, and
-                // every delete goes through the confirmation dialog below first — there
-                // is no quiet path that removes a saved key (task 6).
                 IconButton(onClick = { onRequestDeleteProfile(idx) }) {
                     Icon(Icons.Default.Delete, contentDescription = S.apiDeleteA11y, tint = onGradientMuted)
                 }
@@ -175,13 +139,10 @@ internal fun ApiSettingsPage(
         }
     }
 
-    // Nothing selected means nothing to edit, so the editor block is hidden entirely
-    // rather than bound to a phantom profile (task 6).
     if (profiles.isNotEmpty()) {
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    // ---- Editor for the selected profile ----
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.apiEditTitle, color = onGradient)
         Spacer(modifier = Modifier.height(8.dp))
@@ -245,13 +206,8 @@ internal fun ApiSettingsPage(
         )
 
         Spacer(modifier = Modifier.height(12.dp))
-        // No `enabled = !localModelEnabled` guard any more: this whole block is hidden
-        // while the API is frozen (task 18), so the only way to reach this button is
-        // with local mode off.
         GlassButton(text = S.fetchModels, onClick = {
             if (url.trim().isEmpty()) {
-                // No address yet: say so plainly instead of letting the HTTP client throw a
-                // technical "malformed URL" style error the user can't act on.
                 onErrorTextChange(S.apiUrlRequired)
             } else {
                 onLoadingChange(true)
@@ -288,10 +244,6 @@ internal fun ApiSettingsPage(
                 enabled = models.isNotEmpty()
             )
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                // R3 report: a manual FUZZY model search on top of the list, sharing the
-                // same ranking rules as the chat model switcher (ModelSearch.rankModels):
-                // typing part of a name — case, separators and even exact order optional —
-                // reorders the list best-match first. The query resets with each open.
                 var query by remember(menuExpanded) { mutableStateOf("") }
                 Column(modifier = Modifier.width(280.dp)) {
                     OutlinedTextField(
@@ -318,10 +270,8 @@ internal fun ApiSettingsPage(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        // Saving writes the edits into the selected profile and activates it, so the
-        // assistant uses it right away.
         GlassButton(text = S.saveApi, onClick = onSaveProfile)
     }
-    } // profiles.isNotEmpty()
-    } // !localModelEnabled
+    }
+    }
 }

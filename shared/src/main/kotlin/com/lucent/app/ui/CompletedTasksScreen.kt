@@ -45,31 +45,8 @@ import com.lucent.app.tools.TaskActions
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * Which timestamp the completed-list date filter matches against. A completed task has two dates
- * worth searching by — when it was finished and when it was originally created — so the user gets
- * to pick. Defaults to COMPLETED, matching how this page is already sorted.
- */
 private enum class CompletedDateField { COMPLETED, CREATED }
 
-/**
- * Read-only-ish list of every task the user has marked as done.
- *
- * Newly-completed tasks land here automatically because the home page only queries
- * `taskDao().getActive()` (WHERE isDone = 0) — the moment a task's [Task.isDone] flips true
- * it disappears from the home list and appears here instead. Sorted by [Task.completedAt] so
- * the most recently finished tasks sit at the top.
- *
- * Owned by [TasksScreen]: the delete flow and the "open detail" flow both delegate back to
- * the parent so the confirmation dialog and detail-page state live in one place, not two.
- * The one action this screen implements directly is the "undo complete" button, which sends the
- * task back to the active list — and as of task 7 that asks first too. It used to be the deliberate
- * exception, on the reasoning that only *completing* something needs a guard. That reasoning didn't
- * survive contact with the layout: the undo button sits immediately beside the delete button on
- * every row, so the unguarded action was the one sharing a thumb-width with the destructive one.
- * It also isn't as harmless as it looks — restoring a task re-arms its reminder, so a stray tap can
- * bring back a notification for something you finished last week.
- */
 @Composable
 fun CompletedTasksScreen(
     onBack: () -> Unit,
@@ -84,9 +61,7 @@ fun CompletedTasksScreen(
     val hazeState = LocalHazeState.current
 
     var searchQuery by remember { mutableStateOf("") }
-    // The task whose "mark as not done" is awaiting confirmation (task 7).
     var taskToRestore by remember { mutableStateOf<Task?>(null) }
-    // Optional date range to filter by, plus which date it applies to (completion vs creation).
     var dateRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
 
     taskToRestore?.let { task ->
@@ -102,9 +77,6 @@ fun CompletedTasksScreen(
                 TextButton(onClick = {
                     val target = task
                     taskToRestore = null
-                    // Shared action: a task completed early may still have a future due time, so
-                    // sending it back to active re-evaluates its reminder rather than leaving it
-                    // silently disarmed.
                     AppScope.io.launch { TaskActions.restore(context, db, target) }
                 }) { Text(com.lucent.app.i18n.S.markNotDone) }
             },
@@ -113,8 +85,6 @@ fun CompletedTasksScreen(
     }
     var dateField by remember { mutableStateOf(CompletedDateField.COMPLETED) }
 
-    // Text search matches the title; the date filter narrows by the chosen date field to a range.
-    // Both combine — a task must match the typed text (if any) AND fall within the picked range (if set).
     val filtered = remember(completed, searchQuery, dateRange, dateField) {
         completed.filter { task ->
             val matchesText = searchQuery.isBlank() || task.title.contains(searchQuery, ignoreCase = true)
@@ -136,13 +106,6 @@ fun CompletedTasksScreen(
             Text(com.lucent.app.i18n.S.screenCompletedTasks, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
         }
 
-        // A small insights strip: how much has actually been finished, in total and lately.
-        //
-        // Computed from the *full* completed list rather than the filtered view, so the numbers
-        // stay still while you search — a "total" that changes as you type isn't a total, it's a
-        // result count, and the two mean very different things. The windows are rolling (the last 7
-        // and 30 days) rather than calendar-aligned, because "have I got anything done this week"
-        // is a rolling question and a Monday-morning zero would be honest but useless.
         if (completed.isNotEmpty()) {
             val now = System.currentTimeMillis()
             val dayMillis = 24L * 60 * 60 * 1000
@@ -177,9 +140,6 @@ fun CompletedTasksScreen(
             )
         }
 
-        // The date controls appear only once a range is picked, so with no filter set there's just
-        // a plain search box. When active: two chips choose whether the range means "completed on"
-        // or "created on", and a chip shows the range itself with an X to clear it.
         dateRange?.let { (start, end) ->
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -214,12 +174,9 @@ fun CompletedTasksScreen(
         LazyColumn(
             modifier = Modifier.hazeSource(state = hazeState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            // Reserve the floating capsule's height so the last row clears the pill.
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
         ) {
             items(filtered, key = { it.id }) { task ->
-                // Tapping the card opens the task detail, where its text is selectable/copyable
-                // through the native selection toolbar.
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -233,10 +190,6 @@ fun CompletedTasksScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            // A static "completed" mark — a checked box next to a struck-through
-                            // title, in the familiar finished-to-do style. It is NOT a control:
-                            // tapping it does nothing. Restoring a task to the active list is done
-                            // with the undo button on the right instead.
                             CompletedCheckbox()
                             Column(modifier = Modifier.padding(start = 8.dp)) {
                                 Text(
@@ -250,9 +203,6 @@ fun CompletedTasksScreen(
                                 Text(com.lucent.app.i18n.S.createdOn(formatTimestamp(task.createdAt)), color = onGradientMuted, fontSize = 12.sp)
                             }
                         }
-                        // Two quick actions: send back to active (undo), or delete outright.
-                        // Opening the detail page (tap the card) also lets the user do the
-                        // same things through the same confirmation flow as the home list.
                         IconButton(onClick = { taskToRestore = task }) {
                             Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = com.lucent.app.i18n.S.a11yMarkActive, tint = onGradient)
                         }
@@ -266,7 +216,6 @@ fun CompletedTasksScreen(
     }
 }
 
-/** One figure in the completed-tasks insights strip: a big number over a small caption. */
 @Composable
 private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current

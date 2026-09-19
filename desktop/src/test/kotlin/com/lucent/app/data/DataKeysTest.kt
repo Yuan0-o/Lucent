@@ -9,12 +9,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/**
- * P0-4: the desktop DataKeys contract — an unreadable key file must throw instead of minting a
- * fresh key over it (minting would silently orphan every encrypted byte), the zero-length file
- * (the power-loss case the fsync exists for) is treated as unreadable, and resetCacheForTesting
- * genuinely re-reads the file rather than serving a stale cached key.
- */
 class DataKeysTest {
 
     private class TestContext(private val dir: File) : Context() {
@@ -45,7 +39,7 @@ class DataKeysTest {
         val dir = freshDir()
         use(dir) {
             val ctx = TestContext(dir)
-            DataKeys.databasePassphrase(ctx) // mint
+            DataKeys.databasePassphrase(ctx)
             val keyFile = keyFile(dir, "database.key")
             assertTrue(keyFile.exists())
 
@@ -59,7 +53,6 @@ class DataKeysTest {
             )
             assertTrue(err.message!!.contains(".lcb"), "message should point at the .lcb backup")
 
-            // The file was NOT replaced with a fresh mint — the evidence stays on disk.
             assertEquals("garbage-not-a-sealed-key", keyFile.readText())
         }
     }
@@ -69,10 +62,9 @@ class DataKeysTest {
         val dir = freshDir()
         use(dir) {
             val ctx = TestContext(dir)
-            DataKeys.databasePassphrase(ctx) // mint
+            DataKeys.databasePassphrase(ctx)
             val keyFile = keyFile(dir, "database.key")
 
-            // The power-loss case: present but empty.
             keyFile.writeText("")
             DataKeys.resetCacheForTesting()
 
@@ -89,7 +81,6 @@ class DataKeysTest {
             val ctx = TestContext(dir)
             val first = DataKeys.databasePassphrase(ctx)
 
-            // Replace the sealed key file with a DIFFERENT key's sealed form, then ask again.
             val other = ByteArray(32) { 9 }
             keyFile(dir, "database.key").writeText(
                 LocalSecrets.encrypt(Base64.getEncoder().encodeToString(other))
@@ -98,7 +89,6 @@ class DataKeysTest {
 
             val second = DataKeys.databasePassphrase(ctx)
             assertNotEquals(first, second, "resetCacheForTesting must re-read the file")
-            // And the new passphrase really is the replacement key (x'0909…').
             val expected = "x'" + other.joinToString("") { "%02x".format(it) } + "'"
             assertEquals(expected, second)
         }

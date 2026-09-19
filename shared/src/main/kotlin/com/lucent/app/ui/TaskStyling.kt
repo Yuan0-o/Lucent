@@ -48,15 +48,10 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// ---- Priority colours ----
-// Warm-to-cool, so higher priority reads as "hotter" at a glance without needing the label. These
-// sit on frosted glass over an animated background, so they're picked mid-tone: bright enough to
-// register against a dark backdrop, muted enough not to shout on a light one.
 val PriorityHighColor = Color(0xFFE57373)
 val PriorityMediumColor = Color(0xFFFFB74D)
 val PriorityLowColor = Color(0xFF64B5F6)
 
-/** The colour an overdue due-date is rendered in. Shares the "high priority" red on purpose. */
 val OverdueColor = PriorityHighColor
 
 fun TaskPriority.color(): Color = when (this) {
@@ -66,7 +61,6 @@ fun TaskPriority.color(): Color = when (this) {
     TaskPriority.HIGH -> PriorityHighColor
 }
 
-/** A bare coloured dot, for the tight left edge of a task card. Renders nothing for NONE. */
 @Composable
 fun PriorityDot(priority: TaskPriority, modifier: Modifier = Modifier, size: Dp = 9.dp) {
     if (priority == TaskPriority.NONE) return
@@ -75,14 +69,10 @@ fun PriorityDot(priority: TaskPriority, modifier: Modifier = Modifier, size: Dp 
             .size(size)
             .clip(CircleShape)
             .background(priority.color())
-            // The label sits next to it in text on the detail page, and the card's own semantics
-            // already read the title; a lone "Low priority dot" announcement between them would be
-            // noise. Colour here is decoration on top of information that's stated elsewhere.
             .clearAndSetSemantics { }
     )
 }
 
-/** A small flag plus its label — used where there's room to say it, not just show it. */
 @Composable
 fun PriorityBadge(priority: TaskPriority, modifier: Modifier = Modifier) {
     if (priority == TaskPriority.NONE) return
@@ -98,27 +88,6 @@ fun PriorityBadge(priority: TaskPriority, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * None / Low / Medium / High, always on **one** row (task 2).
- *
- * ### Why these aren't Material `FilterChip`s any more
- *
- * They were, laid out in a `FlowRow`, and on a phone that produced the bug this rework fixes: four
- * chips wrapped onto two lines, with "High" stranded alone on the second. The cause isn't the labels
- * — it's that a `FilterChip` has fixed internal padding (16dp each side, plus its own icon spacing)
- * that no caller can reduce. Four of them simply cannot fit across a phone's content width, and a
- * `FlowRow` does the only thing it can when they don't: it wraps.
- *
- * Wrapping is also *unstable*, which is the worse half of the problem. Whether the row broke at all
- * depended on the chosen typeface and the system font scale, so the composer's layout shifted under
- * the user for reasons they had no way to connect to anything they'd done.
- *
- * So the chips are drawn here instead, and each takes `weight(1f)` — an exact quarter of the width,
- * whatever that width is. The row can't wrap because it has no second line to wrap onto, and the
- * four options stay a single glanceable scale from None to High, which is what a priority control is
- * *for*. Labels are single-line and ellipsised as a last resort, so even an extreme font scale
- * degrades to "Mediu…" on one row rather than silently re-flowing the page.
- */
 @Composable
 fun PriorityPickerRow(selected: TaskPriority, onSelect: (TaskPriority) -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
@@ -142,11 +111,6 @@ fun PriorityPickerRow(selected: TaskPriority, onSelect: (TaskPriority) -> Unit, 
     }
 }
 
-/**
- * One quarter-width priority chip: a small flag in the level's own colour, its label, and a fill and
- * rim that light up in that same colour when selected. Selected state is carried by colour *and*
- * border weight rather than colour alone, so it survives a colour-blind reading of the row.
- */
 @Composable
 private fun PriorityChip(
     option: TaskPriority,
@@ -158,8 +122,6 @@ private fun PriorityChip(
     val onGradientMuted = LocalOnGradientMuted.current
     val context = LocalContext.current
     val shape = RoundedCornerShape(10.dp)
-    // NONE has no colour of its own (it is the absence of a priority), so it borrows the theme's
-    // content colour for its selected state instead of rendering as an invisible transparent chip.
     val accent = if (option == TaskPriority.NONE) onGradient else option.color()
     val fill = if (selected) accent.copy(alpha = 0.20f) else Color.Transparent
     val rim = if (selected) accent.copy(alpha = 0.85f) else onGradientMuted.copy(alpha = 0.40f)
@@ -188,9 +150,6 @@ private fun PriorityChip(
             Spacer(modifier = Modifier.width(3.dp))
         }
         Text(
-            // Task A17: the chip showed TaskPriority.label, which is the *English* wire name the
-            // assistant's tools and the CSV/Markdown exports depend on — so "None"/"Low" stayed
-            // English in every language. uiLabel is the localized twin (zh/en/ja/ko).
             option.uiLabel,
             color = if (selected) onGradient else onGradientMuted,
             fontSize = 11.sp,
@@ -201,13 +160,6 @@ private fun PriorityChip(
     }
 }
 
-/**
- * Repeat cadence chips.
- *
- * The caller only shows this once a due date is set, because recurrence has no meaning without a
- * base instant to advance from (see [com.lucent.app.data.Recurrence]) — a repeat rule on an undated
- * task would be a setting the app could never act on.
- */
 @Composable
 fun RepeatRuleRow(selected: RepeatRule, onSelect: (RepeatRule) -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
@@ -227,8 +179,6 @@ fun RepeatRuleRow(selected: RepeatRule, onSelect: (RepeatRule) -> Unit, modifier
                 FilterChip(
                     selected = option == selected,
                     onClick = { onSelect(option) },
-                    // Task A17: same fix as the priority chips — the repeat cadences were showing
-                    // their English wire names instead of the localized uiLabel.
                     label = { Text(option.uiLabel) }
                 )
             }
@@ -236,14 +186,6 @@ fun RepeatRuleRow(selected: RepeatRule, onSelect: (RepeatRule) -> Unit, modifier
     }
 }
 
-/**
- * The reminder switch.
- *
- * Disabled — and saying why — until a due date exists, because a reminder needs a moment to fire at.
- * The visible checked state is gated on [hasDueDate] too, so a stale "on" saved earlier can never
- * *look* armed while there's nothing behind it. That matters: a switch that says a reminder is set
- * when none can fire is worse than no switch at all.
- */
 @Composable
 fun ReminderToggleRow(
     enabled: Boolean,
@@ -274,7 +216,6 @@ fun ReminderToggleRow(
     }
 }
 
-/** Pin/unpin toggle with the same haptic tick every other meaningful tap in the app has. */
 @Composable
 fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
@@ -295,13 +236,6 @@ fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Mo
     }
 }
 
-/**
- * A non-interactive pin marker for a card that's already carrying its own tap target.
- *
- * Sized to sit level with the title text beside it (roughly a body-text cap height) rather than the
- * former tiny 13dp glyph, which read as a speck next to the title. [size] defaults to that but is
- * overridable for the detail pages, whose titles are larger.
- */
 @Composable
 fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp) {
     val onGradientMuted = LocalOnGradientMuted.current
@@ -313,26 +247,15 @@ fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp) {
     )
 }
 
-// ---- Due-date labelling ----
 
 private val dueDayFormatter get() = com.lucent.app.i18n.LDates.of(S.patternMonthDay)
 private val dueTimeFormatter get() = com.lucent.app.i18n.LDates.of(S.patternTime)
 
-/** True when a pending task's due time has already passed. A completed task is never overdue. */
 fun isOverdue(dueAt: Long?, isDone: Boolean): Boolean {
     if (dueAt == null || isDone) return false
     return dueAt < System.currentTimeMillis()
 }
 
-/**
- * A due date phrased the way a person would say it: "Today 3:00 PM", "Tomorrow 9:00 AM", "Overdue ·
- * Jul 3", or "Jul 8 · 2:00 PM".
- *
- * Relative wording for the two days that matter, an explicit marker once a deadline has passed, and
- * a plain date beyond that. The whole point is that "tomorrow" is instantly legible in a way that
- * "Jul 14, 9:00 AM" is not, and that the difference between *late* and *soon* should be readable
- * without doing arithmetic against today's date in your head.
- */
 fun friendlyDue(dueAt: Long): String {
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
@@ -348,11 +271,6 @@ fun friendlyDue(dueAt: Long): String {
     }
 }
 
-/**
- * The localized display name for a priority (localization task). [TaskPriority.label] itself
- * stays English on purpose: it feeds the assistant's tool results and file exports' data columns,
- * which must remain stable for the model; the UI reads this instead.
- */
 val TaskPriority.uiLabel: String
     get() = when (this) {
         TaskPriority.NONE -> S.priorityNone
@@ -361,7 +279,6 @@ val TaskPriority.uiLabel: String
         TaskPriority.HIGH -> S.priorityHigh
     }
 
-/** The localized display name for a repeat rule; same reasoning as [TaskPriority.uiLabel]. */
 val RepeatRule.uiLabel: String
     get() = when (this) {
         RepeatRule.NONE -> S.repeatNone

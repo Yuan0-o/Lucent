@@ -44,36 +44,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * The quick model switcher that sits immediately left of the send button (B-group task 5).
- *
- * ### What it switches, and what it deliberately does not
- *
- * The MODEL, and only the model. The API profile — endpoint, spec, key — is untouched, which is the
- * explicit requirement: people want to try the same question against a cheaper or a stronger model
- * on the SAME provider without walking to Settings, opening the API page, editing a field and
- * saving. Switching provider remains a Settings action, because it changes billing and credentials
- * and deserves that friction.
- *
- * ### Where the list comes from
- *
- * Three sources, in decreasing order of immediacy, because a menu that has to hit the network before
- * it can show anything is not "quick":
- *
- *  1. **Recently used** ([com.lucent.app.data.ModelRecents]) — instant, offline, and in practice the
- *     two or three models a given user actually alternates between.
- *  2. **The provider's catalogue** — one tap, fetched through the existing [LlmClient.fetchModels]
- *     the Settings API page already uses. Opt-in rather than automatic: opening a menu should never
- *     silently spend a network round-trip, and some endpoints don't implement /models at all.
- *  3. **Typed by hand** — the escape hatch for a brand-new model id that no catalogue lists yet.
- *
- * In local mode the same control lists the imported on-device slots instead, because in that mode
- * those *are* the models; switching one frees the resident model immediately (a multi-gigabyte
- * allocation is not something to leave lying around) and the next send loads the new slot.
- *
- * The switcher is intentionally a single icon button: the chat input row is already crowded on a
- * phone, and the current model name is available in Settings and in the menu's own header.
- */
 @Composable
 fun QuickModelSwitcher(
     currentModel: String,
@@ -97,8 +67,6 @@ fun QuickModelSwitcher(
     var typing by remember { mutableStateOf(false) }
     var typed by remember { mutableStateOf("") }
 
-    // Local slots are read on each open rather than cached: they change on the Local model page,
-    // which this composable has no way to observe. `refresh` re-reads after a switch.
     var refresh by remember { mutableStateOf(0) }
     val slots = remember(refresh, open, localModelEnabled) {
         if (localModelEnabled) runCatching { LocalModelStore.slots(context) }.getOrDefault(emptyList())
@@ -116,8 +84,6 @@ fun QuickModelSwitcher(
 
     IconButton(
         onClick = {
-            // A fresh menu each time: a catalogue fetched against the previous API would be a list
-            // of models this one cannot serve.
             fetched = emptyList()
             fetchNote = ""
             open = true
@@ -133,7 +99,6 @@ fun QuickModelSwitcher(
 
     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
         Column(modifier = Modifier.width(260.dp)) {
-            // ---- Header: what is in use right now ----
             Text(
                 if (localModelEnabled) com.lucent.app.i18n.S.quickModelLocalSection
                 else com.lucent.app.i18n.S.quickModelCurrent,
@@ -154,7 +119,6 @@ fun QuickModelSwitcher(
 
             Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                 if (localModelEnabled) {
-                    // ---- On-device slots ----
                     if (slots.isEmpty()) {
                         DropdownMenuItem(
                             text = { Text(com.lucent.app.i18n.S.quickModelLocalEmpty, fontSize = 12.sp) },
@@ -181,10 +145,6 @@ fun QuickModelSwitcher(
                                     if (!active) {
                                         scope.launch {
                                             withContext(Dispatchers.IO) {
-                                                // Free the outgoing model before pointing at the new
-                                                // slot — the same order the Local model page uses,
-                                                // so a multi-gigabyte allocation is never held for a
-                                                // model that is no longer selected.
                                                 LocalLlm.shutdown()
                                                 LocalModelStore.setActive(context, slot.id)
                                             }
@@ -197,7 +157,6 @@ fun QuickModelSwitcher(
                         }
                     }
                 } else {
-                    // ---- Recently used ----
                     val shownRecents = recents.filter { it.isNotBlank() && it != currentModel }
                     if (shownRecents.isNotEmpty()) {
                         Text(
@@ -215,7 +174,6 @@ fun QuickModelSwitcher(
                         HorizontalDivider()
                     }
 
-                    // ---- The provider's catalogue, on request ----
                     if (fetched.isEmpty()) {
                         DropdownMenuItem(
                             text = {
@@ -260,7 +218,6 @@ fun QuickModelSwitcher(
                         }
                     }
 
-                    // ---- Typed by hand ----
                     HorizontalDivider()
                     DropdownMenuItem(
                         text = { Text(com.lucent.app.i18n.S.quickModelCustom) },

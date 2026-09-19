@@ -6,25 +6,12 @@ import java.security.SecureRandom
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
-/**
- * Desktop twin of the Android DataKeys: the two data-encryption keys (attachments, database),
- * each 32 random bytes, stored under `keys/` wrapped by [LocalSecrets].
- *
- * The Android build stores each key twice (Keystore-wrapped + a Keystore-independent recovery
- * copy) because the Android Keystore can die independently of the files. The desktop wrapping has
- * no such external dependency — [LocalSecrets]' master key lives in the very same directory — so a
- * single wrapped copy carries the same guarantees the two copies do on Android: as long as the
- * `keys/` directory survives, the data opens; if the whole profile is lost, the `.lcb` backup is
- * the recovery path on both platforms.
- *
- * Public API is identical to Android's so shared code compiles unchanged.
- */
 object DataKeys {
 
     private const val KEY_DIR = "keys"
     private const val ATTACHMENT_KEY_FILE = "attachments.key"
     private const val DATABASE_KEY_FILE = "database.key"
-    private const val KEY_BYTES = 32 // AES-256
+    private const val KEY_BYTES = 32
 
     private val lock = Any()
     @Volatile private var attachmentKey: SecretKey? = null
@@ -43,28 +30,6 @@ object DataKeys {
         return if (bytes != null && bytes.size == KEY_BYTES) bytes else null
     }
 
-    /**
-     * Atomic **and durable** write: temp file, fsync, then rename — so neither a half-written nor a
-     * present-but-empty key file can ever be observed.
-     *
-     * ### C-group task 4/17: why the fsync is not optional here
-     *
-     * The original wrote the temp file and renamed it. That is atomic with respect to *other
-     * readers* — nobody sees a partial file — but it is not durable with respect to *power loss*.
-     * On NTFS the metadata change (the new name) can reach the disk before the file's contents do,
-     * so an abrupt power-off leaves `database.key` existing at zero length.
-     *
-     * That is not a theoretical window. Task 4's GPU hang forces exactly that power-off, and the
-     * dialog reported afterwards — "The Lucent database ... could not be unlocked with this
-     * machine's key" — is what an unreadable or regenerated key file produces on the next launch.
-     * A key file is the one thing in this app whose loss is unrecoverable without a backup, so it
-     * gets the strongest write the platform offers.
-     *
-     * `fd.sync()` blocks until the bytes are on the platter. After it returns, the only two states
-     * the crash can leave are "temp file exists, real file absent" (recoverable: a fresh key is
-     * minted, and [getOrCreate] only ever mints when the real file is absent) and "real file exists,
-     * complete".
-     */
     private fun atomicWrite(file: File, contents: String): Boolean {
         val temp = File(file.parentFile, "${file.name}.tmp")
         return try {
@@ -85,8 +50,6 @@ object DataKeys {
         if (file.exists()) {
             val stored = try { file.readText() } catch (t: Throwable) { "" }
             decodeKey(LocalSecrets.decrypt(stored))?.let { return it }
-            // Never overwrite an unreadable key with a fresh one — that would silently orphan
-            // everything it protects. Same policy as Android.
             throw IllegalStateException(
                 "The encryption key in $fileName could not be read. Data protected by it cannot " +
                     "be decrypted on this machine; restore from a .lcb backup."
@@ -100,7 +63,6 @@ object DataKeys {
         return fresh
     }
 
-    /** The AES key protecting attachment files on disk. */
     fun attachmentKey(context: Context): SecretKey {
         attachmentKey?.let { return it }
         synchronized(lock) {
@@ -111,7 +73,6 @@ object DataKeys {
         }
     }
 
-    /** The database passphrase in SQLCipher's raw-key form: `x'<64 hex chars>'`. */
     fun databasePassphrase(context: Context): String {
         databaseKeyHex?.let { return it }
         synchronized(lock) {
@@ -124,11 +85,9 @@ object DataKeys {
         }
     }
 
-    /** Whether a database key already exists — i.e. whether this install has ever been encrypted. */
     fun hasDatabaseKey(context: Context): Boolean =
         File(keyDir(context), DATABASE_KEY_FILE).exists()
 
-    /** Test seam: forget the cached keys so the next call re-reads them from disk. */
     fun resetCacheForTesting() {
         synchronized(lock) {
             attachmentKey = null

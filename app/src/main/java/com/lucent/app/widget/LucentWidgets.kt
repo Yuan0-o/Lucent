@@ -1,11 +1,3 @@
-// Backlog A-5, widget cluster — DECISION (option c, recorded 2026-07-26): the Intent-based
-// RemoteViewsService collection API used below was deprecated in API 31 in favour of
-// RemoteViews.setRemoteAdapter(int, RemoteCollectionItems) — which does not exist below 31, and
-// minSdk is 26 (cpuOnly) / 28. A branch would mean two data paths for the same widget list, and a
-// Glance migration is a rewrite; both are out of proportion to a deprecation that Android still
-// fully supports on every OS this app runs on. So the deprecation is SUPPRESSED here, file-wide,
-// as a decision rather than an accident. Revisit when minSdk reaches 31 (then the modern overload
-// can simply replace the calls) or if these widgets are ever rebuilt on Glance.
 @file:Suppress("DEPRECATION")
 
 package com.lucent.app.widget
@@ -26,34 +18,10 @@ import com.lucent.app.data.Checklist
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
-/**
- * Lucent's home-screen widgets (task 9). Five small, deliberately compact widgets:
- *
- *  - [NewNoteWidget], [NewTaskWidget], [AssistantWidget] — one-tap shortcuts that open a fresh note
- *    composer, a fresh task composer, or the assistant. These are the three the brief asked for.
- *  - [QuickActionsWidget] — all three of the above in a single tidy bar, for people who'd rather
- *    spend one cell on the lot than three.
- *  - [TaskSummaryWidget] — shows how many tasks are still open and opens the task list when tapped;
- *    the one widget that surfaces live data rather than just launching something.
- *
- * Each is a thin launcher over [WidgetActions.pendingIntent]; only the summary reads the database,
- * and it does so off the main thread under [android.content.BroadcastReceiver.goAsync].
- */
 
-// ---------------------------------------------------------------------------------------
-// Size buckets (this round's widget task). The user can resize every widget from 1x1 up to
-// its max, and each size deserves its own composition rather than one squashed layout:
-//  - SMALL  (~1x1): the glyph alone, centred — instantly readable, never the app icon.
-//  - MEDIUM (~2x1): glyph over a one-line function label.
-//  - WIDE   (>=3 columns): a banner with room for the label (and, for the assistant, the
-//    "ask anything" pill; for progress, the next-due line).
-// Chosen from the launcher-reported OPTION_APPWIDGET_MIN_* dp in onAppWidgetOptionsChanged,
-// which works on every API level — no reliance on the S+ mapped-RemoteViews API, so Huawei
-// and other forked launchers get the same behaviour.
-// ---------------------------------------------------------------------------------------
 
-private const val WIDE_MIN_DP = 176   // three launcher columns and up
-private const val MEDIUM_MIN_DP = 100 // two columns (or a tall single column)
+private const val WIDE_MIN_DP = 176
+private const val MEDIUM_MIN_DP = 100
 
 private fun sizeBucketLayout(options: Bundle?, small: Int, medium: Int, wide: Int): Int {
     val w = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH) ?: 0
@@ -65,10 +33,6 @@ private fun sizeBucketLayout(options: Bundle?, small: Int, medium: Int, wide: In
     }
 }
 
-/**
- * Base for the three one-tap launchers: renders the size-appropriate layout and wires the whole
- * card to its action. Re-renders on every resize via [onAppWidgetOptionsChanged].
- */
 abstract class ResponsiveActionWidget(
     private val small: Int,
     private val medium: Int,
@@ -94,25 +58,21 @@ abstract class ResponsiveActionWidget(
     }
 }
 
-/** One-tap "new note". */
 class NewNoteWidget : ResponsiveActionWidget(
     R.layout.widget_new_note_small, R.layout.widget_new_note, R.layout.widget_new_note_wide,
     WidgetActions.NEW_NOTE
 )
 
-/** One-tap "new task". */
 class NewTaskWidget : ResponsiveActionWidget(
     R.layout.widget_new_task_small, R.layout.widget_new_task, R.layout.widget_new_task_wide,
     WidgetActions.NEW_TASK
 )
 
-/** One-tap "ask the assistant"; at banner width it shows the quiet "ask anything" pill. */
 class AssistantWidget : ResponsiveActionWidget(
     R.layout.widget_assistant_small, R.layout.widget_assistant, R.layout.widget_assistant_wide,
     WidgetActions.ASK
 )
 
-/** All three shortcuts in one compact bar. */
 class QuickActionsWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (id in appWidgetIds) {
@@ -125,12 +85,6 @@ class QuickActionsWidget : AppWidgetProvider() {
     }
 }
 
-/**
- * Live task progress: how much of what's on the list is DONE — "3 / 8" plus a bar — with the next
- * due task named at banner width. Opens the task list when tapped. This replaces the old bare
- * open-count: the user asked to *see progress*, and a fraction with a bar answers "how am I
- * doing" where a lone count only answered "how much is left".
- */
 class TaskSummaryWidget : AppWidgetProvider() {
 
     private data class Progress(val done: Int, val total: Int, val next: String?)
@@ -146,9 +100,6 @@ class TaskSummaryWidget : AppWidgetProvider() {
     }
 
     private fun renderAll(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        // Reading the (encrypted) database can block, so hop off the main thread and keep the
-        // broadcast alive until we've finished with goAsync(). A failure just shows a dash rather
-        // than crashing the launcher.
         val pendingResult = goAsync()
         val appContext = context.applicationContext
         AppScope.io.launch {
@@ -156,8 +107,6 @@ class TaskSummaryWidget : AppWidgetProvider() {
                 val tasks = AppDatabase.getInstance(appContext).taskDao().getAllOnce()
                     .filter { it.trashedAt == null }
                 val done = tasks.count { it.isDone }
-                // "Next" = the open task due soonest; with no dated ones, the newest open task,
-                // so the line is never blank while anything at all remains to do.
                 val open = tasks.filter { !it.isDone }
                 val next = (open.filter { it.dueAt != null }.minByOrNull { it.dueAt!! }
                     ?: open.maxByOrNull { it.createdAt })
@@ -185,8 +134,6 @@ class TaskSummaryWidget : AppWidgetProvider() {
                         )
                         val pct = if (progress.total == 0) 0 else (progress.done * 100 / progress.total)
                         views.setProgressBar(R.id.progress_bar, 100, pct, false)
-                        // The next-due line only exists in the wide layout; touching an id a layout
-                        // doesn't contain is a RemoteViews error, so it's bound only there.
                         if (layout == R.layout.widget_task_summary_wide) {
                             val nextLine = when {
                                 progress.total > 0 && progress.done == progress.total ->
@@ -208,23 +155,14 @@ class TaskSummaryWidget : AppWidgetProvider() {
     }
 }
 
-// ---------------------------------------------------------------------------------------
-// Content widgets ported from the first settings variant: a scrollable tasks list and a
-// pinned-note preview. They surface data rather than just launching something, and read only
-// the local, already-decrypted database — nothing touches the network.
-// ---------------------------------------------------------------------------------------
 
-/** A scrollable list of the tasks still to do, with a quick-add "+" in its header. */
 class TodayTasksWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_today_tasks).apply {
-                // Header "+" opens a new-task composer; tapping the title opens the Tasks tab.
                 setOnClickPendingIntent(R.id.widget_today_add, WidgetActions.pendingIntent(context, WidgetActions.NEW_TASK))
                 setOnClickPendingIntent(R.id.widget_today_title, WidgetActions.pendingIntent(context, WidgetActions.OPEN_TASKS))
 
-                // Bind the ListView to the RemoteViewsService that supplies the task rows. The data
-                // URI keeps each widget instance's service intent distinct.
                 val serviceIntent = Intent(context, TodayTasksWidgetService::class.java).apply {
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
                     data = Uri.parse("lucent://widget/today/" + widgetId)
@@ -232,12 +170,10 @@ class TodayTasksWidget : AppWidgetProvider() {
                 setRemoteAdapter(R.id.widget_today_list, serviceIntent)
                 setEmptyView(R.id.widget_today_list, R.id.widget_today_empty)
 
-                // One template PendingIntent for the whole list; each row's fill-in supplies its id.
                 setPendingIntentTemplate(R.id.widget_today_list, WidgetActions.taskListTemplate(context))
             }
             appWidgetManager.updateAppWidget(widgetId, views)
         }
-        // Ask the list to re-fetch, in case this update was triggered by a data change.
         appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_today_list)
     }
 }
@@ -246,11 +182,6 @@ class TodayTasksWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = TodayTasksFactory(applicationContext)
 }
 
-/**
- * Feeds task rows into the [TodayTasksWidget] list. RemoteViewsFactory methods are called on a
- * binder thread, so reading the database synchronously here is correct — and cheap, since it's the
- * same one-shot query the app uses, just filtered to active tasks.
- */
 private class TodayTasksFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
 
     private data class Row(val id: Long, val title: String, val subtitle: String, val isDone: Boolean)
@@ -262,10 +193,6 @@ private class TodayTasksFactory(private val context: Context) : RemoteViewsServi
     override fun onDataSetChanged() {
         rows = try {
             runBlocking {
-                // Done and not-done alike (this round's ask): the open work sorts first — due
-                // soonest at the top, undated newest-first after — and the completed rows follow,
-                // muted and struck through, so the list reads as "here's the day, and here's what
-                // you've already knocked out" rather than pretending finished work never existed.
                 AppDatabase.getInstance(context).taskDao().getAllOnce()
                     .filter { it.trashedAt == null }
                     .sortedWith(compareBy({ it.isDone }, { it.dueAt ?: Long.MAX_VALUE }, { -it.createdAt }))
@@ -293,8 +220,6 @@ private class TodayTasksFactory(private val context: Context) : RemoteViewsServi
         val row = rows.getOrNull(position)
             ?: return RemoteViews(context.packageName, R.layout.widget_today_tasks_item)
         return RemoteViews(context.packageName, R.layout.widget_today_tasks_item).apply {
-            // Completed rows read as receipts: struck through, dimmed, check filled. Spans travel
-            // fine inside RemoteViews, so the strike is a real strike rather than a unicode hack.
             val title: CharSequence = if (row.isDone) {
                 android.text.SpannableString(row.title).apply {
                     setSpan(
@@ -319,9 +244,6 @@ private class TodayTasksFactory(private val context: Context) : RemoteViewsServi
                 setViewVisibility(R.id.widget_task_item_subtitle, android.view.View.VISIBLE)
                 setTextViewText(R.id.widget_task_item_subtitle, row.subtitle)
             }
-            // TWO fill-ins into the one neutral template: the row body opens the task, the check
-            // asks (via the in-app confirmation dialog) to complete or reopen it. Each supplies
-            // its own action alongside the id.
             val openFillIn = Intent().apply {
                 putExtra(WidgetActions.EXTRA_ACTION, WidgetActions.OPEN_TASK_ITEM)
                 putExtra(WidgetActions.EXTRA_ID, row.id)
@@ -343,12 +265,8 @@ private class TodayTasksFactory(private val context: Context) : RemoteViewsServi
     companion object { private const val MAX_ROWS = 25 }
 }
 
-/** The most recently updated pinned note at a glance; tapping opens it. */
 class PinnedNoteWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        // Pick the most recently updated pinned, non-archived, non-trashed note. RemoteViews work is
-        // quick; the one DB read is a one-shot on this broadcast, guarded so a failure just renders
-        // the empty state rather than crashing the launcher.
         val note = try {
             runBlocking {
                 AppDatabase.getInstance(context).noteDao().getAllOnce()
@@ -389,11 +307,6 @@ class PinnedNoteWidget : AppWidgetProvider() {
     }
 }
 
-/**
- * Nudge the content widgets to redraw. Called when the app goes to the background (MainActivity
- * onStop) so the home screen is fresh as the launcher reappears. Cheap and safe to call often — it
- * only enqueues a redraw, and does nothing when no such widget is placed.
- */
 object WidgetUpdater {
     fun refreshContent(context: Context) {
         val manager = AppWidgetManager.getInstance(context) ?: return

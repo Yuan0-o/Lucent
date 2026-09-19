@@ -5,11 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/**
- * P2-3: provider request-body and URL shape tests, pinned against the behaviour of the pre-refactor
- * implementation so the ProviderAdapter refactor stays behaviour-identical. Each provider's wire
- * format (URLs, auth headers, body shape, reply parsing) is asserted from fixtures.
- */
 class ProviderAdapterTest {
 
     private val tools = listOf(
@@ -25,7 +20,6 @@ class ProviderAdapterTest {
         ChatTurn(role = "assistant", content = "Hi there")
     )
 
-    // ---- URLs ----
 
     @Test
     fun `openai chat url`() {
@@ -56,7 +50,6 @@ class ProviderAdapterTest {
         )
     }
 
-    // ---- Auth headers ----
 
     @Test
     fun `openai auth uses bearer`() {
@@ -81,7 +74,6 @@ class ProviderAdapterTest {
         assertEquals("gkey", b.build().header("x-goog-api-key"))
     }
 
-    // ---- Request body shapes ----
 
     @Test
     fun `openai body shape`() {
@@ -90,7 +82,6 @@ class ProviderAdapterTest {
         assertEquals("sys", body.getJSONArray("messages").getJSONObject(0).getString("content"))
         assertEquals("user", body.getJSONArray("messages").getJSONObject(1).getString("role"))
         assertTrue(body.getDouble("temperature") > 0)
-        // tools are wrapped in the OpenAI function shape
         val t = body.getJSONArray("tools").getJSONObject(0)
         assertEquals("function", t.getString("type"))
         assertEquals("create_task", t.getJSONObject("function").getString("name"))
@@ -103,7 +94,6 @@ class ProviderAdapterTest {
         assertEquals("sys", body.getString("system"))
         val messages = body.getJSONArray("messages")
         assertEquals("user", messages.getJSONObject(0).getString("role"))
-        // anthropic tools use input_schema
         val t = body.getJSONArray("tools").getJSONObject(0)
         assertEquals("create_task", t.getString("name"))
         assertNotNull(t.optJSONObject("input_schema"))
@@ -115,14 +105,11 @@ class ProviderAdapterTest {
         val contents = body.getJSONArray("contents")
         assertEquals("user", contents.getJSONObject(0).getString("role"))
         assertTrue(body.has("generationConfig"))
-        // google tools use functionDeclarations
         val decls = body.getJSONArray("tools").getJSONObject(0).getJSONArray("functionDeclarations")
         assertEquals("create_task", decls.getJSONObject(0).getString("name"))
-        // system prompt goes into systemInstruction
         assertEquals("sys", body.getJSONObject("systemInstruction").getJSONArray("parts").getJSONObject(0).getString("text"))
     }
 
-    // ---- Reply parsing ----
 
     @Test
     fun `openai reply parses text and tool calls`() {
@@ -161,7 +148,6 @@ class ProviderAdapterTest {
         assertEquals("create_task", reply.toolCalls[0].name)
     }
 
-    // ---- Stream parsing ----
 
     @Test
     fun `openai stream event accumulates text`() {

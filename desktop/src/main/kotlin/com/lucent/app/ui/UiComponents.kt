@@ -71,73 +71,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
 
-/**
- * Tuning for the note/task detail page's swipe-between-items animation (task 7).
- *
- * Shared by both detail pages because they are the same gesture on two screens, and a swipe that
- * felt different on notes than on tasks would be a bug rather than a flourish.
- *
- * Exit is shorter than entry on purpose. The outgoing page is leaving with the finger's own
- * momentum, so it should accelerate away ([FastOutLinearInEasing]); the incoming page is arriving
- * under its own steam and should settle ([LinearOutSlowInEasing]). Equal durations read as a
- * mechanical slideshow — this asymmetry is what makes the two halves read as one movement.
- */
 const val SWIPE_EXIT_MS = 160
 
-/** How long the incoming page takes to settle. See [SWIPE_EXIT_MS]. */
 const val SWIPE_ENTER_MS = 220
 
-/**
- * Drag multiplier applied when there is nothing to swipe to in that direction. Not zero: a gesture
- * that does nothing at all reads as broken, whereas one that moves a little and pulls back reads as
- * the end of the list, which is what it is.
- */
 const val SWIPE_RESIST = 0.33f
 
-/**
- * Task A8 — the label inside a capsule button sat off-centre: the whitespace above "保存" was
- * visibly larger than the whitespace below it.
- *
- * The padding was symmetric all along (`vertical = 13.dp` / `16.dp`), so the button box was never
- * the problem. What is off-centre is the *line box* the glyphs are painted into. A line reserves
- * `lineHeight`, and the theme's body style asks for more of it (24sp) than a 15–16sp label needs;
- * the surplus — the "leading" — is distributed by the default [LineHeightStyle.Alignment.Proportional],
- * i.e. split in the ratio of the font's ascent to its descent. CJK faces are strongly
- * ascent-heavy, so most of that surplus lands *above* the glyphs. Centring the box therefore does
- * not centre what the eye actually sees, and the taller the label's script, the worse it reads.
- *
- * [LineHeightStyle.Trim.Both] drops the leading above the first line and below the last one, and
- * [LineHeightStyle.Alignment.Center] splits whatever remains evenly instead of proportionally. The
- * visible glyphs end up centred in the capsule, which is what the symmetric padding was asking for.
- *
- * Deliberately built from the common `ui-text` API (no `PlatformTextStyle`, which takes an
- * Android-only `includeFontPadding` argument), so the Android file and the desktop fork stay in
- * step. A style whose `lineHeight` is unspecified simply has no leading to trim, making this a
- * no-op there rather than a surprise.
- */
 private val CapsuleLabelLineHeight = LineHeightStyle(
     alignment = LineHeightStyle.Alignment.Center,
     trim = LineHeightStyle.Trim.Both
 )
 
-/**
- * The primary pill button used for "Edit note" / "Edit task" / "Archive".
- *
- * ### Why the Haze blur was removed (task 2)
- *
- * This used to run a live Haze blur of the background behind it, on the theory that a genuine blur
- * is more "liquid glass" than a flat translucent fill. In practice it looked *dirty*: the blur
- * sampled the shared background layer and smeared a lump of whatever colour happened to be nearby
- * across the inside of the button — a lavender-grey bruise sitting in one corner with no relation to
- * anything behind it. On a small, isolated pill there is nothing for a blur to reveal anyway; a blur
- * only reads as glass when there is legible content behind it to be softened, and behind a button
- * 48dp tall there is one flat gradient. All it could contribute was the artefact.
- *
- * So the effect is gone. The button now uses the same honest, flat frosted treatment as the cards:
- * a translucent fill, a faint top sheen, a hairline rim — theme-aware in the same direction as
- * everything else (lighter than the backdrop on dark, smoked on light). It is quieter, it is
- * consistent with every other surface in the app, and it cannot smear.
- */
 @Composable
 fun GlassCapsuleButton(
     text: String,
@@ -155,9 +99,6 @@ fun GlassCapsuleButton(
     val rim = lucentGlassRim(strong = true)
     Row(
         modifier = modifier
-            // Fill and rim, nothing else — the same subtraction the cards went through. No shadow
-            // (it creates a graphicsLayer, which is what put a pale block inside every card), and no
-            // sheen overlay on top of the fill.
             .clip(shape)
             .background(fill)
             .border(1.dp, rim, shape)
@@ -175,60 +116,11 @@ fun GlassCapsuleButton(
             text,
             color = onGradient,
             fontSize = 16.sp,
-            // Task A8: centre the glyphs, not the metrics box around them.
             style = LocalTextStyle.current.copy(lineHeightStyle = CapsuleLabelLineHeight)
         )
     }
 }
 
-/**
- * The app's standard button, in the same glass as everything else (task 11).
- *
- * ### Why this exists
- *
- * Lucent draws one material — a translucent fill, a hairline gradient rim, no shadow — and every
- * surface in it obeys that rule except the buttons on Settings > Data, which were still Material 3's
- * `Button`. M3 draws a *filled, opaque* pill in the theme's primary colour, so the Data page ended
- * up with six solid lilac slabs and four solid red ones sitting on top of a page made entirely of
- * glass. Not ugly in isolation — it is a perfectly good button — but visibly borrowed, which is the
- * one thing a design language cannot afford at its most consequential screen: the page where the
- * buttons erase your notes should not be the page that looks like it came from somewhere else.
- *
- * So this is the same subtraction [GlassCapsuleButton] went through, generalized: fill, rim, label.
- * No `Modifier.shadow` anywhere near it — a shadow creates a `graphicsLayer`, and one of those
- * nested inside the `hazeSource` container that captures the background is what once painted a pale
- * rectangle inside every card in the app.
- *
- * [danger] is the one deliberate exception to the glass rule, and it is an exception on purpose.
- *
- * ### Why the destructive buttons are solid, not glass
- *
- * Every other surface in Lucent is translucent because translucency is *pleasant*: it lets the
- * backdrop through, it reads as light, it invites you in. That is exactly the wrong signal for the
- * four buttons on Settings > Data that erase your notes, your tasks, your chats, or all three. A
- * red wash at 16–22% alpha over a drifting background is a red *suggestion*: on a pale palette it
- * nearly vanishes, and its colour shifts as the background blobs move under it, so the one control
- * on the page you must not press by accident is also the one whose appearance you cannot rely on.
- *
- * So danger buttons are drawn as a flat, fully opaque red slab with white text. They are meant to
- * look heavier than everything around them, to stop the eye, and to look identical on every palette
- * and in both themes. Consistency of material matters right up until the material starts hiding the
- * consequences, and then legibility wins.
- *
- * A disabled button fades rather than disappearing, and swallows its tap: callers that want a
- * *reason* shown on tap (the greyed-out controls in local-model mode, task 8) keep [enabled] true
- * and answer inside [onClick] with a bottom toast instead — a dead control that ignores touches
- * teaches nothing.
- */
-/**
- * The height of the two actions that close a note or task composer — "Add"/"Save changes" and
- * "Save to draft" (task 3).
- *
- * It is a named constant in the shared UI file rather than a literal at each of the four call sites
- * (two composers × two platforms) because "the same size" is a promise between controls that are
- * declared in different files. Written out four times it holds until someone adjusts one of them;
- * written once it cannot drift.
- */
 val COMPOSER_ACTION_HEIGHT = 52.dp
 
 @Composable
@@ -239,9 +131,6 @@ fun GlassButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
     danger: Boolean = false,
-    // Compact trims the pill down (tighter padding, smaller label and icon) so it can sit as a
-    // secondary action beside a larger primary button. Defaults to false, so every existing call
-    // site keeps its current size.
     compact: Boolean = false
 ) {
     val onGradient = LocalOnGradient.current
@@ -249,17 +138,12 @@ fun GlassButton(
     val shape = RoundedCornerShape(percent = 50)
     val glassDark = isDarkGlass()
 
-    // Two size profiles, selected by [compact]. The regular one is the original pill.
     val padH = if (compact) 14.dp else 22.dp
     val padV = if (compact) 8.dp else 13.dp
     val iconSize = if (compact) 15.dp else 18.dp
     val iconGap = if (compact) 6.dp else 8.dp
     val labelSize = if (compact) 13.sp else 15.sp
 
-    // Danger is a solid slab, not a tint. DANGER_RED is the same hue the old wash used, at full
-    // opacity, and it is identical on both themes on purpose: a destructive control should not
-    // change appearance with the palette, and white-on-red is legible on every backdrop there is.
-    // The darker rim is what stops the slab reading as a flat sticker against a bright background.
     val dangerFill = DANGER_RED
     val dangerRim = DANGER_RED_RIM
     val fill = when {
@@ -294,61 +178,25 @@ fun GlassButton(
             text,
             color = label.copy(alpha = label.alpha * fade),
             fontSize = labelSize,
-            // ---- Task 3, and the reason it was not only a Korean problem ----
-            //
-            // A pill is a fixed shape with a word in it. When the row it sits in runs out of width,
-            // the layout's only remaining move is to squeeze the pill, and a Text that is allowed to
-            // wrap answers by breaking its label into one character per line — which is how "Once a
-            // week" became a 600px-tall column on a phone. Korean showed it first because its label
-            // is longest, but English does exactly the same thing at a slightly narrower screen or a
-            // larger system font, and so does every other language.
-            //
-            // Refusing to wrap is what makes the pill's width HONEST: it now asks for the space its
-            // word actually needs, so a FlowRow can wrap the pill to the next line (the right
-            // answer) instead of the pill wrapping its text (never the right answer).
-            // ONE line, always. That single rule is what prevents the failure you saw: when a row
-            // runs out of width the layout squeezes the pill, and a Text allowed to use more lines
-            // answers by breaking its label into one character per line — a 600px-tall pill. Capping
-            // the line count makes the pill ask for its label's real width instead, which is what
-            // lets a FlowRow wrap the PILL (right) rather than the pill wrapping its TEXT (never).
-            //
-            // softWrap is deliberately left ON. Turning it off as well would change how the label is
-            // measured inside a width the caller has already fixed — a `weight(1f)` pill in an
-            // equal-size group — and those groups are supposed to keep their equal widths and shorten
-            // the label if they must. Equality comes from the weight, not from this.
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            // Task A8: see [CapsuleLabelLineHeight].
             style = LocalTextStyle.current.copy(lineHeightStyle = CapsuleLabelLineHeight)
         )
     }
 }
 
-/**
- * The attachment block shared by the note and task composers.
- *
- * Restyled to match the "Set a due date" row one visual level up: a single icon + label line, the
- * whole row tappable to open the file picker, with any already-attached files listed as removable
- * chips directly beneath it. The previous labelled mini-section (an "Attachments" heading, an
- * "Images, PDFs, audio…" hint line and a pill-shaped "Attach file" button) read as a foreign
- * control next to the plain due-date and pin rows, so all three of those pieces are gone — the
- * row itself is now the affordance, exactly like the due-date row in the task composer.
- */
 @Composable
 fun AttachmentSection(
     attachments: List<com.lucent.app.data.Attachment>,
     onPick: () -> Unit,
     onRemove: (com.lucent.app.data.Attachment) -> Unit,
     modifier: Modifier = Modifier,
-    // Tasks A4 and A11. Optional so the section stays usable anywhere renaming or ordering has no
-    // meaning; the corresponding control simply isn't drawn.
     onRename: ((com.lucent.app.data.Attachment, String) -> Unit)? = null,
     onReorder: ((Int, Int) -> Unit)? = null
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     Column(modifier = modifier.fillMaxWidth()) {
-        // Same anatomy as the due-date row: muted leading icon, 14sp label, whole row clickable.
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable { onPick() },
             verticalAlignment = Alignment.CenterVertically
@@ -363,23 +211,11 @@ fun AttachmentSection(
             )
         }
         if (attachments.isNotEmpty()) {
-            // The chips carry their own top padding, so no extra spacer is needed here.
             PendingAttachmentChips(attachments, onGradientMuted, onRemove, onRename, onReorder)
         }
     }
 }
 
-/**
- * A static, non-interactive "completed" indicator for tasks that are done: a filled rounded
- * square with a checkmark inside. It is deliberately NOT a [androidx.compose.material3.Checkbox]
- * — it has no click handling at all, so tapping it does nothing. Restoring a completed task is
- * done through the explicit undo control instead. Paired with a strikethrough title, this reads
- * as the familiar "this to-do is finished and locked" style.
- *
- * Drawn in [LocalOnGradient] so it matches the other monochrome icons on the frosted cards; the
- * checkmark is drawn in whichever of black/white contrasts with that fill so it stays legible in
- * both light and dark themes.
- */
 @Composable
 fun CompletedCheckbox(modifier: Modifier = Modifier, boxSize: Dp = 22.dp) {
     val boxColor = LocalOnGradient.current
@@ -406,10 +242,6 @@ fun CompletedCheckbox(modifier: Modifier = Modifier, boxSize: Dp = 22.dp) {
     }
 }
 
-/**
- * The calendar icon that opens the date filter. Rendered slightly brighter when a date is
- * currently active so the affordance quietly signals whether a filter is on.
- */
 @Composable
 fun DateFilterIconButton(active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
@@ -423,17 +255,10 @@ fun DateFilterIconButton(active: Boolean, onClick: () -> Unit, modifier: Modifie
     }
 }
 
-/**
- * A small dismissible pill that shows the currently active date-range filter (e.g. "Jul 3, 2026 –
- * Jul 9, 2026", collapsing to a single date when start == end) with an X to clear it. Shown only
- * while a filter is set, so an inactive filter adds no clutter.
- */
 @Composable
 fun DateFilterChip(startMillis: Long, endMillis: Long, onClear: () -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
     val shape = RoundedCornerShape(percent = 50)
-    // Theme-aware glass (task 1): a white wash reads on dark, a smoke wash reads on light. The old
-    // fixed white one disappeared entirely on the light theme.
     val chipDark = isDarkGlass()
     val chipFill = Color.White.copy(alpha = if (chipDark) 0.12f else 0.26f)
     val chipRim = if (chipDark) Color.White.copy(alpha = 0.22f) else onGradient.copy(alpha = 0.20f)
@@ -464,23 +289,6 @@ fun DateFilterChip(startMillis: Long, endMillis: Long, onClear: () -> Unit, modi
     }
 }
 
-/**
- * The Notes/Tasks home header bar with a **collapsible** set of secondary actions (task 16).
- *
- * Layout, left to right: the search field (which flexes to fill the remaining width) · an
- * animated cluster of secondary actions ([actions]: date filter, sort, overflow) · a chevron that
- * expands/collapses that cluster · the always-visible "+" ([trailing]).
- *
- * Collapsed (the default), only the chevron and "+" sit beside the search field, so the search box
- * is as wide as possible. Tapping the "<" chevron expands the cluster *leftwards* — it grows from
- * the chevron toward the search box, which smoothly shrinks to make room — and the chevron flips to
- * ">" to collapse again. The reveal is driven by [expandHorizontally]/[shrinkHorizontally] anchored
- * at the end, so the motion reads as sliding out from behind the chevron rather than appearing all
- * at once, and the weighted search field reflows in step with it.
- *
- * [search] must size itself with `Modifier.fillMaxWidth()` (this bar gives it the flexible slot);
- * [actions] is a normal [RowScope] content lambda holding the buttons to hide/show.
- */
 @Composable
 fun CollapsibleActionBar(
     expanded: Boolean,
@@ -492,13 +300,9 @@ fun CollapsibleActionBar(
     tint: Color = LocalOnGradientMuted.current
 ) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // The flexible search slot. Everything after it is intrinsically sized, so the search box
-        // takes whatever width is left — which changes as the action cluster expands or collapses.
         Box(modifier = Modifier.weight(1f)) { search() }
         Spacer(modifier = Modifier.width(4.dp))
 
-        // The secondary actions, revealed/hidden with a horizontal expand anchored at the end so
-        // they slide out toward the search box (i.e. "to the left") rather than popping in place.
         AnimatedVisibility(
             visible = expanded,
             enter = expandHorizontally(expandFrom = Alignment.End) + fadeIn(),
@@ -507,8 +311,6 @@ fun CollapsibleActionBar(
             Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
 
-        // The expand/collapse toggle. "<" invites expansion (there is more, tucked away to the
-        // left); once open it becomes ">" to fold the cluster back up.
         IconButton(onClick = onToggleExpanded) {
             Icon(
                 if (expanded) Icons.Default.ChevronRight else Icons.Default.ChevronLeft,
@@ -521,12 +323,6 @@ fun CollapsibleActionBar(
     }
 }
 
-/**
- * The compact circular "+" that sits in the top-right corner of the Notes and Tasks home pages
- * and opens the create-new composer. It replaces the old full-width "New note" / "New task" bar:
- * a single glass pill in the corner reads as the primary create action while taking almost no
- * space. Shared between both screens so the affordance looks identical in each.
- */
 @Composable
 fun NewItemButton(contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
@@ -562,28 +358,12 @@ private fun startOfDayMillis(year: Int, month: Int, day: Int): Long =
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-/**
- * Opens the app's date-range picker — first the start date, then the end date — to choose a range
- * to filter by. [currentStart]/[currentEnd] pre-select the range if one is already active.
- * [onPicked] receives (start-of-day-of-start, start-of-day-of-end) in local time, the values the
- * filters store and compare against with [withinLocalDayRange].
- *
- * Desktop adaptation: Android shows the platform date dialog twice; desktop has no platform
- * dialog, so this posts a request that the desktop shell renders as an in-app glass dialog (see
- * com.lucent.desktop.ui.DateRangePickerHost). Semantics are unchanged — the end date is clamped so
- * the range can never come back inverted, and picking the same day for both ends matches that day.
- */
 fun showDateRangePicker(context: Context, currentStart: Long?, currentEnd: Long?, onPicked: (Long, Long) -> Unit) {
     DesktopDatePicker.open(currentStart, currentEnd) { start, end ->
         onPicked(start, maxOf(start, end))
     }
 }
 
-/**
- * The imperative-to-Compose bridge for the date-range picker. showDateRangePicker (called from
- * non-composable click handlers, same as on Android) posts a [Request]; the desktop shell observes
- * [request] and renders the actual dialog, exactly the pattern LucentToast uses for toasts.
- */
 object DesktopDatePicker {
     data class Request(
         val initialStart: Long?,
@@ -599,19 +379,9 @@ object DesktopDatePicker {
 
     fun dismiss() { request.value = null }
 
-    /** Midnight of the given local calendar day — the value the filters store. */
     fun startOfDay(year: Int, month: Int, day: Int): Long = startOfDayMillis(year, month, day)
 }
 
-/**
- * The panel shown in place of a list that has nothing in it.
- *
- * There are always two reasons a list is empty and they need different words: there is nothing
- * *yet*, or there is nothing *matching*. Showing "No notes yet" to someone who has two hundred notes
- * and typed a typo is actively confusing — it reads as though the app lost them. So the caller
- * passes both messages and this picks, which keeps the distinction impossible to forget at a call
- * site.
- */
 @Composable
 fun EmptyState(
     isFiltered: Boolean,
@@ -634,14 +404,6 @@ fun EmptyState(
     }
 }
 
-/**
- * The "?" beside a search box, which opens a sheet listing the search operators.
- *
- * Search syntax that isn't discoverable may as well not exist: nobody guesses `has:attachment`, and
- * a feature only power users find by reading the source is a feature that was built for nobody. One
- * unobtrusive icon, one dialog, and the whole query language becomes something an ordinary user can
- * stumble into.
- */
 @Composable
 fun SearchHelpButton(modifier: Modifier = Modifier) {
     val onGradientMuted = LocalOnGradientMuted.current
@@ -680,15 +442,6 @@ fun SearchHelpButton(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * A row of tappable note chips — used for a note's outgoing `[[links]]` and for its backlinks.
- *
- * Links live here, as chips under the body, rather than relying solely on tapping the inline
- * `[[text]]` itself. Inline link targets on a phone are a few millimetres of text wedged inside a
- * paragraph, which is a miserable tap target; a chip is a proper one. The inline link is still
- * tappable for anyone who wants it — this is the affordance that makes the graph actually
- * *navigable* rather than merely present.
- */
 @Composable
 fun NoteLinkChips(
     label: String,
@@ -749,14 +502,6 @@ fun NoteLinkChips(
     }
 }
 
-/**
- * A row of chips for `[[links]]` that point at nothing yet.
- *
- * Tapping one creates that note — which turns a broken link from an error into the fastest way to
- * write the next note. Writing `[[Packing list]]` in the middle of a trip plan and then tapping it
- * to bring the packing list into existence is the single nicest thing about linked notes, and it
- * only works if broken links are surfaced rather than hidden.
- */
 @Composable
 fun BrokenLinkChips(
     targets: List<String>,
@@ -807,21 +552,6 @@ fun BrokenLinkChips(
     }
 }
 
-/**
- * A single round "edge jump" control for a long scrolling page, overlaid at the bottom-right of a
- * list or a detail page.
- *
- * ### One disc, not a pair (R3 report fix)
- *
- * This used to be two stacked discs (up above down), each fading in and out through its own
- * AnimatedVisibility. Whenever scrolling reached an edge only one disc remained, the Column
- * collapsed, and the survivor slid into the other disc's slot — the visible position jump that
- * was reported as flickering. The control is now ONE disc that never moves: it shows "jump up"
- * whenever there is content above ([canUp]) and "jump down" otherwise, so a single tap always
- * heads for the far end the reader is not at. Mid-page it offers up first; at the very top it
- * offers down; at the very bottom, up again — both extremes stay reachable in at most two taps,
- * and nothing ever relocates on screen.
- */
 @Composable
 fun ScrollEdgeJumpButtons(
     canUp: Boolean,
@@ -831,11 +561,8 @@ fun ScrollEdgeJumpButtons(
     onDown: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Nothing to travel to: a short page that cannot scroll in either direction gets no control,
-    // exactly as the two-disc version rendered nothing at all there.
     if (!canUp && !canDown) return
 
-    // One anchor, one disc: the direction is a property of the icon, not of a second slot.
     val jumpUp = canUp
     Box(
         modifier = modifier
@@ -855,17 +582,6 @@ fun ScrollEdgeJumpButtons(
 }
 
 
-/**
- * A near-full-screen editor for any plain-text field (task 12).
- *
- * [ExpandableGlassTextField] already does this for the note and task composers, but its expanded
- * panel is private to that file and bound to its own collapsed field. The assistant composer needs
- * the same panel without the collapsed half, so the panel is offered here on its own.
- *
- * Every name below is fully qualified on purpose. This function is appended to a file whose two
- * platform copies do not carry an identical import list, and a shared component that compiles on one
- * platform and not the other is worse than a verbose one that compiles on both.
- */
 @Composable
 fun LucentExpandedInput(
     value: String,
@@ -878,21 +594,11 @@ fun LucentExpandedInput(
     val onGradientMuted = LocalOnGradientMuted.current
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onCollapse,
-        // Desktop has no IME insets and no window decor fitting to switch off — Compose
-        // Multiplatform's DialogProperties has no `decorFitsSystemWindows` field at all, which is
-        // why the Android copy of this file carries it and this one does not. The flicker it fixes
-        // is an Android-only symptom of the platform resizing the dialog window for the keyboard.
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Task 4 — follow the keyboard, exactly as the note and task editors do.
-                //
-                // Without imePadding the panel keeps its full height while the IME covers the bottom
-                // half of it, so the caret sits behind the keyboard and the text being typed cannot
-                // be seen. systemBarsPadding keeps the title clear of the status bar for the same
-                // reason. Both are no-ops on desktop, where there is no IME inset to consume.
                 .systemBarsPadding()
                 .imePadding()
                 .background(

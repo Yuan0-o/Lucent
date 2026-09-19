@@ -1,11 +1,6 @@
 <resources>
-    <!-- Launcher label, shown under the home-screen icon. Uses the mathematical
-         script (bold) capitals so it renders as 𝓛𝓾𝓬𝓮𝓷𝓽 on the launcher. -->
     <string name="app_name">𝓛𝓾𝓬𝓮𝓷𝓽</string>
 
-    <!-- Launcher widgets. These are the one surface that renders outside the app process,
-         so they can't read the in-app catalog (i18n/I18n.kt) and localize the classic way
-         through res/values-*. The app_name brand mark is deliberately NOT translated. -->
     <string name="widget_ask">Ask</string>
     <string name="widget_new_note">New note</string>
     <string name="widget_new_task">New task</string>
@@ -19,8 +14,6 @@
     <string name="widget_untitled">Untitled</string>
     <string name="widget_untitled_task">Untitled task</string>
 
-    <!-- Widget picker labels (this round): short FUNCTION names, never the app name, one per
-         widget, localized the classic res/values-* way because the launcher renders them. -->
     <string name="widget_label_new_task">New task</string>
     <string name="widget_label_new_note">New note</string>
     <string name="widget_label_assistant">Assistant</string>
@@ -28,11 +21,9 @@
     <string name="widget_label_quick">Quick actions</string>
     <string name="widget_label_today">Task list</string>
     <string name="widget_label_pinned">Pinned note</string>
-    <!-- On-widget texts for the redesigned four. -->
     <string name="widget_ask_hint">Ask anything…</string>
     <string name="widget_all_done">All done ✨</string>
     <string name="widget_next_fmt">Next: %1$s</string>
-    <!-- Locale-neutral fraction, kept in base values only. -->
     <string name="widget_fraction_fmt" translatable="false">%1$d / %2$d</string>
     <string name="widget_a11y_mark_done">Mark as done</string>
     <string name="widget_a11y_reopen">Mark as not done</string>

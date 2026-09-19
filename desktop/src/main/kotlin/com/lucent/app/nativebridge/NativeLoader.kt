@@ -3,55 +3,13 @@ package com.lucent.app.nativebridge
 import android.content.DesktopContext
 import java.io.File
 
-/**
- * Loads the app's optional native libraries on desktop.
- *
- * On Android the .so files ride inside the APK and `System.loadLibrary` finds them. On desktop the
- * DLLs are packaged as classpath resources (`/native/<mapped name>`, put there by the Windows CI
- * workflow), so loading is: try the library path first (a developer running with -Djava.library.path
- * set), then extract the resource beside the app data and `System.load` the absolute path.
- *
- * Both native libraries are pure accelerators/engines with graceful degradation on the Kotlin
- * side, so a missing or unloadable DLL must — and does — resolve to `false`, never to a crash.
- */
 object NativeLoader {
 
-    /**
-     * W-1: true when the engine load was REFUSED because this CPU lacks AVX2. The UI reads this to
-     * show the honest sentence ("this processor can't run the on-device model") instead of the
-     * generic "engine missing" one — the difference between a message and a mystery.
-     */
     @Volatile
     var cpuMissingAvx2: Boolean = false
         private set
 
-    /**
-     * Load the on-device LLM engine, preferring the Vulkan-enabled build when this machine can run
-     * it (settings task A4 — Windows GPU support, mirroring the Android build's approach).
-     *
-     * The Windows CI packages up to two engine DLLs: `lucent_llama.dll` (CPU-only — the guaranteed
-     * baseline) and `lucent_llama_vk.dll` (the same engine with llama.cpp's Vulkan GPU backend
-     * compiled in — built best-effort when the Vulkan SDK is available). The Vulkan build links
-     * against `vulkan-1.dll`, which ships with GPU drivers but is absent on some VMs and servers —
-     * loading it there would fail outright and take the local model down with it. So the choice is
-     * made HERE, once, before anything is loaded: the _vk variant is used only when the Windows
-     * Vulkan runtime is actually present, and everything else gets the CPU DLL. Only one of the two
-     * is ever loaded into the process (they export identical JNI symbols).
-     *
-     * With the CPU DLL resident, the in-app GPU switch stays harmless: llama.cpp simply reports no
-     * GPU devices, so a requested offload loads on the CPU instead — the same graceful fallback
-     * LocalLlm already applies when a driver rejects the offload. Default remains CPU either way;
-     * GPU is opt-in behind the existing warning dialog, exactly like Android.
-     */
     fun loadLlmEngine(): Boolean {
-        // ---- W-1: refuse, politely, before the fault can happen. ----
-        // Both engine DLLs are compiled /arch:AVX2 (desktop/native/CMakeLists.txt). On a CPU
-        // without AVX2 they LOAD fine and then kill the whole JVM with an illegal-instruction
-        // fault on the first inference — a process death, not a catchable exception. So the check
-        // runs HERE, before any engine DLL enters the process. The probe lives in lucent_native
-        // (plain x86-64, safe everywhere); when that library is absent the answer is unknown and
-        // the old behaviour stands — refusing on "unknown" would take the local model away from
-        // the AVX2-capable majority to protect machines we can't identify.
         if (LucentNative.cpuHasAvx2() == false) {
             cpuMissingAvx2 = true
             return false
@@ -60,7 +18,6 @@ object NativeLoader {
         return load("lucent_llama")
     }
 
-    /** Whether the Windows Vulkan loader (vulkan-1.dll) is present on this machine. */
     private fun vulkanRuntimePresent(): Boolean {
         return try {
             val os = System.getProperty("os.name")?.lowercase() ?: ""
@@ -77,22 +34,18 @@ object NativeLoader {
     }
 
     fun load(baseName: String): Boolean {
-        // 1) The conventional path, for developers who put the DLL on java.library.path.
         try {
             System.loadLibrary(baseName)
             return true
         } catch (_: Throwable) {
         }
-        // 2) The packaged path: extract /native/<mapped> from resources and load it absolutely.
         return try {
-            val mapped = System.mapLibraryName(baseName) // lucent_llama -> lucent_llama.dll on Windows
+            val mapped = System.mapLibraryName(baseName)
             val resource = NativeLoader::class.java.getResourceAsStream("/native/$mapped") ?: return false
             val dir = File(DesktopContext.filesDir, "native").apply { mkdirs() }
             val target = File(dir, mapped)
             resource.use { input ->
                 val bytes = input.readBytes()
-                // Re-extract only when the packaged copy differs, so a locked in-use DLL on Windows
-                // (from a still-closing previous instance) doesn't fail the load of an identical one.
                 if (!target.exists() || target.length() != bytes.size.toLong()) {
                     val tmp = File(dir, "$mapped.tmp")
                     tmp.writeBytes(bytes)

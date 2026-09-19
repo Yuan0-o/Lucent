@@ -3,10 +3,6 @@ package com.lucent.app.data
 import kotlinx.coroutines.flow.Flow
 import java.sql.ResultSet
 
-// Desktop twins of the Android Room DAOs (app/.../data/Daos.kt), method-for-method: same names,
-// same signatures, same SQL semantics (the queries are copied from the Room annotations), same
-// reactive behaviour through Db.watch. Everything that calls a DAO — the assistant tools, backup,
-// search, every screen — compiles against these exactly as it does against Room.
 
 private fun noteOf(rs: ResultSet) = Note(
     id = rs.getLong("id"),
@@ -22,16 +18,12 @@ private fun noteOf(rs: ResultSet) = Note(
     isChecklist = rs.getInt("isChecklist") != 0,
     checklist = rs.getString("checklist"),
     trashedAt = rs.longOrNull("trashedAt"),
-    // 1.1.0 group A. Read positionally by NAME, like every other column here, so the mapper is
-    // insensitive to where ALTER TABLE happened to append them.
     manualOrder = rs.getInt("manualOrder"),
     isDraft = rs.getInt("isDraft") != 0,
     draftSavedAt = rs.longOrNull("draftSavedAt"),
     hidden = rs.getInt("hidden") != 0,
     isDoodle = rs.getInt("isDoodle") != 0,
     doodle = rs.getString("doodle"),
-    // INTEGRATION (C task 20) — read by name like the rest, so it does not matter where the ALTER
-    // appended it. Nullable-safe: a row written before the column existed reads back as "".
     bodySpans = rs.getString("bodySpans") ?: ""
 )
 
@@ -62,7 +54,6 @@ private fun taskOf(rs: ResultSet) = Task(
     isDraft = rs.getInt("isDraft") != 0,
     draftSavedAt = rs.longOrNull("draftSavedAt"),
     hidden = rs.getInt("hidden") != 0,
-    // INTEGRATION (C task 20) — the task twin of Note.bodySpans.
     notesSpans = rs.getString("notesSpans") ?: ""
 )
 
@@ -132,7 +123,6 @@ class NoteDao internal constructor(private val db: Db) {
             .executeQuery().mapAll(::noteOf).firstOrNull()
     }
 
-    /** Resolve a batch of note ids in one query — used by the notebook detail screen. */
     suspend fun getByIds(ids: List<Long>): List<Note> {
         if (ids.isEmpty()) return emptyList()
         val list = ids.distinct().joinToString(",")
@@ -143,22 +133,6 @@ class NoteDao internal constructor(private val db: Db) {
 
     suspend fun searchNotes(text: String, tag: String, archived: Int, trashed: Int, limit: Int): List<Note> =
         db.use { c ->
-            // P2-1 follow-up (found during the 2.8 audit, not by a test — none existed): this used to
-            // try notes_fts MATCH first and fall through to LIKE on a thrown exception. That fallback
-            // never fires for the two cases that actually matter, because neither one throws:
-            //  1. CJK queries. unicode61/simple tokenise a whole run of Han/Kana/Hangul as ONE token
-            //     (see the class doc on SearchQuery), so MATCH silently returns too few or zero rows
-            //     instead of erroring — exactly the "stops finding the user's notes" failure SearchQuery
-            //     warns about, for an app whose owner writes in Chinese.
-            //  2. notes_fts only indexes (title, body) — tags and checklist text were never added to
-            //     it — so a match that lives only in a tag or a checklist item is silently dropped even
-            //     for plain-ASCII queries, FTS succeeds, just against an incomplete index.
-            // SearchQuery's own header already settled this: matching stays substring-based so it
-            // behaves identically in every script. This method now agrees with that decision (and with
-            // the Android twin, which never tried FTS) instead of quietly overriding it. The notes_fts
-            // table and its sync triggers are left in place — harmless, kept current by the existing
-            // AFTER triggers — as a foundation for a future pass that indexes every searched column and
-            // is proven safe for CJK before it's used to serve a query again.
             c.prepareStatement(
                 """
                 SELECT * FROM notes
@@ -186,7 +160,6 @@ class NoteDao internal constructor(private val db: Db) {
             }.executeQuery().mapAll(::noteOf)
         }
 
-    /** Task A10 — the draft area, a sibling of the trash. */
     fun getDrafts(): Flow<List<Note>> = db.watch("notes") {
         db.use { c ->
             c.prepareStatement(
@@ -196,7 +169,6 @@ class NoteDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Task A21 — the hidden area; only read once the user has unlocked it in Settings. */
     fun getHidden(): Flow<List<Note>> = db.watch("notes") {
         db.use { c ->
             c.prepareStatement(
@@ -205,13 +177,11 @@ class NoteDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Task A10 — is there anything to offer to restore on the next launch? */
     suspend fun draftCountOnce(): Int = db.use { c ->
         c.prepareStatement("SELECT COUNT(*) FROM notes WHERE isDraft = 1 AND trashedAt IS NULL")
             .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
     }
 
-    /** Task A16 — highest order in use, so a drag can append without renumbering the table. */
     suspend fun maxManualOrderOnce(): Int = db.use { c ->
         c.prepareStatement("SELECT COALESCE(MAX(manualOrder), 0) FROM notes")
             .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
@@ -272,7 +242,6 @@ class NoteDao internal constructor(private val db: Db) {
         db.write("notes") { c -> c.createStatement().use { it.executeUpdate("DELETE FROM notes") } }
     }
 
-    /** P2-1: Rebuild the FTS5 full-text index after a bulk import. */
     suspend fun rebuildFts() {
         db.use { c ->
             c.createStatement().use { st ->
@@ -282,12 +251,6 @@ class NoteDao internal constructor(private val db: Db) {
     }
 }
 
-/**
- * P2-2 (data layer only): read/write access to [NoteEmbedding] rows. Desktop twin of the Android
- * Room DAO of the same name — same names, same signatures. [getForModel] is the one the similarity
- * search actually uses — see EmbeddingStore, which does the cosine-similarity ranking in shared/ so
- * this DAO only has to hand back rows, never rank them.
- */
 class NoteEmbeddingDao internal constructor(private val db: Db) {
 
     suspend fun upsert(embedding: NoteEmbedding): Unit = db.write("note_embeddings") { c ->
@@ -303,13 +266,11 @@ class NoteEmbeddingDao internal constructor(private val db: Db) {
         Unit
     }
 
-    /** Every stored vector for [model], for a similarity search against that model's space. */
     suspend fun getForModel(model: String): List<NoteEmbedding> = db.use { c ->
         c.prepareStatement("SELECT * FROM note_embeddings WHERE model = ?").apply { setString(1, model) }
             .executeQuery().mapAll(::noteEmbeddingOf)
     }
 
-    /** Every model a note currently has a cached vector for — used to decide what's stale. */
     suspend fun getForNote(noteId: Long): List<NoteEmbedding> = db.use { c ->
         c.prepareStatement("SELECT * FROM note_embeddings WHERE noteId = ?").apply { setLong(1, noteId) }
             .executeQuery().mapAll(::noteEmbeddingOf)
@@ -323,7 +284,6 @@ class NoteEmbeddingDao internal constructor(private val db: Db) {
         Unit
     }
 
-    /** Drops every vector for one model — for when a model is retired or replaced. */
     suspend fun deleteAllForModel(model: String): Unit = db.write("note_embeddings") { c ->
         c.prepareStatement("DELETE FROM note_embeddings WHERE model = ?").apply { setString(1, model) }.executeUpdate()
         Unit
@@ -378,7 +338,6 @@ class NoteVersionDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Task A19 — delete one revision on the user's explicit instruction. */
     suspend fun deleteById(id: Long) {
         db.write("note_versions") { c ->
             c.prepareStatement("DELETE FROM note_versions WHERE id=?").apply { setLong(1, id) }.executeUpdate()
@@ -418,10 +377,6 @@ private fun taskVersionOf(rs: ResultSet) = TaskVersion(
     savedAt = rs.getLong("savedAt")
 )
 
-/**
- * Task A19 — desktop twin of the Android TaskVersionDao, method-for-method, so the history screens
- * and BackupManager compile against one shape on both platforms.
- */
 class TaskVersionDao internal constructor(private val db: Db) {
 
     fun getForTask(taskId: Long): Flow<List<TaskVersion>> = db.watch("task_versions") { getForTaskOnce(taskId) }
@@ -465,7 +420,6 @@ class TaskVersionDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Task A19 — delete one revision on the user's explicit instruction. */
     suspend fun deleteById(id: Long) {
         db.write("task_versions") { c ->
             c.prepareStatement("DELETE FROM task_versions WHERE id=?").apply { setLong(1, id) }.executeUpdate()
@@ -505,7 +459,6 @@ class TaskDao internal constructor(private val db: Db) {
             .executeQuery().mapAll(::taskOf).firstOrNull()
     }
 
-    /** Resolve a batch of task ids in one query — used by the notebook detail screen. */
     suspend fun getByIds(ids: List<Long>): List<Task> {
         if (ids.isEmpty()) return emptyList()
         val list = ids.distinct().joinToString(",")
@@ -523,11 +476,6 @@ class TaskDao internal constructor(private val db: Db) {
         dueAfter: Long,
         limit: Int
     ): List<Task> = db.use { c ->
-        // P2-1 follow-up: see the comment on NoteDao.searchNotes above — the same MATCH-first attempt
-        // lived here with the same two silent failure modes (CJK tokenisation, and tasks_fts indexing
-        // only title+notes while subtasks text was never added to it), and for the same reason it's
-        // gone: this now matches SearchQuery's documented design and the Android twin, both of which
-        // stay LIKE-based. tasks_fts and its triggers are left in place, unread, for a future pass.
         c.prepareStatement(
             """
             SELECT * FROM tasks
@@ -586,7 +534,6 @@ class TaskDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Task A10 — the draft area for tasks; mirrors [NoteDao.getDrafts]. */
     fun getDrafts(): Flow<List<Task>> = db.watch("tasks") {
         db.use { c ->
             c.prepareStatement(
@@ -596,7 +543,6 @@ class TaskDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Task A21 — the hidden area for tasks. */
     fun getHidden(): Flow<List<Task>> = db.watch("tasks") {
         db.use { c ->
             c.prepareStatement(
@@ -610,7 +556,6 @@ class TaskDao internal constructor(private val db: Db) {
             .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
     }
 
-    /** Task A16 — see [NoteDao.maxManualOrderOnce]. */
     suspend fun maxManualOrderOnce(): Int = db.use { c ->
         c.prepareStatement("SELECT COALESCE(MAX(manualOrder), 0) FROM tasks")
             .executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
@@ -669,7 +614,6 @@ class TaskDao internal constructor(private val db: Db) {
         db.write("tasks") { c -> c.createStatement().use { it.executeUpdate("DELETE FROM tasks") } }
     }
 
-    /** P2-1: Rebuild the FTS5 full-text index after a bulk import. */
     suspend fun rebuildFts() {
         db.use { c ->
             c.createStatement().use { st ->
@@ -679,7 +623,6 @@ class TaskDao internal constructor(private val db: Db) {
     }
 }
 
-/** Projection for [ChatDao.conversationContents] — see the Android original. */
 data class ConversationContent(
     val conversationId: Long,
     val content: String?
@@ -713,7 +656,6 @@ class ChatDao internal constructor(private val db: Db) {
         ).executeQuery().mapAll { rs -> ConversationContent(rs.getLong("conversationId"), rs.stringOrNull("content")) }
     }
 
-    /** Insert one message, returning its new row id — see the Android twin for why the id matters. */
     suspend fun insert(message: ChatMessage): Long = db.write("chat_messages") { c ->
         val ps = c.prepareStatement(
             "INSERT INTO chat_messages (role, content, timestamp, attachmentMime, attachmentData, " +
@@ -728,12 +670,6 @@ class ChatDao internal constructor(private val db: Db) {
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
 
-    /**
-     * Delete a specific set of messages (B-group task 11). The id list is interpolated rather than
-     * bound because JDBC has no parameter form for `IN (?)` — safe here precisely because these are
-     * Longs: they come from ChatMessage.id, and a Long cannot carry SQL. An empty set is a no-op
-     * rather than an `IN ()`, which SQLite rejects outright.
-     */
     suspend fun deleteByIds(ids: List<Long>) {
         if (ids.isEmpty()) return
         val list = ids.joinToString(",")
@@ -817,14 +753,8 @@ private fun notebookItemOf(rs: ResultSet) = NotebookItem(
     addedAt = rs.getLong("addedAt")
 )
 
-/** Per-notebook item count, projected by the list query — mirrors the Android projection. */
 data class NotebookCount(val notebookId: Long, val count: Int)
 
-/**
- * Notebooks and their membership rows (see [Notebook] / [NotebookItem]). Desktop twin of the
- * Android Room DAO — same method names, same signatures, same reactive behaviour through
- * Db.watch. Membership is resolved by the caller against NoteDao/TaskDao, exactly as on Android.
- */
 class NotebookDao internal constructor(private val db: Db) {
 
     fun getAll(): Flow<List<Notebook>> = db.watch("notebooks") { getAllOnce() }
@@ -854,7 +784,6 @@ class NotebookDao internal constructor(private val db: Db) {
             .apply { setLong(1, notebookId) }.executeQuery().mapAll(::notebookItemOf)
     }
 
-    /** All membership rows of one kind, across every notebook — for the orphan sweep. */
     suspend fun getItemsByKindOnce(kind: String): List<NotebookItem> = db.use { c ->
         c.prepareStatement("SELECT * FROM notebook_items WHERE itemKind = ?")
             .apply { setString(1, kind) }.executeQuery().mapAll(::notebookItemOf)
@@ -905,7 +834,6 @@ class NotebookDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Delete every membership row of one notebook. */
     suspend fun deleteItemsForNotebook(notebookId: Long) {
         db.write("notebook_items", "notebooks") { c ->
             c.prepareStatement("DELETE FROM notebook_items WHERE notebookId=?")
@@ -913,7 +841,6 @@ class NotebookDao internal constructor(private val db: Db) {
         }
     }
 
-    /** Delete one notebook row (call [deleteItemsForNotebook] first, or the memberships orphan). */
     suspend fun deleteById(notebookId: Long) {
         db.write("notebooks") { c ->
             c.prepareStatement("DELETE FROM notebooks WHERE id=?")
@@ -931,11 +858,6 @@ class NotebookDao internal constructor(private val db: Db) {
     }
 }
 
-/**
- * Drop membership rows whose target note or task no longer exists — mirrors the Android extension
- * of the same name. Called after any permanent item deletion path so a notebook never quietly
- * points at a ghost.
- */
 suspend fun NotebookDao.pruneOrphans(noteDao: NoteDao, taskDao: TaskDao) {
     val noteMembers = getItemsByKindOnce(NotebookItem.KIND_NOTE)
     if (noteMembers.isNotEmpty()) {

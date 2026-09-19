@@ -25,22 +25,9 @@ import com.lucent.app.data.AttachmentStore
 import com.lucent.app.reminders.Notifications
 import java.util.Calendar
 
-/**
- * Android seams for the shared [NotesScreen] (and, where noted, reused by [TasksScreen] once that
- * screen is unified too). Six small, named platform differences — file picking, backgrounding,
- * toast context, sharing, the overflow-menu search item, and grid density — each kept to exactly
- * the width it needs, per P1-1's "narrow and composable-shaped, not a wide PlatformApi" guidance.
- */
 
-/** A picked attachment source on Android: a content [Uri] from the system file picker. */
 typealias PlatformPickedFile = Uri
 
-/**
- * Registers an Android activity-result launcher for picking multiple files, and returns a callback
- * that fires it. [onPicked] runs only when at least one file was actually chosen (a cancelled picker
- * calls back with an empty list, which this filters out — matching the original launcher's own
- * `if (uris.isNotEmpty())` guard).
- */
 @Composable
 fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
@@ -49,27 +36,14 @@ fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): 
     return { launcher.launch("*/*") }
 }
 
-/** Best-effort size of a picked source without opening it, for the pre-write size check. */
 internal fun attachmentSizeHint(context: Context, source: PlatformPickedFile): Long =
     AttachmentStore.sizeHint(context, source)
 
-/** Reads and imports [source] into an [Attachment], or null if it can't be read. */
 internal fun pickedFileToAttachment(context: Context, source: PlatformPickedFile): Attachment? =
     uriToAttachment(context, source)
 
-/**
- * The context a toast shown from [NotesScreen]'s "save as template" flow should use. Plain
- * [context] on Android; see the desktop implementation for why desktop needs its application
- * context here specifically, while other toasts in the same screen don't.
- */
 internal fun templateToastContext(context: Context): Context = context
 
-/**
- * Runs [action] when the app leaves the foreground (screen off, home, another app) — used to
- * collapse the notes screen's action cluster so reopening finds it tucked away rather than as it
- * was left. `ON_STOP` fires when the activity is no longer visible, which covers all of those
- * without touching any tab-switching state.
- */
 @Composable
 fun OnAppHidden(action: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -82,12 +56,6 @@ fun OnAppHidden(action: () -> Unit) {
     }
 }
 
-/**
- * Android counterpart to desktop's `DesktopShare.shareText` — pops the system share sheet via a
- * plain ACTION_SEND, matching that function's call shape so a screen can write
- * `shareText(context, subject = ..., text = ..., chooserTitle = ...)` once and have it work on both
- * platforms. Entirely local: no account, no Lucent server, no link that outlives the tap.
- */
 fun shareText(context: Context, subject: String? = null, text: String, chooserTitle: String) {
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
@@ -97,11 +65,6 @@ fun shareText(context: Context, subject: String? = null, text: String, chooserTi
     context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
 }
 
-/**
- * The notes/tasks screens' overflow-menu "search everything" entry. Present on Android because this
- * menu is the only route to global search here. Must be called from within a
- * [androidx.compose.material3.DropdownMenu]'s content.
- */
 @Composable
 fun OverflowMenuSearchItem(onClick: () -> Unit) {
     DropdownMenuItem(
@@ -111,16 +74,8 @@ fun OverflowMenuSearchItem(onClick: () -> Unit) {
     )
 }
 
-/** Notes grid columns on a phone-width Android screen. */
 internal val notesGridColumns: Int = 2
 
-/**
- * Registers the Android runtime notification permission (API 33+) request, and returns a callback
- * that fires it only if posting isn't already allowed. Declining is never re-prompted automatically
- * — a rationale toast explains why reminders won't alert — but the reminder preference itself is
- * still stored either way, so the setting is recoverable once the permission is granted later rather
- * than being silently discarded over one dialog answer.
- */
 @Composable
 fun rememberNotificationPermissionRequester(): () -> Unit {
     val context = LocalContext.current
@@ -136,15 +91,6 @@ fun rememberNotificationPermissionRequester(): () -> Unit {
     }
 }
 
-/**
- * Registers Android's native, nested `DatePickerDialog` → `TimePickerDialog` flow for picking a
- * due date/time, and returns a callback that fires it. [initialMillis] and [minMillis] are read
- * fresh from the enclosing composable on every recomposition (this function isn't `remember`-cached),
- * so the returned callback always opens on the current due date, not whatever it was when first
- * composed. The floor is enforced twice: `datePicker.minDate` blocks picking an earlier calendar day
- * outright, and `coerceAtLeast` catches the one case that slips through it (same day, earlier time
- * of day) once a time is chosen.
- */
 @Composable
 fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
     val context = LocalContext.current

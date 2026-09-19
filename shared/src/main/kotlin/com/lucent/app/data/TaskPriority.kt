@@ -1,13 +1,5 @@
 package com.lucent.app.data
 
-/**
- * How important a task is. Stored on [Task.priority] as [value] — a plain Int column, so sorting by
- * priority is a cheap numeric comparison and an old row (0) reads as [NONE] with no backfill.
- *
- * [key] is the stable text form the assistant's tools accept and report; [label] is what the UI
- * shows. [fromKey] is deliberately lenient: a model may say "urgent" or "hi" when it means high,
- * and quietly landing on the right level beats failing the tool call over a synonym.
- */
 enum class TaskPriority(val value: Int, val key: String, val label: String) {
     NONE(0, "none", "None"),
     LOW(1, "low", "Low"),

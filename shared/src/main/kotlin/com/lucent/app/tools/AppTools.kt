@@ -24,44 +24,8 @@ import com.lucent.app.network.WebSearchClient
 import com.lucent.app.reminders.ReminderScheduler
 import org.json.JSONObject
 
-/**
- * The function-calling tools the assistant can invoke.
- *
- * Notes and tasks are exposed as *separate* tools (create_note vs create_task, delete_note vs
- * delete_task, …) rather than one generic tool with a "type" argument, so a model can't blur the
- * two — "remind me to call the dentist" is a task and "the dentist's number is 555-0134" is a note,
- * and a single ambiguous tool makes that distinction the model's problem instead of the schema's.
- *
- * Three rules hold across every tool here, and they're what make the assistant trustworthy rather
- * than merely capable:
- *
- * **It only reports what actually happened.** Every failure path returns
- * [ToolExecResult.success] = false, and the attachment-removal tools re-read the row after writing
- * to confirm the file is really gone before claiming it is. The assistant can only say "done" when
- * the store agrees.
- *
- * **It can't touch what the user can't see.** Every working lookup goes through [activeNotes] /
- * [activeTasks], which exclude trashed rows, so the assistant can never quietly read, edit, or
- * attach files to something the user believes they deleted — exactly the kind of spooky action
- * that destroys trust in an assistant with write access. The Trash itself is different: the user
- * CAN see it, on the Trash screens, so the assistant gets exactly the two abilities those screens
- * offer and nothing more — listing what's there (list_trash) and restoring items out of it
- * (restore_note_from_trash / restore_task_from_trash), which go through [trashedNotes] /
- * [trashedTasks]. Working on a trashed row in place, or deleting anything permanently, stays
- * impossible from here.
- *
- * **It behaves identically to the UI.** Completing, trashing, and rescheduling all route through
- * [TaskActions], the same code the buttons call. Ask the assistant to tick off a repeating task and
- * next week's occurrence appears, because it is literally the same function that runs when you tap
- * the checkbox.
- */
 object AppTools {
 
-    /**
-     * The tools the assistant may call. [includeWebSearch] appends the opt-in `web_search` tool,
-     * which is only offered when the user has turned Web Search on in Settings (issue 16) — the
-     * assistant should never even see it as an option otherwise.
-     */
     fun definitions(includeWebSearch: Boolean = false): List<ToolDefinition> =
         baseDefinitions() + if (includeWebSearch) listOf(webSearchDefinition()) else emptyList()
 
@@ -71,24 +35,13 @@ object AppTools {
         params = listOf(ToolParam("query", "string", "What to look up on the web"))
     )
 
-    /**
-     * Tools that only *read* — they never change the user's data, so the confirmation flow (issue 13)
-     * lets them run without a prompt. Everything not in this set mutates something and is gated behind
-     * an explicit confirm before it executes.
-     */
     private val READ_ONLY_TOOLS = setOf(
         "list_notes", "read_note", "list_tasks", "read_task", "search_items", "recall_notes", "web_search",
         "read_attachment", "list_note_versions", "list_trash", "list_drafts"
     )
 
-    /** Whether calling [name] would change the user's notes/tasks (and therefore needs confirmation). */
     fun isMutating(name: String): Boolean = name !in READ_ONLY_TOOLS
 
-    /**
-     * A short, human sentence describing what a tool call *would do*, shown in the confirmation modal
-     * so the user approves a real action they can read ("Create task \"Call the dentist\"") rather
-     * than a raw function name. Best-effort: unknown tools fall back to a generic phrasing.
-     */
     fun describeToolCall(name: String, argumentsJson: String): String {
         val a = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
         fun s(vararg keys: String): String {
@@ -134,71 +87,16 @@ object AppTools {
         }
     }
 
-    /**
-     * The one argument of a tool call that is worth letting the user correct before it runs, and
-     * the label to put on the field (task 3).
-     *
-     * ### Why only one field
-     *
-     * The confirmation modal exists so an action can be *stopped*, and the overwhelmingly common
-     * reason to stop one is that the model got the wording slightly wrong — it heard "remind me to
-     * eat tomorrow" and proposed a task called "eat tomorrow" when what was meant was "eat
-     * breakfast tomorrow". Declining, retyping the request and hoping for better is a poor answer to
-     * a one-word problem.
-     *
-     * But a full argument editor would be a worse answer still: it turns a yes/no into a form, in a
-     * modal, mid-conversation, and it invites the user to hand-edit fields (dates, priorities, tool
-     * names) whose valid values they have no way to see. So exactly one field is editable — the
-     * human-readable *subject* of the action, which is the part a person can judge at a glance and
-     * the only part they usually want to change. Everything else stays as the model proposed it, and
-     * anything more complicated is still better said in words to the assistant.
-     *
-     * Returns null for calls with no such field (deletes, pins, completions), where the decision
-     * really is only yes or no.
-     */
     data class EditableArgument(
         val key: String,
         val label: String,
         val value: String,
-        // Body text, checklists and note contents are paragraphs, not labels; the dialog gives
-        // those a taller, multi-line box. A title or a due date gets a single line.
         val multiline: Boolean = false
     )
 
-    /**
-     * Kept for callers that only ever wanted the headline field. Delegates to
-     * [editableArguments] so there is exactly one definition of "what is worth editing".
-     */
     fun editableArgument(name: String, argumentsJson: String): EditableArgument? =
         editableArguments(name, argumentsJson).firstOrNull()
 
-    /**
-     * EVERY argument of a proposed call that is worth showing the user before it runs, in the order
-     * they should appear (B-group task 3).
-     *
-     * ### Why this replaced the single-field version
-     *
-     * The old flow was: approve the action, and only afterwards get the option to open the created
-     * item and fix it. That is the wrong way round — it writes first and reviews second, so a wrong
-     * note or task genuinely exists (and has fired its reminder, and sits in the list) before the
-     * user has agreed to what is in it. The brief is the opposite order: see the whole thing, edit
-     * it, and only then decide whether it is added at all.
-     *
-     * So the modal now shows the *content* of the proposed item, not a one-line description of it.
-     * The single editable title was never enough for that: a create_task with a due date, a
-     * priority and three subtasks was summarised as its title alone, and everything else was
-     * approved sight-unseen.
-     *
-     * ### What is deliberately NOT editable
-     *
-     * The arguments that identify WHICH item is being acted on — the lookup `title` on an update,
-     * a version number, a colour keyword. Editing those does not correct the action, it silently
-     * retargets it at a different item, which is the one mistake a confirmation dialog must not
-     * make easy. Those still appear in the summary line above the fields; they are just not fields.
-     *
-     * Returns an empty list for calls where the decision genuinely is only yes or no (deletes,
-     * pins, completions) — those show no form at all, exactly as before.
-     */
     fun editableArguments(name: String, argumentsJson: String): List<EditableArgument> {
         val a = try { JSONObject(argumentsJson) } catch (e: Exception) { return emptyList() }
         fun of(key: String, label: String, multiline: Boolean = false): EditableArgument? =
@@ -206,21 +104,18 @@ object AppTools {
                 ?.let { EditableArgument(key, label, it, multiline) }
 
         return when (name) {
-            // Creating a note: title, then whatever body or checklist it would be created with.
             "create_note" -> listOfNotNull(
                 of("title", com.lucent.app.i18n.S.confirmEditTitleLabel),
                 of("body", com.lucent.app.i18n.S.confirmEditBodyLabel, multiline = true),
                 of("checklist", com.lucent.app.i18n.S.confirmEditChecklistLabel, multiline = true),
                 of("tags", com.lucent.app.i18n.S.confirmEditTagsLabel)
             )
-            // Creating a task: title, its notes, when it is due, and any subtasks proposed with it.
             "create_task" -> listOfNotNull(
                 of("title", com.lucent.app.i18n.S.confirmEditTitleLabel),
                 of("notes", com.lucent.app.i18n.S.confirmEditNotesLabel, multiline = true),
                 of("due", com.lucent.app.i18n.S.confirmEditDueLabel),
                 of("subtasks", com.lucent.app.i18n.S.confirmEditSubtasksLabel, multiline = true)
             )
-            // Editing: the NEW values are under review; the lookup title is not a field.
             "update_note" -> listOfNotNull(
                 of("new_title", com.lucent.app.i18n.S.confirmEditNewTitleLabel),
                 of("body", com.lucent.app.i18n.S.confirmEditBodyLabel, multiline = true)
@@ -235,7 +130,6 @@ object AppTools {
             "add_note_checklist_item" -> listOfNotNull(of("item", com.lucent.app.i18n.S.confirmEditItemLabel))
             "edit_subtask" -> listOfNotNull(of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel))
             "edit_note_checklist_item" -> listOfNotNull(of("new_text", com.lucent.app.i18n.S.confirmEditNewTextLabel))
-            // Writing free text onto an item: the text itself is the whole of what is approved.
             "set_note_attachment", "set_task_attachment" -> listOfNotNull(
                 of("file_name", com.lucent.app.i18n.S.confirmEditFileNameLabel),
                 of("content", com.lucent.app.i18n.S.confirmEditContentLabel, multiline = true)
@@ -244,14 +138,6 @@ object AppTools {
         }
     }
 
-    /**
-     * Return [argumentsJson] with every entry of [edits] applied. Blank values are skipped rather
-     * than written, so clearing a field in the dialog means "leave this as proposed" instead of
-     * "create a nameless item" — the one edit that could not possibly be intended.
-     *
-     * Falls back to the original text if the arguments won't parse, for the same reason
-     * [withArgument] does: a call we cannot read is a call we must not silently rewrite.
-     */
     fun withArguments(argumentsJson: String, edits: Map<String, String>): String = try {
         val o = JSONObject(argumentsJson)
         edits.forEach { (k, v) -> if (v.isNotBlank()) o.put(k, v) }
@@ -260,14 +146,6 @@ object AppTools {
         argumentsJson
     }
 
-    /**
-     * Return [argumentsJson] with [key] set to [value]. Used when the user edits the field offered
-     * by [editableArgument] before approving, so the tool runs with what they actually want rather
-     * than with what the model proposed.
-     *
-     * Falls back to the original text if the arguments won't parse — a call we cannot read is a call
-     * we must not silently rewrite.
-     */
     fun withArgument(argumentsJson: String, key: String, value: String): String = try {
         JSONObject(argumentsJson).put(key, value).toString()
     } catch (e: Exception) {
@@ -282,7 +160,6 @@ object AppTools {
     private fun dueSuffix(due: String): String = if (due.isNotBlank()) com.lucent.app.i18n.S.ccDueSuffix(due) else ""
 
     private fun baseDefinitions(): List<ToolDefinition> = listOf(
-        // ---- Notes ----
         ToolDefinition(
             name = "create_note",
             description = "Create a NOTE (a titled piece of written information with a body). Use this for information to remember, never for a to-do item. The body supports Markdown, and [[Note title]] creates a link to another note. To create a CHECKLIST note (checkable items instead of a body), pass the checklist field.",
@@ -342,8 +219,6 @@ object AppTools {
                 ToolParam("color", "string", "One of: default, red, orange, yellow, green, teal, blue, purple, pink")
             )
         ),
-        // ---- Checklist-mode notes get the same item-level tools a task's checklist has, so the
-        // assistant can work a shopping list exactly like the user can (settings tasks C2/C3). ----
         ToolDefinition(
             name = "add_note_checklist_item",
             description = "Add one checklist item to a NOTE, matched by its title text. If the note isn't a checklist yet it becomes one (its body text is kept, and comes back if the user switches the note back to plain text).",
@@ -411,8 +286,6 @@ object AppTools {
                 ToolParam("file_name", "string", "Optional name to save the file as; leave out to keep the uploaded file's own name", required = false)
             )
         ),
-        // ---- Note version history: every edit saves the outgoing text, and the user can browse
-        // and restore those versions on the note's History screen — so the assistant can too. ----
         ToolDefinition(
             name = "list_note_versions",
             description = "List a NOTE's saved history versions (matched by its title), newest first: each saved version's time, title, and a short preview, numbered from 1 for the most recently saved. Every edit records the previous text automatically, so this is how you see what a note used to say — call it before restore_note_version.",
@@ -427,7 +300,6 @@ object AppTools {
             )
         ),
 
-        // ---- Tasks ----
         ToolDefinition(
             name = "create_task",
             description = "Create a TASK (a to-do item that can be marked done). Use this for something the user needs to do, never for storing information. Optionally set notes, a priority, a due date, a repeat schedule, a reminder, and an initial checklist — all in this one call.",
@@ -565,12 +437,6 @@ object AppTools {
             )
         ),
 
-        // ---- Trash: the user can see and restore deleted items on the Trash screens, so the
-        // assistant can too — but ONLY list and restore. It still cannot read, edit, or attach
-        // to a trashed row, and it cannot delete anything permanently: restoring is the one safe
-        // direction, and everything destructive stays behind the user's own hands. ----
-        // ---- Drafts (phase 3). Read + delete only, on purpose: a draft is an uncommitted
-        // proposal, so the one thing the assistant may do to it besides look is discard it. ----
         ToolDefinition(
             name = "list_drafts",
             description = "List the user's DRAFTS: notes and tasks that were saved to the draft area (manually, or automatically when the app closed unexpectedly) and have not been committed yet. Returns titles and when each draft was saved. The assistant cannot edit or promote drafts — only the user can, from the Drafts screen; the assistant can delete one with delete_draft if asked.",
@@ -600,7 +466,6 @@ object AppTools {
             params = listOf(ToolParam("title", "string", "The title (or part of it) of the trashed task to restore"))
         ),
 
-        // ---- Retrieval ----
         ToolDefinition(
             name = "read_attachment",
             description = "Read ONE attachment by name from a note or task, without pulling in the rest of the item. Text files come back as text; an image is shown to you directly so you can look at it. Use it when the person asks about a specific file whose name you know (or have just listed); use read_note/read_task instead when you also need the item's own contents.",
@@ -627,19 +492,7 @@ object AppTools {
         )
     )
 
-    // ---------------------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------------------
 
-    /**
-     * Read the first present key from [keys].
-     *
-     * Models do get argument names slightly wrong — passing `title` where the schema says
-     * `task_title`, or `subtask_text` where it says `item` — and failing the whole call over a
-     * synonym helps nobody. Accepting the obvious aliases costs one line and turns a hard failure
-     * into a successful action. The schema still advertises exactly one name; this just refuses to
-     * be pedantic about it.
-     */
     private fun JSONObject.firstString(vararg keys: String): String {
         for (key in keys) {
             if (has(key)) {
@@ -652,28 +505,6 @@ object AppTools {
 
     private fun JSONObject.hasAny(vararg keys: String): Boolean = keys.any { has(it) }
 
-    /**
-     * Trashed rows are gone as far as the user is concerned — hidden from every screen but the Trash
-     * list — so every tool resolves its title match against these rather than the raw, unfiltered
-     * DAO. Otherwise the assistant could quietly read or edit something the user believes they
-     * deleted.
-     */
-    /**
-     * PHASE-3 SCOPING RULE — which rows the assistant may see at all.
-     *
-     * `getAllOnce()` is deliberately unfiltered (backup and cleanup depend on that), which meant
-     * the assistant was inheriting the FULL table — including two kinds of row it must not:
-     *
-     *  - **Hidden rows.** The hidden area (task A21) sits behind the app-lock password in the UI.
-     *    An assistant that lists a hidden note in chat has walked the contents straight around
-     *    that password. Hidden rows are therefore invisible to every tool here — list, read,
-     *    search, update, and delete alike — and the same filter is applied to the Trash view, so
-     *    trashing a hidden note does not resurface it in chat either.
-     *  - **Drafts.** A draft is a note or task the user has not committed yet; presenting it as a
-     *    real item would let the assistant "edit" something that does not exist. Drafts get their
-     *    own explicit surface instead: list_drafts to see them, delete_draft to discard one —
-     *    and, per the current instruction, delete is the ONLY write the assistant has for them.
-     */
     private suspend fun activeNotes(db: AppDatabase): List<Note> =
         db.noteDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
 
@@ -686,11 +517,6 @@ object AppTools {
     private suspend fun draftTasks(db: AppDatabase): List<Task> =
         db.taskDao().getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
 
-    /**
-     * The rows currently in the Trash. Only list_trash and the two restore tools may look here:
-     * everything else stays scoped to the active rows above, so the assistant can restore what the
-     * user can see on the Trash screens but can never quietly work on a row while it's "deleted".
-     */
     private suspend fun trashedNotes(db: AppDatabase): List<Note> =
         db.noteDao().getAllOnce().filter { it.trashedAt != null && !it.hidden }
 
@@ -733,7 +559,6 @@ object AppTools {
         return if (partial.size == 1) partial.first().name else null
     }
 
-    /** One-line summary of a task, used by list_tasks and search_items. */
     private fun summarize(task: Task): String {
         val sb = StringBuilder()
         sb.append(task.title)
@@ -752,7 +577,6 @@ object AppTools {
         return sb.toString()
     }
 
-    /** One-line summary of a note, used by list_notes and search_items. */
     private fun summarize(note: Note): String {
         val sb = StringBuilder()
         sb.append(note.title.ifBlank { "Untitled" })
@@ -812,9 +636,6 @@ object AppTools {
         else -> "upload"
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Execution
-    // ---------------------------------------------------------------------------------------
 
     suspend fun execute(
         context: Context,
@@ -830,16 +651,11 @@ object AppTools {
 
         return when (name) {
 
-            // ================================ NOTES ================================
 
             "create_note" -> {
                 val title = args.optString("title", "Untitled")
                 val body = args.optString("body", "")
                 val tags = args.optString("tags", "")
-                // Optional initial checklist, symmetric with create_task's subtasks argument: the
-                // note is created straight in checklist mode when items were given. The body is
-                // still stored — switching the note back to plain text brings it up, exactly like
-                // the composer's own mode toggle.
                 val checklistJson = Checklist.addAll("[]", args.optString("checklist", ""))
                 val isChecklist = checklistJson != "[]"
                 val newNoteId = db.noteDao().insert(
@@ -871,8 +687,6 @@ object AppTools {
                     if (match.archived) sb.append("Archived: yes\n")
                     if (match.tags.isNotBlank()) sb.append("Tags: ${match.tags}\n")
                     if (match.isDoodle) {
-                        // The strokes are geometry, not text — say so instead of pretending the
-                        // note is empty, and hand over the caption, which IS text.
                         val strokes = com.lucent.app.ui.Doodle.parse(match.doodle)
                         sb.append("This is a doodle note — a freehand drawing (${strokes.size} strokes). ")
                         sb.append("The drawing itself cannot be read as text.\n")
@@ -904,9 +718,6 @@ object AppTools {
                 if (match == null) {
                     ToolExecResult("No note found matching \"$titleQuery\".", success = false)
                 } else if (match.isDoodle) {
-                    // Phase-3 rule: for the new note kinds the assistant may only DELETE. An edit
-                    // that rewrote a doodle's caption while silently keeping strokes it cannot see
-                    // would look like a full edit and not be one.
                     ToolExecResult("\"${match.title}\" is a doodle note. The assistant can delete doodle notes but cannot edit them — the user edits the drawing in the app.", success = false)
                 } else if (!args.hasAny("new_title", "new_body", "new_tags")) {
                     ToolExecResult("No changes were provided.", success = false)
@@ -917,8 +728,6 @@ object AppTools {
                         body = if (args.has("new_body")) args.optString("new_body") else match.body,
                         tags = if (args.has("new_tags")) args.optString("new_tags") else match.tags
                     )
-                    // Records the outgoing text as a revision before overwriting it — so an edit made
-                    // by asking is exactly as recoverable as one made by typing.
                     TaskActions.updateNoteWithHistory(db, match, updated)
                     ToolExecResult("Updated note \"${updated.title}\". Its previous version was saved to history.", openNoteId = match.id)
                 }
@@ -930,8 +739,6 @@ object AppTools {
                 if (match == null) {
                     ToolExecResult("No note found matching \"$titleQuery\".", success = false)
                 } else {
-                    // Soft delete: the row, its attachments, and its history all stay on disk,
-                    // hidden in Trash, until the user restores it or the 30-day sweep purges it.
                     TaskActions.trashNote(db, match)
                     ToolExecResult("Moved note \"${match.title}\" to Trash. The user can restore it from there.")
                 }
@@ -960,8 +767,6 @@ object AppTools {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
                     val archived = args.optBoolean("archived", true)
-                    // The same two-field write the archive button makes, so both paths are
-                    // indistinguishable to the Archive screen's time-sorted list.
                     db.noteDao().update(
                         match.copy(archived = archived, archivedAt = if (archived) System.currentTimeMillis() else null)
                     )
@@ -1005,8 +810,6 @@ object AppTools {
                     else -> {
                         val becameChecklist = !match.isChecklist
                         val updated = match.copy(isChecklist = true, checklist = Checklist.add(match.checklist, item))
-                        // Through the same history-capturing path as update_note, so a checklist
-                        // change made by asking is exactly as recoverable as one made by typing.
                         TaskActions.updateNoteWithHistory(db, match, updated)
                         val extra = if (becameChecklist) " (the note is now a checklist)" else ""
                         ToolExecResult("Added \"$item\" to the checklist on note \"${match.title}\"$extra.")
@@ -1026,10 +829,7 @@ object AppTools {
                         val names = Checklist.parse(match.checklist).joinToString(", ") { it.text }.ifBlank { "none" }
                         ToolExecResult("No checklist item matching \"$itemQuery\" on note \"${match.title}\". It has: $names.", success = false)
                     } else {
-                        // No explicit `done` means "toggle" — same convention as set_subtask_done.
                         val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
-                        // A check-state flip records no history entry, matching the note page's own
-                        // checkbox, which doesn't either.
                         db.noteDao().update(match.copy(checklist = Checklist.setDone(match.checklist, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on note \"${match.title}\".")
                     }
@@ -1087,9 +887,6 @@ object AppTools {
                     if (toChecklist == match.isChecklist) {
                         ToolExecResult("Note \"${match.title}\" is already in ${if (toChecklist) "checklist" else "plain-text"} mode.")
                     } else {
-                        // The same single-field flip the editor's own mode toggle makes: the body
-                        // and the checklist are BOTH kept on the row, so switching is lossless in
-                        // either direction — exactly the guarantee the composer gives the user.
                         db.noteDao().update(match.copy(isChecklist = toChecklist))
                         ToolExecResult(
                             if (toChecklist) "Note \"${match.title}\" now shows as a checklist. Its body text is kept and comes back if it's switched to plain text again."
@@ -1133,7 +930,6 @@ object AppTools {
                     } else {
                         val list = Attachments.removeByName(appContext, existing, resolved)
                         db.noteDao().update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
-                        // Confirm the write actually stuck before telling the model it worked.
                         val after = db.noteDao().getByIdOnce(match.id)
                         val stillThere = after != null &&
                             Attachments.parse(after.attachments).any { it.name.equals(resolved, ignoreCase = true) }
@@ -1200,10 +996,6 @@ object AppTools {
                             success = false
                         )
                     } else {
-                        // Exactly the History screen's restore: re-read the LIVE row (it may have
-                        // changed since the match above), apply the version, and record the outgoing
-                        // text as a new revision FIRST — so a restore is itself undoable, the same
-                        // guarantee the user gets doing it by hand.
                         val current = db.noteDao().getByIdOnce(match.id)
                         if (current == null) {
                             ToolExecResult("Note \"${match.title}\" disappeared before it could be restored.", success = false)
@@ -1217,8 +1009,6 @@ object AppTools {
                                 newTags = restored.tags,
                                 newIsChecklist = restored.isChecklist,
                                 newChecklist = restored.checklist,
-                                // R3 report: same rule as the History screen — the pre-restore
-                                // snapshot is a new entry made now, not an old timestamp.
                                 savedAt = System.currentTimeMillis()
                             )
                             db.noteDao().update(restored)
@@ -1228,15 +1018,12 @@ object AppTools {
                 }
             }
 
-            // ================================ TASKS ================================
 
             "create_task" -> {
                 val title = args.optString("title", "Untitled task")
                 val notes = args.optString("notes", "")
                 val priority = TaskPriority.fromKey(args.optString("priority", "")).value
                 val due = if (args.has("due")) DueParsing.parse(args.optString("due")) else null
-                // A repeat with no due date can never fire, so it's dropped rather than stored as a
-                // setting that quietly does nothing.
                 val repeat = if (due != null && args.has("repeat")) {
                     RepeatRule.fromKey(args.optString("repeat"))
                 } else {
@@ -1323,8 +1110,6 @@ object AppTools {
                 if (match == null) {
                     ToolExecResult("No task found matching \"$titleQuery\".", success = false)
                 } else {
-                    // The same function the checkbox calls: marks done, cancels the reminder, and —
-                    // when the task repeats — spawns and arms the next occurrence.
                     val next = TaskActions.complete(appContext, db, match)
                     val note = next?.dueAt?.let { " It repeats, so the next occurrence was created, due ${DueParsing.format(it)}." } ?: ""
                     ToolExecResult("Marked \"${match.title}\" as done.$note")
@@ -1333,14 +1118,10 @@ object AppTools {
 
             "reopen_task" -> {
                 val titleQuery = args.optString("title", "")
-                // Matched only against COMPLETED tasks, so "reopen the report" can never yank a
-                // similarly named pending task around.
                 val match = matchTask(activeTasks(db).filter { it.isDone }, titleQuery)
                 if (match == null) {
                     ToolExecResult("No completed task found matching \"$titleQuery\".", success = false)
                 } else {
-                    // The same function the history page's "mark as not done" button calls: clears
-                    // the done state and re-evaluates the reminder.
                     TaskActions.restore(appContext, db, match)
                     ToolExecResult("Reopened \"${match.title}\" — it's back on the active list.")
                 }
@@ -1356,10 +1137,6 @@ object AppTools {
                 } else {
                     val newTitle = args.optString("new_title", "")
 
-                    // new_due: an explicit clear word nulls it; a valid date sets it; an unparseable
-                    // value leaves the existing due date alone rather than silently wiping it — the
-                    // one thing worse than not understanding a date is destroying the one that was
-                    // already there.
                     var dueParseFailed = false
                     val newDue: Long? = if (args.has("new_due")) {
                         val raw = args.optString("new_due")
@@ -1392,7 +1169,6 @@ object AppTools {
                         notes = if (args.has("new_notes")) args.optString("new_notes") else match.notes,
                         priority = newPriority,
                         dueAt = newDue,
-                        // Clearing the due date clears the repeat with it.
                         repeatRule = if (newDue == null) RepeatRule.NONE.key else newRepeat.key,
                         reminderEnabled = newReminder
                     )
@@ -1506,8 +1282,6 @@ object AppTools {
                         val names = Checklist.parse(match.subtasks).joinToString(", ") { it.text }.ifBlank { "none" }
                         ToolExecResult("No checklist item matching \"$itemQuery\" on task \"${match.title}\". It has: $names.", success = false)
                     } else {
-                        // No explicit `done` means "toggle" — which is what a person means when they
-                        // say "tick that off" without saying which way.
                         val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
                         db.taskDao().update(match.copy(subtasks = Checklist.setDone(match.subtasks, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on task \"${match.title}\".")
@@ -1615,10 +1389,6 @@ object AppTools {
                 }
             }
 
-            // ================================ TRASH =================================
-            // The Trash screens let the user see and restore what they deleted, so the assistant
-            // gets the same two abilities — and ONLY those two. Trashed rows still can't be read,
-            // edited, attached to, or purged through here: restoring is the one safe direction.
 
             "list_drafts" -> {
                 val notes = draftNotes(db)
@@ -1649,8 +1419,6 @@ object AppTools {
                         val match = matchNote(draftNotes(db), titleQuery)
                         if (match == null) ToolExecResult("No draft note found matching \"$titleQuery\".", success = false)
                         else {
-                            // Hard delete, mirroring the app's Drafts screen: a discarded draft is
-                            // final there too — drafts never pass through the Trash.
                             db.noteDao().delete(match)
                             ToolExecResult("Deleted draft note \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
@@ -1705,8 +1473,6 @@ object AppTools {
                 if (match == null) {
                     ToolExecResult("No trashed note found matching \"$titleQuery\". Call list_trash to see what's in the Trash.", success = false)
                 } else {
-                    // The same untrash the Trash screen's Restore button runs, so both paths land
-                    // the note back in exactly the same place.
                     TaskActions.untrashNote(db, match)
                     ToolExecResult(
                         if (match.archived) "Restored note \"${match.title}\" from the Trash — it's back on the Archive screen."
@@ -1721,21 +1487,16 @@ object AppTools {
                 if (match == null) {
                     ToolExecResult("No trashed task found matching \"$titleQuery\". Call list_trash to see what's in the Trash.", success = false)
                 } else {
-                    // Routed through TaskActions.untrash, exactly like the Trash screen's Restore
-                    // button — which also re-arms the task's reminder if it still has a future due.
                     TaskActions.untrash(appContext, db, match)
                     ToolExecResult("Restored task \"${match.title}\" from the Trash.")
                 }
             }
 
-            // ============================== RETRIEVAL ==============================
 
             "read_attachment" -> {
                 val itemType = args.optString("item_type", "").trim().lowercase()
                 val titleQuery = args.firstString("title", "note_title", "task_title")
                 val fileName = args.firstString("file_name", "name")
-                // Resolve the owning item first. An explicit item_type wins; without one, try notes
-                // then tasks — the same title tolerance every other tool applies.
                 val note = if (itemType != "task") matchNote(activeNotes(db), titleQuery) else null
                 val task = if (note == null && itemType != "note") matchTask(activeTasks(db), titleQuery) else null
                 if (note == null && task == null) {
@@ -1768,11 +1529,6 @@ object AppTools {
                     val wantNotes = type != "tasks"
                     val wantTasks = type != "notes"
 
-                    // The same query engine the search boxes use — one syntax, one implementation, so
-                    // an operator that works when the user types it also works when the model does.
-                    // rank() is computed once per hit (decorate-sort-undecorate); a bare
-                    // sortedByDescending { query.rank(it) } re-evaluates it per comparison,
-                    // O(n log n) times, and each evaluation lowercases the whole row.
                     val noteHits = if (wantNotes) {
                         activeNotes(db).filterBySearch(query)
                             .map { it to query.rank(it) }
@@ -1791,8 +1547,6 @@ object AppTools {
                     }
 
                     if (noteHits.isEmpty() && taskHits.isEmpty()) {
-                        // Not a failure: "nothing matched" is a real, useful answer, and flagging it
-                        // as an error would push the model into retrying a search that worked fine.
                         ToolExecResult("Nothing matched \"$raw\".")
                     } else {
                         val sb = StringBuilder()
@@ -1829,12 +1583,6 @@ object AppTools {
                             val hits = com.lucent.app.data.EmbeddingStore.search(
                                 appContext, outcome.vector, outcome.model, topK = 8
                             )
-                            // EmbeddingStore doesn't know about trash/hidden/draft state — a note can
-                            // sit trashed for up to 30 days (see the delete_note tool's own note)
-                            // with its embedding still on disk, since only a hard delete's trigger
-                            // (MIGRATION_18_19) clears it. Filter the same way every other read tool
-                            // in this file does, and re-apply the similarity order afterwards since
-                            // getByIds does not promise to preserve it.
                             val byId = db.noteDao().getByIds(hits.map { it.noteId })
                                 .filter { it.trashedAt == null && !it.hidden && !it.isDraft }
                                 .associateBy { it.id }
@@ -1858,8 +1606,6 @@ object AppTools {
                 } else {
                     WebSearchClient.search(query).fold(
                         onSuccess = { ToolExecResult(it) },
-                        // A network failure is reported honestly so the assistant can tell the user it
-                        // couldn't reach the web, rather than inventing an answer.
                         onFailure = { ToolExecResult("Web search couldn't be completed: ${it.message ?: "network error"}.", success = false) }
                     )
                 }

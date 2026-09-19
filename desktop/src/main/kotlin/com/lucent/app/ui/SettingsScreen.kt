@@ -96,32 +96,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-// Memory and Web are recombined into a single "Memory & web" page (task 10 of the earlier round),
-// reached via the Memory route; there is no separate Web route.
-//
-// Security and Privacy used to be one page. They are now two (task 10): *Security* is about keeping
-// other people out of your data — today that is the app lock — while *Privacy* is about what leaves
-// this device, or is recorded on it, at all: the share-sheet surface and local diagnostic logging.
-// Those are different questions asked by different worries, and a single page called "Security and
-// Privacy" answered neither of them clearly. Splitting them also gives each page room to grow
-// without becoming the drawer where every remaining switch is kept.
-//
-// Two routes arrived with the localization / local-model round:
-//   - Language: the in-app UI language picker (system / en / zh / ja / ko). It sits directly after
-//     Appearance at the root, because "what language is this in" is the same kind of question as
-//     "what does this look like".
-//   - LocalModel: the on-device GGUF assistant — import, enable, inspect, delete. It lives under
-//     Assistant beside API and Memory, because it IS an assistant backend: the fourth answer to
-//     "where do replies come from".
 internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data }
 
-/** Which kind of item the selective Markdown-export picker is currently choosing. */
 internal enum class ExportKind { NOTES, TASKS }
 
-/** Sentinel distinguishing "wrong password, try again" from "this file is damaged". */
 private const val WRONG_PASSWORD = "__wrong_password__"
 
-// ModalBottomSheet (the post-restore result sheet) is still experimental in Material 3.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(active: Boolean = true) {
@@ -139,15 +119,9 @@ fun SettingsScreen(active: Boolean = true) {
     val savedFont by repo.font.collectAsState(initial = "system")
     val savedAssistantName by repo.assistantName.collectAsState(initial = "Lucent")
     val savedAssistantStyle by repo.assistantStyle.collectAsState(initial = "")
-    // One-shot warning shown when small-model mode is switched on (B-group task 4); the switch's
-    // own state is read directly from SettingsRepository by MemorySettingsPage now.
     var showSmallModelWarn by remember { mutableStateOf(false) }
-    // Whether the assistant answers with the imported on-device model (local-model task).
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
 
-    // Working copies of the *active* profile's connection fields, used by the API editor page.
-    // These mirror the flat saved values; the API page saves through saveApiProfiles (which also
-    // re-mirrors them), so they're always in sync with the selected profile.
     var url by remember(savedUrl) { mutableStateOf(savedUrl) }
     var spec by remember(savedSpec) { mutableStateOf(savedSpec) }
     var key by remember(savedKey) { mutableStateOf(savedKey) }
@@ -155,21 +129,8 @@ fun SettingsScreen(active: Boolean = true) {
     var assistantName by remember(savedAssistantName) { mutableStateOf(savedAssistantName) }
     var assistantStyle by remember(savedAssistantStyle) { mutableStateOf(savedAssistantStyle) }
 
-    // --- Multi-API profiles ---
     val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = "")
     val savedSelectedIdx by repo.apiProfileSelected.collectAsState(initial = 0)
-    // Parsed profile list. If nothing's been saved yet we seed a single profile from the existing
-    // flat connection values, so users upgrading from the single-API version keep their config.
-    //
-    // "No profiles" and "no profiles yet" are different states, and telling them apart is what makes
-    // deleting the last API actually possible (task 6). The stored JSON is the discriminator:
-    //
-    //   blank   -> nothing was ever saved. This is an install upgrading from the single-API version,
-    //              so one profile is seeded from the legacy flat connection values and the user's
-    //              existing configuration survives the upgrade untouched.
-    //   "[]"    -> a list WAS saved and it is empty: the user deleted their last API on purpose.
-    //              Re-seeding a blank "API 1" here is what used to make that deletion impossible —
-    //              the row reappeared instantly and the delete looked like it had failed.
     val profiles = remember(savedProfilesJson, savedUrl, savedSpec, savedKey, savedModel) {
         val parsed = com.lucent.app.data.ApiProfiles.parse(savedProfilesJson)
         when {
@@ -189,10 +150,8 @@ fun SettingsScreen(active: Boolean = true) {
     var errorText by remember { mutableStateOf("") }
     var backupStatus by remember { mutableStateOf("") }
 
-    // --- Privacy toggles: App Lock (task 2), System integration (task 6), Startup logging (task 15) ---
     val appLockOn by repo.appLockEnabled.collectAsState(initial = false)
 
-    // ---- C-group tasks 1, 3, 6, 18 ----
     val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
     )
@@ -204,18 +163,6 @@ fun SettingsScreen(active: Boolean = true) {
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
     )
 
-    // =========================================================================
-    // Unified credential gate for this screen's password prompts (task 18/5B)
-    // =========================================================================
-    //
-    // Every Settings dialog that VERIFIES a credential - turning the App Lock off, the
-    // danger-zone auth gate, the hidden-area unlock, and the backup-restore password -
-    // charges the SAME persisted counter as the lock screen (PasswordAttempts: one counter,
-    // not one per screen). Wrong guesses announce the attempts left this round; a closed round
-    // disables the field behind a live mm:ss countdown; and when the optional self-destruct is
-    // enabled and its lifetime threshold is reached, the wipe (AppWipe.wipeAllData) runs and the
-    // app reopens empty and unlocked. A correct app password anywhere calls registerSuccess,
-    // which resets the whole counter.
     val gateAttemptJson by repo.passwordAttemptState.collectAsState(initial = "")
     val gateAttempt = remember(gateAttemptJson) {
         com.lucent.app.data.PasswordAttempts.State.fromJson(gateAttemptJson)
@@ -234,7 +181,6 @@ fun SettingsScreen(active: Boolean = true) {
     var gateFailedOnce by remember { mutableStateOf(false) }
     var gateWiping by remember { mutableStateOf(false) }
 
-    /** The optional self-destruct from a Settings prompt (same wipe as the lock screen). */
     fun runSettingsGateWipe() {
         if (gateWiping) return
         gateWiping = true
@@ -257,7 +203,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    /** A correct credential anywhere on this screen resets the whole shared counter. */
     fun settingsGateSuccess() {
         gateFailedOnce = false
         scope.launch {
@@ -265,7 +210,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    /** Charge one wrong credential guess on the shared counter. */
     fun chargeSettingsGate() {
         if (gateLockedOut || gateWiping) return
         val next = com.lucent.app.data.PasswordAttempts.registerFailure(
@@ -282,7 +226,6 @@ fun SettingsScreen(active: Boolean = true) {
         scope.launch { repo.setPasswordAttemptState(next.toJson()) }
     }
 
-    /** Shared feedback under a gated password field: countdown / attempts-left / proximity warn. */
     @Composable
     fun SettingsGateFeedback() {
         if (selfDestructOn && !gateLockedOut && !gateWiping &&
@@ -309,31 +252,18 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Confirmation dialogs for the three switches that change what the app is allowed to do.
     var showBlackoutWarning by remember { mutableStateOf(false) }
     var showCrashShieldInfo by remember { mutableStateOf(false) }
     var showOpenLinksWarning by remember { mutableStateOf(false) }
-    // Self-destruct is the only irreversible switch in the app, so it is gated by a TYPED phrase
-    // rather than a tap: a destructive action reached by muscle memory is a destructive action
-    // taken by accident.
     var showSelfDestructWarning by remember { mutableStateOf(false) }
     var selfDestructTyped by remember { mutableStateOf("") }
-    // Result of the on-demand at-rest encryption self-check (task 17). Null = not run yet.
     var encryptionCheckResult by remember { mutableStateOf<String?>(null) }
-    // Task 3.1 — the self-check result used to stay on screen forever. It is the answer to a
-    // question the user asked by pressing a button one second ago, not a property of the page, and
-    // once read it is just a line of stale text sitting under a control that now looks like it did
-    // something permanent. Clear it after a few seconds, exactly like a toast.
-    //
-    // A FAILURE is deliberately left up: that one is not "here is your answer", it is "something is
-    // wrong", and it should stay until the user leaves the page.
     LaunchedEffect(encryptionCheckResult) {
         if (encryptionCheckResult == "") {
             kotlinx.coroutines.delay(6000)
             encryptionCheckResult = null
         }
     }
-    // Same rule for the backup status line, which had the same problem for the same reason.
     LaunchedEffect(backupStatus) {
         if (backupStatus.isNotBlank()) {
             kotlinx.coroutines.delay(8000)
@@ -342,7 +272,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
 
 
-    // App Lock setup dialog (only shown while turning the lock ON, to capture the credentials).
     var showAppLockSetup by remember { mutableStateOf(false) }
     var lockPw by remember { mutableStateOf("") }
     var lockPwConfirm by remember { mutableStateOf("") }
@@ -350,23 +279,15 @@ fun SettingsScreen(active: Boolean = true) {
     var lockAnswer by remember { mutableStateOf("") }
     var lockSetupError by remember { mutableStateOf("") }
 
-    // Shown when the user tries to turn the lock on with no security question (task 9).
     var showNoRecoveryWarning by remember { mutableStateOf(false) }
 
-    // Turning the lock OFF now also requires the password (task): a dialog confirms the user knows
-    // it before the protection is removed, and spells out the security risk of removing it. The
-    // credentials blob is collected here so the dialog can verify what's typed against it.
     val appLockCreds by repo.appLockCredentials.collectAsState(initial = "")
     var showAppLockDisable by remember { mutableStateOf(false) }
     var disablePw by remember { mutableStateOf("") }
     var disableError by remember { mutableStateOf("") }
 
-    // System-integration privacy warning (shown before enabling the share/intent surface).
     var showShareWarning by remember { mutableStateOf(false) }
 
-    // Writes the local diagnostic log to a user-chosen text file (task 15). Reading is off the main
-    // thread; the log lives in internal storage and is only ever copied out by this explicit action.
-    // Desktop log export: native save dialog on the AWT thread (from the button below), write on IO.
     fun exportLogs(suggestedName: String) {
         val file = DesktopFiles.saveFile(suggestedName = suggestedName) ?: return
         scope.launch {
@@ -382,46 +303,17 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // --- Backup encryption ---
     var showExportDialog by remember { mutableStateOf(false) }
-    // Starts BLANK every time (task 5). It used to be pre-seeded from the last-used password, which —
-    // combined with the old password-first default — meant a user who set a password once kept
-    // silently exporting password-locked files, and those files then failed to restore on any other
-    // device that didn't have the password. Blank means the default export uses the portable
-    // built-in key; a password is only applied if the user deliberately types one this time.
     var exportPasswordDraft by remember { mutableStateOf("") }
-    // Which sections the next export writes (task 9). Defaults to everything except the model
-    // files, which is byte-for-byte what an export produced before this was selectable — so the
-    // common case is unchanged and the choice only costs anyone who wants it.
     var exportModules by remember { mutableStateOf(BackupManager.DEFAULT_MODULES) }
-    // Per-item selection (second-level menu). Null means "everything in that module", which is the
-    // default and what every previous release did; a non-null set is an explicit subset the user
-    // built by hand. Kept null until they actually open the sub-menu, so the common path never pays
-    // to enumerate every note and task.
     var exportNoteIds by remember { mutableStateOf<Set<Long>?>(null) }
     var exportTaskIds by remember { mutableStateOf<Set<Long>?>(null) }
-    // Same per-item shape for the two sections that gained it in task F1: which chat conversations
-    // and which API profiles the export includes. Null = everything in that module (the default);
-    // API profiles are held by NAME (the label the user picks, stable across reordering), the same
-    // handle BackupManager filters on.
     var exportConversationIds by remember { mutableStateOf<Set<Long>?>(null) }
     var exportApiProfileNames by remember { mutableStateOf<Set<String>?>(null) }
-    // The REAL saved API profiles — not the synthetic single profile the API page shows when nothing
-    // has been saved yet (see `profiles` above). The per-profile export picker is built from and
-    // gated on this list, so its indices line up exactly with what BackupManager re-parses from the
-    // same stored JSON. When it's empty (a fresh install still on the legacy flat keys), no API
-    // drill-in is offered and the whole-API toggle is the only choice — which is the honest option
-    // when there is only one connection to include or leave out.
     val realProfiles = remember(savedProfilesJson) { com.lucent.app.data.ApiProfiles.parse(savedProfilesJson) }
-    // Which second-level picker is open, if any.
     var itemPicker by remember { mutableStateOf<ExportItemKind?>(null) }
-    // The item lists behind the second-level picker. Loaded only while the export dialog is open:
-    // reading every note and task is cheap, but doing it on a Settings screen nobody is exporting
-    // from is work for nothing, and on a large database it is work for nothing on every recomposition.
     var allNotes by remember { mutableStateOf<List<com.lucent.app.data.Note>>(emptyList()) }
     var allTasks by remember { mutableStateOf<List<com.lucent.app.data.Task>>(emptyList()) }
-    // Conversations behind the chat picker, loaded (like notes/tasks) only while the export dialog is
-    // open. API profiles need no load here — realProfiles above already comes from settings.
     var allConversations by remember {
         mutableStateOf<List<com.lucent.app.data.ChatConversation>>(emptyList())
     }
@@ -435,77 +327,33 @@ fun SettingsScreen(active: Boolean = true) {
             allConversations = loadedConversations
         }
     }
-    // Which sections a restore applies. Populated from the file's own contents when the preview
-    // opens, so the list offers what is actually in the file rather than a fixed menu of maybes.
     var restoreModules by remember { mutableStateOf(BackupManager.DEFAULT_MODULES) }
-    // Per-item restore choices (task F2), the import-side mirror of the export selection. Reset when a
-    // new preview opens (see the ImportPreviewDialog). Chats by conversation id, API by name — the
-    // handles the preview's own lists carry.
     var restoreConversationIds by remember { mutableStateOf<Set<Long>?>(null) }
     var restoreApiProfileNames by remember { mutableStateOf<Set<String>?>(null) }
     var restoreItemPicker by remember { mutableStateOf<ExportItemKind?>(null) }
-    // Set when confirming a restore whose API profiles would push this device over ApiProfiles.MAX.
-    // Drives the API-limit prompt (below), which asks which of the incoming profiles to keep before
-    // any of them is written — the alternative, silently dropping the overflow, is never done.
     var apiLimitPrompt by remember { mutableStateOf(false) }
     var exportPasswordVisible by remember { mutableStateOf(false) }
 
-    // The picked backup FILE, held for the import flow's two streaming passes (inspect, then
-    // commit). On desktop the system file dialog hands back a real path that stays readable, so
-    // no staging copy is needed — but this is the USER'S OWN FILE, so unlike the Android build's
-    // cache copy it is never deleted here; letting go of it only drops the reference. The
-    // streaming matters for the same reason as on Android: a backup carrying local model files
-    // is gigabytes, and the old whole-file ByteArray read died in OutOfMemoryError — an Error
-    // the catch blocks never saw — before the preview could even appear.
     var importSourceFile by remember { mutableStateOf<java.io.File?>(null) }
-    // Whether the password prompt (step 2) is up for the picked file.
     var importPasswordPrompt by remember { mutableStateOf(false) }
     var importPasswordDraft by remember { mutableStateOf("") }
     var importPasswordError by remember { mutableStateOf(false) }
-    // What's in the file, worked out without writing anything. Non-null means the confirm step is up.
     var importPreview by remember { mutableStateOf<BackupManager.BackupPreview?>(null) }
-    // Outcome of the last finished restore, surfaced as a bottom sheet the moment commit returns.
-    // first = whether the commit succeeded (which picks the sheet's title), second = the same
-    // summary / failure text that also goes to the Data page's status line. Null = no sheet shown.
     var importResultSheet by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    // The long-running backup operation currently in flight, if any: the label the modal
-    // progress dialog shows (null = no dialog up). While non-null the dialog blocks every
-    // other interaction, which is what keeps a second operation — or any other data action —
-    // from starting mid-stream.
     var backupBusyLabel by remember { mutableStateOf<String?>(null) }
-    // The coroutine doing that work, so the dialog's Cancel button can cancel it cooperatively.
     var backupOpJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    // Close the import flow's file state. Called on every exit from the flow — cancel or a failed
-    // inspect. The file is the user's own on desktop, so this only drops the reference; nothing
-    // is ever deleted from their disk.
     fun discardImportSource() {
         importSourceFile = null
         importPasswordPrompt = false
     }
-    // The actual restore + its post-restore housekeeping, in one place so the confirm button and the
-    // API-limit prompt drive identical behaviour; only the API profile selection differs between them.
-    // Passing a non-null (possibly empty) profile-name set makes the API restore MERGE into this
-    // device's profiles; passing null keeps the legacy whole-API replace (used for old single-API
-    // backups that carry only the flat connection keys).
     val runRestore: (BackupManager.BackupPreview, Set<BackupManager.BackupModule>, Set<Long>?, Set<String>?) -> Unit =
         { preview, modules, convIds, apiNames ->
             importPreview = null
             apiLimitPrompt = false
-            // Capture the picked file before launching: commit's second streaming pass reads the
-            // model/font blobs straight from it (see BackupManager — the preview no longer carries
-            // a decrypted payload, which is what used to pin gigabytes of model file in memory and
-            // kill the import with an OutOfMemoryError the catch below could never see).
             val sourceFile = importSourceFile
             val job = scope.launch {
                 backupBusyLabel = S.importingBackup
-                // Whether commit itself returned (true) or threw (false), tracked separately so
-                // the result sheet below can title itself without parsing the message text.
                 var committed = true
-                // The outcome, recorded the instant commit produces one. A Cancel that lands after
-                // the database phase has begun does not abort that phase (it is shielded — see
-                // BackupManager.commit), but it still cancels this coroutine at the next suspension
-                // point; recording the outcome here is how the true result survives to be reported
-                // instead of a cancellation that never actually happened.
                 var outcome: String? = null
                 try {
                     withContext(Dispatchers.IO) {
@@ -515,41 +363,21 @@ fun SettingsScreen(active: Boolean = true) {
                                 source = sourceFile?.let { BackupManager.fileSource(it) }
                             )
                         } catch (t: kotlinx.coroutines.CancellationException) {
-                            // A genuine cancel inside the cancellable blob phase — let it fly.
                             throw t
                         } catch (t: Throwable) {
-                            // Throwable, not Exception: the failure this flow historically died of
-                            // was an OutOfMemoryError, which is an Error. Streaming makes that
-                            // unlikely, but if anything of the kind ever recurs it must surface as
-                            // a message, not as the app vanishing.
                             committed = false
                             S.importFailed(t.message ?: "")
                         }
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
-                    // Cancel pressed while the blob phase was still streaming: nothing further
-                    // ran. The status line reports it; the completion sheet stays reserved for
-                    // restores that actually finished.
                     if (outcome == null) backupStatus = S.importCancelledStatus
                 } finally {
                     outcome?.let { result ->
                         backupStatus = result
-                        // Announce the outcome in a bottom sheet as well. The status line above keeps the
-                        // same text for the rest of THIS visit to the Data page, but it is cleared the next
-                        // time the page is entered (see the LaunchedEffect(route) further down) — so the
-                        // sheet is the moment-of-completion announcement, and the line is only same-visit
-                        // context.
                         importResultSheet = committed to result
-                        // A restored backup can bring in tasks that want reminders, and alarms aren't part of
-                        // a backup file — they're OS state. BackupManager re-arms them, but the channel has to
-                        // exist before one can be posted.
                         com.lucent.app.reminders.Notifications.ensureChannel(context)
-                        // If a database had been set aside as undecryptable, restoring is the cure — retire
-                        // the notice rather than leaving it frightening someone who has already fixed it.
                         com.lucent.app.data.DatabaseEncryption.clearLockedNotice(context)
                     }
-                    // The flow is over — done, failed, or cancelled; drop the file reference (the
-                    // user's file itself is untouched) and bring the modal down.
                     importSourceFile = null
                     importPasswordPrompt = false
                     backupBusyLabel = null
@@ -558,15 +386,8 @@ fun SettingsScreen(active: Boolean = true) {
             }
             backupOpJob = job
         }
-    // Set when a database could not be decrypted on this launch. Nothing was deleted — see
-    // DatabaseEncryption.setAside — but the user has to be told, and told what to do about it.
     val lockedNotice = remember { com.lucent.app.data.DatabaseEncryption.lockedNotice(context) }
     var lockedDismissed by remember { mutableStateOf(false) }
-    // The notice is *persisted at fault time* (see DatabaseEncryption.setAside), so an old marker
-    // may be in English while the UI is not. The set-aside file name is the only variable part and
-    // is always written inside double quotes, so it is extracted here and re-rendered through the
-    // catalog; if extraction ever fails (foreign/edited marker), the stored text is shown verbatim
-    // rather than nothing — a recovery notice must never be lost to a formatting quibble.
     val lockedNoticeFileName = remember(lockedNotice) {
         lockedNotice?.let { Regex("\"([^\"]+)\"").find(it)?.groupValues?.getOrNull(1) }
     }
@@ -574,19 +395,11 @@ fun SettingsScreen(active: Boolean = true) {
     var showClearNotes by remember { mutableStateOf(false) }
     var showClearTasks by remember { mutableStateOf(false) }
     var showClearChats by remember { mutableStateOf(false) }
-    // The API profile the user has asked to delete, held until they confirm (task 1). Deleting an
-    // API key is destructive — it can't be undone and the key may be the only copy — so it now goes
-    // through an explicit confirmation instead of firing on the first tap of the trash icon.
     var profilePendingDelete by remember { mutableStateOf<Int?>(null) }
-    // Name of the profile being edited on the API page (editable so users can rename).
     var editingProfileName by remember(savedProfilesJson, selectedProfileIdx) {
         mutableStateOf(profiles.getOrNull(selectedProfileIdx)?.name ?: "")
     }
 
-    // --- Local model (GGUF) page state (local-model task) ---
-    //
-    // lmRefresh is a change counter: bumping it makes the remember()s below re-read the store, so
-    // the page reflects an import/delete/rename/switch immediately without any second source of truth.
     var lmRefresh by remember { mutableStateOf(0) }
     val lmIndex = remember(lmRefresh) { LocalModelStore.index(context) }
     val lmModels = lmIndex.slots
@@ -594,44 +407,25 @@ fun SettingsScreen(active: Boolean = true) {
     val lmCanImportMore = lmModels.size < LocalModelStore.MAX_MODELS
     var lmImporting by remember { mutableStateOf(false) }
     var lmError by remember { mutableStateOf("") }
-    // The slot the user has asked to delete, held until they confirm. Deleting always asks first.
     var lmSlotPendingDelete by remember { mutableStateOf<LocalModelStore.ModelSlot?>(null) }
-    // The slot being renamed and the working text (null = the rename dialog is closed).
     var lmRenameTarget by remember { mutableStateOf<LocalModelStore.ModelSlot?>(null) }
     var lmRenameText by remember { mutableStateOf("") }
-    // A just-picked model file awaiting a name before it is imported (null = no naming dialog up).
-    // Holding the Uri lets the user label the model at import time (custom names, task requirement).
     var lmPendingImportFile by remember { mutableStateOf<File?>(null) }
     var lmImportName by remember { mutableStateOf("") }
-    // Warning dialogs for the opt-in local-model switches (use-local, tools, GPU). Turning any ON
-    // asks first; turning OFF is free (back to the safe default), so only the "on" path is gated.
     var lmConfirmToolsOn by remember { mutableStateOf(false) }
     var lmConfirmGpuOn by remember { mutableStateOf(false) }
-    // Turning "use local model" ON freezes the cloud API and pulls a multi-gigabyte model into RAM,
-    // so it warns first (API frozen, memory cost, don't quit mid-reply, quitting frees the memory).
     var lmConfirmUseLocalOn by remember { mutableStateOf(false) }
-    // Letting a reply run on in the background keeps a multi-gigabyte model resident while the user
-    // is somewhere else entirely, so switching it ON warns first (task 2). Off is always immediate.
     var lmConfirmBackgroundOn by remember { mutableStateOf(false) }
 
-    // The GGUF picker. A native open dialog on the AWT thread; LocalModelStore validates the actual
-    // bytes (GGUF magic, or a zip containing a .gguf) and rejects everything else with a clear
-    // message. Picking doesn't import straight away: it stages the File and opens a naming dialog
-    // first, so the user can label the model (custom names, task requirement). Import runs on confirm.
     fun pickLocalModel() {
         if (lmImporting) return
         val file = DesktopFiles.openFile() ?: return
         lmError = ""
-        // Default the name to the picked file's name (minus extension); the user can edit it.
         lmImportName = file.name.substringBeforeLast('.').take(60)
         lmPendingImportFile = file
     }
 
 
-    // PHASE 4 — multimodal projector (mmproj) import for the ACTIVE slot. Unlike the model import
-    // there is no naming step: the projector has no user-facing name — it is a property of the
-    // model it serves — so the pick imports directly. The resident model is freed first because
-    // ensureLoaded attaches the projector at model-load time; the next send reloads the pair.
     fun pickMmproj() {
         val mmprojSlotId = lmActiveId ?: return
         if (lmImporting) return
@@ -669,8 +463,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Run the staged import under the chosen name. Frees the resident model first so the peak
-    // footprint stays at one model, then adds the new slot (which becomes active) and refreshes.
     fun startLocalImport(file: File, name: String) {
         if (lmImporting) return
         lmImporting = true
@@ -701,29 +493,23 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Switch the active model. Only one model is ever resident, so the currently loaded one is
-    // released immediately; the next send loads the newly selected slot. No-op if already active.
     fun selectLocalModel(id: String) {
         if (id == lmActiveId) return
         scope.launch {
             withContext(Dispatchers.IO) {
-                LocalLlm.shutdown()          // free the outgoing model's memory now
+                LocalLlm.shutdown()
                 LocalModelStore.setActive(context, id)
             }
             lmRefresh++
         }
     }
 
-    // Delete a model slot. If it is the resident model, the engine is shut down first so a
-    // multi-gigabyte model is never left in memory with nothing on disk to reload.
     fun deleteLocalModel(slot: LocalModelStore.ModelSlot) {
         scope.launch {
             val wasActive = slot.id == lmActiveId
             withContext(Dispatchers.IO) {
                 if (wasActive) LocalLlm.shutdown()
                 LocalModelStore.delete(context, slot.id)
-                // If that was the last model, the "use local model" switch would point at nothing,
-                // so turn it off — the assistant reverts to the cloud API cleanly.
                 if (LocalModelStore.slots(context).isEmpty()) repo.setLocalModelEnabled(false)
             }
             lmRefresh++
@@ -731,39 +517,23 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // --- Imported font state (font library task) ---
-    //
-    // Same shape as the local-model state above, at a smaller scale: fontRefresh is a change
-    // counter, and bumping it makes the remember() below re-read the store so the picker reflects
-    // an import/delete immediately without a second source of truth.
     var fontRefresh by remember { mutableStateOf(0) }
     val importedFonts = remember(fontRefresh) { FontStore.index(context) }.slots
     val fontCanImportMore = importedFonts.size < FontStore.MAX_FONTS
     var fontImporting by remember { mutableStateOf(false) }
     var fontError by remember { mutableStateOf("") }
-    // The font the user has asked to delete, held until they confirm. Deleting always asks first.
     var fontPendingDelete by remember { mutableStateOf<FontStore.FontSlot?>(null) }
-    // A just-picked font file awaiting a name before it is imported (null = no naming dialog up).
-    // Holding the File lets the user label the font at import time (custom names, task requirement).
     var fontPendingImportFile by remember { mutableStateOf<File?>(null) }
     var fontImportName by remember { mutableStateOf("") }
 
-    // The font picker. A native open dialog on the AWT thread, unfiltered for the same reason the
-    // GGUF picker is: FontStore validates the actual bytes (TTF/OTF/TTC magic) and rejects
-    // everything else with a clear message. Picking doesn't import straight away: it stages the
-    // File and opens a naming dialog first.
     fun pickImportFont() {
         if (fontImporting) return
         val file = DesktopFiles.openFile() ?: return
         fontError = ""
-        // Default the name to the picked file's name (minus extension); the user can edit it.
         fontImportName = file.name.substringBeforeLast('.').take(60)
         fontPendingImportFile = file
     }
 
-    // Run the staged font import under the chosen name. The new font becomes the app font right
-    // away — it is the one the user just added, and the immediate whole-app change doubles as the
-    // clearest possible confirmation that the import worked.
     fun startFontImport(file: File, name: String) {
         if (fontImporting) return
         fontImporting = true
@@ -793,9 +563,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Delete an imported font. If it is the selected font, the preference falls back to the
-    // system font FIRST, so no frame is ever asked to render from a family whose file is gone;
-    // the cached FontFamily is dropped for the same reason.
     fun deleteImportedFont(slot: FontStore.FontSlot) {
         scope.launch {
             withContext(Dispatchers.IO) {
@@ -809,9 +576,6 @@ fun SettingsScreen(active: Boolean = true) {
 
     var route by rememberSaveable { mutableStateOf(SettingsRoute.Root) }
 
-    // --- Unsaved-changes guard for the Personalization sub-screen ---
-    // Only personalization (name + chat style) can go "dirty"; the API/Appearance/Data pages save
-    // each action immediately (an explicit button press), so they never need a guard.
     val assistantDirty = route == SettingsRoute.Personalization && (
         assistantName.ifBlank { "Lucent" } != savedAssistantName ||
             assistantStyle != savedAssistantStyle
@@ -820,8 +584,6 @@ fun SettingsScreen(active: Boolean = true) {
 
     val appContext = context.applicationContext
     fun persistAssistantSettings() {
-        // App-lifetime scope: the unsaved-changes dialog saves and then leaves the screen in the
-        // same action, which would otherwise cancel this write before it commits.
         AppScope.io.launch {
             repo.setAssistantName(assistantName.ifBlank { "Lucent" })
             repo.setAssistantStyle(assistantStyle)
@@ -836,14 +598,6 @@ fun SettingsScreen(active: Boolean = true) {
         assistantStyle = savedAssistantStyle
     }
 
-    // Saves the currently-edited connection fields into profile [idx] (replacing it) and makes it
-    // active. Used by the API editor's Save button. Runs on the app-lifetime scope for the same
-    // reason as above.
-    //
-    // The persisted fallback name deliberately stays the English "API N" pattern:
-    // ApiProfiles.nextDefaultName generates the same pattern at the data layer, and a stored name
-    // should not depend on which language happened to be active the moment Save was pressed.
-    // Display-side fallbacks (list rows, the delete dialog) ARE localized.
     fun saveActiveProfile(idx: Int, activate: Boolean = true) {
         val updated = profiles.toMutableList()
         val edited = com.lucent.app.data.ApiProfile(
@@ -861,7 +615,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Switch the active profile to [idx] and load its fields into the editor. Saves immediately.
     fun selectProfile(idx: Int) {
         val p = profiles.getOrNull(idx) ?: return
         url = p.baseUrl; spec = p.spec; key = p.apiKey; selectedModel = p.model
@@ -870,9 +623,6 @@ fun SettingsScreen(active: Boolean = true) {
         AppScope.io.launch { repo.saveApiProfiles(profiles, idx) }
     }
 
-    // Add a new empty profile (up to MAX) and start editing it. Its default name is the smallest
-    // free "API N" number, so deleting a lower-numbered profile lets that number be reused instead
-    // of always climbing (e.g. after deleting "API 1", the next add is "API 1" again, not "API 3").
     fun addProfile() {
         if (profiles.size >= com.lucent.app.data.ApiProfiles.MAX) return
         val defaultName = com.lucent.app.data.ApiProfiles.nextDefaultName(profiles)
@@ -883,16 +633,6 @@ fun SettingsScreen(active: Boolean = true) {
         AppScope.io.launch { repo.saveApiProfiles(newList, newIdx) }
     }
 
-    // Delete profile [idx] — including the last one, which is now a genuine deletion (task 6).
-    //
-    // It used to "delete" the final profile by replacing it with a fresh blank "API 1". That was
-    // meant to keep the editor usable, and instead produced the one outcome a delete button must
-    // never produce: you tapped Delete, confirmed, and a row with the same name was still sitting
-    // there. Whether the key had actually been erased was anybody's guess from the outside.
-    //
-    // Now the list can be empty. The API page shows an explicit empty state instead of an editor
-    // bound to nothing, and SettingsRepository.saveApiProfiles clears the mirrored connection keys
-    // so the assistant stops using credentials the user just removed.
     fun deleteProfile(idx: Int) {
         if (idx !in profiles.indices) return
         val newList = profiles.toMutableList().also { it.removeAt(idx) }
@@ -904,17 +644,10 @@ fun SettingsScreen(active: Boolean = true) {
         AppScope.io.launch { repo.saveApiProfiles(newList, newSelected) }
     }
 
-    // Leaving the Personalization sub-screen (back arrow or system back) while dirty asks first
-    // instead of silently discarding. Every other page saves each action immediately, so this
-    // guard only ever engages on the Personalization route.
     fun leavePersonalization() {
         if (assistantDirty) showUnsavedDialog = true else route = SettingsRoute.Assistant
     }
 
-    // Where "back" goes from the current sub-route, reflecting the nesting:
-    //   Assistant > { Personalization, API, Memory, Network, Local model }
-    //   Appearance > { Theme, Background }
-    //   Language  > { Font }
     fun goBack() {
         when (route) {
             SettingsRoute.Personalization -> leavePersonalization()
@@ -929,35 +662,17 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Leaving Settings folds it back to the root list (task 3). Settings is the clearest case of
-    // the problem: its sub-pages are deep (Assistant > API, Appearance > Background) and highly
-    // specific, so returning to the tab and landing on the API editor — with no memory of having
-    // been there — reads as the app having lost its place rather than helpfully kept it. The
-    // Personalization guard has already resolved by the time this runs, so no edit can be lost.
     LaunchedEffect(active) {
         if (!active) route = SettingsRoute.Root
     }
 
-    // A failed local-model import (e.g. "no .gguf in that zip") should not linger. Clearing it when
-    // the Local Model page is (re-)entered means the message shows once, for that attempt, and is
-    // gone the next time the user opens the page. (Parity with the Android build.)
     LaunchedEffect(route) {
         if (route == SettingsRoute.LocalModel) lmError = ""
-        // Same for the API page's "fetch models" error: a one-off failure (bad URL, network, empty
-        // address) shows once and is gone the next time the page is opened, rather than lingering.
         if (route == SettingsRoute.Api) errorText = ""
-        // And for the Data page's backup status line: the import/export outcome is announced in
-        // its own sheet at completion time, so the line is same-visit context only — re-entering
-        // the page starts it blank instead of showing a stale "Imported …" from last time.
         if (route == SettingsRoute.Data) backupStatus = ""
-        // And the Language & type page's font-import error ("that file isn't a font"): it had no
-        // such reset, so once set it lingered across every later visit — the exact staleness the
-        // three lines above were added to end.
         if (route == SettingsRoute.Language) fontError = ""
     }
 
-    // Registers this screen's dirty state with the app-lifetime guard so switching bottom-nav
-    // tabs, or the system back button closing the app, also asks before losing changes here.
     SideEffect {
         if (assistantDirty) {
             UnsavedChangesGuard.register("settings", ::persistAssistantSettings, ::discardAssistantSettings)
@@ -968,9 +683,6 @@ fun SettingsScreen(active: Boolean = true) {
     DisposableEffect(Unit) { onDispose { UnsavedChangesGuard.clear("settings") } }
 
 
-    // The opt-in warning for small-model mode (B-group task 4). Confirming applies the setting;
-    // dismissing leaves the switch as it was, because the switch is driven by the stored value and
-    // never by local state, so a cancelled dialog cannot leave the UI out of step with reality.
     if (showSmallModelWarn) {
         AlertDialog(
             onDismissRequest = { showSmallModelWarn = false },
@@ -1016,15 +728,8 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showUnsavedDialog) { UnsavedChangesDialog() }
 
-    // Inside a sub-menu, the system back button / edge-swipe returns to the Settings root
-    // instead of leaving the screen. When already at the root this is disabled, so back falls
-    // through to the app-level handler (which returns to the Notes home).
     BackHandler(enabled = route != SettingsRoute.Root) { goBack() }
 
-    // --- API key visibility (task 14) ---
-    // Hidden on entry. The eye button reveals for 3s. While the user is actively typing the
-    // field is shown, then re-masks 1s after the last keystroke. keystrokeSeq starts at 0 and
-    // only advances on real edits, so loading the saved key never triggers a reveal.
     var manualReveal by remember { mutableStateOf(false) }
     var typingReveal by remember { mutableStateOf(false) }
     var keystrokeSeq by remember { mutableStateOf(0) }
@@ -1042,34 +747,11 @@ fun SettingsScreen(active: Boolean = true) {
     }
     val keyVisible = manualReveal || typingReveal
 
-    // =======================================================================================
-    // Backup: export
-    // =======================================================================================
-    //
-    // Exporting asks a question before it writes anything, because the answer genuinely matters and
-    // the user is the only one who can give it. A backup is the one artefact that deliberately leaves
-    // the device — into a cloud drive, an email to yourself, a Downloads folder shared with every app
-    // that ever asked for storage access — and how it is locked is a decision with a real trade-off
-    // on both sides. Picking silently on the user's behalf would be picking wrong for half of them.
 
-    // The password this particular export will use. Null means "use the built-in key". Held across
-    // the launcher round-trip, since the file picker's callback arrives long after the dialog closes.
     var exportPassword by remember { mutableStateOf<String?>(null) }
 
-    // In-flight guard against the "multiple duplicate downloads" bug (task 11).
-    //
-    // The dialog's confirm/dismiss buttons both call beginExport, which dismisses the dialog and
-    // launches the SAF create-document picker. If the button is tapped twice within the same frame —
-    // easy to do, and the recomposition that removes the dialog hasn't happened yet — beginExport
-    // fires twice and TWO pickers open, each writing its own file. That is exactly how three
-    // identically-named lucent-backup.lcb files end up in Downloads from what the user experienced as
-    // one action. This flag makes launching idempotent: the second call is ignored until the current
-    // export finishes (or its picker is cancelled), so at most one file is ever written per request.
     var exportInFlight by remember { mutableStateOf(false) }
 
-    // Desktop backup export. beginExport() opens the native save dialog on the AWT thread and hands
-    // the chosen File here; the sealed payload is written off the main thread. (On Android this was a
-    // CreateDocument launcher writing through contentResolver.openOutputStream.)
     fun runExport(file: File) {
         val password = exportPassword
         val chosenSelection = BackupManager.BackupSelection(
@@ -1082,11 +764,6 @@ fun SettingsScreen(active: Boolean = true) {
         val job = scope.launch {
             backupBusyLabel = S.exportingBackup
             try {
-                // The full payload — notes (archived included), tasks, note version history,
-                // chats, conversations, every attachment, and all settings — sealed as one file.
-                // All of it, not just the API key. Written on IO so a large export can't stall the
-                // UI; use() closes the cipher stream even if the write throws, which matters
-                // because closing is what seals the final frame.
                 val result = withContext(Dispatchers.IO) {
                     try {
                         file.outputStream().use { out ->
@@ -1098,7 +775,6 @@ fun SettingsScreen(active: Boolean = true) {
                             S.backupSavedPassword
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
-                        // A user cancel is handled — and the partial file removed — below.
                         throw e
                     } catch (e: Exception) {
                         S.exportFailed(e.message ?: "")
@@ -1106,20 +782,14 @@ fun SettingsScreen(active: Boolean = true) {
                 }
                 backupStatus = result
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Cancel pressed: the write aborted mid-stream, so the partial file is deleted
-                // best-effort — a half-written envelope that can never decrypt again is worse
-                // than no file at all.
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
                     try {
                         file.delete()
                     } catch (_: Throwable) {
-                        // Already gone or locked by the OS — nothing further to do.
                     }
                 }
                 backupStatus = S.exportCancelledStatus
             } finally {
-                // The write is done, failed, or cancelled — clear the guard so the user can
-                // export again, and bring the modal down.
                 exportInFlight = false
                 backupBusyLabel = null
                 backupOpJob = null
@@ -1129,7 +799,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
 
     fun beginExport(password: String?) {
-        // Ignore a second launch while one is already pending — see exportInFlight above.
         if (exportInFlight) return
         exportInFlight = true
         exportPassword = password
@@ -1149,14 +818,8 @@ fun SettingsScreen(active: Boolean = true) {
                     Text(S.exportBackupBody, fontSize = 13.sp)
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // ---- What to include (task 9) ----
                     Text(S.backupChooseWhat, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
-                    // Notes and tasks carry a second level: tick the module to include it, or tap
-                    // "choose…" to pick individual items. The count in the sub-label is the whole
-                    // point of putting it here rather than only inside the sub-menu — "12 of 40"
-                    // tells you at a glance that this is not a complete backup, which is the one
-                    // fact a partial selection must never hide.
                     BackupModuleRow(
                         label = S.backupModNotes,
                         module = BackupManager.BackupModule.NOTES,
@@ -1173,9 +836,6 @@ fun SettingsScreen(active: Boolean = true) {
                         onChooseItems = { itemPicker = ExportItemKind.TASKS },
                         onChange = { exportModules = it }
                     )
-                    // Chats carry a second level too (task F1): the tick includes the whole assistant
-                    // history, "choose…" narrows it to particular conversations. Offered only when
-                    // there is more than nothing to pick.
                     BackupModuleRow(
                         label = S.backupModChats,
                         module = BackupManager.BackupModule.CHATS,
@@ -1187,10 +847,6 @@ fun SettingsScreen(active: Boolean = true) {
                         onChange = { exportModules = it }
                     )
                     BackupModuleRow(S.backupModSettings, BackupManager.BackupModule.SETTINGS, exportModules) { exportModules = it }
-                    // Settings quietly carries the imported font files with it (they are what the
-                    // font preference points at — see BackupManager). Unlike model files they are
-                    // small, so they get no opt-out of their own, but the size is still quoted:
-                    // a module that adds megabytes to the file should say so where it is ticked.
                     val importedFontBytes = remember(fontRefresh) { FontStore.totalFontBytes(context) }
                     if (importedFontBytes > 0L) {
                         Text(
@@ -1199,9 +855,6 @@ fun SettingsScreen(active: Boolean = true) {
                             modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
                         )
                     }
-                    // API likewise: include every saved connection, or pick which ones. The drill-in
-                    // is gated on realProfiles so its indices match what BackupManager filters on; a
-                    // fresh install still on the flat keys just gets the whole-API tick.
                     BackupModuleRow(
                         label = S.backupModApi,
                         module = BackupManager.BackupModule.API,
@@ -1213,10 +866,6 @@ fun SettingsScreen(active: Boolean = true) {
                         onChange = { exportModules = it }
                     )
                     BackupModuleRow(S.backupModLocalAssistant, BackupManager.BackupModule.LOCAL_ASSISTANT, exportModules) { exportModules = it }
-                    // The model files are offered only when there are some, and always with their
-                    // real size attached: "include local model files" means something very
-                    // different at 40 MB than at 4 GB, and the number is the only honest way to
-                    // say which one this phone is about to do.
                     val modelBytes = remember(lmRefresh) { LocalModelStore.totalModelBytes(context) }
                     if (modelBytes > 0L) {
                         BackupModuleRow(
@@ -1260,10 +909,6 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
             },
-            // One primary action. A blank password → the portable built-in key (the default that
-            // fixes cross-device restore, task 5); a typed password → real encryption. Saving the
-            // typed password is only a same-device convenience for a quick re-import; a different
-            // device still (correctly) asks for it, so the default file stays portable regardless.
             confirmButton = {
                 Button(
                     enabled = !BackupManager.BackupSelection(exportModules, exportNoteIds, exportTaskIds, exportConversationIds, exportApiProfileNames).isEmpty,
@@ -1283,16 +928,7 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showExportDialog) { ExportBackupDialog() }
 
-    // Second-level picker for individual notes / tasks. Rendered as a sibling of the export dialog
-    // rather than nested inside it: an AlertDialog inside an AlertDialog is a platform arrangement
-    // with no good behaviour, and this way dismissing the picker returns to an export dialog that
-    // never went away and still holds the password the user had already typed.
     itemPicker?.let { kind ->
-        // Notes and tasks are keyed on real row ids; chats on the conversation id; API on the
-        // profile INDEX carried as a Long, so one generic picker drives all four. In every case a
-        // full selection is stored back as null ("everything") rather than an explicit set of every
-        // id — that keeps the manifest honest if items are added between choosing and exporting, and
-        // it is what makes the "12 of 40" sub-label disappear again when the user re-ticks all.
         val ids: List<Pair<Long, String>> = when (kind) {
             ExportItemKind.NOTES -> allNotes.map { it.id to it.title.ifBlank { S.untitled } }
             ExportItemKind.TASKS -> allTasks.map { it.id to it.title.ifBlank { S.untitledTask } }
@@ -1332,35 +968,13 @@ fun SettingsScreen(active: Boolean = true) {
         )
     }
 
-    // =======================================================================================
-    // Backup: import
-    // =======================================================================================
-    //
-    // Three steps, and the middle one only when it's needed:
-    //
-    //   1. Pick a file. Lucent reads its header and works out whether it wants a password.
-    //   2. If it does, ask for it. (The header is plaintext precisely so this question can be asked
-    //      *before* trying — otherwise the only way to find out would be to demand a password and see
-    //      if it worked, which is a miserable thing to do to someone restoring a backup.)
-    //   3. Show what is actually inside, and let them cancel.
-    //
-    // Step 3 is the one that was missing. Restoring merges a stranger's file into a live database,
-    // and the old flow did it the instant the file was picked — no idea what was in it, no way back.
 
     fun pickImportBackup() {
         val file = DesktopFiles.openFile() ?: return
         val job = scope.launch {
-            // Reading through a multi-gigabyte backup below is real work; the modal keeps every
-            // other action out of the way while it runs and offers the one safe exit.
             backupBusyLabel = S.importingBackup
             try {
-                // Replace whatever a previous, abandoned pick left behind.
                 discardImportSource()
-                // No whole-file read here any more. The old code did `file.readBytes()`, and a backup
-                // carrying local model files is gigabytes — an instant OutOfMemoryError on the JVM
-                // heap, which is an Error the old catch(Exception) never saw, so the app simply died
-                // the moment such a file was picked. BackupManager now streams both of its passes
-                // straight from the file instead.
                 val readable = withContext(Dispatchers.IO) {
                     try {
                         file.isFile && file.canRead()
@@ -1377,8 +991,6 @@ fun SettingsScreen(active: Boolean = true) {
 
                 val header = BackupManager.peekPasswordRequirement(source)
                 if (header != null && header.needsPassword) {
-                    // Try the password saved on this device first. On the machine that made the backup,
-                    // that means restoring is still a single tap.
                     val stored = repo.backupPassword.first()
                     val preview = if (stored.isEmpty()) null else withContext(Dispatchers.IO) {
                         try {
@@ -1411,7 +1023,6 @@ fun SettingsScreen(active: Boolean = true) {
                     )
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Cancel pressed while the file was being read: let go of the pick entirely.
                 discardImportSource()
                 backupStatus = S.importCancelledStatus
             } finally {
@@ -1422,7 +1033,6 @@ fun SettingsScreen(active: Boolean = true) {
         backupOpJob = job
     }
 
-    // --- Step 2: the password prompt (only for a backup made with a custom password) ---
     @Composable
     @NonRestartableComposable
     fun ImportPasswordDialog(file: java.io.File) {
@@ -1443,9 +1053,6 @@ fun SettingsScreen(active: Boolean = true) {
                         label = { Text(if (importPasswordError) S.wrongPassword else S.lockPassword) },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    // Wrong backup-password guesses charge the SAME shared counter as the lock
-                    // screen and the other Settings prompts; a correct backup password merely
-                    // proceeds (only the app's own credential resets the counter).
                     SettingsGateFeedback()
                 }
             },
@@ -1455,15 +1062,10 @@ fun SettingsScreen(active: Boolean = true) {
                     onClick = {
                         val attempt = importPasswordDraft
                         val job = scope.launch {
-                            // The PBKDF2 cost plus a full read-through of the file: long enough on
-                            // a big backup to deserve the same modal-and-Cancel as the other passes.
                             backupBusyLabel = S.importingBackup
                             try {
                                 val result = withContext(Dispatchers.IO) {
                                     try {
-                                        // Streaming inspect over the picked file — the password's
-                                        // PBKDF2 cost is paid here once; commit reuses the validated
-                                        // password from the preview for its own pass.
                                         Result.success(
                                             BackupManager.inspect(context, BackupManager.fileSource(file), attempt)
                                         )
@@ -1478,10 +1080,6 @@ fun SettingsScreen(active: Boolean = true) {
                                     },
                                     onFailure = { error ->
                                         if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
-                                            // Stay on the dialog. There is no recovery for a forgotten
-                                            // backup password — that is the whole point of it — so the
-                                            // only useful thing left to offer is another try. Each
-                                            // wrong guess also charges the shared credential gate.
                                             importPasswordError = true
                                             chargeSettingsGate()
                                         } else {
@@ -1491,8 +1089,6 @@ fun SettingsScreen(active: Boolean = true) {
                                     }
                                 )
                             } catch (e: kotlinx.coroutines.CancellationException) {
-                                // Cancel pressed mid-inspect: drop the pick, exactly like the
-                                // dialog's own Cancel button does.
                                 discardImportSource()
                                 backupStatus = S.importCancelledStatus
                             } finally {
@@ -1509,13 +1105,10 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (importPasswordPrompt) importSourceFile?.let { ImportPasswordDialog(it) }
 
-    // --- Step 3: show what's in the file, and let them say no ---
     @Composable
     @NonRestartableComposable
     fun ImportPreviewDialog(preview: BackupManager.BackupPreview) {
         AlertDialog(
-            // Backing out of the preview abandons the import; drop the file reference with it
-            // (the user's file itself is untouched).
             onDismissRequest = { importPreview = null; discardImportSource() },
             title = { Text(S.restoreBackupTitle) },
             text = {
@@ -1566,13 +1159,6 @@ fun SettingsScreen(active: Boolean = true) {
                             )
                         }
 
-                        // ---- Restore only part of it (task 9) ----
-                        //
-                        // The same module list as the export dialog, but narrowed to what this file
-                        // actually contains: offering to restore tasks from a notes-only backup is
-                        // a checkbox that can only disappoint. `available` is computed from the
-                        // preview's real counts rather than from the manifest's "modules" list, so
-                        // a pre-v10 backup — which has no such list — still gets an accurate menu.
                         val available = buildSet {
                             if (preview.notes > 0) add(BackupManager.BackupModule.NOTES)
                             if (preview.tasks > 0) add(BackupManager.BackupModule.TASKS)
@@ -1586,9 +1172,6 @@ fun SettingsScreen(active: Boolean = true) {
                             }
                             if (preview.modelFiles > 0) add(BackupManager.BackupModule.LOCAL_MODEL_FILES)
                         }
-                        // Start with everything the file has selected: restoring all of it is what
-                        // the button used to do, so that stays the default and opting out is the
-                        // deliberate act.
                         LaunchedEffect(preview) {
                             restoreModules = available
                             restoreConversationIds = null
@@ -1647,11 +1230,6 @@ fun SettingsScreen(active: Boolean = true) {
                 Button(
                     enabled = !preview.isEmpty && restoreModules.isNotEmpty(),
                     onClick = {
-                        // Which API profiles the restore should carry, and whether that would overflow
-                        // the device's cap. Only a MULTI-API backup (one that carries a named profile
-                        // list) merges; a legacy single-API backup keeps the whole-API replace by
-                        // handing null through. "All" (restoreApiProfileNames == null) is turned into
-                        // the explicit full set so it merges too, rather than replacing what's here.
                         val apiSelected = BackupManager.BackupModule.API in restoreModules
                         val isMultiApiBackup = preview.apiProfileNames.isNotEmpty()
                         val effectiveApiNames: Set<String>? = when {
@@ -1659,8 +1237,6 @@ fun SettingsScreen(active: Boolean = true) {
                             !isMultiApiBackup -> null
                             else -> restoreApiProfileNames ?: preview.apiProfileNames.toSet()
                         }
-                        // Only NEW names take a slot; a name already saved here is kept by the merge
-                        // and costs nothing. If the newcomers wouldn't fit, ask before writing any.
                         val existingNames = com.lucent.app.data.ApiProfiles
                             .parse(savedProfilesJson).map { it.name }.toHashSet()
                         val incomingNew = effectiveApiNames?.count { it !in existingNames } ?: 0
@@ -1680,10 +1256,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     importPreview?.let { ImportPreviewDialog(it) }
 
-    // The moment-of-completion announcement for a finished restore (parity with the Android
-    // build): the status line on the Data page keeps the same text for the rest of THIS visit,
-    // but the sheet is what tells the user "it's done" the instant commit returns, wherever in
-    // Settings they are. Swipe, the scrim, or the button all dismiss it.
     importResultSheet?.let { (committed, message) ->
         val resultSheetState = rememberModalBottomSheetState()
         fun dismissResultSheet() {
@@ -1715,14 +1287,9 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // The modal progress dialog for a long-running backup export or import. Deliberately
-    // impossible to dismiss from the outside — no outside click, no Esc-equivalent back press —
-    // because the whole point is that nothing else may run while gigabytes are in flight; Cancel
-    // is the one way out, and it goes through cooperative cancellation so the streams shut down
-    // cleanly.
     backupBusyLabel?.let { busyLabel ->
         AlertDialog(
-            onDismissRequest = { /* Blocked on purpose — see the comment above. */ },
+            onDismissRequest = {  },
             properties = androidx.compose.ui.window.DialogProperties(
                 dismissOnBackPress = false,
                 dismissOnClickOutside = false
@@ -1744,10 +1311,6 @@ fun SettingsScreen(active: Boolean = true) {
         )
     }
 
-    // Second-level picker for the restore dialog (task F2) — the import-side twin of the export one.
-    // Built from the preview's own lists (not the live database), so it offers exactly what the file
-    // contains. Chats key on the conversation id; API keys on the profile INDEX in the file carried as
-    // a Long, with the stored selection kept as names — same shape as the export picker.
     restoreItemPicker?.let { kind ->
         importPreview?.let { preview ->
             val ids: List<Pair<Long, String>> = when (kind) {
@@ -1785,11 +1348,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // API-limit prompt: shown when a confirmed restore's API profiles would exceed ApiProfiles.MAX.
-    // Rendered here (not nested inside the preview dialog) so a cancel leaves the preview and its
-    // selections intact — the same reason the item picker above lives at this level. The incoming
-    // list and remaining room are recomputed from the same inputs the confirm button used, so the two
-    // always agree on whether a prompt is warranted.
     if (apiLimitPrompt) {
         importPreview?.let { preview ->
             val existingNames = com.lucent.app.data.ApiProfiles
@@ -1807,21 +1365,10 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // --- App Lock setup ---
-    // Captures a password (twice) and, optionally, a security question and its answer, then turns the
-    // lock on. The credentials are hashed by AppLock before anything is stored; the raw
-    // password/answer are never persisted. Cancelling leaves the lock off.
-    //
-    // The question is optional as of task 9 — but skipping it is a genuinely consequential choice, so
-    // it is confirmed rather than merely allowed (see showNoRecoveryWarning below). Note that this is
-    // not just a UI nicety: AppLock.createCredentials stores an *empty* answer hash in that case
-    // rather than the hash of an empty string, because the latter would have been matched by typing a
-    // single space into the recovery form.
     fun applyAppLock() {
         val creds = AppLock.createCredentials(lockPw, lockQuestion, lockAnswer)
         scope.launch { repo.setAppLock(true, creds) }
         AppLockController.enabled = true
-        // Clear the captured secrets from memory now that they're hashed & stored.
         lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
         lockSetupError = ""
         showAppLockSetup = false
@@ -1882,13 +1429,10 @@ fun SettingsScreen(active: Boolean = true) {
                     when {
                         lockPw.length < 4 -> lockSetupError = S.lockErrTooShort
                         lockPw != lockPwConfirm -> lockSetupError = S.lockErrMismatch
-                        // Half a security question is still an error: a question with no answer can
-                        // never be verified, and an answer with no question can never be asked.
                         lockQuestion.isNotBlank() && lockAnswer.isBlank() ->
                             lockSetupError = S.lockErrNeedAnswer
                         lockAnswer.isNotBlank() && lockQuestion.isBlank() ->
                             lockSetupError = S.lockErrNeedQuestion
-                        // Both blank: allowed, but only after the user has been told what it costs.
                         lockQuestion.isBlank() && lockAnswer.isBlank() -> showNoRecoveryWarning = true
                         else -> applyAppLock()
                     }
@@ -1904,12 +1448,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showAppLockSetup) { AppLockSetupDialog() }
 
-    // --- Disable-lock confirmation (task) ---
-    //
-    // Turning the lock OFF is a security downgrade, so it is gated exactly like a login: the current
-    // password must be entered correctly before the protection is removed. The body spells out what
-    // is being given up (anyone can then read everything without a password). A wrong password shows
-    // an inline error and changes nothing; only a correct one disables the lock.
     @Composable
     @NonRestartableComposable
     fun AppLockDisableDialog() {
@@ -1966,17 +1504,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showAppLockDisable) { AppLockDisableDialog() }
 
-    // --- "No security question" warning (task 9) ---
-    //
-    // Skipping the question is permitted, because a lock on a personal device is often protecting
-    // against a curious housemate rather than an adversary, and forcing a recovery question on
-    // someone who doesn't want one just adds a second secret to lose. But it is irreversible in the
-    // worst way: forget the password and there is no reset, only "clear all data" — which is the
-    // whole database, every attachment, gone. That deserves a sentence saying so *before* it
-    // happens, not a support question afterwards.
-    //
-    // The setup dialog stays open underneath, so "Add a question" returns to it with the password
-    // the user already typed still there.
     @Composable
     @NonRestartableComposable
     fun NoRecoveryWarningDialog() {
@@ -1997,7 +1524,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showNoRecoveryWarning) { NoRecoveryWarningDialog() }
 
-    // --- System integration privacy warning (task 6) ---
     @Composable
     @NonRestartableComposable
     fun ShareWarningDialog() {
@@ -2010,8 +1536,6 @@ fun SettingsScreen(active: Boolean = true) {
                     scope.launch { repo.setSystemIntegrationEnabled(true) }
                     ShareIntegration.setEnabled(context, true)
                     showShareWarning = false
-                    // Toast rather than the Data page's backupStatus line: this control lives on
-                    // Security and Privacy now (task 5).
                     LucentToast.show(context, S.systemIntegrationOnToast)
                 }) { Text(S.turnOn) }
             },
@@ -2022,12 +1546,7 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showShareWarning) { ShareWarningDialog() }
 
-    // ==============================================================================================
-    //  C-GROUP dialogs — every switch that changes what the app is ALLOWED to do explains itself
-    //  first, and every one of them states the cost, not just the benefit.
-    // ==============================================================================================
 
-    // --- Task 1: Blackout Mode ---
     @Composable
     @NonRestartableComposable
     fun BlackoutWarningDialog() {
@@ -2037,8 +1556,6 @@ fun SettingsScreen(active: Boolean = true) {
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(S.blackoutWarnBody)
-                    // Blackout requires a password. If there is no lock yet, say so HERE rather
-                    // than letting the user confirm and then bounce off a second dialog.
                     if (!appLockOn) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(S.blackoutNeedsPassword, fontWeight = FontWeight.SemiBold)
@@ -2049,10 +1566,6 @@ fun SettingsScreen(active: Boolean = true) {
                 Button(onClick = {
                     showBlackoutWarning = false
                     if (!appLockOn) {
-                        // No lock yet: send the user through the existing lock-setup dialog, which
-                        // already collects a password AND an optional security question. Blackout
-                        // is switched on by that flow's completion, not here — turning it on with
-                        // no password would produce an app nobody can open.
                         lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
                         lockSetupError = ""
                         showAppLockSetup = true
@@ -2072,7 +1585,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showBlackoutWarning) { BlackoutWarningDialog() }
 
-    // --- Task 3: Crash Shield ---
     @Composable
     @NonRestartableComposable
     fun CrashShieldInfoDialog() {
@@ -2088,8 +1600,6 @@ fun SettingsScreen(active: Boolean = true) {
                 Button(onClick = {
                     showCrashShieldInfo = false
                     scope.launch {
-                        // setCrashShieldEnabled forces logging on in the same edit, so the two can
-                        // never end up disagreeing.
                         repo.setCrashShieldEnabled(true)
                         StartupLog.setEnabled(true)
                         StartupLog.event(context, "crash shield: enabled from Settings")
@@ -2103,7 +1613,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showCrashShieldInfo) { CrashShieldInfoDialog() }
 
-    // --- Task 6: opening links in another app ---
     @Composable
     @NonRestartableComposable
     fun OpenLinksWarningDialog() {
@@ -2128,11 +1637,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showOpenLinksWarning) { OpenLinksWarningDialog() }
 
-    // --- Task 18: self-destruct ---
-    //
-    // The one dialog in the app whose confirm button is disabled until the user TYPES a word. Every
-    // other destructive action here is undoable or recoverable from a backup; this one is neither,
-    // and a tap is too cheap a gesture for a decision that cannot be revisited.
     @Composable
     @NonRestartableComposable
     fun SelfDestructWarningDialog() {
@@ -2173,14 +1677,6 @@ fun SettingsScreen(active: Boolean = true) {
     if (showSelfDestructWarning) { SelfDestructWarningDialog() }
 
 
-    // --- App-Lock gate for the danger zone ---
-    //
-    // When App Lock is on, the four destructive clears (all data / notes / tasks / chats) must be
-    // confirmed with the lock password. The destructive dialogs themselves stay exactly as they
-    // are; their confirm buttons route through requireLockAuth, which either runs the wipe
-    // directly (lock off) or parks it behind this password prompt. The password is verified
-    // against the same PBKDF2 credentials the lock screen uses, and a wrong entry stays in the
-    // dialog with the standard error line rather than silently doing nothing.
     var dangerAuthAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var dangerAuthPw by remember { mutableStateOf("") }
     var dangerAuthError by remember { mutableStateOf("") }
@@ -2260,112 +1756,41 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearData = false
-                    // App Lock on → the wipe below runs only after the password prompt
-                    // (requireLockAuth / DangerAuthDialog); lock off → it runs immediately.
                     requireLockAuth { AppScope.io.launch {
-                        // Cancel every scheduled reminder *before* the rows they point at disappear.
-                        // An alarm outlives the task it belongs to: skip this and a notification for
-                        // a task that no longer exists anywhere in the app can still fire hours
-                        // later, which is both baffling and impossible to make stop.
                         db.taskDao().getAllOnce().forEach {
                             com.lucent.app.reminders.ReminderScheduler.cancel(appContext, it.id)
                         }
-                        // ---- Database rows ----
                         db.noteVersionDao().clearAll()
                         db.noteDao().clearAll()
                         db.taskDao().clearAll()
                         db.chatDao().clearAll()
                         db.chatConversationDao().clearAll()
 
-                        // ---- Preferences ----
                         repo.clearAll()
-                        // The usage scores live in their OWN DataStore (lucent_usage), which
-                        // repo.clearAll() has never touched — see UsageTracker.clearAll.
                         com.lucent.app.data.UsageTracker.clearAll(appContext)
 
-                        // ---- Files on disk ----
-                        // Nothing references anything on disk any more, so sweeping with an
-                        // empty "referenced ids" set drops every stored attachment file. If
-                        // we skipped this, the files would just sit there until the next
-                        // startup ran the orphan sweep — cleaner to free the space now so
-                        // the storage figure matches what the user just did.
                         com.lucent.app.data.AttachmentStore.pruneOrphans(appContext, emptySet())
-                        // Decrypted attachment previews are copies of the user's files sitting
-                        // in cacheDir. The OS clears that eventually; "delete everything" should
-                        // not mean "eventually".
                         com.lucent.app.data.AttachmentAccess.clearPreviewCache(appContext)
-                        // Everything else parked in cacheDir goes too — restore temp blobs from an
-                        // interrupted import, decode scratch files, whatever a future feature puts
-                        // there. Cache contents are disposable by definition, and "delete
-                        // everything" should leave the cache looking like first launch, not
-                        // "whenever the OS gets around to it".
                         appContext.cacheDir.listFiles()?.forEach { f -> runCatching { f.deleteRecursively() } }
 
-                        // ---- The imported local models (task 8) ----
-                        //
-                        // This is the omission that prompted the task, and it was the largest
-                        // thing on disk by three orders of magnitude: a wipe could leave four
-                        // gigabytes of GGUF behind while reporting that all data had been
-                        // cleared. LocalModelStore.deleteAll had existed, correctly written and
-                        // documented as "used when wiping all data", and simply was never called
-                        // from anywhere — dead code that read as a finished feature.
-                        //
-                        // Shut the engine down FIRST. The active model may be resident in memory
-                        // with its file open; deleting underneath a live llama context risks a
-                        // native fault, and on some filesystems the bytes are not freed until the
-                        // last handle closes, so the space would not even come back.
                         com.lucent.app.local.LocalLlm.shutdown()
                         com.lucent.app.local.LocalModelStore.deleteAll(appContext)
 
-                        // ---- The imported fonts (font library task) ----
-                        //
-                        // Same reasoning as the models above, at font scale: imported font files
-                        // are user data on disk that repo.clearAll() knows nothing about, so a
-                        // wipe must sweep them explicitly. The cached FontFamily objects go too —
-                        // the font preference has just been reset to "system" by repo.clearAll(),
-                        // and a family built from a deleted file must not survive to be handed
-                        // out again if a later import mints a new library.
                         FontStore.deleteAll(appContext)
                         LucentFontResolver.evictAll()
 
-                        // ---- Diagnostics and one-off markers ----
                         com.lucent.app.data.StartupLog.clear(appContext)
                         com.lucent.app.data.StartupLog.setEnabled(false)
-                        // A "your database couldn't be decrypted" notice describes a database
-                        // that no longer exists, so it must not survive into the fresh app.
                         com.lucent.app.data.DatabaseEncryption.clearLockedNotice(appContext)
-                        // Set-aside database copies: a failed decryption parks the old DB beside
-                        // the live one rather than deleting it, which is right in normal operation
-                        // and wrong here — a wipe that leaves multi-megabyte snapshots of the data
-                        // it claims to have erased is not the reinstall it promises.
                         com.lucent.app.data.DatabaseEncryption.purgeSetAsideDatabases(appContext)
 
-                        // ---- OS-level state the app owns ----
-                        // The share-sheet entry is a manifest component, not a preference: the
-                        // preference has just been reset to its default, so the component has to
-                        // follow it or the app keeps advertising an integration it believes is
-                        // off. Same class of bug as a reminder outliving its task.
                         com.lucent.app.data.ShareIntegration.setEnabled(appContext, false)
-                        // Home-screen widgets keep rendering their last known rows until told
-                        // otherwise, so without this the user's launcher would still be showing
-                        // tasks from the data they just erased.
                         com.lucent.app.widget.WidgetUpdater.refreshContent(appContext)
 
                         withContext(Dispatchers.Main) {
                             backupStatus = ""
-                            // The local-model list on this page is remember()ed off lmRefresh.
-                            // Without this bump it keeps rendering the pre-wipe snapshot — model
-                            // names whose files are gone, showing as "0 MB" and still marked
-                            // Active — until the screen happens to be rebuilt. That stale ghost
-                            // was the reported "cleared all data, the model name is still there"
-                            // bug; the store itself was wiped correctly above. The font list
-                            // and the byte figures on the export sheet are remember()ed the same
-                            // way, so they get the same treatment.
                             lmRefresh++
                             fontRefresh++
-                            // The assistant holds the current conversation id in memory; the row
-                            // it points at is gone, so reset it to the greeting rather than
-                            // leaving it observing a conversation that no longer exists.
                             AssistantController.onAllChatsCleared(appContext)
                             LucentToast.show(appContext, S.allDataClearedToast)
                         }
@@ -2377,9 +1802,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showClearData) { ClearDataDialog() }
 
-    // Clear only notes. After deleting the rows, re-run the orphan sweep, which recomputes the
-    // referenced attachment ids from whatever remains (tasks) and frees files that belonged only
-    // to notes while keeping any still referenced elsewhere.
     @Composable
     @NonRestartableComposable
     fun ClearNotesDialog() {
@@ -2390,11 +1812,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearNotes = false
-                    // App Lock on → the wipe below runs only after the password prompt
-                    // (requireLockAuth / DangerAuthDialog); lock off → it runs immediately.
                     requireLockAuth { AppScope.io.launch {
-                        // A note's revision history belongs to the note. Leaving it behind would
-                        // orphan every row and quietly grow a table nothing can ever reach again.
                         db.noteVersionDao().clearAll()
                         db.noteDao().clearAll()
                         com.lucent.app.data.AttachmentMigration.pruneOrphans(appContext)
@@ -2417,11 +1835,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearTasks = false
-                    // App Lock on → the wipe below runs only after the password prompt
-                    // (requireLockAuth / DangerAuthDialog); lock off → it runs immediately.
                     requireLockAuth { AppScope.io.launch {
-                        // Same reasoning as "Clear all data": an alarm outlives its task unless it's
-                        // explicitly cancelled first.
                         db.taskDao().getAllOnce().forEach {
                             com.lucent.app.reminders.ReminderScheduler.cancel(appContext, it.id)
                         }
@@ -2436,13 +1850,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showClearTasks) { ClearTasksDialog() }
 
-    // Clear only the assistant's chat history. Chat attachments are stored inline on each message
-    // row, so deleting the rows frees them directly — no disk sweep needed. We also reset the
-    // assistant's in-memory conversation cache so it doesn't keep showing a deleted conversation.
-    // --- API key deletion confirmation (task 1) ---
-    // Only acts on the explicit "Delete" press. The index is re-validated inside the click because
-    // the profile list can change between opening the dialog and confirming; deleteProfile itself
-    // also refuses to remove the last remaining profile.
     @Composable
     @NonRestartableComposable
     fun DeleteApiProfileDialog(idx: Int) {
@@ -2472,8 +1879,6 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearChats = false
-                    // App Lock on → the wipe below runs only after the password prompt
-                    // (requireLockAuth / DangerAuthDialog); lock off → it runs immediately.
                     requireLockAuth { AppScope.io.launch {
                         db.chatDao().clearAll()
                         db.chatConversationDao().clearAll()
@@ -2487,10 +1892,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (showClearChats) { ClearChatsDialog() }
 
-    // --- Local model: per-slot delete confirmation (local-model task) ---
-    // Deleting always asks first, for ANY model. If the model being deleted is the resident one the
-    // engine is freed FIRST, then the file: unloading after deleting would leave a multi-gigabyte
-    // model resident with nothing on disk to reload, which is the worst of both.
     @Composable
     @NonRestartableComposable
     fun DeleteLocalModelDialog(slot: LocalModelStore.ModelSlot) {
@@ -2509,9 +1910,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     lmSlotPendingDelete?.let { DeleteLocalModelDialog(it) }
 
-    // --- Local model: name a model at import time (custom names, task requirement) ---
-    // The file is already picked; this captures the label before the copy runs. Cancelling here
-    // drops the pending import entirely (nothing was copied yet).
     @Composable
     @NonRestartableComposable
     fun NameLocalModelDialog(file: File) {
@@ -2542,7 +1940,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     lmPendingImportFile?.let { NameLocalModelDialog(it) }
 
-    // --- Local model: rename an imported model ---
     @Composable
     @NonRestartableComposable
     fun RenameLocalModelDialog(slot: LocalModelStore.ModelSlot) {
@@ -2574,9 +1971,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     lmRenameTarget?.let { RenameLocalModelDialog(it) }
 
-    // --- Imported fonts: per-font delete confirmation (font library task) ---
-    // Deleting always asks first. The helper resets the selection to the system font before the
-    // file goes, so nothing is ever asked to render from a family whose file is missing.
     @Composable
     @NonRestartableComposable
     fun DeleteImportedFontDialog(slot: FontStore.FontSlot) {
@@ -2595,9 +1989,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     fontPendingDelete?.let { DeleteImportedFontDialog(it) }
 
-    // --- Imported fonts: name a font at import time (custom names, task requirement) ---
-    // The file is already picked; this captures the label before the copy runs. Cancelling here
-    // drops the pending import entirely (nothing was copied yet).
     @Composable
     @NonRestartableComposable
     fun NameImportedFontDialog(file: File) {
@@ -2628,10 +2019,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     fontPendingImportFile?.let { NameImportedFontDialog(it) }
 
-    // --- Local model: warn before turning "use local model" ON ---
-    // Enabling local mode freezes the cloud API and loads a multi-gigabyte model into RAM, so it
-    // spells out the consequences first: the API stops being called, memory use is high, quitting the
-    // app mid-reply interrupts the answer, and quitting frees that memory. Confirming enables it.
     @Composable
     @NonRestartableComposable
     fun ConfirmUseLocalDialog() {
@@ -2650,8 +2037,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (lmConfirmUseLocalOn) { ConfirmUseLocalDialog() }
 
-    // Warn before letting the on-device model call tools: it can be slower and, on a small model,
-    // unreliable. Confirming enables it; cancelling leaves it off.
     @Composable
     @NonRestartableComposable
     fun ConfirmToolsDialog() {
@@ -2670,8 +2055,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (lmConfirmToolsOn) { ConfirmToolsDialog() }
 
-    // Warn before switching the on-device model to the GPU: faster on some phones, but Vulkan
-    // drivers vary and it can be unstable; it also needs the GPU backend compiled into the build.
     @Composable
     @NonRestartableComposable
     fun ConfirmGpuDialog() {
@@ -2682,9 +2065,6 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     lmConfirmGpuOn = false
-                    // Record-only by design: never call into LocalLlm from here. A reply that is
-                    // mid-generation keeps the backend it started on; the next send picks this
-                    // up (LocalLlm.setGpuEnabled documents the contract).
                     AppScope.io.launch { repo.setLocalGpuEnabled(true) }
                 }) { Text(S.lmWarnEnableAnyway) }
             },
@@ -2693,10 +2073,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (lmConfirmGpuOn) { ConfirmGpuDialog() }
 
-    // --- Warn before letting a reply keep running after the app leaves the screen (task 2) ---
-    // Same shape as the tools/GPU warnings, for the same reason: this is the one setting that lets
-    // Lucent hold gigabytes of RAM while the user is doing something else entirely, so it is opt-in
-    // behind a plain description of that cost. Turning it back OFF never asks.
     @Composable
     @NonRestartableComposable
     fun ConfirmBackgroundDialog() {
@@ -2715,27 +2091,14 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (lmConfirmBackgroundOn) { ConfirmBackgroundDialog() }
 
-    // --- Selective Markdown export (choose which notes/tasks) ---
-    // Lists for the picker, live so a just-added item is selectable.
     val notesForExport by remember { db.noteDao().getAll() }.collectAsState(initial = emptyList())
     val tasksForExport by remember { db.taskDao().getAll() }.collectAsState(initial = emptyList())
-    // Which picker is open (null = none). NOTES or TASKS.
     var exportKind by remember { mutableStateOf<ExportKind?>(null) }
-    // Part of the same "fold back to the root on leave" rule as `route` above (task 3); it lives
-    // here rather than beside that effect because this is where the state it clears is declared.
     LaunchedEffect(active) {
         if (!active) exportKind = null
     }
-    // The generated file bytes waiting for the location the user is about to pick. Bytes rather than
-    // a Markdown string now, because Word/Excel/PDF exports are binary (task 1). The MIME rides along
-    // so the created document is typed correctly.
     var pendingExportBytes by remember { mutableStateOf<ByteArray?>(null) }
     var pendingExportName by remember { mutableStateOf("lucent-export.md") }
-    // The picker is created with a generic type and the real MIME/extension come from the chosen
-    // format via the suggested file name — one launcher serves every format.
-    // Desktop selective export: launchExport() opens the native save dialog on the AWT thread and
-    // passes the chosen File here; the staged bytes are written off the main thread. (On Android this
-    // was a CreateDocument launcher writing through contentResolver.openOutputStream.)
     fun runSelectiveExport(file: File) {
         val bytes = pendingExportBytes
         pendingExportBytes = null
@@ -2749,11 +2112,6 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    // Turn a chosen subset + format into bytes and kick off the file picker. Shared by the notes and
-    // tasks export screens below so the format handling lives in exactly one place. When [asZip] is
-    // set the bytes are a .zip bundle (document + attachment files) and the suggested name gets a
-    // .zip extension instead of the format's own; the writer writes whatever bytes it's given, so the
-    // extension is all that needs to change.
     fun launchExport(
         fileStem: String,
         bytes: ByteArray,
@@ -2769,12 +2127,6 @@ fun SettingsScreen(active: Boolean = true) {
 
     BackHandler(enabled = exportKind != null) { exportKind = null }
 
-    // A single scroll state for the whole settings body, declared BEFORE the export-selection early
-    // return below (task 9). The export picker replaces the settings body entirely for a moment; if
-    // the body's scroll position lived inside it, that position would be forgotten while the picker
-    // was up and the page would snap back to the top on return. Hoisting it here — above the return —
-    // keeps it alive across the detour, so coming back from "Choose … to export" lands exactly where
-    // the user left off.
     val rootScroll = rememberScrollState()
 
     if (exportKind != null) {
@@ -2788,22 +2140,12 @@ fun SettingsScreen(active: Boolean = true) {
                 timestamp = { it.updatedAt },
                 searchText = { it.title + "\n" + it.body },
                 attachmentsOf = { com.lucent.app.data.Attachments.parse(it.attachments) },
-                // Round R1, task 3 — a note's drawn canvases, offered beside its files.
                 doodlesOf = { com.lucent.app.data.DoodleExport.canvasesOf(it) },
                 onExport = { subset, format, atts, canvases ->
                     val doc = com.lucent.app.data.DocumentExport.exportNotes(subset, format)
-                    // R3 report: one PDF per NOTE, not one per canvas. The ticked canvases of each
-                    // doodle note are grouped and written as a single multi-page PDF (the picker
-                    // still ticks canvases individually — that is the selection UI — but the
-                    // exporter merges them). Rendering happens here rather than in the picker so
-                    // the picker stays a picker: it decides what is wanted, this decides what that
-                    // costs. The heading is the note's title, so a folder of exported drawings
-                    // survives being renamed.
                     val canvasFiles = canvases.groupBy { it.ownerId }.flatMap { (ownerId, group) ->
                         val owner = subset.firstOrNull { it.id == ownerId }
                         val title = owner?.title.orEmpty().ifBlank { S.untitled }
-                        // One ticked canvas keeps its descriptive "canvas N" name; a merged set
-                        // takes the note's plain file stem.
                         val name = if (group.size == 1) group.first().fileName
                                    else com.lucent.app.data.DoodleExport.fileStem(title).ifBlank { S.untitled } + ".pdf"
                         listOf(name to com.lucent.app.data.DocumentExport.doodlesPdf(group, title))
@@ -2828,9 +2170,6 @@ fun SettingsScreen(active: Boolean = true) {
                 timestamp = { it.createdAt },
                 searchText = { it.title + "\n" + it.notes },
                 attachmentsOf = { com.lucent.app.data.Attachments.parse(it.attachments) },
-                // A task cannot hold a drawing, so `doodlesOf` is left at its empty default and the
-                // canvas list handed back here is always empty; it is named `_` rather than dropped
-                // so the arity mismatch would be a compile error if that ever stopped being true.
                 onExport = { subset, format, atts, _ ->
                     val doc = com.lucent.app.data.DocumentExport.exportTasks(subset, format)
                     if (atts.isEmpty()) {

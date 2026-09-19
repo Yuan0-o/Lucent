@@ -5,11 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * v2.7.9 — the diffuse gradient replaced the drifting blobs, and its two promises are testable
- * without a GPU: the field is a real continuous gradient that actually moves, and the frame policy
- * is what keeps a slow device slow *on purpose* instead of stuttering.
- */
 class DiffuseBackgroundTest {
 
     private val warmPalette = intArrayOf(
@@ -42,8 +37,6 @@ class DiffuseBackgroundTest {
 
     @Test
     fun coloursKeepChangingEvenWhenTheWavesAreFrozen() {
-        // Reduced motion freezes the travelling waves but must NOT freeze the palette: a gradient
-        // whose colours never change is wallpaper, which is exactly what this background is not.
         val field = DiffuseGradientField(24)
         val atStart = field.render(0.0, 5.0, warmPalette, nightBackdrop, dark = true).copyOf()
         val later = field.render(0.0, 40.0, warmPalette, nightBackdrop, dark = true).copyOf()
@@ -51,14 +44,12 @@ class DiffuseBackgroundTest {
             atStart.contentEquals(later),
             "with the waves frozen, 35 seconds of palette drift must still repaint the field"
         )
-        // And the frozen frame must be stable when neither clock moves.
         val repeat = field.render(0.0, 40.0, warmPalette, nightBackdrop, dark = true)
         assertTrue(repeat.contentEquals(later))
     }
 
     @Test
     fun fieldIsAContinuumNotFlatBlocks() {
-        // A diffuse gradient must produce many distinct shades, not a handful of painted patches.
         val pixels = DiffuseGradientField(32).render(3.0, warmPalette, nightBackdrop, dark = true)
         val distinct = pixels.toSet().size
         assertTrue(distinct > 200, "expected a continuum of shades, got $distinct")
@@ -71,7 +62,6 @@ class DiffuseBackgroundTest {
         val recoloured = field.render(2.0, intArrayOf(0xFF00FF00.toInt()), nightBackdrop, dark = true).copyOf()
         assertFalse(left.contentEquals(recoloured), "a palette change must repaint the texture")
 
-        // A palette of fully transparent colours leaves the backdrop untouched.
         val clear = field.render(2.0, intArrayOf(0x00000000), nightBackdrop, dark = true)
         assertTrue(clear.all { pixel -> pixel == nightBackdrop || ((pixel ushr 24) and 255) == 255 })
     }
@@ -82,7 +72,6 @@ class DiffuseBackgroundTest {
         timeline.advance(0L)
         val steady = timeline.advance(33_000_000L)
         assertEquals(0.033, steady, 1e-6)
-        // A ten-second stall (app resumed) must not teleport the gradient.
         val afterStall = timeline.advance(10_000_000_000L)
         assertEquals(0.133, afterStall, 1e-6)
     }

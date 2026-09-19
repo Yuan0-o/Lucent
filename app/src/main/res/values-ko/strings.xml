@@ -1,5 +1,4 @@
 <resources>
-    <!-- Korean widget strings. The app_name brand mark is deliberately not translated. -->
     <string name="widget_ask">질문</string>
     <string name="widget_new_note">새 노트</string>
     <string name="widget_new_task">새 할 일</string>

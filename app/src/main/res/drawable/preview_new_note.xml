@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Picker preview: a miniature of the real widget, so the picker never shows the app icon. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@drawable/widget_card_gradient" />
     <item android:gravity="center" android:width="64dp" android:height="64dp">

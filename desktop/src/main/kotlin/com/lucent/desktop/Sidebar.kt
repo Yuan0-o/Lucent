@@ -37,12 +37,6 @@ import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.frostedGlass
 
-/**
- * The left navigation rail from the mockup: the "\u2726 Lucent" wordmark, a prominent New button, one
- * row per [Screen] destination, and a bottom info card. It carries the same warm-glass look as the
- * rest of the app (a frosted panel, on-gradient ink), and every caption reads from the i18n table via
- * [Screen.label] so it re-renders the instant the language changes.
- */
 @Composable
 fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
     val onGradient = LocalOnGradient.current
@@ -56,7 +50,6 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
             .frostedGlass(cornerRadius = 24.dp)
             .padding(horizontal = 14.dp, vertical = 18.dp)
     ) {
-        // ---- Wordmark: ✦ Lucent ----
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp)) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = onGradient)
             Spacer(modifier = Modifier.width(10.dp))
@@ -65,7 +58,6 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // ---- Destinations, one per Screen ----
         Screen.entries.forEach { screen ->
             NavRow(
                 icon = iconFor(screen),
@@ -80,7 +72,6 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // ---- Bottom info card ----
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier

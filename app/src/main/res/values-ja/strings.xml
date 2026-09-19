@@ -1,5 +1,4 @@
 <resources>
-    <!-- Japanese widget strings. The app_name brand mark is deliberately not translated. -->
     <string name="widget_ask">質問</string>
     <string name="widget_new_note">新規メモ</string>
     <string name="widget_new_task">新規タスク</string>

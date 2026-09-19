@@ -30,14 +30,6 @@ import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.rememberDynamicColorActive
 import kotlinx.coroutines.launch
 
-/**
- * P1-3 — extracted from the `ThemePage` local composable that used to live inside `SettingsScreen`.
- * The two originals differed only in whether dynamic colour could be active at all: Android showed
- * a "paused" banner and hid the list while it was, desktop never could and always showed the list
- * unconditionally. [rememberDynamicColorActive] collapses that into one boolean — `dynamicColorOn &&
- * dynamicColorSupported` on Android, always `false` on desktop — so the two `if` blocks below now
- * read the same way on both platforms and reproduce each one's original behaviour exactly.
- */
 @Composable
 internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
@@ -48,23 +40,11 @@ internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute
     BackHeader(S.settingsThemeTitle) { onRoute(SettingsRoute.Appearance) }
 
     if (dynamicColorActive) {
-        // Material You has priority while it is on: the list below still edits the STORED
-        // choice (so turning dynamic off restores exactly this), but nothing here changes
-        // what is on screen until then. Say so instead of pretending the list is live.
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.dynamicColorPausedTheme, color = onGradientMuted, fontSize = 13.sp)
         }
         Spacer(modifier = Modifier.height(12.dp))
     }
-    // v2.7.2: while Material You is on, the tint list is hidden rather than merely paused —
-    // dynamic colour outranks it in the read path, so rows that edit a choice the screen is
-    // not using would only confuse. The banner above explains why the list is gone, and the
-    // rows return the moment the wallpaper mode is switched off. The list is the picker
-    // subset (18 of the 32 tints, see LucentThemeMode.pickerEntries); System/Light/Dark
-    // and the tints are peers, each row previews the actual backdrop colour it selects, and
-    // a tint that is no longer offered still resolves for anyone whose stored choice names it.
-    // (On desktop, dynamicColorActive is always false, so this is the only appearance picker
-    // desktop has and it always renders — exactly as it did before this page was shared.)
     if (!dynamicColorActive) {
         val systemDark = isSystemInDarkTheme()
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

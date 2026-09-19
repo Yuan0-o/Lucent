@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    "Today's tasks" widget: a glass card with a header (title + quick-add "+") and a scrollable list
-    of the tasks still to do. The ListView is fed by TodayTasksWidgetService; the empty view shows
-    when there are none.
--->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_today_root"
     android:layout_width="match_parent"

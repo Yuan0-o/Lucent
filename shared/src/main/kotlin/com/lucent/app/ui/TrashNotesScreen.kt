@@ -44,27 +44,6 @@ import com.lucent.app.data.TrashCleanup
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * Notes the user deleted, held for [TrashCleanup.RETENTION_DAYS] days before they're removed for
- * good. Reached from the overflow menu on the Notes screen.
- *
- * ### Why a Trash at all
- *
- * The old delete button destroyed a note, its attachments, and (now) its history, immediately and
- * irreversibly, behind a single confirmation dialog. On a phone. With a thumb. That is a design that
- * *works* right up until the one time it doesn't, and then the note is simply gone — no undo, no
- * file on disk, nothing to recover, because a local-first app has no server copy to fall back on.
- * A safety net is not a luxury here; it's the thing that has to replace the one everyone else gets
- * from the cloud.
- *
- * ### Why this screen doesn't open a detail page
- *
- * Unlike [ArchivedNotesScreen], tapping a trashed note doesn't take you anywhere. A note in the bin
- * isn't something you read or edit — it's something you either want back or want gone — so both
- * actions live directly on the card and there's nothing to hand off to [NotesScreen] for. It's also
- * the one place in the app where the words "permanently deleted, can't be undone" are finally true,
- * and they're kept for exactly here so they still mean something.
- */
 @Composable
 fun TrashNotesScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -76,10 +55,6 @@ fun TrashNotesScreen(onBack: () -> Unit) {
 
     var searchQuery by remember { mutableStateOf("") }
     var noteToPurge by remember { mutableStateOf<Note?>(null) }
-    // Restoring out of the trash is confirmed too (task 7). It is not destructive, but it *moves*
-    // the note back into the main list where the user will next go looking for it — and the restore
-    // and delete-forever icons sit side by side on every card, which is exactly the arrangement
-    // where an unconfirmed tap is most likely to be the wrong one.
     var noteToRestore by remember { mutableStateOf<Note?>(null) }
 
     noteToRestore?.let { note ->
@@ -99,9 +74,6 @@ fun TrashNotesScreen(onBack: () -> Unit) {
     }
     var confirmEmptyTrash by remember { mutableStateOf(false) }
 
-    // Purging runs on the app-lifetime scope, not this screen's: emptying the trash disposes the
-    // list this composable is collecting, and a purge cancelled halfway would delete a note's files
-    // without deleting its row.
     fun purge(note: Note) {
         AppScope.io.launch { TrashCleanup.purgeNote(context, db, note) }
     }
@@ -183,7 +155,6 @@ fun TrashNotesScreen(onBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.hazeSource(state = hazeState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            // Reserve the floating capsule's height so the last row clears the pill.
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
         ) {
             items(filtered, key = { it.id }) { note ->

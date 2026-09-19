@@ -20,7 +20,6 @@ import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 
-/** Copy ARGB scratch pixels to owned RGBA bytes before publishing an immutable Skia image. */
 fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap {
     require(edge > 0 && edge.toLong() * edge <= pixels.size.toLong())
     val pixelCount = edge * edge
@@ -33,7 +32,6 @@ fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap {
         bytes[offset + 2] = argb.toByte()
         bytes[offset + 3] = (argb ushr 24).toByte()
     }
-    // makeRaster copies bytes into Skia-owned storage; neither array is shared with a displayed frame.
     return Image.makeRaster(
         ImageInfo(edge, edge, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL),
         bytes,
@@ -41,7 +39,6 @@ fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap {
     ).toComposeImageBitmap()
 }
 
-/** No window-focus heuristic: visible, non-minimized windows may animate even when unfocused. */
 @Composable
 fun rememberBackgroundEnvironment(active: Boolean): BackgroundEnvironment {
     var motionEnabled by remember {
@@ -49,8 +46,6 @@ fun rememberBackgroundEnvironment(active: Boolean): BackgroundEnvironment {
     }
     LaunchedEffect(active) {
         if (!active || !WindowsBackgroundMotion.isWindows) return@LaunchedEffect
-        // Avoid native window subclassing. A cheap read every two seconds notices accessibility
-        // changes while visible; hiding/minimizing cancels this loop until the window returns.
         while (isActive) {
             val enabled = withContext(Dispatchers.IO) { WindowsBackgroundMotion.readEnabled() }
             if (enabled != null) motionEnabled = enabled
@@ -80,7 +75,6 @@ private object WindowsBackgroundMotion {
     }
 }
 
-/** JNA's bundled User32 omits this API; this binding only reads the system preference. */
 private interface WindowsAnimationApi : StdCallLibrary {
     @Suppress("FunctionName")
     fun SystemParametersInfoW(action: Int, parameter: Int, value: IntByReference, flags: Int): Boolean

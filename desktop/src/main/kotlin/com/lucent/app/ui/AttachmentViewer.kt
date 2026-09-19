@@ -58,31 +58,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
-/**
- * Desktop twin of the Android AttachmentViewerDialog.
- *
- * Same job — a full-screen preview of one attachment over a dark scrim with an action row — and the
- * same shape for the two cases a desktop can render natively:
- *  - **Images** are zoom/pannable and gain an Edit action (crop / doodle / mosaic).
- *  - **PDFs** render page by page through Apache PDFBox into a scrollable column.
- *
- * The one deliberate platform divergence: **video and audio are opened in the system's default
- * player** rather than embedded. Android used a VideoView; Compose Desktop has no media widget
- * without a heavy native library, and Windows users already have capable players, so the honest
- * behaviour is [NonPreviewableInfo] plus a one-click "Open with". The Windows work report states
- * this. Every other attachment type behaves exactly as on Android.
- *
- * The action row is Save + Open-with for everything, plus Edit for images. Android's separate
- * "Share" has no desktop equivalent and folds into Open-with.
- */
 @Composable
 fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
     AttachmentViewerDialog(listOf(att), 0, onDismiss)
 
-/**
- * The full-screen attachment viewer. Multiple attachments can be swiped between with a horizontal
- * pager (task E3); the chrome reflects whichever attachment is currently shown.
- */
 @Composable
 fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
     if (attachments.isEmpty()) return
@@ -93,13 +72,8 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
     val pagerState = rememberPagerState(
         initialPage = initialIndex.coerceIn(0, attachments.size - 1)
     ) { attachments.size }
-    // Task 13 — whether the image on the page being looked at is zoomed. It lives here because the
-    // control it governs (the pager's scrollability) is declared here; a child cannot switch off a
-    // gesture its parent owns.
     var currentImageZoomed by remember { mutableStateOf(false) }
     val current = pagerState.currentPage.coerceIn(0, attachments.size - 1)
-    // A new page starts un-zoomed, so swiping can never leave the pager frozen by the zoom state of
-    // a picture that is no longer on screen.
     LaunchedEffect(current) { currentImageZoomed = false }
     val att = attachments[current]
 
@@ -112,10 +86,6 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                 modifier = Modifier.fillMaxSize().padding(bottom = 96.dp, top = 56.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Task 13 — while the visible image is zoomed the pager stops being scrollable, so
-                // every drag belongs to the image. `canPan` alone was not enough: the pager's
-                // scrollable ancestor claims horizontal drags during the gesture, which pinned a
-                // zoomed photo sideways while leaving it free to move vertically.
                 HorizontalPager(
                     state = pagerState,
                     userScrollEnabled = !currentImageZoomed,
@@ -130,7 +100,6 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                                 onZoomChanged = { zoomed -> if (page == current) currentImageZoomed = zoomed }
                             )
                             a.isPdf -> PdfViewer(a)
-                            // Task A1 — same text preview as Android, same extractor.
                             DocumentText.canExtract(a) -> TextPreview(a)
                             else -> NonPreviewableInfo(a)
                         }
@@ -138,7 +107,6 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                 }
             }
 
-            // Top bar: title + page counter + close.
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -157,7 +125,6 @@ fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onD
                 }
             }
 
-            // Bottom action row.
             Row(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 32.dp, top = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -200,7 +167,6 @@ private fun ViewerAction(icon: ImageVector, label: String, onClick: () -> Unit) 
     }
 }
 
-/** Scroll-wheel / pinch zoom and drag-pan image view. Decodes from the encrypted store off-thread. */
 @Composable
 private fun ZoomableImage(
     att: Attachment,
@@ -224,8 +190,6 @@ private fun ZoomableImage(
     var offsetY by remember { mutableStateOf(0f) }
     var viewport by remember { mutableStateOf(IntSize.Zero) }
 
-    // Task A3 — identical rule to Android: the picture may not be dragged past its own edge, and a
-    // picture at fit scale doesn't claim the drag at all, so the pager keeps its swipe.
     fun panLimits(): Pair<Float, Float> {
         val bmp = bitmap ?: return 0f to 0f
         if (viewport.width == 0 || viewport.height == 0) return 0f to 0f
@@ -243,7 +207,6 @@ private fun ZoomableImage(
         offsetY = (offsetY + panChange.y).coerceIn(-maxY, maxY)
     }
 
-    // Task 13 — report zoom as a boolean so the pager is reconfigured only when the answer changes.
     val zoomed = scale > 1f
     LaunchedEffect(zoomed) { onZoomChanged(zoomed) }
 
@@ -256,8 +219,6 @@ private fun ZoomableImage(
                 .onSizeChanged { viewport = it }
                 .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offsetX, translationY = offsetY)
                 .transformable(state = transformState, canPan = { scale > 1f })
-                // Task 13 — reported as a boolean so the pager is only reconfigured when the answer
-                // changes, not on every pinch sample.
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
                         if (scale > 1f) { scale = 1f; offsetX = 0f; offsetY = 0f } else scale = 2f
@@ -269,11 +230,6 @@ private fun ZoomableImage(
     }
 }
 
-/**
- * Render a PDF attachment page-by-page with Apache PDFBox and show the pages in a vertical scroll.
- * Pages are rasterized off the main thread at a readable DPI; a failure falls back to the
- * "open it elsewhere" info panel rather than a blank screen.
- */
 @Composable
 private fun PdfViewer(att: Attachment) {
     val context = android.content.DesktopContext
@@ -286,7 +242,7 @@ private fun PdfViewer(att: Attachment) {
                 val bytes = Attachments.readBytes(context, att, maxBytes = 256L * 1024 * 1024) ?: return@withContext null
                 org.apache.pdfbox.Loader.loadPDF(bytes).use { doc ->
                     val renderer = org.apache.pdfbox.rendering.PDFRenderer(doc)
-                    val count = doc.numberOfPages.coerceAtMost(60) // guard a pathological page count
+                    val count = doc.numberOfPages.coerceAtMost(60)
                     (0 until count).mapNotNull { i ->
                         val image = renderer.renderImageWithDPI(i, 120f)
                         val baos = ByteArrayOutputStream()
@@ -331,7 +287,6 @@ private fun NonPreviewableInfo(att: Attachment) {
         Spacer(Modifier.height(4.dp))
         Text(com.lucent.app.i18n.S.noPreviewForType, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
         Spacer(Modifier.height(16.dp))
-        // A media file lands here on desktop; make the system-player hand-off one obvious click.
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
@@ -354,11 +309,6 @@ private fun NonPreviewableInfo(att: Attachment) {
     }
 }
 
-/**
- * Task A1 — the in-app text preview for documents and code. Desktop twin of the Android composable
- * of the same name; the extraction itself is the shared [DocumentText], so the two platforms show
- * the same words for the same file.
- */
 @Composable
 private fun TextPreview(att: Attachment) {
     val context = android.content.DesktopContext

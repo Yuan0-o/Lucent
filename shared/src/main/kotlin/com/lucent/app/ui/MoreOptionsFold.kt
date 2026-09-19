@@ -32,26 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.i18n.S
 
-/**
- * The shared two-level fold for the note and task composers (v2.7 UI reorganization).
- *
- * ### What it is
- *
- * A slim always-visible row ("More options" + chevron) that expands a glass card of secondary
- * controls directly beneath it — the same chevron-fold idiom the detail pages already use for
- * their action strips (hide behind a chevron, reveal in place), applied to the composers so the
- * first screenful of a new note/task is just what the item *is*: title, body, attachments, save.
- * Everything that *configures* the item (checklist/doodle/subtasks modes, pin, colour, tags,
- * priority, reminder/repeat) lives inside [content], one tap away.
- *
- * Deliberately NOT a dropdown or bottom sheet: this app's established fold is an in-place
- * expand/collapse (see the detail-page strips and Quillpad's expanding "Notebooks" drawer
- * section), it composes identically on Android and desktop, and it keeps the glass identity —
- * the revealed card uses [frostedGlass], the same surface as every other card in the app.
- *
- * The expanded state is owned by the caller (rememberSaveable at the call site) so the composer
- * keeps it across rotation within a session while a fresh composer always starts collapsed.
- */
 @Composable
 fun MoreOptionsFold(
     expanded: Boolean,

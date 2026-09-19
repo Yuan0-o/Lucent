@@ -20,6 +20,4 @@ hmac = "0.12"
 opt-level = 3
 lto = true
 codegen-units = 1
-# Deliberately NOT panic = "abort": every JNI export wraps its body in catch_unwind so a Rust
-# panic degrades to "native unavailable, Kotlin fallback used" instead of killing the app.
 strip = "symbols"

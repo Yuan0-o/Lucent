@@ -26,7 +26,6 @@ class CustomTemplatesTest {
         var json = "[]"
         repeat(CustomTemplates.MAX + 3) { json = CustomTemplates.upsert(json, tpl(it.toString())) }
         assertEquals(CustomTemplates.MAX, CustomTemplates.parse(json).size)
-        // replacement keeps position semantics: same id replaces
         val before = CustomTemplates.parse(json)
         val victim = before[0]
         json = CustomTemplates.upsert(json, victim.copy(name = "renamed"))
@@ -47,7 +46,6 @@ class CustomTemplatesTest {
         assertTrue(CustomTemplates.parse("{ not json").isEmpty())
         assertTrue(CustomTemplates.parse(null).isEmpty())
         assertTrue(CustomTemplates.parse("").isEmpty())
-        // entries without an id are dropped rather than crashing
         assertTrue(CustomTemplates.parse("[{\"name\":\"x\"}]").isEmpty())
     }
 

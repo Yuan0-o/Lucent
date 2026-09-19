@@ -24,25 +24,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
-/**
- * P1-2 step 4: the send → tool-call → confirm → persist chain, exercised on a plain JVM
- * [AssistantControllerImpl] instance — no Android environment, no real network, no Compose UI.
- *
- * This is exactly what P1-2's steps 1-2 were for: [AssistantControllerImpl] takes its
- * [AppDatabase] and its [AssistantLlmClient] as constructor parameters instead of reaching for
- * `AppDatabase.getInstance(...)` / the real `LlmClient` object itself, so a test can hand it a
- * real (but disposable) test database — [AppDatabase.createForTesting], the same seam
- * `com.lucent.app.data.BackupRoundTripTest` and `com.lucent.app.data.DbEncryptionTest` already
- * use for exactly this reason — and a fake, scripted [AssistantLlmClient] instead of a live model.
- * Everything else [AssistantControllerImpl] touches (AppTools, the desktop Context shim,
- * GenerationService, Haptics, ReminderScheduler) already has a safe desktop/no-op path with a
- * disabled reminder and no due date, which is what [createTaskReply] deliberately sends.
- *
- * There is no `kotlinx-coroutines-test` dependency in this module — P1-2's own brief asks not to
- * add one — so generation genuinely runs on a background dispatcher here exactly as it does in the
- * real app. [awaitState] polls [AssistantControllerImpl.state] with a timeout rather than assuming
- * any particular interleaving, which is what makes these tests correct regardless of that.
- */
 class AssistantControllerTest {
 
     private class TestContext(private val dir: File) : Context() {
@@ -53,10 +34,6 @@ class AssistantControllerTest {
         File(System.getProperty("java.io.tmpdir"), "lucent-assistant-controller-test-${System.nanoTime()}")
             .apply { mkdirs() }
 
-    // Same key-material setup as BackupRoundTripTest/DbEncryptionTest: the store is encrypted at
-    // rest keyed off the files directory, so any test that touches AppDatabase needs this wrapper
-    // around it — including, incidentally, AssistantDraftBridge.clear's own
-    // AppDatabase.getInstance(...) call inside resolveConfirmation, which this also keeps safe.
     private suspend fun use(dir: File, block: suspend () -> Unit) {
         LocalSecrets.filesDirOverride = dir
         LocalSecrets.resetForTesting()
@@ -70,7 +47,6 @@ class AssistantControllerTest {
         }
     }
 
-    /** Returns scripted replies in order, repeating the last one if asked for more than were given. */
     private class ScriptedLlmClient(private val scripted: List<Result<RawModelReply>>) : AssistantLlmClient {
         private val index = AtomicInteger(0)
         val callCount: Int get() = index.get()
@@ -97,7 +73,6 @@ class AssistantControllerTest {
             context = context
         )
 
-    /** Poll [AssistantControllerImpl.state] until [condition] holds, or fail with [description]. */
     private suspend fun awaitState(
         controller: AssistantControllerImpl,
         timeoutMs: Long = 5_000,
@@ -113,10 +88,6 @@ class AssistantControllerTest {
         }
     }
 
-    // No "due"/"reminder" keys, so AppTools.execute's create_task branch builds a task with no due
-    // date and reminders off — ReminderScheduler.sync's first check (shouldFire) then returns
-    // immediately without touching any OS-level scheduling, which is what keeps this safe to run
-    // as a plain JVM test.
     private fun createTaskReply(callId: String = "call_1", title: String = "Buy milk", notes: String = "2%") =
         Result.success(
             RawModelReply(
@@ -149,8 +120,6 @@ class AssistantControllerTest {
             style = "friendly",
             memoryTier = MemoryTier.LOW,
             webSearchEnabled = false
-            // confirmTools defaults to true, useLocalModel defaults to false — exactly the cloud,
-            // confirm-before-write path this test exists to exercise.
         )
     }
 
@@ -175,7 +144,6 @@ class AssistantControllerTest {
             assertEquals("Buy milk", byKey["title"])
             assertEquals("2%", byKey["notes"])
 
-            // Nothing runs until the user answers — the whole point of confirm-before-write.
             assertTrue(db.taskDao().getAllOnce().isEmpty())
         }
     }
@@ -211,8 +179,6 @@ class AssistantControllerTest {
             controller.sendFixture(context)
             awaitState(controller, description = "pendingConfirmation to be set") { it.pendingConfirmation != null }
 
-            // The double-click this test is named for: two approvals back to back, exactly as two
-            // fast taps on the same button would arrive.
             controller.resolveConfirmation(approved = true)
             controller.resolveConfirmation(approved = true)
 

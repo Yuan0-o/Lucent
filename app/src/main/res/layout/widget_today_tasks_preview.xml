@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- C-group task 9 — picker preview for the task-list widget. Same reasoning as the other two
-     previews: the real layout is a ListView bound at runtime, and a ListView renders EMPTY in the
-     picker because nothing binds its adapter there — which is why this widget's preview was a bare
-     dark rectangle. A preview has to be static content, so it shows two representative rows. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"

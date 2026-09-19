@@ -51,33 +51,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-/**
- * A multi-line text field with an expand toggle in its bottom-right corner. Collapsed, it behaves
- * like an ordinary [OutlinedTextField] bounded by [collapsedMinHeight]/[collapsedMaxHeight].
- *
- * ### Round R1, task 1 - the collapsed box is twice as tall
- *
- * The defaults below (and every call site's explicit values) were doubled. The old 120..320dp box
- * showed about six lines of a note before it started scrolling inside itself, which is the point at
- * which writing turns into peering through a slot: you lose sight of the sentence you just wrote.
- * Doubling is deliberately a change to the COLLAPSED size only - the expanded editor already filled
- * the screen and needed nothing - so the composer keeps its shape and the tags, attachments and
- * save controls below stay exactly where the user's thumb expects them, just further down.
- * Tapping the expand icon opens a modal editor that fills **almost the entire screen** (edge to
- * edge inside the status/navigation bars) so long notes are comfortable to read and edit.
- *
- * The expanded editor is rendered in its own window (a [Dialog]) rather than inline, which keeps
- * it from squeezing or reflowing the rest of the composer (tags, attachments, the save button …):
- * those stay exactly where they were while the editor floats above them. The dialog window is made
- * transparent with its dim removed, so the app's live animated background still shows through and
- * the panel keeps the app's frosted-glass look. A [Dialog] (instead of the plain popup used
- * before) is what makes this robust: it is a normal focusable window that receives the IME insets
- * and redraws reliably, which fixes the occasional blank/half-drawn panel that could appear after
- * a lot of text had been typed and the editor was then expanded.
- *
- * Both the Notes and the Tasks composer use this one component, so their expanded editors are
- * pixel-for-pixel the same size.
- */
 @Composable
 fun ExpandableGlassTextField(
     value: String,
@@ -87,25 +60,16 @@ fun ExpandableGlassTextField(
     modifier: Modifier = Modifier,
     collapsedMinHeight: Dp = 360.dp,
     collapsedMaxHeight: Dp = 960.dp,
-    // ---- INTEGRATION: C-group task 20 ----
-    // All optional, all inert by default, so every existing call site is untouched and a user who
-    // never turns rich text on gets byte-identical behaviour to before.
     spans: List<RichSpan> = emptyList(),
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
     textColors: List<Color> = emptyList(),
-    // PHASE 4: an optional action rendered in the field's top-right corner (the expand toggle owns
-    // the bottom-right). Used for the dictation mic; default null keeps every existing call site
-    // byte-compatible.
     extraAction: (@Composable () -> Unit)? = null,
 ) {
     val onGradientMuted = LocalOnGradientMuted.current
     var expanded by remember { mutableStateOf(false) }
 
 
-    // The field still owns a plain String; this only carries the caret/selection so the formatting
-    // buttons know what to act on. Re-synced from [value] whenever the text changes underneath us
-    // (an undo, the assistant, a version restore) so the selection can never point past the end.
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
     if (fieldValue.text != value) {
         fieldValue = fieldValue.copy(
@@ -167,17 +131,6 @@ fun ExpandableGlassTextField(
     }
 }
 
-/**
- * The near-full-screen editor window. It is a [Dialog] whose own window has been made transparent
- * (and its dim removed) so the app's animated background still shows through our own scrim, exactly
- * like before — but as a real focusable window it receives the IME insets and redraws reliably, so
- * the panel no longer occasionally comes up blank/half-drawn after a long note.
- *
- * The content is a single column, inset only by the system bars (and the keyboard, via
- * the phone keyboard), with the glass editor panel taking all the remaining height. That fills almost the
- * whole screen and guarantees the field is never hidden behind the IME. A slim margin around the
- * panel is a tap target that dismisses; the collapse button and the back gesture dismiss too.
- */
 @Composable
 private fun ExpandedEditor(
     value: String,
@@ -190,8 +143,6 @@ private fun ExpandedEditor(
     highlightColors: List<Color> = emptyList(),
     textColors: List<Color> = emptyList(),
 ) {
-    // Same treatment as the collapsed field — see the comments there. The expanded editor is where
-    // long-form writing actually happens, so it would be the wrong one to leave unstyled.
     var expandedField by remember { mutableStateOf(TextFieldValue(value)) }
     if (expandedField.text != value) {
         expandedField = expandedField.copy(
@@ -206,14 +157,8 @@ private fun ExpandedEditor(
     }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    // A shared, indication-free interaction source so the scrim/panel tap targets add no ripple.
     val noRipple = remember { MutableInteractionSource() }
 
-    // usePlatformDefaultWidth = false lets the content decide the size, so fillMaxSize makes the
-    // dialog span the whole window. dismissOnClickOutside is off because the content fills the
-    // window; dismissOnBackPress stays on so Esc / the back gesture collapses the editor first.
-    // (The Android build also inset system bars and the IME here; desktop has neither, so those
-    // knobs and the padding they drove are dropped below.)
     Dialog(
         onDismissRequest = onCollapse,
         properties = DialogProperties(
@@ -221,13 +166,7 @@ private fun ExpandedEditor(
             dismissOnClickOutside = false
         )
     ) {
-        // On Android this poked the platform dialog window to drop its dim and go transparent so
-        // the live background showed through. Desktop dialogs have no such window handle, and the
-        // scrim below already provides the look, so there is nothing to do here.
 
-        // A darker full-screen scrim (edge to edge) so the panel stands out clearly from the busy
-        // animated background behind it. Tapping the scrim (the slim area around the panel)
-        // collapses the editor.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -237,15 +176,8 @@ private fun ExpandedEditor(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    // (Android inset the system bars + keyboard here; desktop has neither.)
                     .padding(10.dp)
             ) {
-                // ---- The editor panel: fills essentially the whole screen ----
-                // An opaque surface sits UNDER the glass so the content has a solid, high-contrast
-                // backing (the moving background doesn't bleed through and wash out the text): the
-                // surface is derived from the inverse of the text colour (a dark panel under light
-                // text, a light panel under dark text), keeping the theme-aware look while staying
-                // readable in every palette.
                 val panelSurface = panelSurfaceColor(onGradient)
                 Column(
                     modifier = Modifier
@@ -254,7 +186,6 @@ private fun ExpandedEditor(
                         .clip(RoundedCornerShape(20.dp))
                         .background(panelSurface)
                         .frostedGlass()
-                        // Swallow taps so pressing inside the panel never dismisses.
                         .clickable(interactionSource = noRipple, indication = null) {}
                         .padding(16.dp)
                 ) {
@@ -303,31 +234,13 @@ private fun ExpandedEditor(
     }
 }
 
-/**
- * Picks an opaque backing colour for the expanded editor panel based on the current on-gradient
- * text colour. When the text is light (drawn on dark palettes) we return a near-opaque dark panel;
- * when the text is dark we return a near-opaque light panel. Either way the note/task content sits
- * on a solid, high-contrast surface instead of showing the moving background through, while the
- * thin frosted-glass sheen layered on top keeps it consistent with the rest of the app.
- */
 private fun panelSurfaceColor(onGradient: Color): Color =
     if (onGradient.luminance() > 0.5f) {
-        // Light text -> dark surface.
         Color(0xFF20202B).copy(alpha = 0.92f)
     } else {
-        // Dark text -> light surface.
         Color(0xFFF4F4F8).copy(alpha = 0.92f)
     }
 
-/**
- * INTEGRATION (C-group task 20) — turn a sidecar span list into Compose styling.
- *
- * Kept as a [VisualTransformation] rather than by swapping the field for a rich editor: the field
- * keeps holding a plain [String], every existing caller keeps working, and the styling is applied
- * at draw time only. Offsets are unchanged (nothing is inserted or hidden), so the mapping is the
- * identity — which is what makes the cursor, selection handles and IME all behave exactly as they
- * did before.
- */
 private class RichSpanTransformation(
     private val spans: List<RichSpan>,
     private val highlightColors: List<Color>,
@@ -337,9 +250,6 @@ private class RichSpanTransformation(
         if (spans.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
         val styled = buildAnnotatedString {
             append(text.text)
-            // Clamped against the text actually in the field: the spans come from the database and
-            // the field may already have been edited this frame. A stale range would either throw
-            // or, worse, style the wrong words.
             RichText.reconcile(spans, text.text.length).forEach { s ->
                 val style = when (s.kind) {
                     RichSpan.Kind.LIGHT -> SpanStyle(fontWeight = FontWeight.Light)
@@ -349,8 +259,6 @@ private class RichSpanTransformation(
                         background = highlightColors[s.color.coerceIn(0, highlightColors.lastIndex)]
                             .copy(alpha = 0.45f)
                     )
-                    // Index 0 is the "follow the theme" sentinel, and the caller has already
-                    // resolved it to the ambient text colour, so nothing special is needed here.
                     RichSpan.Kind.COLOR ->
                         if (textColors.isEmpty()) SpanStyle()
                         else SpanStyle(color = textColors[s.color.coerceIn(0, textColors.lastIndex)])

@@ -50,15 +50,6 @@ import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
-/**
- * v2.7.5 — the cloud storage settings page, shared by Android and Windows.
- *
- * WebDAV is the protocol; the page is the form. Everything here is deliberately plain: a provider
- * preset that fills in a well-known endpoint, the four fields WebDAV needs, a test button, an
- * automatic-backup switch, a "back up now" action, and a restore path that lists the cloud folder,
- * downloads the chosen backup and hands it to the same [BackupManager.inspect]/[BackupManager.commit]
- * pair the local restore uses. The password is sealed with the same [CryptoUtil] the API keys use.
- */
 @Composable
 fun CloudSettingsPage(
     repo: SettingsRepository,
@@ -88,7 +79,6 @@ fun CloudSettingsPage(
     var cloudList by remember { mutableStateOf<List<String>?>(null) }
     var pickedBackup by remember { mutableStateOf<String?>(null) }
 
-    // Seed drafts once; changes are saved as user types (the fields are cheap strings).
     LaunchedEffect(url, user, folder, storedPw) {
         if (urlDraft.isEmpty() && url.isNotEmpty()) urlDraft = url
         if (userDraft.isEmpty() && user.isNotEmpty()) userDraft = user
@@ -109,16 +99,6 @@ fun CloudSettingsPage(
         )
     }
 
-    // The settings root already scrolls; adding verticalScroll here nested a scrollable inside a
-    // scrollable and was measured with infinite constraints (crash on open). No scroll of our own.
-    //
-    // No .padding(16.dp) here either, for a related reason: the settings root Column that hosts
-    // every page (SettingsScreen.kt's rootScroll container) already applies .padding(16.dp) once,
-    // the same 16dp every other page — CloudSettingsPage included — sits inside. This page used to
-    // add a second, redundant .padding(16.dp) of its own on top of that, stacking to 32dp of inset
-    // instead of 16dp, which is why this page visibly read as narrower than every other settings
-    // page (its cards' fillMaxWidth() was filling a narrower box). fillMaxWidth() alone is correct
-    // here — it fills whatever width the root already handed down, exactly like every other page.
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -130,7 +110,6 @@ fun CloudSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- Enable ----
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Cloud, contentDescription = null, tint = onGradientMuted)
@@ -147,7 +126,6 @@ fun CloudSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- Provider presets ----
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.cloudProviderTitle, color = onGradient, fontSize = 15.sp)
             Spacer(modifier = Modifier.height(8.dp))
@@ -177,7 +155,6 @@ fun CloudSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- Connection fields ----
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             OutlinedTextField(
                 value = urlDraft,
@@ -247,7 +224,6 @@ fun CloudSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- Automatic backup upload ----
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -262,7 +238,6 @@ fun CloudSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- Actions ----
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             var busy by remember { mutableStateOf(false) }
             TextButton(
@@ -318,7 +293,6 @@ fun CloudSettingsPage(
         }
     }
 
-    // ---- Pick a file from the cloud list ----
     cloudList?.let { files ->
         AlertDialog(
             onDismissRequest = { cloudList = null },
@@ -340,7 +314,6 @@ fun CloudSettingsPage(
         )
     }
 
-    // ---- Confirm the restore, then inspect + commit ----
     pickedBackup?.let { name ->
         AlertDialog(
             onDismissRequest = { pickedBackup = null },

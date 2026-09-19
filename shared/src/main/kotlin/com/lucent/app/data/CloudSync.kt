@@ -10,23 +10,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/**
- * v2.7.5 — the cloud storage module, spoken in WebDAV.
- *
- * Why WebDAV: it is the one protocol every mainstream cloud that wants to be used by third-party
- * software already speaks — 坚果云 (Nutstore), Nextcloud, ownCloud, Koofr, Seafile — and it needs
- * no OAuth client registration, no app secrets buried in the APK, and no redirect dance. The user
- * brings an endpoint, a username and an app password (the kind every provider issues for exactly
- * this purpose), and optionally chooses a folder. On phones whose vendor cloud pickers refuse to
- * open — which is a known Huawei party trick — this module is the dependable way in.
- *
- * The client is deliberately small: PROPFIND to list, PUT to upload, GET to download, and an
- * OPTIONS/PROPFIND probe to test a configuration. XML responses are parsed with a tolerant regex
- * scan rather than a schema: WebDAV servers disagree about namespaces, and we only need <href>.
- */
 object CloudSync {
 
-    /** Presets the settings page offers. The third entry is "custom". */
     val PRESETS: List<Pair<String, String>> = listOf(
         "Nutstore" to "https://dav.jianguoyun.com/dav/",
         "Nextcloud" to "https://cloud.example.com/remote.php/dav/files/",
@@ -47,7 +32,6 @@ object CloudSync {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /** The folder URL with a trailing slash, created on demand by [ensureFolder]. */
     fun folderUrl(config: Config, extra: String = ""): String {
         var base = config.url.trim()
         if (base.isBlank()) return ""
@@ -63,12 +47,10 @@ object CloudSync {
             .method(method, null)
             .header("Authorization", Credentials.basic(config.user, config.password))
 
-    /** Whether the configuration answers at all — the "test connection" button. */
     suspend fun test(config: Config): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val url = folderUrl(config)
             require(url.isNotBlank()) { "empty URL" }
-            // PROPFIND depth 0 asks "is this directory there"; 207 means "yes, Multi-Status".
             val req = request(config, url, "PROPFIND")
                 .header("Depth", "0")
                 .build()
@@ -83,7 +65,6 @@ object CloudSync {
         }
     }
 
-    /** Create the folder if missing (MKCOL; a 405 "already exists" is fine). */
     suspend fun ensureFolder(config: Config): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val url = folderUrl(config)
@@ -97,7 +78,6 @@ object CloudSync {
         }
     }
 
-    /** Upload one file into the configured folder. */
     suspend fun upload(config: Config, name: String, bytes: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             ensureFolder(config).getOrThrow()
@@ -110,7 +90,6 @@ object CloudSync {
         }
     }
 
-    /** List files in the configured folder (names only; the picker shows the filename). */
     suspend fun list(config: Config, keepExtension: String = ".lcb"): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
             val req = request(config, folderUrl(config), "PROPFIND")
@@ -128,7 +107,6 @@ object CloudSync {
         }
     }
 
-    /** Download one file from the configured folder. */
     suspend fun download(config: Config, name: String): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val req = request(config, folderUrl(config, name), "GET").build()

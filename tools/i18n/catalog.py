@@ -1,17 +1,6 @@
-# -*- coding: utf-8 -*-
-# Lucent translation catalog. ENTRIES: (key_or_signature, en, zh, ja, ko).
-# {param} inside templates becomes ${param} in generated Kotlin.
-# None => no override => falls back to English.
-# A bare string item is a comment line, emitted verbatim (indented) into Tr only.
-# NOTE: gen_i18n.py writes ONLY the Android I18n.kt. The desktop file
-# (desktop/src/main/kotlin/com/lucent/app/i18n/I18n.kt) is a hand-maintained fork that also
-# carries desktop-only strings (Windows Hello, PDF font hints, ...) — sync it by hand.
 
 ENTRIES = [
 
-    # ---- Task 10: exported document labels (PDF / DOCX / XLSX) ----
-    # These were hardcoded English inside DocumentExport, so a Chinese user exporting a Chinese
-    # note got a PDF whose headings said "Updated" and "Subtasks".
     ("exportDocNotesTitle", "Lucent notes", "Lucent 笔记", "Lucent メモ", "Lucent 노트"),
     ("exportDocTasksTitle", "Lucent tasks", "Lucent 任务", "Lucent タスク", "Lucent 할 일"),
     ("exportDocNoteCount(count: Int)", "{count} notes", "{count} 条笔记", "メモ {count} 件", "노트 {count}개"),
@@ -33,13 +22,10 @@ ENTRIES = [
     ("exportDocUntitledTask", "Untitled task", "无标题任务", "無題のタスク", "제목 없는 할 일"),
     ("exportDocAttachmentsLine(names: String)", "Attachments: {names}", "附件：{names}", "添付：{names}", "첨부: {names}"),
     ("exportDocAttachmentsNote", "Attachments are listed by name but not embedded. Use the .lcb backup if you need the files themselves.", "附件仅列出文件名，不会嵌入文档。需要附件本身请使用 .lcb 备份。", "添付ファイルは名前のみ記載され、埋め込まれません。ファイル本体が必要な場合は .lcb バックアップをお使いください。", "첨부 파일은 이름만 기재되며 포함되지 않습니다. 파일 자체가 필요하면 .lcb 백업을 사용하세요."),
-    # Round R1 - the Markdown writer was the one export format still hardcoded in English; these
-    # cover the strings it needed that the other formats did not already have.
     ("exportDocEmptyChecklist", "(empty checklist)", "（空清单）", "（空のチェックリスト）", "(빈 체크리스트)"),
     ("exportDocDoodleLine(names: String)", "Doodles: {names}", "涂鸦：{names}", "落書き：{names}", "낙서: {names}"),
     ("exportDocDoodleCanvases(count: Int)", "{count} doodle canvases", "{count} 块涂鸦画布", "落書きキャンバス {count} 枚", "낙서 캔버스 {count}개"),
     ("exportDocYes", "Yes", "是", "はい", "예"),
-    # Spreadsheet column headers
     ("exportColTitle", "Title", "标题", "タイトル", "제목"),
     ("exportColUpdated", "Updated", "更新时间", "更新日時", "업데이트"),
     ("exportColCreated", "Created", "创建时间", "作成日時", "생성"),
@@ -56,7 +42,6 @@ ENTRIES = [
     ("exportColSubtasks", "Subtasks", "子任务", "サブタスク", "하위 작업"),
     ("exportPdfMissingCjkFont", "Some characters could not be drawn because no font on this machine covers them. Import a font in Settings, or export as .docx.", "部分字符无法绘制，因为本机没有覆盖这些字形的字体。请在设置里导入字体，或改用 .docx 导出。", "この端末に該当する字形を含むフォントがないため、一部の文字を描画できませんでした。設定でフォントを読み込むか、.docx で書き出してください。", "이 컴퓨터에 해당 글자를 포함한 글꼴이 없어 일부 문자를 그릴 수 없었습니다. 설정에서 글꼴을 가져오거나 .docx로 내보내세요."),
 
-    # ---- Task 7: automatic backup ----
     ("autoBackupTitle", "Automatic backup", "自动备份", "自動バックアップ", "자동 백업"),
     ("autoBackupFolder", "Backup folder", "备份文件夹", "バックアップ先フォルダー", "백업 폴더"),
     ("autoBackupChooseFolder", "Choose folder", "选择文件夹", "フォルダーを選択", "폴더 선택"),
@@ -70,12 +55,9 @@ ENTRIES = [
     ("autoBackupNeedsFolder", "Choose a folder first", "请先选择文件夹", "先にフォルダーを選択してください", "먼저 폴더를 선택하세요"),
     ("autoBackupWhyNoModels", "Local model files can be several gigabytes and can be downloaded again, so they are left out. Everything else — notes, tasks, chats, settings and attachments — is included.", "本地模型文件可能有数 GB，且可以重新下载，因此不纳入自动备份。其余内容——笔记、任务、聊天、设置和附件——全部包含。", "ローカルモデルのファイルは数ギガバイトになることがあり、再ダウンロードも可能なため除外しています。それ以外——メモ、タスク、チャット、設定、添付ファイル——はすべて含まれます。", "로컬 모델 파일은 수 기가바이트에 이를 수 있고 다시 내려받을 수 있으므로 제외합니다. 그 외 노트, 할 일, 채팅, 설정, 첨부 파일은 모두 포함됩니다."),
     ("autoBackupFailed(reason: String)", "Last automatic backup failed: {reason}", "上次自动备份失败：{reason}", "前回の自動バックアップに失敗しました：{reason}", "마지막 자동 백업 실패: {reason}"),
-    # Restored to the catalog (round R1): these were hand-added straight into both I18n.kt files,
-    # which is the drift the catalog exists to prevent. Values copied verbatim from those files.
     ("autoBackupRunNow", "Back up now", "立即备份", "今すぐバックアップ", "지금 백업"),
 
 
-    # ---- Task 16: parallel vs overwrite restore ----
     ("importModeTitle", "If something is already here", "如果本机已有相同内容", "同じ内容が既にある場合", "같은 내용이 이미 있을 때"),
     ("importModeParallel", "Keep both", "平行导入", "両方とも残す", "둘 다 유지"),
     ("importModeParallelDesc", "Adds everything alongside what you have. Nothing existing is changed. Safest — the worst case is a duplicate you can delete.", "把备份里的内容并列添加进来，不修改任何已有数据。最安全——最坏情况只是多出一份可以删掉的副本。", "バックアップの内容を既存データと並べて追加します。既存のものは一切変更されません。最も安全で、最悪でも削除できる重複が増えるだけです。", "백업 내용을 기존 데이터와 나란히 추가합니다. 기존 항목은 전혀 변경되지 않습니다. 가장 안전하며, 최악의 경우 삭제할 수 있는 중복이 생길 뿐입니다."),
@@ -85,7 +67,6 @@ ENTRIES = [
     ("importReplacedSummary(notes: Int, tasks: Int)", "Replaced {notes} notes and {tasks} tasks", "已覆盖 {notes} 条笔记、{tasks} 个任务", "{notes} 件のメモと {tasks} 件のタスクを置き換えました", "노트 {notes}개, 할 일 {tasks}개를 교체했습니다"),
 
 
-    # ---- Task 15: twelve further backgrounds ----
     ("paletteAmber", "Amber", "琥珀", "アンバー", "앰버"),
     ("paletteCrimson", "Crimson", "绯红", "クリムゾン", "크림슨"),
     ("paletteIndigo", "Indigo", "靛蓝", "インディゴ", "인디고"),
@@ -99,7 +80,6 @@ ENTRIES = [
     ("paletteMeridian", "Meridian", "子午", "メリディアン", "메리디안"),
     ("paletteOrchid", "Orchid", "兰花", "オーキッド", "오키드"),
 
-    # ---- Task 15: four further appearances ----
     ("themeMonetRose", "Rose", "蔷薇", "ローズ", "로즈"),
     ("themeMonetRoseDesc", "Soft light pink", "柔和的浅粉色", "やわらかな淡いピンク", "부드러운 연분홍"),
     ("themeMonetLagoon", "Lagoon", "浅湖", "ラグーン", "라군"),
@@ -110,11 +90,9 @@ ENTRIES = [
     ("themeMonetGarnetDesc", "Deep crimson after dark", "夜色中的深绯红", "夜の深いクリムゾン", "어둠 속 짙은 크림슨"),
 
 
-    # ---- Task 12: attachment select-all on the export selection screen ----
     ("selectAllAttachments", "Select all attachments", "全选附件", "添付ファイルをすべて選択", "첨부 파일 모두 선택"),
     ("nAttachmentsSelected(count: Int)", "{count} attachments", "已选 {count} 个附件", "添付 {count} 件", "첨부 {count}개"),
 
-    # ---- Task 13: opt-in security-question recovery for the backup password ----
     ("backupRecoveryTitle", "Add a security question to this backup", "为此备份添加密保问题", "このバックアップに秘密の質問を追加", "이 백업에 보안 질문 추가"),
     ("backupRecoveryDesc", "Off by default. Lets you recover this backup's password by answering a question you set now.", "默认关闭。开启后，可通过回答你现在设置的问题来找回此备份的密码。", "初期状態はオフです。今設定する質問に答えることで、このバックアップのパスワードを取り戻せます。", "기본값은 꺼짐입니다. 지금 설정한 질문에 답하여 이 백업의 비밀번호를 되찾을 수 있습니다."),
     ("backupRecoveryWarnBody", "Read this before turning it on. With a security question attached, this backup is only as strong as the WEAKER of your password and your answer. An answer someone could find on your social media does not weaken this backup — it becomes its real password.\n\nChoose a question whose answer nobody else knows and you will not forget. This is set per backup, so you can add it to a file kept in a drawer and leave it off a file going to a shared cloud folder.\n\nBackups exported without this are unchanged: forgetting their password means the file cannot be opened by anyone, including us.", "开启前请先读这段。附带密保问题后，此备份的安全性等于你的密码和你的答案中**较弱的那一个**。如果答案是别人能从你社交媒体上查到的东西，那它不是削弱了这个备份——它直接变成了这个备份的真实密码。\n\n请选择一个别人不知道、而你不会忘记的问题。此选项按备份单独设置，所以你可以给放在抽屉里的文件加上，而给传到共享云盘的文件不加。\n\n不带此选项导出的备份保持原样：忘记密码就意味着任何人都打不开该文件，包括我们。", "オンにする前にお読みください。秘密の質問を添えると、このバックアップの強度はパスワードと答えのうち**弱い方**と同じになります。SNS から調べられるような答えは、このバックアップを弱めるのではなく、そのまま実質的なパスワードになります。\n\n他人が知らず、あなたが忘れない質問を選んでください。この設定はバックアップごとです。引き出しにしまうファイルには付け、共有クラウドに置くファイルには付けない、という使い分けができます。\n\nこれを付けずに書き出したバックアップは従来どおりです。パスワードを忘れれば、私たちを含め誰もそのファイルを開けません。", "켜기 전에 읽어 주세요. 보안 질문을 붙이면 이 백업의 강도는 비밀번호와 답변 중 **더 약한 쪽**과 같아집니다. SNS에서 찾을 수 있는 답변은 이 백업을 약하게 만드는 정도가 아니라, 그 자체가 실질적인 비밀번호가 됩니다.\n\n남들은 모르고 본인은 잊지 않을 질문을 고르세요. 이 설정은 백업마다 따로 적용되므로, 서랍에 보관할 파일에는 붙이고 공유 클라우드에 올릴 파일에는 붙이지 않을 수 있습니다.\n\n이 옵션 없이 내보낸 백업은 그대로입니다. 비밀번호를 잊으면 저희를 포함해 누구도 그 파일을 열 수 없습니다."),
@@ -122,9 +100,7 @@ ENTRIES = [
     ("backupRecoveryAnswerWrong", "That answer doesn't match", "答案不正确", "答えが一致しません", "답변이 일치하지 않습니다"),
 
 
-    # ================= C-group tasks =================
 
-    # ---- Task 1: Blackout Mode (the advanced privacy switch) ----
     ("blackoutTitle", "Blackout Mode", "隐迹模式", "ブラックアウトモード", "블랙아웃 모드"),
     ("blackoutOverridesTitle", "This switch outranks every other setting", "此开关的优先级高于其它所有设定", "このスイッチは他のすべての設定より優先されます", "이 스위치는 다른 모든 설정보다 우선합니다"),
     ("blackoutWarnTitle", "Turn on Blackout Mode?", "要开启隐迹模式吗？", "ブラックアウトモードをオンにしますか？", "블랙아웃 모드를 켤까요?"),
@@ -135,7 +111,6 @@ ENTRIES = [
     ("blackoutFrozenBody", "This needs the network, which Blackout Mode blocks. Turn Blackout off in Settings → Privacy to use it again.", "此功能需要联网，而隐迹模式已阻止所有网络请求。前往 设置 → 隐私 关闭隐迹模式后即可使用。", "この機能にはネットワークが必要ですが、ブラックアウトモードが遮断しています。設定 → プライバシー でオフにすると再び使えます。", "이 기능에는 네트워크가 필요하지만 블랙아웃 모드가 차단하고 있습니다. 설정 → 개인정보에서 끄면 다시 사용할 수 있습니다."),
     ("blackoutOffToast", "Blackout Mode off — previous settings restored", "已关闭隐迹模式，之前的设定已恢复", "ブラックアウトモードをオフにしました。以前の設定に戻りました", "블랙아웃 모드를 껐습니다. 이전 설정이 복원되었습니다"),
 
-    # ---- Task 3: Crash Shield ----
     ("crashShieldTitle", "Crash Shield", "崩溃护盾", "クラッシュシールド", "크래시 실드"),
     ("crashShieldLimitsTitle", "What it cannot catch", "它无法拦截的情况", "捕捉できないもの", "막을 수 없는 경우"),
     ("crashShieldLimitsBody", "Crash Shield catches every error inside the app itself. It cannot catch three things: a crash inside the on-device model engine, the system closing Lucent to free memory, or Android killing it for not responding. We would rather say so than promise a guarantee we cannot keep.\n\nA caught error means the work that failed did not finish — a save that crashed did not save. The app stays open so you can retry or export a backup, which a closed app cannot do.\n\nTurning this on also turns diagnostic logging on and keeps it on: an error that is hidden without being recorded is worse than one you can see.", "崩溃护盾能拦截应用自身的所有错误，但有三种情况拦不住：本地模型引擎内部的崩溃、系统为释放内存而关闭 Lucent、以及安卓因应用无响应将其终止。与其承诺做不到的保证，我们选择如实说明。\n\n被拦截的错误意味着那次操作并没有完成——崩溃的保存并没有保存成功。但应用会保持打开，你可以重试或导出备份，而已关闭的应用做不到这些。\n\n开启此功能会同时强制开启日志记录：一个被隐藏且未被记录的错误，比一个你能看见的错误更糟。", "クラッシュシールドはアプリ自身のエラーをすべて捕捉します。ただし三つだけ捕捉できません：端末内モデルエンジン内部のクラッシュ、メモリ確保のためシステムが Lucent を終了する場合、応答なしとみなされて Android に終了される場合です。守れない保証を約束するより、正直にお伝えします。\n\n捕捉されたエラーは、その処理が完了しなかったことを意味します——失敗した保存は保存されていません。それでもアプリは開いたままなので、やり直しやバックアップの書き出しができます。閉じてしまったアプリにはできないことです。\n\nこれをオンにすると診断ログも自動的にオンになり、オンのまま保たれます。記録されずに隠されたエラーは、目に見えるエラーより厄介だからです。", "크래시 실드는 앱 자체의 모든 오류를 잡아냅니다. 다만 세 가지는 잡을 수 없습니다: 기기 내 모델 엔진 내부의 크래시, 메모리 확보를 위해 시스템이 Lucent를 종료하는 경우, 응답 없음으로 Android가 종료하는 경우입니다. 지킬 수 없는 보장을 약속하기보다 사실대로 말씀드립니다.\n\n오류가 잡혔다는 것은 그 작업이 끝나지 않았다는 뜻입니다 — 실패한 저장은 저장되지 않았습니다. 그래도 앱은 열린 채로 남아 다시 시도하거나 백업을 내보낼 수 있습니다. 닫힌 앱은 그럴 수 없습니다.\n\n이 기능을 켜면 진단 로깅도 함께 켜지고 유지됩니다. 기록되지 않은 채 숨겨진 오류는 눈에 보이는 오류보다 나쁘기 때문입니다."),
@@ -143,7 +118,6 @@ ENTRIES = [
     ("crashShieldNextLaunch", "Takes effect the next time you open Lucent", "下次打开 Lucent 时生效", "次回 Lucent を起動したときに有効になります", "다음에 Lucent를 열 때 적용됩니다"),
     ("crashShieldCaught(count: Int)", "Errors caught this session: {count}", "本次运行已拦截错误：{count}", "今回の起動で捕捉したエラー：{count}", "이번 세션에서 잡은 오류: {count}"),
 
-    # ---- Task 18: unlock attempt limits and self-destruct ----
     ("attemptLimitsTitle", "Unlock attempt limits", "解锁尝试次数限制", "ロック解除の試行回数制限", "잠금 해제 시도 횟수 제한"),
     ("attemptFirstRound", "First round attempts", "首轮尝试次数", "最初のラウンドの試行回数", "첫 라운드 시도 횟수"),
     ("attemptLaterRounds", "Attempts per later round", "后续每轮尝试次数", "以降の各ラウンドの試行回数", "이후 각 라운드 시도 횟수"),
@@ -156,21 +130,17 @@ ENTRIES = [
     ("selfDestructConfirmPhrase", "ERASE", "清除", "消去", "삭제"),
     ("selfDestructConfirmHint(phrase: String)", "Type {phrase} to confirm", "输入 {phrase} 以确认", "確認のため {phrase} と入力してください", "확인하려면 {phrase}을(를) 입력하세요"),
     ("selfDestructRemaining(count: Int)", "Warning: {count} more wrong passwords will erase everything", "警告：再输错 {count} 次将清除全部数据", "警告：あと {count} 回間違えるとすべて消去されます", "경고: {count}번 더 틀리면 모든 데이터가 삭제됩니다"),
-    # Lock-screen banner while wrong guesses approach the (optional) self-destruct threshold.
     ("selfDestructNear", "Warning: a few more wrong attempts will permanently erase all of your data", "警告：再输错几次将永久清除你的全部数据", "警告：もう少し間違えると、すべてのデータが完全に消去されます", "경고: 몇 번 더 틀리면 모든 데이터가 영구히 삭제됩니다"),
 
-    # ---- Task 6: open links in the system browser ----
     ("openLinksTitle", "Open web links in your browser", "在浏览器中打开网址", "ウェブリンクをブラウザで開く", "웹 링크를 브라우저에서 열기"),
     ("openLinksWarnTitle", "Open web links in your browser?", "要在浏览器中打开网址吗？", "ウェブリンクをブラウザで開きますか？", "웹 링크를 브라우저에서 열까요?"),
     ("openLinksWarnBody", "For: a pasted address works like it does everywhere else, with no syntax to learn. The full address stays visible as text, so you can see where a link goes before you tap it.\n\nAgainst: tapping hands the address to another app. Your browser sees it, the destination sees your IP address, and none of that is covered by Lucent's own encryption. A link in a note someone shared with you is then one tap from opening.\n\nOnly http and https addresses are ever opened. Blackout Mode overrides this switch — while it is on, nothing is handed to a browser.", "好处：粘贴的网址会像在其它应用里一样直接可用，无需学习任何语法。完整地址始终以文本形式显示，因此你在点击前就能看清它指向哪里。\n\n代价：点击会把地址交给另一个应用。你的浏览器会看到它，目标网站会看到你的 IP 地址，而这些都不在 Lucent 的加密保护范围内。别人分享给你的笔记里的链接，也就只差一次点击就会被打开。\n\n只有 http 和 https 地址会被打开。隐迹模式的优先级高于此开关——它开启时，任何地址都不会交给浏览器。", "利点：貼り付けたアドレスが他のアプリと同じように使え、覚える書式もありません。完全なアドレスがテキストとして表示されたままなので、タップする前にリンク先を確認できます。\n\n欠点：タップするとアドレスが別のアプリに渡されます。ブラウザはそれを見ますし、接続先はあなたの IP アドレスを知ります。そのどちらも Lucent の暗号化の対象外です。誰かが共有したメモの中のリンクも、タップ一回で開く状態になります。\n\n開かれるのは http と https のアドレスのみです。ブラックアウトモードはこのスイッチより優先され、オンの間はブラウザに何も渡されません。", "장점: 붙여넣은 주소가 다른 앱과 똑같이 동작하며 배울 문법이 없습니다. 전체 주소가 텍스트로 그대로 보이므로 탭하기 전에 어디로 가는지 확인할 수 있습니다.\n\n단점: 탭하면 주소가 다른 앱으로 전달됩니다. 브라우저가 주소를 보고, 목적지는 당신의 IP 주소를 보며, 그 어느 것도 Lucent의 암호화 보호를 받지 않습니다. 누군가 공유한 노트 속 링크도 탭 한 번이면 열립니다.\n\nhttp와 https 주소만 열립니다. 블랙아웃 모드가 이 스위치보다 우선하며, 켜져 있는 동안에는 브라우저로 아무것도 전달되지 않습니다."),
     ("openLinksBlockedByBlackout", "Blackout Mode is on — links are not opened", "隐迹模式已开启，不会打开任何链接", "ブラックアウトモードがオンです。リンクは開きません", "블랙아웃 모드가 켜져 있어 링크를 열지 않습니다"),
     ("openLinksNoBrowser", "No app on this device can open that link", "此设备上没有可以打开该链接的应用", "この端末にはそのリンクを開けるアプリがありません", "이 기기에는 해당 링크를 열 수 있는 앱이 없습니다"),
 
-    # ---- Task 11: internal vs external link colours ----
     ("linkLegendInternal", "Links to another note", "指向其它笔记", "他のメモへのリンク", "다른 노트로 연결"),
     ("linkLegendExternal", "Opens outside Lucent", "在 Lucent 之外打开", "Lucent の外部で開きます", "Lucent 외부에서 열림"),
 
-    # ---- Task 17: at-rest encryption readout ----
     ("encryptionStatusTitle", "Encryption at rest", "静态数据加密", "保存データの暗号化", "저장 데이터 암호화"),
     ("encryptionStatusHealthy", "Your notes, attachments and saved keys are encrypted on this device.", "你的笔记、附件和已保存的密钥在本设备上均已加密。", "メモ・添付ファイル・保存された鍵は、この端末上で暗号化されています。", "노트, 첨부 파일, 저장된 키가 이 기기에서 암호화되어 있습니다."),
     ("encryptionStatusDegraded", "Some data is NOT encrypted on this device right now. Tap for details.", "当前有部分数据未在本设备上加密。点击查看详情。", "現在、一部のデータがこの端末で暗号化されていません。詳細はタップしてください。", "현재 일부 데이터가 이 기기에서 암호화되어 있지 않습니다. 자세한 내용은 탭하세요."),
@@ -179,14 +149,12 @@ ENTRIES = [
     ("encryptionCheckPassed", "Check passed — values are sealed and open correctly.", "自检通过——数据可正确加密并解密。", "チェックに合格しました——値は正しく封印され、復号できます。", "검사 통과 — 값이 정상적으로 봉인되고 복호화됩니다."),
     ("encryptionCheckFailed(reason: String)", "Check failed: {reason}", "自检失败：{reason}", "チェックに失敗しました：{reason}", "검사 실패: {reason}"),
 
-    # ---- Tabs / navigation ----
     ("tabTasks", "Tasks", "任务", "タスク", "할 일"),
     ("tabNotes", "Notes", "笔记", "メモ", "노트"),
     ("tabAssistant", "Assistant", "助手", "アシスタント", "어시스턴트"),
     ("tabSettings", "Setting", "设置", "設定", "설정"),
     ("pressBackAgainToExit", "Press back again to exit", "再按一次返回键退出", "もう一度戻るボタンで終了します", "뒤로 버튼을 한 번 더 누르면 종료됩니다"),
 
-    # ---- Common actions ----
     ("actionSave", "Save", "保存", "保存", "저장"),
     ("actionDiscard", "Discard", "放弃", "破棄", "저장 안 함"),
     ("actionCancel", "Cancel", "取消", "キャンセル", "취소"),
@@ -212,11 +180,9 @@ ENTRIES = [
     ("actionDismiss", "Dismiss", "知道了", "閉じる", "닫기"),
     ("untitled", "Untitled", "无标题", "無題", "제목 없음"),
 
-    # ---- Unsaved-changes guard (MainActivity dialog) ----
     ("unsavedChangesTitle", "Unsaved changes", "未保存的更改", "未保存の変更", "저장되지 않은 변경 사항"),
     ("unsavedChangesBody", "You have unsaved changes. Save them before leaving?", "有尚未保存的更改。要在离开前保存吗？", "未保存の変更があります。移動する前に保存しますか？", "저장되지 않은 변경 사항이 있습니다. 나가기 전에 저장할까요?"),
 
-    # ---- Home sections ----
     ("sectionRecent", "Recent", "最近", "最近", "최근"),
     ("sectionToday", "Today", "今天", "今日", "오늘"),
     ("sectionOlder", "Older", "更早", "それ以前", "이전"),
@@ -225,7 +191,6 @@ ENTRIES = [
     ("historyNotes", "Keep history for notes", "为笔记保留历史版本", "メモの履歴を保存", "노트 기록 유지"),
     ("historyTasks", "Keep history for tasks", "为任务保留历史版本", "タスクの履歴を保存", "할 일 기록 유지"),
 
-    # ---- Sort options ----
     ("sortLastEdited", "Last edited", "最近编辑", "最終編集順", "최근 수정순"),
     ("sortNewestFirst", "Newest first", "最新在前", "新しい順", "최신순"),
     ("sortOldestFirst", "Oldest first", "最早在前", "古い順", "오래된순"),
@@ -234,7 +199,6 @@ ENTRIES = [
     ("sortDueDate", "Due date", "截止日期", "期限", "마감일"),
     ("sortByA11y(label: String)", "Sort by {label}", "排序方式：{label}", "並べ替え：{label}", "정렬 기준: {label}"),
 
-    # ---- Theme modes ----
     ("themeSystem", "System default", "跟随系统", "システムに従う", "시스템 기본값"),
     ("themeSystemDesc", "Follow the device's light/dark setting", "跟随设备的浅色/深色设置", "端末のライト／ダーク設定に従います", "기기의 라이트/다크 설정을 따릅니다"),
     ("themeLight", "Light", "浅色", "ライト", "라이트"),
@@ -258,7 +222,6 @@ ENTRIES = [
     ("themeMonetEmber", "Monet embers", "莫奈·余烬", "モネ・残り火", "모네 잔불"),
     ("themeMonetEmberDesc", "Deep haystack amber — a dark theme", "深邃的麦垛琥珀 — 深色主题", "深い干し草の琥珀 — ダークテーマ", "깊은 건초 앰버 — 다크 테마"),
 
-    # ---- Note colours ----
     ("colorDefault", "Default", "默认", "デフォルト", "기본"),
     ("colorRed", "Red", "红色", "赤", "빨강"),
     ("colorOrange", "Orange", "橙色", "オレンジ", "주황"),
@@ -271,7 +234,6 @@ ENTRIES = [
     ("noteColorA11y(label: String)", "{label} note colour", "{label}笔记颜色", "{label}のメモカラー", "{label} 노트 색상"),
     ("noteWithColorA11y(label: String)", "{label} note", "{label}笔记", "{label}のメモ", "{label} 노트"),
 
-    # ---- Task styling / due dates ----
     ("priorityBadge(label: String)", "{label} priority", "{label}优先级", "優先度：{label}", "{label} 우선순위"),
     ("labelPriority", "Priority", "优先级", "優先度", "우선순위"),
     ("labelRepeat", "Repeat", "重复", "繰り返し", "반복"),
@@ -286,28 +248,23 @@ ENTRIES = [
     ("dueOverdueOn(date: String)", "Overdue · {date}", "已逾期 · {date}", "期限切れ · {date}", "기한 지남 · {date}"),
     ("dueOn(date: String, time: String)", "{date} · {time}", "{date} · {time}", "{date} · {time}", "{date} · {time}"),
 
-    # ---- Checklist ----
     ("checklist", "Checklist", "清单", "チェックリスト", "체크리스트"),
     ("checklistEmptyItem", "(empty)", "（空）", "（空）", "(비어 있음)"),
     ("checklistRemoveA11y(text: String)", "Remove \"{text}\"", "移除“{text}”", "「{text}」を削除", "\"{text}\" 제거"),
     ("checklistEditItem", "Edit item", "编辑项目", "項目を編集", "항목 편집"),
     ("checklistMore(count: Int)", "+{count} more", "还有 {count} 项", "他 {count} 件", "외 {count}개"),
 
-    # ---- Expandable text field ----
     ("expandTextBox", "Expand text box", "展开输入框", "テキスト欄を展開", "입력란 펼치기"),
     ("collapseTextBox", "Collapse text box", "收起输入框", "テキスト欄を折りたたむ", "입력란 접기"),
 
-    # ---- PDF viewer ----
     ("pdfNoPages", "This PDF has no pages to show.", "这个 PDF 没有可显示的页面。", "このPDFには表示できるページがありません。", "이 PDF에는 표시할 페이지가 없습니다."),
     ("pdfPageA11y(page: Int)", "Page {page}", "第 {page} 页", "{page}ページ", "{page}페이지"),
     ("pdfPageOf(page: Int, total: Int)", "Page {page} of {total}", "第 {page} 页，共 {total} 页", "{total}ページ中 {page}ページ", "{total}페이지 중 {page}페이지"),
     ("pdfRenderFailed", "Couldn't render this PDF. Try \"Open with\" instead.", "无法显示这个 PDF，请改用“打开方式”。", "このPDFを表示できませんでした。「他のアプリで開く」をお試しください。", "이 PDF를 표시할 수 없습니다. \"다른 앱으로 열기\"를 사용해 보세요."),
 
-    # ---- Splash ----
     ("tapToSkip", "Tap to skip", "点按跳过", "タップでスキップ", "탭하여 건너뛰기"),
     ("skipAnimation", "Skip", "跳过", "スキップ", "건너뛰기"),
 
-    # ---- Share intake ----
     ("sharedDefaultTitle", "Shared", "分享内容", "共有", "공유됨"),
     ("shareDialogTitle", "Add to Lucent", "添加到 Lucent", "Lucentに追加", "Lucent에 추가"),
     ("shareSaveTextAndFile", "Save the shared text and file as a new:", "将分享的文本和文件保存为新的：", "共有されたテキストとファイルを新規として保存：", "공유된 텍스트와 파일을 새 항목으로 저장:"),
@@ -316,13 +273,9 @@ ENTRIES = [
     ("newNote", "New note", "新建笔记", "新しいメモ", "새 노트"),
     ("newTask", "New task", "新建任务", "新しいタスク", "새 할 일"),
 
-    # ---- Export selection ----
     ("selectAll", "Select all", "全选", "すべて選択", "모두 선택"),
     ("selectAllMatching", "Select all matching", "全选匹配项", "一致する項目をすべて選択", "일치 항목 모두 선택"),
     ("nSelected(count: Int)", "{count} selected", "已选择 {count} 项", "{count}件を選択中", "{count}개 선택됨"),
-    # Note/task body statistics (paragraph & character count, word count, reading time). Singular and
-    # plural are separate keys so English reads correctly ("1 paragraph" vs "3 paragraphs"); CJK has no
-    # inflection so both forms are the same phrase.
     ("statParagraphsOne", "1 paragraph", "1 段落", "1 段落", "단락 1개"),
     ("statParagraphsN(n: Int)", "{n} paragraphs", "{n} 段落", "{n} 段落", "단락 {n}개"),
     ("statCharactersOne", "1 character", "1 字", "1 文字", "1자"),
@@ -333,16 +286,12 @@ ENTRIES = [
     ("labelFormat", "Format", "格式", "形式", "형식"),
     ("exportNSelected(count: Int)", "Export {count} selected", "导出所选 {count} 项", "選択した{count}件をエクスポート", "선택한 {count}개 내보내기"),
 
-    # ---- Notifications / reminders ----
     ("notifChannelName", "Task reminders", "任务提醒", "タスクのリマインダー", "할 일 알림"),
     ("notifChannelDesc", "Alerts you when a task with a reminder reaches its due time", "当设置了提醒的任务到达截止时间时通知你", "リマインダー付きのタスクが期限を迎えるとお知らせします", "알림이 설정된 할 일이 마감 시간이 되면 알려줍니다"),
     ("notifTaskDue", "Task due", "任务到期", "タスクの期限です", "할 일 마감"),
     ("notifMarkDone", "Mark as Done", "标记为完成", "完了にする", "완료로 표시"),
     ("untitledTask", "Untitled task", "未命名任务", "無題のタスク", "제목 없는 할 일"),
 
-    # ---- Priority / repeat UI labels ----
-    # (TaskPriority.label / RepeatRule.label stay English on purpose: they feed the assistant's
-    #  tool results and must stay stable for the model; the UI shows these instead.)
     ("priorityNone", "None", "无", "なし", "없음"),
     ("priorityLow", "Low", "低", "低", "낮음"),
     ("priorityMedium", "Medium", "中", "中", "보통"),
@@ -354,7 +303,6 @@ ENTRIES = [
     ("repeatYearly", "Yearly", "每年", "毎年", "매년"),
     ("repeatsEvery(rule: String)", "Repeats {rule}", "重复：{rule}", "繰り返し：{rule}", "반복: {rule}"),
 
-    # ---- Assistant: errors, confirmations, local model ----
     ("networkCantReach", "Couldn't reach the server. Check your internet connection and try again.", "无法连接到服务器。请检查网络连接后重试。", "サーバーに接続できませんでした。インターネット接続を確認して、もう一度お試しください。", "서버에 연결할 수 없습니다. 인터넷 연결을 확인한 후 다시 시도해 주세요."),
     ("noDetails", "no details", "无详细信息", "詳細なし", "자세한 정보 없음"),
     ("confirmMoveTrash", "Move to Trash?", "移到回收站？", "ゴミ箱へ移動しますか？", "휴지통으로 이동할까요?"),
@@ -370,7 +318,6 @@ ENTRIES = [
 
     ("localModelLoadFailedDetail", "The file may not be a valid GGUF model, or it may be too large for this device's memory.", "文件可能不是有效的 GGUF 模型，或超出了此设备的可用内存。", "ファイルが有効なGGUFモデルでないか、この端末のメモリには大きすぎる可能性があります。", "파일이 유효한 GGUF 모델이 아니거나 이 기기의 메모리에 비해 너무 클 수 있습니다."),
 
-    # ---- Assistant screen ----
     ("assistantGreeting(name: String)", "Hi there! I'm your assistant {name}. Whether it's learning or expressing your feelings, I will gently accompany you! Feel free to ask me planning questions or share anything happy or unhappy!", "嗨！我是你的助手{name}。无论是学习还是倾诉心情，我都会温柔地陪伴你！欢迎问我任何规划问题，或分享任何开心与不开心的事！", "こんにちは！あなたのアシスタント、{name}です。学びのことでも気持ちのことでも、やさしく寄り添います。計画の相談でも、うれしいことやつらいことでも、気軽に話しかけてくださいね！", "안녕하세요! 저는 당신의 어시스턴트 {name}입니다. 공부든 마음속 이야기든 다정하게 함께할게요! 계획에 대한 질문이든 기쁘거나 속상한 일이든 편하게 이야기해 주세요!"),
     ("deleteConversationTitle", "Delete this conversation?", "删除此对话？", "この会話を削除しますか？", "이 대화를 삭제할까요?"),
     ("deleteConversationBodyAll", "This permanently deletes this conversation and its messages. Your other conversations are kept. This can't be undone.", "这将永久删除此对话及其消息。其他对话会保留。此操作无法撤销。", "この会話とそのメッセージは完全に削除されます。ほかの会話は残ります。この操作は元に戻せません。", "이 대화와 메시지가 영구적으로 삭제됩니다. 다른 대화는 유지됩니다. 이 작업은 되돌릴 수 없습니다."),
@@ -409,7 +356,6 @@ ENTRIES = [
     ("inputAttachedFile(name: String)", "[Attached file: {name}]", "[附件：{name}]", "[添付ファイル：{name}]", "[첨부 파일: {name}]"),
     ("inputAttachedFileTooLarge(name: String)", "[Attached file: {name} (too large to read here)]", "[附件：{name}（太大，无法在此读取）]", "[添付ファイル：{name}（大きすぎるためここでは読み込めません）]", "[첨부 파일: {name} (너무 커서 여기서 읽을 수 없음)]"),
 
-    # ---- UiComponents ----
     ("a11yFilterByDate", "Filter by date", "按日期筛选", "日付で絞り込み", "날짜로 필터"),
     ("a11yClearDateFilter", "Clear date filter", "清除日期筛选", "日付の絞り込みを解除", "날짜 필터 지우기"),
     ("a11yHideActions", "Hide actions", "隐藏操作", "操作を隠す", "작업 숨기기"),
@@ -419,7 +365,6 @@ ENTRIES = [
     ("gotIt", "Got it", "知道了", "OK", "확인"),
     ("brokenLinksHint", "Links to notes that don't exist yet — tap to create", "指向尚不存在的笔记的链接——点按即可创建", "まだ存在しないメモへのリンクです。タップで作成できます", "아직 없는 노트로 연결되는 링크입니다. 탭하여 만들 수 있어요"),
 
-    # ---- Search help meanings (syntax literals stay as-is) ----
     ("helpBothWords", "Both words must appear", "两个词都必须出现", "両方の語を含む", "두 단어가 모두 포함되어야 함"),
     ("helpExactPhrase", "An exact phrase", "完全匹配的短语", "完全一致するフレーズ", "정확히 일치하는 구문"),
     ("helpTag", "Notes carrying that tag", "带有该标签的笔记", "そのタグの付いたメモ", "해당 태그가 있는 노트"),
@@ -436,8 +381,6 @@ ENTRIES = [
     ("helpDue", "today / tomorrow / week / overdue", "today／tomorrow／week／overdue（今天／明天／本周／逾期）", "today／tomorrow／week／overdue（今日／明日／今週／期限切れ）", "today / tomorrow / week / overdue (오늘/내일/이번 주/기한 지남)"),
     ("helpLink", "Notes linking to [[Recipes]]", "链接到 [[Recipes]] 的笔记", "[[Recipes]] にリンクするメモ", "[[Recipes]]로 연결되는 노트"),
 
-    # ---- Search filter chip labels (shown ON the operator chips; the underlying query token stays
-    #      the ASCII literal like is:pinned so typed queries and the parser are unchanged) ----
     ("searchChipTag", "Tag", "标签", "タグ", "태그"),
     ("searchChipPinned", "Pinned", "已置顶", "ピン留め", "고정됨"),
     ("searchChipDone", "Done", "已完成", "完了", "완료"),
@@ -453,7 +396,6 @@ ENTRIES = [
     ("searchChipDueWeek", "Due this week", "本周到期", "今週期限", "이번 주 마감"),
     ("searchChipLink", "Link", "链接", "リンク", "링크"),
 
-    # ---- Image editor ----
     ("toolDraw", "Draw", "涂鸦", "描く", "그리기"),
     ("toolMosaic", "Mosaic", "马赛克", "モザイク", "모자이크"),
     ("toolCrop", "Crop", "裁剪", "切り抜き", "자르기"),
@@ -464,12 +406,10 @@ ENTRIES = [
     ("savingEllipsis", "Saving…", "正在保存…", "保存中…", "저장 중…"),
     ("imageOpenFailed", "Couldn't open this image for editing.", "无法打开此图片进行编辑。", "この画像を編集用に開けませんでした。", "이 이미지를 편집용으로 열 수 없습니다."),
 
-    # ---- Attachment chips ----
     ("a11yRemoveNamed(name: String)", "Remove {name}", "移除 {name}", "{name}を削除", "{name} 제거"),
     ("a11yDownloadNamed(name: String)", "Download {name}", "下载 {name}", "{name}をダウンロード", "{name} 다운로드"),
     ("a11yOpenNamed(name: String)", "Open {name}", "打开 {name}", "{name}を開く", "{name} 열기"),
 
-    # ---- Palettes ----
     ("paletteSunset", "Sunset", "日落", "サンセット", "석양"),
     ("paletteOcean", "Ocean", "海洋", "オーシャン", "바다"),
     ("paletteForest", "Forest", "森林", "フォレスト", "숲"),
@@ -486,20 +426,17 @@ ENTRIES = [
     ("palettePeachDusk", "Peach Dusk", "蜜桃暮色", "ピーチダスク", "피치 더스크"),
     ("paletteCosmic", "Cosmic", "星穹", "コズミック", "코스믹"),
 
-    # ---- Generation foreground service ----
     ("genChannelName", "Assistant replies", "助手回复", "アシスタントの返信", "어시스턴트 답장"),
     ("genChannelDesc", "Shown briefly while the assistant is generating a reply", "助手生成回复时短暂显示", "アシスタントが返信を生成している間だけ表示されます", "어시스턴트가 답장을 생성하는 동안 잠시 표시됩니다"),
     ("genReplyingTitle(name: String)", "{name} is replying…", "{name} 正在回复…", "{name}が返信しています…", "{name}이(가) 답장하는 중…"),
     ("genReplyingBody", "Finishing your reply in the background", "正在后台完成你的回复", "バックグラウンドで返信を仕上げています", "백그라운드에서 답장을 완성하고 있어요"),
 
-    # ---- Date/time patterns (java.time format patterns per language) ----
     ("patternMonthDay", "MMM d", "M月d日", "M月d日", "M월 d일"),
     ("patternTime", "h:mm a", "HH:mm", "HH:mm", "a h:mm"),
     ("patternDateFull", "MMM d, yyyy", "yyyy年M月d日", "yyyy年M月d日", "yyyy년 M월 d일"),
     ("patternTimestamp", "MMM d, h:mm a", "M月d日 HH:mm", "M月d日 HH:mm", "M월 d일 a h:mm"),
     ("patternDateTimeFull", "MMM d, yyyy · h:mm a", "yyyy年M月d日 · HH:mm", "yyyy年M月d日 · HH:mm", "yyyy년 M월 d일 · a h:mm"),
 
-    # ---- Search screen ----
     ("searchEverything", "Search everything", "全局搜索", "すべてを検索", "전체 검색"),
     ("searchPlaceholder", "Notes, tasks, tags, checklists…", "笔记、任务、标签、清单…", "メモ、タスク、タグ、チェックリスト…", "노트, 할 일, 태그, 체크리스트…"),
     ("searchEmptyHint", "Search across every note and task — including archived, completed, and trashed ones. Tap a filter above to narrow it down.", "搜索所有笔记和任务——包括已归档、已完成和回收站中的内容。点按上方筛选器可缩小范围。", "アーカイブ済み・完了済み・ゴミ箱内も含め、すべてのメモとタスクを検索します。上のフィルターで絞り込めます。", "보관됨·완료됨·휴지통 항목까지 모든 노트와 할 일을 검색합니다. 위의 필터를 탭해 범위를 좁혀 보세요."),
@@ -513,7 +450,6 @@ ENTRIES = [
     ("duePrefix(due: String)", "Due {due}", "截止 {due}", "期限 {due}", "마감 {due}"),
     ("subtasksDone(done: Int, total: Int)", "{done}/{total} subtasks done", "子任务已完成 {done}/{total}", "サブタスク {done}/{total} 完了", "하위 작업 {done}/{total} 완료"),
 
-    # ---- Attachment viewer ----
     ("cantOpenFile", "Couldn't open this file", "无法打开此文件", "このファイルを開けませんでした", "이 파일을 열 수 없습니다"),
     ("openWith", "Open with", "打开方式", "他のアプリで開く", "다른 앱으로 열기"),
     ("noAppCanOpen", "No app can open this file", "没有可打开此文件的应用", "このファイルを開けるアプリがありません", "이 파일을 열 수 있는 앱이 없습니다"),
@@ -527,13 +463,10 @@ ENTRIES = [
     ("a11yPause", "Pause", "暂停", "一時停止", "일시정지"),
     ("noPreviewForType", "No in-app preview for this type. Save it, or open it in another app.", "此类型不支持应用内预览。可以保存后用其他应用打开。", "この形式はアプリ内でプレビューできません。保存するか、他のアプリで開いてください。", "이 형식은 앱 내 미리보기를 지원하지 않습니다. 저장하거나 다른 앱에서 열어 보세요."),
 
-    # ---- Clipboard ----
     ("copiedToast", "Copied", "已复制", "コピーしました", "복사됨"),
 
-    # ---- Misc errors ----
     ("errorUnknown", "Unknown error", "未知错误", "不明なエラー", "알 수 없는 오류"),
 
-    # ---- Completed tasks screen ----
     ("markNotDoneTitle", "Mark as not done?", "标记为未完成？", "未完了にしますか？", "완료 안 함으로 표시할까요?"),
     ("markNotDoneBody(title: String)", "\"{title}\" will move back into your active tasks.", "“{title}”将移回你的进行中任务。", "「{title}」はアクティブなタスクに戻ります。", "\"{title}\"이(가) 진행 중인 할 일로 돌아갑니다."),
     ("markNotDone", "Mark as not done", "标记为未完成", "未完了にする", "완료 안 함으로 표시"),
@@ -546,7 +479,6 @@ ENTRIES = [
     ("completedEmpty", "Nothing here yet. Tasks you finish will appear here.", "这里还没有内容。你完成的任务会显示在这里。", "まだ何もありません。完了したタスクがここに表示されます。", "아직 아무것도 없습니다. 완료한 할 일이 여기에 표시됩니다."),
     ("completedNoMatch", "No completed tasks match your search.", "没有符合搜索条件的已完成任务。", "検索に一致する完了済みタスクはありません。", "검색과 일치하는 완료된 할 일이 없습니다."),
 
-    # ---- Trash (tasks + notes) ----
     ("restoreTaskTitle", "Restore this task?", "恢复此任务？", "このタスクを復元しますか？", "이 할 일을 복원할까요?"),
     ("restoreTaskBody(title: String)", "\"{title}\" will be moved out of Trash and back into your tasks. Any reminder it had is re-armed if its due time is still ahead.", "“{title}”将移出回收站，回到你的任务。若截止时间未过，其提醒会重新启用。", "「{title}」はゴミ箱から戻され、タスクに復元されます。期限がまだ先であれば、設定されていたリマインダーは再設定されます。", "\"{title}\"이(가) 휴지통에서 할 일로 복원됩니다. 마감 시간이 아직 남아 있으면 알림이 다시 설정됩니다."),
     ("restoreNoteTitle", "Restore this note?", "恢复此笔记？", "このメモを復元しますか？", "이 노트를 복원할까요?"),
@@ -565,7 +497,6 @@ ENTRIES = [
     ("trashRetention(days: Int)", "Kept for {days} days, then deleted automatically.", "保留 {days} 天后自动删除。", "{days}日間保持され、その後自動的に削除されます。", "{days}일간 보관된 후 자동으로 삭제됩니다."),
     ("untitledNote", "Untitled note", "无标题笔记", "無題のメモ", "제목 없는 노트"),
 
-    # ---- Archived notes screen ----
     ("untaggedLabel", "Untagged", "未加标签", "タグなし", "태그 없음"),
     ("searchArchive", "Search archive", "搜索归档", "アーカイブを検索", "보관함 검색"),
     ("filterTime", "Time", "时间", "期間", "기간"),
@@ -574,7 +505,6 @@ ENTRIES = [
     ("archivedNoMatch", "No archived notes match your search.", "没有符合搜索条件的归档笔记。", "検索に一致するアーカイブ済みメモはありません。", "검색과 일치하는 보관된 노트가 없습니다."),
     ("checklistDoneCount(done: Int, total: Int)", "Checklist \u00b7 {done}/{total} done", "清单 \u00b7 已完成 {done}/{total}", "チェックリスト \u00b7 {done}/{total} 完了", "체크리스트 \u00b7 {done}/{total} 완료"),
 
-    # ---- Note history screen ----
     ("restoreVersionTitle", "Restore this version?", "恢复此版本？", "このバージョンを復元しますか？", "이 버전을 복원할까요?"),
     ("restoreVersionBody(at: String)", "The note will go back to how it read on {at}. The current text is saved to history first, so you can undo this too.", "笔记将恢复到 {at} 时的内容。当前文本会先保存到历史记录，因此此操作也可撤销。", "メモは{at}時点の内容に戻ります。現在のテキストは先に履歴へ保存されるため、この操作も元に戻せます。", "노트가 {at} 시점의 내용으로 돌아갑니다. 현재 텍스트는 먼저 기록에 저장되므로 이 작업도 되돌릴 수 있습니다."),
     ("restoreThisVersion", "Restore this version", "恢复此版本", "このバージョンを復元", "이 버전 복원"),
@@ -583,7 +513,6 @@ ENTRIES = [
     ("historyEmpty", "No earlier versions yet. One is saved automatically the first time you change this note's text.", "还没有早期版本。第一次修改此笔记时会自动保存一个。", "以前のバージョンはまだありません。このメモを初めて変更したときに自動的に保存されます。", "아직 이전 버전이 없습니다. 이 노트를 처음 변경할 때 자동으로 저장됩니다."),
     ("emptyChecklistParen", "(empty checklist)", "（空清单）", "（空のチェックリスト）", "(빈 체크리스트)"),
 
-    # ---- App lock screen ----
     ("lockPassword", "Password", "密码", "パスワード", "비밀번호"),
     ("lockWrongPassword", "Wrong password. Try again.", "密码错误，请重试。", "パスワードが違います。もう一度お試しください。", "비밀번호가 틀렸습니다. 다시 시도하세요."),
     ("dangerAuthTitle", "Confirm with your password", "输入密码以确认", "パスワードで確認", "비밀번호로 확인"),
@@ -608,11 +537,9 @@ ENTRIES = [
     ("lockConfirmNewPassword", "Confirm new password", "确认新密码", "新しいパスワードを確認", "새 비밀번호 확인"),
     ("lockPasswordsDontMatch", "The passwords don't match.", "两次输入的密码不一致。", "パスワードが一致しません。", "비밀번호가 일치하지 않습니다."),
     ("lockCouldntUpdate", "Couldn't update the password. Try again.", "无法更新密码，请重试。", "パスワードを更新できませんでした。もう一度お試しください。", "비밀번호를 업데이트할 수 없습니다. 다시 시도하세요."),
-    # Wrong-password hints on the lock screen, powered by PasswordAttempts (task 18).
     ("lockAttemptsLeft(n: Int)", "{n} attempts left before a time-out", "还剩 {n} 次机会，之后将临时锁定", "あと {n} 回失敗すると一時的にロックされます", "남은 기회 {n}번, 그 후 일시적으로 잠깁니다"),
     ("lockTryAgainIn(time: String)", "Try again in {time}", "请 {time} 后再试", "{time} 後にもう一度お試しください", "{time} 후에 다시 시도하세요"),
 
-    # ---- Screen titles ----
     ("screenCompletedTasks", "Completed tasks", "已完成任务", "完了したタスク", "완료된 할 일"),
     ("screenTrash", "Trash", "回收站", "ゴミ箱", "휴지통"),
     ("screenArchivedNotes", "Archived notes", "已归档笔记", "アーカイブしたメモ", "보관된 노트"),
@@ -622,21 +549,17 @@ ENTRIES = [
     ("a11yRestore", "Restore", "恢复", "復元", "복원"),
     ("a11yDeleteForever", "Delete forever", "永久删除", "完全に削除", "영구 삭제"),
 
-    # ---- Archived (extra) ----
     ("groupBy", "Group by", "分组方式", "グループ化", "그룹화 기준"),
     ("archivedOn(at: String)", "Archived {at}", "归档于 {at}", "アーカイブ日 {at}", "보관일 {at}"),
 
-    # ---- Note history (extra) ----
     ("screenVersion", "Version", "版本", "バージョン", "버전"),
     ("historyAsOf(at: String)", "As of {at}", "截至 {at}", "{at}時点", "{at} 기준"),
     ("emptyParen", "(empty)", "（空）", "（空）", "(비어 있음)"),
 
-    # ---- App lock (extra) ----
     ("lockIsLocked", "Lucent is locked", "Lucent 已锁定", "Lucentはロックされています", "Lucent이 잠겨 있습니다"),
     ("lockChooseNewPassword", "Choose a new password.", "设置一个新密码。", "新しいパスワードを設定してください。", "새 비밀번호를 설정하세요."),
     ("lockSetPasswordUnlock", "Set password & unlock", "设置密码并解锁", "パスワードを設定して解除", "비밀번호 설정 후 잠금 해제"),
 
-    # ---- Notes & Tasks editors (shared + specific) ----
     ("noteSaved", "Note saved", "笔记已保存", "メモを保存しました", "노트가 저장되었습니다"),
     ("taskSaved", "Task saved", "任务已保存", "タスクを保存しました", "할 일이 저장되었습니다"),
     ("writeFailedToast", "That change couldn't be saved. Your data is untouched — try again.", "这项更改未能保存，原有数据未受影响，请重试。", "その変更を保存できませんでした。データはそのままです。もう一度お試しください。", "변경 사항을 저장하지 못했습니다. 기존 데이터는 그대로입니다. 다시 시도해 주세요."),
@@ -649,7 +572,6 @@ ENTRIES = [
     ("moveNTasksTrashBody(count: Int, days: Int)", "{count} tasks will be moved to Trash. You can restore them within {days} days.", "{count} 个任务将移到回收站。你可以在 {days} 天内恢复。", "{count}件のタスクがゴミ箱に移動します。{days}日以内なら復元できます。", "할 일 {count}개가 휴지통으로 이동합니다. {days}일 이내에 복원할 수 있습니다."),
     ("moveOneTaskTrashBody(days: Int)", "1 task will be moved to Trash. You can restore it within {days} days.", "1 个任务将移到回收站。你可以在 {days} 天内恢复。", "1件のタスクがゴミ箱に移動します。{days}日以内なら復元できます。", "할 일 1개가 휴지통으로 이동합니다. {days}일 이내에 복원할 수 있습니다."),
 
-    # ---- Archive / pin toggles (notes) ----
     ("archiveNoteTitle", "Archive this note?", "归档此笔记？", "このメモをアーカイブしますか？", "이 노트를 보관할까요?"),
     ("unarchiveNoteTitle", "Unarchive this note?", "取消归档此笔记？", "このメモのアーカイブを解除しますか？", "이 노트의 보관을 해제할까요?"),
     ("archiveNoteBody(title: String)", "\"{title}\" will move out of your notes and into the archive.", "“{title}”将移出你的笔记，进入归档。", "「{title}」はメモから外され、アーカイブに移動します。", "\"{title}\"이(가) 노트에서 보관함으로 이동합니다."),
@@ -667,12 +589,10 @@ ENTRIES = [
     ("actionPin", "Pin", "置顶", "固定", "고정"),
     ("actionUnpin", "Unpin", "取消置顶", "固定解除", "고정 해제"),
 
-    # ---- Complete task / not done (tasks) ----
     ("completeTaskTitle", "Complete this task?", "完成此任务？", "このタスクを完了しますか？", "이 할 일을 완료할까요?"),
     ("completeTaskBody(title: String)", "Mark \"{title}\" as done? It'll move to your completed tasks.", "将“{title}”标记为完成？它将移到已完成任务。", "「{title}」を完了にしますか？完了したタスクに移動します。", "\"{title}\"을(를) 완료로 표시할까요? 완료된 할 일로 이동합니다."),
     ("notDoneTaskBody(title: String)", "\"{title}\" will move back to your active tasks.", "“{title}”将移回你的进行中任务。", "「{title}」はアクティブなタスクに戻ります。", "\"{title}\"이(가) 진행 중인 할 일로 돌아갑니다."),
 
-    # ---- Editor fields ----
     ("startFromTemplate", "Start from a template", "从模板开始", "テンプレートから作成", "템플릿으로 시작"),
     ("fieldTitle", "Title", "标题", "タイトル", "제목"),
     ("checklistNote", "Checklist note", "清单笔记", "チェックリストメモ", "체크리스트 노트"),
@@ -688,11 +608,8 @@ ENTRIES = [
     ("a11yVersionHistory(count: Int)", "Version history ({count})", "版本历史（{count}）", "バージョン履歴（{count}）", "버전 기록 ({count})"),
     ("createdOn(at: String)", "Created {at}", "创建于 {at}", "作成 {at}", "생성 {at}"),
     ("completedOn(at: String)", "Completed {at}", "完成于 {at}", "完了 {at}", "완료 {at}"),
-    # Japanese does not put spaces between words; the old value had a stray space in the middle
-    # ("リマインダー オン"), which rendered as an odd gap inside the label.
     ("reminderOn", "Reminder on", "提醒已开启", "リマインダーオン", "알림 켜짐"),
 
-    # ---- Overflow menus / selection ----
     ("selectNotes", "Select notes", "选择笔记", "メモを選択", "노트 선택"),
     ("selectTasks", "Select tasks", "选择任务", "タスクを選択", "할 일 선택"),
     ("a11yCancelSelection", "Cancel selection", "取消选择", "選択を解除", "선택 취소"),
@@ -705,9 +622,6 @@ ENTRIES = [
     ("noteArchivedToast", "Note archived", "笔记已归档", "メモをアーカイブしました", "노트를 보관했습니다"),
     ("noteRestoredToast", "Note restored", "笔记已恢复", "メモを復元しました", "노트를 복원했습니다"),
 
-    # =====================================================================================
-    # Settings — root navigation cards
-    # =====================================================================================
     ("settingsAppearanceTitle", "Appearance", "外观", "外観", "모양"),
     ("settingsAppearanceSub", "Theme, background palette, and font", "主题、背景配色与字体", "テーマ・背景パレット・フォント", "테마, 배경 팔레트, 글꼴"),
     ("settingsLanguageTitle", "Language", "语言", "言語", "언어"),
@@ -723,22 +637,12 @@ ENTRIES = [
     ("settingsDataTitle", "Data", "数据", "データ", "데이터"),
     ("settingsDataSub", "Backup, restore, and clear all data", "备份、恢复与清除所有数据", "バックアップ・復元・全データ消去", "백업, 복원, 전체 데이터 삭제"),
 
-    # =====================================================================================
-    # Settings — Language page
-    # =====================================================================================
     ("langSystem", "Follow system", "跟随系统", "システムに従う", "시스템 설정 따르기"),
 
-    # =====================================================================================
-    # Settings — Assistant sub-cards
-    # =====================================================================================
     ("settingsPersonalizationTitle", "Personalization", "个性化", "パーソナライズ", "개인화"),
     ("settingsPersonalizationSub", "Assistant name and chat style", "助手名称与聊天风格", "アシスタントの名前とチャットスタイル", "어시스턴트 이름과 대화 스타일"),
     ("settingsApiTitle", "API", "API", "API", "API"),
     ("settingsApiSub(active: String)", "Selection and connection · active: {active}", "选择与连接 · 当前：{active}", "選択と接続 · 使用中：{active}", "선택 및 연결 · 사용 중: {active}"),
-    # Shown in place of settingsApiSub while the local model is on: naming the "active" profile
-    # there would advertise a connection the app is deliberately not using (the API page itself
-    # says "Cloud API frozen"), so the card states the freeze instead. The title above it is
-    # already "API", so the subtitle doesn't repeat the word.
     ("settingsApiSubFrozen", "Frozen: local model is on", "已冻结：本地模型运行中", "凍結中：ローカルモデル稼働中", "동결됨: 로컬 모델 실행 중"),
     ("settingsMemoryWebTitle", "Memory & web", "记忆与联网", "記憶とウェブ", "메모리 및 웹"),
     ("settingsMemoryWebSub", "How much it remembers · web search", "记住多少内容 · 网络搜索", "どこまで覚えるか · ウェブ検索", "기억 범위 · 웹 검색"),
@@ -749,9 +653,6 @@ ENTRIES = [
     ("settingsLocalModelTitle", "Local model (experimental)", "本地模型（实验性）", "ローカルモデル（実験的）", "로컬 모델(실험적)"),
     ("settingsLocalModelSub", "On-device assistant, no network", "本机助手，无需网络", "端末内アシスタント、ネット不要", "기기 내 어시스턴트, 네트워크 불필요"),
 
-    # =====================================================================================
-    # Settings — Local model (GGUF) page
-    # =====================================================================================
     ("lmUseLocalToggle", "Use local model", "使用本地模型", "ローカルモデルを使用", "로컬 모델 사용"),
     ("lmToolsToggle", "Allow tools", "允许使用工具", "ツールの使用を許可", "도구 사용 허용"),
     ("localToolsOffHint", "Local tools are off — the assistant can chat, but can't see or change your notes and tasks. Turn on Settings > Assistant > Local model > Allow tools to let it.", "本地助手的工具权限未开启——它可以聊天，但无法查看或更改你的笔记和任务。到 设置 > 助手 > 本地模型 > 允许使用工具 开启后即可。", "ローカルアシスタントのツールはオフです — 会話はできますが、メモやタスクの閲覧・変更はできません。設定 > アシスタント > ローカルモデル > ツールの使用を許可 をオンにすると使えるようになります。", "로컬 어시스턴트의 도구가 꺼져 있습니다 — 대화는 할 수 있지만 메모와 할 일을 보거나 변경할 수 없습니다. 설정 > 어시스턴트 > 로컬 모델 > 도구 사용 허용을 켜면 사용할 수 있습니다."),
@@ -777,7 +678,6 @@ ENTRIES = [
     ("lmDeletedToast", "Model deleted.", "模型已删除。", "モデルを削除しました。", "모델을 삭제했습니다."),
     ("lmUnsupportedAbiNote", "This device's processor isn't supported by the local model engine, so this feature is unavailable here.", "此设备的处理器不受本地模型引擎支持，因此该功能在此设备上不可用。", "この端末のプロセッサはローカルモデルエンジンに対応していないため、この機能は利用できません。", "이 기기의 프로세서는 로컬 모델 엔진에서 지원되지 않아 이 기능을 사용할 수 없습니다."),
 
-    # ---- Local model: multiple models, custom names, active selection (task requirement) ----
     ("lmModelsTitle", "Local models", "本地模型", "ローカルモデル", "로컬 모델"),
     ("lmActiveTag", "Active", "使用中", "使用中", "사용 중"),
     ("lmRenameA11y", "Rename model", "重命名模型", "モデルの名前を変更", "모델 이름 바꾸기"),
@@ -791,28 +691,19 @@ ENTRIES = [
     ("lmRenameTitle", "Rename model", "重命名模型", "モデルの名前を変更", "모델 이름 바꾸기"),
     ("lmLoadingIndicator", "Loading the local model…", "正在加载本地模型……", "ローカルモデルを読み込み中…", "로컬 모델을 불러오는 중…"),
 
-    # ---- Local model: warn before turning the whole feature on (freezes the API; heavy on RAM) ----
     ("lmUseLocalWarnTitle", "Turn on the local model?", "开启本地模型？", "ローカルモデルをオンにしますか？", "로컬 모델을 켤까요?"),
     ("lmUseLocalWarnBody", "While the local model is on, the cloud API is frozen and won't be called — the assistant answers entirely on this device. Running a model uses a lot of memory (RAM), so it's best not to close the app while it's replying: quitting interrupts the reply. Closing the app also frees that memory. You can turn this off any time to go back to the cloud API.", "开启本地模型后，云端 API 将被冻结、不再调用——助手完全在本设备上作答。运行模型会占用大量运行内存（RAM），因此在它回复期间最好不要退出应用：退出会中断回复。退出应用也会释放这部分内存。你可以随时关闭以切回云端 API。", "ローカルモデルがオンの間、クラウドAPIは凍結され呼び出されません。アシスタントはこの端末上だけで応答します。モデルの実行は多くのメモリ（RAM）を使うため、応答中はアプリを閉じないことをおすすめします。終了すると応答が中断されます。アプリを閉じるとそのメモリも解放されます。いつでもオフにしてクラウドAPIに戻せます。", "로컬 모델이 켜져 있는 동안 클라우드 API는 동결되어 호출되지 않습니다. 어시스턴트는 이 기기에서만 답변합니다. 모델 실행은 많은 메모리(RAM)를 사용하므로 답변 중에는 앱을 닫지 않는 것이 좋습니다. 종료하면 답변이 중단됩니다. 앱을 닫으면 그 메모리도 해제됩니다. 언제든지 꺼서 클라우드 API로 돌아갈 수 있습니다."),
 
-    # ---- API page: frozen banner while local model mode is on ----
     ("apiFrozenTitle", "Cloud API frozen", "云端 API 已冻结", "クラウドAPIは凍結中", "클라우드 API 동결됨"),
     ("apiFrozenBody", "Local model mode is on, so the assistant answers on-device and the cloud API is not used. Saving and fetching models are disabled here until you turn the local model off.", "本地模型模式已开启，助手将在本设备上作答，云端 API 不会被使用。在关闭本地模型前，此页的保存和获取模型已禁用。", "ローカルモデルモードがオンのため、アシスタントは端末上で応答し、クラウドAPIは使用されません。ローカルモデルをオフにするまで、このページの保存とモデル取得は無効です。", "로컬 모델 모드가 켜져 있어 어시스턴트가 기기에서 답변하며 클라우드 API는 사용되지 않습니다. 로컬 모델을 끌 때까지 이 페이지의 저장과 모델 가져오기는 비활성화됩니다."),
     ("apiFrozenManage", "Local model settings", "本地模型设置", "ローカルモデル設定", "로컬 모델 설정"),
 
-    # =====================================================================================
-    # Settings — Personalization page
-    # =====================================================================================
     ("fieldAssistantName", "Assistant name", "助手名称", "アシスタントの名前", "어시스턴트 이름"),
     ("fieldChatStyle", "Chat style", "聊天风格", "チャットスタイル", "대화 스타일"),
     ("typingHapticsTitle", "Typing haptics", "打字触感", "入力時の振動", "타이핑 햅틱"),
     ("settingsUnsavedBody", "You have unsaved changes to your assistant settings. Save them before leaving?", "你的助手设置有尚未保存的更改。要在离开前保存吗？", "アシスタント設定に未保存の変更があります。移動する前に保存しますか？", "어시스턴트 설정에 저장되지 않은 변경 사항이 있습니다. 나가기 전에 저장할까요?"),
     ("apiSavedToast", "API saved", "API 已保存", "APIを保存しました", "API가 저장되었습니다"),
 
-    # =====================================================================================
-    # Settings — Memory & web page
-    # =====================================================================================
-    # P2-2
     ("embeddingProviderTitle", "Semantic search", "语义搜索", "セマンティック検索", "의미 기반 검색"),
     ("embeddingProviderLocalTitle", "On-device", "本机", "デバイス上", "기기 내"),
     ("embeddingProviderLocalDesc", "Nothing ever leaves your device. Not available in this build yet.", "任何内容都不会离开你的设备。此版本暂未提供。", "何もデバイスの外に出ません。このビルドではまだ利用できません。", "아무것도 기기 밖으로 나가지 않습니다. 이 빌드에서는 아직 사용할 수 없습니다."),
@@ -824,9 +715,6 @@ ENTRIES = [
     ("memoryHighTitle", "High · across conversations", "高 · 跨会话", "高 · 会話をまたぐ", "높음 · 대화 간"),
     ("webSearchTitle", "Web search", "网络搜索", "ウェブ検索", "웹 검색"),
 
-    # =====================================================================================
-    # Settings — API page
-    # =====================================================================================
     ("apiSelectionTitle", "API selection", "API 选择", "APIの選択", "API 선택"),
     ("apiNoModel", "no model", "未选模型", "モデル未選択", "모델 없음"),
     ("apiAddButton", "Add API", "添加 API", "APIを追加", "API 추가"),
@@ -855,9 +743,6 @@ ENTRIES = [
     ("apiUrlExampleGoogle", "e.g. https://generativelanguage.googleapis.com/v1beta", "例如 https://generativelanguage.googleapis.com/v1beta", "例：https://generativelanguage.googleapis.com/v1beta", "예: https://generativelanguage.googleapis.com/v1beta"),
     ("errorWithDetail(kind: String, detail: String)", "{kind}: {detail}", "{kind}：{detail}", "{kind}：{detail}", "{kind}: {detail}"),
 
-    # =====================================================================================
-    # Settings — Theme / Background / Font pages
-    # =====================================================================================
     ("settingsThemeTitle", "Theme", "主题", "テーマ", "테마"),
     ("settingsThemeSub", "Light, dark, system, or tint", "浅色、深色、系统或色调", "ライト・ダーク・システム・色調", "라이트, 다크, 시스템 또는 색조"),
     ("settingsBackgroundTitle", "Background", "背景", "背景", "배경"),
@@ -886,7 +771,6 @@ ENTRIES = [
     ("paletteGroupGradient", "Gradient", "渐变", "グラデーション", "그라데이션"),
     ("paletteGroupClassic", "Classic", "经典", "クラシック", "클래식"),
 
-    # ---- Task 2: Material You dynamic colour (Android 12+ wallpaper palette) ----
     ("dynamicColorTitle", "Material You colours", "Material You 动态取色", "Material You カラー", "Material You 컬러"),
     ("dynamicColorSub", "Match your wallpaper and system accents (Android 12+). This takes priority over the theme and background choices below.", "跟随你的壁纸与系统强调色（Android 12+）。开启后优先于下方选择的主题与背景。", "壁紙とシステムのアクセントカラーに合わせます（Android 12 以上）。以下で選ぶテーマや背景より優先されます。", "배경화면과 시스템 강조색에 맞춥니다(Android 12 이상). 아래에서 고른 테마와 배경보다 우선합니다."),
     ("dynamicColorOnSub", "Active: Lucent now follows your wallpaper palette.", "已启用：Lucent 现在跟随你的壁纸配色。", "有効です：Lucent は壁紙のパレットに従います。", "사용 중: Lucent가 이제 배경화면 팔레트를 따릅니다."),
@@ -894,15 +778,9 @@ ENTRIES = [
     ("dynamicColorPausedTheme", "Theme choices are paused while Material You colours are on — the wallpaper palette is in charge.", "Material You 动态取色开启期间，主题选择暂停生效——由壁纸配色接管。", "Material You カラーがオンの間、テーマの選択は一時停止されます。壁紙のパレットが優先されます。", "Material You 컬러가 켜져 있는 동안 테마 선택이 일시 중지됩니다. 배경화면 팔레트가 우선합니다."),
     ("dynamicColorPausedBackground", "Background palettes are paused while Material You colours are on — the wallpaper palette is in charge.", "Material You 动态取色开启期间，背景配色选择暂停生效——由壁纸配色接管。", "Material You カラーがオンの間、背景パレットの選択は一時停止されます。壁紙のパレットが優先されます。", "Material You 컬러가 켜져 있는 동안 배경 팔레트 선택이 일시 중지됩니다. 배경화면 팔레트가 우선합니다."),
 
-    # =====================================================================================
-    # Settings — Editor page
-    # =====================================================================================
     ("markdownFormattingTitle", "Markdown formatting", "Markdown 格式", "Markdown書式", "마크다운 서식"),
     ("linksTitle", "Links", "链接", "リンク", "링크"),
 
-    # =====================================================================================
-    # Settings — Security page (app lock)
-    # =====================================================================================
     ("appLockTitle", "App lock", "应用锁", "アプリロック", "앱 잠금"),
     ("appLockSetupTitle", "Set up app lock", "设置应用锁", "アプリロックの設定", "앱 잠금 설정"),
     ("appLockSetupBody", "Choose a password you'll enter each time Lucent opens. The security question is optional, but it is the only way to reset the password if you forget it. Neither the password nor the answer is stored — only a salted hash — so if you forget BOTH, the only way back in is to clear all data.", "设置一个每次打开 Lucent 时输入的密码。安全问题为可选项，但它是忘记密码时唯一的重置途径。密码和答案都不会被存储——只保存加盐哈希——因此如果两者都忘记，唯一的办法就是清除所有数据。", "Lucentを開くたびに入力するパスワードを決めてください。セキュリティの質問は任意ですが、パスワードを忘れたときの唯一のリセット手段です。パスワードも答えも保存されず、ソルト付きハッシュのみが保存されます。両方とも忘れた場合、戻る方法は全データの消去だけです。", "Lucent를 열 때마다 입력할 비밀번호를 정하세요. 보안 질문은 선택 사항이지만, 비밀번호를 잊었을 때 재설정할 수 있는 유일한 방법입니다. 비밀번호와 답변은 저장되지 않고 솔트 해시만 저장되므로, 둘 다 잊으면 되돌아갈 방법은 전체 데이터 삭제뿐입니다."),
@@ -924,9 +802,6 @@ ENTRIES = [
     ("turnOnAnyway", "Turn on anyway", "仍然开启", "それでもオンにする", "그래도 켜기"),
     ("addAQuestion", "Add a question", "添加问题", "質問を追加", "질문 추가"),
 
-    # =====================================================================================
-    # Settings — Privacy page
-    # =====================================================================================
     ("systemIntegrationTitle", "System integration", "系统集成", "システム連携", "시스템 연동"),
     ("shareWarnTitle", "Make Lucent a share target?", "将 Lucent 设为分享目标？", "Lucentを共有先にしますか？", "Lucent를 공유 대상으로 만들까요?"),
     ("shareWarnBody", "This makes Lucent appear in other apps' share sheets so you can send text and files into it. It's the one place Lucent becomes visible to other apps. Anything you choose to share INTO Lucent is copied into your encrypted database like any other note or task; Lucent still sends nothing out on its own. You can turn this off again at any time, and it's off until you confirm.", "这会让 Lucent 出现在其他应用的分享面板中，以便向其发送文字和文件。这是 Lucent 对其他应用可见的唯一场合。你选择分享进 Lucent 的内容会像普通笔记或任务一样复制进加密数据库；Lucent 自身仍然不会向外发送任何内容。你可以随时再次关闭，且在确认之前保持关闭。", "他のアプリの共有シートにLucentが表示され、テキストやファイルを送り込めるようになります。Lucentが他のアプリから見えるのはこの場面だけです。Lucentへ共有した内容は、他のメモやタスクと同様に暗号化データベースへコピーされます。Lucent自身が外へ何かを送ることはありません。いつでも再びオフにでき、確認するまではオフのままです。", "다른 앱의 공유 시트에 Lucent가 표시되어 텍스트와 파일을 보낼 수 있게 됩니다. Lucent가 다른 앱에 보이는 것은 이 경우뿐입니다. Lucent로 공유한 내용은 다른 노트나 할 일처럼 암호화된 데이터베이스에 복사되며, Lucent 스스로 밖으로 내보내는 것은 없습니다. 언제든 다시 끌 수 있으며, 확인하기 전까지는 꺼져 있습니다."),
@@ -943,9 +818,6 @@ ENTRIES = [
     ("logsExported", "Logs exported.", "日志已导出。", "ログをエクスポートしました。", "로그를 내보냈습니다."),
     ("logsExportFailed", "Couldn't export the logs.", "无法导出日志。", "ログをエクスポートできませんでした。", "로그를 내보내지 못했습니다."),
 
-    # =====================================================================================
-    # Settings — Data page: backup & restore
-    # =====================================================================================
     ("backupRestoreTitle", "Backup & restore", "备份与恢复", "バックアップと復元", "백업 및 복원"),
     ("exportBackup", "Export backup", "导出备份", "バックアップをエクスポート", "백업 내보내기"),
     ("importBackup", "Import backup", "导入备份", "バックアップをインポート", "백업 가져오기"),
@@ -966,7 +838,6 @@ ENTRIES = [
     ("backupPasswordBody", "This backup was protected with a password when it was exported. Enter it to see what's inside.", "此备份在导出时设置了密码保护。输入密码即可查看其中内容。", "このバックアップはエクスポート時にパスワードで保護されました。中身を見るには入力してください。", "이 백업은 내보낼 때 비밀번호로 보호되었습니다. 내용을 보려면 입력하세요."),
     ("wrongPassword", "Wrong password", "密码错误", "パスワードが違います", "잘못된 비밀번호"),
     ("restoreBackupTitle", "Restore this backup?", "恢复此备份？", "このバックアップを復元しますか？", "이 백업을 복원할까요?"),
-    "// Titles for the bottom sheet that announces the outcome the moment a restore finishes.",
     ("restoreDoneTitle", "Restore complete", "恢复完成", "復元が完了しました", "복원 완료"),
     ("restoreFailedTitle", "Restore failed", "恢复失败", "復元に失敗しました", "복원 실패"),
     ("exportingBackup", "Exporting backup…", "正在导出备份…", "バックアップをエクスポート中…", "백업 내보내는 중…"),
@@ -992,12 +863,8 @@ ENTRIES = [
     ("bkNCompleted(count: Int)", "{count} completed", "{count} 项已完成", "{count}件完了", "{count}개 완료됨"),
     ("restoreMergeNote", "Restoring adds these to what you already have — nothing currently on this device is deleted. Anything identical is skipped rather than duplicated.", "恢复会将这些内容添加到你现有的数据中——此设备上当前的内容不会被删除。完全相同的条目会被跳过而不是重复导入。", "復元すると、これらは今ある内容に追加されます。この端末の既存データは一切削除されません。完全に同一の項目は重複せずスキップされます。", "복원하면 이 항목들이 기존 데이터에 추가됩니다. 이 기기의 현재 내용은 삭제되지 않습니다. 완전히 동일한 항목은 중복되지 않고 건너뜁니다."),
 
-    # =====================================================================================
-    # Settings — Data page: selective export + danger zone
-    # =====================================================================================
     ("exportNotesTasksTitle", "Export notes & tasks", "导出笔记与任务", "メモとタスクのエクスポート", "노트 및 할 일 내보내기"),
     ("exportAttachmentsHint", "Tick a file to include it; tap its name to preview.", "勾选文件以包含它；点击名称可预览。", "同梱するファイルを選択。名前をタップでプレビュー。", "포함할 파일을 선택하세요. 이름을 누르면 미리보기."),
-    # Round R1 - per-item select-all (task 4) and doodle-as-attachment (task 3).
     ("exportSelectAllHere", "Select all files in this one", "全选本条的附件", "この項目のファイルをすべて選択", "이 항목의 파일 모두 선택"),
     ("exportDoodleCanvas(index: Int)", "Doodle canvas {index}", "涂鸦画布 {index}", "落書きキャンバス {index}", "낙서 캔버스 {index}"),
     ("exportDoodleHint", "A doodle canvas counts as an attachment: tick it to export that canvas as its own PDF.", "涂鸦画布与附件同级：勾选后会把该画布单独导出为 PDF。", "落書きキャンバスは添付ファイルと同等です。選択するとそのキャンバスを個別の PDF として書き出します。", "낙서 캔버스는 첨부 파일과 동등합니다. 선택하면 해당 캔버스를 별도의 PDF로 내보냅니다."),
@@ -1031,9 +898,6 @@ ENTRIES = [
     ("lockedNoticeTitle", "Your notes couldn't be unlocked", "无法解锁你的笔记", "メモのロックを解除できませんでした", "노트의 잠금을 해제할 수 없습니다"),
     ("lockedNoticeBody(fileName: String)", "Your notes database could not be decrypted on this launch, so it was set aside as \"{fileName}\" and a new empty one was created. Nothing has been deleted. Import your most recent backup to restore your notes and tasks.", "本次启动时无法解密你的笔记数据库，因此已将其另存为“{fileName}”并创建了一个新的空数据库。没有任何内容被删除。请导入最近的备份以恢复你的笔记和任务。", "今回の起動でメモのデータベースを復号できなかったため、「{fileName}」として退避し、新しい空のデータベースを作成しました。何も削除されていません。最新のバックアップをインポートして、メモとタスクを復元してください。", "이번 실행에서 노트 데이터베이스를 해독할 수 없어 \"{fileName}\"(으)로 따로 보관하고 새 빈 데이터베이스를 만들었습니다. 삭제된 것은 없습니다. 가장 최근 백업을 가져와 노트와 할 일을 복원하세요."),
 
-    # =====================================================================================
-    # Screens — leftover call sites (tasks / notes / trash / archive / history / lock)
-    # =====================================================================================
     ("editTask", "Edit task", "编辑任务", "タスクを編集", "할 일 편집"),
     ("editNote", "Edit note", "编辑笔记", "メモを編集", "노트 편집"),
     ("addTaskBtn", "Add task", "添加任务", "タスクを追加", "할 일 추가"),
@@ -1074,9 +938,6 @@ ENTRIES = [
     ("a11yMarkActive", "Mark as active", "标记为进行中", "進行中に戻す", "진행 중으로 표시"),
     ("a11yRestoreToNotes", "Restore to notes", "恢复到笔记", "メモに復元", "노트로 복원"),
 
-    # =====================================================================================
-    # Assistant — action confirmation sheet (describeToolCall)
-    # =====================================================================================
     ("ccCreateNote(title: String)", "Create a note titled \"{title}\"", "创建标题为“{title}”的笔记", "「{title}」というメモを作成", "\"{title}\" 제목의 노트 만들기"),
     ("ccEditNote(title: String)", "Edit the note \"{title}\"", "编辑笔记“{title}”", "メモ「{title}」を編集", "노트 \"{title}\" 편집"),
     ("ccDeleteNote(title: String)", "Move the note \"{title}\" to Trash", "将笔记“{title}”移入回收站", "メモ「{title}」をゴミ箱へ移動", "노트 \"{title}\"을(를) 휴지통으로 이동"),
@@ -1120,9 +981,6 @@ ENTRIES = [
     ("ccRenameSuffix(newTitle: String)", " (rename to \"{newTitle}\")", "（重命名为“{newTitle}”）", "（「{newTitle}」に名称変更）", "(\"{newTitle}\"(으)로 이름 변경)"),
     ("ccDueSuffix(due: String)", " due {due}", "，截止 {due}", "（期限 {due}）", " (마감 {due})"),
 
-    # =====================================================================================
-    # Note templates (composer chips + generated scaffold text)
-    # =====================================================================================
     ("tplJournal", "Journal entry", "日记", "日記", "일기"),
     ("tplMeeting", "Meeting notes", "会议记录", "会議メモ", "회의록"),
     ("tplIdea", "Project idea", "项目想法", "プロジェクト案", "프로젝트 아이디어"),
@@ -1134,18 +992,12 @@ ENTRIES = [
     ("tplMeetingBody(date: String)", "**Attendees:** \n**Date:** {date}\n\n## Discussion\n- \n\n## Decisions\n- \n\n## Action items\n- \n", "**参会人：** \n**日期：** {date}\n\n## 讨论\n- \n\n## 决定\n- \n\n## 行动项\n- \n", "**参加者：** \n**日付：** {date}\n\n## 議論\n- \n\n## 決定事項\n- \n\n## アクション\n- \n", "**참석자:** \n**날짜:** {date}\n\n## 논의\n- \n\n## 결정 사항\n- \n\n## 실행 항목\n- \n"),
     ("tplIdeaBody", "## The idea\n\n\n## Why it's worth doing\n\n\n## First step\n\n\n## Open questions\n- \n", "## 想法\n\n\n## 为什么值得做\n\n\n## 第一步\n\n\n## 待解决的问题\n- \n", "## アイデア\n\n\n## なぜやる価値があるか\n\n\n## 最初の一歩\n\n\n## 未解決の疑問\n- \n", "## 아이디어\n\n\n## 할 만한 이유\n\n\n## 첫걸음\n\n\n## 남은 질문\n- \n"),
 
-    # =====================================================================================
-    # Default tag suggestions (editor chips)
-    # =====================================================================================
     ("tagStudy", "Study", "学习", "勉強", "공부"),
     ("tagWork", "Work", "工作", "仕事", "업무"),
     ("tagGame", "Game", "游戏", "ゲーム", "게임"),
     ("tagSports", "Sports", "运动", "スポーツ", "운동"),
     ("tagOther", "Other", "其他", "その他", "기타"),
 
-    # =====================================================================================
-    # Data-layer user-visible messages
-    # =====================================================================================
     ("notLcbBackup", "That isn't a Lucent .lcb backup. Only .lcb files exported by this app can be restored.", "这不是 Lucent 的 .lcb 备份。只有本应用导出的 .lcb 文件才能恢复。", "これはLucentの.lcbバックアップではありません。復元できるのは本アプリが書き出した.lcbファイルだけです。", "이 파일은 Lucent의 .lcb 백업이 아닙니다. 이 앱이 내보낸 .lcb 파일만 복원할 수 있습니다."),
     ("importedConversationTitle", "Imported conversation", "导入的会话", "インポートした会話", "가져온 대화"),
     ("importSummary(notes: Int, tasks: Int, chats: Int)", "Imported {notes} notes, {tasks} tasks, {chats} chat messages.", "已导入 {notes} 条笔记、{tasks} 个任务、{chats} 条聊天消息。", "メモ{notes}件、タスク{tasks}件、チャットメッセージ{chats}件をインポートしました。", "노트 {notes}개, 할 일 {tasks}개, 채팅 메시지 {chats}개를 가져왔습니다."),
@@ -1154,15 +1006,6 @@ ENTRIES = [
     ("importDuplicatesSkipped(count: Int)", " ({count} duplicate entries skipped.)", "（已跳过 {count} 条重复条目。）", "（重複{count}件をスキップ。）", " (중복 항목 {count}개 건너뜀.)"),
     ("attachmentTooLarge(size: String, limit: String)", "That file is {size}, over the {limit} limit for a single attachment. It wasn't added.", "该文件为 {size}，超过了单个附件 {limit} 的上限，未被添加。", "そのファイルは{size}で、添付1件あたりの上限{limit}を超えています。追加されませんでした。", "해당 파일은 {size}(으)로 첨부 파일당 {limit} 제한을 초과하여 추가되지 않았습니다."),
 
-    # =====================================================================================
-    # Round: local-assistant gating, floating capsule, backup coverage, localized search
-    # =====================================================================================
-    "// TODO(local-multimodal): this note describes a TEMPORARY gap, not a permanent design decision.",
-    "// The on-device engine currently loads text-only GGUF models, so images, PDFs and audio are not",
-    "// passed to it. Multimodal on-device support (an mmproj/vision projector alongside the model,",
-    "// and an attachment path into LocalLlm.generate) is planned for a future release. When it lands,",
-    "// rewrite this string in all four languages and remove the \"for now\" framing — leaving a",
-    "// temporary limitation described as permanent is how a shipped feature stays hidden.",
     ("lmTextOnlyNote", "Text only, for now: the local assistant reads and writes text, and cannot yet see images, PDFs, audio or other attachments. This is a current limitation of on-device mode rather than a permanent one — multimodal support for local models is planned for a future version. Until then, attach files to the cloud assistant instead.", "目前仅支持纯文本：本地助手只能读写文字，暂时无法识别图片、PDF、音频或其他附件。这是本地模式现阶段的限制，并非永久如此——本地模型的多模态支持已列入后续版本计划。在此之前，需要发送附件请改用云端助手。", "現在はテキスト専用：ローカルアシスタントは文字の読み書きのみ行え、画像・PDF・音声などの添付はまだ認識できません。これはローカルモードの現時点での制限であり、恒久的なものではありません。ローカルモデルのマルチモーダル対応は今後のバージョンで予定しています。それまでは添付が必要な場合クラウドアシスタントをご利用ください。", "현재는 텍스트 전용: 로컬 어시스턴트는 글만 읽고 쓰며, 이미지·PDF·오디오 등 첨부 파일은 아직 인식하지 못합니다. 이것은 로컬 모드의 현재 제약일 뿐 영구적인 것은 아니며, 로컬 모델의 멀티모달 지원은 향후 버전에 추가될 예정입니다. 그전까지 첨부가 필요하면 클라우드 어시스턴트를 사용하세요."),
     ("lmEnableToConfigureNote", "Turn on the switch above to import a model and configure the local assistant.", "开启上方的开关后，即可导入模型并配置本地助手。", "上のスイッチをオンにすると、モデルのインポートとローカルアシスタントの設定ができます。", "위 스위치를 켜면 모델을 가져오고 로컬 어시스턴트를 설정할 수 있습니다."),
     ("lmNeedModelNotice", "The local assistant is on but no model is imported yet. Import a GGUF model below — until then the assistant has nothing to answer with.", "本地助手已开启，但尚未导入模型。请在下方导入一个 GGUF 模型——在此之前助手无法作答。", "ローカルアシスタントはオンですが、モデルがまだインポートされていません。下でGGUFモデルをインポートしてください。それまではアシスタントは応答できません。", "로컬 어시스턴트는 켜져 있지만 아직 가져온 모델이 없습니다. 아래에서 GGUF 모델을 가져오세요. 그전까지는 어시스턴트가 답변할 수 없습니다."),
@@ -1175,17 +1018,11 @@ ENTRIES = [
     ("lmKeepWaiting", "Keep waiting", "继续等待", "待機を続ける", "계속 기다리기"),
     ("replyStopped", "Reply stopped.", "回复已中止。", "応答を中止しました。", "답변이 중단되었습니다."),
     ("replyStoppedBackground", "Reply stopped because Lucent went to the background. You can turn on background replies in Settings > Assistant > Local model.", "因 Lucent 退到后台，回复已中止。可在「设置 > 助手 > 本地模型」中开启后台回复。", "Lucentがバックグラウンドに移ったため応答を中止しました。「設定 > アシスタント > ローカルモデル」でバックグラウンド応答をオンにできます。", "Lucent가 백그라운드로 전환되어 답변이 중단되었습니다. '설정 > 어시스턴트 > 로컬 모델'에서 백그라운드 답변을 켤 수 있습니다."),
-    # Toast copy. Android 12+ hard-caps a system Toast at TWO lines and ellipsizes the rest,
-    # so these must stay short: one sentence, the unavailability and its subject, nothing more.
-    # These toasts are now the only place the "why is it unavailable" explanation is stated:
-    # the settings pages name the control and nothing more.
     ("webSearchLocalDisabledHint", "Web search is unavailable while the local assistant is on.", "本地助手开启时无法使用网络搜索。", "ローカルアシスタントがオンの間はウェブ検索を使用できません。", "로컬 어시스턴트 사용 중에는 웹 검색을 쓸 수 없습니다."),
     ("memoryHighLocalDisabledHint", "High memory is unavailable while the local assistant is on.", "本地助手开启时无法使用高档记忆。", "ローカルアシスタントがオンの間は記憶「高」を使用できません。", "로컬 어시스턴트 사용 중에는 높은 메모리를 쓸 수 없습니다."),
     ("apiNoneTitle", "No API saved", "尚无已保存的 API", "保存されたAPIがありません", "저장된 API 없음"),
     ("apiNoneBody", "You've deleted every saved API. Add one to use the cloud assistant, or import a local model to chat offline.", "你已删除全部已保存的 API。添加一个即可使用云端助手，或导入本地模型离线聊天。", "保存済みのAPIをすべて削除しました。クラウドアシスタントを使うには1つ追加するか、ローカルモデルをインポートしてオフラインで会話してください。", "저장된 API를 모두 삭제했습니다. 클라우드 어시스턴트를 사용하려면 하나를 추가하거나, 로컬 모델을 가져와 오프라인으로 대화하세요."),
     ("helpLocalizedFilters", "Filters also work in your own language — type 完成 / 完了 / 완료 instead of is:done. Wrap a word in quotes to search for it literally.", "筛选词也支持用你自己的语言输入——可以直接输入「已完成」，无需 is:done。用引号括起来则按字面搜索。", "フィルターは日本語でも使えます。is:done の代わりに「完了」と入力できます。引用符で囲むと、その語をそのまま検索します。", "필터는 한국어로도 사용할 수 있습니다. is:done 대신 '완료'라고 입력하면 됩니다. 따옴표로 묶으면 글자 그대로 검색합니다."),
-    "",
-    "// ---- Editable tool confirmations, declined actions, and modular backup ----",
     ("assistantDeclinedReply(details: String)", "You said no, so I didn’t do it — {details}. Nothing was changed. Tell me if you’d like it done differently.", "你拒绝了这个操作，所以我没有执行——{details}。什么都没有改变。如果想换个方式，告诉我就行。", "ご承認いただけなかったので実行していません——{details}。何も変更されていません。別の形でご希望でしたら教えてください。", "거절하셔서 실행하지 않았습니다 — {details}. 변경된 것은 없습니다. 다른 방식을 원하시면 말씀해 주세요."),
     ("confirmEditTitleLabel", "Title", "标题", "タイトル", "제목"),
     ("confirmEditNewTitleLabel", "New title", "新标题", "新しいタイトル", "새 제목"),
@@ -1211,8 +1048,6 @@ ENTRIES = [
     ("bkImportedFonts", "Imported fonts", "导入的字体", "インポート済みフォント", "가져온 글꼴"),
     ("backupFontsRestored(count: Int)", " Restored {count} imported font(s).", "已还原 {count} 个导入的字体。", "インポート済みフォント {count} 件を復元しました。", "가져온 글꼴 {count}개를 복원했습니다."),
     ("backupModSettingsFontsDesc(size: String)", "Includes your imported font files ({size}), so a restore brings your fonts back too.", "包含已导入的字体文件（{size}），还原时字体也会一并恢复。", "インポート済みのフォントファイル（{size}）を含めるため、復元時にフォントも戻ります。", "가져온 글꼴 파일({size})을 포함하므로 복원 시 글꼴도 함께 복원됩니다."),
-    "",
-    "// ---- Per-item backup selection (second-level picker) ----",
     ("backupChooseItems", "Choose…", "选择…", "選択…", "선택…"),
     ("backupNOfM(chosen: Int, total: Int)", "{chosen} of {total} selected", "已选 {chosen}/{total}", "{total} 件中 {chosen} 件を選択", "{total}개 중 {chosen}개 선택"),
     ("backupPickNotesTitle", "Which notes?", "选择要备份的笔记", "バックアップするメモ", "백업할 노트"),
@@ -1223,54 +1058,41 @@ ENTRIES = [
     ("backupImportApiFull(max: Int)", "You already have the maximum of {max} API profiles. Remove one first to import more.", "你已有 {max} 个 API 配置（已达上限）。请先删除一个再导入。", "API プロファイルは既に上限の {max} 件です。インポートするには先に 1 件削除してください。", "API 프로필이 이미 최대 {max}개입니다. 더 가져오려면 먼저 하나를 삭제하세요."),
     ("backupNothingToPick", "There is nothing here to back up yet.", "目前没有可备份的内容。", "バックアップできるものはまだありません。", "아직 백업할 항목이 없습니다."),
 
-    # ---- 1.1.0 / group A ----
-    # Checklist rows: insert in the middle instead of only appending (task A18).
     ("checklistInsertBelow", "Insert item below", "在下方插入一条", "下に項目を挿入", "아래에 항목 삽입"),
 
-    # Attachment rows: rename (A4) and custom order (A11).
     ("attachmentRenameTitle", "Rename attachment", "重命名附件", "添付ファイルの名前を変更", "첨부파일 이름 바꾸기"),
     ("attachmentNameLabel", "File name", "文件名", "ファイル名", "파일 이름"),
     ("attachmentNameTaken", "Another attachment already uses that name.", "已有同名附件。", "同じ名前の添付ファイルが既にあります。", "같은 이름의 첨부파일이 이미 있습니다."),
     ("a11yRenameNamed(name: String)", "Rename {name}", "重命名 {name}", "{name} の名前を変更", "{name} 이름 바꾸기"),
     ("a11yDragToReorder", "Drag to reorder", "拖拽以调整顺序", "ドラッグして並べ替え", "드래그하여 순서 변경"),
 
-    # Text-based preview for documents and code files (task A1).
     ("previewTextOnly", "Text preview — layout, images and styling are not shown.", "纯文本预览——不含排版、图片和样式。", "テキストのみのプレビューです（レイアウト・画像・書式は表示されません）。", "텍스트만 미리 봅니다 — 레이아웃·이미지·서식은 표시되지 않습니다."),
     ("previewTextTruncated", "Preview truncated. Open the file to read the rest.", "预览已截断，打开文件可查看剩余内容。", "プレビューは途中までです。続きはファイルを開いてください。", "미리보기가 잘렸습니다. 나머지는 파일을 열어 확인하세요."),
     ("cantLoadText", "This file's text couldn't be read.", "无法读取该文件的文本。", "このファイルのテキストを読み取れませんでした。", "이 파일의 텍스트를 읽을 수 없습니다."),
     ("previewEmptyDocument", "No readable text in this document.", "该文档中没有可读文本。", "この文書に読み取れるテキストはありません。", "이 문서에는 읽을 수 있는 텍스트가 없습니다."),
 
-    # Home list: pinned items get their own section above everything else (task A13).
     ("sectionPinned", "Pinned", "置顶", "ピン留め", "고정됨"),
 
-    # Task A25 (replacement scope): confirm a share once the user is back in Lucent.
     ("sharedToast(name: String)", "Shared \u201c{name}\u201d", "\u5df2\u5206\u4eab\u201c{name}\u201d", "\u300c{name}\u300d\u3092\u5171\u6709\u3057\u307e\u3057\u305f", "\u201c{name}\u201d\uc744(\ub97c) \uacf5\uc720\ud588\uc2b5\ub2c8\ub2e4"),
 
-    # Task A23: on-screen readouts for the video gestures.
     ("videoSpeedBoost", "2\u00d7", "2\u00d7", "2\u00d7", "2\u00d7"),
     ("a11yReplay", "Replay", "\u91cd\u64ad", "\u518d\u751f\u3057\u76f4\u3059", "\ub2e4\uc2dc \uc7ac\uc0dd"),
     ("a11yBrightness", "Brightness", "\u4eae\u5ea6", "\u660e\u308b\u3055", "\ubc1d\uae30"),
     ("a11yVolume", "Volume", "\u97f3\u91cf", "\u97f3\u91cf", "\uc74c\ub7c9"),
 
-    # Task A6: detail pages get an explicit "copy the whole thing" action, now that a long press
-    # selects text instead of silently copying everything.
     ("copyAll", "Copy all", "\u590d\u5236\u5168\u90e8", "\u3059\u3079\u3066\u30b3\u30d4\u30fc", "\uc804\uccb4 \ubcf5\uc0ac"),
     ("copiedAllToast", "Copied", "\u5df2\u590d\u5236", "\u30b3\u30d4\u30fc\u3057\u307e\u3057\u305f", "\ubcf5\uc0ac\ub428"),
 
-    # Task A19: manual deletion of a single stored revision (notes and tasks alike).
     ("deleteVersionTitle", "Delete this version?", "\u5220\u9664\u8fd9\u4e2a\u7248\u672c\uff1f", "\u3053\u306e\u30d0\u30fc\u30b8\u30e7\u30f3\u3092\u524a\u9664\u3057\u307e\u3059\u304b\uff1f", "\uc774 \ubc84\uc804\uc744 \uc0ad\uc81c\ud560\uae4c\uc694?"),
     ("deleteVersionBody(time: String)", "The version from {time} will be removed permanently. The current text is not affected.", "\u5c06\u6c38\u4e45\u5220\u9664 {time} \u7684\u7248\u672c\u3002\u5f53\u524d\u5185\u5bb9\u4e0d\u53d7\u5f71\u54cd\u3002", "{time} \u306e\u30d0\u30fc\u30b8\u30e7\u30f3\u3092\u5b8c\u5168\u306b\u524a\u9664\u3057\u307e\u3059\u3002\u73fe\u5728\u306e\u5185\u5bb9\u306b\u5f71\u97ff\u306f\u3042\u308a\u307e\u305b\u3093\u3002", "{time} \ubc84\uc804\uc774 \uc601\uad6c\uc801\uc73c\ub85c \uc0ad\uc81c\ub429\ub2c8\ub2e4. \ud604\uc7ac \ub0b4\uc6a9\uc740 \uc601\ud5a5\uc744 \ubc1b\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."),
     ("deleteThisVersion", "Delete this version", "\u5220\u9664\u6b64\u7248\u672c", "\u3053\u306e\u30d0\u30fc\u30b8\u30e7\u30f3\u3092\u524a\u9664", "\uc774 \ubc84\uc804 \uc0ad\uc81c"),
     ("historySubtasksHeader", "Subtasks", "\u5b50\u4efb\u52a1", "\u30b5\u30d6\u30bf\u30b9\u30af", "\ud558\uc704 \ud560 \uc77c"),
 
-    # Task A10: the draft area, a sibling of the trash.
     ("screenDrafts", "Drafts", "\u8349\u7a3f", "\u4e0b\u66f8\u304d", "\uc784\uc2dc \uc800\uc7a5"),
     ("saveToDraft", "Save to drafts", "\u5b58\u5165\u8349\u7a3f", "\u4e0b\u66f8\u304d\u306b\u4fdd\u5b58", "\uc784\uc2dc \uc800\uc7a5\uc5d0 \ubcf4\uad00"),
     ("draftsEmpty", "No drafts. Anything you save here — or that was still open when the app closed unexpectedly — will appear in this list.", "\u6ca1\u6709\u8349\u7a3f\u3002\u4f60\u5b58\u5165\u7684\u5185\u5bb9\uff0c\u6216\u8005\u8f6f\u4ef6\u5f02\u5e38\u5173\u95ed\u65f6\u672a\u4fdd\u5b58\u7684\u7f16\u8f91\uff0c\u90fd\u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u3002", "\u4e0b\u66f8\u304d\u306f\u3042\u308a\u307e\u305b\u3093\u3002\u4fdd\u5b58\u3057\u305f\u3082\u306e\u3084\u3001\u30a2\u30d7\u30ea\u304c\u4e88\u671f\u305b\u305a\u7d42\u4e86\u3057\u305f\u3068\u304d\u306e\u7de8\u96c6\u5185\u5bb9\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002", "\uc784\uc2dc \uc800\uc7a5\ub41c \ud56d\ubaa9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \uc800\uc7a5\ud55c \ub0b4\uc6a9\uc774\ub098 \uc571\uc774 \uc608\uae30\uce58 \uc54a\uac8c \uc885\ub8cc\ub420 \ub54c \ud3b8\uc9d1 \uc911\uc774\ub358 \ub0b4\uc6a9\uc774 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4."),
     ("draftSavedToast", "Saved to drafts", "\u5df2\u5b58\u5165\u8349\u7a3f", "\u4e0b\u66f8\u304d\u306b\u4fdd\u5b58\u3057\u307e\u3057\u305f", "\uc784\uc2dc \uc800\uc7a5\uc5d0 \ubcf4\uad00\ud588\uc2b5\ub2c8\ub2e4"),
     ("draftRestoreTitle", "Unfinished edits found", "\u53d1\u73b0\u672a\u5b8c\u6210\u7684\u7f16\u8f91", "\u672a\u5b8c\u6210\u306e\u7de8\u96c6\u304c\u3042\u308a\u307e\u3059", "\uc644\ub8cc\ub418\uc9c0 \uc54a\uc740 \ud3b8\uc9d1\uc774 \uc788\uc2b5\ub2c8\ub2e4"),
-    # Round R1 - the abnormal-shutdown prompt (task 5). Deliberately worded as a question about a
-    # PAGE, not about data: the draft copy is safe either way, what is being offered is the trip back.
     ("sessionRestoreTitle", "Go back to where you were?", "要回到上次的页面吗？", "前回の画面に戻りますか？", "마지막 화면으로 돌아갈까요?"),
     ("sessionRestoreNoteBody(title: String)", "Lucent closed unexpectedly while you were editing the note \u201c{title}\u201d. Reopen it with the changes you had not saved?", "上次 Lucent 在你编辑笔记“{title}”时异常关闭。是否重新打开并恢复当时未保存的内容？", "メモ「{title}」の編集中に Lucent が予期せず終了しました。未保存の内容を復元して開き直しますか？", "노트 “{title}”을(를) 편집하는 중에 Lucent가 예기치 않게 종료되었습니다. 저장하지 않은 내용을 복원해 다시 열까요?"),
     ("sessionRestoreTaskBody(title: String)", "Lucent closed unexpectedly while you were editing the task \u201c{title}\u201d. Reopen it with the changes you had not saved?", "上次 Lucent 在你编辑任务“{title}”时异常关闭。是否重新打开并恢复当时未保存的内容？", "タスク「{title}」の編集中に Lucent が予期せず終了しました。未保存の内容を復元して開き直しますか？", "할 일 “{title}”을(를) 편집하는 중에 Lucent가 예기치 않게 종료되었습니다. 저장하지 않은 내용을 복원해 다시 열까요?"),
@@ -1280,11 +1102,9 @@ ENTRIES = [
     ("draftOpen", "Open drafts", "\u6253\u5f00\u8349\u7a3f", "\u4e0b\u66f8\u304d\u3092\u958b\u304f", "\uc784\uc2dc \uc800\uc7a5 \uc5f4\uae30"),
     ("draftPromote", "Move out of drafts", "\u79fb\u51fa\u8349\u7a3f", "\u4e0b\u66f8\u304d\u304b\u3089\u623b\u3059", "\uc784\uc2dc \uc800\uc7a5\uc5d0\uc11c \uaebc\ub0b4\uae30"),
 
-    # ---- Task A16: user-defined order ----
     ("sortCustom", "Custom order", "\u81ea\u5b9a\u4e49\u987a\u5e8f", "\u30ab\u30b9\u30bf\u30e0\u9806", "\uc0ac\uc6a9\uc790 \uc9c0\uc815 \uc21c\uc11c"),
     ("a11yDragItems", "Long-press and drag to reorder", "\u957f\u6309\u62d6\u62fd\u53ef\u8c03\u6574\u987a\u5e8f", "\u9577\u62bc\u3057\u3057\u3066\u30c9\u30e9\u30c3\u30b0\u3067\u4e26\u3079\u66ff\u3048", "\uae38\uac8c \ub20c\ub7ec \ub04c\uc5b4\uc11c \uc21c\uc11c \ubcc0\uacbd"),
 
-    # ---- Task A21: the hidden area ----
     ("screenHidden", "Hidden", "\u9690\u85cf", "\u975e\u8868\u793a", "\uc228\uae40"),
     ("hiddenSettingTitle", "Show hidden area", "\u663e\u793a\u9690\u85cf\u533a", "\u975e\u8868\u793a\u30a8\u30ea\u30a2\u3092\u8868\u793a", "\uc228\uae40 \uc601\uc5ed \ud45c\uc2dc"),
     ("hiddenUnlockPrompt", "Enter your app lock password to show the hidden area.", "\u8bf7\u8f93\u5165\u5e94\u7528\u9501\u5bc6\u7801\u4ee5\u663e\u793a\u9690\u85cf\u533a\u3002", "\u975e\u8868\u793a\u30a8\u30ea\u30a2\u3092\u8868\u793a\u3059\u308b\u306b\u306f\u30a2\u30d7\u30ea\u30ed\u30c3\u30af\u306e\u30d1\u30b9\u30ef\u30fc\u30c9\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002", "\uc228\uae40 \uc601\uc5ed\uc744 \ud45c\uc2dc\ud558\ub824\uba74 \uc571 \uc7a0\uae08 \ube44\ubc00\ubc88\ud638\ub97c \uc785\ub825\ud558\uc138\uc694."),
@@ -1296,7 +1116,6 @@ ENTRIES = [
     ("hiddenRemoveConfirmBody", "This item goes back to its normal list, where anyone using this device can see it.", "该条目将回到普通列表，使用本设备的任何人都能看到它。", "この項目は通常の一覧に戻り、この端末を使う人なら誰でも見られるようになります。", "이 항목은 일반 목록으로 돌아가며, 이 기기를 사용하는 누구나 볼 수 있게 됩니다."),
     ("hiddenRemoveConfirmAction", "Move out", "移出", "戻す", "꺼내기"),
 
-    # ---- Task A22: doodle notes ----
     ("doodleNote", "Doodle", "\u6d82\u9e26", "\u624b\u66f8\u304d", "\ub099\uc11c"),
     ("doodleClear", "Clear canvas", "\u6e05\u7a7a\u753b\u5e03", "\u30ad\u30e3\u30f3\u30d0\u30b9\u3092\u6d88\u53bb", "\uce94\ubc84\uc2a4 \uc9c0\uc6b0\uae30"),
     ("doodleUndoStroke", "Undo stroke", "\u64a4\u9500\u4e00\u7b14", "\u4e00\u753b\u5143\u306b\u623b\u3059", "\ud55c \ud68d \uc2e4\ud589 \ucde8\uc18c"),
@@ -1307,17 +1126,11 @@ ENTRIES = [
     ("doodleDeletePage", "Delete this canvas", "删除这块画布", "このキャンバスを削除", "이 캔버스 삭제"),
     ("doodlePageName(index: Int)", "Canvas {index}", "画布 {index}", "キャンバス {index}", "캔버스 {index}"),
 
-    # ---- Task A7: the floating scroll / quick-edit control ----
     ("a11yScrollTop", "Scroll to top", "\u56de\u5230\u9876\u90e8", "\u4e00\u756a\u4e0a\u3078", "\ub9e8 \uc704\ub85c"),
     ("a11yScrollBottom", "Scroll to bottom", "\u56de\u5230\u5e95\u90e8", "\u4e00\u756a\u4e0b\u3078", "\ub9e8 \uc544\ub798\ub85c"),
     ("a11yQuickEdit", "Quick edit", "\u5feb\u901f\u7f16\u8f91", "\u30af\u30a4\u30c3\u30af\u7de8\u96c6", "\ube60\ub978 \ud3b8\uc9d1"),
     ("actionRedo", "Redo", "\u91cd\u505a", "\u3084\u308a\u76f4\u3059", "\ub2e4\uc2dc \uc2e4\ud589"),
 
-    # ============================================================================
-    # Group B (assistant) — merged in during integration. These 52 keys were
-    # hand-written into the generated Android I18n.kt by group B; moved here so the
-    # generator remains the single source of truth for the Android file.
-    # ============================================================================
     ("quickModelTitle", "Switch model", "切换模型", "モデルを切り替え", "모델 전환"),
     ("quickModelCurrent", "Current model", "当前模型", "現在のモデル", "현재 모델"),
     ("quickModelRecent", "Recently used", "最近使用", "最近使ったモデル", "최근 사용"),
@@ -1375,7 +1188,6 @@ ENTRIES = [
     ("variantPrevious", "Previous answer", "上一个回复", "前の回答", "이전 답변"),
     ("variantNext", "Next answer", "下一个回复", "次の回答", "다음 답변"),
 
-    # ---- INTEGRATION: C-group task 20 rich text, wired into A-group's corner button ----
     ("richTextTitle", "Rich text", "富文本", "リッチテキスト", "서식 있는 텍스트"),
     ("richTextWeight", "Weight", "字重", "太さ", "굵기"),
     ("richTextLight", "Light", "细", "細字", "가늘게"),
@@ -1387,24 +1199,19 @@ ENTRIES = [
     ("richTextNeedSelection", "Select some text first, then choose a style.", "请先选中一段文字，再选择样式。", "先にテキストを選択してから、スタイルを選んでください。", "먼저 텍스트를 선택한 다음 스타일을 고르세요."),
     ("a11yRichTextToolbar", "Formatting", "格式", "書式", "서식"),
 
-    # ---- Phase 3: assistant draft deletion (confirmation sentence) ----
     ("ccDeleteDraft(title: String)", "Permanently delete the draft \"{title}\" (drafts do not go to the Trash)", "永久删除草稿“{title}”（草稿不经过回收站）", "下書き「{title}」を完全に削除（下書きはゴミ箱を経由しません）", "초안 \"{title}\"을(를) 영구 삭제 (초안은 휴지통을 거치지 않습니다)"),
 
-    # ---- W-1: AVX2 guard message (desktop shows it; Android declares it for the shared twin) ----
     ("localModelNeedsAvx2", "This computer's processor doesn't support AVX2, which the on-device model engine requires, so local models can't run here. Everything else in Lucent works normally, and cloud models are unaffected.", "这台电脑的处理器不支持 AVX2 指令集，而本地模型引擎需要它，因此本地模型无法在此运行。Lucent 的其它功能一切正常，云端模型也不受影响。", "このパソコンのプロセッサはオンデバイスモデルのエンジンに必要な AVX2 に対応していないため、ローカルモデルはここでは実行できません。Lucent のその他の機能は通常どおり動作し、クラウドモデルにも影響はありません。", "이 컴퓨터의 프로세서는 온디바이스 모델 엔진에 필요한 AVX2를 지원하지 않아 로컬 모델을 실행할 수 없습니다. Lucent의 다른 기능은 모두 정상 작동하며 클라우드 모델에도 영향이 없습니다."),
 
-    # ---- F-1: saved searches ----
     ("saveSearchAction", "Save this search", "保存此搜索", "この検索を保存", "이 검색 저장"),
     ("saveSearchNamePlaceholder", "Name this view", "为这个视图命名", "このビューに名前を付ける", "이 보기의 이름 지정"),
     ("savedSearchRemove(name: String)", "Remove saved search \"{name}\"", "移除已保存的搜索“{name}”", "保存済み検索「{name}」を削除", "저장된 검색 \"{name}\" 제거"),
 
-    # ---- PHASE 4: voice input (dictation) ----
     ("dictateStart", "Voice input", "语音输入", "音声入力", "음성 입력"),
     ("dictateStop", "Stop recording", "停止录音", "録音を停止", "녹음 중지"),
     ("dictateFailed", "Voice input didn't work. Please try again.", "语音输入失败，请重试。", "音声入力に失敗しました。もう一度お試しください。", "음성 입력에 실패했습니다. 다시 시도해 주세요."),
     ("sttNeedsApi", "Desktop voice input sends your recording to the AI provider you configured, and no API is set up yet. Add your API connection in Settings first.", "桌面端语音输入会把录音发送到你配置的 AI 服务商，目前还没有配置 API。请先在设置中填写 API 连接。", "デスクトップの音声入力は録音を設定済みの AI プロバイダーに送信しますが、API がまだ設定されていません。まず設定で API 接続を追加してください。", "데스크톱 음성 입력은 녹음을 설정한 AI 제공업체로 전송하는데, 아직 API가 설정되지 않았습니다. 먼저 설정에서 API 연결을 추가해 주세요."),
 
-    # ---- PHASE 4: local multimodal (mmproj) ----
     ("lmMmprojTitle", "Multimodal projector (mmproj)", "多模态投影器（mmproj）", "マルチモーダルプロジェクター（mmproj）", "멀티모달 프로젝터(mmproj)"),
     ("lmMmprojImport", "Import mmproj", "导入 mmproj", "mmproj をインポート", "mmproj 가져오기"),
     ("lmMmprojRemove", "Remove projector", "移除投影器", "プロジェクターを削除", "프로젝터 제거"),
@@ -1549,8 +1356,6 @@ ENTRIES = [
 
 ]
 
-# ---- Conditional (if/else) entries --------------------------------
-# sig -> [en, zh, ja, ko] raw Kotlin expressions.
 CONDITIONAL_ENTRIES = {
     "notebookItemsCount(count: Int)": ["if (count == 1) \"1 item\" else \"$count items\"", "if (count == 1) \"1 个项目\" else \"$count 个项目\"", "if (count == 1) \"1 項目\" else \"$count 項目\"", "if (count == 1) \"항목 1개\" else \"항목 ${count}개\""],
 }

@@ -6,26 +6,19 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/**
- * Characterisation tests for [ReplyPolish], extracted verbatim from AssistantController (v2.7.6).
- * They pin down the markdown scrubber, the refusal/terse detectors and the honest-reply fallback
- * logic so later refactors cannot silently change what reaches the chat bubbles.
- */
 class ReplyPolishTest {
 
-    // ---- deRobotify ----
 
     @Test
     fun stripsBoldItalicAndCodeSpans() {
         assertEquals("hello world code", ReplyPolish.deRobotify("**hello** *world* `code`"))
         assertEquals("plain", ReplyPolish.deRobotify("plain"))
-        assertEquals("a_b", ReplyPolish.deRobotify("a_b")) // lone underscore untouched
+        assertEquals("a_b", ReplyPolish.deRobotify("a_b"))
     }
 
     @Test
     fun stripsLineLeadingMarkdown() {
         assertEquals("heading\nbullet\n2. keeps", ReplyPolish.deRobotify("# heading\n- bullet\n2. keeps"))
-        // A bullet not at the line start is not a markdown prefix.
         assertEquals("keeps • mid-line", ReplyPolish.deRobotify("keeps • mid-line"))
     }
 
@@ -40,7 +33,6 @@ class ReplyPolishTest {
         assertEquals("smiles warmly", ReplyPolish.deRobotify("*smiles* warmly"))
     }
 
-    // ---- isBareRefusal ----
 
     @Test
     fun detectsShortBareRefusals() {
@@ -53,16 +45,11 @@ class ReplyPolishTest {
     @Test
     fun ignoresLongOrSubstantiveText() {
         assertFalse(ReplyPolish.isBareRefusal(""))
-        // Over 64 characters passes through untouched.
         assertFalse(ReplyPolish.isBareRefusal("I can't do that because the note is archived, but here is what I found instead."))
-        // Not an "i can't…" opener, so it is not a bare refusal.
         assertFalse(ReplyPolish.isBareRefusal("Thanks for the help"))
-        // Characterisation: the opener check only looks at the start, so a short "i can't" with
-        // trailing words still counts as a bare refusal (this is the v2.7.6 behaviour).
         assertTrue(ReplyPolish.isBareRefusal("i can't believe you"))
     }
 
-    // ---- isTerseNonAnswer ----
 
     @Test
     fun detectsTersePlaceholders() {
@@ -78,7 +65,6 @@ class ReplyPolishTest {
         assertFalse(ReplyPolish.isTerseNonAnswer("Done — created note \"Groceries\"."))
     }
 
-    // ---- imageFileName ----
 
     @Test
     fun mapsMimeToFileName() {
@@ -90,7 +76,6 @@ class ReplyPolishTest {
         assertEquals("image.png", ReplyPolish.imageFileName("application/pdf"))
     }
 
-    // ---- replyContent ----
 
     @Test
     fun keepsRealReply() {
@@ -103,7 +88,6 @@ class ReplyPolishTest {
 
     @Test
     fun replacesBareRefusalDenyingSuccess() {
-        // Reported bug: model created the task, then replied "i can't".
         val out = ReplyPolish.replyContent(
             "I can't", hasImage = false,
             toolResults = listOf(ToolExecResult(summary = "Created task \"Buy milk\".", success = true))

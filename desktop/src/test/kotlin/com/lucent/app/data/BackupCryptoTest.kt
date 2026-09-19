@@ -9,18 +9,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
-/**
- * Backup round-trip tests for [BackupCrypto] (P0-5, highest priority): the .lcb envelope must
- * survive export → import intact in both APP_KEY and PASSWORD modes, wrong passwords must fail
- * with the dedicated exception (never a generic crash), and foreign bytes must be refused.
- * Runs on the JVM against the same shared sources :desktop compiles; PBKDF2 falls back to JCE
- * when the Rust native library is absent.
- */
 class BackupCryptoTest {
 
     private val payload = "notes=hello&tasks=buy milk&chats={\"role\":\"user\"}".toByteArray(Charsets.UTF_8)
 
-    // ---- APP_KEY mode (default, no password) ----
 
     @Test
     fun appKeyRoundTripPreservesPayload() {
@@ -33,7 +25,6 @@ class BackupCryptoTest {
         assertContentEquals(payload, BackupCrypto.decrypt(blob, password = null))
     }
 
-    // ---- PASSWORD mode ----
 
     @Test
     fun passwordRoundTripPreservesPayload() {
@@ -63,8 +54,6 @@ class BackupCryptoTest {
 
     @Test
     fun passwordModeIsChosenForAnyNonNullNonEmptyPassword() {
-        // The mode decision is isNullOrEmpty only: a whitespace-only password still counts as a
-        // password (the user gets what they typed, including spaces). Null and "" select APP_KEY.
         val spaced = BackupCrypto.encrypt(payload, password = "   ")
         assertEquals(BackupCrypto.Mode.PASSWORD, BackupCrypto.readHeader(spaced)!!.mode)
 
@@ -75,7 +64,6 @@ class BackupCryptoTest {
         assertEquals(BackupCrypto.Mode.APP_KEY, BackupCrypto.readHeader(none)!!.mode)
     }
 
-    // ---- Foreign / damaged bytes ----
 
     @Test
     fun refusesForeignBytes() {
@@ -98,13 +86,11 @@ class BackupCryptoTest {
 
     @Test
     fun magicPrefixAloneIsNotEnough() {
-        // A file that merely begins with our magic but has no valid header must not decrypt.
         val garbage = ("LCNTBAK1" + "X".repeat(30)).toByteArray(Charsets.UTF_8)
-        assertTrue(BackupCrypto.looksEncrypted(garbage)) // looks like ours…
-        assertNull(BackupCrypto.readHeader(garbage))      // …but is not one of ours
+        assertTrue(BackupCrypto.looksEncrypted(garbage))
+        assertNull(BackupCrypto.readHeader(garbage))
     }
 
-    // ---- Recovery envelope (v2) ----
 
     @Test
     fun passwordBackupCanCarryRecoveryEnvelope() {
@@ -124,7 +110,6 @@ class BackupCryptoTest {
         assertContentEquals(envelope.salt, header.recovery?.salt)
         assertContentEquals(envelope.iv, header.recovery?.iv)
         assertContentEquals(envelope.wrapped, header.recovery?.wrapped)
-        // The payload must still decrypt normally with the real password.
         assertContentEquals(payload, BackupCrypto.decrypt(blob, password = "pw"))
     }
 
@@ -137,17 +122,14 @@ class BackupCryptoTest {
         val blob = BackupCrypto.encrypt(payload, password = null, recovery = envelope)
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)
-        // APP_KEY mode never carries a recovery envelope: the key is not a secret worth wrapping.
         assertNull(header.recovery)
         assertFalse(header.hasRecovery)
         assertContentEquals(payload, BackupCrypto.decrypt(blob, password = null))
     }
 
-    // ---- Format stability ----
 
     @Test
     fun headerParsingIsStableAcrossSaltLengths() {
-        // Encryption always uses a 16-byte salt; the header parser must reject an undersized one.
         val blob = BackupCrypto.encrypt(payload, password = null)
         val header = BackupCrypto.readHeader(blob)
         assertNotNull(header)

@@ -1,27 +1,11 @@
 import org.jetbrains.compose.ComposeBuildConfig
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
-// ============================================================================================
-//  :desktop — the Windows build of Lucent (Compose for Desktop, plain JVM)
-// ============================================================================================
-//
-// This module lives beside :app and never touches it. It reuses the shared Kotlin — data models,
-// backup/crypto engine, i18n, business logic, and most UI — verbatim from com.lucent.app.*, and
-// swaps only the genuinely platform-bound pieces for desktop implementations of the SAME package,
-// name, and API. See the handover document for the architecture in full.
-//
-// Versions are pinned to match :app (Kotlin 2.4.0, JDK 17, haze 1.7.2, okhttp 4.12.0) and the
-// desktop toolchain the root build declares (Compose Multiplatform 1.12.0). Keeping them in lockstep
-// is what lets the shared source compile identically on both sides. Dependency coordinates now come
-// from gradle/libs.versions.toml (P0-5), which enforces the shared group's identity by construction.
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
-    // Provides the Compose compiler for Kotlin 2.x (the same plugin :app uses). Compose for Desktop
-    // needs it exactly as the Android module does.
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
-    // P0-6: static analysis — deliberately minimal rule set, see config/detekt/detekt.yml.
     id("io.gitlab.arturbosch.detekt")
 }
 
@@ -35,107 +19,37 @@ kotlin {
     jvmToolchain(17)
     sourceSets {
         main {
-            // ---- The single shared source tree ----
-            // Compile the SAME shared/src/main/kotlin sources as :app does. Platform seams stay in
-            // this module's own tree (the android.* shims, the JDBC database core, desktop shells);
-            // everything else is one file for both platforms now.
             kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
         }
     }
 }
 
 dependencies {
-    // The Compose for Desktop bundle for whatever OS the build runs on (Windows in CI). Pulls in the
-    // runtime, ui, foundation, material and material3 for the desktop (Skiko) backend.
     implementation(compose.desktop.currentOs)
-    // compose.material3 (Gradle plugin alias) is deprecated in favour of a direct coordinate.
-    // material3's version is decoupled from the Compose Multiplatform plugin version, so it's read
-    // from ComposeBuildConfig.composeMaterial3Version rather than pinned in the catalog — this is
-    // the same value the now-deprecated alias resolved to internally.
     implementation("org.jetbrains.compose.material3:material3:${ComposeBuildConfig.composeMaterial3Version}")
-    // compose.materialIconsExtended (Gradle plugin alias) is also deprecated. Unlike material3, this
-    // artifact is intentionally frozen upstream at 1.7.3 (no newer version is published for it), so
-    // it's pinned explicitly via the catalog rather than tracked dynamically.
     implementation(libs.compose.material.icons.extended)
 
-    // Coroutines: -core is the engine; -swing supplies Dispatchers.Main on the desktop (the Swing/AWT
-    // event thread Compose for Desktop renders on). Versions live in the catalogue (P0-5) — unified
-    // with :app at 1.8.1.
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
 
-    // Frosted-glass blur, identical to :app so Glass.kt compiles unchanged.
     implementation(libs.haze)
     implementation(libs.haze.materials)
 
-    // Networking for the cloud assistant — the same shared-group OkHttp :app uses (P0-5 unified
-    // desktop's former 5.5.0 down to the Android-proven 4.12.0; the shared code uses the API
-    // intersection of the two lines).
     implementation(libs.okhttp)
 
-    // Android ships org.json in the platform; the desktop JVM does not, so bring it in explicitly.
-    // The shared code (ApiProfiles, AppLock, BackupManager, …) uses org.json.JSONObject throughout.
     implementation(libs.org.json)
 
-    // v2.7.3 (code-review report, Phase 1): unit tests for the shared business logic (data shapes,
-    // brute-force ladder, palette uniqueness). They compile and run on the JVM next to the same
-    // shared sources :desktop compiles, so CI can run them without an Android device.
     testImplementation(kotlin("test"))
     tasks.withType<Test> { useJUnitPlatform() }
 
-    // SQLite JDBC driver — io.github.willena:sqlite-jdbc, the drop-in Xerial build whose SQLite
-    // core is SQLite3MultipleCiphers, i.e. it speaks the SQLCipher scheme Db.kt keys with. This is
-    // what makes the desktop database encrypted at rest, restoring parity with Android.
-    //
-    // HARD PIN, on purpose. The previous "rich constraint" (strictly [3.44.0.0,4.0.0[ +
-    // prefer 3.45.1.6) is what broke the 2026-07-22 Windows run: when `prefer` names a version,
-    // Gradle resolves straight to that exact number and — if it was never published — fails with
-    // ModuleVersionNotFoundException instead of falling back to the range. 3.45.1.6 does not exist
-    // (the 3.45 line on Maven Central stops at 3.45.2.0), so :desktop:compileKotlin died before the
-    // self-check ever ran. 3.51.2.0 is a real Maven Central release (published 2026-01-16), and the
-    // `cipherSelfCheck` CI step still proves the driver Gradle resolves really encrypts before
-    // anything is packaged. When bumping, pick an EXACT version from
-    //   https://central.sonatype.com/artifact/io.github.willena/sqlite-jdbc/versions
-    // (latest as of 2026-09 is 3.53.4.0).
-    // NEVER fall back to org.xerial here — that silently ships an unencrypted store, and the
-    // self-check below will (rightly) fail the build in red if anyone tries.
     implementation(libs.sqlite.jdbc)
 
-    // PDF export and in-app PDF attachment preview (replaces Android's PdfRenderer with PDFBox).
     implementation(libs.pdfbox)
 
-    // P0-1: Windows DPAPI (CryptProtectData / CryptUnprotectData) via JNA, to bind the master key
-    // to the user account instead of leaving it as a plaintext Base64 file beside the data it
-    // protects. Pure JVM, no custom native code: jna-platform already binds Crypt32. Windows-only
-    // at runtime — on other OSes the wrapper is unavailable and LocalSecrets stores the legacy
-    // form and reports the missing binding. EXACT PIN, on purpose; see LocalSecrets.kt.
     implementation(libs.jna.platform)
 
-    // ---- C-group task 10: the bundled CJK face for PDF export ----
-    //
-    // PDFBox embeds only the fonts it is handed, and its built-in Helvetica has no CJK coverage.
-    // Because DocumentExport DROPS characters the chosen face cannot encode, a Chinese/Japanese/
-    // Korean note exported to PDF on a machine with no imported CJK font came out with its text
-    // silently missing. See the comment on DocumentExport.loadPdfFonts.
-    //
-    // The face is a build INPUT, not a Gradle dependency: it is a binary asset the workflow places
-    // at
-    //     desktop/src/main/resources/fonts/LucentCJK.otf
-    // before `packageExe` runs. Recommended: **Noto Sans CJK** (SIL Open Font License 1.1, which
-    // permits redistribution inside an application — record it in THIRD-PARTY-NOTICES.md), the
-    // "Super OTC" or a regional subset. Expect the installer to grow by roughly 15-20 MB; this was
-    // chosen over glyph subsetting deliberately, because a subset has to be regenerated whenever
-    // the exportable string set changes and a stale subset fails the same silent way this bug did.
-    //
-    // The build does NOT fail when the file is absent — an optional asset must never break CI — but
-    // DocumentExport.cjkFontMissing is then set and the app tells the user their characters were
-    // dropped and offers .docx instead.
 }
 
-// CI proof that the desktop database is REALLY encrypted with the driver Gradle resolved — see
-// CipherSelfCheck.kt for what it asserts. Wired into build-windows.yml as its own red/green step
-// before packaging; encryption is a launch requirement, so unlike the GPU engine it is allowed to
-// stop the build.
 tasks.register<org.gradle.api.tasks.JavaExec>("cipherSelfCheck") {
     group = "verification"
     description = "Prove at-rest encryption end to end with the resolved sqlite-jdbc driver."
@@ -148,93 +62,19 @@ compose.desktop {
         mainClass = "com.lucent.desktop.MainKt"
 
         nativeDistributions {
-            // A single "double-click to install" Windows installer, as the requirement asks. The
-            // workflow uploads exactly the one .exe this produces.
             targetFormats(TargetFormat.Exe)
             packageName = "Lucent"
-            // 2.3.0. This MUST be bumped for WiX to perform an in-place upgrade: the installer only
-            // replaces an existing install when the incoming version is HIGHER, so shipping a new
-            // build under the old number leaves the user with two parallel installs and no obvious
-            // way to tell them apart.
-            //
-            // 2.3.0 is the R3 maintenance release — see the note beside Android's MARKETING_VERSION
-            // for the full list; on the desktop side it also includes the network-aware Windows
-            // warm-up retry, the single-anchor scroll-edge control, adaptive error tints,
-            // crash-shield install-on-launch, and the doodle-canvas merge to one multi-page PDF.
-            //
-            // 2.2.1 was the patch on 2.2.0: no user-facing change — it realigned the desktop number
-            // with Android's MARKETING_VERSION (both were 2.2.1) and hardened the Windows CI
-            // warm-up step against long repository outages (see build-windows.yml).
-            //
-            // 2.0.0 was the integrated three-group release. 2.2.0 carries the editor and whiteboard
-            // work on top of it — the rich-text toolbar rebuilt as a grid with styles that can be
-            // armed before typing, drag-to-reorder actually taking effect, canonical note tags that
-            // survive a language switch, scheduled backups wired end to end, and the whiteboard's
-            // clear/redraw and full-screen fixes.
-                        // 2.3.5 - the engineering release (multi-attachment chat, shared i18n, toolchain
-            // upgrades). Bumped so WiX upgrades 2.3.0 installs in place.
-                        // 2.7.0 - see the note beside Android's MARKETING_VERSION (2.5.0/2.6.0
-            // skipped as planned); bumped so WiX upgrades 2.4.0 installs in place.
-                        // 2.7.2 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.0
-            // installs in place.
-                        // 2.7.3 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.2
-            // installs in place.
-                        // 2.7.4 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.3
-            // installs in place.
-                        // 2.7.5 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.4
-            // installs in place.
-                        // 2.7.6 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.5
-            // installs in place.
-                        // 2.7.7 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.6
-            // installs in place.
-            // 2.7.9: shared full-screen diffuse gradients and visibility/system-motion gating.
-            // 2.8.0: quieter settings pages, a complete home-section lookup, and background writes
-            // that report and log their failures instead of ending the process.
             packageVersion = "2.8.0"
 
-            // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
-            // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with
-            // NoClassDefFoundError: java/sql/Driver. okhttp's HTTPS also needs jdk.crypto.ec, and some
-            // libraries touch sun.misc.Unsafe (jdk.unsupported). Bundling all JDK modules is the
-            // simplest guarantee that no runtime module is missing; it enlarges the installer somewhat.
-            // (To slim it later, replace with e.g. modules("java.sql", "java.naming", "jdk.crypto.ec",
-            // "jdk.unsupported").)
             includeAllModules = true
 
             windows {
                 menu = true
                 menuGroup = "Lucent"
                 shortcut = true
-                // Stable across releases so the installer upgrades in place rather than installing a
-                // second copy. Must never change once shipped. (This is what makes "install the new
-                // build over the old one" replace it — provided packageVersion above is bumped for the
-                // new release, since the installer only upgrades to a *higher* version.)
                 upgradeUuid = "8f4e2a10-1c3b-4d5e-9a7f-2b6c8d0e1f23"
-                // ---- C-group task 5: install anywhere, not just C: or D: ----
-                //
-                // The report was "the desktop build can only be installed on C: or D:". The cause is
-                // that WiX was never told to show a directory page at all: with no `dirChooser`,
-                // jpackage generates an installer with a FIXED destination, and `perUserInstall`
-                // below pins that destination to %LOCALAPPDATA% — which lives on whichever drive
-                // Windows is installed on. Anyone who wanted it elsewhere had to reach for the
-                // installer's own drive dropdown, which is why it looked like "C: or D: only":
-                // those were simply the only fixed drives that dialog would offer.
-                //
-                // `dirChooser = true` adds the WixUI_InstallDir browse page, so the user picks a
-                // real folder on any volume — E:, an external disk, a mounted network path.
                 dirChooser = true
-                // Install into the user's profile rather than Program Files, so installing and
-                // upgrading never needs administrator rights and the overwrite-upgrade is clean.
-                //
-                // NOTE (task 4 aftermath): keep this true. `perUserInstall = false` writes to
-                // Program Files and registers machine-wide, and it is the machine-wide MSI
-                // registration that gets stranded by a hard power-off mid-install — which is what
-                // produces the "cannot uninstall, cannot reinstall into the same folder, Failed to
-                // launch JVM" state reported in task 4. A per-user install is repairable by the
-                // user; a stranded machine-wide one needs msiexec surgery.
                 perUserInstall = true
-                // The .ico is bundled if present; the build still succeeds without it (jpackage falls
-                // back to a default icon), so a missing icon never fails CI.
                 val icoFile = project.file("src/main/resources/icons/lucent.ico")
                 if (icoFile.exists()) iconFile.set(icoFile)
             }

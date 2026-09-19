@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- C-group task 9 — picker preview for the pinned-note widget. See widget_quick_actions_preview.xml
-     for why previews are their own layouts rather than the real one scaled down.
 
-     The real layout shows a title plus several body lines at reading sizes. In the picker's cell
-     those lines collapse into the dark slab with white bars that the bug report shows. This draws
-     the same idea at preview scale: one title line and two short rules standing in for body text,
-     which is what a preview is for — recognising the widget, not reading it. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"

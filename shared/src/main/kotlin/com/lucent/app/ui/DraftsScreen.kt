@@ -42,27 +42,6 @@ import com.lucent.app.data.TrashCleanup
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
-/**
- * The draft area (task A10) — a sibling of the trash, and shaped like it on purpose.
- *
- * ### What a draft is, and why it is a flag rather than a place
- *
- * A draft is the note or task itself, at an earlier moment, held back from the main list until the
- * user says it is ready. That is the same relationship the trash has to a deleted item, so it is
- * stored the same way: a column on the row (`isDraft`), not a separate table. One schema, one write
- * path, and nothing extra to keep in step the next time either entity gains a field.
- *
- * ### Two ways in
- *
- *  - **Deliberately**, with the "Save to drafts" button beside Save in either composer.
- *  - **Automatically**, when Lucent leaves the foreground with an editor still open and dirty (see
- *    `UnsavedChangesGuard.autoDraft` and `MainActivity.onStop`). This is the case the task list
- *    describes as "closes abnormally": a stopped Android process can be killed without another
- *    line of our code running, and the edit used to be gone. Now a copy is already here.
- *
- * Restoring is the inverse of exactly one thing — the flag — so a restored draft returns with its
- * attachments, pin, colour and everything else intact.
- */
 @Composable
 fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
     val context = LocalContext.current
@@ -74,9 +53,6 @@ fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
 
     var toPurge by remember { mutableStateOf<Note?>(null) }
 
-    // Deleting a draft is deleting content, so it asks — and it purges rather than trashing,
-    // because a draft that "went to the trash" would be in two holding areas at once, which is one
-    // more than anybody can keep track of.
     toPurge?.let { note ->
         AlertDialog(
             onDismissRequest = { toPurge = null },
@@ -107,7 +83,6 @@ fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
                 savedAt = note.draftSavedAt ?: note.updatedAt,
                 onOpen = { onOpen(note) },
                 onPromote = {
-                    // Out of drafts and into the ordinary list — the single flag flipped back.
                     AppScope.io.launch {
                         db.noteDao().update(note.copy(isDraft = false, draftSavedAt = null))
                     }
@@ -120,7 +95,6 @@ fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
     }
 }
 
-/** The task side of the draft area; identical in every respect that isn't the row's own fields. */
 @Composable
 fun DraftTasksScreen(onBack: () -> Unit, onOpen: (Task) -> Unit) {
     val context = LocalContext.current
@@ -174,7 +148,6 @@ fun DraftTasksScreen(onBack: () -> Unit, onOpen: (Task) -> Unit) {
     }
 }
 
-/** Header, empty state and list container — shared so the two draft screens cannot drift apart. */
 @Composable
 private fun DraftScaffold(
     onBack: () -> Unit,
@@ -209,14 +182,6 @@ private fun DraftScaffold(
     }
 }
 
-/**
- * One draft: what it says, when it was parked, and the two things you can do with it.
- *
- * Tapping the row opens it back in the editor, because that is what a draft is *for* — the list is
- * a way back to unfinished work, not an archive to admire. "Move out of drafts" is the second-best
- * action (the content is already fine, it just shouldn't be hidden any more), and delete is last
- * and muted.
- */
 @Composable
 private fun DraftRow(
     title: String,
@@ -259,30 +224,10 @@ private fun DraftRow(
     }
 }
 
-/**
- * The "you had unfinished edits last time" prompt (task A10).
- *
- * ### Why it asks once per launch, from whichever tab you land on
- *
- * The obvious home for this is a global dialog in MainActivity, but the useful *action* — open the
- * draft area — lives inside a tab, so a global dialog would have to reach across into one and drive
- * its navigation. Instead each home screen offers its own drafts, and [asked] makes sure only the
- * first one to compose actually speaks up. You get one question per launch, and it takes you
- * straight to the thing it is asking about.
- *
- * The flag is process-scoped on purpose. It resets when the process does, which is exactly when the
- * question becomes worth asking again.
- */
 object DraftRestorePrompt {
-    /** Set once the question has been put to the user this launch, answered or dismissed. */
     var asked: Boolean = false
 }
 
-/**
- * Renders the prompt if this screen has drafts and nobody has asked yet. Dismissing it counts as an
- * answer: the drafts are not going anywhere, they are one menu entry away, and re-asking on every
- * tab switch would turn a safety net into nagging.
- */
 @Composable
 fun DraftRestoreDialog(draftCount: Int, onOpenDrafts: () -> Unit) {
     var visible by remember { mutableStateOf(!DraftRestorePrompt.asked && draftCount > 0) }

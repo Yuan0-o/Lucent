@@ -50,17 +50,6 @@ import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.lucentTypography
 import kotlinx.coroutines.delay
 
-/**
- * The desktop app root, the peer of Android's `LucentApp`. It reproduces the same three responsibilities
- * that composable has — resolve the appearance from settings, gate the whole UI behind the App Lock,
- * and host the toast overlay — and then, in place of Android's bottom-nav Scaffold, lays the window
- * out as the mockup asks: a vertical sidebar on the left and the active screen filling the rest.
- *
- * The appearance plumbing is intentionally identical to Android's (theme → colours → on-gradient ink
- * → backdrop → palette), so the shared [FluidGlassBackground], [LockScreen], and every glass surface
- * read exactly the same colours here as on the phone. The one deliberate difference is the default:
- * the drifting background starts OFF on desktop (see [SettingsRepository]).
- */
 @Composable
 fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val context = DesktopContext
@@ -74,30 +63,16 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
         initial = startup.backgroundAnimationEnabled
     )
     val backgroundEnvironment = rememberBackgroundEnvironment(active)
-    // Keep the shell composed under the splash, but animate only the visible background.
     var splashDone by remember { mutableStateOf(false) }
 
-    // Task 2 — Material You dynamic colour (Android 12+). There is no wallpaper API on Windows, so
-    // this flag is deliberately IGNORED here: even when it is true (e.g. after restoring a backup
-    // made on Android), the desktop keeps the user's manual theme and palette below, and no toggle
-    // is ever surfaced in desktop Settings. The key exists only so backups stay symmetric.
     val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = startup.dynamicColor)
 
-    // Keep the runtime language following the setting, so switching it in Settings re-renders every
-    // S-reading string at once with no restart — the same contract as Android's LaunchedEffect.
     val languageKey by repo.appLanguage.collectAsState(initial = startup.appLanguage)
     LaunchedEffect(languageKey) { com.lucent.app.i18n.L.apply(languageKey) }
 
-    // Mirror the App Lock setting into the controller so toggling it takes effect on the next lock.
     val appLockOn by repo.appLockEnabled.collectAsState(initial = startup.appLockEnabled)
     LaunchedEffect(appLockOn) { com.lucent.app.ui.AppLockController.enabled = appLockOn }
 
-    // Crash Shield, installed on launch when the setting is on (peer of Android's MainActivity).
-    // The shield must wrap the event queue from the very first moment of the session, so it can
-    // only ever be installed here — never later — which is exactly why the Settings note says the
-    // switch "takes effect the next time you open Lucent", and why that note is shown only while
-    // the shield is NOT yet installed: once this has run, the note's promise is kept and it must
-    // disappear (R3 report).
     LaunchedEffect(Unit) {
         val shieldWanted = try { repo.crashShieldEnabledOnce() } catch (t: Throwable) { false }
         if (shieldWanted) com.lucent.app.data.CrashShield.install(context)
@@ -110,14 +85,11 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val onGradientMuted = onGradient.copy(alpha = 0.65f)
     val backdropColor = themeChoice.backdrop(systemDark)
     val paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
-        // v2.4.0: self-switching random palette (see rememberRandomPaletteColors).
         com.lucent.app.ui.rememberRandomPaletteColors(
             animated = backgroundAnimated,
             environment = backgroundEnvironment
         )
     } else if (paletteName == PALETTE_CYCLE) {
-        // Auto-cycling background: drifts smoothly through every palette over time. Backdrop and
-        // text colours stay theme-based (above), so contrast is unaffected. (Parity with Android.)
         rememberCyclingPaletteColors(
             LucentPalette.pickerEntries.map { it.colors },
             animated = backgroundAnimated,
@@ -132,20 +104,13 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
         CompositionLocalProvider(
             LocalOnGradient provides onGradient,
             LocalOnGradientMuted provides onGradientMuted,
-            // The renderer and every palette clock read the window's own visibility and the
-            // system's animation preference from here, so a hidden or minimized window costs
-            // nothing and a reduced-motion setting is honoured once, not per call site.
             LocalBackgroundEnvironment provides backgroundEnvironment
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // The lock stands entirely in front of the app: while locked, the shell isn't composed,
-                // so nothing behind it can be read. Unlocking (password or Windows Hello) swaps it out.
                 if (com.lucent.app.ui.AppLockController.locked) {
                     LockScreen(
                         paletteColors = paletteColors,
                         backdropColor = backdropColor,
-                        // The shell below the splash stays composed (it pre-warms the first real
-                        // frame) but only the visible background animates.
                         backgroundAnimated = backgroundAnimated && splashDone
                     )
                 } else {
@@ -159,8 +124,6 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
                 ToastOverlay()
 
-                // The launch animation, layered OVER everything (lock screen + shell) so the real
-                // content composes underneath while it plays — same idea as Android's splash.
                 if (!splashDone) {
                     LucentSplash(
                         paletteColors = paletteColors,
@@ -181,8 +144,6 @@ private fun DesktopShell(
     backdropColor: Color,
     backgroundAnimated: Boolean
 ) {
-    // Opens on the Assistant, the mockup's hero screen and the app's centre of gravity. Cross-screen
-    // jumps (Insights/Search "open this note") route through AppNavigation exactly as on Android.
     var current by remember { mutableStateOf(Screen.Tasks) }
     LaunchedEffect(AppNavigation.requestedScreen) {
         AppNavigation.consumeScreen()?.let { current = it }
@@ -204,9 +165,6 @@ private fun DesktopShell(
                     Screen.Notes -> NotesScreen()
                     Screen.Insights -> InsightsScreen()
                     Screen.Search -> SearchScreen(
-                        // Tapping a result routes through the same AppNavigation "open this item"
-                        // channel the Tasks/Notes screens already consume on entry, so the target
-                        // opens directly in its editor on the right tab.
                         onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Search) },
                         onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Search) },
                         onBack = { AppNavigation.requestScreen(Screen.Tasks) }
@@ -218,7 +176,6 @@ private fun DesktopShell(
     }
 }
 
-/** The floating toast chip, rendered by the shell (Android delegates to the platform Toast). */
 @Composable
 private fun ToastOverlay() {
     val entry by LucentToast.messages.collectAsState()

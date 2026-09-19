@@ -63,22 +63,6 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas as ComposeCanvas
 import android.graphics.Color as AndroidColor
 
-/**
- * A small, dependency-free image editor: **doodle** (freehand pen), **mosaic** (pixelate a region to
- * obscure it), and **crop**. Enough to scribble an arrow, blur out a face or a bit of text, or trim
- * the edges — the everyday touch-ups people actually want on an attached photo — without reaching for
- * a separate app.
- *
- * Doodle and mosaic are painted straight onto a mutable working [Bitmap] via a plain
- * [android.graphics.Canvas], so what you see is exactly what gets saved; crop replaces the working
- * bitmap with a sub-region. On save the result is re-encoded and written **back over the same stored
- * attachment** through [AttachmentStore], so the edit shows up everywhere that image appears. The
- * working copy is a full-resolution ARGB clone of the original, matching the app's "keep attachments
- * at original quality" rule.
- *
- * [onDismiss] closes without saving; [onSaved] is called after a successful write so the caller can
- * refresh the (unchanged-id) attachment.
- */
 private enum class EditTool { DOODLE, MOSAIC, CROP }
 
 @Composable
@@ -87,32 +71,12 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
     var working by remember(att.data) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(att.data) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    // Bumped after each in-place edit so the displayed ImageBitmap wrapper is recreated and the
-    // canvas repaints (editing the same Bitmap object in place doesn't change its identity).
     var version by remember { mutableIntStateOf(0) }
     var tool by remember { mutableStateOf(EditTool.DOODLE) }
 
-    // ---- Undo history (task 3) ----
-    //
-    // Every tool here is destructive: doodle and mosaic paint straight onto the working bitmap's
-    // pixels, and crop replaces it outright. That is what makes the editor simple and what made it
-    // unforgiving — one stray mosaic drag over the wrong part of a photo and the only way back was
-    // to cancel and lose *every* edit, because "cancel" is all-or-nothing and there was nothing in
-    // between.
-    //
-    // So each destructive action now snapshots the pixels first. Undo pops the most recent snapshot
-    // straight back into place: instant, exact, and with no need to replay anything.
-    //
-    // The cost of that is memory — a full-resolution ARGB copy of a 12MP photo is ~48MB — so the
-    // stack is bounded by BOTH a step count and a byte budget (see trimUndoStack). A modest
-    // screenshot gets a dozen levels of undo; a huge photo gets fewer, but always at least one,
-    // which is exactly the "take back the last thing I did" the tool was missing. Evicted snapshots
-    // are recycled immediately: they have never been shown on screen, so nothing can still be
-    // drawing them.
     val undoStack = remember(att.data) { mutableStateListOf<Bitmap>() }
     val canUndo = undoStack.isNotEmpty()
 
-    // Load a mutable, full-resolution copy to edit.
     LaunchedEffect(att.data) {
         val bmp = withContext(Dispatchers.IO) {
             val bytes = Attachments.readBytes(context, att, maxBytes = 96L * 1024 * 1024) ?: return@withContext null
@@ -127,21 +91,15 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
             val bmp = working
             when {
                 bmp != null -> {
-                    // Current pen/mosaic stroke, in bitmap pixel coordinates, redrawn live as an
-                    // overlay so the user sees the line before it's committed on drag-end.
                     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
                     var livePath by remember { mutableStateOf<List<Offset>>(emptyList()) }
                     var cropRect by remember(version) { mutableStateOf<Rect?>(null) }
                     val image = remember(version) { bmp.asImageBitmap() }
 
-                    /** Snapshot the current pixels so the edit about to happen can be taken back. */
                     fun pushUndo(source: Bitmap) {
                         val copy = try {
                             source.copy(Bitmap.Config.ARGB_8888, true)
                         } catch (t: Throwable) {
-                            // Out of memory on a very large image: skip the snapshot rather than
-                            // crash. The edit still goes ahead — losing undo is bad, losing the
-                            // user's whole session to an OOM is worse.
                             null
                         }
                         if (copy != null) {
@@ -150,18 +108,15 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                         }
                     }
 
-                    /** Restore the most recent snapshot, discarding the edit made after it. */
                     fun undo() {
                         if (undoStack.isEmpty()) return
                         val previous = undoStack.removeAt(undoStack.size - 1)
                         working = previous
-                        // Any half-drawn stroke or crop box belongs to the state we just left.
                         livePath = emptyList()
                         cropRect = null
                         version++
                     }
 
-                    // Map a point from on-screen canvas space into bitmap pixel space.
                     fun toBitmap(p: Offset): Offset {
                         if (canvasSize.width == 0 || canvasSize.height == 0) return p
                         val sx = bmp.width.toFloat() / canvasSize.width
@@ -187,7 +142,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                                     contentDescription = att.name,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                                // Gesture + live-overlay surface, exactly covering the image.
                                 ComposeCanvas(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -207,8 +161,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                                                 onDragEnd = {
                                                     when (tool) {
                                                         EditTool.DOODLE -> {
-                                                            // Snapshot BEFORE the paint lands: this
-                                                            // stroke is what undo will remove.
                                                             if (livePath.size > 1) pushUndo(bmp)
                                                             drawDoodle(bmp, livePath.map { toBitmap(it) })
                                                             version++
@@ -218,7 +170,7 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                                                             drawMosaic(bmp, livePath.map { toBitmap(it) })
                                                             version++
                                                         }
-                                                        EditTool.CROP -> { /* applied via the Crop button */ }
+                                                        EditTool.CROP -> {  }
                                                     }
                                                     livePath = emptyList()
                                                 }
@@ -226,7 +178,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                                         }
                                         .onSizeChangedCompat { canvasSize = it }
                                 ) {
-                                    // Live preview of the in-progress stroke / crop box.
                                     if (livePath.size > 1 && tool != EditTool.CROP) {
                                         val color = if (tool == EditTool.DOODLE) Color(0xFFFF3B30) else Color.White.copy(alpha = 0.5f)
                                         val width = if (tool == EditTool.DOODLE) DOODLE_STROKE else MOSAIC_BLOCK.toFloat()
@@ -252,7 +203,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                             }
                         }
 
-                        // Tool selector + crop-apply.
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             horizontalArrangement = Arrangement.Center,
@@ -275,10 +225,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                                             if (r != null) {
                                                 val cropped = applyCrop(bmp, toBitmap(Offset(minOf(r.left, r.right), minOf(r.top, r.bottom))), toBitmap(Offset(maxOf(r.left, r.right), maxOf(r.top, r.bottom))))
                                                 if (cropped != null) {
-                                                    // A crop *replaces* the working bitmap rather
-                                                    // than painting into it, so the outgoing one can
-                                                    // go straight onto the undo stack — no copy, and
-                                                    // therefore no extra memory at all for this step.
                                                     undoStack.add(bmp)
                                                     trimUndoStack(undoStack)
                                                     working = cropped
@@ -293,7 +239,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                         }
                     }
 
-                    // Top bar: close + save.
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -305,9 +250,6 @@ fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Uni
                             modifier = Modifier.size(26.dp).clickable { onDismiss() }
                         )
                         Text(com.lucent.app.i18n.S.editImageTitle, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
-                        // Undo sits next to Save because that is where the eye already is after an
-                        // edit. Dimmed rather than hidden when there is nothing to undo, so the
-                        // control's existence is discoverable before it is needed.
                         Icon(
                             Icons.AutoMirrored.Filled.Undo,
                             contentDescription = if (canUndo) com.lucent.app.i18n.S.a11yUndoLastEdit else com.lucent.app.i18n.S.a11yNothingToUndo,
@@ -367,11 +309,9 @@ private fun ToolChip(label: String, icon: androidx.compose.ui.graphics.vector.Im
     }
 }
 
-// A tiny wrapper so the call site reads cleanly; onSizeChanged is a standard modifier.
 private fun Modifier.onSizeChangedCompat(block: (IntSize) -> Unit): Modifier =
     this.then(Modifier.onSizeChanged(block))
 
-/** Paint a freehand stroke onto [bmp] along [points] (bitmap-space), in a visible red. */
 private fun drawDoodle(bmp: Bitmap, points: List<Offset>) {
     if (points.size < 2) return
     val canvas = Canvas(bmp)
@@ -388,10 +328,6 @@ private fun drawDoodle(bmp: Bitmap, points: List<Offset>) {
     }
 }
 
-/**
- * Pixelate [bmp] in blocks along [points]: for every [MOSAIC_BLOCK]-sized cell the stroke passes
- * through, replace the cell with its own average colour, obscuring whatever detail was there.
- */
 private fun drawMosaic(bmp: Bitmap, points: List<Offset>) {
     if (points.isEmpty()) return
     val block = MOSAIC_BLOCK
@@ -401,7 +337,6 @@ private fun drawMosaic(bmp: Bitmap, points: List<Offset>) {
     for (p in points) {
         val cellX = (p.x.toInt() / block) * block
         val cellY = (p.y.toInt() / block) * block
-        // A 3x3 neighbourhood of cells around the point so a fast drag still covers a band.
         for (dx in -1..1) for (dy in -1..1) {
             val bx = cellX + dx * block
             val by = cellY + dy * block
@@ -436,7 +371,6 @@ private fun averageColor(bmp: Bitmap, x: Int, y: Int, w: Int, h: Int): Int {
     return AndroidColor.rgb((r / count).toInt(), (g / count).toInt(), (b / count).toInt())
 }
 
-/** Return a cropped copy of [bmp] between two bitmap-space corners, or null if the box is degenerate. */
 private fun applyCrop(bmp: Bitmap, topLeft: Offset, bottomRight: Offset): Bitmap? {
     val left = topLeft.x.toInt().coerceIn(0, bmp.width - 1)
     val top = topLeft.y.toInt().coerceIn(0, bmp.height - 1)
@@ -452,10 +386,6 @@ private fun applyCrop(bmp: Bitmap, topLeft: Offset, bottomRight: Offset): Bitmap
     }
 }
 
-/**
- * Re-encode [bmp] and write it back over [att]'s stored bytes. JPEG for a JPEG source (keeps it
- * small at high quality), PNG otherwise so any transparency and the doodle survive losslessly.
- */
 private fun saveEdited(context: android.content.Context, att: Attachment, bmp: Bitmap): Boolean {
     return try {
         val useJpeg = att.mime.equals("image/jpeg", true) || att.mime.equals("image/jpg", true)
@@ -466,7 +396,6 @@ private fun saveEdited(context: android.content.Context, att: Attachment, bmp: B
         if (AttachmentStore.looksLikeId(att.data)) {
             AttachmentStore.writeBytes(context, att.data, bytes)
         } else {
-            // Legacy in-row Base64 attachment: nothing stable to overwrite; treat as unsupported.
             false
         }
     } catch (t: Throwable) {
@@ -474,16 +403,6 @@ private fun saveEdited(context: android.content.Context, att: Attachment, bmp: B
     }
 }
 
-/**
- * Keep the undo history inside both budgets, dropping the *oldest* snapshots first.
- *
- * Two limits rather than one, because they guard different failure modes: [UNDO_MAX_STEPS] stops a
- * long doodling session accumulating history nobody will ever walk back, and [UNDO_MAX_BYTES] stops
- * a single large photo turning a dozen snapshots into half a gigabyte. One snapshot is always kept
- * even if it exceeds the byte budget on its own — it is already allocated, and dropping it would
- * leave the user with an undo button that does nothing on exactly the images where a mistake costs
- * the most.
- */
 private fun trimUndoStack(stack: MutableList<Bitmap>) {
     fun bytesOf(b: Bitmap): Long = b.width.toLong() * b.height.toLong() * 4L
     while (stack.size > UNDO_MAX_STEPS) {

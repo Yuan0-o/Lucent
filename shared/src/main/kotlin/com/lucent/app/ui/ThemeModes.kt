@@ -3,39 +3,7 @@ package com.lucent.app.ui
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 
-/**
- * Every appearance the app can wear, as one closed list.
- *
- * ### Why this exists (added task 1)
- *
- * The theme used to be three loose string literals — `"system"`, `"light"`, `"dark"` — compared with
- * `==` in `MainActivity`, in `SettingsScreen`, and nowhere else. Adding the four Monet tints to that
- * arrangement would have meant seven string comparisons in two files that must agree with each
- * other forever, and the first typo would be a theme that silently falls back to "system" with no
- * error anywhere. So the list of themes is now a type, and the two things a theme actually decides —
- * *is it a dark theme* and *what colour is the backdrop* — are answered by the theme itself.
- *
- * The stored value is still the plain [key] string, so every existing install keeps its choice and
- * nothing in [com.lucent.app.data.SettingsRepository] had to change: it stores a string, and
- * [fromKey] is lenient about anything it doesn't recognise.
- *
- * ### The Monet tints
- *
- * The four Monet options are *peers* of System/Light/Dark, not a sub-menu — they sit in the same
- * radio list and are chosen the same way. Each one is a light theme whose backdrop is a soft,
- * desaturated wash instead of the neutral off-white: the pale straw of a haystack at dawn, the green
- * of the water-garden, the blue-grey of morning on the Seine, the wisteria over the Giverny bridge.
- *
- * They are deliberately *quiet* — every one sits above 90% lightness. The backdrop is the surface the
- * drifting blobs and all the frosted glass are read against, so a saturated tint here would fight the
- * palette in front of it and drag the contrast of every piece of text down with it. A wash you notice
- * only when you look for it is the right amount for something the whole app sits on top of.
- */
 enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
-    // v2.7.2: the picker offers a hand-tuned subset of the tints (see [pickerEntries]) - 18 boards,
-    // nine light and nine dark - while every entry keeps its full behaviour, so a stored key from
-    // an older install (or an old backup) still resolves to exactly the appearance it always had.
-    // Entries with featured = false are simply no longer OFFERED; nothing else about them changes.
     SYSTEM("system"),
     LIGHT("light"),
     DARK("dark"),
@@ -43,32 +11,15 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
     MONET_GARDEN("monet_green"),
     MONET_MORNING("monet_blue"),
     MONET_WISTERIA("monet_purple"),
-    // Dark peers of the four Monet tints (added later): the same painterly families after dusk —
-    // deep, muted, *coloured* darks rather than the neutral near-black of [DARK]. Never true black.
     MONET_NIGHT("monet_night"),
     MONET_PINE("monet_pine"),
     MONET_PLUM("monet_plum"),
     MONET_EMBER("monet_ember"),
 
-    // ---- C-group task 15: four further appearances ----
-    //
-    // The existing eight tints cover yellow, green, blue and purple, each with a light and a dark
-    // member. Two hue families were missing entirely from BOTH halves — rose and teal — so the
-    // four added here are those two, again as a light/dark pair each. That keeps the set balanced
-    // (six light, six dark) rather than growing one side of it.
-    //
-    // "No overlap" is the binding constraint, and the near-misses are called out at each colour
-    // below rather than left for someone to discover on a phone screen in daylight.
     MONET_ROSE("monet_rose"),
     MONET_LAGOON("monet_lagoon"),
     MONET_INK("monet_ink"),
     MONET_GARNET("monet_garnet"),
-    // ---- R3 report: four further appearances (light/dark pair of orange, light/dark pair of
-    // orchid-mauve) ----
-    // Orange was the one warm hue family with no member in EITHER half; mauve sits between the
-    // existing violet (WISTERIA/PLUM) and pink (ROSE/GARNET) families at a hue neither of them
-    // owns. Adding one light + one dark per family keeps the set balanced at eight light and
-    // eight dark. "No overlap" is binding — see the notes at each colour below.
     MONET_PEACH("monet_peach"),
     MONET_CLAY("monet_clay"),
     MONET_ORCHID("monet_orchid"),
@@ -90,7 +41,6 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
     MONET_WALNUT("monet_walnut", featured = false),
     MONET_ABYSS("monet_abyss", featured = false),;
 
-    // Live i18n lookups (localization task); `label`/`detail` call sites are unchanged.
     val label: String
         get() = when (this) {
             SYSTEM -> com.lucent.app.i18n.S.themeSystem
@@ -169,30 +119,17 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
             MONET_ABYSS -> com.lucent.app.i18n.S.themeMonetAbyssDesc
         }
 
-    /**
-     * Whether this theme draws light-on-dark. Only [SYSTEM] consults the device; every other option
-     * is an explicit choice and ignores it, which is the entire point of choosing one.
-     */
     fun isDark(systemDark: Boolean): Boolean = when (this) {
         SYSTEM -> systemDark
         DARK -> true
-        // C-group task 15: MONET_INK and MONET_GARNET are dark tints and MUST be listed here.
-        //
-        // This branch is `else -> false`, so a new dark appearance that is not named would compile
-        // cleanly and then render dark text on a dark backdrop — a silent, unreadable failure with
-        // no compiler help at all. Any future dark tint goes in this list at the same time as it
-        // goes in the enum; the two are not independent.
         MONET_NIGHT, MONET_PINE, MONET_PLUM, MONET_EMBER,
         MONET_INK, MONET_GARNET,
-        // R3 report: the two new dark tints MUST be named here or they would compile cleanly and
-        // render dark text on a dark backdrop — see the warning comment above.
         MONET_CLAY, MONET_ORCHID_NIGHT,
         MONET_UMBER, MONET_DEEP_MOSS, MONET_BLUEBERRY, MONET_BRICK,
         MONET_OBSIDIAN, MONET_FIR, MONET_WALNUT, MONET_ABYSS -> true
         else -> false
     }
 
-    /** The flat colour painted behind the drifting blobs. */
     fun backdrop(systemDark: Boolean): Color = when (this) {
         SYSTEM -> if (systemDark) DARK_BACKDROP else LIGHT_BACKDROP
         DARK -> DARK_BACKDROP
@@ -205,28 +142,13 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
         MONET_PINE -> Color(0xFF16241C)
         MONET_PLUM -> Color(0xFF241A2E)
         MONET_EMBER -> Color(0xFF2A1E19)
-        // Light rose. No light pink existed; the nearest was MONET_WISTERIA (0xFFEEE9F7), which
-        // is violet — this sits ~40 degrees round the wheel from it.
         MONET_ROSE -> Color(0xFFF9EEF0)
-        // Light teal. MONET_GARDEN is green and MONET_MORNING is blue; teal is the gap between
-        // them and reads as neither.
         MONET_LAGOON -> Color(0xFFE4F1EF)
-        // Dark teal, against MONET_PINE's dark green and MONET_NIGHT's navy.
         MONET_INK -> Color(0xFF0F262A)
-        // Dark crimson. MONET_EMBER (0xFF2A1E19) is a warm BROWN — hue ~18; this is ~345, i.e. on
-        // the blue side of red rather than the yellow side. Side by side they are plainly two
-        // different colours, which is the test that matters.
         MONET_GARNET -> Color(0xFF2E161C)
-        // R3 additions: light peach — no light ORANGE existed (EMBER's 0xFF2A1E19 is a dark
-        // brown at hue ~18; this pale apricot is the light half of the same family).
         MONET_PEACH -> Color(0xFFF9EFE1)
-        // Dark orange, against MONET_EMBER's dark brown: same warm corner, more orange in it.
         MONET_CLAY -> Color(0xFF371B0C)
-        // Light mauve — WISTERIA (0xFFEEE9F7) is violet, ROSE (0xFFF9EEF0) is pink; this sits
-        // between them.
         MONET_ORCHID -> Color(0xFFF8EBF4)
-        // Dark mauve — PLUM (0xFF241A2E) is indigo-violet, GARNET (0xFF2E161C) is crimson; this
-        // is the blue-ish side of magenta, distinct from both.
         MONET_ORCHID_NIGHT -> Color(0xFF2C1024)
         MONET_HONEY -> Color(0xFFFCF6DC)
         MONET_MINT -> Color(0xFFE4F6ED)
@@ -246,11 +168,6 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
         MONET_ABYSS -> Color(0xFF032A26)
     }
 
-    /**
-     * The two-colour preview shown beside this option in Settings. For the tints it's the backdrop
-     * itself deepened slightly, so the swatch shows the actual colour the app will take on rather
-     * than a decorative stand-in.
-     */
     fun swatch(systemDark: Boolean): List<Color> = when (this) {
         SYSTEM -> listOf(LIGHT_BACKDROP, DARK_BACKDROP)
         LIGHT -> listOf(LIGHT_BACKDROP, Color(0xFFDCDBE4))
@@ -293,29 +210,12 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
         val LIGHT_BACKDROP = Color(0xFFF4F3F8)
         val DARK_BACKDROP = Color(0xFF0E0E14)
 
-        /** Lenient: an unknown or missing key reads as [SYSTEM] rather than throwing. */
         fun fromKey(key: String?): LucentThemeMode =
             entries.firstOrNull { it.key == key } ?: SYSTEM
 
-        /**
-         * The tints the appearance picker offers (v2.7.2): 18 of the 32, nine light and nine dark,
-         * chosen so every hue family keeps a light and a dark member and near-duplicates are gone.
-         * System/Light/Dark are offered separately above this list.
-         */
         val pickerEntries: List<LucentThemeMode> = entries.filter { it.featured }
     }
 }
 
-/**
- * Material You blob palette: the three drifting colours, taken from the active scheme.
- *
- * Material You dynamic colour (task 2) hands the app a whole [ColorScheme] derived from the system
- * wallpaper; the drifting background needs exactly the three colours [LucentPalette] is built
- * around, so the scheme's [ColorScheme.primary]/[ColorScheme.secondary]/[ColorScheme.tertiary] stand
- * in for them. [FluidGlassBackground] cycles palette[i % size] for its six blobs and rebuilds its
- * brushes only when the list changes, so passing the stable list this returns from composition is
- * all the wiring it needs. Desktop uses the identical function (it just never runs in dynamic mode —
- * there is no wallpaper API on Windows).
- */
 fun dynamicBlobPalette(scheme: ColorScheme): List<Color> =
     listOf(scheme.primary, scheme.secondary, scheme.tertiary)
