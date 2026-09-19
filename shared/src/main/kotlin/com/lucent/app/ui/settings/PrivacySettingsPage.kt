@@ -106,8 +106,6 @@ internal fun PrivacySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.blackoutTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.blackoutSub, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -133,8 +131,6 @@ internal fun PrivacySettingsPage(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(S.blackoutDesc, color = onGradientMuted, fontSize = 12.sp)
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -142,12 +138,6 @@ internal fun PrivacySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.systemIntegrationTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.systemIntegrationDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -196,12 +186,6 @@ internal fun PrivacySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.startupLoggingTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.startupLoggingDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -254,19 +238,9 @@ internal fun PrivacySettingsPage(
     //
     // On by default, and switched off without a confirmation dialog: turning it off costs
     // nothing that exists yet — it only stops FUTURE snapshots — so a prompt would be
-    // ceremony. What the page does owe the user is an explanation of what the feature is and
-    // what its limit does, because "flash record" means nothing on its own and silent
-    // deletion of an old version would otherwise look like data loss.
+    // ceremony.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.historyTitle, color = onGradient)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(S.historyDesc, color = onGradientMuted, fontSize = 13.sp)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            S.historyCapNote(NoteHistory.MAX_VERSIONS_PER_NOTE),
-            color = onGradientMuted,
-            fontSize = 12.sp
-        )
 
         Spacer(modifier = Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -326,8 +300,6 @@ internal fun PrivacySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.hiddenSettingTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.hiddenSettingDesc, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(

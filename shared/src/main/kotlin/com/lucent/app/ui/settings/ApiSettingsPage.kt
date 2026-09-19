@@ -140,8 +140,6 @@ internal fun ApiSettingsPage(
             Text(S.apiSelectionTitle, color = onGradient, modifier = Modifier.weight(1f))
             Text("${profiles.size}/${ApiProfiles.MAX}", color = onGradientMuted, fontSize = 13.sp)
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(S.apiSelectionDesc(ApiProfiles.MAX), color = onGradientMuted, fontSize = 13.sp)
         Spacer(modifier = Modifier.height(8.dp))
         if (profiles.isEmpty()) {
             // Deleting the last API is allowed now (task 6), so this state is reachable
@@ -319,11 +317,6 @@ internal fun ApiSettingsPage(
                 }
             }
         }
-        if (models.isEmpty() && selectedModel.isNotBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(S.currentModelHint(selectedModel), color = onGradientMuted, fontSize = 12.sp)
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
         // Saving writes the edits into the selected profile and activates it, so the
         // assistant uses it right away.

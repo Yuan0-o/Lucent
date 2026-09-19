@@ -155,12 +155,16 @@ internal fun BackHeader(title: String, onBack: () -> Unit) {
     Spacer(modifier = Modifier.height(8.dp))
 }
 
-/** One selectable memory-tier row: a radio button, the tier's name, and its cost explanation (issue 9). */
+/**
+ * One selectable tier row: a radio button, the tier's name, and — when the caller supplies one — a
+ * short [detail] line under it. [detail] is nullable because most tiers are self-explanatory by name
+ * alone; a row without one renders a single line rather than an empty second line.
+ */
 @Composable
 internal fun MemoryTierRow(
     selected: Boolean,
     title: String,
-    detail: String,
+    detail: String? = null,
     onGradient: Color,
     onGradientMuted: Color,
     onClick: () -> Unit,
@@ -178,7 +182,7 @@ internal fun MemoryTierRow(
         RadioButton(selected = selected && !dimmed, onClick = onClick, modifier = Modifier.alpha(fade))
         Column(modifier = Modifier.padding(start = 4.dp, top = 4.dp).alpha(fade)) {
             Text(title, color = onGradient)
-            Text(detail, color = onGradientMuted, fontSize = 12.sp)
+            if (!detail.isNullOrBlank()) Text(detail, color = onGradientMuted, fontSize = 12.sp)
         }
     }
 }

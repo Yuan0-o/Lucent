@@ -98,7 +98,10 @@ val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNul
 // unread, for a future pass that indexes every searched column and is proven safe for CJK first.
 // 2.7.9: one full-screen diffuse gradient renderer for Android and Windows, with bounded
 // off-main-thread frames, adaptive quality, and lifecycle/system-motion-aware animation.
-val MARKETING_VERSION = "2.7.9"
+// 2.8.0: settings pages lose their explanatory paragraphs (dialogs keep theirs), the home-section
+// lookup is derived from the same bucket list the lists render so no section can go missing, and a
+// failed background write is logged and reported instead of ending the process.
+val MARKETING_VERSION = "2.8.0"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

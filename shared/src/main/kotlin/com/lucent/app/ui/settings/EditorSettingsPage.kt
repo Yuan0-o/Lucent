@@ -60,12 +60,6 @@ internal fun EditorSettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.markdownFormattingTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.markdownFormattingDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -82,12 +76,6 @@ internal fun EditorSettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.richTextTitle, color = onGradient)
-                Text(S.richTextSub, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
-                // Both consequences are stated up front, per the brief's "tell the user the
-                // upside and the downside": what it costs them (Markdown goes off) and what
-                // survives an export (highlights in PDF/DOCX, not in Markdown/plain text).
-                Text(S.richTextExclusiveHint, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
-                Text(S.richTextExportNote, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -113,12 +101,6 @@ internal fun EditorSettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.linksTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.linksDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -144,8 +126,6 @@ internal fun EditorSettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.openLinksTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.openLinksDesc, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(

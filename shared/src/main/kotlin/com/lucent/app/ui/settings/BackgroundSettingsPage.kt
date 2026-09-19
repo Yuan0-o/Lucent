@@ -73,8 +73,6 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.backgroundAnimationTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.backgroundAnimationDesc, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -148,12 +146,6 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
                         modifier = Modifier.padding(start = 10.dp)
                     )
                 }
-                Text(
-                    S.paletteRandomHint,
-                    color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 28.dp)
-                )
             }
 
             // Palettes grouped by style family (v2.4.0: eight sections), each with a small

@@ -26,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
@@ -126,15 +125,9 @@ internal fun LocalModelSettingsPage(
         // greying would: a control that isn't there cannot be operated by accident, and
         // the page stops presenting four questions when only the first one is live.
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            // The experimental badge belongs to the FEATURE, so it moved here from the
-            // models card (task 1) — it is the first thing read by someone deciding
-            // whether to turn this on, rather than a note attached to the importer.
-            Text(S.lmExperimentalNote, color = onGradient, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(S.lmUseLocalToggle, color = onGradient, fontSize = 16.sp)
-                    Text(S.lmUseLocalToggleDesc, color = onGradientMuted, fontSize = 13.sp)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 // Switchable ON with no model imported, which the old build forbade.
@@ -173,10 +166,6 @@ internal fun LocalModelSettingsPage(
                     Text(S.lmModelsTitle, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
                     Text("${lmModels.size}/${LocalModelStore.MAX_MODELS}", color = onGradientMuted, fontSize = 13.sp)
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.lmPageIntro, color = onGradientMuted, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.lmSizeHint, color = onGradientMuted, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (lmModels.isEmpty()) {
@@ -237,13 +226,10 @@ internal fun LocalModelSettingsPage(
                 // ---- PHASE 4: multimodal projector (mmproj) for the active model ----
                 // Two files make a vision-capable local model: the model .gguf above and a
                 // projector .gguf from the SAME model family (a Qwen projector cannot serve
-                // a Gemma model). The description string carries that rule to the user; the
-                // status line says which state the active slot is in.
+                // a Gemma model). The status line says which state the active slot is in.
                 if (lmActiveId != null) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(S.lmMmprojTitle, color = onGradient, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.lmMmprojDesc, color = onGradientMuted, fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     val lmMmprojFile = remember(lmRefresh, lmActiveId) { LocalModelStore.activeMmprojFile(context) }
                     Text(
@@ -267,22 +253,11 @@ internal fun LocalModelSettingsPage(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // The reset rule is stated ONCE, above both switches it governs (task 1),
-            // rather than repeated inside each card. It is a property of the pair.
-            Text(
-                S.lmSubTogglesResetNote,
-                color = onGradientMuted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
             // ---- Opt-in: let the on-device model act on notes/tasks ----
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(S.lmToolsToggle, color = onGradient, fontSize = 16.sp)
-                        Text(S.lmToolsToggleDesc, color = onGradientMuted, fontSize = 13.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(
@@ -298,14 +273,12 @@ internal fun LocalModelSettingsPage(
             Spacer(modifier = Modifier.height(12.dp))
 
             // ---- Opt-in: run the model on the GPU instead of the CPU ----
-            // No "(experimental)" on this one any more (task 7): the page already opens
-            // with an experimental badge on the feature, and stamping the word onto a
-            // sub-option as well starts to read as noise rather than as a warning.
+            // No "(experimental)" on this sub-option (task 7): repeating the word on every
+            // knob starts to read as noise rather than as a warning.
             Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(S.lmGpuToggle, color = onGradient, fontSize = 16.sp)
-                        Text(S.lmGpuToggleDesc, color = onGradientMuted, fontSize = 13.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(
@@ -329,7 +302,6 @@ internal fun LocalModelSettingsPage(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(S.lmBackgroundToggle, color = onGradient, fontSize = 16.sp)
-                        Text(S.lmBackgroundToggleDesc, color = onGradientMuted, fontSize = 13.sp)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Switch(

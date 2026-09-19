@@ -55,24 +55,8 @@ internal fun MemorySettingsPage(
 
     BackHeader(S.settingsMemoryTitle) { onRoute(SettingsRoute.Assistant) }
 
-    // Memory tier. Each option explains both what the assistant will remember and the
-    // rough cost trade-off, since more context means more tokens per reply.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.memoryCostTitle, color = onGradient, fontSize = 16.sp)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            S.memoryCostDesc,
-            color = onGradientMuted,
-            fontSize = 13.sp
-        )
-        // Local mode changes what this page is allowed to offer (task 8): an on-device
-        // model works from a short prompt, so the high tier is withdrawn while it is on.
-        // Saying that here, before the rows, means the greyed row below is explained
-        // before it is touched rather than only after.
-        if (localModelEnabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(S.memoryLocalTierNote, color = onGradientMuted, fontSize = 12.sp)
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -81,7 +65,6 @@ internal fun MemorySettingsPage(
         MemoryTierRow(
             selected = current == MemoryTier.LOW,
             title = S.memoryLowTitle,
-            detail = S.memoryLowDesc,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
             onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.LOW.key) } }
@@ -89,7 +72,6 @@ internal fun MemorySettingsPage(
         MemoryTierRow(
             selected = current == MemoryTier.MEDIUM,
             title = S.memoryMediumTitle,
-            detail = S.memoryMediumDesc,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
             onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) } }
@@ -102,7 +84,6 @@ internal fun MemorySettingsPage(
         MemoryTierRow(
             selected = current == MemoryTier.HIGH,
             title = S.memoryHighTitle,
-            detail = S.memoryHighDesc,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
             dimmed = localModelEnabled,
@@ -124,7 +105,6 @@ internal fun MemorySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
-                Text(S.smallModelModeSub, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -147,8 +127,6 @@ internal fun MemorySettingsPage(
     Spacer(modifier = Modifier.height(12.dp))
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.embeddingProviderTitle, color = onGradient, fontSize = 16.sp)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(S.embeddingProviderDesc, color = onGradientMuted, fontSize = 13.sp)
         Spacer(modifier = Modifier.height(12.dp))
 
         MemoryTierRow(

@@ -154,8 +154,6 @@ internal fun DataSettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.autoBackupTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.autoBackupDesc, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -256,8 +254,6 @@ internal fun DataSettingsPage(
             Spacer(modifier = Modifier.height(4.dp))
             Text(S.autoBackupFailed(autoState.lastError), color = Color(0xFFFF8A80), fontSize = 12.sp)
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(S.autoBackupOnlyWhileOpen, color = onGradientMuted, fontSize = 12.sp)
 
         Spacer(modifier = Modifier.height(12.dp))
         GlassButton(
@@ -281,12 +277,6 @@ internal fun DataSettingsPage(
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.backupRestoreTitle, color = onGradient)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            S.backupRestoreDesc,
-            color = onGradientMuted,
-            fontSize = 13.sp
-        )
         Spacer(modifier = Modifier.height(12.dp))
         Row {
             GlassButton(text = S.exportBackup, onClick = onRequestExportBackup)
@@ -304,12 +294,6 @@ internal fun DataSettingsPage(
 
         Spacer(modifier = Modifier.height(20.dp))
         Text(S.exportNotesTasksTitle, color = onGradient)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            S.exportNotesTasksDesc,
-            color = onGradientMuted,
-            fontSize = 13.sp
-        )
         Spacer(modifier = Modifier.height(12.dp))
         // Two full-width buttons, tasks first (task 9). They line up cleanly instead of the
         // old mismatched row, and each opens the pick-items-and-format screen.

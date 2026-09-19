@@ -84,9 +84,6 @@ internal fun LanguageSettingsPage(
     // is snapshot state every S-reading text in the app — including this list —
     // recomposes in the new language on the very next frame. No restart, no flash.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Text(S.langPageHint, color = onGradientMuted, fontSize = 13.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -100,11 +97,6 @@ internal fun LanguageSettingsPage(
             )
             Column(modifier = Modifier.padding(start = 4.dp)) {
                 Text(S.langSystem, color = onGradient)
-                Text(
-                    S.langSystemDetail(AppLanguage.systemDefault().label),
-                    color = onGradientMuted,
-                    fontSize = 12.sp
-                )
             }
         }
 

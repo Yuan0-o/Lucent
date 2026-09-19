@@ -92,6 +92,9 @@ fun main() {
     com.lucent.app.i18n.L.apply(startup.appLanguage)
     AppLockController.markProcessStarted(startup.appLockEnabled)
     com.lucent.app.data.StartupLog.setEnabled(startup.startupLoggingEnabled)
+    // Let a background write record its own failure in the same event log the Export logs button
+    // carries, even when no window is attached to it. Desktop parity with MainActivity.
+    com.lucent.app.AppScope.appContext = context
 
     // PHASE 3 (C-4): one Lucent, ever. If an instance is already running, this launch asks it to
     // surface its window and exits before any startup chore, scheduler, or model touches disk —

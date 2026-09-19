@@ -536,8 +536,9 @@ fun TasksScreen(active: Boolean = true) {
         val appContext = context.applicationContext
 
         // App-lifetime scope so saving-then-navigating (e.g. the unsaved-changes dialog) can't
-        // cancel the write before it commits.
-        AppScope.io.launch {
+        // cancel the write before it commits. A failed save is reported and logged rather than
+        // killing the process (see backgroundWrite).
+        com.lucent.app.data.backgroundWrite(context, "task save") {
             val saved: Task = if (original != null) {
                 val updated = original.copy(
                     title = title,
@@ -838,14 +839,13 @@ fun TasksScreen(active: Boolean = true) {
             orderWithinSections = sortOption == TaskSort.CUSTOM
         )
     }
-    // Which section a given id sits in, or null when the page is not sectioned at all.
+    // Which section a given id sits in, or null when the page is not sectioned at all. Derived from
+    // nonEmpty() — the same list the page renders from — so a bucket can never go missing here the
+    // way THREE_DAYS once did in the hand-written version. See NotesScreen for the full note.
     val sectionOfId = remember(sections) {
         val m = HashMap<Long, HomeSection>()
-        sections?.let { s ->
-            s.pinned.forEach { m[it.id] = HomeSection.PINNED }
-            s.recent.forEach { m[it.id] = HomeSection.RECENT }
-            s.today.forEach { m[it.id] = HomeSection.TODAY }
-            s.older.forEach { m[it.id] = HomeSection.OLDER }
+        sections?.nonEmpty()?.forEach { (section, list) ->
+            list.forEach { m[it.id] = section }
         }
         m
     }
@@ -988,8 +988,13 @@ fun TasksScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     val target = task
+                    val pinnedNow = !target.pinned
                     taskToTogglePin = null
-                    AppScope.io.launch { db.taskDao().update(target.copy(pinned = !target.pinned)) }
+                    // A failed write is reported and logged instead of ending the process; the pin
+                    // simply does not change, and the log names the reason.
+                    com.lucent.app.data.backgroundWrite(context, "task pin toggle") {
+                        db.taskDao().update(target.copy(pinned = pinnedNow))
+                    }
                 }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
             dismissButton = { TextButton(onClick = { taskToTogglePin = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }

@@ -69,11 +69,6 @@ internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRou
         ) {
             Column(modifier = Modifier.weight(1f).alpha(if (webSearchLocked) 0.38f else 1f)) {
                 Text(S.webSearchTitle, color = onGradient, fontSize = 16.sp)
-                Text(
-                    S.webSearchDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(

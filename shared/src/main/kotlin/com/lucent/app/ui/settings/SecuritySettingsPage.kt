@@ -111,12 +111,6 @@ internal fun SecuritySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.appLockTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    S.appLockDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -150,8 +144,6 @@ internal fun SecuritySettingsPage(
         if (appLockOn) {
             Spacer(modifier = Modifier.height(24.dp))
             Text(S.attemptLimitsTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(S.attemptLimitsDesc, color = onGradientMuted, fontSize = 13.sp)
 
             Spacer(modifier = Modifier.height(12.dp))
             StepperRow(
@@ -167,18 +159,12 @@ internal fun SecuritySettingsPage(
                 range = PasswordAttempts.ROUND_LIMIT_RANGE,
                 onChange = { scope.launch { repo.setPwLaterRoundLimit(it) } }
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            // The escalation ladder itself is fixed, not configurable. A user-editable
-            // backoff curve is a backoff curve that whoever reaches this screen can flatten.
-            Text(S.attemptLadderNote, color = onGradientMuted, fontSize = 12.sp)
 
             // ---- Self-destruct: OFF by default, typed confirmation to turn on ----
             Spacer(modifier = Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(S.selfDestructTitle, color = onGradient)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(S.selfDestructDesc, color = onGradientMuted, fontSize = 13.sp)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Switch(
@@ -211,8 +197,6 @@ internal fun SecuritySettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.crashShieldTitle, color = onGradient)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(S.crashShieldDesc, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(

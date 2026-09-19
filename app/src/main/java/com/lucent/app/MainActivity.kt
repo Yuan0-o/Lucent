@@ -233,6 +233,9 @@ class MainActivity : FragmentActivity() {
         AppLockController.markProcessStarted(lockEnabled)
 
         StartupLog.setEnabled(startup.startupLoggingEnabled)
+        // Let a background write record its own failure in the same event log the Export logs
+        // button carries, even when no screen is attached to it.
+        AppScope.appContext = applicationContext
 
         // The share-sheet component is kept in step with its setting, but off the main thread: it is
         // a PackageManager write, it has nothing to do with the first frame, and it was costing

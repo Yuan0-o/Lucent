@@ -188,7 +188,9 @@ compose.desktop {
                         // 2.7.7 - see Android's MARKETING_VERSION note; bumped so WiX upgrades 2.7.6
             // installs in place.
             // 2.7.9: shared full-screen diffuse gradients and visibility/system-motion gating.
-            packageVersion = "2.7.9"
+            // 2.8.0: quieter settings pages, a complete home-section lookup, and background writes
+            // that report and log their failures instead of ending the process.
+            packageVersion = "2.8.0"
 
             // The jlink runtime image jpackage builds only bundles the modules Compose declares, which
             // does NOT include java.sql — so the SQLite JDBC driver fails at runtime with

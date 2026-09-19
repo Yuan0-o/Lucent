@@ -23,7 +23,6 @@ import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.GlassButton
 import com.lucent.app.ui.LocalOnGradient
-import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
@@ -50,7 +49,6 @@ fun PersonalizationSettingsPage(
     onBack: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
-    val onGradientMuted = LocalOnGradientMuted.current
     val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = true)
     val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(initial = true)
 
@@ -84,11 +82,6 @@ fun PersonalizationSettingsPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.typingHapticsTitle, color = onGradient, fontSize = 16.sp)
-                Text(
-                    S.typingHapticsDesc,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -102,17 +95,12 @@ fun PersonalizationSettingsPage(
 
     // Whether the assistant must ask before EVERY tool call — reads as well as writes,
     // cloud and on-device alike. Default ON. Turning it off removes the confirmation
-    // modal entirely; the subtitle says so in plain words, because the switch trades
-    // oversight for convenience and that trade should never be made by accident.
+    // modal entirely, because the switch trades oversight for convenience — and that
+    // trade should never be made by accident.
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.assistantConfirmToolsTitle, color = onGradient, fontSize = 16.sp)
-                Text(
-                    S.assistantConfirmToolsSub,
-                    color = onGradientMuted,
-                    fontSize = 13.sp
-                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(

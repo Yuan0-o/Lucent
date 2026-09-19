@@ -775,8 +775,9 @@ fun NotesScreen(active: Boolean = true) {
 
         // Run on the app-lifetime scope, not the composable's scope: saving from the
         // unsaved-changes dialog switches screens in the same action, which would otherwise
-        // dispose this screen and cancel the write before it commits.
-        AppScope.io.launch {
+        // dispose this screen and cancel the write before it commits. A failed save is reported
+        // and logged rather than killing the process (see backgroundWrite).
+        com.lucent.app.data.backgroundWrite(context, "note save") {
             if (id != null) {
                 // Read the existing row and copy onto it so fields the composer doesn't touch —
                 // notably the archive state (archived/archivedAt) and trashedAt — are preserved.
@@ -1281,13 +1282,15 @@ fun NotesScreen(active: Boolean = true) {
         )
     }
     // Which section a given id sits in, or null when the page is not sectioned at all.
+    //
+    // Built from nonEmpty() — the same list the grid renders from — rather than from hand-written
+    // per-bucket lines. The hand-written version had silently lost THREE_DAYS, so every card in
+    // that section came back null, and the drag rules below could not tell it apart from "the page
+    // is not sectioned". Deriving both from one source makes that drift impossible.
     val sectionOfId = remember(sections) {
         val m = HashMap<Long, HomeSection>()
-        sections?.let { s ->
-            s.pinned.forEach { m[it.id] = HomeSection.PINNED }
-            s.recent.forEach { m[it.id] = HomeSection.RECENT }
-            s.today.forEach { m[it.id] = HomeSection.TODAY }
-            s.older.forEach { m[it.id] = HomeSection.OLDER }
+        sections?.nonEmpty()?.forEach { (section, list) ->
+            list.forEach { m[it.id] = section }
         }
         m
     }
@@ -1463,8 +1466,13 @@ fun NotesScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     val target = note
+                    val pinnedNow = !target.pinned
                     noteToTogglePin = null
-                    AppScope.io.launch { db.noteDao().update(target.copy(pinned = !target.pinned)) }
+                    // A failed write is reported and logged instead of ending the process; the pin
+                    // simply does not change, and the log names the reason.
+                    com.lucent.app.data.backgroundWrite(context, "note pin toggle") {
+                        db.noteDao().update(target.copy(pinned = pinnedNow))
+                    }
                 }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
             dismissButton = { TextButton(onClick = { noteToTogglePin = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }
