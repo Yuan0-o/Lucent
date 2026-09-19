@@ -322,20 +322,29 @@ jobs:
       - name: Report APK size and upload R8 mapping
         run: |
           set -eu
-          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          # The SIGNED release APK, named exactly: `find … | head -n 1` used to pick whichever .apk
+          # the filesystem happened to list first, so an unsigned sibling would have been measured
+          # (and, in the verify step below, verified) instead of the artifact that ships. The
+          # `! -name '*unsigned*'` filter is what keeps that from ever being a coin toss.
+          APK="$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)"
           if [ -n "$APK" ]; then
             SIZE_BYTES="$(stat -c%s "$APK")"
             SIZE_MB="$(python3 -c "print(f'{$SIZE_BYTES/1048576:.2f}')")"
-            echo "Release APK size: ${SIZE_MB} MiB (${SIZE_BYTES} bytes)"
-            echo "::notice::APK size ${SIZE_MB} MiB — compare against previous builds to catch bloat."
+            echo "Release APK size: ${SIZE_MB} MiB (${SIZE_BYTES} bytes) — $APK"
+            # Say which number this is. The APK is stored with its DEX entries uncompressed, so the
+            # GitHub artifact (a zip of this file) downloads at roughly a third of this size; both
+            # figures are correct and reading one as the other is what made the pipeline's own
+            # notice look like evidence that R8 had not run.
+            echo "::notice::APK on disk: ${SIZE_MB} MiB (${SIZE_BYTES} bytes). The artifact download is smaller — it is a zip of this file."
           else
-            echo "::warning::no APK found yet to measure (expected before assembleRelease)."
+            echo "::warning::no signed APK found yet to measure (expected before assembleRelease)."
           fi
-          # mapping.txt lives under build/outputs/mapping/<variant>/ when minify is on.
+          # mapping.txt lives under build/outputs/mapping/<variant>/ when minify is on. Its size is
+          # the proof that R8 actually ran, which is worth stating on every build.
           if [ -f app/build/outputs/mapping/release/mapping.txt ]; then
-            echo "mapping.txt found ($(stat -c%s app/build/outputs/mapping/release/mapping.txt) bytes)"
+            echo "mapping.txt found ($(stat -c%s app/build/outputs/mapping/release/mapping.txt) bytes) — R8 minification is active."
           else
-            echo "::warning::no mapping.txt at app/build/outputs/mapping/release/mapping.txt"
+            echo "::warning::no mapping.txt at app/build/outputs/mapping/release/mapping.txt — R8 minification may be off."
           fi
 
       - name: Upload R8 mapping
@@ -352,9 +361,11 @@ jobs:
         # certificate so you can confirm it is YOUR key — not the SDK's throwaway debug key.
         run: |
           set -eu
-          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          # Same exact-name rule as the measure step above: verify the APK that ships, never an
+          # unsigned sibling that merely happens to be listed first.
+          APK="$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)"
           if [ -z "$APK" ]; then
-            echo "::error::No APK found in app/build/outputs/apk/release."
+            echo "::error::No signed release APK found in app/build/outputs/apk/release."
             exit 1
           fi
           echo "Release APK: $APK ($(stat -c%s "$APK") bytes)"
