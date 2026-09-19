@@ -170,11 +170,21 @@ object LocalToolCallParser {
                         esc -> esc = false
                         c == '\\' -> esc = true
                         c == '"' -> inStr = false
+                        // Any other character inside a string literal is just string content —
+                        // consume it and move on. Explicit rather than an implicit silent
+                        // fallthrough, since this scanner only cares about escapes and the
+                        // closing quote and every other character is deliberately a no-op.
+                        else -> {}
                     }
                 } else when (c) {
                     '"' -> inStr = true
                     '{' -> depth++
                     '}' -> { depth--; if (depth == 0) { out.add(s.substring(i, j + 1)); break } }
+                    // Everything outside those three characters — letters, digits, whitespace,
+                    // '[', ']', ',', ':' — is irrelevant to brace-depth tracking and deliberately
+                    // ignored; this scanner only needs to find where `{...}` objects start and end,
+                    // not parse the JSON itself. Explicit rather than an implicit silent fallthrough.
+                    else -> {}
                 }
                 j++
             }
