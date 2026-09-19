@@ -41,6 +41,22 @@ class DiffuseBackgroundTest {
     }
 
     @Test
+    fun coloursKeepChangingEvenWhenTheWavesAreFrozen() {
+        // Reduced motion freezes the travelling waves but must NOT freeze the palette: a gradient
+        // whose colours never change is wallpaper, which is exactly what this background is not.
+        val field = DiffuseGradientField(24)
+        val atStart = field.render(0.0, 5.0, warmPalette, nightBackdrop, dark = true).copyOf()
+        val later = field.render(0.0, 40.0, warmPalette, nightBackdrop, dark = true).copyOf()
+        assertFalse(
+            atStart.contentEquals(later),
+            "with the waves frozen, 35 seconds of palette drift must still repaint the field"
+        )
+        // And the frozen frame must be stable when neither clock moves.
+        val repeat = field.render(0.0, 40.0, warmPalette, nightBackdrop, dark = true)
+        assertTrue(repeat.contentEquals(later))
+    }
+
+    @Test
     fun fieldIsAContinuumNotFlatBlocks() {
         // A diffuse gradient must produce many distinct shades, not a handful of painted patches.
         val pixels = DiffuseGradientField(32).render(3.0, warmPalette, nightBackdrop, dark = true)
