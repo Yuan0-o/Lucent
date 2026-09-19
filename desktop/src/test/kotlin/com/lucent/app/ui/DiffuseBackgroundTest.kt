@@ -57,7 +57,7 @@ class DiffuseBackgroundTest {
 
         // A palette of fully transparent colours leaves the backdrop untouched.
         val clear = field.render(2.0, intArrayOf(0x00000000), nightBackdrop, dark = true)
-        assertTrue(clear.all { it == nightBackdrop or (it ushr 24) == 255 })
+        assertTrue(clear.all { pixel -> pixel == nightBackdrop || ((pixel ushr 24) and 255) == 255 })
     }
 
     @Test
