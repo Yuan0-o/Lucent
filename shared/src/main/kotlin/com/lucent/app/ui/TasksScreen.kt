@@ -232,6 +232,7 @@ fun TasksScreen(active: Boolean = true) {
     }
     LaunchedEffect(newNotes) { bodyUndo.record(newNotes) }
     val reorderState = rememberReorderDragState()
+    val reorderSlots = rememberListSlots(listState)
     var selectionMode by remember { mutableStateOf(false) }
     var selectedTaskIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -1492,6 +1493,7 @@ fun TasksScreen(active: Boolean = true) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(modifier = Modifier.fillMaxSize()) {
+                ReorderDropSlot(state = reorderState, slots = reorderSlots, modifier = Modifier.fillMaxSize())
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
@@ -1512,7 +1514,7 @@ fun TasksScreen(active: Boolean = true) {
                         val renderCard: @Composable (Task, Modifier) -> Unit = { task, itemModifier ->
                             TaskCard(
                                 task = task,
-                                reorderVisualModifier = itemModifier.reorderVisuals(task.id, reorderState),
+                                reorderVisualModifier = itemModifier.reorderVisuals(task.id, reorderState, reorderSlots),
                                 selectionMode = selectionMode,
                                 selected = task.id in selectedTaskIds,
                                 onOpen = { openDetail(task) },

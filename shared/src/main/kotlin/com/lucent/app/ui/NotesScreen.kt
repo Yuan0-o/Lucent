@@ -253,6 +253,7 @@ fun NotesScreen(active: Boolean = true) {
     }
     LaunchedEffect(newBody) { bodyUndo.record(newBody) }
     val reorderState = rememberReorderDragState()
+    val reorderSlots = rememberGridSlots(gridState)
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNoteIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -1991,6 +1992,7 @@ fun NotesScreen(active: Boolean = true) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(modifier = Modifier.fillMaxSize()) {
+                ReorderDropSlot(state = reorderState, slots = reorderSlots, modifier = Modifier.fillMaxSize())
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(notesGridColumns),
@@ -2011,7 +2013,7 @@ fun NotesScreen(active: Boolean = true) {
                         val renderCard: @Composable (Note, Modifier) -> Unit = { note, itemModifier ->
                             NoteCard(
                                 note = note,
-                                reorderVisualModifier = itemModifier.reorderVisuals(note.id, reorderState),
+                                reorderVisualModifier = itemModifier.reorderVisuals(note.id, reorderState, reorderSlots),
                                 selectionMode = selectionMode,
                                 selected = note.id in selectedNoteIds,
                                 onOpen = { openDetail(note) },
