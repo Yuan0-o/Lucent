@@ -113,10 +113,11 @@ private operator fun IntOffset.minus(other: IntOffset) = IntOffset(x - other.x, 
 
 private fun LazyListState.visibleSlots(): ReorderSlots {
     val cards = layoutInfo.visibleItemsInfo.filter { it.key is Long }
+    val width = layoutInfo.viewportSize.width
     return ReorderSlots(
         keys = cards.map { it.key as Long },
         offsets = cards.map { IntOffset(0, it.offset) },
-        sizes = cards.map { IntSize(it.size.width, it.size.height) }
+        sizes = cards.map { IntSize(width, it.size) }
     )
 }
 
@@ -321,6 +322,7 @@ private const val JELLY_STRETCH = 0.022f
 private const val JELLY_BREATHE = 0.016f
 private val JELLY_BOB = 3.5.dp
 private val SLOT_CORNER = 20.dp
+private const val SLOT_BREATHE = 0.05f
 private const val SLOT_FILL = 0.05f
 private const val SLOT_FILL_SWING = 0.05f
 private const val SLOT_RIM = 0.32f
