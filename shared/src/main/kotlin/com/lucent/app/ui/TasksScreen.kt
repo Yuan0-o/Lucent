@@ -100,6 +100,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.BackClaim
 import com.lucent.app.AppNavigation
 import com.lucent.app.AppScope
 import com.lucent.app.Screen
