@@ -154,7 +154,7 @@ class ProviderAdapterTest {
         val acc = StreamAccumulator()
         val json = org.json.JSONObject("""{"choices":[{"delta":{"content":"Hel"}}]}""")
         val collected = StringBuilder()
-        OpenAiAdapter.parseStreamEvent(json, acc) { collected.append(it) }
+        OpenAiAdapter.parseStreamEvent(json, acc, { collected.append(it) })
         assertEquals("Hel", acc.fullText.toString())
         assertEquals("Hel", collected.toString())
     }
@@ -164,7 +164,7 @@ class ProviderAdapterTest {
         val acc = StreamAccumulator()
         val json = org.json.JSONObject("""{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}""")
         val collected = StringBuilder()
-        AnthropicAdapter.parseStreamEvent(json, acc) { collected.append(it) }
+        AnthropicAdapter.parseStreamEvent(json, acc, { collected.append(it) })
         assertEquals("lo", acc.fullText.toString())
     }
 
@@ -174,7 +174,7 @@ class ProviderAdapterTest {
         val json = org.json.JSONObject(
             """{"candidates":[{"content":{"parts":[{"text":"ok"},{"functionCall":{"name":"create_task","args":{"title":"x"}}}]}}]}"""
         )
-        GoogleAdapter.parseStreamEvent(json, acc) {}
+        GoogleAdapter.parseStreamEvent(json, acc, {})
         assertEquals("ok", acc.fullText.toString())
         val calls = acc.toolCalls(useAnthropicAcc = false)
         assertEquals(1, calls.size)
