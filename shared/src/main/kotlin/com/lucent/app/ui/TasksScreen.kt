@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -146,7 +145,7 @@ fun TasksScreen(active: Boolean = true) {
     val sortOption = TaskSort.fromKey(sortKey)
 
     val taskUsage by remember { com.lucent.app.data.UsageTracker.scores(context, com.lucent.app.data.UsageTracker.Kind.TASK) }
-        .collectAsState(initial = emptyMap())
+        .collectAsState(initial = null)
 
     var composing by remember { mutableStateOf(false) }
     var showingHistory by remember { mutableStateOf(false) }
@@ -194,7 +193,7 @@ fun TasksScreen(active: Boolean = true) {
     var taskToDelete by remember { mutableStateOf<Task?>(null) }
     var taskToTogglePin by remember { mutableStateOf<Task?>(null) }
 
-    val listState = rememberLazyListState()
+    val listState = rememberRestoredListState(TASKS_LIST_SCROLL_KEY)
 
     LaunchedEffect(Unit) {
         settingsRepo.noteHistoryEnabled.collect { com.lucent.app.data.NoteHistory.enabled = it }
@@ -214,8 +213,8 @@ fun TasksScreen(active: Boolean = true) {
     var composerMoreOpen by rememberSaveable(composing) { mutableStateOf(false) }
     val bodyUndo = remember(composing) { TextUndoStack(newNotes) }
     val repo = remember { com.lucent.app.data.SettingsRepository(context) }
-    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
-    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = false)
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.richTextEnabled)
+    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.markdownEnabled)
     var bodySpans by remember { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
     var bodySelStart by remember(composing) { mutableStateOf(0) }
     var bodySelEnd by remember(composing) { mutableStateOf(0) }
@@ -235,6 +234,7 @@ fun TasksScreen(active: Boolean = true) {
     LaunchedEffect(newNotes) { bodyUndo.record(newNotes) }
     val reorderState = rememberReorderDragState()
     val reorderSlots = rememberListSlots(listState)
+    ReorderSettleEffect(reorderState, reorderSlots)
     var selectionMode by remember { mutableStateOf(false) }
     var selectedTaskIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -614,7 +614,7 @@ fun TasksScreen(active: Boolean = true) {
             maxRecent = 6,
             id = { it.id },
             timestamp = { it.createdAt },
-            activityScore = { com.lucent.app.data.UsageTracker.score(taskUsage[it.id] ?: 0.0, it.createdAt, sectionNow) },
+            activityScore = { com.lucent.app.data.UsageTracker.score(taskUsage?.get(it.id) ?: 0.0, it.createdAt, sectionNow) },
             isPinned = { it.pinned },
             orderWithinSections = sortOption == TaskSort.CUSTOM
         )
@@ -636,15 +636,15 @@ fun TasksScreen(active: Boolean = true) {
 
     fun dropSelection(beforeId: Long?, afterId: Long?) {
         val moving = selectedTaskIds.toList().mapNotNull { id -> sortedActive.firstOrNull { it.id == id } }
-        if (moving.isEmpty()) return
+        if (moving.isEmpty()) { reorderState.cancel(); return }
         val home = sectionOfId[moving.first().id]
         val sameSection = { id: Long? -> sections == null || id == null || sectionOfId[id] == home }
         val usableAfter = if (sameSection(afterId)) afterId else null
         val usableBefore = if (sameSection(beforeId)) beforeId else null
-        if (usableAfter == null && usableBefore == null) return
-        if (moving.any { sectionOfId[it.id] != home }) return
+        if (usableAfter == null && usableBefore == null) { reorderState.cancel(); return }
+        if (moving.any { sectionOfId[it.id] != home }) { reorderState.cancel(); return }
         val reordered = reorderedAround(sortedActive, moving, usableBefore, usableAfter) { it.id }
-        if (reordered === sortedActive) return
+        if (reordered === sortedActive) { reorderState.cancel(); return }
         AppScope.io.launch {
             reordered.forEachIndexed { index, t ->
                 if (t.manualOrder != index) db.taskDao().setManualOrder(t.id, index)
@@ -1524,7 +1524,6 @@ fun TasksScreen(active: Boolean = true) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                ReorderDropSlot(state = reorderState, slots = reorderSlots, modifier = Modifier.fillMaxSize())
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
@@ -1771,25 +1770,17 @@ private fun copyTextForTask(task: Task): String {
 
 @Composable
 private fun DueDateRow(dueAt: Long?, minMillis: Long, onChange: (Long?) -> Unit) {
-    val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
     val openPicker = rememberDateTimePicker(minMillis = minMillis, initialMillis = dueAt ?: minMillis) { chosen ->
         onChange(chosen)
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable { openPicker() },
-        verticalAlignment = Alignment.CenterVertically
+    ComposerRow(
+        icon = Icons.Default.CalendarToday,
+        label = if (dueAt != null) com.lucent.app.i18n.S.dueWhen(formatTimestamp(dueAt)) else com.lucent.app.i18n.S.setADueDate,
+        onClick = { openPicker() }
     ) {
-        Icon(Icons.Default.CalendarToday, contentDescription = null, tint = onGradientMuted)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = if (dueAt != null) com.lucent.app.i18n.S.dueWhen(formatTimestamp(dueAt)) else com.lucent.app.i18n.S.setADueDate,
-            color = onGradient,
-            fontSize = 14.sp,
-            modifier = Modifier.weight(1f)
-        )
         if (dueAt != null) {
             IconButton(onClick = { onChange(null) }) {
                 Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.a11yClearDueDate, tint = onGradientMuted)
@@ -1799,3 +1790,4 @@ private fun DueDateRow(dueAt: Long?, minMillis: Long, onChange: (Long?) -> Unit)
 }
 
 private const val DETAILS_JUMP_THRESHOLD = 400
+private const val TASKS_LIST_SCROLL_KEY = "tasks_list"

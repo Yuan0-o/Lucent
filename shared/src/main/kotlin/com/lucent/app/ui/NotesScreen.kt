@@ -44,7 +44,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -159,12 +158,12 @@ fun NotesScreen(active: Boolean = true) {
         .collectAsState(initial = com.lucent.app.data.SettingsCache.notesSort ?: "recent")
     val sortOption = NoteSort.fromKey(sortKey)
 
-    val markdownEnabled by settingsRepo.markdownEnabled.collectAsState(initial = false)
-    val linksEnabled by settingsRepo.linksEnabled.collectAsState(initial = true)
+    val markdownEnabled by settingsRepo.markdownEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.markdownEnabled)
+    val linksEnabled by settingsRepo.linksEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.linksEnabled)
     val linksActive = linksEnabled
 
     val noteUsage by remember { com.lucent.app.data.UsageTracker.scores(context, com.lucent.app.data.UsageTracker.Kind.NOTE) }
-        .collectAsState(initial = emptyMap())
+        .collectAsState(initial = null)
 
     var composing by remember { mutableStateOf(false) }
     var viewingId by remember { mutableStateOf<Long?>(null) }
@@ -206,7 +205,7 @@ fun NotesScreen(active: Boolean = true) {
     LaunchedEffect(Unit) {
         settingsRepo.taskHistoryEnabled.collect { com.lucent.app.data.TaskHistory.enabled = it }
     }
-    val gridState = rememberLazyGridState()
+    val gridState = rememberRestoredGridState(NOTES_GRID_SCROLL_KEY)
 
     val composerScroll = rememberScrollState()
     var lastScrollValue by remember { mutableStateOf(0) }
@@ -226,15 +225,15 @@ fun NotesScreen(active: Boolean = true) {
     var editingTemplateId by remember { mutableStateOf<String?>(null) }
     val bodyUndo = remember(composing) { TextUndoStack(newBody) }
     val repo = remember { com.lucent.app.data.SettingsRepository(context) }
-    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
-    val customTemplatesJson by repo.customTemplatesJson.collectAsState(initial = "[]")
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.richTextEnabled)
+    val customTemplatesJson by repo.customTemplatesJson.collectAsState(initial = null)
     val customTemplates = remember(customTemplatesJson) {
         com.lucent.app.data.CustomTemplates.parse(customTemplatesJson)
     }
-    val templateDraftJson by repo.templateDraftJson.collectAsState(initial = "")
-    val hiddenTemplatesJson by repo.hiddenTemplatesJson.collectAsState(initial = "")
+    val templateDraftJson by repo.templateDraftJson.collectAsState(initial = null)
+    val hiddenTemplatesJson by repo.hiddenTemplatesJson.collectAsState(initial = null)
     val hiddenBuiltins = remember(hiddenTemplatesJson) {
-        hiddenTemplatesJson.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        hiddenTemplatesJson.orEmpty().split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
     }
     var bodySpans by remember { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
     var bodySelStart by remember(composing) { mutableStateOf(0) }
@@ -255,6 +254,7 @@ fun NotesScreen(active: Boolean = true) {
     LaunchedEffect(newBody) { bodyUndo.record(newBody) }
     val reorderState = rememberReorderDragState()
     val reorderSlots = rememberGridSlots(gridState)
+    ReorderSettleEffect(reorderState, reorderSlots)
     var selectionMode by remember { mutableStateOf(false) }
     var selectedNoteIds by remember { mutableStateOf(setOf<Long>()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -932,7 +932,7 @@ fun NotesScreen(active: Boolean = true) {
             maxRecent = 6,
             id = { it.id },
             timestamp = { it.updatedAt },
-            activityScore = { com.lucent.app.data.UsageTracker.score(noteUsage[it.id] ?: 0.0, it.updatedAt, sectionNow) },
+            activityScore = { com.lucent.app.data.UsageTracker.score(noteUsage?.get(it.id) ?: 0.0, it.updatedAt, sectionNow) },
             isPinned = { it.pinned },
             orderWithinSections = sortOption == NoteSort.CUSTOM
         )
@@ -954,15 +954,15 @@ fun NotesScreen(active: Boolean = true) {
 
     fun dropSelection(beforeId: Long?, afterId: Long?) {
         val moving = selectedNoteIds.toList().mapNotNull { id -> sortedNotes.firstOrNull { it.id == id } }
-        if (moving.isEmpty()) return
+        if (moving.isEmpty()) { reorderState.cancel(); return }
         val home = sectionOfId[moving.first().id]
         val sameSection = { id: Long? -> sections == null || id == null || sectionOfId[id] == home }
         val usableAfter = if (sameSection(afterId)) afterId else null
         val usableBefore = if (sameSection(beforeId)) beforeId else null
-        if (usableAfter == null && usableBefore == null) return
-        if (moving.any { sectionOfId[it.id] != home }) return
+        if (usableAfter == null && usableBefore == null) { reorderState.cancel(); return }
+        if (moving.any { sectionOfId[it.id] != home }) { reorderState.cancel(); return }
         val reordered = reorderedAround(sortedNotes, moving, usableBefore, usableAfter) { it.id }
-        if (reordered === sortedNotes) return
+        if (reordered === sortedNotes) { reorderState.cancel(); return }
         AppScope.io.launch {
             reordered.forEachIndexed { index, n ->
                 if (n.manualOrder != index) db.noteDao().setManualOrder(n.id, index)
@@ -2017,7 +2017,6 @@ fun NotesScreen(active: Boolean = true) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                ReorderDropSlot(state = reorderState, slots = reorderSlots, modifier = Modifier.fillMaxSize())
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(notesGridColumns),
@@ -2300,3 +2299,4 @@ private fun templateIcon(template: NoteTemplate) = when (template.iconName) {
 }
 
 private const val BODY_JUMP_THRESHOLD = 400
+private const val NOTES_GRID_SCROLL_KEY = "notes_grid"

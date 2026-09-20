@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -36,11 +37,11 @@ internal fun EditorSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = false)
-    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
-    val linksEnabled by repo.linksEnabled.collectAsState(initial = false)
-    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = false)
-    val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = false)
+    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = SettingsCache.markdownEnabled)
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = SettingsCache.richTextEnabled)
+    val linksEnabled by repo.linksEnabled.collectAsState(initial = SettingsCache.linksEnabled)
+    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
+    val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = SettingsCache.openLinksExternally)
 
     BackHeader(S.settingsEditorTitle) { onRoute(SettingsRoute.Root) }
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

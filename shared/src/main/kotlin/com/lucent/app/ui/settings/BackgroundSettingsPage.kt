@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -46,8 +47,10 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val backgroundAnimationEnabled by repo.backgroundAnimationEnabled.collectAsState(initial = true)
-    val savedPalette by repo.palette.collectAsState(initial = "SUNSET")
+    val backgroundAnimationEnabled by repo.backgroundAnimationEnabled.collectAsState(
+        initial = SettingsCache.backgroundAnimationEnabled
+    )
+    val savedPalette by repo.palette.collectAsState(initial = SettingsCache.palette)
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
     BackHeader(S.settingsBackgroundTitle) { onRoute(SettingsRoute.Appearance) }

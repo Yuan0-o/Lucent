@@ -21,10 +21,10 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.CrashShield
 import com.lucent.app.data.EncryptionStatus
 import com.lucent.app.data.PasswordAttempts
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
-import com.lucent.app.ui.GlassButton
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.OverdueColor
@@ -41,24 +41,22 @@ internal fun SecuritySettingsPage(
     onRequestDisableAppLock: () -> Unit,
     onRequestEnableSelfDestruct: () -> Unit,
     onRequestCrashShieldInfo: () -> Unit,
-    encryptionCheckResult: String?,
-    onEncryptionCheckResultChange: (String?) -> Unit,
     onRoute: (SettingsRoute) -> Unit
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val appLockOn by repo.appLockEnabled.collectAsState(initial = false)
-    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = false)
+    val appLockOn by repo.appLockEnabled.collectAsState(initial = SettingsCache.appLockEnabled)
+    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = SettingsCache.pwSelfDestructEnabled)
     val selfDestructThreshold by repo.pwSelfDestructThreshold.collectAsState(
-        initial = PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
+        initial = SettingsCache.pwSelfDestructThreshold
     )
-    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = false)
+    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = SettingsCache.crashShieldEnabled)
     val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
-        initial = PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
+        initial = SettingsCache.pwFirstRoundLimit
     )
     val pwLaterRound by repo.pwLaterRoundLimit.collectAsState(
-        initial = PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT
+        initial = SettingsCache.pwLaterRoundLimit
     )
 
     BackHeader(S.settingsSecurityTitle) { onRoute(SettingsRoute.Root) }
@@ -174,26 +172,5 @@ internal fun SecuritySettingsPage(
             color = if (EncryptionStatus.degraded || EncryptionStatus.lockedOut) OverdueColor else onGradientMuted,
             fontSize = 13.sp
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            EncryptionStatus.summaryLine(),
-            color = onGradientMuted,
-            fontSize = 11.sp
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            GlassButton(text = S.encryptionRunCheck, onClick = {
-                val failure = EncryptionStatus.probeSecrets()
-                onEncryptionCheckResultChange(failure ?: "")
-            })
-        }
-        encryptionCheckResult?.let { result ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                if (result.isEmpty()) S.encryptionCheckPassed else S.encryptionCheckFailed(result),
-                color = if (result.isEmpty()) onGradientMuted else OverdueColor,
-                fontSize = 12.sp
-            )
-        }
     }
 }

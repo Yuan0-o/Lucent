@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
 import com.lucent.app.data.FontStore
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.AppLanguage
 import com.lucent.app.i18n.S
@@ -54,8 +55,8 @@ internal fun LanguageSettingsPage(
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val savedLanguage by repo.appLanguage.collectAsState(initial = "system")
-    val savedFont by repo.font.collectAsState(initial = "system")
+    val savedLanguage by repo.appLanguage.collectAsState(initial = SettingsCache.appLanguage)
+    val savedFont by repo.font.collectAsState(initial = SettingsCache.font)
 
     BackHeader(S.settingsLanguageTitle) { onRoute(SettingsRoute.Root) }
 

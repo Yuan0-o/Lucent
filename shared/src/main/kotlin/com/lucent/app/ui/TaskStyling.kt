@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +52,10 @@ import java.time.format.DateTimeFormatter
 val PriorityHighColor = Color(0xFFE57373)
 val PriorityMediumColor = Color(0xFFFFB74D)
 val PriorityLowColor = Color(0xFF64B5F6)
+
+private val ComposerRowIconSize = 20.dp
+private val ComposerRowIconGap = 8.dp
+private val ComposerRowLineHeight = 20.sp
 
 val OverdueColor = PriorityHighColor
 
@@ -183,6 +188,38 @@ fun RepeatRuleRow(selected: RepeatRule, onSelect: (RepeatRule) -> Unit, modifier
                 )
             }
         }
+    }
+}
+
+@Composable
+fun ComposerRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit = {}
+) {
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    Row(
+        modifier = modifier.fillMaxWidth().padding(top = 4.dp).clickable { onClick() },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = onGradientMuted,
+            modifier = Modifier.size(ComposerRowIconSize)
+        )
+        Spacer(modifier = Modifier.width(ComposerRowIconGap))
+        Text(
+            label,
+            color = onGradient,
+            fontSize = 14.sp,
+            lineHeight = ComposerRowLineHeight,
+            modifier = Modifier.weight(1f)
+        )
+        trailing()
     }
 }
 

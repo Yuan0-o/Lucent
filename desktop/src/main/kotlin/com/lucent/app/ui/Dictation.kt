@@ -42,8 +42,8 @@ fun DictationButton(onText: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = DesktopContext
     val repo = remember { SettingsRepository(context) }
     val scope = rememberCoroutineScope()
-    val baseUrl by repo.baseUrl.collectAsState(initial = "")
-    val apiKey by repo.apiKey.collectAsState(initial = "")
+    val baseUrl by repo.baseUrl.collectAsState(initial = com.lucent.app.data.SettingsCache.baseUrl)
+    val apiKey by repo.apiKey.collectAsState(initial = com.lucent.app.data.SettingsCache.apiKey)
 
     var recording by remember { mutableStateOf(false) }
     var transcribing by remember { mutableStateOf(false) }

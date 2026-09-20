@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.AppLock
 import com.lucent.app.data.BlackoutMode
 import com.lucent.app.data.NoteHistory
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.ShareIntegration
 import com.lucent.app.data.StartupLog
@@ -62,13 +63,15 @@ internal fun PrivacySettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = false)
-    val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(initial = false)
-    val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = false)
-    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = false)
-    val noteHistoryOn by repo.noteHistoryEnabled.collectAsState(initial = true)
-    val taskHistoryOn by repo.taskHistoryEnabled.collectAsState(initial = true)
-    val appLockCreds by repo.appLockCredentials.collectAsState(initial = "")
+    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
+    val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(
+        initial = SettingsCache.systemIntegrationEnabled
+    )
+    val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = SettingsCache.startupLoggingEnabled)
+    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = SettingsCache.crashShieldEnabled)
+    val noteHistoryOn by repo.noteHistoryEnabled.collectAsState(initial = SettingsCache.noteHistoryEnabled)
+    val taskHistoryOn by repo.taskHistoryEnabled.collectAsState(initial = SettingsCache.taskHistoryEnabled)
+    val appLockCredsOrNull by repo.appLockCredentials.collectAsState(initial = null)
 
     BackHeader(S.settingsPrivacyTitle) { onRoute(SettingsRoute.Root) }
 
@@ -221,7 +224,9 @@ internal fun PrivacySettingsPage(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = HiddenArea.visible,
+                enabled = appLockCredsOrNull != null,
                 onCheckedChange = { turnOn ->
+                    val appLockCreds = appLockCredsOrNull ?: return@Switch
                     when {
                         !turnOn -> HiddenArea.close()
                         appLockCreds.isBlank() -> HiddenArea.open()

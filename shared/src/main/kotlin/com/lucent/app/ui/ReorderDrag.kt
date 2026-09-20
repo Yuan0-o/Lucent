@@ -1,34 +1,35 @@
 package com.lucent.app.ui
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -36,6 +37,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 
 class ReorderDragState internal constructor() {
@@ -49,22 +54,50 @@ class ReorderDragState internal constructor() {
     var gapBeforeId: Long? by mutableStateOf(null)
     var gapAfterId: Long? by mutableStateOf(null)
 
+    var settling: Boolean by mutableStateOf(false)
+        private set
+
+    var settleOrder: List<Long>? by mutableStateOf(null)
+        private set
+
+    internal var dragToken: Int by mutableStateOf(0)
+        private set
+
     internal fun begin(id: Long) {
+        dragToken += 1
         dragging = true
+        settling = false
+        settleOrder = null
         draggingId = id
         dragOffset = Offset.Zero
         gapBeforeId = null
         gapAfterId = null
     }
 
-    internal fun finish(): Pair<Long?, Long?> {
+    internal fun finish(order: List<Long>?): Pair<Long?, Long?> {
         val landed = gapBeforeId to gapAfterId
         dragging = false
+        settling = order != null
+        settleOrder = order
+        return landed
+    }
+
+    internal fun cancel() {
+        dragging = false
+        settling = true
+        settleOrder = null
+        gapBeforeId = null
+        gapAfterId = null
+    }
+
+    internal fun landed() {
+        dragging = false
+        settling = false
+        settleOrder = null
         draggingId = null
         dragOffset = Offset.Zero
         gapBeforeId = null
         gapAfterId = null
-        return landed
     }
 }
 
@@ -80,10 +113,22 @@ class ReorderSlots internal constructor(
     fun boundsAt(index: Int): Pair<IntOffset, IntSize>? =
         if (index in keys.indices) offsets[index] to sizes[index] else null
 
-    fun slotFor(gapBeforeId: Long?, gapAfterId: Long?): Pair<IntOffset, IntSize>? {
-        boundsAt(indexOfKey(gapAfterId))?.let { return it }
-        val (offset, size) = boundsAt(indexOfKey(gapBeforeId)) ?: return null
-        return IntOffset(offset.x, offset.y + size.height) to size
+    fun offsetOf(key: Long?): IntOffset? = offsets.getOrNull(indexOfKey(key))
+
+    fun sizeOf(key: Long?): IntSize? = sizes.getOrNull(indexOfKey(key))
+
+    fun visibleKeys(): List<Long> = keys
+
+    fun slotFor(dragging: Long?, gapBeforeId: Long?, gapAfterId: Long?): Pair<IntOffset, IntSize>? =
+        boundsAt(landingIndex(dragging, gapBeforeId, gapAfterId))
+
+    fun targetFor(key: Long, dragging: Long?, gapBeforeId: Long?, gapAfterId: Long?): IntOffset? {
+        val me = indexOfKey(key)
+        if (me < 0) return null
+        if (dragging == null) return offsets[me]
+        if (key == dragging) return slotFor(dragging, gapBeforeId, gapAfterId)?.first ?: offsets[me]
+        val reflow = reflowFor(key, dragging, gapBeforeId, gapAfterId)
+        return IntOffset(offsets[me].x + reflow.x, offsets[me].y + reflow.y)
     }
 
     fun reflowFor(key: Long, dragging: Long?, gapBeforeId: Long?, gapAfterId: Long?): IntOffset {
@@ -102,6 +147,18 @@ class ReorderSlots internal constructor(
         }
         val destination = boundsAt(neighbour)?.first ?: return IntOffset.Zero
         return destination - offsets[me]
+    }
+
+    private fun landingIndex(dragging: Long?, gapBeforeId: Long?, gapAfterId: Long?): Int {
+        if (dragging == null) return -1
+        val after = indexOfKey(gapAfterId)
+        val before = indexOfKey(gapBeforeId)
+        if (after < 0 && before < 0) return -1
+        val target = if (after >= 0) after else before + 1
+        val from = indexOfKey(dragging)
+        if (from < 0 || target == from) return -1
+        val landing = if (from < target) target - 1 else target
+        return if (landing in keys.indices) landing else -1
     }
 
     companion object {
@@ -131,12 +188,70 @@ private fun LazyGridState.visibleSlots(): ReorderSlots {
 }
 
 @Composable
-fun rememberListSlots(state: LazyListState): () -> ReorderSlots =
-    remember(state) { { state.visibleSlots() } }
+fun rememberListSlots(state: LazyListState): () -> ReorderSlots {
+    val cached = remember(state) { derivedStateOf { state.visibleSlots() } }
+    return remember(cached) { { cached.value } }
+}
 
 @Composable
-fun rememberGridSlots(state: LazyGridState): () -> ReorderSlots =
-    remember(state) { { state.visibleSlots() } }
+fun rememberGridSlots(state: LazyGridState): () -> ReorderSlots {
+    val cached = remember(state) { derivedStateOf { state.visibleSlots() } }
+    return remember(cached) { { cached.value } }
+}
+
+private object ListScrollMemory {
+    private val entries = HashMap<String, IntArray>()
+
+    fun read(key: String): IntArray? = entries[key]
+
+    fun write(key: String, index: Int, offset: Int) {
+        val slot = entries[key]
+        if (slot == null) {
+            entries[key] = intArrayOf(index, offset)
+        } else {
+            slot[0] = index
+            slot[1] = offset
+        }
+    }
+}
+
+@Composable
+fun rememberRestoredListState(key: String): LazyListState {
+    val restored = remember(key) { ListScrollMemory.read(key) }
+    val state = rememberLazyListState(
+        initialFirstVisibleItemIndex = restored?.get(0) ?: 0,
+        initialFirstVisibleItemScrollOffset = restored?.get(1) ?: 0
+    )
+    LaunchedEffect(state, key) {
+        snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                if (state.layoutInfo.totalItemsCount > 1) ListScrollMemory.write(key, index, offset)
+            }
+    }
+    return state
+}
+
+@Composable
+fun rememberRestoredGridState(key: String): LazyGridState {
+    val restored = remember(key) { ListScrollMemory.read(key) }
+    val state = rememberLazyGridState(
+        initialFirstVisibleItemIndex = restored?.get(0) ?: 0,
+        initialFirstVisibleItemScrollOffset = restored?.get(1) ?: 0
+    )
+    LaunchedEffect(state, key) {
+        snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                if (state.layoutInfo.totalItemsCount > 1) ListScrollMemory.write(key, index, offset)
+            }
+    }
+    return state
+}
+
+private fun jellyPhase(raw: Float, seed: Float): Float {
+    val shifted = (raw + seed) % 1f
+    val up = if (shifted < 0f) shifted + 1f else shifted
+    return if (up <= 0.5f) up * 2f else (1f - up) * 2f
+}
 
 @Composable
 private fun reorderJelly(active: Boolean): State<Float>? {
@@ -178,8 +293,15 @@ fun Modifier.reorderableItem(
                     state.begin(id)
                     press()
                 },
-                onDragEnd = { val (b, a) = state.finish(); drop(b, a) },
-                onDragCancel = { state.finish() },
+                onDragEnd = {
+                    val slots = listState.visibleSlots()
+                    val from = slots.offsetOf(id)
+                    val landing = slots.targetFor(id, id, state.gapBeforeId, state.gapAfterId)
+                    val moved = landing != null && landing != from
+                    val (b, a) = state.finish(if (moved) slots.visibleKeys() else null)
+                    drop(b, a)
+                },
+                onDragCancel = { state.cancel() },
                 onDrag = { change, amount ->
                     change.consume()
                     travelled += amount
@@ -215,8 +337,15 @@ fun Modifier.reorderableGridItem(
                     state.begin(id)
                     press()
                 },
-                onDragEnd = { val (b, a) = state.finish(); drop(b, a) },
-                onDragCancel = { state.finish() },
+                onDragEnd = {
+                    val slots = gridState.visibleSlots()
+                    val from = slots.offsetOf(id)
+                    val landing = slots.targetFor(id, id, state.gapBeforeId, state.gapAfterId)
+                    val moved = landing != null && landing != from
+                    val (b, a) = state.finish(if (moved) slots.visibleKeys() else null)
+                    drop(b, a)
+                },
+                onDragCancel = { state.cancel() },
                 onDrag = { change, amount ->
                     change.consume()
                     travelled += amount
@@ -235,68 +364,94 @@ fun Modifier.reorderVisuals(
     slots: () -> ReorderSlots = { ReorderSlots.EMPTY }
 ): Modifier = composed {
     val lifted = state.draggingId == id
+    val active = state.dragging || state.settling
+    val motion = LocalBackgroundEnvironment.current.motionEnabled
+    val token = state.dragToken
     val jelly = reorderJelly(state.dragging)
+    val wobble by animateFloatAsState(
+        targetValue = if (state.dragging) 1f else 0f,
+        animationSpec = tween(durationMillis = JELLY_RAMP_MS),
+        label = "reorderWobble"
+    )
+    val lift by animateFloatAsState(
+        targetValue = if (lifted) 1f else 0f,
+        animationSpec = if (motion) JELLY_SPRING else JELLY_STILL,
+        label = "reorderLift"
+    )
+    val follow by animateFloatAsState(
+        targetValue = if (state.dragging) JELLY_LEAD else 0f,
+        animationSpec = tween(durationMillis = JELLY_LEAD_MS),
+        label = "reorderFollow"
+    )
+    val target = if (active) slots().targetFor(id, state.draggingId, state.gapBeforeId, state.gapAfterId) else null
+    val positioned = target != null
+    val targetX = target?.x?.toFloat() ?: 0f
+    val targetY = target?.y?.toFloat() ?: 0f
+    val travelX = remember(token) { Animatable(targetX) }
+    val travelY = remember(token) { Animatable(targetY) }
+    val anchorX = remember(token) { targetX }
+    val anchorY = remember(token) { targetY }
+    val seed = (id % JELLY_SEEDS).toInt() * JELLY_SEED_STEP
+    val travelSpec = if (motion) JELLY_SPRING else JELLY_STILL
     val density = LocalDensity.current
     val bob = with(density) { JELLY_BOB.toPx() }
+    LaunchedEffect(token, targetX, targetY, positioned) {
+        if (positioned) {
+            launch { travelX.animateTo(targetX, travelSpec) }
+            launch { travelY.animateTo(targetY, travelSpec) }
+        }
+    }
     this
-        .zIndex(if (lifted) 2f else if (state.dragging) 1f else 0f)
+        .zIndex(if (lifted) 2f else if (active) 1f else 0f)
         .graphicsLayer {
             val phase = jelly?.value ?: 0f
-            if (state.draggingId == id) {
-                val stretch = 1f + JELLY_STRETCH * phase
-                translationX = state.dragOffset.x
-                translationY = state.dragOffset.y
-                scaleX = LIFT_SCALE * stretch
-                scaleY = LIFT_SCALE / stretch
-                alpha = LIFT_ALPHA
-                shadowElevation = LIFT_ELEVATION
-            } else if (state.dragging) {
-                val reflow = slots().reflowFor(id, state.draggingId, state.gapBeforeId, state.gapAfterId)
-                if (reflow != IntOffset.Zero) {
-                    val direction = if (reflow.y < 0) -1f else 1f
-                    translationX = reflow.x.toFloat()
-                    translationY = reflow.y.toFloat() + bob * phase * direction
-                    val breathe = JELLY_BREATHE * phase
-                    scaleX = 1f + breathe * 0.5f
-                    scaleY = 1f - breathe
+            if (positioned) {
+                val here = slots().offsetOf(id)
+                if (here != null) {
+                    var dx = travelX.value - here.x
+                    var dy = travelY.value - here.y
+                    if (lifted) {
+                        val size = slots().sizeOf(id)
+                        val leadX = (size?.width ?: 0) * JELLY_LEAD_CAP
+                        val leadY = (size?.height ?: 0) * JELLY_LEAD_CAP
+                        dx += ((state.dragOffset.x - (travelX.value - anchorX)) * follow).coerceIn(-leadX, leadX)
+                        dy += ((state.dragOffset.y - (travelY.value - anchorY)) * follow).coerceIn(-leadY, leadY)
+                    } else {
+                        dy += bob * jellyPhase(phase, seed) * wobble * JELLY_WOBBLE_GAIN
+                    }
+                    translationX = dx
+                    translationY = dy
                 }
+            }
+            val liftScale = 1f + (LIFT_SCALE - 1f) * lift
+            if (lifted || lift > JELLY_LIFT_MIN) {
+                val stretch = 1f + JELLY_STRETCH * phase
+                scaleX = liftScale * stretch
+                scaleY = liftScale / stretch
+                alpha = 1f - (1f - LIFT_ALPHA) * lift
+                shadowElevation = LIFT_ELEVATION * lift
+            } else {
+                val breathe = JELLY_BREATHE * phase * wobble * JELLY_WOBBLE_GAIN
+                scaleX = 1f + breathe * 0.5f
+                scaleY = 1f - breathe
             }
         }
 }
 
 @Composable
-fun ReorderDropSlot(state: ReorderDragState, slots: () -> ReorderSlots, modifier: Modifier = Modifier) {
-    if (!state.dragging) return
-    val jelly = reorderJelly(true)
-    val ink = LocalOnGradient.current
-    val density = LocalDensity.current
-    val corner = with(density) { SLOT_CORNER.toPx() }
-    val stroke = with(density) { 1.5.dp.toPx() }
-    Canvas(modifier = modifier) {
-        val bounds = slots().slotFor(state.gapBeforeId, state.gapAfterId) ?: return@Canvas
-        val phase = jelly?.value ?: 0f
-        val shrink = SLOT_BREATHE * phase
-        val width = bounds.second.width * (1f - shrink)
-        val height = bounds.second.height * (1f - shrink)
-        val left = bounds.first.x + (bounds.second.width - width) / 2f
-        val top = bounds.first.y + (bounds.second.height - height) / 2f
-        val topLeft = Offset(left, top)
-        drawRoundRect(
-            color = ink.copy(alpha = SLOT_FILL + SLOT_FILL_SWING * phase),
-            topLeft = topLeft,
-            size = Size(width, height),
-            cornerRadius = CornerRadius(corner, corner)
-        )
-        drawRoundRect(
-            color = ink.copy(alpha = SLOT_RIM),
-            topLeft = topLeft,
-            size = Size(width, height),
-            cornerRadius = CornerRadius(corner, corner),
-            style = Stroke(
-                width = stroke,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(stroke * 7f, stroke * 5f), 0f)
-            )
-        )
+fun ReorderSettleEffect(state: ReorderDragState, slots: () -> ReorderSlots) {
+    if (!state.settling) return
+    val id = state.draggingId
+    val order = state.settleOrder
+    LaunchedEffect(state.settling, id, order) {
+        if (id != null && order != null) {
+            withTimeoutOrNull(JELLY_SETTLE_TIMEOUT_MS) {
+                snapshotFlow { slots().visibleKeys() }.first { it != order }
+            }
+        } else {
+            delay(JELLY_RETURN_MS)
+        }
+        state.landed()
     }
 }
 
@@ -321,11 +476,18 @@ private const val JELLY_PERIOD_MS = 620
 private const val JELLY_STRETCH = 0.022f
 private const val JELLY_BREATHE = 0.016f
 private val JELLY_BOB = 3.5.dp
-private val SLOT_CORNER = 20.dp
-private const val SLOT_BREATHE = 0.05f
-private const val SLOT_FILL = 0.05f
-private const val SLOT_FILL_SWING = 0.05f
-private const val SLOT_RIM = 0.32f
+private const val JELLY_WOBBLE_GAIN = 0.6f
+private const val JELLY_RAMP_MS = 260
+private const val JELLY_LIFT_MIN = 0.002f
+private const val JELLY_LEAD = 0.18f
+private const val JELLY_LEAD_MS = 240
+private const val JELLY_LEAD_CAP = 0.12f
+private const val JELLY_SEEDS = 5L
+private const val JELLY_SEED_STEP = 0.16f
+private const val JELLY_SETTLE_TIMEOUT_MS = 900L
+private const val JELLY_RETURN_MS = 480L
+private val JELLY_SPRING = spring<Float>(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+private val JELLY_STILL = spring<Float>(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)
 
 private fun LazyListState.topOf(id: Long): Float =
     (layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.offset ?: 0).toFloat()

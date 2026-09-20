@@ -190,22 +190,40 @@ fun AssistantScreen(active: Boolean = true) {
                 m.attachmentMime, m.attachmentData, m.attachmentName, m.attachmentList)
         }
     }
-    val savedUrl by repo.baseUrl.collectAsState(initial = "")
-    val savedSpecStr by repo.apiSpec.collectAsState(initial = "openai")
-    val savedKey by repo.apiKey.collectAsState(initial = "")
-    val savedModel by repo.model.collectAsState(initial = "")
+    val savedUrl by repo.baseUrl.collectAsState(initial = SettingsCache.baseUrl)
+    val savedSpecStr by repo.apiSpec.collectAsState(initial = SettingsCache.apiSpec)
+    val savedKey by repo.apiKey.collectAsState(initial = SettingsCache.apiKey)
+    val savedModel by repo.model.collectAsState(initial = SettingsCache.model)
     val assistantNameOrNull by repo.assistantName.collectAsState(initial = SettingsCache.assistantName)
     val assistantName = assistantNameOrNull.orEmpty()
-    val assistantStyle by repo.assistantStyle.collectAsState(initial = "")
-    val memoryTierKey by repo.memoryTier.collectAsState(initial = MemoryTier.DEFAULT.key)
-    val webSearchEnabled by repo.webSearchEnabled.collectAsState(initial = false)
-    val typingHapticsEnabled by repo.typingHapticsEnabled.collectAsState(initial = true)
-    val confirmToolsEnabled by repo.assistantConfirmToolsEnabled.collectAsState(initial = true)
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
-    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = false)
-    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = false)
+    val assistantStyle by repo.assistantStyle.collectAsState(initial = SettingsCache.assistantStyle)
+    val memoryTierKey by repo.memoryTier.collectAsState(initial = SettingsCache.memoryTier)
+    val webSearchEnabled by repo.webSearchEnabled.collectAsState(initial = SettingsCache.webSearchEnabled)
+    val typingHapticsEnabled by repo.typingHapticsEnabled.collectAsState(initial = SettingsCache.typingHapticsEnabled)
+    val confirmToolsEnabled by repo.assistantConfirmToolsEnabled.collectAsState(
+        initial = SettingsCache.assistantConfirmToolsEnabled
+    )
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
+    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
+    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
     val modelRecents by repo.modelRecents.collectAsState(initial = emptyList())
-    val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = false)
+    val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = SettingsCache.smallModelModeEnabled)
+    val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = SettingsCache.apiProfilesJson)
+    val savedSelectedIdx by repo.apiProfileSelected.collectAsState(initial = SettingsCache.apiProfileSelected)
+    val activeApiProfile = remember(savedProfilesJson, savedSelectedIdx) {
+        val parsed = com.lucent.app.data.ApiProfiles.parse(savedProfilesJson)
+        parsed.getOrNull(savedSelectedIdx.coerceIn(0, (parsed.size - 1).coerceAtLeast(0)))
+    }
+
+    fun persistSelectedModels(picked: List<String>) {
+        val parsed = com.lucent.app.data.ApiProfiles.parse(savedProfilesJson)
+        if (parsed.isEmpty()) return
+        val idx = savedSelectedIdx.coerceIn(0, parsed.size - 1)
+        val updated = parsed.mapIndexed { index, profile ->
+            if (index == idx) profile.copy(selectedModels = picked) else profile
+        }
+        scope.launch { repo.saveApiProfiles(updated, idx) }
+    }
 
     var input by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf("") }
@@ -1391,10 +1409,13 @@ fun AssistantScreen(active: Boolean = true) {
                     else -> ApiSpec.OPENAI
                 },
                 apiKey = savedKey,
+                selectedModels = activeApiProfile?.selectedModels ?: emptyList(),
+                hasProfile = activeApiProfile != null,
                 localModelEnabled = localModelEnabled,
                 tint = onGradient,
                 mutedTint = onGradientMuted,
                 onPickCloudModel = { model -> scope.launch { repo.setActiveModel(model) } },
+                onSelectedModelsChange = { picked -> persistSelectedModels(picked) },
                 modifier = Modifier.height(56.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))

@@ -172,6 +172,7 @@ fun CompletedTasksScreen(
         }
 
         LazyColumn(
+            state = rememberRestoredListState("CompletedTasksScreen#1"),
             modifier = Modifier.hazeSource(state = hazeState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)

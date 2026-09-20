@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
 import com.lucent.app.data.BiometricAuth
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.launch
@@ -34,17 +36,22 @@ const val crashShieldLocksStartupLogging: Boolean = true
 
 private val dynamicColorSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+private object DynamicColorState {
+    @Volatile
+    var active: Boolean = SettingsCache.dynamicColor && dynamicColorSupported
+}
+
 @Composable
 fun DynamicColorRow(repo: SettingsRepository) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = false)
+    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = DynamicColorState.active)
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.dynamicColorTitle, color = onGradient, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     when {
                         !dynamicColorSupported -> S.dynamicColorUnsupported
@@ -54,10 +61,6 @@ fun DynamicColorRow(repo: SettingsRepository) {
                     color = onGradientMuted,
                     fontSize = 13.sp
                 )
-                if (dynamicColorSupported) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(S.dynamicColorGradientNote, color = onGradientMuted, fontSize = 13.sp)
-                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -74,8 +77,10 @@ fun DynamicColorRow(repo: SettingsRepository) {
 
 @Composable
 fun rememberDynamicColorActive(repo: SettingsRepository): Boolean {
-    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = false)
-    return dynamicColorOn && dynamicColorSupported
+    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = DynamicColorState.active)
+    val active = dynamicColorOn && dynamicColorSupported
+    SideEffect { DynamicColorState.active = active }
+    return active
 }
 
 @Composable
@@ -91,7 +96,7 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = false)
+    val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = SettingsCache.appLockBiometricEnabled)
 
     Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {

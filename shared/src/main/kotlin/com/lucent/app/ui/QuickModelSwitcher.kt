@@ -51,10 +51,13 @@ fun QuickModelSwitcher(
     baseUrl: String,
     spec: ApiSpec,
     apiKey: String,
+    selectedModels: List<String>,
+    hasProfile: Boolean,
     localModelEnabled: Boolean,
     tint: Color,
     mutedTint: Color,
     onPickCloudModel: (String) -> Unit,
+    onSelectedModelsChange: (List<String>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -66,6 +69,13 @@ fun QuickModelSwitcher(
     var fetchNote by remember { mutableStateOf("") }
     var typing by remember { mutableStateOf(false) }
     var typed by remember { mutableStateOf("") }
+    var autoFetchTried by remember { mutableStateOf(false) }
+
+    val profileModels = remember(selectedModels) {
+        selectedModels.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+    }
+    val profileMenu = hasProfile && profileModels.isNotEmpty()
+    val canFetch = baseUrl.isNotBlank() && apiKey.isNotBlank()
 
     var refresh by remember { mutableStateOf(0) }
     val slots = remember(refresh, open, localModelEnabled) {
@@ -82,11 +92,36 @@ fun QuickModelSwitcher(
         LucentToast.show(context, com.lucent.app.i18n.S.quickModelSwitched(model))
     }
 
+    fun loadAllModels() {
+        if (fetching) return
+        fetching = true
+        fetchNote = ""
+        scope.launch {
+            val result = LlmClient.fetchModels(baseUrl, spec, apiKey)
+            fetching = false
+            result.onSuccess { list ->
+                val usable = list.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                if (usable.isEmpty()) {
+                    fetchNote = com.lucent.app.i18n.S.quickModelFetchEmpty
+                } else {
+                    fetched = usable
+                    onSelectedModelsChange(usable)
+                }
+            }.onFailure {
+                fetchNote = com.lucent.app.i18n.S.quickModelFetchFailed
+            }
+        }
+    }
+
     IconButton(
         onClick = {
             fetched = emptyList()
             fetchNote = ""
             open = true
+            if (hasProfile && profileModels.isEmpty() && canFetch && !autoFetchTried) {
+                autoFetchTried = true
+                loadAllModels()
+            }
         },
         modifier = modifier
     ) {
@@ -157,64 +192,99 @@ fun QuickModelSwitcher(
                         }
                     }
                 } else {
-                    val shownRecents = recents.filter { it.isNotBlank() && it != currentModel }
-                    if (shownRecents.isNotEmpty()) {
-                        Text(
-                            com.lucent.app.i18n.S.quickModelRecent,
-                            color = mutedTint,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(start = 14.dp, top = 8.dp)
-                        )
-                        shownRecents.forEach { model ->
-                            DropdownMenuItem(
-                                text = { Text(model, maxLines = 1, overflow = TextOverflow.Ellipsis, color = tint) },
-                                onClick = { pickCloud(model) }
-                            )
-                        }
-                        HorizontalDivider()
-                    }
-
-                    if (fetched.isEmpty()) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    if (fetching) com.lucent.app.i18n.S.quickModelFetching
-                                    else com.lucent.app.i18n.S.quickModelFetch
+                    when {
+                        profileMenu -> {
+                            profileModels.forEach { model ->
+                                val active = model == currentModel
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            model,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = if (active) tint else mutedTint
+                                        )
+                                    },
+                                    leadingIcon = if (active) {
+                                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                    } else null,
+                                    onClick = { if (active) open = false else pickCloud(model) }
                                 )
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            enabled = !fetching && baseUrl.isNotBlank(),
-                            onClick = {
-                                fetching = true
-                                fetchNote = ""
-                                scope.launch {
-                                    val result = LlmClient.fetchModels(baseUrl, spec, apiKey)
-                                    fetching = false
-                                    result.onSuccess { list ->
-                                        fetched = list
-                                        if (list.isEmpty()) fetchNote = com.lucent.app.i18n.S.quickModelFetchEmpty
-                                    }.onFailure {
-                                        fetchNote = com.lucent.app.i18n.S.quickModelFetchFailed
-                                    }
+                            }
+                        }
+
+                        hasProfile -> {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (fetching) com.lucent.app.i18n.S.quickModelFetching
+                                        else com.lucent.app.i18n.S.quickModelFetch
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                enabled = !fetching && canFetch,
+                                onClick = { loadAllModels() }
+                            )
+                            if (fetchNote.isNotBlank()) {
+                                Text(
+                                    fetchNote,
+                                    color = mutedTint,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        else -> {
+                            val shownRecents = recents.filter { it.isNotBlank() && it != currentModel }
+                            if (shownRecents.isNotEmpty()) {
+                                Text(
+                                    com.lucent.app.i18n.S.quickModelRecent,
+                                    color = mutedTint,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(start = 14.dp, top = 8.dp)
+                                )
+                                shownRecents.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model, maxLines = 1, overflow = TextOverflow.Ellipsis, color = tint) },
+                                        onClick = { pickCloud(model) }
+                                    )
+                                }
+                                HorizontalDivider()
+                            }
+
+                            if (fetched.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (fetching) com.lucent.app.i18n.S.quickModelFetching
+                                            else com.lucent.app.i18n.S.quickModelFetch
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    },
+                                    enabled = !fetching && baseUrl.isNotBlank(),
+                                    onClick = { loadAllModels() }
+                                )
+                                if (fetchNote.isNotBlank()) {
+                                    Text(
+                                        fetchNote,
+                                        color = mutedTint,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                    )
+                                }
+                            } else {
+                                fetched.filter { it != currentModel }.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model, maxLines = 1, overflow = TextOverflow.Ellipsis, color = tint) },
+                                        onClick = { pickCloud(model) }
+                                    )
                                 }
                             }
-                        )
-                        if (fetchNote.isNotBlank()) {
-                            Text(
-                                fetchNote,
-                                color = mutedTint,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                            )
-                        }
-                    } else {
-                        fetched.filter { it != currentModel }.forEach { model ->
-                            DropdownMenuItem(
-                                text = { Text(model, maxLines = 1, overflow = TextOverflow.Ellipsis, color = tint) },
-                                onClick = { pickCloud(model) }
-                            )
                         }
                     }
 

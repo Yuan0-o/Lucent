@@ -78,6 +78,111 @@ class DiffuseBackgroundTest {
         )
     }
 
+    @Test
+    fun everyCornerAndRegionOfTheTextureIsPainted() {
+        val edge = 64
+        val pixels = DiffuseGradientField(edge).render(3.0, warmPalette, nightBackdrop, dark = true)
+        val corners = intArrayOf(0, edge - 1, edge * (edge - 1), edge * edge - 1)
+        for (corner in corners) {
+            assertTrue(
+                channelGap(pixels[corner], nightBackdrop) >= 10,
+                "corner ${corner / edge},${corner % edge} must carry colour, not the bare backdrop"
+            )
+        }
+        for (cellY in 0 until 4) {
+            for (cellX in 0 until 4) {
+                val mean = cellMean(pixels, edge, cellX, cellY)
+                assertTrue(
+                    channelGap(mean, nightBackdrop) >= 10,
+                    "cell $cellX,$cellY must be painted rather than left flat"
+                )
+            }
+        }
+    }
+
+    @Test
+    fun theColourSpansTheWholeHeightInsteadOfOneRegion() {
+        val edge = 64
+        val pixels = DiffuseGradientField(edge).render(4.0, warmPalette, nightBackdrop, dark = true)
+        val top = rowBandMean(pixels, edge, 0, edge / 4)
+        val middle = rowBandMean(pixels, edge, 3 * edge / 8, 5 * edge / 8)
+        val bottom = rowBandMean(pixels, edge, 3 * edge / 4, edge)
+        assertTrue(channelGap(top, middle) >= 10, "the hues must keep changing below the top of the field")
+        assertTrue(channelGap(middle, bottom) >= 10, "the hues must keep changing above the bottom of the field")
+        assertTrue(channelGap(top, bottom) >= 20, "the top and the bottom must not read as one tone")
+    }
+
+    @Test
+    fun everyPaletteHueOwnsPartOfTheTexture() {
+        val edge = 64
+        val rgb = intArrayOf(0xFFFF0000.toInt(), 0xFF00FF00.toInt(), 0xFF0000FF.toInt())
+        val pixels = DiffuseGradientField(edge).render(2.0, rgb, nightBackdrop, dark = true)
+        var reds = 0
+        var greens = 0
+        var blues = 0
+        for (pixel in pixels) {
+            val r = (pixel ushr 16) and 255
+            val g = (pixel ushr 8) and 255
+            val b = pixel and 255
+            when {
+                r > g && r > b -> reds++
+                g > b -> greens++
+                else -> blues++
+            }
+        }
+        val share = pixels.size / 20
+        assertTrue(reds > share, "the first palette colour must own a region, got $reds of ${pixels.size}")
+        assertTrue(greens > share, "the second palette colour must own a region, got $greens of ${pixels.size}")
+        assertTrue(blues > share, "the third palette colour must own a region, got $blues of ${pixels.size}")
+    }
+
+    @Test
+    fun theTextureKeepsCoveringItsWholeAreaAtEveryQualityTier() {
+        for (edge in intArrayOf(96, 80, 64, 48)) {
+            val pixels = DiffuseGradientField(edge).render(7.5, warmPalette, nightBackdrop, dark = false)
+            assertEquals(edge * edge, pixels.size)
+            assertTrue(pixels.all { (it ushr 24) and 255 == 255 }, "tier $edge must stay opaque")
+            assertTrue(
+                channelGap(cellMean(pixels, edge, 0, 0), cellMean(pixels, edge, 3, 3)) >= 10,
+                "tier $edge must paint every part of the field, corners included"
+            )
+        }
+    }
+
+    private fun cellMean(pixels: IntArray, edge: Int, cellX: Int, cellY: Int): Int {
+        val span = edge / 4
+        var r = 0
+        var g = 0
+        var b = 0
+        for (y in cellY * span until (cellY + 1) * span) {
+            for (x in cellX * span until (cellX + 1) * span) {
+                val pixel = pixels[y * edge + x]
+                r += (pixel ushr 16) and 255
+                g += (pixel ushr 8) and 255
+                b += pixel and 255
+            }
+        }
+        val count = span * span
+        return (255 shl 24) or ((r / count) shl 16) or ((g / count) shl 8) or (b / count)
+    }
+
+    private fun rowBandMean(pixels: IntArray, edge: Int, fromRow: Int, toRow: Int): Int {
+        var r = 0
+        var g = 0
+        var b = 0
+        var count = 0
+        for (y in fromRow until toRow) {
+            for (x in 0 until edge) {
+                val pixel = pixels[y * edge + x]
+                r += (pixel ushr 16) and 255
+                g += (pixel ushr 8) and 255
+                b += pixel and 255
+                count++
+            }
+        }
+        return (255 shl 24) or ((r / count) shl 16) or ((g / count) shl 8) or (b / count)
+    }
+
     private fun worstNeighbourGap(pixels: IntArray): Int {
         var worst = 0
         for (y in 0 until 96) {

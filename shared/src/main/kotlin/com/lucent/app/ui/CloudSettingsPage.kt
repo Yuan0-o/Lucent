@@ -44,6 +44,7 @@ import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.BackupManager
 import com.lucent.app.data.CloudSync
 import com.lucent.app.data.CryptoUtil
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.launch
@@ -61,13 +62,13 @@ fun CloudSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    val enabled by repo.cloudEnabled.collectAsState(initial = false)
-    val provider by repo.cloudProvider.collectAsState(initial = "Nutstore")
-    val url by repo.cloudUrl.collectAsState(initial = "")
-    val user by repo.cloudUser.collectAsState(initial = "")
-    val folder by repo.cloudFolder.collectAsState(initial = "Lucent")
-    val autoUpload by repo.cloudAutoBackup.collectAsState(initial = false)
-    val storedPw by repo.cloudPasswordEnc.collectAsState(initial = "")
+    val enabled by repo.cloudEnabled.collectAsState(initial = SettingsCache.cloudEnabled)
+    val provider by repo.cloudProvider.collectAsState(initial = SettingsCache.cloudProvider)
+    val url by repo.cloudUrl.collectAsState(initial = SettingsCache.cloudUrl)
+    val user by repo.cloudUser.collectAsState(initial = SettingsCache.cloudUser)
+    val folder by repo.cloudFolder.collectAsState(initial = SettingsCache.cloudFolder)
+    val autoUpload by repo.cloudAutoBackup.collectAsState(initial = SettingsCache.cloudAutoBackup)
+    val storedPw by repo.cloudPasswordEnc.collectAsState(initial = SettingsCache.cloudPasswordEnc)
 
     var urlDraft by remember { mutableStateOf("") }
     var userDraft by remember { mutableStateOf("") }
@@ -134,6 +135,7 @@ fun CloudSettingsPage(
                     FilterChip(
                         selected = provider == name,
                         onClick = {
+                            val switching = provider != name
                             scope.launch {
                                 repo.setCloudProvider(name)
                                 if (presetUrl.isNotBlank()) {
@@ -145,6 +147,9 @@ fun CloudSettingsPage(
                                         urlDraft = presetUrl
                                         repo.setCloudUrl(presetUrl)
                                     }
+                                } else if (name == "Custom" && switching) {
+                                    urlDraft = ""
+                                    repo.setCloudUrl("")
                                 }
                             }
                         },

@@ -91,11 +91,13 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT)
     val pwLaterLimit by repo.pwLaterRoundLimit.collectAsState(
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT)
-    val selfDestructArmed by repo.pwSelfDestructEnabled.collectAsState(initial = false)
+    val selfDestructArmed by repo.pwSelfDestructEnabled.collectAsState(
+        initial = com.lucent.app.data.SettingsCache.pwSelfDestructEnabled)
     val selfDestructAt by repo.pwSelfDestructThreshold.collectAsState(
         initial = com.lucent.app.data.PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD)
 
-    val biometricEnabled by repo.appLockBiometricEnabled.collectAsState(initial = false)
+    val biometricEnabled by repo.appLockBiometricEnabled.collectAsState(
+        initial = com.lucent.app.data.SettingsCache.appLockBiometricEnabled)
     val biometricAvailable = remember { BiometricAuth.isAvailable(context) }
     val activity = context as? FragmentActivity
 

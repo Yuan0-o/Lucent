@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lucent.app.data.ApiProfile
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -21,7 +22,7 @@ internal fun AssistantSettingsPage(
     selectedProfileIdx: Int,
     onRoute: (SettingsRoute) -> Unit
 ) {
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
 
     BackHeader(S.settingsAssistantTitle) { onRoute(SettingsRoute.Root) }
 

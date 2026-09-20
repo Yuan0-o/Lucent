@@ -174,6 +174,7 @@ private fun DraftScaffold(
         }
 
         LazyColumn(
+            state = rememberRestoredListState("DraftsScreen#1"),
             modifier = Modifier.hazeSource(state = hazeState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current),

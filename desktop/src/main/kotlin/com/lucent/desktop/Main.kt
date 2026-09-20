@@ -86,7 +86,8 @@ fun main() {
         val trayState = rememberTrayState()
         var windowVisible by remember { mutableStateOf(true) }
         val settingsRepo = remember { SettingsRepository(context) }
-        val closeToTray by settingsRepo.closeToTray.collectAsState(initial = true)
+        val closeToTray by settingsRepo.closeToTray.collectAsState(
+            initial = com.lucent.app.data.SettingsCache.closeToTray)
         val fallbackIcon = rememberVectorPainter(Icons.Default.AutoAwesome)
         val icon: Painter = remember {
             runCatching {

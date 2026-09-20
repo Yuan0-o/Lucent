@@ -67,6 +67,7 @@ import com.lucent.app.data.AppLock
 import com.lucent.app.data.AttachmentLimits
 import com.lucent.app.data.BackupManager
 import com.lucent.app.data.FontStore
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.ShareIntegration
 import com.lucent.app.data.StartupLog
@@ -114,15 +115,15 @@ fun SettingsScreen(active: Boolean = true) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    val savedUrl by repo.baseUrl.collectAsState(initial = "")
-    val savedSpec by repo.apiSpec.collectAsState(initial = "openai")
-    val savedKey by repo.apiKey.collectAsState(initial = "")
-    val savedModel by repo.model.collectAsState(initial = "")
-    val savedFont by repo.font.collectAsState(initial = "system")
-    val savedAssistantName by repo.assistantName.collectAsState(initial = "Lucent")
-    val savedAssistantStyle by repo.assistantStyle.collectAsState(initial = "")
+    val savedUrl by repo.baseUrl.collectAsState(initial = SettingsCache.baseUrl)
+    val savedSpec by repo.apiSpec.collectAsState(initial = SettingsCache.apiSpec)
+    val savedKey by repo.apiKey.collectAsState(initial = SettingsCache.apiKey)
+    val savedModel by repo.model.collectAsState(initial = SettingsCache.model)
+    val savedFont by repo.font.collectAsState(initial = SettingsCache.font)
+    val savedAssistantName by repo.assistantName.collectAsState(initial = SettingsCache.assistantName ?: "Lucent")
+    val savedAssistantStyle by repo.assistantStyle.collectAsState(initial = SettingsCache.assistantStyle)
     var showSmallModelWarn by remember { mutableStateOf(false) }
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
 
     var url by remember(savedUrl) { mutableStateOf(savedUrl) }
     var spec by remember(savedSpec) { mutableStateOf(savedSpec) }
@@ -131,8 +132,8 @@ fun SettingsScreen(active: Boolean = true) {
     var assistantName by remember(savedAssistantName) { mutableStateOf(savedAssistantName) }
     var assistantStyle by remember(savedAssistantStyle) { mutableStateOf(savedAssistantStyle) }
 
-    val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = "")
-    val savedSelectedIdx by repo.apiProfileSelected.collectAsState(initial = 0)
+    val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = SettingsCache.apiProfilesJson)
+    val savedSelectedIdx by repo.apiProfileSelected.collectAsState(initial = SettingsCache.apiProfileSelected)
     val profiles = remember(savedProfilesJson, savedUrl, savedSpec, savedKey, savedModel) {
         val parsed = com.lucent.app.data.ApiProfiles.parse(savedProfilesJson)
         when {
@@ -161,20 +162,20 @@ fun SettingsScreen(active: Boolean = true) {
     var errorText by remember { mutableStateOf("") }
     var backupStatus by remember { mutableStateOf("") }
 
-    val appLockOn by repo.appLockEnabled.collectAsState(initial = false)
+    val appLockOn by repo.appLockEnabled.collectAsState(initial = SettingsCache.appLockEnabled)
 
     val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
-        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
+        initial = SettingsCache.pwFirstRoundLimit
     )
     val pwLaterRound by repo.pwLaterRoundLimit.collectAsState(
-        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT
+        initial = SettingsCache.pwLaterRoundLimit
     )
-    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = false)
+    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = SettingsCache.pwSelfDestructEnabled)
     val selfDestructThreshold by repo.pwSelfDestructThreshold.collectAsState(
-        initial = com.lucent.app.data.PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
+        initial = SettingsCache.pwSelfDestructThreshold
     )
 
-    val gateAttemptJson by repo.passwordAttemptState.collectAsState(initial = "")
+    val gateAttemptJson by repo.passwordAttemptState.collectAsState(initial = SettingsCache.passwordAttemptState)
     val gateAttempt = remember(gateAttemptJson) {
         com.lucent.app.data.PasswordAttempts.State.fromJson(gateAttemptJson)
     }
@@ -268,13 +269,6 @@ fun SettingsScreen(active: Boolean = true) {
     var showOpenLinksWarning by remember { mutableStateOf(false) }
     var showSelfDestructWarning by remember { mutableStateOf(false) }
     var selfDestructTyped by remember { mutableStateOf("") }
-    var encryptionCheckResult by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(encryptionCheckResult) {
-        if (encryptionCheckResult == "") {
-            kotlinx.coroutines.delay(6000)
-            encryptionCheckResult = null
-        }
-    }
     LaunchedEffect(backupStatus) {
         if (backupStatus.isNotBlank()) {
             kotlinx.coroutines.delay(8000)
@@ -2290,10 +2284,21 @@ fun SettingsScreen(active: Boolean = true) {
                 onEditingProfileNameChange = { editingProfileName = it },
                 provider = provider,
                 onProviderChange = { id ->
-                    provider = id
-                    com.lucent.app.data.ApiProviders.preset(id)?.let { preset ->
-                        url = preset.baseUrl
-                        spec = preset.spec
+                    if (id != provider) {
+                        val wasPreset = com.lucent.app.data.ApiProviders.isPreset(provider)
+                        provider = id
+                        val preset = com.lucent.app.data.ApiProviders.preset(id)
+                        if (preset != null) {
+                            url = preset.baseUrl
+                            spec = preset.spec
+                        } else {
+                            url = ""
+                            if (wasPreset) {
+                                spec = "openai"
+                                selectedModel = ""
+                                models = emptyList()
+                            }
+                        }
                     }
                 },
                 url = url,
@@ -2356,8 +2361,6 @@ fun SettingsScreen(active: Boolean = true) {
                     showSelfDestructWarning = true
                 },
                 onRequestCrashShieldInfo = { showCrashShieldInfo = true },
-                encryptionCheckResult = encryptionCheckResult,
-                onEncryptionCheckResultChange = { encryptionCheckResult = it },
                 onRoute = { setRoute(it) }
             )
 

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -37,8 +38,10 @@ fun PersonalizationSettingsPage(
     onBack: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
-    val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = true)
-    val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(initial = true)
+    val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = SettingsCache.typingHapticsEnabled)
+    val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(
+        initial = SettingsCache.assistantConfirmToolsEnabled
+    )
 
     BackHeader(S.settingsPersonalizationTitle) { onBack() }
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

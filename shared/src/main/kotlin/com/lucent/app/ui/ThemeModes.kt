@@ -4,9 +4,9 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 
 enum class LucentThemeSection {
+    SYSTEM,
     LIGHT,
-    DARK,
-    SYSTEM;
+    DARK;
 
     val label: String
         get() = when (this) {

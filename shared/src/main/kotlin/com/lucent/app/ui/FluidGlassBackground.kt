@@ -21,19 +21,37 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.lucent.app.data.StartupLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
+import kotlin.math.ceil
 
 data class BackgroundEnvironment(val active: Boolean = true, val motionEnabled: Boolean = true)
 
 val LocalBackgroundEnvironment = staticCompositionLocalOf { BackgroundEnvironment() }
 
 private const val STILL_COLOUR_TICK_MS = 1_000L
+
+private class PaletteArgbs {
+    private var values = IntArray(0)
+
+    fun of(palette: List<Color>): IntArray {
+        if (!matches(palette)) values = IntArray(palette.size) { palette[it].toArgb() }
+        return values
+    }
+
+    private fun matches(palette: List<Color>): Boolean {
+        if (palette.size != values.size) return false
+        for (index in palette.indices) {
+            if (palette[index].toArgb() != values[index]) return false
+        }
+        return true
+    }
+}
 
 @Composable
 fun FluidGlassBackground(
@@ -65,13 +83,14 @@ fun FluidGlassBackground(
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
     val timeline = remember { BackgroundTimeline() }
     val policy = remember { BackgroundFramePolicy() }
+    val argbPalette = remember { PaletteArgbs() }
 
     LaunchedEffect(environment.active, moving) {
         if (!environment.active) return@LaunchedEffect
         policy.resume()
         var field = DiffuseGradientField(policy.edge)
         suspend fun paint(spatialSeconds: Double, colourSeconds: Double): ImageBitmap {
-            val colors = currentPalette.map { it.toArgb() }.toIntArray()
+            val colors = argbPalette.of(currentPalette)
             val backdrop = currentBackdrop
             return withContext(Dispatchers.Default) {
                 if (field.edge != policy.edge) field = DiffuseGradientField(policy.edge)
@@ -121,7 +140,8 @@ fun FluidGlassBackground(
             if (size.width >= 1f && size.height >= 1f) {
                 drawImage(
                     image = image,
-                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                    dstOffset = IntOffset.Zero,
+                    dstSize = IntSize(ceil(size.width).toInt(), ceil(size.height).toInt()),
                     filterQuality = FilterQuality.Low
                 )
             }

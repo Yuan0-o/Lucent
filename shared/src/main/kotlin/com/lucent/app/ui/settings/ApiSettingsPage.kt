@@ -44,6 +44,7 @@ import com.lucent.app.data.ApiProfile
 import com.lucent.app.data.ApiProfiles
 import com.lucent.app.data.ApiProviders
 import com.lucent.app.data.ModelSearch
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.network.ApiSpec
@@ -111,7 +112,7 @@ internal fun ApiSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
     var menuExpanded by remember { mutableStateOf(false) }
     var fetchedModels by remember { mutableStateOf<List<String>>(emptyList()) }
     var pickerOpen by remember { mutableStateOf(false) }

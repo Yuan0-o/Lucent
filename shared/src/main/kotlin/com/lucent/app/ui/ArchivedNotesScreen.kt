@@ -145,6 +145,7 @@ fun ArchivedNotesScreen(
         when (grouping) {
             ArchiveGrouping.TIME -> {
                 LazyColumn(
+                    state = rememberRestoredListState("ArchivedNotesScreen#1"),
                     modifier = Modifier.hazeSource(state = hazeState),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
@@ -164,6 +165,7 @@ fun ArchivedNotesScreen(
             ArchiveGrouping.TAG -> {
                 val groups = remember(filtered) { buildTagGroups(filtered) }
                 LazyColumn(
+                    state = rememberRestoredListState("ArchivedNotesScreen#2"),
                     modifier = Modifier.hazeSource(state = hazeState),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)

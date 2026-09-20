@@ -129,6 +129,7 @@ fun NotebooksScreen(
             }
         } else {
             LazyColumn(
+                state = rememberRestoredListState("NotebooksScreen#1"),
                 modifier = Modifier.hazeSource(state = LocalHazeState.current),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
@@ -364,6 +365,7 @@ fun NotebookDetailScreen(
         }
 
         LazyColumn(
+            state = rememberRestoredListState("NotebooksScreen#2"),
             modifier = Modifier.hazeSource(state = LocalHazeState.current),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)

@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -35,7 +36,7 @@ import kotlinx.coroutines.launch
 internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val savedTheme by repo.themeMode.collectAsState(initial = "system")
+    val savedTheme by repo.themeMode.collectAsState(initial = SettingsCache.themeMode)
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
     BackHeader(S.settingsThemeTitle) { onRoute(SettingsRoute.Appearance) }

@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -35,8 +36,8 @@ internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRou
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
-    val savedWebSearch by repo.webSearchEnabled.collectAsState(initial = false)
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
+    val savedWebSearch by repo.webSearchEnabled.collectAsState(initial = SettingsCache.webSearchEnabled)
 
     BackHeader(S.settingsNetworkTitle) { onRoute(SettingsRoute.Assistant) }
 

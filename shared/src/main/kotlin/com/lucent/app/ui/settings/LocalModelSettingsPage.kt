@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
 import com.lucent.app.data.AttachmentLimits
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.local.LocalModelStore
@@ -65,10 +66,12 @@ internal fun LocalModelSettingsPage(
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
-    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = false)
-    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = false)
-    val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(initial = false)
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
+    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
+    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
+    val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(
+        initial = SettingsCache.localBackgroundReplyEnabled
+    )
 
     BackHeader(S.settingsLocalModelTitle) { onRoute(SettingsRoute.Assistant) }
 

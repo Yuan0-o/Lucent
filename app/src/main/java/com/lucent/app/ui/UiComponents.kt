@@ -195,28 +195,13 @@ fun AttachmentSection(
     onRename: ((com.lucent.app.data.Attachment, String) -> Unit)? = null,
     onReorder: ((Int, Int) -> Unit)? = null
 ) {
-    val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable { onPick() },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.AttachFile,
-                contentDescription = null,
-                tint = onGradientMuted,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = com.lucent.app.i18n.S.attachFile,
-                color = onGradient,
-                fontSize = 14.sp,
-                lineHeight = 18.sp,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        ComposerRow(
+            icon = Icons.Default.AttachFile,
+            label = com.lucent.app.i18n.S.attachFile,
+            onClick = onPick
+        )
         if (attachments.isNotEmpty()) {
             PendingAttachmentChips(attachments, onGradientMuted, onRemove, onRename, onReorder)
         }

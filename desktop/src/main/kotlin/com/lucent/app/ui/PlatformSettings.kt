@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.security.WindowsHello
@@ -39,7 +40,7 @@ fun rememberDynamicColorActive(repo: SettingsRepository): Boolean = false
 fun DesktopIntegrationRows(repo: SettingsRepository) {
     val onGradient = LocalOnGradient.current
     val scope = rememberCoroutineScope()
-    val closeToTray by repo.closeToTray.collectAsState(initial = true)
+    val closeToTray by repo.closeToTray.collectAsState(initial = SettingsCache.closeToTray)
     var startWithWindows by remember {
         mutableStateOf(com.lucent.desktop.platform.StartupRegistration.isEnabled())
     }
@@ -84,7 +85,7 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val helloEnabled by repo.appLockHelloEnabled.collectAsState(initial = false)
+    val helloEnabled by repo.appLockHelloEnabled.collectAsState(initial = SettingsCache.appLockHelloEnabled)
 
     Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
