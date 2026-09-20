@@ -261,7 +261,8 @@ internal fun PrivacySettingsPage(
                     compact = true,
                     enabled = !gateLockedOut && !gateWiping,
                     onClick = {
-                        if (AppLock.verifyPassword(appLockCreds, hiddenPw)) {
+                        val stored = appLockCredsOrNull
+                        if (stored != null && AppLock.verifyPassword(stored, hiddenPw)) {
                             onSettingsGateSuccess()
                             HiddenArea.open()
                             askingHiddenPw = false
