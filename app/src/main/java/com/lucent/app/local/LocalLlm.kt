@@ -34,13 +34,24 @@ object LocalLlm {
 
     fun isGenerating(): Boolean = LocalLlmProxy.isGenerating()
 
-    suspend fun ensureLoaded(context: Context): Boolean = LocalLlmProxy.ensureLoaded(context)
+    internal var ensureLoadedOverride: (suspend (Context) -> Boolean)? = null
+
+    internal var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
+
+    internal fun resetOverridesForTesting() {
+        ensureLoadedOverride = null
+        generateOverride = null
+    }
+
+    suspend fun ensureLoaded(context: Context): Boolean =
+        ensureLoadedOverride?.invoke(context) ?: LocalLlmProxy.ensureLoaded(context)
 
     suspend fun generate(
         messages: List<Pair<String, String>>,
         images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
-    ): Int = LocalLlmProxy.generate(messages, images, onDelta)
+    ): Int = generateOverride?.invoke(messages, images, onDelta)
+        ?: LocalLlmProxy.generate(messages, images, onDelta)
 
     fun stop() = LocalLlmProxy.stop()
 

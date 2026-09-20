@@ -230,27 +230,24 @@ internal fun ApiSettingsPage(
 
         Spacer(modifier = Modifier.height(12.dp))
         Text(S.apiConnectionTitle, color = onGradient)
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = url,
-            onValueChange = onUrlChange,
-            label = { Text(S.fieldBaseUrl) },
-            enabled = customProvider,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            if (customProvider) {
+        if (customProvider) {
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = url,
+                onValueChange = onUrlChange,
+                label = { Text(S.fieldBaseUrl) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
                 when (spec) {
                     "anthropic" -> S.apiUrlExampleAnthropic
                     "google" -> S.apiUrlExampleGoogle
                     else -> S.apiUrlExampleOpenAi
-                }
-            } else {
-                S.apiProviderBuiltInHint
-            },
-            color = onGradientMuted
-        )
+                },
+                color = onGradientMuted
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
         GlassButton(text = S.fetchModels, onClick = {

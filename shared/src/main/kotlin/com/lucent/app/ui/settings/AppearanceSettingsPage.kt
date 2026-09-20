@@ -39,6 +39,7 @@ internal fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (Settings
 
     BackHeader(S.settingsAppearanceTitle) { onRoute(SettingsRoute.Root) }
 
+    DynamicColorRow(repo)
     Box(modifier = cardModifier) {
         NavCard(S.settingsThemeTitle, S.settingsThemeSub) {
             if (dynamicColorActive) pausedTarget = SettingsRoute.Theme else onRoute(SettingsRoute.Theme)
@@ -58,8 +59,6 @@ internal fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (Settings
         Spacer(modifier = Modifier.height(12.dp))
         PausedNotice(S.dynamicColorPausedBackground)
     }
-    Spacer(modifier = Modifier.height(12.dp))
-    DynamicColorRow(repo)
 }
 
 @Composable

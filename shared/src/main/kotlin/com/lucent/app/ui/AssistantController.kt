@@ -876,9 +876,10 @@ class AssistantControllerImpl(
             .takeLast(com.lucent.app.local.LocalLlm.HISTORY_TURNS * 2)
         val lastUserText = turns.lastOrNull { it.first == "user" }?.second ?: ""
 
+        val localPrompt = SystemPrompts.local(tools, lastUserText, smallModelMode)
         val messages = mutableListOf<Pair<String, String>>()
-        messages.add("system" to SystemPrompts.local(tools, lastUserText, smallModelMode))
-        messages.addAll(turns)
+        messages.add("system" to localPrompt)
+        messages.addAll(localTranscriptWithin(localPrompt, turns))
 
         val (uploadMime, uploadData, uploadName) = resolveUpload(db, conversationId, null, null, null)
         if (!uploadData.isNullOrBlank()) {
@@ -916,7 +917,7 @@ class AssistantControllerImpl(
                     )
                     messages.add("assistant" to raw.trim().take(600))
                     messages.add(
-                        "tool" to ("Result of " + attempted + ": ERROR — no tool named \"" + attempted +
+                        "user" to ("Result of " + attempted + ": ERROR — no tool named \"" + attempted +
                             "\" exists. Use EXACTLY one tool name from the list in the system " +
                             "message, or answer the user in plain text without any JSON.")
                     )
@@ -992,7 +993,7 @@ class AssistantControllerImpl(
             toolResults.add(result)
 
             messages.add("assistant" to LocalToolCallParser.renderLocalToolCall(call))
-            messages.add("tool" to "Result of ${call.name}: ${result.summary}")
+            messages.add("user" to "Result of ${call.name}: ${result.summary}")
             round++
         }
 
@@ -1006,14 +1007,14 @@ class AssistantControllerImpl(
             finalText = ReplyPolish.deRobotify(turn.snapshotBuffer()).trim()
         }
 
-        run {
-            val ft = finalText
-            if (LocalToolCallParser.attemptedToolCallName(ft) != null) {
-                val shape = ft.trim()
-                if (shape.startsWith("{") || shape.startsWith("<tool_call") || shape.startsWith("```")) {
-                    finalText = ""
-                }
+        val unusableToolCall = finalText?.let { ft ->
+            LocalToolCallParser.attemptedToolCallName(ft) != null && ft.trim().let { shape ->
+                shape.startsWith("{") || shape.startsWith("<tool_call") || shape.startsWith("```")
             }
+        } == true
+        if (unusableToolCall) finalText = ""
+        if (unusableToolCall && toolResults.none { it.success }) {
+            postError(turn, com.lucent.app.i18n.S.localModelGenerateFailed)
         }
 
         val content = ReplyPolish.replyContent(finalText, hasImage = false, toolResults = toolResults, userText = lastUserText)
@@ -1124,7 +1125,23 @@ class AssistantControllerImpl(
 
     private val MAX_LOCAL_TOOL_ROUNDS = 6
 
-
+    private fun localTranscriptWithin(
+        systemPrompt: String,
+        turns: List<Pair<String, String>>
+    ): List<Pair<String, String>> {
+        val budget = com.lucent.app.local.LocalLlm.N_CTX -
+            com.lucent.app.local.LocalLlm.MAX_NEW_TOKENS -
+            com.lucent.app.local.LocalLlm.MAX_NEW_TOKENS / 2
+        var remaining = budget - TokenEstimator.estimate(systemPrompt)
+        val kept = ArrayDeque<Pair<String, String>>()
+        for (message in turns.asReversed()) {
+            val cost = TokenEstimator.estimate(message.second)
+            if (kept.isNotEmpty() && cost > remaining) break
+            kept.addFirst(message)
+            remaining -= cost
+        }
+        return kept.toList()
+    }
 
     private fun localTier(tier: MemoryTier): MemoryTier =
         if (tier == MemoryTier.HIGH) MemoryTier.MEDIUM else tier

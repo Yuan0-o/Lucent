@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-set(LLAMA_CPP_TAG "b9888")
+set(LLAMA_CPP_TAG "b11057")
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp-src/CMakeLists.txt")
     set(FETCHCONTENT_SOURCE_DIR_LLAMA_CPP "${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp-src" CACHE PATH "" FORCE)
@@ -71,6 +71,7 @@ find_library(log-lib log)
 
 target_link_libraries(lucent_llama
     llama
+    vendor::hash
     ${log-lib})
 
 set(LUCENT_MTMD_DIR ${llama_cpp_SOURCE_DIR}/tools/mtmd)

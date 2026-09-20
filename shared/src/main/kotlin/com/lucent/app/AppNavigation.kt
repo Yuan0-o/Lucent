@@ -1,5 +1,7 @@
 package com.lucent.app
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -73,4 +75,25 @@ object AppNavigation {
     fun consumeComposeNote(): Boolean = composeNoteRequested.also { composeNoteRequested = false }
 
     fun consumeComposeTask(): Boolean = composeTaskRequested.also { composeTaskRequested = false }
+
+    private var backClaims by mutableStateOf(0)
+
+    val innerBackActive: Boolean
+        get() = backClaims > 0
+
+    internal fun claimBack() {
+        backClaims += 1
+    }
+
+    internal fun releaseBack() {
+        backClaims = (backClaims - 1).coerceAtLeast(0)
+    }
+}
+
+@Composable
+fun BackClaim(active: Boolean) {
+    DisposableEffect(active) {
+        if (active) AppNavigation.claimBack()
+        onDispose { if (active) AppNavigation.releaseBack() }
+    }
 }

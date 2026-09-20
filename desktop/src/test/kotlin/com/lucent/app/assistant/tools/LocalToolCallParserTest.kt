@@ -194,4 +194,122 @@ class LocalToolCallParserTest {
         assertEquals("Buy milk", args.getString("title"))
         assertEquals("2026-01-01", args.getString("due"))
     }
+
+    @Test
+    fun parsesLlamaPythonTagShape() {
+        val call = LocalToolCallParser.parseLocalToolCall(
+            """<|python_tag|>{"name": "create_task", "parameters": {"title": "Buy milk"}}<|eom_id|>""",
+            valid
+        )
+        assertNotNull(call)
+        assertEquals("create_task", call.name)
+        assertTrue(call.argsJson.contains("Buy milk"))
+    }
+
+    @Test
+    fun parsesMistralToolCallsShape() {
+        val call = LocalToolCallParser.parseLocalToolCall(
+            """[TOOL_CALLS] [{"name": "complete_task", "arguments": {"title": "Buy milk"}}]""",
+            valid
+        )
+        assertNotNull(call)
+        assertEquals("complete_task", call.name)
+        assertTrue(call.argsJson.contains("Buy milk"))
+    }
+
+    @Test
+    fun parsesHermesToolCallTagWithNewlines() {
+        val call = LocalToolCallParser.parseLocalToolCall(
+            "<tool_call>\n{\"name\": \"list_tasks\", \"arguments\": {}}\n</tool_call>",
+            valid
+        )
+        assertNotNull(call)
+        assertEquals("list_tasks", call.name)
+    }
+
+    @Test
+    fun toleratesTrailingChatterAndNewlines() {
+        val call = LocalToolCallParser.parseLocalToolCall(
+            "{\"tool\": \"create_note\", \"arguments\": {\"title\": \"Trip\"}}\n\nHope that helps!\n",
+            valid
+        )
+        assertNotNull(call)
+        assertEquals("create_note", call.name)
+        assertTrue(call.argsJson.contains("Trip"))
+    }
+
+    @Test
+    fun toleratesAnUnclosedToolCallTag() {
+        val call = LocalToolCallParser.parseLocalToolCall(
+            """<tool_call>{"tool": "read_note", "arguments": {"title": "Trip"}}""",
+            valid
+        )
+        assertNotNull(call)
+        assertEquals("read_note", call.name)
+        assertTrue(call.argsJson.contains("Trip"))
+    }
+
+    @Test
+    fun aCallSplitAcrossStreamedChunksOnlyParsesOnceTheWholeCallHasArrived() {
+        val first = """<tool_call>{"name": "create_task", "argu"""
+        val second = """ments": {"title": "Buy milk"}}</tool_call>"""
+        assertNull(LocalToolCallParser.parseLocalToolCall(first, valid))
+        val call = LocalToolCallParser.parseLocalToolCall(first + second, valid)
+        assertNotNull(call)
+        assertEquals("create_task", call.name)
+        assertTrue(call.argsJson.contains("Buy milk"))
+    }
+
+    @Test
+    fun localPromptCarriesExactlyTheProtocolTheParserAccepts() {
+        val tools = com.lucent.app.tools.AppTools.definitions(includeWebSearch = false)
+        val prompt = com.lucent.app.assistant.prompts.SystemPrompts.local(tools, userText = "add a task", compact = false)
+
+        assertTrue(prompt.contains("""{"tool": "<tool_name>", "arguments": { ... }}"""))
+        assertTrue(prompt.contains("EXACTLY ONE JSON object"))
+        assertTrue(prompt.contains("Result of <tool>:"))
+
+        val createTask = tools.first { it.name == "create_task" }
+        assertTrue(prompt.contains("- create_task("))
+        for (param in createTask.params) {
+            assertTrue(prompt.contains(param.name), "the local prompt must name create_task's ${param.name} argument")
+        }
+
+        val shape = prompt.substringAfter("in this exact form:\n").substringBefore("\n")
+        val parsed = LocalToolCallParser.parseLocalToolCall(
+            "{\"tool\": \"create_task\", \"arguments\": {\"title\": \"Buy milk\"}}",
+            tools.map { it.name }.toSet()
+        )
+        assertNotNull(parsed)
+        assertEquals("create_task", parsed.name)
+        assertEquals("""{"tool": "<tool_name>", "arguments": { ... }}""", shape)
+    }
+
+    @Test
+    fun localPromptPutsTheToolProtocolAfterTheCatalogue() {
+        val tools = com.lucent.app.tools.AppTools.definitions(includeWebSearch = false)
+        val prompt = com.lucent.app.assistant.prompts.SystemPrompts.local(tools, userText = "add a task", compact = false)
+
+        val protocolAt = prompt.indexOf("EXACTLY ONE JSON object")
+        assertTrue(protocolAt > 0)
+        for (tool in tools) {
+            assertTrue(prompt.lastIndexOf("- " + tool.name) < protocolAt, "${tool.name} must precede the protocol")
+        }
+        assertTrue(
+            prompt.length - protocolAt < prompt.length / 4,
+            "the protocol must sit near the end, where the engine's front truncation cannot reach it"
+        )
+    }
+
+    @Test
+    fun localPromptFitsTheEngineContextWithRoomForTheReply() {
+        val tools = com.lucent.app.tools.AppTools.definitions(includeWebSearch = false)
+        val prompt = com.lucent.app.assistant.prompts.SystemPrompts.local(tools, userText = "add a task", compact = false)
+        val budget = com.lucent.app.local.LocalLlm.N_CTX - com.lucent.app.local.LocalLlm.MAX_NEW_TOKENS
+        val used = com.lucent.app.data.TokenEstimator.estimate(prompt)
+        assertTrue(
+            used < budget - com.lucent.app.local.LocalLlm.MAX_NEW_TOKENS / 2,
+            "the local tool prompt must leave room in the engine context: $used tokens used, $budget available"
+        )
+    }
 }

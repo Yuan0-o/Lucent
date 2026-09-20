@@ -11,7 +11,7 @@ endif()
 
 include(FetchContent)
 
-set(LLAMA_CPP_TAG "b9888")
+set(LLAMA_CPP_TAG "b11057")
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp-src/CMakeLists.txt")
     set(FETCHCONTENT_SOURCE_DIR_LLAMA_CPP "${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp-src" CACHE PATH "" FORCE)
@@ -60,7 +60,7 @@ target_include_directories(lucent_llama PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/shim"
 )
 
-target_link_libraries(lucent_llama llama)
+target_link_libraries(lucent_llama llama vendor::hash)
 
 set(LUCENT_MTMD_DIR ${llama_cpp_SOURCE_DIR}/tools/mtmd)
 if (EXISTS ${LUCENT_MTMD_DIR}/mtmd.cpp)

@@ -461,6 +461,7 @@ fun TasksScreen(active: Boolean = true) {
         if (taskDirty) showUnsavedDialog = true else discardComposer()
     }
 
+    BackClaim(composing || viewingId != null || showingHistory || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode)
     BackHandler(enabled = composing) { leaveComposer() }
     BackHandler(enabled = !composing && viewingId != null) { closeDetail() }
     BackHandler(enabled = !composing && viewingId == null && showingHistory) { showingHistory = false }

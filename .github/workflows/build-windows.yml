@@ -77,13 +77,13 @@ jobs:
           Write-Error "Gradle warm-up failed after $maxAttempts attempts - every failure matched a network/repository marker. See the last stacktrace above. If the artifact repositories stay unreachable this long, re-run the workflow once GitHub's infrastructure recovers."
           exit 1
 
-      - name: Prefetch llama.cpp (pinned b9888)
+      - name: Prefetch llama.cpp (pinned b11057)
         shell: pwsh
         run: |
           $dest = "desktop/native/llama.cpp-src"
           for ($attempt = 1; $attempt -le 3; $attempt++) {
             if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
-            git clone --depth 1 --branch b9888 https://github.com/ggml-org/llama.cpp $dest
+            git clone --depth 1 --branch b11057 https://github.com/ggml-org/llama.cpp $dest
             if ($LASTEXITCODE -eq 0) { Write-Host "llama.cpp cloned on attempt $attempt"; break }
             if ($attempt -eq 3) { Write-Error "Failed to clone llama.cpp after 3 attempts."; exit 1 }
             Start-Sleep -Seconds 10

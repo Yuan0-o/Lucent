@@ -657,6 +657,7 @@ fun NotesScreen(active: Boolean = true) {
         if (noteDirty) showUnsavedDialog = true else discardComposer()
     }
 
+    BackClaim(composing || viewingId != null || historyForId != null || showArchive || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode)
     BackHandler(enabled = composing) { leaveComposer() }
     BackHandler(enabled = !composing && historyForId != null) { historyForId = null }
     BackHandler(enabled = !composing && historyForId == null && viewingId != null) { closeDetail() }

@@ -27,8 +27,8 @@ template <typename W> static inline mtmd_bitmap * lucent_unwrap_bitmap(W w) {
 }
 
 template <typename C> static auto lucent_from_buf_impl(C * c, const unsigned char * d, size_t n, lucent_rank<1>)
-    -> decltype(lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false))) {
-    return lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false));
+    -> decltype(lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false, mtmd_helper_init_opt_default()))) {
+    return lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n, false, mtmd_helper_init_opt_default()));
 }
 template <typename C> static auto lucent_from_buf_impl(C * c, const unsigned char * d, size_t n, lucent_rank<0>)
     -> decltype(lucent_unwrap_bitmap(mtmd_helper_bitmap_init_from_buf(c, d, n))) {
@@ -140,7 +140,7 @@ Java_com_lucent_app_local_LocalLlm_nativeLoad(JNIEnv * env, jobject, jstring jpa
 
     try {
         llama_model_params mparams = llama_model_default_params();
-        mparams.use_mmap = true;
+        mparams.load_mode = LLAMA_LOAD_MODE_MMAP;
 
         mparams.n_gpu_layers = n_gpu_layers > 0 ? n_gpu_layers : 0;
 
@@ -262,6 +262,9 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerate(JNIEnv * env, jobject, jlong h
         const int budget = max_new > 0 ? max_new : 512;
         const int max_prompt = s->n_ctx - budget - 8;
         if (max_prompt > 0 && (int) tokens.size() > max_prompt) {
+            const size_t dropped = tokens.size() - (size_t) max_prompt;
+            LOGE("generate: prompt does not fit — dropped the %zu oldest of %zu tokens (max_prompt=%d, max_new=%d, n_ctx=%d); kept the newest %d tokens, which hold the newest history and the latest user turn, and hold the tool protocol only if it falls inside that window",
+                 dropped, tokens.size(), max_prompt, budget, s->n_ctx, max_prompt);
             tokens.erase(tokens.begin(), tokens.end() - max_prompt);
         }
 
@@ -454,6 +457,7 @@ Java_com_lucent_app_local_LocalLlm_nativeGenerateWithImages(JNIEnv * env, jobjec
             chunks = mtmd_input_chunks_init();
             mtmd_input_text text;
             text.text          = prompt.c_str();
+            text.text_len      = prompt.size();
             text.add_special   = true;
             text.parse_special = true;
             std::vector<const mtmd_bitmap *> cbitmaps(bitmaps.begin(), bitmaps.end());

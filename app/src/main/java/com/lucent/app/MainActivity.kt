@@ -468,7 +468,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
         }
     }
 
-    BackHandler(enabled = true) {
+    BackHandler(enabled = !AppNavigation.innerBackActive) {
         when {
             currentScreen == Screen.Settings && AppNavigation.settingsRoute == SettingsRoute.Root ->
                 runOrConfirm {

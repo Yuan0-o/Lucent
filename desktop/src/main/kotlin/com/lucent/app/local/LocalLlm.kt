@@ -47,7 +47,7 @@ object LocalLlm {
 
     private const val VRAM_HEADROOM_BYTES = 1_200L * 1024 * 1024
 
-    const val N_CTX_GPU = 2048
+    const val N_CTX_GPU = 4096
 
     private const val GPU_LAYERS_BLIND_CAP = 20
 
@@ -121,7 +121,17 @@ object LocalLlm {
         return (if (total > 4) total - 1 else total).coerceIn(2, 8)
     }
 
-    suspend fun ensureLoaded(context: Context): Boolean = withContext(llmDispatcher) {
+    internal var ensureLoadedOverride: (suspend (Context) -> Boolean)? = null
+
+    internal var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
+
+    internal fun resetOverridesForTesting() {
+        ensureLoadedOverride = null
+        generateOverride = null
+    }
+
+    suspend fun ensureLoaded(context: Context): Boolean = ensureLoadedOverride?.invoke(context)
+        ?: withContext(llmDispatcher) {
         if (!available) return@withContext false
         val activeSlot = LocalModelStore.activeSlot(context) ?: return@withContext false
         val file = LocalModelStore.activeModelFile(context) ?: return@withContext false
@@ -181,7 +191,8 @@ object LocalLlm {
         messages: List<Pair<String, String>>,
         images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
-    ): Int = withContext(llmDispatcher) {
+    ): Int = generateOverride?.invoke(messages, images, onDelta)
+        ?: withContext(llmDispatcher) {
         val h = handle
         if (h == 0L) return@withContext -1
         generating.set(true)

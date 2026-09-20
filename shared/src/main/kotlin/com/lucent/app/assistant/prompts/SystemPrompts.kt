@@ -19,17 +19,6 @@ object SystemPrompts {
             append("Write plain conversational text only — never markdown, asterisks, bullet points, or headings.\n\n")
             append("Right now it is ").append(today).append(" in the user's local time. ")
             append("Work any concrete date out from this and pass it as an absolute value.\n\n")
-            append("You can act inside the app by calling tools. Only when you actually need to take an action ")
-            append("or look something up, reply with EXACTLY ONE JSON object and nothing else, in this exact form:\n")
-            append("{\"tool\": \"<tool_name>\", \"arguments\": { ... }}\n")
-            append("When calling a tool: output the raw JSON with no code fences and no words before or after it; ")
-            append("use only the tools listed below, copying the tool name EXACTLY as written ")
-            append("(for example create_task — never an invented variant like add_task); ")
-            append("include only the arguments you need. ")
-            append("After each tool runs you receive a line beginning \"Result of <tool>:\". ")
-            append("Then either call another tool the same way, or — once the task is done — write your final answer ")
-            append("to the user in their language as plain text (no JSON). ")
-            append("If the user is only chatting and no action is needed, just answer directly with no tool.\n\n")
             if (compact) append("The tools below are the ONLY things you can do. You have NO internet " +
                 "access. Never say you did something unless its \"Result of <tool>:\" line says it " +
                 "worked.\n\n")
@@ -47,8 +36,7 @@ object SystemPrompts {
                 val params = t.params.joinToString(", ") { p -> p.name + if (p.required) "*" else "" }
                 append("- ").append(t.name)
                 if (params.isNotEmpty()) append("(").append(params).append(")")
-                val desc = if (compact) t.description.substringBefore(". ").take(120) else t.description
-                append(" — ").append(desc).append("\n")
+                append(" — ").append(t.description.substringBefore(". ").take(120)).append("\n")
             }
             append("\n(* = required argument. Booleans are true or false. Dates are \"YYYY-MM-DD\" or \"YYYY-MM-DD HH:mm\".)")
 
@@ -60,6 +48,19 @@ object SystemPrompts {
             append("checklist line or one attached file — pick the narrower tool when that is what ")
             append("they meant. If one message asks for several things, do them all, one tool call ")
             append("at a time, before you write your final answer.")
+
+            append("\n\nYou can act inside the app by calling tools. Only when you actually need to take an action ")
+            append("or look something up, reply with EXACTLY ONE JSON object and nothing else, in this exact form:\n")
+            append("{\"tool\": \"<tool_name>\", \"arguments\": { ... }}\n")
+            append("When calling a tool: output the raw JSON with no code fences and no words before or after it; ")
+            append("use only the tools listed above, copying the tool name EXACTLY as written ")
+            append("(for example create_task — never an invented variant like add_task); ")
+            append("include only the arguments you need. ")
+            append("After each tool runs you receive the next message in the conversation, and it begins ")
+            append("with the line \"Result of <tool>:\". ")
+            append("Then either call another tool the same way, or — once the task is done — write your final answer ")
+            append("to the user in their language as plain text (no JSON). ")
+            append("If the user is only chatting and no action is needed, just answer directly with no tool.")
 
             com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append("\n\n").append(it) }
         }
