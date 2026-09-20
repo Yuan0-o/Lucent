@@ -66,8 +66,8 @@ internal fun adapterFor(spec: ApiSpec): ProviderAdapter = when (spec) {
     ApiSpec.GOOGLE -> GoogleAdapter
 }
 
-private const val THINK_OPEN = " thinking"
-private const val THINK_CLOSE = ""
+private const val THINK_OPEN = "<think>"
+private const val THINK_CLOSE = "</think>"
 
 private fun routeContent(
     piece: String,

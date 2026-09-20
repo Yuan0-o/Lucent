@@ -96,6 +96,8 @@ class NotebookToolsTest {
             assertEquals(1, db.notebookDao().getAllOnce().size)
 
             db.noteDao().insert(Note(title = "Osaka hotel", body = "booked"))
+            val added = exec(db, "add_to_notebook", """{"notebook":"Trips","title":"Osaka hotel"}""")
+            assertTrue(added.success, "got ${added.summary}")
             val listed = exec(db, "list_notebooks", "{}")
             assertTrue(listed.summary.contains("Trips"), "got ${listed.summary}")
             assertTrue(listed.summary.contains("1 item"), "got ${listed.summary}")
