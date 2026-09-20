@@ -19,7 +19,7 @@ object AppNavigation {
     var returnScreen by mutableStateOf<Screen?>(null)
         private set
 
-    var settingsRoute by mutableStateOf(SettingsRoute.Root)
+    internal var settingsRoute by mutableStateOf(SettingsRoute.Root)
         private set
 
     var composeNoteRequested by mutableStateOf(false)
@@ -54,11 +54,11 @@ object AppNavigation {
         requestedScreen = screen
     }
 
-    fun rememberSettingsRoute(route: SettingsRoute) {
+    internal fun rememberSettingsRoute(route: SettingsRoute) {
         settingsRoute = route
     }
 
-    fun resetSettingsRoute() {
+    internal fun resetSettingsRoute() {
         settingsRoute = SettingsRoute.Root
     }
 
