@@ -48,7 +48,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +60,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.AppNavigation
 import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.AppLock
@@ -140,14 +140,23 @@ fun SettingsScreen(active: Boolean = true) {
             savedProfilesJson.isNotBlank() -> emptyList()
             else -> listOf(
                 com.lucent.app.data.ApiProfile(
-                    name = "API 1", spec = savedSpec, baseUrl = savedUrl, apiKey = savedKey, model = savedModel
+                    name = "API 1", spec = savedSpec, baseUrl = savedUrl, apiKey = savedKey, model = savedModel,
+                    provider = com.lucent.app.data.ApiProviders.match(savedSpec, savedUrl),
+                    selectedModels = listOfNotNull(savedModel.trim().takeIf { it.isNotBlank() })
                 )
             )
         }
     }
     val selectedProfileIdx = savedSelectedIdx.coerceIn(0, (profiles.size - 1).coerceAtLeast(0))
 
-    var models by remember { mutableStateOf(listOf<String>()) }
+    var provider by remember(savedProfilesJson, selectedProfileIdx) {
+        mutableStateOf(
+            profiles.getOrNull(selectedProfileIdx)?.provider ?: com.lucent.app.data.ApiProviders.CUSTOM
+        )
+    }
+    var models by remember(savedProfilesJson, selectedProfileIdx) {
+        mutableStateOf(profiles.getOrNull(selectedProfileIdx)?.selectedModels ?: emptyList())
+    }
     var loading by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf("") }
     var backupStatus by remember { mutableStateOf("") }
@@ -603,7 +612,11 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
-    var route by rememberSaveable { mutableStateOf(SettingsRoute.Root) }
+    val route = AppNavigation.settingsRoute
+
+    fun setRoute(next: SettingsRoute) {
+        AppNavigation.rememberSettingsRoute(next)
+    }
 
     val assistantDirty = route == SettingsRoute.Personalization && (
         assistantName.ifBlank { "Lucent" } != savedAssistantName ||
@@ -627,14 +640,21 @@ fun SettingsScreen(active: Boolean = true) {
         assistantStyle = savedAssistantStyle
     }
 
-    fun saveActiveProfile(idx: Int, activate: Boolean = true) {
+    fun saveActiveProfile(
+        idx: Int,
+        providerId: String,
+        selectedModels: List<String>,
+        activate: Boolean = true
+    ) {
         val updated = profiles.toMutableList()
         val edited = com.lucent.app.data.ApiProfile(
             name = editingProfileName.trim().ifBlank { "API ${idx + 1}" },
             spec = spec,
             baseUrl = url.trim(),
             apiKey = key.trim(),
-            model = selectedModel
+            model = selectedModel,
+            provider = providerId,
+            selectedModels = selectedModels
         )
         if (idx in updated.indices) updated[idx] = edited else updated.add(edited)
         val newSelected = if (activate) idx.coerceIn(0, updated.size - 1) else selectedProfileIdx
@@ -648,7 +668,6 @@ fun SettingsScreen(active: Boolean = true) {
         val p = profiles.getOrNull(idx) ?: return
         url = p.baseUrl; spec = p.spec; key = p.apiKey; selectedModel = p.model
         editingProfileName = p.name
-        models = emptyList()
         AppScope.io.launch { repo.saveApiProfiles(profiles, idx) }
     }
 
@@ -658,7 +677,6 @@ fun SettingsScreen(active: Boolean = true) {
         val newList = profiles + com.lucent.app.data.ApiProfile(name = defaultName)
         val newIdx = newList.size - 1
         url = ""; spec = "openai"; key = ""; selectedModel = ""; editingProfileName = defaultName
-        models = emptyList()
         AppScope.io.launch { repo.saveApiProfiles(newList, newIdx) }
     }
 
@@ -667,32 +685,27 @@ fun SettingsScreen(active: Boolean = true) {
         val newList = profiles.toMutableList().also { it.removeAt(idx) }
         if (newList.isEmpty()) {
             url = ""; spec = "openai"; key = ""; selectedModel = ""; editingProfileName = ""
-            models = emptyList()
         }
         val newSelected = if (newList.isEmpty()) 0 else selectedProfileIdx.coerceIn(0, newList.size - 1)
         AppScope.io.launch { repo.saveApiProfiles(newList, newSelected) }
     }
 
     fun leavePersonalization() {
-        if (assistantDirty) showUnsavedDialog = true else route = SettingsRoute.Assistant
+        if (assistantDirty) showUnsavedDialog = true else setRoute(SettingsRoute.Assistant)
     }
 
     fun goBack() {
         when (route) {
             SettingsRoute.Personalization -> leavePersonalization()
-            SettingsRoute.Memory -> route = SettingsRoute.Assistant
-            SettingsRoute.Network -> route = SettingsRoute.Assistant
-            SettingsRoute.Api -> route = SettingsRoute.Assistant
-            SettingsRoute.LocalModel -> route = SettingsRoute.Assistant
-            SettingsRoute.Theme, SettingsRoute.Background -> route = SettingsRoute.Appearance
+            SettingsRoute.Memory -> setRoute(SettingsRoute.Assistant)
+            SettingsRoute.Network -> setRoute(SettingsRoute.Assistant)
+            SettingsRoute.Api -> setRoute(SettingsRoute.Assistant)
+            SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
+            SettingsRoute.Theme, SettingsRoute.Background -> setRoute(SettingsRoute.Appearance)
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
-            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> route = SettingsRoute.Root
-            else -> route = SettingsRoute.Root
+            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> setRoute(SettingsRoute.Root)
+            else -> setRoute(SettingsRoute.Root)
         }
-    }
-
-    LaunchedEffect(active) {
-        if (!active) route = SettingsRoute.Root
     }
 
     LaunchedEffect(route) {
@@ -740,7 +753,7 @@ fun SettingsScreen(active: Boolean = true) {
                 TextButton(onClick = {
                     persistAssistantSettings()
                     showUnsavedDialog = false
-                    route = SettingsRoute.Assistant
+                    setRoute(SettingsRoute.Assistant)
                 }) { Text(S.actionSave) }
             },
             dismissButton = {
@@ -748,7 +761,7 @@ fun SettingsScreen(active: Boolean = true) {
                     TextButton(onClick = {
                         discardAssistantSettings()
                         showUnsavedDialog = false
-                        route = SettingsRoute.Assistant
+                        setRoute(SettingsRoute.Assistant)
                     }) { Text(S.actionDiscard) }
                     TextButton(onClick = { showUnsavedDialog = false }) { Text(S.actionCancel) }
                 }
@@ -1798,36 +1811,8 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearData = false
-                    requireLockAuth { AppScope.io.launch {
-                        db.taskDao().getAllOnce().forEach {
-                            com.lucent.app.reminders.ReminderScheduler.cancel(appContext, it.id)
-                        }
-                        db.noteVersionDao().clearAll()
-                        db.noteDao().clearAll()
-                        db.taskDao().clearAll()
-                        db.chatDao().clearAll()
-                        db.chatConversationDao().clearAll()
-
-                        repo.clearAll()
-                        com.lucent.app.data.UsageTracker.clearAll(appContext)
-
-                        com.lucent.app.data.AttachmentStore.pruneOrphans(appContext, emptySet())
-                        com.lucent.app.data.AttachmentAccess.clearPreviewCache(appContext)
-                        appContext.cacheDir.listFiles()?.forEach { f -> runCatching { f.deleteRecursively() } }
-
-                        com.lucent.app.local.LocalLlm.shutdown()
-                        com.lucent.app.local.LocalModelStore.deleteAll(appContext)
-
-                        FontStore.deleteAll(appContext)
-                        LucentFontResolver.evictAll()
-
-                        com.lucent.app.data.StartupLog.clear(appContext)
-                        com.lucent.app.data.StartupLog.setEnabled(false)
-                        com.lucent.app.data.DatabaseEncryption.clearLockedNotice(appContext)
-                        com.lucent.app.data.DatabaseEncryption.purgeSetAsideDatabases(appContext)
-
-                        com.lucent.app.data.ShareIntegration.setEnabled(appContext, false)
-                        com.lucent.app.widget.WidgetUpdater.refreshContent(appContext)
+                    requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear all data") {
+                        com.lucent.app.data.wipeAllData(appContext, db, repo)
 
                         withContext(Dispatchers.Main) {
                             backupStatus = ""
@@ -1854,10 +1839,11 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearNotes = false
-                    requireLockAuth { AppScope.io.launch {
+                    requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear notes") {
                         db.noteVersionDao().clearAll()
                         db.noteDao().clearAll()
                         com.lucent.app.data.AttachmentMigration.pruneOrphans(appContext)
+                        com.lucent.app.widget.WidgetUpdater.refreshContent(appContext)
                         withContext(Dispatchers.Main) { LucentToast.show(appContext, S.notesClearedToast) }
                     }
                 } }) { Text(S.deleteNotesBtn) }
@@ -1877,12 +1863,14 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearTasks = false
-                    requireLockAuth { AppScope.io.launch {
+                    requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear tasks") {
                         db.taskDao().getAllOnce().forEach {
                             com.lucent.app.reminders.ReminderScheduler.cancel(appContext, it.id)
                         }
+                        db.taskVersionDao().clearAll()
                         db.taskDao().clearAll()
                         com.lucent.app.data.AttachmentMigration.pruneOrphans(appContext)
+                        com.lucent.app.widget.WidgetUpdater.refreshContent(appContext)
                         withContext(Dispatchers.Main) { LucentToast.show(appContext, S.tasksClearedToast) }
                     }
                 } }) { Text(S.deleteTasksBtn) }
@@ -1921,7 +1909,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showClearChats = false
-                    requireLockAuth { AppScope.io.launch {
+                    requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear chats") {
                         db.chatDao().clearAll()
                         db.chatConversationDao().clearAll()
                         AssistantController.onAllChatsCleared(appContext)
@@ -2235,7 +2223,7 @@ fun SettingsScreen(active: Boolean = true) {
         modifier = Modifier.fillMaxWidth().verticalScroll(rootScroll).hazeSource(state = LocalHazeState.current).padding(16.dp).padding(bottom = LocalBottomBarInset.current)
     ) {
         when (route) {
-            SettingsRoute.Root -> RootSettingsPage(onRoute = { route = it })
+            SettingsRoute.Root -> RootSettingsPage(onRoute = { setRoute(it) })
 
             SettingsRoute.Language -> LanguageSettingsPage(
                 repo = repo,
@@ -2245,14 +2233,14 @@ fun SettingsScreen(active: Boolean = true) {
                 fontError = fontError,
                 onRequestDeleteFont = { fontPendingDelete = it },
                 onImportFontClick = { fontImportLauncher.launch(arrayOf("*/*")) },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Assistant -> AssistantSettingsPage(
                 repo = repo,
                 profiles = profiles,
                 selectedProfileIdx = selectedProfileIdx,
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.LocalModel -> LocalModelSettingsPage(
@@ -2273,7 +2261,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestToolsOn = { lmConfirmToolsOn = true },
                 onRequestGpuOn = { lmConfirmGpuOn = true },
                 onRequestBackgroundOn = { lmConfirmBackgroundOn = true },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Personalization -> PersonalizationSettingsPage(
@@ -2289,10 +2277,10 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Memory -> MemorySettingsPage(
                 repo = repo,
                 onRequestSmallModelWarning = { showSmallModelWarn = true },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
-            SettingsRoute.Network -> NetworkSettingsPage(repo = repo, onRoute = { route = it })
+            SettingsRoute.Network -> NetworkSettingsPage(repo = repo, onRoute = { setRoute(it) })
 
             SettingsRoute.Api -> ApiSettingsPage(
                 repo = repo,
@@ -2300,6 +2288,14 @@ fun SettingsScreen(active: Boolean = true) {
                 selectedProfileIdx = selectedProfileIdx,
                 editingProfileName = editingProfileName,
                 onEditingProfileNameChange = { editingProfileName = it },
+                provider = provider,
+                onProviderChange = { id ->
+                    provider = id
+                    com.lucent.app.data.ApiProviders.preset(id)?.let { preset ->
+                        url = preset.baseUrl
+                        spec = preset.spec
+                    }
+                },
                 url = url,
                 onUrlChange = { url = it },
                 spec = spec,
@@ -2311,7 +2307,10 @@ fun SettingsScreen(active: Boolean = true) {
                 selectedModel = selectedModel,
                 onSelectedModelChange = { selectedModel = it },
                 models = models,
-                onModelsChange = { models = it },
+                onModelsChange = { picked ->
+                    models = picked
+                    saveActiveProfile(selectedProfileIdx, provider, picked)
+                },
                 loading = loading,
                 onLoadingChange = { loading = it },
                 errorText = errorText,
@@ -2319,26 +2318,26 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestDeleteProfile = { profilePendingDelete = it },
                 onSelectProfile = { selectProfile(it) },
                 onAddProfile = { addProfile() },
-                onSaveProfile = { saveActiveProfile(selectedProfileIdx) },
-                onRoute = { route = it }
+                onSaveProfile = { saveActiveProfile(selectedProfileIdx, provider, models) },
+                onRoute = { setRoute(it) }
             )
 
-            SettingsRoute.Appearance -> AppearanceSettingsPage(repo = repo, onRoute = { route = it })
+            SettingsRoute.Appearance -> AppearanceSettingsPage(repo = repo, onRoute = { setRoute(it) })
 
-            SettingsRoute.Theme -> ThemeSettingsPage(repo = repo, onRoute = { route = it })
+            SettingsRoute.Theme -> ThemeSettingsPage(repo = repo, onRoute = { setRoute(it) })
 
-            SettingsRoute.Background -> BackgroundSettingsPage(repo = repo, onRoute = { route = it })
+            SettingsRoute.Background -> BackgroundSettingsPage(repo = repo, onRoute = { setRoute(it) })
 
             SettingsRoute.Editor -> EditorSettingsPage(
                 repo = repo,
                 onRequestOpenLinksWarning = { showOpenLinksWarning = true },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Cloud -> CloudSettingsPage(
                 repo = repo,
                 showToast = { msg -> LucentToast.show(context, msg) },
-                onBack = { route = SettingsRoute.Root }
+                onBack = { setRoute(SettingsRoute.Root) }
             )
 
             SettingsRoute.Security -> SecuritySettingsPage(
@@ -2359,7 +2358,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestCrashShieldInfo = { showCrashShieldInfo = true },
                 encryptionCheckResult = encryptionCheckResult,
                 onEncryptionCheckResultChange = { encryptionCheckResult = it },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Privacy -> PrivacySettingsPage(
@@ -2372,7 +2371,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestBlackoutWarning = { showBlackoutWarning = true },
                 onRequestShareWarning = { showShareWarning = true },
                 onExportLogsClick = { logsExportLauncher.launch("lucent-startup-log.txt") },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Data -> DataSettingsPage(
@@ -2389,7 +2388,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestClearTasks = { showClearTasks = true },
                 onRequestClearChats = { showClearChats = true },
                 onRequestClearData = { showClearData = true },
-                onRoute = { route = it }
+                onRoute = { setRoute(it) }
             )
         }
     }

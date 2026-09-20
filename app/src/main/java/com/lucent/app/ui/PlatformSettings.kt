@@ -54,6 +54,10 @@ fun DynamicColorRow(repo: SettingsRepository) {
                     color = onGradientMuted,
                     fontSize = 13.sp
                 )
+                if (dynamicColorSupported) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(S.dynamicColorGradientNote, color = onGradientMuted, fontSize = 13.sp)
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
@@ -89,7 +93,7 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val scope = rememberCoroutineScope()
     val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = false)
 
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text(S.biometricUnlockTitle, color = onGradient)

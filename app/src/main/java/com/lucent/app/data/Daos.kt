@@ -74,6 +74,12 @@ interface NoteDao {
     @Update
     suspend fun update(note: Note)
 
+    @Query("UPDATE notes SET pinned = :pinned WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean)
+
+    @Query("UPDATE notes SET manualOrder = :order WHERE id = :id")
+    suspend fun setManualOrder(id: Long, order: Int)
+
     @Delete
     suspend fun delete(note: Note)
 
@@ -257,6 +263,12 @@ interface TaskDao {
 
     @Update
     suspend fun update(task: Task)
+
+    @Query("UPDATE tasks SET pinned = :pinned WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean)
+
+    @Query("UPDATE tasks SET manualOrder = :order WHERE id = :id")
+    suspend fun setManualOrder(id: Long, order: Int)
 
     @Delete
     suspend fun delete(task: Task)

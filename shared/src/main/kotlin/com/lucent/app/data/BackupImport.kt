@@ -75,6 +75,7 @@ internal object BackupImporter {
                 val isDoodle = o.optBoolean("isDoodle", false)
                 val doodle = o.optString("doodle", "")
                 val bodySpans = o.optString("bodySpans", "")
+                val formatOverride = if (o.isNull("formatOverride")) null else o.optString("formatOverride").takeIf { it.isNotBlank() }
                 val key = ImportDecision.noteKey(title)
                 val local = existingNotes.firstOrNull { ImportDecision.noteKey(it.title) == key }
                 val isDuplicate = existingNotes.any {
@@ -89,7 +90,8 @@ internal object BackupImporter {
                     checklist = checklist, trashedAt = trashedAt,
                     manualOrder = manualOrder, isDraft = isDraft,
                     draftSavedAt = draftSavedAt, hidden = hidden,
-                    isDoodle = isDoodle, doodle = doodle, bodySpans = bodySpans
+                    isDoodle = isDoodle, doodle = doodle, bodySpans = bodySpans,
+                    formatOverride = formatOverride
                 )
                 val newNoteId = if (action == ImportAction.REPLACE && local != null) {
                     db.noteDao().update(incoming.copy(id = local.id))
@@ -124,6 +126,7 @@ internal object BackupImporter {
                 val taskDraftSavedAt = if (o.isNull("draftSavedAt")) null else o.optLong("draftSavedAt")
                 val taskHidden = o.optBoolean("hidden", false)
                 val taskNotesSpans = o.optString("notesSpans", "")
+                val taskFormatOverride = if (o.isNull("formatOverride")) null else o.optString("formatOverride").takeIf { it.isNotBlank() }
                 val taskKey = ImportDecision.taskKey(title, createdAt)
                 val localTask = existingTasks.firstOrNull {
                     ImportDecision.taskKey(it.title, it.createdAt) == taskKey
@@ -142,7 +145,8 @@ internal object BackupImporter {
                     reminderEnabled = reminderEnabled, trashedAt = taskTrashedAt,
                     manualOrder = taskManualOrder, isDraft = taskIsDraft,
                     draftSavedAt = taskDraftSavedAt, hidden = taskHidden,
-                    notesSpans = taskNotesSpans
+                    notesSpans = taskNotesSpans,
+                    formatOverride = taskFormatOverride
                 )
                 val newTaskId = if (taskAction == ImportAction.REPLACE && localTask != null) {
                     db.taskDao().update(incomingTask.copy(id = localTask.id))
@@ -232,7 +236,8 @@ internal object BackupImporter {
                         attachmentName = if (o.isNull("attachmentName")) null else o.optString("attachmentName"),
                         attachmentList = if (o.isNull("attachmentList")) null else o.optString("attachmentList"),
                         conversationId = newConvId,
-                        tokens = o.optInt("tokens", 0)
+                        tokens = o.optInt("tokens", 0),
+                        agentTrace = if (o.isNull("agentTrace")) null else o.optString("agentTrace")
                     )
                 )
                 importedChats++

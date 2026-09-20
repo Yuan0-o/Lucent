@@ -103,7 +103,7 @@ internal fun PrivacySettingsPage(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.systemIntegrationTitle, color = onGradient)
@@ -123,7 +123,7 @@ internal fun PrivacySettingsPage(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         var showLoggingConsent by remember { mutableStateOf(false) }
         if (showLoggingConsent) {
             AlertDialog(
@@ -161,7 +161,7 @@ internal fun PrivacySettingsPage(
                 }
             )
         }
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         if (crashShieldLocksStartupLogging && crashShieldOn) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(S.crashShieldLoggingLocked, color = onGradientMuted, fontSize = 12.sp)
@@ -179,12 +179,12 @@ internal fun PrivacySettingsPage(
         }
     }
 
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.historyTitle, color = onGradient)
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(S.historyNotes, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
             Switch(
@@ -207,7 +207,7 @@ internal fun PrivacySettingsPage(
         }
     }
 
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         var hiddenPw by remember { mutableStateOf("") }

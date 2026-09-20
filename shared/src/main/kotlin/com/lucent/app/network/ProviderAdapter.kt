@@ -23,15 +23,23 @@ sealed interface ProviderAdapter {
 
     fun parseReply(bodyStr: String): RawModelReply
 
-    fun parseStreamEvent(json: JSONObject, acc: StreamAccumulator, onDelta: (String) -> Unit)
+    fun parseStreamEvent(
+        json: JSONObject,
+        acc: StreamAccumulator,
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit = {}
+    )
 }
 
 class StreamAccumulator {
     val fullText = StringBuilder()
+    val fullReasoning = StringBuilder()
     val openAiToolAcc = LinkedHashMap<Int, ToolAcc>()
     val anthropicToolAcc = LinkedHashMap<Int, ToolAcc>()
     var returnedImageMime: String? = null
     var returnedImageData: String? = null
+    internal var inThinkBlock = false
+    internal val thinkCarry = StringBuilder()
 
     fun toolCalls(useAnthropicAcc: Boolean): List<ToolCallRequest> {
         val source = if (useAnthropicAcc) anthropicToolAcc else openAiToolAcc
@@ -56,6 +64,86 @@ internal fun adapterFor(spec: ApiSpec): ProviderAdapter = when (spec) {
     ApiSpec.OPENAI -> OpenAiAdapter
     ApiSpec.ANTHROPIC -> AnthropicAdapter
     ApiSpec.GOOGLE -> GoogleAdapter
+}
+
+private const val THINK_OPEN = " thinking"
+private const val THINK_CLOSE = ""
+
+private fun routeContent(
+    piece: String,
+    acc: StreamAccumulator,
+    onDelta: (String) -> Unit,
+    onReasoning: (String) -> Unit
+) {
+    var pending = acc.thinkCarry.append(piece).toString()
+    acc.thinkCarry.setLength(0)
+    while (pending.isNotEmpty()) {
+        val tag = if (acc.inThinkBlock) THINK_CLOSE else THINK_OPEN
+        val at = pending.indexOf(tag)
+        if (at >= 0) {
+            emitChunk(pending.substring(0, at), acc, onDelta, onReasoning)
+            acc.inThinkBlock = !acc.inThinkBlock
+            pending = pending.substring(at + tag.length)
+            continue
+        }
+        val keep = thinkTailLength(pending)
+        emitChunk(pending.substring(0, pending.length - keep), acc, onDelta, onReasoning)
+        if (keep > 0) acc.thinkCarry.append(pending.substring(pending.length - keep))
+        pending = ""
+    }
+}
+
+internal fun flushContentRouting(
+    acc: StreamAccumulator,
+    onDelta: (String) -> Unit,
+    onReasoning: (String) -> Unit
+) {
+    if (acc.thinkCarry.isEmpty()) return
+    val pending = acc.thinkCarry.toString()
+    acc.thinkCarry.setLength(0)
+    emitChunk(pending, acc, onDelta, onReasoning)
+}
+
+private fun emitChunk(
+    text: String,
+    acc: StreamAccumulator,
+    onDelta: (String) -> Unit,
+    onReasoning: (String) -> Unit
+) {
+    if (text.isEmpty()) return
+    if (acc.inThinkBlock) {
+        acc.fullReasoning.append(text)
+        onReasoning(text)
+    } else {
+        acc.fullText.append(text)
+        onDelta(text)
+    }
+}
+
+private fun thinkTailLength(text: String): Int {
+    val max = minOf(text.length, maxOf(THINK_OPEN.length, THINK_CLOSE.length) - 1)
+    for (k in max downTo 1) {
+        val tail = text.substring(text.length - k)
+        if (THINK_OPEN.startsWith(tail) || THINK_CLOSE.startsWith(tail)) return k
+    }
+    return 0
+}
+
+private fun reasoningChannel(delta: JSONObject?): String {
+    if (delta == null) return ""
+    for (key in arrayOf("reasoning_content", "reasoning")) {
+        if (delta.isNull(key)) continue
+        val value = delta.optString(key, "")
+        if (value.isNotEmpty()) return value
+    }
+    val details = delta.optJSONArray("reasoning_details") ?: return ""
+    val sb = StringBuilder()
+    for (i in 0 until details.length()) {
+        val part = details.optJSONObject(i) ?: continue
+        if (part.isNull("text")) continue
+        sb.append(part.optString("text", ""))
+    }
+    return sb.toString()
 }
 
 internal const val TEMPERATURE = 0.6
@@ -192,10 +280,20 @@ object OpenAiAdapter : ProviderAdapter {
         return RawModelReply(text, toolCalls, image?.first, image?.second)
     }
 
-    override fun parseStreamEvent(json: JSONObject, acc: StreamAccumulator, onDelta: (String) -> Unit) {
+    override fun parseStreamEvent(
+        json: JSONObject,
+        acc: StreamAccumulator,
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit
+    ) {
         val delta = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
+        val reasoning = reasoningChannel(delta)
+        if (reasoning.isNotEmpty()) {
+            acc.fullReasoning.append(reasoning)
+            onReasoning(reasoning)
+        }
         val piece = delta?.let { if (it.isNull("content")) "" else it.optString("content", "") } ?: ""
-        if (piece.isNotEmpty()) { acc.fullText.append(piece); onDelta(piece) }
+        if (piece.isNotEmpty()) routeContent(piece, acc, onDelta, onReasoning)
         delta?.optJSONArray("tool_calls")?.let { tcArr ->
             for (i in 0 until tcArr.length()) {
                 val tc = tcArr.getJSONObject(i)
@@ -330,7 +428,12 @@ object AnthropicAdapter : ProviderAdapter {
         return RawModelReply(text, toolCalls)
     }
 
-    override fun parseStreamEvent(json: JSONObject, acc: StreamAccumulator, onDelta: (String) -> Unit) {
+    override fun parseStreamEvent(
+        json: JSONObject,
+        acc: StreamAccumulator,
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit
+    ) {
         when (json.optString("type")) {
             "content_block_start" -> {
                 val block = json.optJSONObject("content_block")
@@ -344,7 +447,14 @@ object AnthropicAdapter : ProviderAdapter {
                 when (delta?.optString("type")) {
                     "text_delta" -> {
                         val piece = if (delta.isNull("text")) "" else delta.optString("text", "")
-                        if (piece.isNotEmpty()) { acc.fullText.append(piece); onDelta(piece) }
+                        if (piece.isNotEmpty()) routeContent(piece, acc, onDelta, onReasoning)
+                    }
+                    "thinking_delta" -> {
+                        val piece = if (delta.isNull("thinking")) "" else delta.optString("thinking", "")
+                        if (piece.isNotEmpty()) {
+                            acc.fullReasoning.append(piece)
+                            onReasoning(piece)
+                        }
                     }
                     "input_json_delta" -> {
                         val idx = json.optInt("index", 0)
@@ -486,13 +596,25 @@ object GoogleAdapter : ProviderAdapter {
         return RawModelReply(text, toolCalls, imageMime, imageData)
     }
 
-    override fun parseStreamEvent(json: JSONObject, acc: StreamAccumulator, onDelta: (String) -> Unit) {
+    override fun parseStreamEvent(
+        json: JSONObject,
+        acc: StreamAccumulator,
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit
+    ) {
         val parts = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
         if (parts != null) {
             for (i in 0 until parts.length()) {
                 val part = parts.getJSONObject(i)
                 val piece = if (part.isNull("text")) "" else part.optString("text", "")
-                if (piece.isNotEmpty()) { acc.fullText.append(piece); onDelta(piece) }
+                if (piece.isNotEmpty()) {
+                    if (part.optBoolean("thought", false)) {
+                        acc.fullReasoning.append(piece)
+                        onReasoning(piece)
+                    } else {
+                        routeContent(piece, acc, onDelta, onReasoning)
+                    }
+                }
                 part.optJSONObject("functionCall")?.let { fc ->
                     val args = fc.optJSONObject("args") ?: JSONObject()
                     val a = acc.openAiToolAcc.getOrPut(i) { ToolAcc() }

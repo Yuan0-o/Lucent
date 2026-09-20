@@ -69,7 +69,7 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
             )
         }
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
     if (!dynamicColorActive) {
         val paletteEnabled = backgroundAnimationEnabled
         val paletteAlpha = if (paletteEnabled) 1f else 0.38f
@@ -122,7 +122,7 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
 
             PaletteGroup.entries.forEach { group ->
                 val heading = group.title()
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     heading,
                     color = onGradientMuted.copy(alpha = onGradientMuted.alpha * paletteAlpha),

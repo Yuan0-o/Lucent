@@ -54,7 +54,7 @@ internal fun EditorSettingsPage(
                 onCheckedChange = { checked -> scope.launch { repo.setMarkdownEnabled(checked) } }
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.richTextTitle, color = onGradient)
@@ -65,7 +65,7 @@ internal fun EditorSettingsPage(
                 onCheckedChange = { checked -> scope.launch { repo.setRichTextEnabled(checked) } }
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         DesktopIntegrationRows(repo)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
@@ -77,7 +77,7 @@ internal fun EditorSettingsPage(
                 onCheckedChange = { checked -> scope.launch { repo.setLinksEnabled(checked) } }
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.openLinksTitle, color = onGradient)

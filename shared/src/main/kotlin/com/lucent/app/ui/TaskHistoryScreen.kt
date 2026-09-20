@@ -176,7 +176,10 @@ fun TaskHistoryScreen(
             Text(com.lucent.app.i18n.S.screenVersionHistory, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
         }
 
-        Text(com.lucent.app.i18n.S.historyIntro(task.title.ifBlank { com.lucent.app.i18n.S.untitled }))
+        Text(
+            com.lucent.app.i18n.S.historyIntro(task.title.ifBlank { com.lucent.app.i18n.S.untitled }),
+            color = onGradient
+        )
         Spacer(modifier = Modifier.height(16.dp))
 
         if (versions.isEmpty()) {

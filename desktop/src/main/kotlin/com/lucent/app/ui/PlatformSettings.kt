@@ -55,7 +55,7 @@ fun DesktopIntegrationRows(repo: SettingsRepository) {
             onCheckedChange = { checked -> scope.launch { repo.setCloseToTray(checked) } }
         )
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.weight(1f)) {
             Text(S.startWithWindowsTitle, color = onGradient)
@@ -70,7 +70,7 @@ fun DesktopIntegrationRows(repo: SettingsRepository) {
             }
         )
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 }
 
 @Composable
@@ -86,7 +86,7 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val scope = rememberCoroutineScope()
     val helloEnabled by repo.appLockHelloEnabled.collectAsState(initial = false)
 
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text(S.helloTitle, color = onGradient)

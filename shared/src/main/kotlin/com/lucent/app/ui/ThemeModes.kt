@@ -3,6 +3,19 @@ package com.lucent.app.ui
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 
+enum class LucentThemeSection {
+    LIGHT,
+    DARK,
+    SYSTEM;
+
+    val label: String
+        get() = when (this) {
+            LIGHT -> com.lucent.app.i18n.S.themeSectionLight
+            DARK -> com.lucent.app.i18n.S.themeSectionDark
+            SYSTEM -> com.lucent.app.i18n.S.themeSectionSystem
+        }
+}
+
 enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
     SYSTEM("system"),
     LIGHT("light"),
@@ -117,6 +130,14 @@ enum class LucentThemeMode(val key: String, val featured: Boolean = true) {
             MONET_FIR -> com.lucent.app.i18n.S.themeMonetFirDesc
             MONET_WALNUT -> com.lucent.app.i18n.S.themeMonetWalnutDesc
             MONET_ABYSS -> com.lucent.app.i18n.S.themeMonetAbyssDesc
+        }
+
+    val section: LucentThemeSection
+        get() = when (this) {
+            SYSTEM -> LucentThemeSection.SYSTEM
+            LIGHT -> LucentThemeSection.LIGHT
+            DARK -> LucentThemeSection.DARK
+            else -> if (isDark(systemDark = false)) LucentThemeSection.DARK else LucentThemeSection.LIGHT
         }
 
     fun isDark(systemDark: Boolean): Boolean = when (this) {

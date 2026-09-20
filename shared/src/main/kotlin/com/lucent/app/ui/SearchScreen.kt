@@ -337,7 +337,7 @@ private fun searchChipLabel(token: String): String = when (token) {
 }
 
 @Composable
-private fun SectionHeader(label: String, count: Int, icon: ImageVector) {
+internal fun SectionHeader(label: String, count: Int, icon: ImageVector) {
     val onGradientMuted = LocalOnGradientMuted.current
     Row(
         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
@@ -350,7 +350,7 @@ private fun SectionHeader(label: String, count: Int, icon: ImageVector) {
 }
 
 @Composable
-private fun NoteResultRow(note: Note, onOpen: () -> Unit) {
+internal fun NoteResultRow(note: Note, onOpen: () -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
@@ -407,7 +407,7 @@ private fun NoteResultRow(note: Note, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun TaskResultRow(task: Task, onOpen: () -> Unit) {
+internal fun TaskResultRow(task: Task, onOpen: () -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 

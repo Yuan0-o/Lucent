@@ -1,23 +1,23 @@
 package com.lucent.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloseFullscreen
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,14 +38,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
@@ -64,12 +65,12 @@ fun ExpandableGlassTextField(
     expandedTitle: String,
     modifier: Modifier = Modifier,
     collapsedMinHeight: Dp = 360.dp,
-    collapsedMaxHeight: Dp = 960.dp,
     spans: List<RichSpan> = emptyList(),
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
     textColors: List<Color> = emptyList(),
     extraAction: (@Composable () -> Unit)? = null,
+    tools: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val onGradientMuted = LocalOnGradientMuted.current
     var expanded by remember { mutableStateOf(false) }
@@ -86,6 +87,18 @@ fun ExpandableGlassTextField(
         if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
         else RichSpanTransformation(spans, highlightColors, textColors)
     }
+    val lastLineRequester = remember { BringIntoViewRequester() }
+    var followedLength by remember { mutableStateOf(value.length) }
+    LaunchedEffect(fieldValue.text.length, fieldValue.selection.max) {
+        val length = fieldValue.text.length
+        val caretAtEnd = fieldValue.selection.max >= length
+        val caretWasAtEnd = fieldValue.selection.max >= followedLength
+        if (length > followedLength && length > 0 && (caretAtEnd || caretWasAtEnd)) {
+            withFrameNanos { }
+            lastLineRequester.bringIntoView()
+        }
+        followedLength = length
+    }
 
     Box(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -99,7 +112,14 @@ fun ExpandableGlassTextField(
             placeholder = { Text(placeholder) },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = collapsedMinHeight, max = collapsedMaxHeight)
+                .heightIn(min = collapsedMinHeight)
+        )
+        Spacer(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(0.dp)
+                .bringIntoViewRequester(lastLineRequester)
         )
         IconButton(
             onClick = { expanded = true },
@@ -130,7 +150,8 @@ fun ExpandableGlassTextField(
             spans = spans,
             onSelectionChange = onSelectionChange,
             highlightColors = highlightColors,
-            textColors = textColors
+            textColors = textColors,
+            tools = tools
         )
     }
 }
@@ -146,6 +167,7 @@ private fun ExpandedEditor(
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
     textColors: List<Color> = emptyList(),
+    tools: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     var expandedField by remember { mutableStateOf(TextFieldValue(value)) }
     if (expandedField.text != value) {
@@ -161,7 +183,7 @@ private fun ExpandedEditor(
     }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val noRipple = remember { MutableInteractionSource() }
+    val panelSurface = panelSurfaceColor(onGradient)
 
     Dialog(
         onDismissRequest = onCollapse,
@@ -179,71 +201,55 @@ private fun ExpandedEditor(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(interactionSource = noRipple, indication = null) { onCollapse() }
-        ) {
+        Box(modifier = Modifier.fillMaxSize().background(panelSurface)) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .systemBarsPadding()
                     .imePadding()
-                    .padding(10.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                val panelSurface = panelSurfaceColor(onGradient)
-                Column(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onCollapse, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = com.lucent.app.i18n.S.actionBack,
+                            tint = onGradient,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(4.dp))
+                    Text(title, color = onGradient, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.size(8.dp))
+                OutlinedTextField(
+                    value = expandedField,
+                    onValueChange = { updated ->
+                        expandedField = updated
+                        onSelectionChange(updated.selection.min, updated.selection.max)
+                        if (updated.text != value) onValueChange(updated.text)
+                    },
+                    visualTransformation = expandedTransformation,
+                    placeholder = { Text(placeholder, color = onGradientMuted) },
+                    textStyle = LocalTextStyle.current.copy(color = onGradient),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = onGradient,
+                        unfocusedTextColor = onGradient,
+                        cursorColor = onGradient,
+                        focusedBorderColor = onGradient.copy(alpha = 0.5f),
+                        unfocusedBorderColor = onGradient.copy(alpha = 0.3f),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(panelSurface)
-                        .frostedGlass()
-                        .clickable(interactionSource = noRipple, indication = null) {}
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(title, color = onGradient, fontSize = 18.sp)
-                        IconButton(onClick = onCollapse, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                Icons.Default.CloseFullscreen,
-                                contentDescription = com.lucent.app.i18n.S.collapseTextBox,
-                                tint = onGradientMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.size(8.dp))
-                    OutlinedTextField(
-                        value = expandedField,
-                        onValueChange = { updated ->
-                            expandedField = updated
-                            onSelectionChange(updated.selection.min, updated.selection.max)
-                            if (updated.text != value) onValueChange(updated.text)
-                        },
-                        visualTransformation = expandedTransformation,
-                        placeholder = { Text(placeholder, color = onGradientMuted) },
-                        textStyle = LocalTextStyle.current.copy(color = onGradient),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = onGradient,
-                            unfocusedTextColor = onGradient,
-                            cursorColor = onGradient,
-                            focusedBorderColor = onGradient.copy(alpha = 0.5f),
-                            unfocusedBorderColor = onGradient.copy(alpha = 0.3f),
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    )
-                }
+                )
             }
+            if (tools != null) tools()
         }
     }
 }

@@ -9,11 +9,6 @@ import android.os.Build
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.TravelExplore
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
@@ -63,15 +58,6 @@ fun shareText(context: Context, subject: String? = null, text: String, chooserTi
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
-}
-
-@Composable
-fun OverflowMenuSearchItem(onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(com.lucent.app.i18n.S.searchEverything) },
-        leadingIcon = { Icon(Icons.Default.TravelExplore, contentDescription = null) },
-        onClick = onClick
-    )
 }
 
 internal val notesGridColumns: Int = 2

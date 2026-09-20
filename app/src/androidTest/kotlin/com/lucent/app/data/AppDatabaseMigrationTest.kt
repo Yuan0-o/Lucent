@@ -475,4 +475,50 @@ class AppDatabaseMigrationTest {
             assertEquals("", c.getString(3))
         }
     }
+
+    @Test
+    fun migrate19To20_addsChatMessagesAgentTraceColumn() {
+        helper.createDatabase(TEST_DB, 19).apply {
+            execSQL(
+                "INSERT INTO chat_messages (id, role, content, timestamp, attachmentMime, " +
+                    "attachmentData, attachmentName, attachmentList, conversationId, tokens, replyToId) " +
+                    "VALUES (1, 'assistant', 'hi', 1000, NULL, NULL, NULL, NULL, 1, 0, 0)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 20, true, MIGRATION_19_20)
+
+        db.query("SELECT agentTrace FROM chat_messages WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst()); assertTrue(c.isNull(0))
+        }
+    }
+
+    @Test
+    fun migrate20To21_addsFormatOverrideColumnsToNotesAndTasks() {
+        helper.createDatabase(TEST_DB, 20).apply {
+            execSQL(
+                "INSERT INTO notes (id, title, body, updatedAt, tags, attachments, archived, " +
+                    "archivedAt, pinned, color, isChecklist, checklist, trashedAt, manualOrder, " +
+                    "isDraft, draftSavedAt, hidden, isDoodle, doodle, bodySpans) VALUES " +
+                    "(1, 'N', 'B', 1000, '', '[]', 0, NULL, 0, '', 0, '[]', NULL, 0, 0, NULL, 0, 0, '', '')"
+            )
+            execSQL(
+                "INSERT INTO tasks (id, title, isDone, createdAt, attachments, dueAt, notes, " +
+                    "completedAt, priority, pinned, subtasks, repeatRule, reminderEnabled, trashedAt, " +
+                    "manualOrder, isDraft, draftSavedAt, hidden, notesSpans) VALUES " +
+                    "(1, 'T', 0, 1000, '[]', NULL, '', NULL, 0, 0, '[]', 'NONE', 0, NULL, 0, 0, NULL, 0, '')"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 21, true, MIGRATION_20_21)
+
+        db.query("SELECT formatOverride FROM notes WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst()); assertTrue(c.isNull(0))
+        }
+        db.query("SELECT formatOverride FROM tasks WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst()); assertTrue(c.isNull(0))
+        }
+    }
 }

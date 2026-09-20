@@ -24,6 +24,7 @@ import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.LucentThemeMode
+import com.lucent.app.ui.LucentThemeSection
 import com.lucent.app.ui.PaletteSwatch
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
@@ -47,23 +48,29 @@ internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute
     }
     if (!dynamicColorActive) {
         val systemDark = isSystemInDarkTheme()
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            LucentThemeMode.pickerEntries.forEach { mode ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = savedTheme == mode.key,
-                        onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
-                    )
-                    PaletteSwatch(mode.swatch(systemDark))
-                    Column(modifier = Modifier.padding(start = 10.dp)) {
-                        Text(mode.label, color = onGradient)
-                        Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
+        val offered = LucentThemeMode.pickerEntries
+        LucentThemeSection.entries.forEachIndexed { index, section ->
+            if (index > 0) Spacer(modifier = Modifier.height(12.dp))
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(section.label, color = onGradient, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                offered.filter { it.section == section }.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = savedTheme == mode.key,
+                            onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                        )
+                        PaletteSwatch(mode.swatch(systemDark))
+                        Column(modifier = Modifier.padding(start = 10.dp)) {
+                            Text(mode.label, color = onGradient)
+                            Text(mode.detail, color = onGradientMuted, fontSize = 12.sp)
+                        }
                     }
                 }
             }

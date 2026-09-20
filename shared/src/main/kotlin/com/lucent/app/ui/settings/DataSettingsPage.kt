@@ -210,7 +210,7 @@ internal fun DataSettingsPage(
             Text(backupStatus, color = onGradientMuted)
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(S.exportNotesTasksTitle, color = onGradient)
         Spacer(modifier = Modifier.height(12.dp))
         GlassButton(
@@ -225,7 +225,7 @@ internal fun DataSettingsPage(
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(S.dangerZone, color = onGradient)
         Spacer(modifier = Modifier.height(8.dp))
         GlassButton(

@@ -582,17 +582,11 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.data.first()[SettingsKeys.SESSION_SNAPSHOT] ?: ""
     suspend fun setTasksSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value } }
     suspend fun setMarkdownEnabled(value: Boolean) {
-        context.settingsDataStore.edit {
-            it[SettingsKeys.MARKDOWN_ENABLED] = value
-            if (value) it[SettingsKeys.RICH_TEXT_ENABLED] = false
-        }
+        context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value }
     }
 
     suspend fun setRichTextEnabled(value: Boolean) {
-        context.settingsDataStore.edit {
-            it[SettingsKeys.RICH_TEXT_ENABLED] = value
-            if (value) it[SettingsKeys.MARKDOWN_ENABLED] = false
-        }
+        context.settingsDataStore.edit { it[SettingsKeys.RICH_TEXT_ENABLED] = value }
     }
     suspend fun setLinksEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LINKS_ENABLED] = value } }
 

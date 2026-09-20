@@ -421,17 +421,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloudAutoBackup(value: Boolean) { edit { it[K.CLOUD_AUTO_BACKUP] = value } }
 
     suspend fun setMarkdownEnabled(value: Boolean) {
-        edit {
-            it[K.MARKDOWN_ENABLED] = value
-            if (value) it[K.RICH_TEXT_ENABLED] = false
-        }
+        edit { it[K.MARKDOWN_ENABLED] = value }
     }
 
     suspend fun setRichTextEnabled(value: Boolean) {
-        edit {
-            it[K.RICH_TEXT_ENABLED] = value
-            if (value) it[K.MARKDOWN_ENABLED] = false
-        }
+        edit { it[K.RICH_TEXT_ENABLED] = value }
     }
 
     val linksEnabled: Flow<Boolean> = state.map { bool(it, K.LINKS_ENABLED) ?: false }

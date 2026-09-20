@@ -46,7 +46,7 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        internal const val SCHEMA_VERSION = 19
+        internal const val SCHEMA_VERSION = 21
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -289,6 +289,9 @@ class Db private constructor(private val connection: Connection) {
                             }
                             true
                         }
+                        20 -> addColumnIfMissing(conn, "chat_messages", "agentTrace", "TEXT")
+                        21 -> addColumnIfMissing(conn, "notes", "formatOverride", "TEXT") &&
+                            addColumnIfMissing(conn, "tasks", "formatOverride", "TEXT")
                         else -> true
                     }
                 } catch (t: Throwable) {
@@ -377,7 +380,8 @@ class Db private constructor(private val connection: Connection) {
                         "hidden INTEGER NOT NULL DEFAULT 0, " +
                         "isDoodle INTEGER NOT NULL DEFAULT 0, " +
                         "doodle TEXT NOT NULL DEFAULT '', " +
-                        "bodySpans TEXT NOT NULL DEFAULT '')"
+                        "bodySpans TEXT NOT NULL DEFAULT '', " +
+                        "formatOverride TEXT)"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS tasks (" +
@@ -399,7 +403,8 @@ class Db private constructor(private val connection: Connection) {
                         "isDraft INTEGER NOT NULL DEFAULT 0, " +
                         "draftSavedAt INTEGER, " +
                         "hidden INTEGER NOT NULL DEFAULT 0, " +
-                        "notesSpans TEXT NOT NULL DEFAULT '')"
+                        "notesSpans TEXT NOT NULL DEFAULT '', " +
+                        "formatOverride TEXT)"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS note_versions (" +
@@ -434,7 +439,8 @@ class Db private constructor(private val connection: Connection) {
                         "attachmentName TEXT, " +
                         "conversationId INTEGER NOT NULL DEFAULT 1, " +
                         "tokens INTEGER NOT NULL DEFAULT 0, " +
-                        "replyToId INTEGER NOT NULL DEFAULT 0)"
+                        "replyToId INTEGER NOT NULL DEFAULT 0, " +
+                        "agentTrace TEXT)"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS chat_conversations (" +

@@ -64,7 +64,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
             packageName = "Lucent"
-            packageVersion = "2.8.0"
+            packageVersion = "2.8.1"
 
             includeAllModules = true
 

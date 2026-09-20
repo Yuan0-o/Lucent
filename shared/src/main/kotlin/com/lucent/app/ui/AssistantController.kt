@@ -55,6 +55,7 @@ data class AssistantUiState(
     val sending: Boolean = false,
     val errorText: String = "",
     val errorConversationId: Long? = null,
+    val errorTrace: AgentTrace? = null,
     val networkErrorMessage: String? = null,
     val pendingConfirmation: PendingConfirmation? = null,
     val messages: List<ChatMessage> = emptyList(),
@@ -89,9 +90,15 @@ class AssistantControllerImpl(
 
     fun loadingModelFor(conversationId: Long?): Boolean = turnFor(conversationId)?.loadingModel == true
 
+    fun agentTraceFor(conversationId: Long?): AgentTrace? = turnFor(conversationId)?.recorder?.snapshot()
+
     var errorText by SyncedState("")
         private set
     var errorConversationId by SyncedState<Long?>(null)
+        private set
+    var errorTrace by SyncedState<AgentTrace?>(null)
+        private set
+    var errorTraceConversationId by SyncedState<Long?>(null)
         private set
     var networkErrorMessage by SyncedState<String?>(null)
         private set
@@ -242,6 +249,8 @@ class AssistantControllerImpl(
     fun clearError() {
         errorText = ""
         errorConversationId = null
+        errorTrace = null
+        errorTraceConversationId = null
     }
 
     fun clearNetworkError() { networkErrorMessage = null }
@@ -298,6 +307,9 @@ class AssistantControllerImpl(
         turn.finishStream()
         turn.thinking = false
         turn.loadingModel = false
+        turn.recorder.endReasoningBlock()
+        turn.recorder.finish(AgentStepStatus.CANCELLED)
+        val traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
         unregisterTurn(turn)
 
         if (silent) {
@@ -309,7 +321,7 @@ class AssistantControllerImpl(
             turn.turnPersisted = true
             val body = if (cleaned.isBlank()) marker else "$cleaned\n\n$marker"
             val tokens = TokenEstimator.estimate(body)
-            AppScope.io.launch { insertAssistant(db, convId, body, null, null, tokens) }
+            AppScope.io.launch { insertAssistant(db, convId, body, null, null, tokens, traceJson = traceJson) }
         }
     }
 
@@ -369,6 +381,7 @@ class AssistantControllerImpl(
         var thinking by mutableStateOf(false)
         var loadingModel by mutableStateOf(false)
         var streamingText by mutableStateOf<String?>(null)
+        val recorder = AgentTraceRecorder()
 
         var confirmationDeferred: CompletableDeferred<ConfirmationOutcome>? = null
 
@@ -396,6 +409,7 @@ class AssistantControllerImpl(
             }
             shown = 0
             streamingText = null
+            recorder.beginBlock()
             if (!reveal) {
                 typewriterJob = null
                 return
@@ -557,6 +571,8 @@ class AssistantControllerImpl(
         if (errorConversationId == targetKey) {
             errorText = ""
             errorConversationId = null
+            errorTrace = null
+            errorTraceConversationId = null
         }
         networkErrorMessage = null
         registerTurn(turn, name)
@@ -638,8 +654,11 @@ class AssistantControllerImpl(
                     turn.resetStream(reveal = false)
                     val roundEpoch = turn.streamEpoch
                     val result = llmClient.streamChat(
-                        url, spec, key, model, history, systemPrompt, tools
-                    ) { delta -> turn.onDelta(roundEpoch, delta) }
+                        url, spec, key, model, history, systemPrompt, tools,
+                        { delta -> turn.onDelta(roundEpoch, delta) },
+                        { piece -> turn.recorder.appendReasoning(piece) },
+                        { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) }
+                    )
 
                     if (result.isFailure) {
                         fail(turn, result.exceptionOrNull() ?: Exception("Unknown error"))
@@ -647,21 +666,27 @@ class AssistantControllerImpl(
                         break
                     }
                     val reply = result.getOrThrow()
+                    turn.recorder.endReasoningBlock()
 
                     if (reply.toolCalls.isEmpty()) {
                         finalReply = reply
                         break
                     }
 
+                    if (!reply.text.isNullOrBlank()) turn.recorder.addPlanning(reply.text)
+
                     val results = mutableListOf<ToolExecResult>()
                     for (call in reply.toolCalls) {
                         val sig = signatureOf(call.name, call.argumentsJson)
                         val cached = executed[sig]
                         if (cached != null) {
+                            val reused = turn.recorder.startTool(call.name, call.argumentsJson)
+                            turn.recorder.finishTool(reused, cached)
                             results.add(cached)
                             continue
                         }
 
+                        val stepIndex = turn.recorder.startTool(call.name, call.argumentsJson)
                         val confirmed = if (confirmTools && AppTools.isMutating(call.name)) {
                             confirmToolCall(turn, call.name, call.argumentsJson)
                         } else ConfirmedCall(approved = true, argumentsJson = call.argumentsJson)
@@ -670,19 +695,29 @@ class AssistantControllerImpl(
                             val proposal = AppTools.describeToolCall(call.name, confirmed.argumentsJson)
                             refinementContext = proposal
                             declinedDetails = "refine\u0001" + proposal
+                            turn.recorder.cancelTool(stepIndex, com.lucent.app.i18n.S.agentTraceRefining)
                             break
                         }
 
                         if (!confirmed.approved) {
                             declinedDetails = AppTools.describeToolCall(call.name, call.argumentsJson)
+                            turn.recorder.cancelTool(stepIndex, com.lucent.app.i18n.S.agentTraceCancelled)
                             break
                         }
 
                         turn.thinking = true
-                        val r = AppTools.execute(
-                            appContext, db, call.name, confirmed.argumentsJson,
-                            uploadMime, uploadData, uploadName
-                        )
+                        val r = try {
+                            AppTools.execute(
+                                appContext, db, call.name, confirmed.argumentsJson,
+                                uploadMime, uploadData, uploadName
+                            )
+                        } catch (t: Throwable) {
+                            turn.recorder.failTool(stepIndex, toolFailureDetail(t))
+                            logToolFailure(call.name, t)
+                            throw t
+                        }
+                        turn.recorder.finishTool(stepIndex, r)
+                        if (!r.success) logToolFailure(call.name, null)
                         executed[sig] = r
                         results.add(r)
                     }
@@ -730,7 +765,12 @@ class AssistantControllerImpl(
                     turn.thinking = false
                     turn.resetStream(reveal = true)
                     turn.finishTyping(content)
-                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content), answeredId)
+                    turn.recorder.finish(AgentStepStatus.CANCELLED)
+                    insertAssistant(
+                        db, conversationId, content, null, null,
+                        TokenEstimator.estimate(content), answeredId,
+                        traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
+                    )
                     turn.turnPersisted = true
                     turn.completionBuzz()
                 } else if (!errored) {
@@ -739,13 +779,17 @@ class AssistantControllerImpl(
                         turn.resetStream(reveal = false)
                         val forcedEpoch = turn.streamEpoch
                         val forced = llmClient.streamChat(
-                            url, spec, key, model, history, systemPrompt, emptyList()
-                        ) { delta -> turn.onDelta(forcedEpoch, delta) }
+                            url, spec, key, model, history, systemPrompt, emptyList(),
+                            { delta -> turn.onDelta(forcedEpoch, delta) },
+                            { piece -> turn.recorder.appendReasoning(piece) },
+                            { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) }
+                        )
                         if (forced.isFailure) {
                             fail(turn, forced.exceptionOrNull() ?: Exception("Unknown error"))
                             errored = true
                         } else {
                             finalReply = forced.getOrThrow()
+                            turn.recorder.endReasoningBlock()
                         }
                     }
                     if (!errored) finalReply?.let { reply ->
@@ -757,7 +801,11 @@ class AssistantControllerImpl(
                         val tokens = TokenEstimator.estimate(systemPrompt) +
                             TokenEstimator.estimateAll(history.map { it.content }) +
                             TokenEstimator.estimate(content)
-                        insertAssistant(db, conversationId, content, reply.imageMime, img, tokens, answeredId)
+                        turn.recorder.finish(AgentStepStatus.DONE)
+                        insertAssistant(
+                            db, conversationId, content, reply.imageMime, img, tokens, answeredId,
+                            traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
+                        )
                         turn.turnPersisted = true
                         turn.completionBuzz()
                     }
@@ -792,16 +840,6 @@ class AssistantControllerImpl(
     ) {
         val ctx = appContextRef ?: return
 
-        if (!com.lucent.app.local.LocalLlm.isSupported()) {
-            turn.thinking = false
-            postError(
-                turn,
-                if (com.lucent.app.local.LocalLlm.unsupportedBecauseCpuLacksAvx2())
-                    com.lucent.app.i18n.S.localModelNeedsAvx2
-                else com.lucent.app.i18n.S.localModelUnsupportedAbi
-            )
-            return
-        }
         if (!com.lucent.app.local.LocalModelStore.hasModel(ctx)) {
             turn.thinking = false
             postError(turn, com.lucent.app.i18n.S.localModelMissing)
@@ -818,7 +856,7 @@ class AssistantControllerImpl(
         }
         com.lucent.app.data.StartupLog.event(
             ctx,
-            "local turn: supported=true, model=${com.lucent.app.local.LocalModelStore.displayName(ctx) ?: "?"}, gpu=$useGpu, loaded=$loaded"
+            "local turn: model=${com.lucent.app.local.LocalModelStore.displayName(ctx) ?: "?"}, gpu=$useGpu, loaded=$loaded"
         )
         if (!loaded) {
             turn.thinking = false
@@ -871,6 +909,11 @@ class AssistantControllerImpl(
             if (call == null) {
                 val attempted = LocalToolCallParser.attemptedToolCallName(raw)
                 if (attempted != null && round < MAX_LOCAL_TOOL_ROUNDS - 1) {
+                    turn.recorder.addNote(
+                        com.lucent.app.i18n.S.ccRunGeneric(attempted),
+                        com.lucent.app.i18n.S.agentTraceUnknownTool,
+                        AgentStepStatus.FAILED
+                    )
                     messages.add("assistant" to raw.trim().take(600))
                     messages.add(
                         "tool" to ("Result of " + attempted + ": ERROR — no tool named \"" + attempted +
@@ -889,6 +932,7 @@ class AssistantControllerImpl(
             val sig = signatureOf(call.name, call.argsJson)
             val cached = executed[sig]
             val result = if (cached != null) cached else {
+                val stepIndex = turn.recorder.startTool(call.name, call.argsJson)
                 val confirmed = if (confirmTools && AppTools.isMutating(call.name)) {
                     confirmToolCall(turn, call.name, call.argsJson)
                 } else ConfirmedCall(approved = true, argumentsJson = call.argsJson)
@@ -900,7 +944,13 @@ class AssistantControllerImpl(
                     turn.thinking = false
                     turn.resetStream(reveal = true)
                     turn.finishTyping(content)
-                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content), answeredId)
+                    turn.recorder.cancelTool(stepIndex, com.lucent.app.i18n.S.agentTraceRefining)
+                    turn.recorder.finish(AgentStepStatus.CANCELLED)
+                    insertAssistant(
+                        db, conversationId, content, null, null,
+                        TokenEstimator.estimate(content), answeredId,
+                        traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
+                    )
                     turn.turnPersisted = true
                     turn.completionBuzz()
                     return
@@ -911,16 +961,30 @@ class AssistantControllerImpl(
                     turn.thinking = false
                     turn.resetStream(reveal = true)
                     turn.finishTyping(content)
-                    insertAssistant(db, conversationId, content, null, null, TokenEstimator.estimate(content), answeredId)
+                    turn.recorder.cancelTool(stepIndex, com.lucent.app.i18n.S.agentTraceCancelled)
+                    turn.recorder.finish(AgentStepStatus.CANCELLED)
+                    insertAssistant(
+                        db, conversationId, content, null, null,
+                        TokenEstimator.estimate(content), answeredId,
+                        traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
+                    )
                     turn.turnPersisted = true
                     turn.completionBuzz()
                     return
                 } else {
                     turn.thinking = true
-                    val r = AppTools.execute(
-                        ctx, db, call.name, confirmed.argumentsJson,
-                        uploadMime, uploadData, uploadName
-                    )
+                    val r = try {
+                        AppTools.execute(
+                            ctx, db, call.name, confirmed.argumentsJson,
+                            uploadMime, uploadData, uploadName
+                        )
+                    } catch (t: Throwable) {
+                        turn.recorder.failTool(stepIndex, toolFailureDetail(t))
+                        logToolFailure(call.name, t)
+                        throw t
+                    }
+                    turn.recorder.finishTool(stepIndex, r)
+                    if (!r.success) logToolFailure(call.name, null)
                     executed[sig] = r
                     r
                 }
@@ -957,7 +1021,11 @@ class AssistantControllerImpl(
         turn.resetStream(reveal = true)
         turn.finishTyping(content)
         val tokens = TokenEstimator.estimateAll(messages.map { it.second }) + TokenEstimator.estimate(content)
-        insertAssistant(db, conversationId, content, null, null, tokens, answeredId)
+        turn.recorder.finish(AgentStepStatus.DONE)
+        insertAssistant(
+            db, conversationId, content, null, null, tokens, answeredId,
+            traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
+        )
         turn.turnPersisted = true
         turn.completionBuzz()
     }
@@ -1188,7 +1256,8 @@ class AssistantControllerImpl(
         mime: String?,
         data: String?,
         tokens: Int = 0,
-        replyToId: Long = 0
+        replyToId: Long = 0,
+        traceJson: String? = null
     ) {
         val hasImage = !data.isNullOrBlank()
         db.chatDao().insert(
@@ -1200,7 +1269,8 @@ class AssistantControllerImpl(
                 attachmentName = if (hasImage) ReplyPolish.imageFileName(mime) else null,
                 conversationId = conversationId,
                 tokens = tokens,
-                replyToId = replyToId
+                replyToId = replyToId,
+                agentTrace = traceJson
             )
         )
     }
@@ -1214,14 +1284,36 @@ class AssistantControllerImpl(
             networkErrorMessage =
                 com.lucent.app.i18n.S.networkCantReach +
                     (t.message?.takeIf { it.isNotBlank() && it != "network error" }?.let { "\n\n($it)" } ?: "")
+            recordTraceFailure(turn, t.message ?: com.lucent.app.i18n.S.noDetails)
         } else {
             postError(turn, "${t.javaClass.simpleName}: ${t.message ?: com.lucent.app.i18n.S.noDetails}")
         }
     }
 
     private fun postError(turn: Turn, text: String) {
+        recordTraceFailure(turn, text)
         errorText = text
         errorConversationId = turn.conversationId
+    }
+
+    private fun recordTraceFailure(turn: Turn, detail: String) {
+        turn.recorder.addNote(
+            com.lucent.app.i18n.S.agentTraceError,
+            AgentTraceLabels.summarize(detail, 240),
+            AgentStepStatus.FAILED
+        )
+        turn.recorder.finish(AgentStepStatus.FAILED)
+        errorTrace = turn.recorder.snapshot()
+        errorTraceConversationId = turn.conversationId
+    }
+
+    private fun toolFailureDetail(t: Throwable): String =
+        "${t.javaClass.simpleName}: ${t.message ?: com.lucent.app.i18n.S.noDetails}"
+
+    private fun logToolFailure(name: String, t: Throwable?) {
+        val ctx = appContextRef ?: return
+        val detail = t?.let { toolFailureDetail(it) } ?: "reported failure"
+        com.lucent.app.data.StartupLog.event(ctx, "assistant tool $name failed - $detail")
     }
 
     private fun stepFor(backlog: Int): Int = when {
@@ -1243,6 +1335,7 @@ class AssistantControllerImpl(
             sending = sending,
             errorText = errorText,
             errorConversationId = errorConversationId,
+            errorTrace = errorTrace,
             networkErrorMessage = networkErrorMessage,
             pendingConfirmation = pendingConfirmation,
             messages = messages,
@@ -1291,6 +1384,7 @@ object AssistantController {
     fun streamingTextFor(conversationId: Long?): String? = backing?.streamingTextFor(conversationId)
     fun thinkingFor(conversationId: Long?): Boolean = backing?.thinkingFor(conversationId) ?: false
     fun loadingModelFor(conversationId: Long?): Boolean = backing?.loadingModelFor(conversationId) ?: false
+    fun agentTraceFor(conversationId: Long?): AgentTrace? = backing?.agentTraceFor(conversationId)
     val localTurnInFlight: Boolean get() = backing?.localTurnInFlight ?: false
 
 
@@ -1299,6 +1393,8 @@ object AssistantController {
 
     val errorText: String get() = backing?.errorText ?: ""
     val errorConversationId: Long? get() = backing?.errorConversationId
+    val errorTrace: AgentTrace? get() = backing?.errorTrace
+    val errorTraceConversationId: Long? get() = backing?.errorTraceConversationId
     val networkErrorMessage: String? get() = backing?.networkErrorMessage
     var pendingConfirmation: PendingConfirmation?
         get() = backing?.pendingConfirmation

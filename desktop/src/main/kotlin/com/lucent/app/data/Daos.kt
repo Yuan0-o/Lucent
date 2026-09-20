@@ -24,7 +24,8 @@ private fun noteOf(rs: ResultSet) = Note(
     hidden = rs.getInt("hidden") != 0,
     isDoodle = rs.getInt("isDoodle") != 0,
     doodle = rs.getString("doodle"),
-    bodySpans = rs.getString("bodySpans") ?: ""
+    bodySpans = rs.getString("bodySpans") ?: "",
+    formatOverride = rs.stringOrNull("formatOverride")
 )
 
 private fun noteEmbeddingOf(rs: ResultSet) = NoteEmbedding(
@@ -54,7 +55,8 @@ private fun taskOf(rs: ResultSet) = Task(
     isDraft = rs.getInt("isDraft") != 0,
     draftSavedAt = rs.longOrNull("draftSavedAt"),
     hidden = rs.getInt("hidden") != 0,
-    notesSpans = rs.getString("notesSpans") ?: ""
+    notesSpans = rs.getString("notesSpans") ?: "",
+    formatOverride = rs.stringOrNull("formatOverride")
 )
 
 private fun versionOf(rs: ResultSet) = NoteVersion(
@@ -79,7 +81,8 @@ private fun messageOf(rs: ResultSet) = ChatMessage(
     attachmentList = rs.stringOrNull("attachmentList"),
     conversationId = rs.getLong("conversationId"),
     tokens = rs.getInt("tokens"),
-    replyToId = rs.getLong("replyToId")
+    replyToId = rs.getLong("replyToId"),
+    agentTrace = rs.stringOrNull("agentTrace")
 )
 
 private fun conversationOf(rs: ResultSet) = ChatConversation(
@@ -191,8 +194,8 @@ class NoteDao internal constructor(private val db: Db) {
         val ps = c.prepareStatement(
             "INSERT INTO notes (title, body, updatedAt, tags, attachments, archived, archivedAt, " +
                 "pinned, color, isChecklist, checklist, trashedAt, manualOrder, isDraft, " +
-                "draftSavedAt, hidden, isDoodle, doodle, bodySpans) " +
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "draftSavedAt, hidden, isDoodle, doodle, bodySpans, formatOverride) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, note.title); ps.setString(2, note.body); ps.setLong(3, note.updatedAt)
@@ -204,7 +207,7 @@ class NoteDao internal constructor(private val db: Db) {
         ps.setInt(13, note.manualOrder); ps.setInt(14, if (note.isDraft) 1 else 0)
         ps.bindLongOrNull(15, note.draftSavedAt); ps.setInt(16, if (note.hidden) 1 else 0)
         ps.setInt(17, if (note.isDoodle) 1 else 0); ps.setString(18, note.doodle)
-        ps.setString(19, note.bodySpans)
+        ps.setString(19, note.bodySpans); ps.bindStringOrNull(20, note.formatOverride)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
@@ -215,7 +218,7 @@ class NoteDao internal constructor(private val db: Db) {
                 "UPDATE notes SET title=?, body=?, updatedAt=?, tags=?, attachments=?, archived=?, " +
                     "archivedAt=?, pinned=?, color=?, isChecklist=?, checklist=?, trashedAt=?, " +
                     "manualOrder=?, isDraft=?, draftSavedAt=?, hidden=?, isDoodle=?, doodle=?, " +
-                    "bodySpans=? WHERE id=?"
+                    "bodySpans=?, formatOverride=? WHERE id=?"
             )
             ps.setString(1, note.title); ps.setString(2, note.body); ps.setLong(3, note.updatedAt)
             ps.setString(4, note.tags); ps.setString(5, note.attachments)
@@ -226,9 +229,25 @@ class NoteDao internal constructor(private val db: Db) {
             ps.setInt(13, note.manualOrder); ps.setInt(14, if (note.isDraft) 1 else 0)
             ps.bindLongOrNull(15, note.draftSavedAt); ps.setInt(16, if (note.hidden) 1 else 0)
             ps.setInt(17, if (note.isDoodle) 1 else 0); ps.setString(18, note.doodle)
-            ps.setString(19, note.bodySpans)
-            ps.setLong(20, note.id)
+            ps.setString(19, note.bodySpans); ps.bindStringOrNull(20, note.formatOverride)
+            ps.setLong(21, note.id)
             ps.executeUpdate()
+        }
+    }
+
+    suspend fun setPinned(id: Long, pinned: Boolean) {
+        db.write("notes") { c ->
+            c.prepareStatement("UPDATE notes SET pinned=? WHERE id=?").apply {
+                setInt(1, if (pinned) 1 else 0); setLong(2, id)
+            }.executeUpdate()
+        }
+    }
+
+    suspend fun setManualOrder(id: Long, order: Int) {
+        db.write("notes") { c ->
+            c.prepareStatement("UPDATE notes SET manualOrder=? WHERE id=?").apply {
+                setInt(1, order); setLong(2, id)
+            }.executeUpdate()
         }
     }
 
@@ -565,8 +584,8 @@ class TaskDao internal constructor(private val db: Db) {
         val ps = c.prepareStatement(
             "INSERT INTO tasks (title, isDone, createdAt, attachments, dueAt, notes, completedAt, " +
                 "priority, pinned, subtasks, repeatRule, reminderEnabled, trashedAt, manualOrder, " +
-                "isDraft, draftSavedAt, hidden, notesSpans) " +
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "isDraft, draftSavedAt, hidden, notesSpans, formatOverride) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, task.title); ps.setInt(2, if (task.isDone) 1 else 0); ps.setLong(3, task.createdAt)
@@ -577,7 +596,7 @@ class TaskDao internal constructor(private val db: Db) {
         ps.bindLongOrNull(13, task.trashedAt)
         ps.setInt(14, task.manualOrder); ps.setInt(15, if (task.isDraft) 1 else 0)
         ps.bindLongOrNull(16, task.draftSavedAt); ps.setInt(17, if (task.hidden) 1 else 0)
-        ps.setString(18, task.notesSpans)
+        ps.setString(18, task.notesSpans); ps.bindStringOrNull(19, task.formatOverride)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
@@ -588,7 +607,7 @@ class TaskDao internal constructor(private val db: Db) {
                 "UPDATE tasks SET title=?, isDone=?, createdAt=?, attachments=?, dueAt=?, notes=?, " +
                     "completedAt=?, priority=?, pinned=?, subtasks=?, repeatRule=?, reminderEnabled=?, " +
                     "trashedAt=?, manualOrder=?, isDraft=?, draftSavedAt=?, hidden=?, " +
-                    "notesSpans=? WHERE id=?"
+                    "notesSpans=?, formatOverride=? WHERE id=?"
             )
             ps.setString(1, task.title); ps.setInt(2, if (task.isDone) 1 else 0); ps.setLong(3, task.createdAt)
             ps.setString(4, task.attachments); ps.bindLongOrNull(5, task.dueAt); ps.setString(6, task.notes)
@@ -598,9 +617,25 @@ class TaskDao internal constructor(private val db: Db) {
             ps.bindLongOrNull(13, task.trashedAt)
             ps.setInt(14, task.manualOrder); ps.setInt(15, if (task.isDraft) 1 else 0)
             ps.bindLongOrNull(16, task.draftSavedAt); ps.setInt(17, if (task.hidden) 1 else 0)
-            ps.setString(18, task.notesSpans)
-            ps.setLong(19, task.id)
+            ps.setString(18, task.notesSpans); ps.bindStringOrNull(19, task.formatOverride)
+            ps.setLong(20, task.id)
             ps.executeUpdate()
+        }
+    }
+
+    suspend fun setPinned(id: Long, pinned: Boolean) {
+        db.write("tasks") { c ->
+            c.prepareStatement("UPDATE tasks SET pinned=? WHERE id=?").apply {
+                setInt(1, if (pinned) 1 else 0); setLong(2, id)
+            }.executeUpdate()
+        }
+    }
+
+    suspend fun setManualOrder(id: Long, order: Int) {
+        db.write("tasks") { c ->
+            c.prepareStatement("UPDATE tasks SET manualOrder=? WHERE id=?").apply {
+                setInt(1, order); setLong(2, id)
+            }.executeUpdate()
         }
     }
 
@@ -659,13 +694,15 @@ class ChatDao internal constructor(private val db: Db) {
     suspend fun insert(message: ChatMessage): Long = db.write("chat_messages") { c ->
         val ps = c.prepareStatement(
             "INSERT INTO chat_messages (role, content, timestamp, attachmentMime, attachmentData, " +
-                "attachmentName, attachmentList, conversationId, tokens, replyToId) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "attachmentName, attachmentList, conversationId, tokens, replyToId, agentTrace) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, message.role); ps.setString(2, message.content); ps.setLong(3, message.timestamp)
         ps.bindStringOrNull(4, message.attachmentMime); ps.bindStringOrNull(5, message.attachmentData)
         ps.bindStringOrNull(6, message.attachmentName); ps.bindStringOrNull(7, message.attachmentList)
         ps.setLong(8, message.conversationId); ps.setInt(9, message.tokens); ps.setLong(10, message.replyToId)
+        ps.bindStringOrNull(11, message.agentTrace)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
@@ -854,6 +891,12 @@ class NotebookDao internal constructor(private val db: Db) {
                 it.executeUpdate("DELETE FROM notebook_items")
                 it.executeUpdate("DELETE FROM notebooks")
             }
+        }
+    }
+
+    suspend fun clearAllItems() {
+        db.write("notebook_items") { c ->
+            c.createStatement().use { it.executeUpdate("DELETE FROM notebook_items") }
         }
     }
 }

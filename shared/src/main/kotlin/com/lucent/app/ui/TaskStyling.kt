@@ -237,13 +237,22 @@ fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Mo
 }
 
 @Composable
-fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp) {
+fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp, onUnpin: (() -> Unit)? = null) {
     val onGradientMuted = LocalOnGradientMuted.current
+    val context = LocalContext.current
     Icon(
         Icons.Filled.PushPin,
-        contentDescription = S.pinned,
+        contentDescription = if (onUnpin == null) S.pinned else S.actionUnpin,
         tint = onGradientMuted,
-        modifier = modifier.size(size)
+        modifier = modifier
+            .size(size)
+            .then(
+                if (onUnpin == null) Modifier
+                else Modifier.clickable {
+                    Haptics.tick(context)
+                    onUnpin()
+                }
+            )
     )
 }
 

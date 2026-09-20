@@ -84,7 +84,7 @@ internal fun SecuritySettingsPage(
         SecondaryUnlockRow(repo, appLockOn)
 
         if (appLockOn) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(S.attemptLimitsTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -102,7 +102,7 @@ internal fun SecuritySettingsPage(
                 onChange = { scope.launch { repo.setPwLaterRoundLimit(it) } }
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(S.selfDestructTitle, color = onGradient)
@@ -131,7 +131,7 @@ internal fun SecuritySettingsPage(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.crashShieldTitle, color = onGradient)
@@ -162,7 +162,7 @@ internal fun SecuritySettingsPage(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Text(S.encryptionStatusTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(4.dp))
         Text(

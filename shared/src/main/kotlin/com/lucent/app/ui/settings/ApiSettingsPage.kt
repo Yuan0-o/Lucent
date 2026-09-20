@@ -42,11 +42,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.data.ApiProfile
 import com.lucent.app.data.ApiProfiles
+import com.lucent.app.data.ApiProviders
 import com.lucent.app.data.ModelSearch
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.network.ApiSpec
 import com.lucent.app.network.LlmClient
+import com.lucent.app.ui.ApiModelPickerDialog
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.GlassButton
 import com.lucent.app.ui.LocalOnGradient
@@ -56,6 +58,25 @@ import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.specLabel
 import kotlinx.coroutines.launch
 
+private fun providerName(id: String): String = when (id) {
+    ApiProviders.CHATGPT -> S.apiProviderChatGpt
+    ApiProviders.GEMINI -> S.apiProviderGemini
+    ApiProviders.CLAUDE -> S.apiProviderClaude
+    ApiProviders.DEEPSEEK -> S.apiProviderDeepSeek
+    ApiProviders.KIMI -> S.apiProviderKimi
+    else -> S.apiProviderCustom
+}
+
+private fun profileProviderLabel(profile: ApiProfile): String =
+    if (ApiProviders.isPreset(profile.provider)) providerName(profile.provider) else specLabel(profile.spec)
+
+private fun modelChoices(fetched: List<String>, saved: List<String>): List<String> {
+    val out = LinkedHashSet<String>()
+    fetched.forEach { if (it.isNotBlank()) out.add(it.trim()) }
+    saved.sorted().forEach { if (it.isNotBlank()) out.add(it.trim()) }
+    return out.toList()
+}
+
 @Composable
 internal fun ApiSettingsPage(
     repo: SettingsRepository,
@@ -63,6 +84,8 @@ internal fun ApiSettingsPage(
     selectedProfileIdx: Int,
     editingProfileName: String,
     onEditingProfileNameChange: (String) -> Unit,
+    provider: String,
+    onProviderChange: (String) -> Unit,
     url: String,
     onUrlChange: (String) -> Unit,
     spec: String,
@@ -90,6 +113,10 @@ internal fun ApiSettingsPage(
     val scope = rememberCoroutineScope()
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = false)
     var menuExpanded by remember { mutableStateOf(false) }
+    var fetchedModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pickerOpen by remember { mutableStateOf(false) }
+    val customProvider = provider == ApiProviders.CUSTOM
+    val choices = modelChoices(fetchedModels, models)
 
     BackHeader(S.settingsApiTitle) { onRoute(SettingsRoute.Assistant) }
 
@@ -123,7 +150,7 @@ internal fun ApiSettingsPage(
                 Column(modifier = Modifier.weight(1f).clickable { onSelectProfile(idx) }.padding(vertical = 4.dp)) {
                     Text(p.name.ifBlank { S.apiFallbackName(idx + 1) }, color = onGradient)
                     Text(
-                        "${specLabel(p.spec)} · ${if (p.model.isBlank()) S.apiNoModel else p.model}",
+                        "${profileProviderLabel(p)} · ${if (p.model.isBlank()) S.apiNoModel else p.model}",
                         color = onGradientMuted,
                         fontSize = 12.sp
                     )
@@ -172,18 +199,32 @@ internal fun ApiSettingsPage(
         )
 
         Spacer(modifier = Modifier.height(12.dp))
-        Text(S.apiSpecTitle, color = onGradient)
-        Row {
-            RadioButton(selected = spec == "openai", onClick = { onSpecChange("openai") })
-            Text(S.apiSpecOpenAi, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+        Text(S.apiProviderTitle, color = onGradient)
+        ApiProviders.ALL.forEach { id ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { onProviderChange(id) }
+            ) {
+                RadioButton(selected = provider == id, onClick = { onProviderChange(id) })
+                Text(providerName(id), color = onGradient, modifier = Modifier.padding(top = 14.dp))
+            }
         }
-        Row {
-            RadioButton(selected = spec == "anthropic", onClick = { onSpecChange("anthropic") })
-            Text(S.apiSpecAnthropic, color = onGradient, modifier = Modifier.padding(top = 14.dp))
-        }
-        Row {
-            RadioButton(selected = spec == "google", onClick = { onSpecChange("google") })
-            Text(S.apiSpecGoogle, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+
+        if (customProvider) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(S.apiSpecTitle, color = onGradient)
+            Row {
+                RadioButton(selected = spec == "openai", onClick = { onSpecChange("openai") })
+                Text(S.apiSpecOpenAi, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+            }
+            Row {
+                RadioButton(selected = spec == "anthropic", onClick = { onSpecChange("anthropic") })
+                Text(S.apiSpecAnthropic, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+            }
+            Row {
+                RadioButton(selected = spec == "google", onClick = { onSpecChange("google") })
+                Text(S.apiSpecGoogle, color = onGradient, modifier = Modifier.padding(top = 14.dp))
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -193,14 +234,19 @@ internal fun ApiSettingsPage(
             value = url,
             onValueChange = onUrlChange,
             label = { Text(S.fieldBaseUrl) },
+            enabled = customProvider,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            when (spec) {
-                "anthropic" -> S.apiUrlExampleAnthropic
-                "google" -> S.apiUrlExampleGoogle
-                else -> S.apiUrlExampleOpenAi
+            if (customProvider) {
+                when (spec) {
+                    "anthropic" -> S.apiUrlExampleAnthropic
+                    "google" -> S.apiUrlExampleGoogle
+                    else -> S.apiUrlExampleOpenAi
+                }
+            } else {
+                S.apiProviderBuiltInHint
             },
             color = onGradientMuted
         )
@@ -220,8 +266,17 @@ internal fun ApiSettingsPage(
                     }
                     val result = LlmClient.fetchModels(url.trim(), apiSpecEnum, key.trim())
                     onLoadingChange(false)
-                    result.onSuccess { onModelsChange(it) }
-                        .onFailure { onErrorTextChange(S.errorWithDetail(it.javaClass.simpleName, it.message ?: S.noDetails)) }
+                    result.onSuccess { list ->
+                        if (list.isEmpty()) {
+                            onErrorTextChange(S.apiModelsEmpty)
+                        } else {
+                            fetchedModels = list
+                            pickerOpen = true
+                        }
+                    }.onFailure {
+                        val detail = (it.message ?: "").trim().ifBlank { S.noDetails }.take(180)
+                        onErrorTextChange(S.apiModelsFetchFailed(detail))
+                    }
                 }
             }
         })
@@ -269,9 +324,21 @@ internal fun ApiSettingsPage(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         GlassButton(text = S.saveApi, onClick = onSaveProfile)
     }
     }
+    }
+
+    if (pickerOpen) {
+        ApiModelPickerDialog(
+            names = choices,
+            selected = models.toSet(),
+            onDone = { picked ->
+                onModelsChange(choices.filter { it in picked })
+                pickerOpen = false
+            },
+            onDismiss = { pickerOpen = false }
+        )
     }
 }

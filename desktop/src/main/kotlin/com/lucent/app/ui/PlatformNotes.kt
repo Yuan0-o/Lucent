@@ -42,10 +42,6 @@ fun OnAppHidden(action: () -> Unit) {
 fun shareText(context: Context, subject: String? = null, text: String, chooserTitle: String) =
     DesktopShare.shareText(context, subject = subject, text = text)
 
-@Composable
-fun OverflowMenuSearchItem(onClick: () -> Unit) {
-}
-
 internal val notesGridColumns: Int = 4
 
 @Composable

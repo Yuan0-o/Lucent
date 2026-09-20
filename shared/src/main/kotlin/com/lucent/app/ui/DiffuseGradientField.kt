@@ -12,11 +12,18 @@ internal class DiffuseGradientField(val edge: Int) {
     private val pixels = IntArray(edge * edge)
     private val xSin = Array(3) { DoubleArray(edge) }
     private val xCos = Array(3) { DoubleArray(edge) }
+    private val fineXSin = Array(3) { DoubleArray(edge) }
+    private val fineXCos = Array(3) { DoubleArray(edge) }
     private val frequencies = doubleArrayOf(3.1, -2.7, 2.3)
     private val yFrequencies = doubleArrayOf(2.5, 3.3, -2.9)
     private val phases = doubleArrayOf(0.2, 2.3, 4.5)
+    private val fineFrequencies = doubleArrayOf(7.1, -6.3, 6.6)
+    private val fineYFrequencies = doubleArrayOf(6.3, 7.7, -6.1)
+    private val finePhases = doubleArrayOf(1.1, 3.7, 5.3)
     private val rowSin = DoubleArray(3)
     private val rowCos = DoubleArray(3)
+    private val fineRowSin = DoubleArray(3)
+    private val fineRowCos = DoubleArray(3)
     private val red = DoubleArray(3)
     private val green = DoubleArray(3)
     private val blue = DoubleArray(3)
@@ -27,6 +34,9 @@ internal class DiffuseGradientField(val edge: Int) {
                 val angle = x.toDouble() / (edge - 1) * frequencies[i]
                 xSin[i][x] = sin(angle)
                 xCos[i][x] = cos(angle)
+                val fineAngle = x.toDouble() / (edge - 1) * fineFrequencies[i]
+                fineXSin[i][x] = sin(fineAngle)
+                fineXCos[i][x] = cos(fineAngle)
             }
         }
     }
@@ -54,17 +64,22 @@ internal class DiffuseGradientField(val edge: Int) {
             green[i] = bg + (((color ushr 8) and 255) - bg) * amount
             blue[i] = bb + ((color and 255) - bb) * amount
         }
+        val fusion = fusionFactor(spatialSeconds)
         for (y in 0 until edge) {
             for (i in 0..2) {
                 val angle = y.toDouble() / (edge - 1) * yFrequencies[i] + phases[i] +
                     (spatialSeconds % PERIODS[i]) / PERIODS[i] * 2.0 * PI
                 rowSin[i] = sin(angle)
                 rowCos[i] = cos(angle)
+                val fineAngle = y.toDouble() / (edge - 1) * fineYFrequencies[i] + finePhases[i] +
+                    (spatialSeconds % FINE_PERIODS[i]) / FINE_PERIODS[i] * 2.0 * PI
+                fineRowSin[i] = sin(fineAngle)
+                fineRowCos[i] = cos(fineAngle)
             }
             for (x in 0 until edge) {
-                val a = weight(0, x)
-                val b = weight(1, x)
-                val c = weight(2, x)
+                val a = weight(0, x, fusion)
+                val b = weight(1, x, fusion)
+                val c = weight(2, x, fusion)
                 val inverse = 1.0 / (a + b + c)
                 val r = ((red[0] * a + red[1] * b + red[2] * c) * inverse).roundToInt().coerceIn(0, 255)
                 val g = ((green[0] * a + green[1] * b + green[2] * c) * inverse).roundToInt().coerceIn(0, 255)
@@ -75,10 +90,19 @@ internal class DiffuseGradientField(val edge: Int) {
         return pixels
     }
 
-    private fun weight(index: Int, x: Int): Double {
+    private fun fusionFactor(spatialSeconds: Double): Double {
+        val cycle = (spatialSeconds % FUSION_PERIOD) / FUSION_PERIOD
+        val raw = 0.5 + 0.5 * sin(cycle * 2.0 * PI + FUSION_PHASE)
+        return raw * raw * (3.0 - 2.0 * raw)
+    }
+
+    private fun weight(index: Int, x: Int, fusion: Double): Double {
         val wave = xSin[index][x] * rowCos[index] + xCos[index][x] * rowSin[index]
+        val detail = fineXSin[index][x] * fineRowCos[index] + fineXCos[index][x] * fineRowSin[index]
         val value = 0.55 + 0.45 * wave
-        return value * value * value
+        val cubic = value * value * value
+        val square = value * value
+        return (cubic + (square - cubic) * fusion) * (1.0 + DETAIL_DEPTH * detail)
     }
 
     private fun paletteAt(palette: IntArray, index: Int, seconds: Double): Int {
@@ -103,8 +127,18 @@ internal class DiffuseGradientField(val edge: Int) {
     }
 
     private companion object {
-        val PERIODS = doubleArrayOf(23.0, 29.0, 37.0)
+        const val SPEED = 1.38
 
-        val ROTATION_PERIODS = doubleArrayOf(37.0, 49.0, 61.0)
+        const val DETAIL_DEPTH = 0.16
+
+        const val FUSION_PHASE = 1.9
+
+        val PERIODS = doubleArrayOf(23.0 / SPEED, 29.0 / SPEED, 37.0 / SPEED)
+
+        val ROTATION_PERIODS = doubleArrayOf(37.0 / SPEED, 49.0 / SPEED, 61.0 / SPEED)
+
+        val FINE_PERIODS = doubleArrayOf(11.0 / SPEED, 15.0 / SPEED, 19.0 / SPEED)
+
+        val FUSION_PERIOD = 53.0 / SPEED
     }
 }

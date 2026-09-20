@@ -413,6 +413,7 @@ private fun AttachmentRow(
             att.name,
             color = tint,
             fontSize = 13.sp,
+            lineHeight = 20.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(start = 6.dp)

@@ -38,6 +38,7 @@ private sealed interface MdBlock {
     data class Numbered(val marker: String, val text: String) : MdBlock
     data class Quote(val text: String) : MdBlock
     data class Code(val lines: List<String>) : MdBlock
+    data object Blank : MdBlock
     data object Rule : MdBlock
 }
 
@@ -52,6 +53,7 @@ private fun parseBlocks(text: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()
     val lines = text.lines()
     val paragraph = StringBuilder()
+    var blankRun = 0
 
     fun flushParagraph() {
         if (paragraph.isNotEmpty()) {
@@ -60,12 +62,18 @@ private fun parseBlocks(text: String): List<MdBlock> {
         }
     }
 
+    fun flushBlankRun() {
+        repeat((blankRun - 1).coerceAtLeast(0)) { blocks += MdBlock.Blank }
+        blankRun = 0
+    }
+
     var i = 0
     while (i < lines.size) {
         val line = lines[i]
 
         if (line.trimStart().startsWith(FENCE)) {
             flushParagraph()
+            flushBlankRun()
             val code = mutableListOf<String>()
             i++
             while (i < lines.size && !lines[i].trimStart().startsWith(FENCE)) {
@@ -78,36 +86,45 @@ private fun parseBlocks(text: String): List<MdBlock> {
         }
 
         when {
-            line.isBlank() -> flushParagraph()
+            line.isBlank() -> {
+                flushParagraph()
+                blankRun++
+            }
 
             RULE.matches(line) -> {
                 flushParagraph()
+                flushBlankRun()
                 blocks += MdBlock.Rule
             }
 
             HEADING.matches(line) -> {
                 flushParagraph()
+                flushBlankRun()
                 val m = HEADING.find(line)!!
                 blocks += MdBlock.Heading(m.groupValues[1].length, m.groupValues[2].trim())
             }
 
             BULLET.matches(line) -> {
                 flushParagraph()
+                flushBlankRun()
                 blocks += MdBlock.Bullet(BULLET.find(line)!!.groupValues[1])
             }
 
             NUMBERED.matches(line) -> {
                 flushParagraph()
+                flushBlankRun()
                 val m = NUMBERED.find(line)!!
                 blocks += MdBlock.Numbered(m.groupValues[1], m.groupValues[2])
             }
 
             QUOTE.matches(line) -> {
                 flushParagraph()
+                flushBlankRun()
                 blocks += MdBlock.Quote(QUOTE.find(line)!!.groupValues[1])
             }
 
             else -> {
+                if (paragraph.isEmpty()) flushBlankRun()
                 if (paragraph.isNotEmpty()) paragraph.append('\n')
                 paragraph.append(line)
             }
@@ -316,6 +333,8 @@ fun MarkdownText(
                         fontSize = 13.sp
                     )
                 }
+
+                MdBlock.Blank -> Spacer(modifier = Modifier.height(12.dp))
 
                 MdBlock.Rule -> Box(
                     modifier = Modifier

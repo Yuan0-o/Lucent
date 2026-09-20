@@ -26,6 +26,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -555,20 +556,18 @@ fun NotesScreen(active: Boolean = true) {
         val appContext = context.applicationContext
 
         com.lucent.app.data.backgroundWrite(context, "note save") {
-            if (id != null) {
-                val existing = db.noteDao().getByIdOnce(id)
-                if (existing != null) {
-                    NoteHistory.recordIfChanged(
-                        db = db,
-                        existing = existing,
-                        newTitle = title,
-                        newBody = body,
-                        newTags = tags,
-                        newIsChecklist = isChecklistSnapshot,
-                        newChecklist = checklistJson
-                    )
-                }
-                val updated = (existing ?: Note(id = id, title = title, body = body)).copy(
+            val existing = if (id != null) db.noteDao().getByIdOnce(id) else null
+            if (existing != null) {
+                NoteHistory.recordIfChanged(
+                    db = db,
+                    existing = existing,
+                    newTitle = title,
+                    newBody = body,
+                    newTags = tags,
+                    newIsChecklist = isChecklistSnapshot,
+                    newChecklist = checklistJson
+                )
+                val updated = existing.copy(
                     title = title,
                     body = body,
                     bodySpans = bodySpansJson,
@@ -586,6 +585,7 @@ fun NotesScreen(active: Boolean = true) {
             } else {
                 db.noteDao().insert(
                     Note(
+                        id = id ?: 0,
                         title = title,
                         body = body,
                         bodySpans = bodySpansJson,
@@ -945,6 +945,13 @@ fun NotesScreen(active: Boolean = true) {
         m
     }
 
+    val inlineGlobal = rememberInlineGlobalResults(searchText)
+    val inlineLocalIds = remember(sortedNotes) { sortedNotes.mapTo(HashSet()) { it.id } }
+    val inlineGlobalNotes = remember(inlineGlobal.notes, inlineLocalIds) {
+        inlineGlobal.notes.filterNot { it.id in inlineLocalIds }
+    }
+    val inlineGlobalTasks = inlineGlobal.tasks
+
     fun dropSelection(beforeId: Long?, afterId: Long?) {
         val moving = selectedNoteIds.toList().mapNotNull { id -> sortedNotes.firstOrNull { it.id == id } }
         if (moving.isEmpty()) return
@@ -958,7 +965,7 @@ fun NotesScreen(active: Boolean = true) {
         if (reordered === sortedNotes) return
         AppScope.io.launch {
             reordered.forEachIndexed { index, n ->
-                if (n.manualOrder != index) db.noteDao().update(n.copy(manualOrder = index))
+                if (n.manualOrder != index) db.noteDao().setManualOrder(n.id, index)
             }
         }
         if (sortOption != NoteSort.CUSTOM) {
@@ -1092,7 +1099,7 @@ fun NotesScreen(active: Boolean = true) {
                     val pinnedNow = !target.pinned
                     noteToTogglePin = null
                     com.lucent.app.data.backgroundWrite(context, "note pin toggle") {
-                        db.noteDao().update(target.copy(pinned = pinnedNow))
+                        db.noteDao().setPinned(target.id, pinnedNow)
                     }
                 }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
@@ -1114,6 +1121,68 @@ fun NotesScreen(active: Boolean = true) {
                     withFrameNanos { }
                     bodyEndRequester.bringIntoView()
                 }
+            }
+            val bodyTools: @Composable BoxScope.() -> Unit = {
+            QuickActionFab(
+                scrollingUp = composerScrollingUp,
+                scrollingDown = composerScrollingDown,
+                expanded = quickActionsOpen,
+                canUndo = bodyUndo.canUndo,
+                canRedo = bodyUndo.canRedo,
+                onScrollTop = { scope.launch { composerScroll.animateScrollTo(0) } },
+                onScrollBottom = { scope.launch { composerScroll.animateScrollTo(composerScroll.maxValue) } },
+                onToggleExpanded = { quickActionsOpen = !quickActionsOpen },
+                onUndo = { bodyUndo.undo()?.let { newBody = it } },
+                onRedo = { bodyUndo.redo()?.let { newBody = it } },
+                richTextEnabled = richTextEnabled,
+                hasSelection = bodySelEnd > bodySelStart,
+                onToggleStyle = { kind, color ->
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichText.toggle(
+                            bodySpans, bodySelStart, bodySelEnd, kind, color
+                        )
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
+                        pendingExplicit = true
+                        pendingHighlight = if (pendingHighlight == color) null else color
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
+                        pendingExplicit = true
+                        pendingColor = if (pendingColor == color) null else color
+                    } else {
+                        pendingExplicit = true
+                        val opposite = when (kind) {
+                            com.lucent.app.data.RichSpan.Kind.BOLD -> com.lucent.app.data.RichSpan.Kind.LIGHT
+                            com.lucent.app.data.RichSpan.Kind.LIGHT -> com.lucent.app.data.RichSpan.Kind.BOLD
+                            else -> null
+                        }
+                        pendingKinds = if (kind in pendingKinds) pendingKinds - kind
+                        else (if (opposite != null) pendingKinds - opposite else pendingKinds) + kind
+                    }
+                },
+                onClearStyle = {
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
+                            com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                        }
+                    } else {
+                        pendingExplicit = true
+                        pendingKinds = emptySet()
+                        pendingHighlight = null
+                        pendingColor = null
+                    }
+                },
+                activeKinds = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.kindsCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingKinds,
+                activeHighlight = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingHighlight,
+                activeColor = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingColor,
+                onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
+            )
             }
             Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(composerScroll).imePadding().padding(bottom = LocalBottomBarInset.current)) {
@@ -1228,14 +1297,6 @@ fun NotesScreen(active: Boolean = true) {
                         }
                     }
 
-                    OutlinedTextField(
-                        value = newTitle,
-                        onValueChange = { newTitle = it },
-                        placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.PushPin,
@@ -1246,6 +1307,14 @@ fun NotesScreen(active: Boolean = true) {
                         Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newTitle,
+                        onValueChange = { newTitle = it },
+                        placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     val detailsIsAside = isChecklistMode || isDoodleMode
@@ -1263,7 +1332,7 @@ fun NotesScreen(active: Boolean = true) {
                         placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                         expandedTitle = if (editingId != null) com.lucent.app.i18n.S.editNote else com.lucent.app.i18n.S.newNote,
                         collapsedMinHeight = if (detailsIsAside) 270.dp else 360.dp,
-                        collapsedMaxHeight = if (detailsIsAside) 660.dp else 960.dp
+                        tools = bodyTools
                     )
                     if (!detailsIsAside && newBody.isNotBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -1455,66 +1524,7 @@ fun NotesScreen(active: Boolean = true) {
                     }
                 }
             }
-            QuickActionFab(
-                scrollingUp = composerScrollingUp,
-                scrollingDown = composerScrollingDown,
-                expanded = quickActionsOpen,
-                canUndo = bodyUndo.canUndo,
-                canRedo = bodyUndo.canRedo,
-                onScrollTop = { scope.launch { composerScroll.animateScrollTo(0) } },
-                onScrollBottom = { scope.launch { composerScroll.animateScrollTo(composerScroll.maxValue) } },
-                onToggleExpanded = { quickActionsOpen = !quickActionsOpen },
-                onUndo = { bodyUndo.undo()?.let { newBody = it } },
-                onRedo = { bodyUndo.redo()?.let { newBody = it } },
-                richTextEnabled = richTextEnabled,
-                hasSelection = bodySelEnd > bodySelStart,
-                onToggleStyle = { kind, color ->
-                    if (bodySelEnd > bodySelStart) {
-                        bodySpans = com.lucent.app.data.RichText.toggle(
-                            bodySpans, bodySelStart, bodySelEnd, kind, color
-                        )
-                    } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
-                        pendingExplicit = true
-                        pendingHighlight = if (pendingHighlight == color) null else color
-                    } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
-                        pendingExplicit = true
-                        pendingColor = if (pendingColor == color) null else color
-                    } else {
-                        pendingExplicit = true
-                        val opposite = when (kind) {
-                            com.lucent.app.data.RichSpan.Kind.BOLD -> com.lucent.app.data.RichSpan.Kind.LIGHT
-                            com.lucent.app.data.RichSpan.Kind.LIGHT -> com.lucent.app.data.RichSpan.Kind.BOLD
-                            else -> null
-                        }
-                        pendingKinds = if (kind in pendingKinds) pendingKinds - kind
-                        else (if (opposite != null) pendingKinds - opposite else pendingKinds) + kind
-                    }
-                },
-                onClearStyle = {
-                    if (bodySelEnd > bodySelStart) {
-                        bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
-                            com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
-                        }
-                    } else {
-                        pendingExplicit = true
-                        pendingKinds = emptySet()
-                        pendingHighlight = null
-                        pendingColor = null
-                    }
-                },
-                activeKinds = if (bodySelEnd > bodySelStart)
-                    com.lucent.app.data.RichText.kindsCovering(bodySpans, bodySelStart, bodySelEnd)
-                else pendingKinds,
-                activeHighlight = if (bodySelEnd > bodySelStart)
-                    com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
-                else pendingHighlight,
-                activeColor = if (bodySelEnd > bodySelStart)
-                    com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
-                else pendingColor,
-                onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
-            )
+            bodyTools()
         }
         }
 
@@ -1643,12 +1653,26 @@ fun NotesScreen(active: Boolean = true) {
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = com.lucent.app.i18n.S.copyAll, tint = onGradient)
                         }
-                        PinIconButton(
-                            pinned = note.pinned,
-                            onToggle = { noteToTogglePin = note }
-                        )
+                        if (!note.pinned) {
+                            PinIconButton(
+                                pinned = false,
+                                onToggle = { noteToTogglePin = note }
+                            )
+                        }
                         IconButton(onClick = { startEdit(note) }) {
                             Icon(Icons.Default.Edit, contentDescription = com.lucent.app.i18n.S.actionEdit, tint = onGradient)
+                        }
+                        if (markdownEnabled && richTextEnabled) {
+                            FormatOverrideButton(
+                                current = note.formatOverride,
+                                onSelect = { key ->
+                                    AppScope.io.launch {
+                                        db.noteDao().getByIdOnce(note.id)?.let { row ->
+                                            db.noteDao().update(row.copy(formatOverride = key))
+                                        }
+                                    }
+                                }
+                            )
                         }
                         IconButton(onClick = { noteToToggleArchive = note }) {
                             Icon(
@@ -1730,8 +1754,14 @@ fun NotesScreen(active: Boolean = true) {
                             val hit = NoteLinks.resolve(target, linkPool)
                             if (hit != null) viewingId = hit.id else startCreate(prefillTitle = target)
                         }
+                        val detailFormat = com.lucent.app.data.ContentFormats.resolve(
+                            markdownEnabled = markdownEnabled,
+                            richTextEnabled = richTextEnabled,
+                            override = note.formatOverride,
+                            body = note.body
+                        )
                         when {
-                            markdownEnabled -> MarkdownText(
+                            detailFormat == com.lucent.app.data.ContentFormat.MARKDOWN -> MarkdownText(
                                 text = note.body,
                                 brokenLinks = brokenLower,
                                 onWikiLink = openLink,
@@ -1815,7 +1845,7 @@ fun NotesScreen(active: Boolean = true) {
         showArchive -> {
             ArchivedNotesScreen(
                 onBack = { showArchive = false },
-                onOpen = { note -> viewingId = note.id },
+                onOpen = { note -> openDetail(note) },
                 onDeleteRequest = { note -> noteToDelete = note }
             )
         }
@@ -1827,7 +1857,7 @@ fun NotesScreen(active: Boolean = true) {
         showHidden && HiddenArea.visible -> {
             HiddenNotesScreen(
                 onBack = { showHidden = false },
-                onOpen = { showHidden = false; openDetail(it) }
+                onOpen = { openDetail(it) }
             )
         }
 
@@ -1848,11 +1878,7 @@ fun NotesScreen(active: Boolean = true) {
 
         showSearch -> {
             SearchScreen(
-                onOpenNote = { note ->
-                    showSearch = false
-                    viewingId = note.id
-                    returnToOnClose = null
-                },
+                onOpenNote = { note -> openDetail(note) },
                 onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Notes) },
                 onBack = { showSearch = false }
             )
@@ -1947,7 +1973,6 @@ fun NotesScreen(active: Boolean = true) {
                                     Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
                                 }
                                 DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
-                                    OverflowMenuSearchItem(onClick = { showOverflowMenu = false; showSearch = true })
                                     DropdownMenuItem(
                                         text = { Text(com.lucent.app.i18n.S.screenArchivedNotes) },
                                         leadingIcon = { Icon(Icons.Default.Inventory2, contentDescription = null) },
@@ -2052,6 +2077,35 @@ fun NotesScreen(active: Boolean = true) {
                             }
                         }
                     }
+                    if (searchText.isNotBlank() && inlineGlobal.hasResults) {
+                        item(key = "inline_global_divider", span = { GridItemSpan(maxLineSpan) }) {
+                            GlobalSearchDivider()
+                        }
+                        if (inlineGlobalNotes.isNotEmpty()) {
+                            item(key = "inline_global_notes_header", span = { GridItemSpan(maxLineSpan) }) {
+                                GlobalNotesHeader(inlineGlobalNotes.size)
+                            }
+                            items(
+                                inlineGlobalNotes,
+                                key = { "global_note_${it.id}" },
+                                span = { GridItemSpan(maxLineSpan) }
+                            ) { note ->
+                                NoteResultRow(note = note, onOpen = { openDetail(note) })
+                            }
+                        }
+                        if (inlineGlobalTasks.isNotEmpty()) {
+                            item(key = "inline_global_tasks_header", span = { GridItemSpan(maxLineSpan) }) {
+                                GlobalTasksHeader(inlineGlobalTasks.size)
+                            }
+                            items(
+                                inlineGlobalTasks,
+                                key = { "global_task_${it.id}" },
+                                span = { GridItemSpan(maxLineSpan) }
+                            ) { task ->
+                                TaskResultRow(task = task, onOpen = { AppNavigation.openTask(task.id, from = Screen.Notes) })
+                            }
+                        }
+                    }
                 }
                 ScrollEdgeJumpButtons(
                     canUp = gridState.canScrollBackward,
@@ -2116,7 +2170,10 @@ private fun NoteCard(
         ) {
             Row(modifier = Modifier.weight(1f)) {
                 if (note.pinned) {
-                    PinnedMarker(modifier = Modifier.padding(top = 2.dp, end = 4.dp))
+                    PinnedMarker(
+                        onUnpin = onTogglePin,
+                        modifier = Modifier.padding(top = 2.dp, end = 4.dp)
+                    )
                 }
                 Text(
                     note.title.ifBlank { com.lucent.app.i18n.S.untitled },
@@ -2134,16 +2191,6 @@ private fun NoteCard(
                     modifier = Modifier.padding(start = 6.dp).size(20.dp)
                 )
             } else {
-                Icon(
-                    Icons.Default.PushPin,
-                    contentDescription = if (note.pinned) com.lucent.app.i18n.S.actionUnpin
-                                         else com.lucent.app.i18n.S.actionPin,
-                    tint = if (note.pinned) onGradient else onGradientMuted,
-                    modifier = Modifier
-                        .padding(start = 6.dp)
-                        .size(18.dp)
-                        .clickable { onTogglePin() }
-                )
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = com.lucent.app.i18n.S.actionDelete,

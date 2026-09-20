@@ -113,7 +113,9 @@ object LlmClient {
     suspend fun streamChat(
         baseUrl: String, spec: ApiSpec, apiKey: String, model: String,
         history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>,
-        onDelta: (String) -> Unit
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit = {},
+        onRetry: (Int) -> Unit = {}
     ): Result<RawModelReply> = withContext(Dispatchers.IO) {
         val adapter = adapterFor(spec)
         val streamJob = coroutineContext[kotlinx.coroutines.Job]
@@ -140,7 +142,7 @@ object LlmClient {
                         Result.failure(ApiNetworkException("Empty response body", null))
                     } else {
                         try {
-                            streamBody(adapter, source, acc, onDelta,
+                            streamBody(adapter, source, acc, onDelta, onReasoning,
                                 isCancelled = { streamJob?.isActive == false })
                         } finally {
                             try { response.close() } catch (_: Throwable) {}
@@ -162,6 +164,7 @@ object LlmClient {
                 isTransientNetwork(error) &&
                 attempt < MAX_ATTEMPTS - 1
             if (retryable) {
+                onRetry(attempt + 2)
                 kotlinx.coroutines.delay(RETRY_BACKOFF_MS[attempt.coerceAtMost(RETRY_BACKOFF_MS.size - 1)])
                 attempt++
                 continue
@@ -177,6 +180,7 @@ object LlmClient {
         source: okio.BufferedSource,
         acc: StreamAccumulator,
         onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit,
         isCancelled: () -> Boolean = { false }
     ) {
         while (!source.exhausted()) {
@@ -188,7 +192,8 @@ object LlmClient {
             val payload = line.removePrefix("data:").trim()
             if (payload.isEmpty() || payload == "[DONE]") continue
             val json = try { JSONObject(payload) } catch (e: Exception) { null } ?: continue
-            adapter.parseStreamEvent(json, acc, onDelta)
+            adapter.parseStreamEvent(json, acc, onDelta, onReasoning)
         }
+        flushContentRouting(acc, onDelta, onReasoning)
     }
 }

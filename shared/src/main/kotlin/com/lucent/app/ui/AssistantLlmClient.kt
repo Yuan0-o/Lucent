@@ -15,7 +15,9 @@ interface AssistantLlmClient {
         history: List<ChatTurn>,
         systemPrompt: String,
         tools: List<ToolDefinition>,
-        onDelta: (String) -> Unit
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit = {},
+        onRetry: (Int) -> Unit = {}
     ): Result<RawModelReply>
 }
 
@@ -28,7 +30,12 @@ object RealAssistantLlmClient : AssistantLlmClient {
         history: List<ChatTurn>,
         systemPrompt: String,
         tools: List<ToolDefinition>,
-        onDelta: (String) -> Unit
+        onDelta: (String) -> Unit,
+        onReasoning: (String) -> Unit,
+        onRetry: (Int) -> Unit
     ): Result<RawModelReply> =
-        LlmClient.streamChat(baseUrl, spec, apiKey, model, history, systemPrompt, tools, onDelta)
+        LlmClient.streamChat(
+            baseUrl, spec, apiKey, model, history, systemPrompt, tools,
+            onDelta, onReasoning, onRetry
+        )
 }

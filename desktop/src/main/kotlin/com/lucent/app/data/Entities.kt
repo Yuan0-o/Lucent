@@ -21,7 +21,8 @@ data class Note(
     val hidden: Boolean = false,
     val bodySpans: String = "",
     val isDoodle: Boolean = false,
-    val doodle: String = ""
+    val doodle: String = "",
+    val formatOverride: String? = null
 )
 
 data class Task(
@@ -43,7 +44,8 @@ data class Task(
     val isDraft: Boolean = false,
     val draftSavedAt: Long? = null,
     val hidden: Boolean = false,
-    val notesSpans: String = ""
+    val notesSpans: String = "",
+    val formatOverride: String? = null
 )
 
 data class NoteVersion(
@@ -79,7 +81,8 @@ data class ChatMessage(
     val attachmentList: String? = null,
     val conversationId: Long = 1,
     val tokens: Int = 0,
-    val replyToId: Long = 0
+    val replyToId: Long = 0,
+    val agentTrace: String? = null
 )
 
 data class ChatConversation(

@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -53,6 +54,47 @@ class DiffuseBackgroundTest {
         val pixels = DiffuseGradientField(32).render(3.0, warmPalette, nightBackdrop, dark = true)
         val distinct = pixels.toSet().size
         assertTrue(distinct > 200, "expected a continuum of shades, got $distinct")
+    }
+
+    @Test
+    fun theLayeredFusionStaysFreeOfHardEdgesAndNoise() {
+        val field = DiffuseGradientField(96)
+        var worst = 0
+        for (step in 0 until 24) {
+            val seconds = step * 2.0
+            worst = maxOf(worst, worstNeighbourGap(field.render(seconds, seconds, warmPalette, nightBackdrop, dark = true)))
+        }
+        assertTrue(worst <= 5, "adjacent pixels must stay within 5/255, worst was $worst")
+    }
+
+    @Test
+    fun theWavesStillMoveWhenOnlyTheSpatialClockAdvances() {
+        val field = DiffuseGradientField(24)
+        val frozenColours = field.render(0.0, 0.0, warmPalette, nightBackdrop, dark = true).copyOf()
+        val advanced = field.render(13.0, 0.0, warmPalette, nightBackdrop, dark = true).copyOf()
+        assertFalse(
+            frozenColours.contentEquals(advanced),
+            "13 seconds of the spatial clock must reshape the field even with the palette stopped"
+        )
+    }
+
+    private fun worstNeighbourGap(pixels: IntArray): Int {
+        var worst = 0
+        for (y in 0 until 96) {
+            for (x in 0 until 96) {
+                val here = pixels[y * 96 + x]
+                if (x + 1 < 96) worst = maxOf(worst, channelGap(here, pixels[y * 96 + x + 1]))
+                if (y + 1 < 96) worst = maxOf(worst, channelGap(here, pixels[(y + 1) * 96 + x]))
+            }
+        }
+        return worst
+    }
+
+    private fun channelGap(a: Int, b: Int): Int {
+        val r = abs(((a ushr 16) and 255) - ((b ushr 16) and 255))
+        val g = abs(((a ushr 8) and 255) - ((b ushr 8) and 255))
+        val bl = abs((a and 255) - (b and 255))
+        return maxOf(r, g, bl)
     }
 
     @Test

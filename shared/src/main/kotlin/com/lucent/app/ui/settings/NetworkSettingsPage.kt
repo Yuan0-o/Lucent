@@ -63,7 +63,7 @@ internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRou
             )
         }
         if (webSearchLocked) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(S.webSearchLocalDisabledHint, color = onGradientMuted, fontSize = 12.sp)
         }
     }

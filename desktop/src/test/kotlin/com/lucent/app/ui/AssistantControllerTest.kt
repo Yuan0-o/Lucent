@@ -58,7 +58,9 @@ class AssistantControllerTest {
             history: List<ChatTurn>,
             systemPrompt: String,
             tools: List<ToolDefinition>,
-            onDelta: (String) -> Unit
+            onDelta: (String) -> Unit,
+            onReasoning: (String) -> Unit,
+            onRetry: (Int) -> Unit
         ): Result<RawModelReply> {
             val i = index.getAndIncrement()
             return scripted.getOrElse(i) { scripted.last() }
@@ -187,6 +189,63 @@ class AssistantControllerTest {
             val tasks = db.taskDao().getAllOnce()
             assertEquals(1, tasks.size, "approving twice must still write exactly one task")
             assertEquals("Buy milk", tasks.first().title)
+        }
+    }
+
+    @Test
+    fun agentTraceRecordsTheToolStepAndIsPersistedWithTheReply() = runBlocking {
+        val dir = freshDir()
+        use(dir) {
+            val context = TestContext(dir)
+            val db = AppDatabase.createForTesting(context)
+            val llm = ScriptedLlmClient(listOf(createTaskReply(title = "Buy milk"), finalTextReply("Added it.")))
+            val controller = newController(context, db, llm)
+
+            controller.sendFixture(context)
+            awaitState(controller, description = "pendingConfirmation to be set") { it.pendingConfirmation != null }
+
+            val running = controller.agentTraceFor(controller.currentConversationId)
+            assertTrue(running != null, "a live trace must exist while the turn runs")
+            val pendingStep = running.steps.first { it.kind == AgentStepKind.TOOL }
+            assertEquals("create_task", pendingStep.toolName)
+            assertEquals("Buy milk", pendingStep.detail)
+            assertEquals(AgentStepStatus.RUNNING, pendingStep.status)
+
+            controller.resolveConfirmation(approved = true)
+            awaitState(controller, description = "turn to finish after approving") { !it.sending }
+
+            val assistant = db.chatDao().getAllOnce().last { it.role == "assistant" }
+            val trace = AgentTraceCodec.decode(assistant.agentTrace)
+            assertTrue(trace != null, "the trace must be persisted on the reply")
+            assertEquals(AgentStepStatus.DONE, trace.status)
+            val step = trace.steps.first { it.kind == AgentStepKind.TOOL }
+            assertEquals("create_task", step.toolName)
+            assertEquals("Buy milk", step.detail)
+            assertEquals(AgentStepStatus.DONE, step.status)
+        }
+    }
+
+    @Test
+    fun declinedConfirmationLeavesTheTraceCancelledWithNothingWritten() = runBlocking {
+        val dir = freshDir()
+        use(dir) {
+            val context = TestContext(dir)
+            val db = AppDatabase.createForTesting(context)
+            val llm = ScriptedLlmClient(listOf(createTaskReply()))
+            val controller = newController(context, db, llm)
+
+            controller.sendFixture(context)
+            awaitState(controller, description = "pendingConfirmation to be set") { it.pendingConfirmation != null }
+            controller.resolveConfirmation(approved = false)
+            awaitState(controller, description = "turn to finish after declining") { !it.sending }
+
+            assertTrue(db.taskDao().getAllOnce().isEmpty(), "declining must not create the task")
+            val assistant = db.chatDao().getAllOnce().last { it.role == "assistant" }
+            val trace = AgentTraceCodec.decode(assistant.agentTrace)
+            assertTrue(trace != null, "the cancelled trace must still be persisted")
+            assertEquals(AgentStepStatus.CANCELLED, trace.status)
+            val step = trace.steps.first { it.kind == AgentStepKind.TOOL }
+            assertEquals(AgentStepStatus.CANCELLED, step.status)
         }
     }
 }

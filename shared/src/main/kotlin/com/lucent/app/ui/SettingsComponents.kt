@@ -310,6 +310,62 @@ internal fun ApiImportLimitDialog(
 }
 
 @Composable
+internal fun ApiModelPickerDialog(
+    names: List<String>,
+    selected: Set<String>,
+    onDone: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var draft by remember(names) { mutableStateOf(selected) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(S.apiModelsTitle) },
+        text = {
+            Column {
+                Row {
+                    TextButton(onClick = { draft = names.toSet() }) {
+                        Text(S.selectAll, fontSize = 13.sp)
+                    }
+                    TextButton(onClick = { draft = emptySet() }) {
+                        Text(S.clearAllSelection, fontSize = 13.sp)
+                    }
+                }
+                Text(S.apiModelsCount(draft.size, names.size), fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                if (names.isEmpty()) {
+                    Text(S.apiModelsEmpty, fontSize = 13.sp)
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                        items(names, key = { it }) { name ->
+                            val checked = name in draft
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { draft = if (checked) draft - name else draft + name }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Text(
+                                    name,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Checkbox(checked = checked, onCheckedChange = null)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onDone(draft) }) { Text(S.actionSave) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(S.actionCancel) } }
+    )
+}
+
+@Composable
 internal fun BackupContentLine(label: String, count: Int, details: List<String>) {
     if (count <= 0) return
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {

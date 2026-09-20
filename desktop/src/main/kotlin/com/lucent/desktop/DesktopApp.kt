@@ -1,6 +1,7 @@
 package com.lucent.desktop
 
 import android.content.DesktopContext
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -41,9 +42,11 @@ import com.lucent.app.ui.rememberCyclingPaletteColors
 import com.lucent.app.ui.LucentThemeMode
 import com.lucent.app.ui.AssistantScreen
 import com.lucent.app.ui.InsightsScreen
+import com.lucent.app.ui.LastScreen
 import com.lucent.app.ui.LucentToast
 import com.lucent.app.ui.NotesScreen
 import com.lucent.app.ui.SearchScreen
+import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.SettingsScreen
 import com.lucent.app.ui.TasksScreen
 import com.lucent.app.ui.frostedGlass
@@ -148,6 +151,14 @@ private fun DesktopShell(
     LaunchedEffect(AppNavigation.requestedScreen) {
         AppNavigation.consumeScreen()?.let { current = it }
     }
+    LaunchedEffect(current) { LastScreen.remember(current) }
+
+    BackHandler(
+        enabled = current == Screen.Settings &&
+            AppNavigation.settingsRoute == SettingsRoute.Root
+    ) {
+        AppNavigation.requestScreen(LastScreen.home)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         FluidGlassBackground(
@@ -157,7 +168,10 @@ private fun DesktopShell(
             modifier = Modifier.fillMaxSize()
         )
         Row(modifier = Modifier.fillMaxSize()) {
-            Sidebar(current = current, onSelect = { current = it })
+            Sidebar(current = current, onSelect = {
+                AppNavigation.resetSettingsRoute()
+                current = it
+            })
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 when (current) {
                     Screen.Assistant -> AssistantScreen()

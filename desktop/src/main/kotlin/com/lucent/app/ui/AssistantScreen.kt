@@ -264,12 +264,17 @@ fun AssistantScreen(active: Boolean = true) {
     val sending = AssistantController.isGenerating(AssistantController.currentConversationId)
     val thinking = AssistantController.thinkingFor(AssistantController.currentConversationId)
     val loadingModel = AssistantController.loadingModelFor(AssistantController.currentConversationId)
+    val liveTrace = AssistantController.agentTraceFor(AssistantController.currentConversationId)
     val pendingConfirmation = AssistantController.pendingConfirmation
     val networkError = AssistantController.networkErrorMessage
     val controllerError =
         if (AssistantController.errorConversationId == AssistantController.currentConversationId) {
             AssistantController.errorText
         } else ""
+    val controllerErrorTrace =
+        if (AssistantController.errorTraceConversationId == AssistantController.currentConversationId) {
+            AssistantController.errorTrace
+        } else null
     val shownError = if (controllerError.isNotBlank()) controllerError else localError
 
     LaunchedEffect(active) {
@@ -319,7 +324,7 @@ fun AssistantScreen(active: Boolean = true) {
             if (!scrolling && !listState.canScrollForward) autoScroll = true
         }
     }
-    LaunchedEffect(messages.size, streamingText, autoScroll, thinking, pendingConfirmation != null) {
+    LaunchedEffect(messages.size, streamingText, autoScroll, thinking, pendingConfirmation != null, liveTrace?.steps?.size) {
         if (autoScroll && pendingJump == null) listState.scrollToLatest()
     }
     LaunchedEffect(AssistantController.currentConversationId) {
@@ -1003,6 +1008,19 @@ fun AssistantScreen(active: Boolean = true) {
                             } else {
                                 buildAnnotatedString { append(msg.content.withLineStartPunctuationAllowed()) }
                             }
+                            if (!isUser) {
+                                val savedTrace = remember(msg.id, msg.agentTrace) {
+                                    AgentTraceCodec.decode(msg.agentTrace)
+                                }
+                                if (savedTrace != null) {
+                                    AgentTracePanel(
+                                        trace = savedTrace,
+                                        tint = onGradient,
+                                        mutedTint = onGradientMuted
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
+                            }
                             if (selectingTextIn == msg.id) {
                                 SelectionContainer {
                                     Text(contentText, color = onGradient)
@@ -1100,6 +1118,15 @@ fun AssistantScreen(active: Boolean = true) {
                                         modifier = Modifier.padding(bottom = 3.dp)
                                     )
                                 }
+                                if (liveTrace != null) {
+                                    AgentTracePanel(
+                                        trace = liveTrace,
+                                        tint = onGradient,
+                                        mutedTint = onGradientMuted,
+                                        initiallyExpanded = true
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
                                 Text(streamingText.withLineStartPunctuationAllowed(), color = onGradient)
                             }
                         }
@@ -1109,6 +1136,15 @@ fun AssistantScreen(active: Boolean = true) {
                     item(key = "thinking") {
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.align(Alignment.CenterStart).frostedGlass().padding(12.dp)) {
+                                if (liveTrace != null) {
+                                    AgentTracePanel(
+                                        trace = liveTrace,
+                                        tint = onGradient,
+                                        mutedTint = onGradientMuted,
+                                        initiallyExpanded = true
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
                                 ThinkingBubble(
                                     name = assistantName,
                                     tint = onGradient,
@@ -1121,11 +1157,22 @@ fun AssistantScreen(active: Boolean = true) {
                 }
                 if (shownError.isNotBlank()) {
                     item(key = "error") {
-                        Text(
-                            shownError,
-                            color = if (onGradient == Color.White) Color(0xFFFFC1C1) else Color(0xFFC62828),
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).longPressCopy(context, shownError)
-                        )
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (controllerErrorTrace != null) {
+                                AgentTracePanel(
+                                    trace = controllerErrorTrace,
+                                    tint = onGradient,
+                                    mutedTint = onGradientMuted,
+                                    initiallyExpanded = true
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                            }
+                            Text(
+                                shownError,
+                                color = if (onGradient == Color.White) Color(0xFFFFC1C1) else Color(0xFFC62828),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).longPressCopy(context, shownError)
+                            )
+                        }
                     }
                 }
             }

@@ -187,4 +187,92 @@ class ProviderAdapterTest {
         assertEquals(AnthropicAdapter, adapterFor(ApiSpec.ANTHROPIC))
         assertEquals(GoogleAdapter, adapterFor(ApiSpec.GOOGLE))
     }
+
+    @Test
+    fun `openai reasoning content is kept out of the answer`() {
+        val acc = StreamAccumulator()
+        val reasoning = StringBuilder()
+        val answer = StringBuilder()
+        val deltas = listOf(
+            """{"choices":[{"delta":{"reasoning_content":"weighing options"}}]}""",
+            """{"choices":[{"delta":{"content":"Answer"}}]}"""
+        )
+        deltas.forEach {
+            OpenAiAdapter.parseStreamEvent(org.json.JSONObject(it), acc, { answer.append(it) }, { reasoning.append(it) })
+        }
+        assertEquals("weighing options", reasoning.toString())
+        assertEquals("Answer", answer.toString())
+        assertEquals("weighing options", acc.fullReasoning.toString())
+        assertEquals("Answer", acc.fullText.toString())
+    }
+
+    @Test
+    fun `openai reasoning field is accepted as well`() {
+        val acc = StreamAccumulator()
+        val reasoning = StringBuilder()
+        OpenAiAdapter.parseStreamEvent(
+            org.json.JSONObject("""{"choices":[{"delta":{"reasoning":"thinking"}}]}"""),
+            acc,
+            {},
+            { reasoning.append(it) }
+        )
+        assertEquals("thinking", reasoning.toString())
+        assertEquals("", acc.fullText.toString())
+    }
+
+    @Test
+    fun `think blocks split across deltas land in reasoning only`() {
+        val acc = StreamAccumulator()
+        val reasoning = StringBuilder()
+        val answer = StringBuilder()
+        val deltas = listOf(
+            """{"choices":[{"delta":{"content":"Heads up <thi"}}]}""",
+            """{"choices":[{"delta":{"content":"nk>secret plan</thi"}}]}""",
+            """{"choices":[{"delta":{"content":"nk>Done"}}]}"""
+        )
+        deltas.forEach {
+            OpenAiAdapter.parseStreamEvent(org.json.JSONObject(it), acc, { answer.append(it) }, { reasoning.append(it) })
+        }
+        assertEquals("Heads up Done", answer.toString())
+        assertEquals("secret plan", reasoning.toString())
+        assertEquals("Heads up Done", acc.fullText.toString())
+    }
+
+    @Test
+    fun `anthropic thinking delta is reasoning not answer`() {
+        val acc = StreamAccumulator()
+        val reasoning = StringBuilder()
+        val answer = StringBuilder()
+        AnthropicAdapter.parseStreamEvent(
+            org.json.JSONObject("""{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}"""),
+            acc,
+            { answer.append(it) },
+            { reasoning.append(it) }
+        )
+        AnthropicAdapter.parseStreamEvent(
+            org.json.JSONObject("""{"type":"content_block_delta","delta":{"type":"text_delta","text":"Sure"}}"""),
+            acc,
+            { answer.append(it) },
+            { reasoning.append(it) }
+        )
+        assertEquals("hmm", reasoning.toString())
+        assertEquals("Sure", answer.toString())
+        assertEquals("Sure", acc.fullText.toString())
+    }
+
+    @Test
+    fun `google thought parts are reasoning not answer`() {
+        val acc = StreamAccumulator()
+        val reasoning = StringBuilder()
+        val answer = StringBuilder()
+        GoogleAdapter.parseStreamEvent(
+            org.json.JSONObject("""{"candidates":[{"content":{"parts":[{"text":"planning","thought":true},{"text":"Result"}]}}]}"""),
+            acc,
+            { answer.append(it) },
+            { reasoning.append(it) }
+        )
+        assertEquals("planning", reasoning.toString())
+        assertEquals("Result", answer.toString())
+        assertEquals("Result", acc.fullText.toString())
+    }
 }

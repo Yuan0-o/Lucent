@@ -3,6 +3,7 @@ package com.lucent.app
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.lucent.app.ui.SettingsRoute
 
 object AppNavigation {
 
@@ -16,6 +17,9 @@ object AppNavigation {
         private set
 
     var returnScreen by mutableStateOf<Screen?>(null)
+        private set
+
+    var settingsRoute by mutableStateOf(SettingsRoute.Root)
         private set
 
     var composeNoteRequested by mutableStateOf(false)
@@ -48,6 +52,14 @@ object AppNavigation {
 
     fun requestScreen(screen: Screen) {
         requestedScreen = screen
+    }
+
+    fun rememberSettingsRoute(route: SettingsRoute) {
+        settingsRoute = route
+    }
+
+    fun resetSettingsRoute() {
+        settingsRoute = SettingsRoute.Root
     }
 
     fun consumeScreen(): Screen? = requestedScreen.also { requestedScreen = null }

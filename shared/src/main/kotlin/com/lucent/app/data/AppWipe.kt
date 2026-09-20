@@ -12,7 +12,10 @@ suspend fun wipeAllData(
     }
     db.noteVersionDao().clearAll()
     db.noteDao().clearAll()
+    db.taskVersionDao().clearAll()
     db.taskDao().clearAll()
+    db.notebookDao().clearAllItems()
+    db.notebookDao().clearAll()
     db.chatDao().clearAll()
     db.chatConversationDao().clearAll()
     com.lucent.app.data.EmbeddingStore.clearAll(context)

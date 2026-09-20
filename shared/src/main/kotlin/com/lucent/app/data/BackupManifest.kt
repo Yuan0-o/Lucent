@@ -47,6 +47,7 @@ internal object BackupManifestBuilder {
                     .put("isDoodle", it.isDoodle)
                     .put("bodySpans", it.bodySpans)
                     .put("doodle", it.doodle)
+                    .put("formatOverride", it.formatOverride ?: JSONObject.NULL)
             )
         }
 
@@ -73,6 +74,7 @@ internal object BackupManifestBuilder {
                     .put("draftSavedAt", it.draftSavedAt ?: JSONObject.NULL)
                     .put("hidden", it.hidden)
                     .put("notesSpans", it.notesSpans)
+                    .put("formatOverride", it.formatOverride ?: JSONObject.NULL)
             )
         }
 
@@ -123,6 +125,7 @@ internal object BackupManifestBuilder {
                     .put("attachmentList", it.attachmentList ?: JSONObject.NULL)
                     .put("conversationId", it.conversationId)
                     .put("tokens", it.tokens)
+                    .put("agentTrace", it.agentTrace ?: JSONObject.NULL)
             )
         }
 

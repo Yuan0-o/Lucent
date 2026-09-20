@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -214,6 +215,7 @@ fun TasksScreen(active: Boolean = true) {
     val bodyUndo = remember(composing) { TextUndoStack(newNotes) }
     val repo = remember { com.lucent.app.data.SettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = false)
+    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = false)
     var bodySpans by remember { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
     var bodySelStart by remember(composing) { mutableStateOf(0) }
     var bodySelEnd by remember(composing) { mutableStateOf(0) }
@@ -375,8 +377,9 @@ fun TasksScreen(active: Boolean = true) {
         val appContext = context.applicationContext
 
         com.lucent.app.data.backgroundWrite(context, "task save") {
-            val saved: Task = if (original != null) {
-                val updated = original.copy(
+            val existing = original?.let { db.taskDao().getByIdOnce(it.id) }
+            val saved: Task = if (existing != null) {
+                val updated = existing.copy(
                     title = title,
                     notes = notesText,
                     notesSpans = notesSpansJson,
@@ -390,7 +393,7 @@ fun TasksScreen(active: Boolean = true) {
                 )
                 TaskHistory.recordIfChanged(
                     db = db,
-                    existing = original,
+                    existing = existing,
                     newTitle = title,
                     newNotes = notesText,
                     newSubtasks = subtasksJson,
@@ -401,6 +404,7 @@ fun TasksScreen(active: Boolean = true) {
                 updated
             } else {
                 val toInsert = Task(
+                    id = original?.id ?: 0,
                     title = title,
                     createdAt = createdAt,
                     notes = notesText,
@@ -623,6 +627,13 @@ fun TasksScreen(active: Boolean = true) {
         m
     }
 
+    val inlineGlobal = rememberInlineGlobalResults(searchText)
+    val inlineLocalIds = remember(sortedActive) { sortedActive.mapTo(HashSet()) { it.id } }
+    val inlineGlobalTasks = remember(inlineGlobal.tasks, inlineLocalIds) {
+        inlineGlobal.tasks.filterNot { it.id in inlineLocalIds }
+    }
+    val inlineGlobalNotes = inlineGlobal.notes
+
     fun dropSelection(beforeId: Long?, afterId: Long?) {
         val moving = selectedTaskIds.toList().mapNotNull { id -> sortedActive.firstOrNull { it.id == id } }
         if (moving.isEmpty()) return
@@ -636,7 +647,7 @@ fun TasksScreen(active: Boolean = true) {
         if (reordered === sortedActive) return
         AppScope.io.launch {
             reordered.forEachIndexed { index, t ->
-                if (t.manualOrder != index) db.taskDao().update(t.copy(manualOrder = index))
+                if (t.manualOrder != index) db.taskDao().setManualOrder(t.id, index)
             }
         }
         if (sortOption != TaskSort.CUSTOM) {
@@ -747,7 +758,7 @@ fun TasksScreen(active: Boolean = true) {
                     val pinnedNow = !target.pinned
                     taskToTogglePin = null
                     com.lucent.app.data.backgroundWrite(context, "task pin toggle") {
-                        db.taskDao().update(target.copy(pinned = pinnedNow))
+                        db.taskDao().setPinned(target.id, pinnedNow)
                     }
                 }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
@@ -811,6 +822,68 @@ fun TasksScreen(active: Boolean = true) {
                     else detailsEndRequester.bringIntoView()
                 }
             }
+            val bodyTools: @Composable BoxScope.() -> Unit = {
+            QuickActionFab(
+                scrollingUp = composerScrollingUp,
+                scrollingDown = composerScrollingDown,
+                expanded = quickActionsOpen,
+                canUndo = bodyUndo.canUndo,
+                canRedo = bodyUndo.canRedo,
+                onScrollTop = { scope.launch { composerScroll.animateScrollTo(0) } },
+                onScrollBottom = { scope.launch { composerScroll.animateScrollTo(composerScroll.maxValue) } },
+                onToggleExpanded = { quickActionsOpen = !quickActionsOpen },
+                onUndo = { bodyUndo.undo()?.let { newNotes = it } },
+                onRedo = { bodyUndo.redo()?.let { newNotes = it } },
+                richTextEnabled = richTextEnabled,
+                hasSelection = bodySelEnd > bodySelStart,
+                onToggleStyle = { kind, color ->
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichText.toggle(
+                            bodySpans, bodySelStart, bodySelEnd, kind, color
+                        )
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
+                        pendingExplicit = true
+                        pendingHighlight = if (pendingHighlight == color) null else color
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
+                        pendingExplicit = true
+                        pendingColor = if (pendingColor == color) null else color
+                    } else {
+                        pendingExplicit = true
+                        val opposite = when (kind) {
+                            com.lucent.app.data.RichSpan.Kind.BOLD -> com.lucent.app.data.RichSpan.Kind.LIGHT
+                            com.lucent.app.data.RichSpan.Kind.LIGHT -> com.lucent.app.data.RichSpan.Kind.BOLD
+                            else -> null
+                        }
+                        pendingKinds = if (kind in pendingKinds) pendingKinds - kind
+                        else (if (opposite != null) pendingKinds - opposite else pendingKinds) + kind
+                    }
+                },
+                onClearStyle = {
+                    if (bodySelEnd > bodySelStart) {
+                        bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
+                            com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
+                        }
+                    } else {
+                        pendingExplicit = true
+                        pendingKinds = emptySet()
+                        pendingHighlight = null
+                        pendingColor = null
+                    }
+                },
+                activeKinds = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.kindsCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingKinds,
+                activeHighlight = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingHighlight,
+                activeColor = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingColor,
+                onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
+            )
+            }
             Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(composerScroll).imePadding().padding(bottom = LocalBottomBarInset.current)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -821,14 +894,6 @@ fun TasksScreen(active: Boolean = true) {
                 }
 
                 Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                    OutlinedTextField(
-                        value = newTitle,
-                        onValueChange = { newTitle = it },
-                        placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.PushPin,
@@ -839,6 +904,14 @@ fun TasksScreen(active: Boolean = true) {
                         Text(com.lucent.app.i18n.S.pinToTop, color = onGradient, fontSize = 14.sp, modifier = Modifier.weight(1f))
                         Switch(checked = pinned, onCheckedChange = { pinned = it })
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newTitle,
+                        onValueChange = { newTitle = it },
+                        placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                     ExpandableGlassTextField(
                         value = newNotes,
@@ -854,7 +927,7 @@ fun TasksScreen(active: Boolean = true) {
                         placeholder = com.lucent.app.i18n.S.detailsPlaceholder,
                         expandedTitle = if (editingTask != null) com.lucent.app.i18n.S.editTask else com.lucent.app.i18n.S.newTask,
                         collapsedMinHeight = 360.dp,
-                        collapsedMaxHeight = 960.dp
+                        tools = bodyTools
                     )
                     Spacer(modifier = Modifier.height(12.dp).bringIntoViewRequester(detailsEndRequester))
                     if (subtasksEnabled) {
@@ -969,66 +1042,7 @@ fun TasksScreen(active: Boolean = true) {
                     }
                 }
             }
-            QuickActionFab(
-                scrollingUp = composerScrollingUp,
-                scrollingDown = composerScrollingDown,
-                expanded = quickActionsOpen,
-                canUndo = bodyUndo.canUndo,
-                canRedo = bodyUndo.canRedo,
-                onScrollTop = { scope.launch { composerScroll.animateScrollTo(0) } },
-                onScrollBottom = { scope.launch { composerScroll.animateScrollTo(composerScroll.maxValue) } },
-                onToggleExpanded = { quickActionsOpen = !quickActionsOpen },
-                onUndo = { bodyUndo.undo()?.let { newNotes = it } },
-                onRedo = { bodyUndo.redo()?.let { newNotes = it } },
-                richTextEnabled = richTextEnabled,
-                hasSelection = bodySelEnd > bodySelStart,
-                onToggleStyle = { kind, color ->
-                    if (bodySelEnd > bodySelStart) {
-                        bodySpans = com.lucent.app.data.RichText.toggle(
-                            bodySpans, bodySelStart, bodySelEnd, kind, color
-                        )
-                    } else if (kind == com.lucent.app.data.RichSpan.Kind.HIGHLIGHT) {
-                        pendingExplicit = true
-                        pendingHighlight = if (pendingHighlight == color) null else color
-                    } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
-                        pendingExplicit = true
-                        pendingColor = if (pendingColor == color) null else color
-                    } else {
-                        pendingExplicit = true
-                        val opposite = when (kind) {
-                            com.lucent.app.data.RichSpan.Kind.BOLD -> com.lucent.app.data.RichSpan.Kind.LIGHT
-                            com.lucent.app.data.RichSpan.Kind.LIGHT -> com.lucent.app.data.RichSpan.Kind.BOLD
-                            else -> null
-                        }
-                        pendingKinds = if (kind in pendingKinds) pendingKinds - kind
-                        else (if (opposite != null) pendingKinds - opposite else pendingKinds) + kind
-                    }
-                },
-                onClearStyle = {
-                    if (bodySelEnd > bodySelStart) {
-                        bodySpans = com.lucent.app.data.RichSpan.Kind.entries.fold(bodySpans) { acc, k ->
-                            com.lucent.app.data.RichText.remove(acc, bodySelStart, bodySelEnd, k, null)
-                        }
-                    } else {
-                        pendingExplicit = true
-                        pendingKinds = emptySet()
-                        pendingHighlight = null
-                        pendingColor = null
-                    }
-                },
-                activeKinds = if (bodySelEnd > bodySelStart)
-                    com.lucent.app.data.RichText.kindsCovering(bodySpans, bodySelStart, bodySelEnd)
-                else pendingKinds,
-                activeHighlight = if (bodySelEnd > bodySelStart)
-                    com.lucent.app.data.RichText.highlightCovering(bodySpans, bodySelStart, bodySelEnd)
-                else pendingHighlight,
-                activeColor = if (bodySelEnd > bodySelStart)
-                    com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
-                else pendingColor,
-                onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)
-            )
+            bodyTools()
         }
         }
 
@@ -1156,9 +1170,9 @@ fun TasksScreen(active: Boolean = true) {
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = com.lucent.app.i18n.S.copyAll, tint = onGradient)
                         }
-                        if (!task.isDone) {
+                        if (!task.isDone && !task.pinned) {
                             PinIconButton(
-                                pinned = task.pinned,
+                                pinned = false,
                                 onToggle = { taskToTogglePin = task }
                             )
                         }
@@ -1173,6 +1187,18 @@ fun TasksScreen(active: Boolean = true) {
                         }
                         IconButton(onClick = { startEdit(task) }) {
                             Icon(Icons.Default.Edit, contentDescription = com.lucent.app.i18n.S.actionEdit, tint = onGradient)
+                        }
+                        if (markdownEnabled && richTextEnabled) {
+                            FormatOverrideButton(
+                                current = task.formatOverride,
+                                onSelect = { key ->
+                                    AppScope.io.launch {
+                                        db.taskDao().getByIdOnce(task.id)?.let { row ->
+                                            db.taskDao().update(row.copy(formatOverride = key))
+                                        }
+                                    }
+                                }
+                            )
                         }
                         IconButton(onClick = {
                             shareText(context, subject = task.title.ifBlank { "Task" }, text = shareTextForTask(task), chooserTitle = com.lucent.app.i18n.S.shareTaskChooser)
@@ -1243,7 +1269,17 @@ fun TasksScreen(active: Boolean = true) {
                                 }
                                 if (task.notes.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    Text(task.notes, color = onGradient)
+                                    val detailFormat = com.lucent.app.data.ContentFormats.resolve(
+                                        markdownEnabled = markdownEnabled,
+                                        richTextEnabled = richTextEnabled,
+                                        override = task.formatOverride,
+                                        body = task.notes
+                                    )
+                                    if (detailFormat == com.lucent.app.data.ContentFormat.MARKDOWN) {
+                                        MarkdownText(text = task.notes)
+                                    } else {
+                                        Text(task.notes, color = onGradient)
+                                    }
                                 }
                             }
                         }
@@ -1328,7 +1364,7 @@ fun TasksScreen(active: Boolean = true) {
         showHidden && HiddenArea.visible -> {
             HiddenTasksScreen(
                 onBack = { showHidden = false },
-                onOpen = { showHidden = false; openDetail(it) }
+                onOpen = { openDetail(it) }
             )
         }
 
@@ -1350,11 +1386,7 @@ fun TasksScreen(active: Boolean = true) {
         showSearch -> {
             SearchScreen(
                 onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Tasks) },
-                onOpenTask = { task ->
-                    showSearch = false
-                    viewingId = task.id
-                    returnToOnClose = null
-                },
+                onOpenTask = { task -> openDetail(task) },
                 onBack = { showSearch = false }
             )
         }
@@ -1448,7 +1480,6 @@ fun TasksScreen(active: Boolean = true) {
                                     Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
                                 }
                                 DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
-                                    OverflowMenuSearchItem(onClick = { showOverflowMenu = false; showSearch = true })
                                     DropdownMenuItem(
                                         text = { Text(com.lucent.app.i18n.S.screenCompletedTasks) },
                                         leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
@@ -1552,6 +1583,27 @@ fun TasksScreen(active: Boolean = true) {
                             }
                         }
                     }
+                    if (searchText.isNotBlank() && inlineGlobal.hasResults) {
+                        item(key = "inline_global_divider") {
+                            GlobalSearchDivider()
+                        }
+                        if (inlineGlobalTasks.isNotEmpty()) {
+                            item(key = "inline_global_tasks_header") {
+                                GlobalTasksHeader(inlineGlobalTasks.size)
+                            }
+                            items(inlineGlobalTasks, key = { "global_task_${it.id}" }) { task ->
+                                TaskResultRow(task = task, onOpen = { openDetail(task) })
+                            }
+                        }
+                        if (inlineGlobalNotes.isNotEmpty()) {
+                            item(key = "inline_global_notes_header") {
+                                GlobalNotesHeader(inlineGlobalNotes.size)
+                            }
+                            items(inlineGlobalNotes, key = { "global_note_${it.id}" }) { note ->
+                                NoteResultRow(note = note, onOpen = { AppNavigation.openNote(note.id, from = Screen.Tasks) })
+                            }
+                        }
+                    }
                 }
                 ScrollEdgeJumpButtons(
                     canUp = listState.canScrollBackward,
@@ -1623,7 +1675,10 @@ private fun TaskCard(
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (task.pinned) {
-                        PinnedMarker(modifier = Modifier.padding(end = 4.dp))
+                        PinnedMarker(
+                            onUnpin = onTogglePin,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
                     }
                     PriorityDot(priority)
                     if (priority != TaskPriority.NONE) Spacer(modifier = Modifier.width(6.dp))
@@ -1664,7 +1719,6 @@ private fun TaskCard(
                 }
             }
             if (!selectionMode) {
-                PinIconButton(pinned = task.pinned, onToggle = onTogglePin)
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
                 }

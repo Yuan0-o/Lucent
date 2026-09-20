@@ -27,7 +27,8 @@ import org.json.JSONObject
 object AppTools {
 
     fun definitions(includeWebSearch: Boolean = false): List<ToolDefinition> =
-        baseDefinitions() + if (includeWebSearch) listOf(webSearchDefinition()) else emptyList()
+        baseDefinitions() + NotebookTools.definitions() +
+            (if (includeWebSearch) listOf(webSearchDefinition()) else emptyList())
 
     private fun webSearchDefinition(): ToolDefinition = ToolDefinition(
         name = "web_search",
@@ -37,7 +38,8 @@ object AppTools {
 
     private val READ_ONLY_TOOLS = setOf(
         "list_notes", "read_note", "list_tasks", "read_task", "search_items", "recall_notes", "web_search",
-        "read_attachment", "list_note_versions", "list_trash", "list_drafts"
+        "read_attachment", "list_note_versions", "list_trash", "list_drafts",
+        "list_notebooks", "list_notebook_items", "search_notebook"
     )
 
     fun isMutating(name: String): Boolean = name !in READ_ONLY_TOOLS
@@ -83,7 +85,7 @@ object AppTools {
             "remove_task_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromTask(s("file_name"), title)
             "attach_upload_to_task" -> com.lucent.app.i18n.S.ccAttachUploadToTask(title)
             "restore_task_from_trash" -> com.lucent.app.i18n.S.ccRestoreTaskFromTrash(title)
-            else -> com.lucent.app.i18n.S.ccRunGeneric(name)
+            else -> NotebookTools.describeToolCall(name, a) ?: com.lucent.app.i18n.S.ccRunGeneric(name)
         }
     }
 
@@ -134,7 +136,7 @@ object AppTools {
                 of("file_name", com.lucent.app.i18n.S.confirmEditFileNameLabel),
                 of("content", com.lucent.app.i18n.S.confirmEditContentLabel, multiline = true)
             )
-            else -> emptyList()
+            else -> NotebookTools.editableArguments(name, a)
         }
     }
 
@@ -505,10 +507,10 @@ object AppTools {
 
     private fun JSONObject.hasAny(vararg keys: String): Boolean = keys.any { has(it) }
 
-    private suspend fun activeNotes(db: AppDatabase): List<Note> =
+    internal suspend fun activeNotes(db: AppDatabase): List<Note> =
         db.noteDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
 
-    private suspend fun activeTasks(db: AppDatabase): List<Task> =
+    internal suspend fun activeTasks(db: AppDatabase): List<Task> =
         db.taskDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
 
     private suspend fun draftNotes(db: AppDatabase): List<Note> =
@@ -559,7 +561,7 @@ object AppTools {
         return if (partial.size == 1) partial.first().name else null
     }
 
-    private fun summarize(task: Task): String {
+    internal fun summarize(task: Task): String {
         val sb = StringBuilder()
         sb.append(task.title)
         sb.append(" [").append(if (task.isDone) "done" else "pending").append("]")
@@ -577,7 +579,7 @@ object AppTools {
         return sb.toString()
     }
 
-    private fun summarize(note: Note): String {
+    internal fun summarize(note: Note): String {
         val sb = StringBuilder()
         sb.append(note.title.ifBlank { "Untitled" })
         if (note.pinned) sb.append(" [pinned]")
@@ -1611,7 +1613,8 @@ object AppTools {
                 }
             }
 
-            else -> ToolExecResult("Unknown tool: $name", success = false)
+            else -> NotebookTools.execute(db, name, args)
+                ?: ToolExecResult("Unknown tool: $name", success = false)
         }
     }
 }

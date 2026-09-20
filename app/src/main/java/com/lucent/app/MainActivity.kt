@@ -106,6 +106,7 @@ import com.lucent.app.ui.PALETTE_CYCLE
 import com.lucent.app.ui.NotesScreen
 import com.lucent.app.ui.rememberCyclingPaletteColors
 import com.lucent.app.ui.SettingsScreen
+import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.ShareIntake
 import com.lucent.app.ui.ShareIntakeDialog
 import com.lucent.app.ui.WidgetTaskConfirmDialog
@@ -469,6 +470,11 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
     BackHandler(enabled = true) {
         when {
+            currentScreen == Screen.Settings && AppNavigation.settingsRoute == SettingsRoute.Root ->
+                runOrConfirm {
+                    AppNavigation.resetSettingsRoute()
+                    currentScreen = LastScreen.home
+                }
             !backArmed -> {
                 backArmed = true
                 LucentToast.show(context, com.lucent.app.i18n.S.pressBackAgainToExit)
@@ -591,7 +597,12 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                     CapsuleNavItem(
                                         screen = screen,
                                         selected = currentScreen == screen,
-                                        onClick = { runOrConfirm { currentScreen = screen } },
+                                        onClick = {
+                                            runOrConfirm {
+                                                AppNavigation.resetSettingsRoute()
+                                                currentScreen = screen
+                                            }
+                                        },
                                         modifier = Modifier.weight(1f)
                                     )
                                 }

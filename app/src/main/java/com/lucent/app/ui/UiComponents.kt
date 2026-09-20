@@ -202,12 +202,18 @@ fun AttachmentSection(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable { onPick() },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.AttachFile, contentDescription = null, tint = onGradientMuted)
+            Icon(
+                Icons.Default.AttachFile,
+                contentDescription = null,
+                tint = onGradientMuted,
+                modifier = Modifier.size(18.dp)
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = com.lucent.app.i18n.S.attachFile,
                 color = onGradient,
                 fontSize = 14.sp,
+                lineHeight = 18.sp,
                 modifier = Modifier.weight(1f)
             )
         }

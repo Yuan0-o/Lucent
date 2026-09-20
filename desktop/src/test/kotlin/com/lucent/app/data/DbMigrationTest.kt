@@ -136,11 +136,11 @@ class DbMigrationTest {
             }
 
             val noteCols = columnNames(conn, "notes")
-            for (c in listOf("manualOrder", "isDraft", "draftSavedAt", "hidden", "isDoodle", "doodle", "bodySpans")) {
+            for (c in listOf("manualOrder", "isDraft", "draftSavedAt", "hidden", "isDoodle", "doodle", "bodySpans", "formatOverride")) {
                 assertTrue(c in noteCols, "notes.$c missing after migration")
             }
             val taskCols = columnNames(conn, "tasks")
-            for (c in listOf("manualOrder", "isDraft", "hidden", "notesSpans")) {
+            for (c in listOf("manualOrder", "isDraft", "hidden", "notesSpans", "formatOverride")) {
                 assertTrue(c in taskCols, "tasks.$c missing after migration")
             }
             val chatCols = columnNames(conn, "chat_messages")
