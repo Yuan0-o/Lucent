@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -49,7 +50,10 @@ class ReorderDragState internal constructor() {
 
     var draggingId: Long? by mutableStateOf(null)
 
-    var dragOffset: Offset by mutableStateOf(Offset.Zero)
+    var dragX: Float by mutableFloatStateOf(0f)
+    var dragY: Float by mutableFloatStateOf(0f)
+
+    var moved: Boolean by mutableStateOf(false)
 
     var gapBeforeId: Long? by mutableStateOf(null)
     var gapAfterId: Long? by mutableStateOf(null)
@@ -69,7 +73,9 @@ class ReorderDragState internal constructor() {
         settling = false
         settleOrder = null
         draggingId = id
-        dragOffset = Offset.Zero
+        dragX = 0f
+        dragY = 0f
+        moved = false
         gapBeforeId = null
         gapAfterId = null
     }
@@ -77,25 +83,44 @@ class ReorderDragState internal constructor() {
     internal fun finish(order: List<Long>?): Pair<Long?, Long?> {
         val landed = gapBeforeId to gapAfterId
         dragging = false
-        settling = order != null
-        settleOrder = order
+        if (order != null) {
+            settling = true
+            settleOrder = order
+        } else if (!moved) {
+            clear()
+        } else {
+            settling = true
+            settleOrder = null
+            gapBeforeId = null
+            gapAfterId = null
+        }
         return landed
     }
 
     internal fun cancel() {
         dragging = false
-        settling = true
-        settleOrder = null
-        gapBeforeId = null
-        gapAfterId = null
+        if (!moved) {
+            clear()
+        } else {
+            settling = true
+            settleOrder = null
+            gapBeforeId = null
+            gapAfterId = null
+        }
     }
 
     internal fun landed() {
+        clear()
+    }
+
+    private fun clear() {
         dragging = false
         settling = false
         settleOrder = null
         draggingId = null
-        dragOffset = Offset.Zero
+        dragX = 0f
+        dragY = 0f
+        moved = false
         gapBeforeId = null
         gapAfterId = null
     }
@@ -104,7 +129,11 @@ class ReorderDragState internal constructor() {
 class ReorderSlots internal constructor(
     private val keys: List<Long>,
     private val offsets: List<IntOffset>,
-    private val sizes: List<IntSize>
+    private val sizes: List<IntSize>,
+    val viewportLeft: Int,
+    val viewportTop: Int,
+    val viewportRight: Int,
+    val viewportBottom: Int
 ) {
     val count: Int get() = keys.size
 
@@ -162,28 +191,37 @@ class ReorderSlots internal constructor(
     }
 
     companion object {
-        val EMPTY = ReorderSlots(emptyList(), emptyList(), emptyList())
+        val EMPTY = ReorderSlots(emptyList(), emptyList(), emptyList(), 0, 0, 0, 0)
     }
 }
 
 private operator fun IntOffset.minus(other: IntOffset) = IntOffset(x - other.x, y - other.y)
 
 private fun LazyListState.visibleSlots(): ReorderSlots {
-    val cards = layoutInfo.visibleItemsInfo.filter { it.key is Long }
-    val width = layoutInfo.viewportSize.width
+    val info = layoutInfo
+    val cards = info.visibleItemsInfo.filter { it.key is Long }
     return ReorderSlots(
         keys = cards.map { it.key as Long },
         offsets = cards.map { IntOffset(0, it.offset) },
-        sizes = cards.map { IntSize(width, it.size) }
+        sizes = cards.map { IntSize(info.viewportSize.width, it.size) },
+        viewportLeft = 0,
+        viewportTop = info.viewportStartOffset,
+        viewportRight = info.viewportSize.width,
+        viewportBottom = info.viewportEndOffset
     )
 }
 
 private fun LazyGridState.visibleSlots(): ReorderSlots {
-    val cards = layoutInfo.visibleItemsInfo.filter { it.key is Long }
+    val info = layoutInfo
+    val cards = info.visibleItemsInfo.filter { it.key is Long }
     return ReorderSlots(
         keys = cards.map { it.key as Long },
         offsets = cards.map { IntOffset(it.offset.x, it.offset.y) },
-        sizes = cards.map { IntSize(it.size.width, it.size.height) }
+        sizes = cards.map { IntSize(it.size.width, it.size.height) },
+        viewportLeft = 0,
+        viewportTop = info.viewportStartOffset,
+        viewportRight = info.viewportSize.width,
+        viewportBottom = info.viewportEndOffset
     )
 }
 
@@ -284,12 +322,15 @@ fun Modifier.reorderableItem(
     this
         .pointerInput(id, enabled) {
             if (!enabled) return@pointerInput
+            val slop = viewConfiguration.touchSlop
             var grabbedAt = Offset.Zero
-            var travelled = Offset.Zero
+            var travelledX = 0f
+            var travelledY = 0f
             detectDragGesturesAfterLongPress(
                 onDragStart = { local ->
                     grabbedAt = local
-                    travelled = Offset.Zero
+                    travelledX = 0f
+                    travelledY = 0f
                     state.begin(id)
                     press()
                 },
@@ -304,10 +345,13 @@ fun Modifier.reorderableItem(
                 onDragCancel = { state.cancel() },
                 onDrag = { change, amount ->
                     change.consume()
-                    travelled += amount
-                    state.dragOffset = travelled
+                    travelledX += amount.x
+                    travelledY += amount.y
+                    state.dragX = travelledX
+                    state.dragY = travelledY
+                    if (!state.moved && (abs(travelledX) > slop || abs(travelledY) > slop)) state.moved = true
                     val top = listState.topOf(id)
-                    val (b, a) = listState.gapAtY(top + grabbedAt.y + travelled.y, id)
+                    val (b, a) = listState.gapAtY(top + grabbedAt.y + travelledY, id)
                     state.gapBeforeId = b
                     state.gapAfterId = a
                 }
@@ -328,12 +372,15 @@ fun Modifier.reorderableGridItem(
     this
         .pointerInput(id, enabled) {
             if (!enabled) return@pointerInput
+            val slop = viewConfiguration.touchSlop
             var grabbedAt = Offset.Zero
-            var travelled = Offset.Zero
+            var travelledX = 0f
+            var travelledY = 0f
             detectDragGesturesAfterLongPress(
                 onDragStart = { local ->
                     grabbedAt = local
-                    travelled = Offset.Zero
+                    travelledX = 0f
+                    travelledY = 0f
                     state.begin(id)
                     press()
                 },
@@ -348,9 +395,12 @@ fun Modifier.reorderableGridItem(
                 onDragCancel = { state.cancel() },
                 onDrag = { change, amount ->
                     change.consume()
-                    travelled += amount
-                    state.dragOffset = travelled
-                    val (b, a) = gridState.gapAt(gridState.originOf(id) + grabbedAt + travelled, id)
+                    travelledX += amount.x
+                    travelledY += amount.y
+                    state.dragX = travelledX
+                    state.dragY = travelledY
+                    if (!state.moved && (abs(travelledX) > slop || abs(travelledY) > slop)) state.moved = true
+                    val (b, a) = gridState.gapAt(gridState.originOf(id) + grabbedAt + Offset(travelledX, travelledY), id)
                     state.gapBeforeId = b
                     state.gapAfterId = a
                 }
@@ -363,13 +413,16 @@ fun Modifier.reorderVisuals(
     state: ReorderDragState,
     slots: () -> ReorderSlots = { ReorderSlots.EMPTY }
 ): Modifier = composed {
-    val lifted = state.draggingId == id
+    val mine = state.draggingId == id
+    val inHand = mine && state.dragging
+    val lifted = inHand && state.moved
+    val carrying = state.dragging && state.moved
     val active = state.dragging || state.settling
     val motion = LocalBackgroundEnvironment.current.motionEnabled
     val token = state.dragToken
-    val jelly = reorderJelly(state.dragging)
+    val jelly = reorderJelly(carrying)
     val wobble by animateFloatAsState(
-        targetValue = if (state.dragging) 1f else 0f,
+        targetValue = if (carrying) 1f else 0f,
         animationSpec = tween(durationMillis = JELLY_RAMP_MS),
         label = "reorderWobble"
     )
@@ -378,54 +431,63 @@ fun Modifier.reorderVisuals(
         animationSpec = if (motion) JELLY_SPRING else JELLY_STILL,
         label = "reorderLift"
     )
-    val follow by animateFloatAsState(
-        targetValue = if (state.dragging) JELLY_LEAD else 0f,
-        animationSpec = tween(durationMillis = JELLY_LEAD_MS),
-        label = "reorderFollow"
-    )
-    val target = if (active) slots().targetFor(id, state.draggingId, state.gapBeforeId, state.gapAfterId) else null
+    val layout = if (active) slots() else null
+    val target = layout?.targetFor(id, state.draggingId, state.gapBeforeId, state.gapAfterId)
     val positioned = target != null
     val targetX = target?.x?.toFloat() ?: 0f
     val targetY = target?.y?.toFloat() ?: 0f
+    val at = layout?.offsetOf(id)
+    val atX = at?.x?.toFloat() ?: 0f
+    val atY = at?.y?.toFloat() ?: 0f
     val travelX = remember(token) { Animatable(targetX) }
     val travelY = remember(token) { Animatable(targetY) }
-    val anchorX = remember(token) { targetX }
-    val anchorY = remember(token) { targetY }
+    val returnX = remember(token) { Animatable(0f) }
+    val returnY = remember(token) { Animatable(0f) }
     val seed = (id % JELLY_SEEDS).toInt() * JELLY_SEED_STEP
     val travelSpec = if (motion) JELLY_SPRING else JELLY_STILL
     val density = LocalDensity.current
     val bob = with(density) { JELLY_BOB.toPx() }
-    LaunchedEffect(token, targetX, targetY, positioned) {
-        if (positioned) {
+    LaunchedEffect(token, positioned, inHand, mine, targetX, targetY, atX, atY) {
+        if (!positioned || inHand) return@LaunchedEffect
+        if (mine) {
+            launch { returnX.animateTo(targetX - atX - state.dragX, travelSpec) }
+            launch { returnY.animateTo(targetY - atY - state.dragY, travelSpec) }
+        } else {
             launch { travelX.animateTo(targetX, travelSpec) }
             launch { travelY.animateTo(targetY, travelSpec) }
         }
     }
     this
-        .zIndex(if (lifted) 2f else if (active) 1f else 0f)
+        .zIndex(if (mine) 2f else if (active) 1f else 0f)
         .graphicsLayer {
             val phase = jelly?.value ?: 0f
-            if (positioned) {
-                val here = slots().offsetOf(id)
-                if (here != null) {
-                    var dx = travelX.value - here.x
+            val live = if (positioned) slots() else null
+            val here = live?.offsetOf(id)
+            if (live != null && here != null) {
+                val size = live.sizeOf(id)
+                val lowX = (live.viewportLeft - (here.x + (size?.width ?: 0))).toFloat()
+                val highX = (live.viewportRight - here.x).toFloat()
+                val lowY = (live.viewportTop - (here.y + (size?.height ?: 0))).toFloat()
+                val highY = (live.viewportBottom - here.y).toFloat()
+                if (inHand) {
+                    translationX = boundedTravel(state.dragX, lowX, highX)
+                    translationY = boundedTravel(state.dragY, lowY, highY)
+                } else if (mine) {
+                    translationX = boundedTravel(state.dragX + returnX.value, lowX, highX)
+                    translationY = boundedTravel(state.dragY + returnY.value, lowY, highY)
+                } else {
                     var dy = travelY.value - here.y
-                    if (lifted) {
-                        val size = slots().sizeOf(id)
-                        val leadX = (size?.width ?: 0) * JELLY_LEAD_CAP
-                        val leadY = (size?.height ?: 0) * JELLY_LEAD_CAP
-                        dx += ((state.dragOffset.x - (travelX.value - anchorX)) * follow).coerceIn(-leadX, leadX)
-                        dy += ((state.dragOffset.y - (travelY.value - anchorY)) * follow).coerceIn(-leadY, leadY)
-                    } else {
-                        dy += bob * jellyPhase(phase, seed) * wobble * JELLY_WOBBLE_GAIN
-                    }
-                    translationX = dx
+                    if (motion) dy += bob * jellyPhase(phase, seed) * wobble * JELLY_WOBBLE_GAIN
+                    translationX = travelX.value - here.x
                     translationY = dy
                 }
+            } else {
+                translationX = if (inHand) state.dragX else 0f
+                translationY = if (inHand) state.dragY else 0f
             }
-            val liftScale = 1f + (LIFT_SCALE - 1f) * lift
-            if (lifted || lift > JELLY_LIFT_MIN) {
+            if (mine || lift > JELLY_LIFT_MIN) {
                 val stretch = 1f + JELLY_STRETCH * phase
+                val liftScale = 1f + (LIFT_SCALE - 1f) * lift
                 scaleX = liftScale * stretch
                 scaleY = liftScale / stretch
                 alpha = 1f - (1f - LIFT_ALPHA) * lift
@@ -434,6 +496,8 @@ fun Modifier.reorderVisuals(
                 val breathe = JELLY_BREATHE * phase * wobble * JELLY_WOBBLE_GAIN
                 scaleX = 1f + breathe * 0.5f
                 scaleY = 1f - breathe
+                alpha = 1f
+                shadowElevation = 0f
             }
         }
 }
@@ -479,15 +543,18 @@ private val JELLY_BOB = 3.5.dp
 private const val JELLY_WOBBLE_GAIN = 0.6f
 private const val JELLY_RAMP_MS = 260
 private const val JELLY_LIFT_MIN = 0.002f
-private const val JELLY_LEAD = 0.18f
-private const val JELLY_LEAD_MS = 240
-private const val JELLY_LEAD_CAP = 0.12f
 private const val JELLY_SEEDS = 5L
 private const val JELLY_SEED_STEP = 0.16f
 private const val JELLY_SETTLE_TIMEOUT_MS = 900L
 private const val JELLY_RETURN_MS = 480L
 private val JELLY_SPRING = spring<Float>(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
 private val JELLY_STILL = spring<Float>(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)
+
+private fun boundedTravel(delta: Float, lower: Float, upper: Float): Float {
+    val low = if (lower < 0f) lower else 0f
+    val high = if (upper > 0f) upper else 0f
+    return if (delta < low) low else if (delta > high) high else delta
+}
 
 private fun LazyListState.topOf(id: Long): Float =
     (layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.offset ?: 0).toFloat()
