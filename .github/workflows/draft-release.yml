@@ -138,25 +138,27 @@ jobs:
       - name: Read release notes
         run: |
           if [ -f RELEASE_NOTES_${{ inputs.version }}.md ]; then
-            NOTES=$(cat RELEASE_NOTES_${{ inputs.version }}.md)
+            cat RELEASE_NOTES_${{ inputs.version }}.md > /tmp/notes.txt
           else
-            NOTES="Release ${{ inputs.version }}"
+            echo "Release ${{ inputs.version }}" > /tmp/notes.txt
           fi
           
           # Add build info
-          NOTES="${NOTES}
-
----
-
-**Build Info**
-- APK Size: ${{ env.APK_SIZE_MB }} MiB
-- Windows EXE Size: ${{ env.EXE_SIZE_MB }} MiB
-- APK Build: https://github.com/${{ github.repository }}/actions/runs/${{ inputs.apk_run_id }}
-- Windows Build: https://github.com/${{ github.repository }}/actions/runs/${{ inputs.windows_run_id }}
-- Built from commit: \`${{ github.sha }}\`"
+          cat >> /tmp/notes.txt <<'BUILDINFO'
+          
+          ---
+          
+          **Build Info**
+          BUILDINFO
+          
+          echo "- APK Size: ${{ env.APK_SIZE_MB }} MiB" >> /tmp/notes.txt
+          echo "- Windows EXE Size: ${{ env.EXE_SIZE_MB }} MiB" >> /tmp/notes.txt
+          echo "- APK Build: https://github.com/${{ github.repository }}/actions/runs/${{ inputs.apk_run_id }}" >> /tmp/notes.txt
+          echo "- Windows Build: https://github.com/${{ github.repository }}/actions/runs/${{ inputs.windows_run_id }}" >> /tmp/notes.txt
+          echo "- Built from commit: \`${{ github.sha }}\`" >> /tmp/notes.txt
           
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-          echo "$NOTES" >> $GITHUB_ENV
+          cat /tmp/notes.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create draft release
