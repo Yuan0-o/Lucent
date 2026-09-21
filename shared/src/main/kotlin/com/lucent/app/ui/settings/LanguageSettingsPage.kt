@@ -55,10 +55,12 @@ internal fun LanguageSettingsPage(
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val savedLanguage by repo.appLanguage.collectAsState(initial = SettingsCache.appLanguage)
-    val savedFont by repo.font.collectAsState(initial = SettingsCache.font)
+    val savedLanguage by repo.appLanguage.collectAsState(initial = null)
+    val savedFont by repo.font.collectAsState(initial = null)
 
     BackHeader(S.settingsLanguageTitle) { onRoute(SettingsRoute.Root) }
+
+    if (savedLanguage == null || savedFont == null) return
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(

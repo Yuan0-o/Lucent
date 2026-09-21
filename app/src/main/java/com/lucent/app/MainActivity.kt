@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
@@ -669,6 +672,7 @@ fun iconFor(screen: Screen) = when (screen) {
     Screen.Settings -> Icons.Default.Settings
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
     val realBackOwner = LocalOnBackPressedDispatcherOwner.current
@@ -684,42 +688,48 @@ private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
     val visited = remember { mutableStateListOf(active) }
     if (active !in visited) visited.add(active)
 
-    Box(modifier) {
-        visited.forEach { screen ->
-            val isActive = screen == active
-            key(screen) {
-                val dummyHaze = rememberHazeState()
-                val tabHaze = if (isActive) sharedHaze else dummyHaze
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(if (isActive) 1f else 0f)
-                        .drawWithContent { if (isActive) drawContent() }
+    val screens = Screen.entries
+    val pagerState = rememberPagerState(
+        initialPage = screens.indexOf(active),
+        pageCount = { screens.size }
+    )
+
+    LaunchedEffect(active) {
+        val targetPage = screens.indexOf(active)
+        if (pagerState.currentPage != targetPage) {
+            pagerState.animateScrollToPage(targetPage)
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
+        if (!pagerState.isScrollInProgress && pagerState.currentPage != screens.indexOf(active)) {
+            val newScreen = screens[pagerState.currentPage]
+            AppNavigation.requestScreen(newScreen)
+        }
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier
+    ) { page ->
+        val screen = screens[page]
+        val isActive = screen == active
+        key(screen) {
+            val dummyHaze = rememberHazeState()
+            val tabHaze = if (isActive) sharedHaze else dummyHaze
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                CompositionLocalProvider(
+                    LocalHazeState provides tabHaze,
+                    LocalOnBackPressedDispatcherOwner provides
+                        (if (isActive) realBackOwner!! else inertBackOwner)
                 ) {
-                    CompositionLocalProvider(
-                        LocalHazeState provides tabHaze,
-                        LocalOnBackPressedDispatcherOwner provides
-                            (if (isActive) realBackOwner!! else inertBackOwner)
-                    ) {
-                        when (screen) {
-                            Screen.Notes -> NotesScreen(active = isActive)
-                            Screen.Tasks -> TasksScreen(active = isActive)
-                            Screen.Assistant -> AssistantScreen(active = isActive)
-                            Screen.Settings -> SettingsScreen(active = isActive)
-                        }
-                    }
-                    if (!isActive) {
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .pointerInput(Unit) {
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            awaitPointerEvent().changes.forEach { it.consume() }
-                                        }
-                                    }
-                                }
-                        )
+                    when (screen) {
+                        Screen.Notes -> NotesScreen(active = isActive)
+                        Screen.Tasks -> TasksScreen(active = isActive)
+                        Screen.Assistant -> AssistantScreen(active = isActive)
+                        Screen.Settings -> SettingsScreen(active = isActive)
                     }
                 }
             }

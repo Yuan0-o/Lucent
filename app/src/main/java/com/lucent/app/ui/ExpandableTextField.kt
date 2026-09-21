@@ -89,15 +89,18 @@ fun ExpandableGlassTextField(
     }
     val lastLineRequester = remember { BringIntoViewRequester() }
     var followedLength by remember { mutableStateOf(value.length) }
+    var followedSelection by remember { mutableStateOf(fieldValue.selection.max) }
     LaunchedEffect(fieldValue.text.length, fieldValue.selection.max) {
         val length = fieldValue.text.length
+        val selectionChanged = fieldValue.selection.max != followedSelection
         val caretAtEnd = fieldValue.selection.max >= length
         val caretWasAtEnd = fieldValue.selection.max >= followedLength
-        if (length > followedLength && length > 0 && (caretAtEnd || caretWasAtEnd)) {
+        if ((length > followedLength && length > 0 && (caretAtEnd || caretWasAtEnd)) || selectionChanged) {
             withFrameNanos { }
             lastLineRequester.bringIntoView()
         }
         followedLength = length
+        followedSelection = fieldValue.selection.max
     }
 
     Box(modifier = modifier.fillMaxWidth()) {

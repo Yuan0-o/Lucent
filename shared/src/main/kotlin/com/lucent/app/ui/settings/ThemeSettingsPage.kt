@@ -36,10 +36,12 @@ import kotlinx.coroutines.launch
 internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val savedTheme by repo.themeMode.collectAsState(initial = SettingsCache.themeMode)
+    val savedTheme by repo.themeMode.collectAsState(initial = null)
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
     BackHeader(S.settingsThemeTitle) { onRoute(SettingsRoute.Appearance) }
+
+    if (savedTheme == null) return
 
     if (dynamicColorActive) {
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

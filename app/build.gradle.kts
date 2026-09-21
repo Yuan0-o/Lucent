@@ -7,7 +7,7 @@ plugins {
 
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
 
-val MARKETING_VERSION = "2.8.2"
+val MARKETING_VERSION = "2.8.3"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }

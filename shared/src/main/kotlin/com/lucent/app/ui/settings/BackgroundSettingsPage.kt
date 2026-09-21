@@ -50,10 +50,12 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
     val backgroundAnimationEnabled by repo.backgroundAnimationEnabled.collectAsState(
         initial = SettingsCache.backgroundAnimationEnabled
     )
-    val savedPalette by repo.palette.collectAsState(initial = SettingsCache.palette)
+    val savedPalette by repo.palette.collectAsState(initial = null)
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
     BackHeader(S.settingsBackgroundTitle) { onRoute(SettingsRoute.Appearance) }
+    
+    if (savedPalette == null) return
     if (dynamicColorActive) {
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.dynamicColorPausedBackground, color = onGradientMuted, fontSize = 13.sp)
