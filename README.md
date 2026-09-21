@@ -4,11 +4,10 @@
 
 ### Modern · Minimalist · Quietly Overqualified
 
-**A notes-and-tasks app with an assistant that can actually touch your data —
-sealed in an encrypted database on your own device, fluent in four languages, and built
-from start to finish by pressing one button on GitHub and going off to put the kettle on.
-It comes in pocket and desk sizes alike — an Android APK and a Windows installer — with the
-same shared heart ready to travel further.**
+**A notes-and-tasks app with an assistant that can actually touch your data — sealed in an
+encrypted database on your own device, fluent in four languages, and built from start to finish
+by pressing one button on GitHub. It comes in pocket and desk sizes alike — an Android APK and a
+Windows installer — with one shared heart, ready to travel further.**
 
 ![Lucent — Platform, Build, Interface, Assistant, Privacy, License](badges/badges.svg)
 
@@ -18,127 +17,127 @@ same shared heart ready to travel further.**
 
 ## The general idea
 
-Most note-taking apps offer you a sporting choice of two from three: the pretty one, the private
-one, or the clever one. Pick any two and learn to live with the disappointment. Lucent politely
-declines this arrangement. Everything you write is sealed in an encrypted database that never leaves
-your device. The assistant can be a cloud model you pay for, a model running entirely on the machine
-in front of you, or — if you are the sort of person who keeps notes the way one keeps a diary, which
-is to say resentfully and alone — nothing at all. And the whole thing is assembled without a line of
-local tooling: you press a button on GitHub, wander off, and an APK or a Windows `.exe` installer is
-waiting when you return.
-
-It is, we admit, a lot of app for a to-do list. We have made our peace with this.
+Most note-taking apps offer you a sporting choice of two from three: the pretty one, the private one,
+or the clever one. Choose your two and live with the disappointment. Lucent declines the arrangement.
+Everything you write is sealed in an encrypted database that never leaves your device. The assistant
+can be a cloud model you pay for, a model running on the machine in front of you, or nothing at all.
+And it is assembled without a line of local tooling: press a button on GitHub, wander off, and an APK
+or a Windows installer is waiting when you return.
 
 ## One app, wherever you put it
 
-Lucent is **one product with a single shared heart**, and the house rule of this repository is that
-every feature lands on every platform it ships to. Today that means your pocket and your desk:
+Lucent is **one product with a single shared heart**: the house rule is that every feature lands on
+every platform it ships to. Today that means your pocket and your desk:
 
-- **`:app`** — the Android application (Kotlin + Jetpack Compose, Room/SQLCipher, llama.cpp via the
-  NDK). Built by `.github/workflows/build.yml` into a signed release APK.
-- **`:desktop`** — the desktop application, Windows today (Compose for Desktop, pure JVM, the same
-  shared Kotlin de-Android-ified with a thin shim layer, SQLite over JDBC, llama.cpp compiled as a
-  DLL). Built by `.github/workflows/build-windows.yml` into a double-click `.exe` installer.
-- **`:shared`** — the single source tree both platforms compile. Business logic, data, most UI, one
-  translation catalogue in four languages. Edit once; both platforms change.
+- **`:app`** — the Android application (Kotlin and Jetpack Compose, Room over SQLCipher, llama.cpp
+  through the NDK). Built by `.github/workflows/build.yml` into a signed release APK.
+- **`:desktop`** — the desktop application, Windows today (Compose for Desktop, pure JVM, SQLite over
+  JDBC, llama.cpp compiled as a DLL). Built by `.github/workflows/build-windows.yml` into a
+  double-click `.exe` installer.
+- **`:shared`** — the single source tree both platforms compile: business logic, data, most of the
+  interface, one translation catalogue in four languages. Edit once; both machines change.
+
+A feature landed on Tuesday is on both platforms on Tuesday. Everything that can be shared lives in
+`shared/`; the few things that cannot — `SettingsRepository`, `Daos`/`Db`, `DocumentExport` and the
+largest screens — stay once per platform because their seams run deep. The native build stages are
+each optional, so a hiccup in one leaves you with a working app rather than a waiting room.
 
 ## The assistant with hands, not merely opinions
 
 This is the feature that defines Lucent. Bring your own model — OpenAI, Anthropic and Google request
-shapes are spoken fluently, several profiles kept and switched with one tap — or run the whole thing
-on the device. Say nothing at all and the assistant simply isn't there; the notes app loses nothing.
+shapes are spoken fluently, several profiles kept and switched in one tap — or run the whole thing on
+the device. Say nothing at all and the assistant isn't there; the notes app loses nothing.
 
-What makes the assistant worth having is that it can *act*: create, read, edit, colour, pin, archive
-and delete notes; create, complete, reopen, schedule, prioritise and delete tasks; work through
-checklist items item by item on notes and tasks alike; search with a real filter language; and
-attach, rename or remove files. Crucially, before it changes anything it shows you precisely what it
+What makes it worth having is that it can *act*: create, read, edit, colour, pin, archive and delete
+notes; create, complete, reopen, schedule and prioritise tasks; search with a real filter language;
+and attach, rename or remove files. Before it changes anything it shows you precisely what it
 intends — in your own language, in a dialog that is itself the editor, with every arguable field
-editable before anything is written. Your answer is always the final word. Someone with an opinion and no hands is a chat; this is a butler who has been told to knock first.
+editable before a single byte is written. Your answer is always the final word. Someone with an
+opinion and no hands is a chat; this is a butler who has been told to knock first.
 
-Conversations go on as long as you like, switch by tapping the title, and travel with you, several
-files per message included. Memory can be single-turn, per-conversation, or a digest of other
-conversations; web search is a toggle, off by default and in your control.
+Conversations run as long as you like and travel with you; the model's reasoning can be shown as a
+collapsible trace, one line per tool call.
 
 ## Notes that remember what they used to be
 
 Every meaningful edit is snapshotted, so you can read exactly what a note said last Tuesday and
-restore it when today's confident rewrite turns out to have been wrong. Type `[[Shopping list]]` and
-it becomes a tappable link; point at a title that doesn't exist yet and the link glows red until a
-tap politely brings the note into existence. Markdown renders when you want it and stays exactly as
-typed when you don't. Checklists are first-class citizens — reword items in place, open a roomy
-pop-out editor when a "quick item" develops ambitions, and nothing you typed is lost to a forgotten
-plus. Tags, colours, pinning, attachments (each encrypted on disk), rich text, a doodle canvas for
-thoughts words can't reach, and a private area with its own lock. Drafts sit beside the trash, so an
-unfinished thought is never an abandoned one.
+restore it when today's confident rewrite turns out to have been optimism. Type `[[Shopping list]]`
+and it becomes a tappable link; point at a title that doesn't exist yet and the link glows red until
+a tap politely brings the note into existence. Markdown renders when you want it and stays exactly as
+typed when you don't. Checklists are first-class citizens: reword items in place, open a roomy pop-out
+editor when a quick item develops ambitions. Tags, colours, pinning, individually encrypted
+attachments, rich text, a doodle canvas for thoughts words can't reach, and a private area with its
+own lock — with drafts beside the trash, so an unfinished thought is never an abandoned one.
 
 A blank note offers four one-tap starters — journal, meeting, project idea, checklist — and then the
-real trick: templates of your own. Write one the way you like it, save it, and it greets you on every
-future blank page; long-press to edit or retire any template, built-ins included.
+real trick: templates of your own. Save one and it greets you on every future blank page; long-press
+to edit or retire any of them, built-ins included.
 
 ## Tasks with due dates that actually mean something
 
-Subtasks, priorities, repeat schedules, and reminders that survive a reboot. Due dates are parsed
-from ordinary language — *next Friday at 6* becomes a genuine timestamp with a genuine alarm — and
-repeat cadences are first-class rather than a clever sentence that eventually gives up. Marking a
-task complete ticks its whole checklist off with it; completed tasks take themselves off to their
-own screen.
+Subtasks, priorities, repeat schedules, and reminders that survive a reboot. Due dates are parsed from
+ordinary language — *next Friday at 6* becomes a genuine timestamp with a genuine alarm — and repeat
+cadences are first-class rather than a clever sentence that eventually gives up. Completing a task
+ticks its whole checklist off with it, and completed tasks take themselves to a screen of their own.
 
 ## Or run the whole thing on the device itself
 
-Import a `.gguf` file (or a `.zip` with one inside, which is unpacked for you) and the assistant
-answers using llama.cpp running directly on the device — no account, no API key, no network, and
-the model is unloaded the moment you leave the app. Roughly 1–4 GB Q4 models hit the sweet spot on a
-phone; a desktop can afford more optimism. Tools are opt-in in local mode and GPU acceleration is a
-choice made after a plain warning; the CPU always works, and a GPU that disagrees falls back
-gracefully. Vision is optional too: import an mmproj file and the assistant will look at a photograph and
-discuss it like a mildly clairvoyant librarian.
+Import a `.gguf` file (or a `.zip` with one inside) and the assistant answers using llama.cpp running
+directly on the device — no account, no API key, no network, and the model unloaded the moment you
+leave the app. Roughly 1–4 GB Q4 models hit the sweet spot on a phone; a desktop can afford more
+optimism. Tools are opt-in locally and GPU acceleration is a choice made after a plain warning: the
+CPU always works, and a GPU that disagrees falls back gracefully. Vision is optional too — import an
+mmproj file and the assistant will look at a photograph and discuss it like a mildly clairvoyant
+librarian.
 
 ## Four languages, switched without ceremony
 
 English, 中文, 日本語, 한국어 — every screen, dialog, date format and template. Switch the language
-and the whole app follows on the same frame, because there is one translation catalogue and it is
-what the UI reads.
+and the whole app follows on the same frame, because there is one catalogue and it is what the
+interface reads: each word kept once, by construction rather than by care.
 
 ## The look of it: made, unashamedly, of glass
 
-Soft blobs of colour drift behind frosted panels that blur whatever passes beneath them, on a
-background that keeps its own schedule, so the blobs drift at their own pace even when the page
-under them is sprinting. A generous spread of palettes across eight style families, with an
-auto-cycle or random companion that ambles through them in smooth transitions. Light, dark, system,
-and a gallery of Monet-tinted themes — and on Android 12+ the palette can politely borrow your
+A living gradient drifts behind frosted panels that blur whatever passes beneath them, never quite
+repeating itself, at a price the device agreed to in advance. A generous spread of palettes across
+eight style families, with an auto-cycle or random companion that ambles through them. Light, dark,
+system and a gallery of Monet-tinted themes — and on Android 12 or later the palette borrows your
 wallpaper's plan for the day. Widgets bring the same glassy surface to your launcher; on Windows the
-app slips into the tray and the sidebar takes over from the bottom tab bar, because a large monitor
+app slips into the tray and a sidebar takes over from the bottom tab bar, because a large monitor
 deserves better than a phone layout stretched sideways.
 
 ## The lock that counts, and the backup that leaves with you
 
-The app lock is a real brute-force policy, not a polite request: escalating cooldowns, a persisted
-counter that survives reboots, an optional security question, an optional self-destruct, and a
-fingerprint (Android) or Windows Hello (Windows) that is politely out of office for the whole
-cooldown. The database is encrypted at rest; attachments are encrypted individually; backups are a
-single password-protectable `.lcb` file carrying notes, tasks, history, chats, attachments and
-settings across devices, previewed before a single item is changed, and armed to run automatically.
+The app lock is a real brute-force policy rather than a polite request: escalating cooldowns, a
+persisted counter that survives reboots, an optional security question, an optional self-destruct, and
+a fingerprint (Android) or Windows Hello (Windows) that is politely out of office for the whole
+cooldown. The database is encrypted at rest, attachments individually, and backups are a single
+password-protectable `.lcb` file carrying notes, tasks, history, chats, attachments and settings
+across devices — previewed before a single item is changed, and armed to run automatically. A backup
+nobody can read is a keepsake rather than a backup, so this one is read on the way out and again on
+the way in.
 
 ## Privacy that is structural, not merely promised
 
 Nothing leaves the device until you export it or give a model a reason to look. Share-sheet
-integration is off by default; diagnostics are off by default and locally kept; the assistant
-services you connect are entirely your choice; and the one deliberate exception to encryption —
-exporting to Markdown, Word, PDF or Excel — is a file you can open anywhere else, which is the whole
-point. Good manners and good safety tend to arrive together.
+integration is off by default; diagnostics are off by default and kept locally; the assistant services
+you connect are entirely your choice; cloud mirroring is a module you configure yourself, over WebDAV.
+The one deliberate exception to encryption — exporting to Markdown, Word, PDF or
+Excel — is a file you can open anywhere else, which is rather the point.
 
 ## Rust, but only where it earns its keep
 
-Two hot paths are written in Rust and reached through JNI —
-the PBKDF2 and AES-256-GCM routines behind backups and attachment encryption, and the maths behind
-the drifting background. Both fall back to identical Kotlin automatically when the native library
-isn't present.
+Two hot paths are written in Rust and reached through JNI — the PBKDF2 and AES-256-GCM routines behind
+backups and attachment encryption, and the mathematics behind the drifting background. Both fall back
+to identical Kotlin when the native library isn't present, so the app is never held hostage by a
+compiler.
 
 ## Building it (yes, from a phone, in your dressing gown)
 
 No Android Studio, no local SDK, no command line. Push to GitHub, open **Actions**, run the workflow
-you want, and download the result — a properly signed release or a double-click installer — with the
-workflows themselves living in the repository, so the build is as inspectable as the code.
+you want, and download the result — a properly signed release or a double-click installer. The
+workflows live in the repository, so the recipe is in the box rather than in the author's head, and the
+build is as inspectable as the code.
 
 ## Project layout
 
@@ -150,23 +149,15 @@ app/          Android module (:app) — Activity shell, Room database layer, JNI
 desktop/      Desktop module (:desktop) — Compose for Desktop shell, the android.* JVM shims,
               the JDBC database core, native CMake build for the engine DLL
 rust/         The Rust accelerator (shared across platforms)
-.github/      build.yml (Android APK) and build-windows.yml (Windows installer)
+.github/      build.yml (Android APK), build-windows.yml (Windows installer), check.yml
 ```
 
-## Toolchain
+## Where it goes next
 
-Everything builds on the newest official versions of the stack: Gradle 9.7.1, AGP 9.4.0, Kotlin
-2.4.0, KSP 2.3.11, Compose Multiplatform 1.12.0, NDK 28.2. Android compiles against API 36, with
-Android-facing dependencies pinned to the newest versions whose AAR metadata accepts it.
-
-## What stays per platform, and why
-
-`shared/` holds everything that can be shared. A short list of files deliberately remains once per
-platform, each for a real reason, and it never grows on purpose: `SettingsRepository` (Android
-DataStore vs desktop preferences), `Daos`/`Db` (Room vs JDBC), `Entities` (Room annotations),
-`DocumentExport` (PdfDocument vs PDFBox), and the large screens whose platform seams run deep.
-Whenever one of those seams can be removed, it is — the single-point rule is the default, and the
-exceptions are the ones listed here.
+Lucent is a great deal of application for a to-do list, and it has never once apologised for the fact.
+Notes with memory, tasks with teeth, an assistant with hands and manners, encryption that keeps its
+promises and a surface worth looking at. Take it for a week and see what you notice; take it for a
+month, and notice that you stopped noticing.
 
 ## With thanks to the giants whose shoulders these are
 
