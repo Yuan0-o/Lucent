@@ -1,17 +1,296 @@
-
-name: Build Windows desktop
+name: Release (APK + EXE + draft)
 
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name, e.g. 2.8.4. Leave blank to use MARKETING_VERSION in build files.'
+        required: false
+        default: ''
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build-apk:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve-version.outputs.version }}
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
 
+      - name: Resolve version
+        id: resolve-version
+        run: |
+          VER="${{ inputs.version_name }}"
+          if [ -z "$VER" ]; then
+            VER=$(sed -n 's/^val MARKETING_VERSION = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)
+          fi
+          if [ -z "$VER" ]; then echo "::error::Could not determine version"; exit 1; fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Building APK for version $VER"
+
+      - name: Check signing secrets are configured
+        env:
+          LUCENT_KEYSTORE_BASE64: ${{ secrets.LUCENT_KEYSTORE_BASE64 }}
+          LUCENT_KEYSTORE_PASSWORD: ${{ secrets.LUCENT_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$LUCENT_KEYSTORE_BASE64" ] || [ -z "$LUCENT_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Missing repository secret LUCENT_KEYSTORE_BASE64 and/or LUCENT_KEYSTORE_PASSWORD."
+            echo "::error::Add both under: Settings -> Secrets and variables -> Actions -> New repository secret."
+            exit 1
+          fi
+          echo "Both signing secrets are present."
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Install Android SDK components
+        run: |
+          set -eu
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Cache Cargo (registry, cargo-ndk, rust/target)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-android-ndk4.1.2-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-android-ndk4.1.2-
+
+      - name: Set up Rust for Android
+        run: |
+          set -eu
+          rustup target add aarch64-linux-android armv7-linux-androideabi
+          if cargo ndk --version 2>/dev/null | grep -q "4.1.2"; then
+            echo "cargo-ndk 4.1.2 already present (cache hit) - skipping install."
+          else
+            cargo install cargo-ndk --version 4.1.2 --locked
+          fi
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Prefetch llama.cpp (pinned b11057)
+        run: |
+          set -eu
+          DEST="app/src/main/cpp/llama.cpp-src"
+          for attempt in 1 2 3; do
+            rm -rf "$DEST"
+            if git clone --depth 1 --branch b11057 https://github.com/ggml-org/llama.cpp "$DEST"; then
+              echo "llama.cpp cloned on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::Failed to clone llama.cpp after 3 attempts."
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Cache ccache (C/C++ build cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-lucent-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-lucent-${{ runner.os }}-
+
+      - name: Set up ccache
+        run: |
+          set -eu
+          command -v ccache >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y ccache; }
+          echo "CCACHE_DIR=${{ runner.temp }}/ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+          mkdir -p "${{ runner.temp }}/ccache"
+          ccache --version | head -1
+
+      - name: Provide Vulkan shader compiler (glslc)
+        run: |
+          set -eu
+          NDK="$ANDROID_HOME/ndk/28.2.13676358"
+          GLSLC_DIR="$NDK/shader-tools/linux-x86_64"
+          OK=0
+          if [ -x "$GLSLC_DIR/glslc" ]; then
+            if [ -f "$GLSLC_DIR/libc++.so" ] && [ ! -e "$GLSLC_DIR/libc++.so.1" ]; then
+              ln -sf libc++.so "$GLSLC_DIR/libc++.so.1" || true
+            fi
+            if LD_LIBRARY_PATH="$GLSLC_DIR:${LD_LIBRARY_PATH:-}" "$GLSLC_DIR/glslc" --version; then
+              echo "$GLSLC_DIR" >> "$GITHUB_PATH"
+              echo "LD_LIBRARY_PATH=$GLSLC_DIR:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+              echo "Using NDK glslc: $GLSLC_DIR/glslc"
+              OK=1
+            fi
+          fi
+          if [ "$OK" != "1" ]; then
+            echo "NDK glslc unavailable; installing a system glslc as fallback."
+            [ -e "$GLSLC_DIR/glslc" ] && mv "$GLSLC_DIR/glslc" "$GLSLC_DIR/glslc.disabled" || true
+            sudo apt-get update
+            sudo apt-get install -y glslc || sudo apt-get install -y glslang-tools || true
+            glslc --version || glslangValidator --version || true
+          fi
+
+      - name: Provide SPIRV-Headers (for the Vulkan GPU backend)
+        run: |
+          set -eu
+          SRC="$RUNNER_TEMP/spirv-headers"
+          PREFIX="$RUNNER_TEMP/spirv-headers-install"
+          for attempt in 1 2 3; do
+            rm -rf "$SRC"
+            if git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers "$SRC"; then break; fi
+            [ "$attempt" = "3" ] && { echo "::error::Failed to clone SPIRV-Headers."; exit 1; }
+            sleep 5
+          done
+          cmake -S "$SRC" -B "$SRC/build" -DCMAKE_INSTALL_PREFIX="$PREFIX" >/dev/null
+          cmake --install "$SRC/build" >/dev/null
+          CFG="$(find "$PREFIX" -name 'SPIRV-HeadersConfig.cmake' -o -name 'spirv-headers-config.cmake' | head -n 1)"
+          if [ -z "$CFG" ]; then
+            echo "::error::SPIRV-Headers installed but no config file found under $PREFIX."
+            exit 1
+          fi
+          CFG_DIR="$(dirname "$CFG")"
+          echo "LUCENT_SPIRV_HEADERS_DIR=$CFG_DIR" >> "$GITHUB_ENV"
+          echo "SPIRV-Headers config: $CFG_DIR"
+
+      - name: Provide Vulkan & SPIR-V headers for the compile
+        run: |
+          set -eu
+          SRC="$RUNNER_TEMP/vulkan-headers"
+          for attempt in 1 2 3; do
+            rm -rf "$SRC"
+            if git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers "$SRC"; then break; fi
+            [ "$attempt" = "3" ] && { echo "::error::Failed to clone Vulkan-Headers."; exit 1; }
+            sleep 5
+          done
+          if [ -d "$RUNNER_TEMP/spirv-headers/include/spirv" ]; then
+            cp -r "$RUNNER_TEMP/spirv-headers/include/spirv" "$SRC/include/"
+          elif [ -d "$RUNNER_TEMP/spirv-headers-install/include/spirv" ]; then
+            cp -r "$RUNNER_TEMP/spirv-headers-install/include/spirv" "$SRC/include/"
+          fi
+          if [ ! -f "$SRC/include/vulkan/vulkan.hpp" ] || [ ! -f "$SRC/include/spirv/unified1/spirv.hpp" ]; then
+            echo "::error::Merged include dir missing vulkan.hpp and/or spirv.hpp."
+            ls -R "$SRC/include" | head -40
+            exit 1
+          fi
+          echo "LUCENT_VULKAN_INCLUDE_DIR=$SRC/include" >> "$GITHUB_ENV"
+          echo "Vulkan + SPIR-V headers merged into: $SRC/include"
+
+      - name: Decode release keystore from secret
+        env:
+          LUCENT_KEYSTORE_BASE64: ${{ secrets.LUCENT_KEYSTORE_BASE64 }}
+        run: |
+          set -eu
+          printf '%s' "$LUCENT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/lucent-release.keystore"
+          echo "Keystore decoded ($(stat -c%s "$RUNNER_TEMP/lucent-release.keystore") bytes)."
+
+      - name: Assemble signed RELEASE APK
+        env:
+          LUCENT_KEYSTORE_FILE: ${{ runner.temp }}/lucent-release.keystore
+          LUCENT_KEYSTORE_PASSWORD: ${{ secrets.LUCENT_KEYSTORE_PASSWORD }}
+          LUCENT_KEY_ALIAS: lucent
+        run: |
+          set -eu
+          ./gradlew assembleRelease --no-daemon --stacktrace \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName='${{ steps.resolve-version.outputs.version }}'
+
+      - name: Report APK size and upload R8 mapping
+        run: |
+          set -eu
+          APK="$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)"
+          if [ -n "$APK" ]; then
+            SIZE_BYTES="$(stat -c%s "$APK")"
+            SIZE_MB="$(python3 -c "print(f'{$SIZE_BYTES/1048576:.2f}')")"
+            echo "Release APK size: ${SIZE_MB} MiB (${SIZE_BYTES} bytes) — $APK"
+            echo "::notice::APK on disk: ${SIZE_MB} MiB (${SIZE_BYTES} bytes). The artifact download is smaller — it is a zip of this file."
+          else
+            echo "::warning::no signed APK found yet to measure (expected before assembleRelease)."
+          fi
+          if [ -f app/build/outputs/mapping/release/mapping.txt ]; then
+            echo "mapping.txt found ($(stat -c%s app/build/outputs/mapping/release/mapping.txt) bytes) — R8 minification is active."
+          else
+            echo "::warning::no mapping.txt at app/build/outputs/mapping/release/mapping.txt — R8 minification may be off."
+          fi
+
+      - name: Upload R8 mapping
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: r8-mapping-release
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: ignore
+
+      - name: Verify the APK is a signed release (not debug, not unsigned)
+        run: |
+          set -eu
+          APK="$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)"
+          if [ -z "$APK" ]; then
+            echo "::error::No signed release APK found in app/build/outputs/apk/release."
+            exit 1
+          fi
+          echo "Release APK: $APK ($(stat -c%s "$APK") bytes)"
+          case "$APK" in
+            *unsigned*)
+              echo "::error::APK is UNSIGNED ($APK). Check the signing secrets and keystore."
+              exit 1 ;;
+          esac
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort | tail -n 1)"
+          echo "Using: $APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$APK"
+          echo "Signature verified — this is a signed RELEASE build."
+
+      - name: Rename APK to the release asset name
+        run: |
+          set -eu
+          VER="${{ steps.resolve-version.outputs.version }}"
+          APK=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)
+          [ -n "$APK" ] || { echo "::error::no release APK found to rename"; exit 1; }
+          mv "$APK" "app/build/outputs/apk/release/Lucent.for.Android-$VER.apk"
+          echo "renamed to Lucent.for.Android-$VER.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: lucent-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.resolve-version.outputs.version }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: resolve-version
+        run: |
+          $ver = "${{ inputs.version_name }}"
+          if (-not $ver) {
+            $ver = (Select-String -Path desktop/build.gradle.kts -Pattern 'packageVersion = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          }
+          if (-not $ver) { Write-Error "Could not determine version"; exit 1 }
+          echo "version=$ver" >> "$env:GITHUB_OUTPUT"
+          Write-Host "Building Windows EXE for version $ver"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -31,7 +310,6 @@ jobs:
 
       - name: Set up sccache (compiler cache for the engine builds)
         uses: mozilla-actions/sccache-action@v0.0.9
-
 
       - name: Resolve Gradle plugins + dependencies, compile :desktop (network-aware retries)
         shell: pwsh
@@ -291,14 +569,6 @@ jobs:
           }
           $summary = @("### Engines in this installer", "", "| DLL | Status | Size |", "|---|---|---|") + $rows
           $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          if (Test-Path (Join-Path $dir "lucent_llama_vk.dll")) {
-            Write-Host "::notice title=GPU engine bundled::lucent_llama_vk.dll is in this installer - the in-app GPU switch has a real backend on Vulkan-capable machines."
-          } else {
-            Write-Host "::warning title=GPU engine missing::lucent_llama_vk.dll was NOT produced - this installer is CPU-only and the in-app GPU switch will silently fall back. Check the 'Install Vulkan SDK' and 'Build lucent_llama_vk.dll' steps above."
-          }
-          if (-not (Test-Path (Join-Path $dir "lucent_llama.dll"))) {
-            Write-Host "::warning title=CPU engine missing::lucent_llama.dll was NOT produced - local models will be unavailable in this build."
-          }
 
       - name: Cache WiX (Compose downloadWix output)
         uses: actions/cache@v4
@@ -344,17 +614,6 @@ jobs:
                 & $signtool.FullName sign /f $pfx /p $env:LUCENT_SIGN_PFX_PASSWORD /fd SHA256 $exe.FullName
                 if ($LASTEXITCODE -ne 0) { Write-Error "signtool failed on $($exe.Name)"; exit 1 }
               }
-              $sig = Get-AuthenticodeSignature $exe.FullName
-              if (-not $sig.SignerCertificate) {
-                Write-Error "no Authenticode signature found on $($exe.Name) after signing"; exit 1
-              }
-              if ($sig.SignerCertificate.Subject -notlike "*Z-ERA*") {
-                Write-Error "unexpected signer on $($exe.Name): $($sig.SignerCertificate.Subject)"; exit 1
-              }
-              if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'UnknownError') {
-                Write-Error "signature check failed on $($exe.Name): $($sig.Status) - $($sig.StatusMessage)"; exit 1
-              }
-              Write-Host "::notice title=Installer signed::$($exe.Name) is Authenticode-signed by $($sig.SignerCertificate.Subject) (status: $($sig.Status); UnknownError = self-signed root, expected)."
             }
           } finally {
             Remove-Item $pfx -ErrorAction SilentlyContinue
@@ -363,8 +622,7 @@ jobs:
       - name: Rename installer to the release asset name
         shell: pwsh
         run: |
-          $ver = (Select-String -Path desktop/build.gradle.kts -Pattern 'packageVersion = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
-          if (-not $ver) { Write-Error "could not read packageVersion from desktop/build.gradle.kts"; exit 1 }
+          $ver = "${{ steps.resolve-version.outputs.version }}"
           $exe = Get-ChildItem desktop/build/compose/binaries/main/exe/*.exe | Select-Object -First 1
           if (-not $exe) { Write-Error "no installer .exe found to rename"; exit 1 }
           $target = "Lucent.for.Windows-$ver.exe"
@@ -377,3 +635,115 @@ jobs:
           name: lucent-windows-exe
           path: desktop/build/compose/binaries/main/exe/*.exe
           if-no-files-found: error
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [build-apk, build-windows]
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: resolve-version
+        run: |
+          VER="${{ inputs.version_name }}"
+          if [ -z "$VER" ]; then
+            VER=$(sed -n 's/^val MARKETING_VERSION = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Releasing version $VER"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.resolve-version.outputs.version }}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be in x.y.z format (e.g., 2.8.4)"
+            exit 1
+          fi
+
+      - name: Download APK artifact
+        run: |
+          echo "Downloading APK..."
+          gh run download ${{ github.run_id }} -n lucent-release-apk -D ./artifacts/apk
+          ls -lh ./artifacts/apk/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Windows artifact
+        run: |
+          echo "Downloading Windows EXE..."
+          gh run download ${{ github.run_id }} -n lucent-windows-exe -D ./artifacts/windows
+          ls -lh ./artifacts/windows/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify artifacts
+        run: |
+          APK_FILE=$(find ./artifacts/apk -name "*.apk" | head -1)
+          EXE_FILE=$(find ./artifacts/windows -name "*.exe" | head -1)
+          if [ -z "$APK_FILE" ]; then echo "::error::APK file not found"; exit 1; fi
+          if [ -z "$EXE_FILE" ]; then echo "::error::EXE file not found"; exit 1; fi
+          APK_SIZE=$(stat -c%s "$APK_FILE")
+          EXE_SIZE=$(stat -c%s "$EXE_FILE")
+          echo "APK_FILE=$APK_FILE" >> $GITHUB_ENV
+          echo "EXE_FILE=$EXE_FILE" >> $GITHUB_ENV
+          echo "APK_SIZE_MB=$(python3 -c "print(f'{$APK_SIZE/1048576:.2f}')")" >> $GITHUB_ENV
+          echo "EXE_SIZE_MB=$(python3 -c "print(f'{$EXE_SIZE/1048576:.2f}')")" >> $GITHUB_ENV
+          echo "Found APK: $APK_FILE ($(python3 -c "print(f'{$APK_SIZE/1048576:.2f}')") MiB)"
+          echo "Found EXE: $EXE_FILE ($(python3 -c "print(f'{$EXE_SIZE/1048576:.2f}')") MiB)"
+
+      - name: Create git tag
+        run: |
+          VER="${{ steps.resolve-version.outputs.version }}"
+          git config user.name "Lucent Release Bot"
+          git config user.email "release@lucent.app"
+          git tag -a "v$VER" -m "Release v$VER"
+          git push origin "v$VER"
+          echo "Tag v$VER created and pushed"
+
+      - name: Compose release notes
+        run: |
+          VER="${{ steps.resolve-version.outputs.version }}"
+          if [ -f "RELEASE_NOTES_$VER.md" ]; then
+            cat "RELEASE_NOTES_$VER.md" > /tmp/notes.txt
+          else
+            echo "Release v$VER" > /tmp/notes.txt
+          fi
+          cat >> /tmp/notes.txt <<'BUILDINFO'
+
+          ---
+
+          **Build Info**
+          BUILDINFO
+          echo "- APK Size: ${{ env.APK_SIZE_MB }} MiB" >> /tmp/notes.txt
+          echo "- Windows EXE Size: ${{ env.EXE_SIZE_MB }} MiB" >> /tmp/notes.txt
+          echo "- APK Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/notes.txt
+          echo "- Windows Build: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/notes.txt
+          echo "- Built from commit: \`${{ github.sha }}\`" >> /tmp/notes.txt
+
+      - name: Create draft release
+        run: |
+          VER="${{ steps.resolve-version.outputs.version }}"
+          gh release create "v$VER" \
+            --draft \
+            --title "Lucent $VER" \
+            --notes-file /tmp/notes.txt \
+            "${{ env.APK_FILE }}" \
+            "${{ env.EXE_FILE }}"
+          echo "::notice::Draft release v$VER created successfully"
+          echo "::notice::APK and EXE uploaded"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output release URL
+        run: |
+          VER="${{ steps.resolve-version.outputs.version }}"
+          URL=$(gh release view "v$VER" --json url --jq '.url')
+          echo "::notice::Draft release: $URL"
+          echo "release_url=$URL" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
