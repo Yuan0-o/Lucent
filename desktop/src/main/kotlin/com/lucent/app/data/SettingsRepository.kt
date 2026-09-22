@@ -235,7 +235,8 @@ class SettingsRepository(private val context: Context) {
         val cloudUser: String = "",
         val cloudFolder: String = "Lucent",
         val cloudAutoBackup: Boolean = false,
-        val cloudPasswordEnc: String = ""
+        val cloudPasswordEnc: String = "",
+        val autoUpdateEnabled: Boolean = false
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -298,7 +299,8 @@ class SettingsRepository(private val context: Context) {
             cloudUser = str(prefs, K.CLOUD_USER) ?: "",
             cloudFolder = str(prefs, K.CLOUD_FOLDER) ?: "Lucent",
             cloudAutoBackup = bool(prefs, K.CLOUD_AUTO_BACKUP) ?: false,
-            cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: ""
+            cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: "",
+            autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false
         )
     }
 

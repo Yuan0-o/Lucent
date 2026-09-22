@@ -2398,7 +2398,11 @@ fun SettingsScreen(active: Boolean = true) {
 
             SettingsRoute.About -> AboutSettingsPage(
                 repo = repo,
-                onRoute = { setRoute(it) }
+                onRoute = { setRoute(it) },
+                onOpenUrl = { url ->
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    context.startActivity(intent)
+                }
             )
 
             SettingsRoute.Data -> DataSettingsPage(

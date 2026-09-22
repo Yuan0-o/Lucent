@@ -2354,7 +2354,8 @@ fun SettingsScreen(active: Boolean = true) {
 
             SettingsRoute.About -> AboutSettingsPage(
                 repo = repo,
-                onRoute = { setRoute(it) }
+                onRoute = { setRoute(it) },
+                onOpenUrl = { url -> DesktopShell.requestElevation("") }
             )
 
             SettingsRoute.Data -> DataSettingsPage(
