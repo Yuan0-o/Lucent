@@ -82,6 +82,7 @@ class SettingsRepository(private val context: Context) {
         const val LOCAL_BACKGROUND_REPLY = "local_background_reply"
         const val MEMORY_TIER_PRELOCAL = "memory_tier_prelocal"
         const val WEB_SEARCH_PRELOCAL = "web_search_prelocal"
+        const val AUTO_UPDATE_ENABLED = "auto_update_enabled"
     }
 
 
@@ -498,6 +499,13 @@ class SettingsRepository(private val context: Context) {
 
     val openLinksExternally: Flow<Boolean> = state.map { bool(it, K.OPEN_LINKS_EXTERNALLY) ?: false }
     suspend fun setOpenLinksExternally(value: Boolean) { edit { it[K.OPEN_LINKS_EXTERNALLY] = value } }
+
+
+    val autoUpdateEnabled: Flow<Boolean> = state.map { bool(it, K.AUTO_UPDATE_ENABLED) ?: false }
+    suspend fun setAutoUpdateEnabled(value: Boolean) {
+        edit { it[K.AUTO_UPDATE_ENABLED] = value }
+        SettingsCache.autoUpdateEnabled = value
+    }
 
     val markdownEnabled: Flow<Boolean> = state.map { bool(it, K.MARKDOWN_ENABLED) ?: false }
     val richTextEnabled: Flow<Boolean> = state.map { bool(it, K.RICH_TEXT_ENABLED) ?: false }

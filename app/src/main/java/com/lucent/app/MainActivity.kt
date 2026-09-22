@@ -153,6 +153,7 @@ class MainActivity : FragmentActivity() {
             )
         )
 
+        PrivilegedShell.install(ShizukuShell)
         val settingsRepo = SettingsRepository(applicationContext)
         val crashShieldWanted = try {
             runBlocking { settingsRepo.crashShieldEnabledOnce() }

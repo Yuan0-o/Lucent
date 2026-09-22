@@ -7,7 +7,7 @@ plugins {
 
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
 
-val MARKETING_VERSION = "2.8.5"
+val MARKETING_VERSION = "2.9.0"
 val ciVersionName = (project.findProperty("versionName") as String?)
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
@@ -184,6 +184,8 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.haze.materials)
+
+    implementation("moe.shizuku.privilege:api:13.0.0")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
 

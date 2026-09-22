@@ -116,6 +116,7 @@ private object SettingsKeys {
 
     val MEMORY_TIER_PRELOCAL = stringPreferencesKey("memory_tier_prelocal")
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
+    val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
 }
 
 const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
@@ -217,7 +218,8 @@ class SettingsRepository(private val context: Context) {
         val cloudUser: String = "",
         val cloudFolder: String = "Lucent",
         val cloudAutoBackup: Boolean = false,
-        val cloudPasswordEnc: String = ""
+        val cloudPasswordEnc: String = "",
+        val autoUpdateEnabled: Boolean = false
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -282,7 +284,8 @@ class SettingsRepository(private val context: Context) {
             cloudUser = prefs[SettingsKeys.CLOUD_USER] ?: "",
             cloudFolder = prefs[SettingsKeys.CLOUD_FOLDER] ?: "Lucent",
             cloudAutoBackup = prefs[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false,
-            cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: ""
+            cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
+            autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false
         )
     }
 
@@ -507,6 +510,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAssistantConfirmTools(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] = value }
         SettingsCache.assistantConfirmToolsEnabled = value
+    }
+
+    val autoUpdateEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false }
+    suspend fun setAutoUpdateEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.AUTO_UPDATE_ENABLED] = value }
+        SettingsCache.autoUpdateEnabled = value
     }
 
     val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }

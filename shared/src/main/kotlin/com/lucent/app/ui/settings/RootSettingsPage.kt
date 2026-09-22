@@ -26,4 +26,6 @@ internal fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     NavCard(S.settingsPrivacyTitle, S.settingsPrivacySub) { onRoute(SettingsRoute.Privacy) }
     Spacer(modifier = Modifier.height(12.dp))
     NavCard(S.settingsDataTitle, S.settingsDataSub) { onRoute(SettingsRoute.Data) }
+    Spacer(modifier = Modifier.height(12.dp))
+    NavCard("About", "Version, licenses, updates") { onRoute(SettingsRoute.About) }
 }

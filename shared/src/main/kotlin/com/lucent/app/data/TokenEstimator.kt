@@ -1,11 +1,19 @@
 package com.lucent.app.data
 
+import java.util.WeakHashMap
+
 object TokenEstimator {
 
     private const val CHARS_PER_TOKEN = 4
 
+    private val cache = WeakHashMap<String, Int>()
+
+    private const val CACHE_MAX = 500
+
     fun estimate(text: String?): Int {
         if (text.isNullOrEmpty()) return 0
+        val cached = cache[text]
+        if (cached != null) return cached
         var cjk = 0
         var other = 0
         var i = 0
@@ -15,7 +23,9 @@ object TokenEstimator {
             if (isWideScript(cp)) cjk++ else if (!Character.isWhitespace(cp)) other++
         }
         val est = cjk + (other + CHARS_PER_TOKEN - 1) / CHARS_PER_TOKEN
-        return if (est <= 0 && text.isNotBlank()) 1 else est
+        val result = if (est <= 0 && text.isNotBlank()) 1 else est
+        if (cache.size < CACHE_MAX) cache[text] = result
+        return result
     }
 
     fun estimateAll(texts: Iterable<String?>): Int = texts.sumOf { estimate(it) }
@@ -29,6 +39,18 @@ object TokenEstimator {
             "~$tokens tokens"
         }
     }
+
+    fun labelFromUsage(prompt: Int, completion: Int): String {
+        val total = prompt + completion
+        if (total <= 0) return "unknown"
+        val promptStr = if (prompt >= 1000) String.format("%.1fk", prompt / 1000.0) else "$prompt"
+        val compStr = if (completion >= 1000) String.format("%.1fk", completion / 1000.0) else "$completion"
+        return "~${promptStr}+${compStr} tokens"
+    }
+
+    fun invalidate(text: String) { cache.remove(text) }
+
+    fun clearCache() { cache.clear() }
 
     private fun isWideScript(cp: Int): Boolean {
         return (cp in 0x3040..0x30FF) ||
