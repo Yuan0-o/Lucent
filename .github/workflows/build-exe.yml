@@ -1,0 +1,229 @@
+name: Build EXE only
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name, e.g. 2.8.4. Leave blank to use packageVersion.'
+        required: false
+        default: ''
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: resolve-version
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.version_name }}"
+          if (-not $ver) {
+            $ver = (Select-String -Path desktop/build.gradle.kts -Pattern 'packageVersion = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          }
+          if (-not $ver) { Write-Error "Could not determine version"; exit 1 }
+          echo "version=$ver" >> "$env:GITHUB_OUTPUT"
+          Write-Host "Building EXE for version $ver"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Resolve Gradle dependencies
+        shell: pwsh
+        run: |
+          $maxAttempts = 6
+          $backoffSeconds = @(45, 60, 120, 240, 300)
+          $networkMarkers = @(
+            'was not found in any of the following sources',
+            'Could not resolve plugin artifact',
+            'Could not GET', 'Could not HEAD', 'Could not POST',
+            'Read timed out', 'timed out',
+            'Connection refused', 'Connection reset', 'Connection timed out',
+            'Remote host terminated the handshake',
+            'Premature end of Content-Length',
+            'SSLHandshakeException', 'SSLPeerUnverifiedException',
+            'Unexpected end of file from server',
+            'repository was unavailable', 'marked the repository unavailable',
+            'Received status code 5', 'Received status code 429'
+          )
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            $lines = @()
+            ./gradlew :desktop:compileKotlin --no-daemon --stacktrace 2>&1 | Tee-Object -Variable lines
+            $code = $LASTEXITCODE
+            if ($code -eq 0) { Write-Host "Gradle warm-up OK on attempt $i."; exit 0 }
+            $text = $lines | Out-String
+            $isNetwork = $false
+            foreach ($marker in $networkMarkers) {
+              if ($text.IndexOf($marker, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $isNetwork = $true; break }
+            }
+            if (-not $isNetwork) { Write-Error "Genuine build error on attempt $i."; exit 1 }
+            if ($i -lt $maxAttempts) { Start-Sleep -Seconds $backoffSeconds[$i - 1] }
+          }
+          Write-Error "Failed after $maxAttempts network-retries."; exit 1
+
+      - name: Prefetch llama.cpp
+        shell: pwsh
+        run: |
+          $dest = "desktop/native/llama.cpp-src"
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Remove-Item -Recurse -Force $dest -ErrorAction SilentlyContinue
+            git clone --depth 1 --branch b11057 https://github.com/ggml-org/llama.cpp $dest
+            if ($LASTEXITCODE -eq 0) { Write-Host "llama.cpp cloned on attempt $attempt"; break }
+            if ($attempt -eq 3) { Write-Error "Failed to clone llama.cpp."; exit 1 }
+            Start-Sleep -Seconds 10
+          }
+
+      - name: Build CPU engine
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          cmake -S desktop/native -B desktop/native/build -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          cmake --build desktop/native/build --parallel
+          New-Item -ItemType Directory -Force -Path desktop/src/main/resources/native | Out-Null
+          $dll = Get-ChildItem -Recurse -Path desktop/native/build -Filter lucent_llama.dll | Select-Object -First 1
+          if ($dll) { Copy-Item $dll.FullName desktop/src/main/resources/native/lucent_llama.dll -Force }
+
+      - name: Cache Vulkan SDK installer
+        uses: actions/cache@v4
+        with:
+          path: .vulkan-installer
+          key: vulkan-installer-1.4.321.1
+
+      - name: Install Vulkan SDK
+        continue-on-error: true
+        shell: pwsh
+        env:
+          VULKAN_VERSION: 1.4.321.1
+        run: |
+          $ErrorActionPreference = 'Continue'
+          try {
+            function Get-Installer([string]$url, [string]$dest) {
+              curl.exe -fSL -o $dest $url
+              if ($LASTEXITCODE -ne 0) { return $false }
+              $magic = Get-Content -Path $dest -AsByteStream -TotalCount 2 -ErrorAction Stop
+              return ($magic.Count -ge 2 -and $magic[0] -eq 0x4D -and $magic[1] -eq 0x5A)
+            }
+            $installer = "$env:RUNNER_TEMP\VulkanSDK-Installer.exe"
+            $cached = ".vulkan-installer\vulkan_sdk-$env:VULKAN_VERSION.exe"
+            if (Test-Path $cached) { Copy-Item $cached $installer -Force }
+            if (-not (Test-Path $installer)) {
+              Get-Installer "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/VulkanSDK-$env:VULKAN_VERSION-Installer.exe" $installer
+            }
+            if (Test-Path $installer) {
+              $proc = Start-Process -Wait -PassThru -FilePath $installer -ArgumentList "--accept-licenses","--default-answer","--confirm-command","install" -ErrorAction Stop
+              $dir = Get-ChildItem "C:\VulkanSDK" -Directory -ErrorAction Stop | Sort-Object Name -Descending | Select-Object -First 1
+              "VULKAN_SDK=$($dir.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          } catch { Write-Warning "Vulkan SDK unavailable." }
+          exit 0
+
+      - name: Build GPU engine
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          if (-not $env:VULKAN_SDK -or -not (Test-Path $env:VULKAN_SDK)) { Write-Warning "Vulkan SDK missing; skipping GPU engine."; exit 0 }
+          cmake -S desktop/native -B desktop/native/build-vk -G Ninja -DCMAKE_BUILD_TYPE=Release -DLUCENT_ENABLE_VULKAN=ON `
+            -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          cmake --build desktop/native/build-vk --parallel
+          $dll = Get-ChildItem -Recurse -Path desktop/native/build-vk -Filter lucent_llama.dll | Select-Object -First 1
+          if ($dll) { Copy-Item $dll.FullName desktop/src/main/resources/native/lucent_llama_vk.dll -Force }
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-win-msvc-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: cargo-win-msvc-
+
+      - name: Build Rust native DLL
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --release --manifest-path rust/Cargo.toml --target x86_64-pc-windows-msvc
+          $dll = "rust/target/x86_64-pc-windows-msvc/release/lucent_native.dll"
+          if (Test-Path $dll) {
+            New-Item -ItemType Directory -Force -Path desktop/src/main/resources/native | Out-Null
+            Copy-Item $dll desktop/src/main/resources/native/lucent_native.dll -Force
+          }
+
+      - name: Cipher self-check
+        shell: pwsh
+        run: |
+          ./gradlew :desktop:cipherSelfCheck --no-daemon --stacktrace
+          if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 30; ./gradlew :desktop:cipherSelfCheck --no-daemon --stacktrace }
+          exit $LASTEXITCODE
+
+      - name: Cache WiX
+        uses: actions/cache@v4
+        with:
+          path: desktop/build/wixToolset
+          key: wix311-compose
+
+      - name: Package EXE
+        shell: pwsh
+        run: |
+          ./gradlew :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+          if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 30; ./gradlew :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace }
+          exit $LASTEXITCODE
+
+      - name: Sign installer
+        shell: pwsh
+        env:
+          LUCENT_SIGN_PFX_BASE64: ${{ secrets.LUCENT_SIGN_PFX_BASE64 }}
+          LUCENT_SIGN_PFX_PASSWORD: ${{ secrets.LUCENT_SIGN_PFX_PASSWORD }}
+        run: |
+          if (-not $env:LUCENT_SIGN_PFX_BASE64 -or -not $env:LUCENT_SIGN_PFX_PASSWORD) {
+            Write-Host "::notice title=Not signed::Signing secrets not configured."
+            exit 0
+          }
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          $pfx = Join-Path $env:RUNNER_TEMP "lucent-sign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:LUCENT_SIGN_PFX_BASE64))
+          try {
+            $exes = Get-ChildItem "desktop/build/compose/binaries/main/exe/*.exe"
+            foreach ($exe in $exes) {
+              & $signtool.FullName sign /f $pfx /p $env:LUCENT_SIGN_PFX_PASSWORD /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $exe.FullName
+              if ($LASTEXITCODE -ne 0) { & $signtool.FullName sign /f $pfx /p $env:LUCENT_SIGN_PFX_PASSWORD /fd SHA256 $exe.FullName }
+            }
+          } finally { Remove-Item $pfx -ErrorAction SilentlyContinue }
+
+      - name: Rename installer
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.resolve-version.outputs.version }}"
+          $exe = Get-ChildItem desktop/build/compose/binaries/main/exe/*.exe | Select-Object -First 1
+          $target = "Lucent.for.Windows-$ver.exe"
+          if ($exe.Name -ne $target) { Move-Item -Force $exe.FullName (Join-Path $exe.DirectoryName $target) }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucent-windows-exe
+          path: desktop/build/compose/binaries/main/exe/*.exe
+          if-no-files-found: error
