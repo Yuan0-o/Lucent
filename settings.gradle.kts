@@ -10,6 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://maven.rikka.app/releases")
     }
 }
 rootProject.name = "Lucent"

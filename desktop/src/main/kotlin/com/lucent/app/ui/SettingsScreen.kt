@@ -78,6 +78,7 @@ import com.lucent.app.ui.settings.AssistantSettingsPage
 import com.lucent.app.ui.settings.BackgroundSettingsPage
 import com.lucent.app.ui.settings.DataSettingsPage
 import com.lucent.app.ui.settings.EditorSettingsPage
+import com.lucent.app.data.DesktopShell
 import com.lucent.app.ui.settings.LanguageSettingsPage
 import com.lucent.app.ui.settings.LocalModelSettingsPage
 import com.lucent.app.ui.settings.MemorySettingsPage
