@@ -16,3 +16,6 @@ rust/target/
 *.keystore
 *.jks
 keystore-base64.txt
+
+# Release notes live on the release page, not in the repository root.
+RELEASE_NOTES*.md

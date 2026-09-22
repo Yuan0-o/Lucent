@@ -17,7 +17,7 @@ on:
         type: string
         default: ''
       release_notes:
-        description: 'Release notes in Markdown. Leave blank to use RELEASE_NOTES_<version>.md from the repo.'
+        description: 'Release notes in Markdown. Leave blank to publish a short placeholder; the body can be edited on the release page afterwards.'
         required: false
         type: string
         default: ''
@@ -127,11 +127,8 @@ jobs:
           NOTES_INPUT: ${{ inputs.release_notes }}
         run: |
           set -eu
-          NOTES_FILE="RELEASE_NOTES_${VERSION}.md"
           if [ -n "$NOTES_INPUT" ]; then
             printf '%s\n' "$NOTES_INPUT" > /tmp/notes.md
-          elif [ -f "$NOTES_FILE" ]; then
-            cat "$NOTES_FILE" > /tmp/notes.md
           else
             printf 'Lucent %s\n' "$VERSION" > /tmp/notes.md
           fi
