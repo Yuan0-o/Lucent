@@ -1,0 +1,13 @@
+# The Settings Remember Their Place
+
+You know that little flicker when you flick a switch in Privacy, leave the page, and come back to find it briefly showing the opposite of what you asked for? That's gone. Every switch now remembers exactly where you left it — the moment you toggle, the cache updates. No flash of the factory default, no split-second of "did I actually turn that on?" before the real state arrives. It's a small thing, and that's precisely why it matters: the app should never second-guess your own choices, not even for a single frame.
+
+The same treatment rippled through every settings page — Security, Editor, Personalisation, Network, Memory, Local Models, Cloud, Background, Theme, and the platform-specific panels on both Android and Windows. If a page has a toggle, the toggle now behaves the way the user expects a toggle to behave: it shows what you set, and it holds that conviction from the moment you navigate back. The fix touched seventeen files across the shared module and both platform builds, because consistency is the sort of thing you either have everywhere or you don't have at all.
+
+And while we were on the subject of remembering where things belong: the bottom navigation bar's swipe animation now knows the difference between a finger drag and a deliberate tap. Tap a tab and the page swaps instantly — no spring animation, no waiting for the physics to play out, just the screen you wanted, right where you tapped. Swipe left or right and the pager responds with its full natural motion, smooth and uninterrupted. The distinction is subtle and the behaviour is obvious, which is exactly the sort of improvement that feels like it was always there.
+
+Version 2.8.4 is a small release with a focused job: it makes the settings honest about their state and the navigation honest about your intent. Your data still lives in its encrypted local store, the `.lcb` backup covers everything it always covered, the log records what happened, the assistant keeps its promises, and the cloud syncs when it should. Nothing changed about how your notes and tasks are protected, and nothing needed to change. The switches just do what you told them, the first time, every time.
+
+**Toggles that stay told** — seventeen files, both platforms, zero flicker.
+**Taps that skip the spring** — instant page navigation when you click a tab, smooth animation when you swipe.
+**Same encrypted store, same backup, same log, same assistant, same cloud.**
