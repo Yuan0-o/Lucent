@@ -67,6 +67,7 @@ fun DynamicColorRow(repo: SettingsRepository) {
                 checked = dynamicColorOn,
                 enabled = dynamicColorSupported,
                 onCheckedChange = { on ->
+                    SettingsCache.dynamicColor = on
                     AppScope.io.launch { repo.setDynamicColorEnabled(on) }
                 }
             )
@@ -108,7 +109,10 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
             checked = biometricOn,
-            onCheckedChange = { turnOn -> scope.launch { repo.setAppLockBiometricEnabled(turnOn) } }
+            onCheckedChange = { turnOn ->
+                scope.launch { repo.setAppLockBiometricEnabled(turnOn) }
+                SettingsCache.appLockBiometricEnabled = turnOn
+            }
         )
     }
 }

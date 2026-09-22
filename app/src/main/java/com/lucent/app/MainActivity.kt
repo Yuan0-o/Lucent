@@ -510,6 +510,8 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
     AssistantConfirmationDialog()
 
+    var tabClickTarget by remember { mutableStateOf<Screen?>(null) }
+
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
             FluidGlassBackground(
@@ -603,6 +605,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                         onClick = {
                                             runOrConfirm {
                                                 AppNavigation.resetSettingsRoute()
+                                                tabClickTarget = screen
                                                 currentScreen = screen
                                             }
                                         },
@@ -622,7 +625,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     Modifier.padding(top = topPad).fillMaxSize()
                 }
                 CompositionLocalProvider(LocalBottomBarInset provides bottomInset) {
-                    KeepAliveTabs(active = currentScreen, modifier = contentModifier)
+                    KeepAliveTabs(active = currentScreen, tabClickTarget = tabClickTarget, onTabClickConsumed = { tabClickTarget = null }, modifier = contentModifier)
                 }
             }
 
@@ -674,7 +677,7 @@ fun iconFor(screen: Screen) = when (screen) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
+private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickConsumed: () -> Unit, modifier: Modifier = Modifier) {
     val realBackOwner = LocalOnBackPressedDispatcherOwner.current
     val inertBackOwner = remember(realBackOwner) {
         object : OnBackPressedDispatcherOwner {
@@ -697,7 +700,12 @@ private fun KeepAliveTabs(active: Screen, modifier: Modifier = Modifier) {
     LaunchedEffect(active) {
         val targetPage = screens.indexOf(active)
         if (pagerState.currentPage != targetPage) {
-            pagerState.animateScrollToPage(targetPage)
+            if (tabClickTarget != null) {
+                pagerState.scrollToPage(targetPage)
+                onTabClickConsumed()
+            } else {
+                pagerState.animateScrollToPage(targetPage)
+            }
         }
     }
 

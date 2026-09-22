@@ -85,7 +85,10 @@ internal fun LocalModelSettingsPage(
                 checked = localModelEnabled,
                 onCheckedChange = { on ->
                     if (on) onRequestUseLocalOn()
-                    else AppScope.io.launch { repo.setLocalModelEnabled(false) }
+                    else {
+                        SettingsCache.localModelEnabled = false
+                        AppScope.io.launch { repo.setLocalModelEnabled(false) }
+                    }
                 }
             )
         }
@@ -191,7 +194,10 @@ internal fun LocalModelSettingsPage(
                     checked = localToolsEnabled,
                     onCheckedChange = { on ->
                         if (on) onRequestToolsOn()
-                        else AppScope.io.launch { repo.setLocalToolsEnabled(false) }
+                        else {
+                            SettingsCache.localToolsEnabled = false
+                            AppScope.io.launch { repo.setLocalToolsEnabled(false) }
+                        }
                     }
                 )
             }
@@ -209,7 +215,10 @@ internal fun LocalModelSettingsPage(
                     checked = localGpuEnabled,
                     onCheckedChange = { on ->
                         if (on) onRequestGpuOn()
-                        else AppScope.io.launch { repo.setLocalGpuEnabled(false) }
+                        else {
+                            SettingsCache.localGpuEnabled = false
+                            AppScope.io.launch { repo.setLocalGpuEnabled(false) }
+                        }
                     }
                 )
             }
@@ -227,7 +236,10 @@ internal fun LocalModelSettingsPage(
                     checked = localBackgroundReply,
                     onCheckedChange = { on ->
                         if (on) onRequestBackgroundOn()
-                        else AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
+                        else {
+                            SettingsCache.localBackgroundReplyEnabled = false
+                            AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
+                        }
                     }
                 )
             }

@@ -90,14 +90,20 @@ internal fun SecuritySettingsPage(
                 label = S.attemptFirstRound,
                 value = pwFirstRound,
                 range = PasswordAttempts.ROUND_LIMIT_RANGE,
-                onChange = { scope.launch { repo.setPwFirstRoundLimit(it) } }
+                onChange = {
+                    scope.launch { repo.setPwFirstRoundLimit(it) }
+                    SettingsCache.pwFirstRoundLimit = it
+                }
             )
             Spacer(modifier = Modifier.height(8.dp))
             StepperRow(
                 label = S.attemptLaterRounds,
                 value = pwLaterRound,
                 range = PasswordAttempts.ROUND_LIMIT_RANGE,
-                onChange = { scope.launch { repo.setPwLaterRoundLimit(it) } }
+                onChange = {
+                    scope.launch { repo.setPwLaterRoundLimit(it) }
+                    SettingsCache.pwLaterRoundLimit = it
+                }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -113,6 +119,7 @@ internal fun SecuritySettingsPage(
                             onRequestEnableSelfDestruct()
                         } else {
                             scope.launch { repo.setPwSelfDestructEnabled(false) }
+                            SettingsCache.pwSelfDestructEnabled = false
                         }
                     }
                 )
@@ -124,7 +131,10 @@ internal fun SecuritySettingsPage(
                     value = selfDestructThreshold,
                     range = PasswordAttempts.SELF_DESTRUCT_RANGE,
                     step = 5,
-                    onChange = { scope.launch { repo.setPwSelfDestructThreshold(it) } }
+                    onChange = {
+                        scope.launch { repo.setPwSelfDestructThreshold(it) }
+                        SettingsCache.pwSelfDestructThreshold = it
+                    }
                 )
             }
         }
@@ -139,7 +149,10 @@ internal fun SecuritySettingsPage(
                 checked = crashShieldOn,
                 onCheckedChange = { turnOn ->
                     if (turnOn) onRequestCrashShieldInfo()
-                    else scope.launch { repo.setCrashShieldEnabled(false) }
+                    else {
+                        scope.launch { repo.setCrashShieldEnabled(false) }
+                        SettingsCache.crashShieldEnabled = false
+                    }
                 }
             )
         }

@@ -52,7 +52,10 @@ internal fun EditorSettingsPage(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = markdownEnabled,
-                onCheckedChange = { checked -> scope.launch { repo.setMarkdownEnabled(checked) } }
+                onCheckedChange = { checked ->
+                    scope.launch { repo.setMarkdownEnabled(checked) }
+                    SettingsCache.markdownEnabled = checked
+                }
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -63,7 +66,10 @@ internal fun EditorSettingsPage(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = richTextEnabled,
-                onCheckedChange = { checked -> scope.launch { repo.setRichTextEnabled(checked) } }
+                onCheckedChange = { checked ->
+                    scope.launch { repo.setRichTextEnabled(checked) }
+                    SettingsCache.richTextEnabled = checked
+                }
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -75,7 +81,10 @@ internal fun EditorSettingsPage(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = linksEnabled,
-                onCheckedChange = { checked -> scope.launch { repo.setLinksEnabled(checked) } }
+                onCheckedChange = { checked ->
+                    scope.launch { repo.setLinksEnabled(checked) }
+                    SettingsCache.linksEnabled = checked
+                }
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -89,7 +98,10 @@ internal fun EditorSettingsPage(
                 enabled = !blackoutOn,
                 onCheckedChange = { turnOn ->
                     if (turnOn) onRequestOpenLinksWarning()
-                    else scope.launch { repo.setOpenLinksExternally(false) }
+                    else {
+                        scope.launch { repo.setOpenLinksExternally(false) }
+                        SettingsCache.openLinksExternally = false
+                    }
                 }
             )
         }

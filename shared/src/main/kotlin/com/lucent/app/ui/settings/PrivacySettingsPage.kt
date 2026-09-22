@@ -89,6 +89,7 @@ internal fun PrivacySettingsPage(
                     } else {
                         scope.launch {
                             repo.setBlackoutEnabled(false)
+                            SettingsCache.blackoutEnabled = false
                             BlackoutMode.hydrate(false)
                             LucentToast.show(context, S.blackoutOffToast)
                         }
@@ -118,7 +119,10 @@ internal fun PrivacySettingsPage(
                     if (turnOn) {
                         onRequestShareWarning()
                     } else {
-                        scope.launch { repo.setSystemIntegrationEnabled(false) }
+                        scope.launch {
+                            repo.setSystemIntegrationEnabled(false)
+                            SettingsCache.systemIntegrationEnabled = false
+                        }
                         ShareIntegration.setEnabled(context, false)
                         LucentToast.show(context, S.systemIntegrationOffToast)
                     }
@@ -136,7 +140,10 @@ internal fun PrivacySettingsPage(
                 confirmButton = {
                     TextButton(onClick = {
                         showLoggingConsent = false
-                        scope.launch { repo.setStartupLoggingEnabled(true) }
+                        scope.launch {
+                            repo.setStartupLoggingEnabled(true)
+                            SettingsCache.startupLoggingEnabled = true
+                        }
                         StartupLog.setEnabled(true)
                         StartupLog.event(context, "Logging enabled from Settings")
                     }) { Text(S.loggingConsentConfirm) }
@@ -159,6 +166,7 @@ internal fun PrivacySettingsPage(
                         showLoggingConsent = true
                     } else {
                         scope.launch { repo.setStartupLoggingEnabled(false) }
+                        SettingsCache.startupLoggingEnabled = false
                         StartupLog.setEnabled(false)
                     }
                 }
@@ -194,6 +202,7 @@ internal fun PrivacySettingsPage(
                 checked = noteHistoryOn,
                 onCheckedChange = { on ->
                     NoteHistory.enabled = on
+                    SettingsCache.noteHistoryEnabled = on
                     scope.launch { repo.setNoteHistoryEnabled(on) }
                 }
             )
@@ -204,6 +213,7 @@ internal fun PrivacySettingsPage(
                 checked = taskHistoryOn,
                 onCheckedChange = { on ->
                     TaskHistory.enabled = on
+                    SettingsCache.taskHistoryEnabled = on
                     scope.launch { repo.setTaskHistoryEnabled(on) }
                 }
             )

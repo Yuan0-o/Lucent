@@ -121,7 +121,10 @@ fun CloudSettingsPage(
                 }
                 Switch(
                     checked = enabled,
-                    onCheckedChange = { scope.launch { repo.setCloudEnabled(it) } }
+                    onCheckedChange = {
+                        SettingsCache.cloudEnabled = it
+                        scope.launch { repo.setCloudEnabled(it) }
+                    }
                 )
             }
         }
@@ -137,6 +140,7 @@ fun CloudSettingsPage(
                         onClick = {
                             val switching = provider != name
                             scope.launch {
+                                SettingsCache.cloudProvider = name
                                 repo.setCloudProvider(name)
                                 if (presetUrl.isNotBlank()) {
                                     val current = urlDraft.trim()
@@ -145,10 +149,12 @@ fun CloudSettingsPage(
                                     }
                                     if (current.isBlank() || isAnotherPreset) {
                                         urlDraft = presetUrl
+                                        SettingsCache.cloudUrl = presetUrl
                                         repo.setCloudUrl(presetUrl)
                                     }
                                 } else if (name == "Custom" && switching) {
                                     urlDraft = ""
+                                    SettingsCache.cloudUrl = ""
                                     repo.setCloudUrl("")
                                 }
                             }
@@ -165,7 +171,10 @@ fun CloudSettingsPage(
                 value = urlDraft,
                 onValueChange = {
                     urlDraft = it
-                    scope.launch { repo.setCloudUrl(it) }
+                    scope.launch {
+                        SettingsCache.cloudUrl = it
+                        repo.setCloudUrl(it)
+                    }
                 },
                 label = { Text(S.cloudUrlLabel) },
                 singleLine = true,
@@ -176,7 +185,10 @@ fun CloudSettingsPage(
                 value = userDraft,
                 onValueChange = {
                     userDraft = it
-                    scope.launch { repo.setCloudUser(it) }
+                    scope.launch {
+                        SettingsCache.cloudUser = it
+                        repo.setCloudUser(it)
+                    }
                 },
                 label = { Text(S.cloudUserLabel) },
                 singleLine = true,
@@ -187,7 +199,10 @@ fun CloudSettingsPage(
                 value = pwDraft,
                 onValueChange = {
                     pwDraft = it
-                    scope.launch { repo.setCloudPasswordEnc(CryptoUtil.encrypt(it)) }
+                    scope.launch {
+                        SettingsCache.cloudPasswordEnc = CryptoUtil.encrypt(it)
+                        repo.setCloudPasswordEnc(CryptoUtil.encrypt(it))
+                    }
                 },
                 label = { Text(S.cloudPasswordLabel) },
                 singleLine = true,
@@ -199,7 +214,10 @@ fun CloudSettingsPage(
                 value = folderDraft,
                 onValueChange = {
                     folderDraft = it
-                    scope.launch { repo.setCloudFolder(it) }
+                    scope.launch {
+                        SettingsCache.cloudFolder = it
+                        repo.setCloudFolder(it)
+                    }
                 },
                 label = { Text(S.cloudFolderLabel) },
                 singleLine = true,
@@ -237,7 +255,10 @@ fun CloudSettingsPage(
                 }
                 Switch(
                     checked = autoUpload,
-                    onCheckedChange = { scope.launch { repo.setCloudAutoBackup(it) } }
+                    onCheckedChange = {
+                        SettingsCache.cloudAutoBackup = it
+                        scope.launch { repo.setCloudAutoBackup(it) }
+                    }
                 )
             }
         }

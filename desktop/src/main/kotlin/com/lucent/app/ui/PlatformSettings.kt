@@ -53,7 +53,10 @@ fun DesktopIntegrationRows(repo: SettingsRepository) {
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
             checked = closeToTray,
-            onCheckedChange = { checked -> scope.launch { repo.setCloseToTray(checked) } }
+            onCheckedChange = { checked ->
+                scope.launch { repo.setCloseToTray(checked) }
+                SettingsCache.closeToTray = checked
+            }
         )
     }
     Spacer(modifier = Modifier.height(12.dp))
@@ -97,7 +100,10 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
             checked = helloEnabled,
-            onCheckedChange = { turnOn -> scope.launch { repo.setAppLockHelloEnabled(turnOn) } }
+            onCheckedChange = { turnOn ->
+                SettingsCache.appLockHelloEnabled = turnOn
+                scope.launch { repo.setAppLockHelloEnabled(turnOn) }
+            }
         )
     }
 }

@@ -72,7 +72,10 @@ fun PersonalizationSettingsPage(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = savedTypingHaptics,
-                onCheckedChange = { on -> AppScope.io.launch { repo.setTypingHapticsEnabled(on) } }
+                onCheckedChange = { on ->
+                    SettingsCache.typingHapticsEnabled = on
+                    AppScope.io.launch { repo.setTypingHapticsEnabled(on) }
+                }
             )
         }
     }
@@ -87,7 +90,10 @@ fun PersonalizationSettingsPage(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = savedConfirmTools,
-                onCheckedChange = { on -> AppScope.io.launch { repo.setAssistantConfirmTools(on) } }
+                onCheckedChange = { on ->
+                    SettingsCache.assistantConfirmToolsEnabled = on
+                    AppScope.io.launch { repo.setAssistantConfirmTools(on) }
+                }
             )
         }
     }

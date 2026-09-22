@@ -698,6 +698,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     showSmallModelWarn = false
+                    SettingsCache.smallModelModeEnabled = true
                     AppScope.io.launch { repo.setSmallModelModeEnabled(true) }
                 }) { Text(S.actionConfirm) }
             },
@@ -1375,6 +1376,7 @@ fun SettingsScreen(active: Boolean = true) {
     fun applyAppLock() {
         val creds = AppLock.createCredentials(lockPw, lockQuestion, lockAnswer)
         scope.launch { repo.setAppLock(true, creds) }
+        SettingsCache.appLockEnabled = true
         AppLockController.enabled = true
         lockPw = ""; lockPwConfirm = ""; lockQuestion = ""; lockAnswer = ""
         lockSetupError = ""
@@ -1540,7 +1542,10 @@ fun SettingsScreen(active: Boolean = true) {
             text = { Text(S.shareWarnBody) },
             confirmButton = {
                 Button(onClick = {
-                    scope.launch { repo.setSystemIntegrationEnabled(true) }
+                    scope.launch {
+                        repo.setSystemIntegrationEnabled(true)
+                        SettingsCache.systemIntegrationEnabled = true
+                    }
                     ShareIntegration.setEnabled(context, true)
                     showShareWarning = false
                     LucentToast.show(context, S.systemIntegrationOnToast)
@@ -1608,6 +1613,8 @@ fun SettingsScreen(active: Boolean = true) {
                     showCrashShieldInfo = false
                     scope.launch {
                         repo.setCrashShieldEnabled(true)
+                        SettingsCache.crashShieldEnabled = true
+                        SettingsCache.startupLoggingEnabled = true
                         StartupLog.setEnabled(true)
                         StartupLog.event(context, "crash shield: enabled from Settings")
                     }
@@ -1634,7 +1641,10 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 Button(onClick = {
                     showOpenLinksWarning = false
-                    scope.launch { repo.setOpenLinksExternally(true) }
+                    scope.launch {
+                        repo.setOpenLinksExternally(true)
+                        SettingsCache.openLinksExternally = true
+                    }
                 }) { Text(S.turnOn) }
             },
             dismissButton = {
@@ -1669,7 +1679,10 @@ fun SettingsScreen(active: Boolean = true) {
                     onClick = {
                         showSelfDestructWarning = false
                         selfDestructTyped = ""
-                        scope.launch { repo.setPwSelfDestructEnabled(true) }
+                        scope.launch {
+                            repo.setPwSelfDestructEnabled(true)
+                            SettingsCache.pwSelfDestructEnabled = true
+                        }
                     }
                 ) { Text(S.turnOn) }
             },
@@ -2011,6 +2024,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     lmConfirmUseLocalOn = false
+                    SettingsCache.localModelEnabled = true
                     AppScope.io.launch { repo.setLocalModelEnabled(true) }
                 }) { Text(S.lmWarnEnableAnyway) }
             },
@@ -2029,6 +2043,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     lmConfirmToolsOn = false
+                    SettingsCache.localToolsEnabled = true
                     AppScope.io.launch { repo.setLocalToolsEnabled(true) }
                 }) { Text(S.lmWarnEnableAnyway) }
             },
@@ -2047,6 +2062,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     lmConfirmGpuOn = false
+                    SettingsCache.localGpuEnabled = true
                     AppScope.io.launch { repo.setLocalGpuEnabled(true) }
                 }) { Text(S.lmWarnEnableAnyway) }
             },
@@ -2065,6 +2081,7 @@ fun SettingsScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     lmConfirmBackgroundOn = false
+                    SettingsCache.localBackgroundReplyEnabled = true
                     AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(true) }
                 }) { Text(S.lmWarnEnableAnyway) }
             },

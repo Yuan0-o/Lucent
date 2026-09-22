@@ -61,14 +61,20 @@ internal fun MemorySettingsPage(
             title = S.memoryLowTitle,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
-            onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.LOW.key) } }
+            onClick = {
+                SettingsCache.memoryTier = MemoryTier.LOW.key
+                AppScope.io.launch { repo.setMemoryTier(MemoryTier.LOW.key) }
+            }
         )
         MemoryTierRow(
             selected = current == MemoryTier.MEDIUM,
             title = S.memoryMediumTitle,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
-            onClick = { AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) } }
+            onClick = {
+                SettingsCache.memoryTier = MemoryTier.MEDIUM.key
+                AppScope.io.launch { repo.setMemoryTier(MemoryTier.MEDIUM.key) }
+            }
         )
         MemoryTierRow(
             selected = current == MemoryTier.HIGH,
@@ -78,7 +84,10 @@ internal fun MemorySettingsPage(
             dimmed = localModelEnabled,
             onClick = {
                 if (localModelEnabled) LucentToast.show(context, S.memoryHighLocalDisabledHint)
-                else AppScope.io.launch { repo.setMemoryTier(MemoryTier.HIGH.key) }
+                else {
+                    SettingsCache.memoryTier = MemoryTier.HIGH.key
+                    AppScope.io.launch { repo.setMemoryTier(MemoryTier.HIGH.key) }
+                }
             }
         )
     }
@@ -94,7 +103,10 @@ internal fun MemorySettingsPage(
             detail = S.embeddingProviderLocalDesc,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
-            onClick = { AppScope.io.launch { repo.setEmbeddingProvider("local") } }
+            onClick = {
+                SettingsCache.embeddingProvider = "local"
+                AppScope.io.launch { repo.setEmbeddingProvider("local") }
+            }
         )
         MemoryTierRow(
             selected = savedEmbeddingProvider == "cloud",
@@ -102,7 +114,10 @@ internal fun MemorySettingsPage(
             detail = S.embeddingProviderCloudDesc,
             onGradient = onGradient,
             onGradientMuted = onGradientMuted,
-            onClick = { AppScope.io.launch { repo.setEmbeddingProvider("cloud") } }
+            onClick = {
+                SettingsCache.embeddingProvider = "cloud"
+                AppScope.io.launch { repo.setEmbeddingProvider("cloud") }
+            }
         )
     }
 
@@ -117,7 +132,10 @@ internal fun MemorySettingsPage(
                 checked = savedSmallModelMode,
                 onCheckedChange = { on ->
                     if (on) onRequestSmallModelWarning()
-                    else AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
+                    else {
+                        SettingsCache.smallModelModeEnabled = false
+                        AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
+                    }
                 }
             )
         }

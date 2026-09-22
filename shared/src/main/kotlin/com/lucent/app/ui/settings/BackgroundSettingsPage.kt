@@ -70,7 +70,10 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = backgroundAnimationEnabled,
-                onCheckedChange = { checked -> scope.launch { repo.setBackgroundAnimationEnabled(checked) } }
+                onCheckedChange = { checked ->
+                    SettingsCache.backgroundAnimationEnabled = checked
+                    scope.launch { repo.setBackgroundAnimationEnabled(checked) }
+                }
             )
         }
     }
@@ -80,6 +83,7 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
         val paletteAlpha = if (paletteEnabled) 1f else 0.38f
         fun pickPalette(name: String) {
             if (paletteEnabled) {
+                SettingsCache.palette = name
                 AppScope.io.launch { repo.setPalette(name) }
             } else {
                 LucentToast.show(context, S.backgroundPaletteDisabledHint)

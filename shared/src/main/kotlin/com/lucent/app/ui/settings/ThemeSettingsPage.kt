@@ -61,13 +61,19 @@ internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                            .clickable {
+                                SettingsCache.themeMode = mode.key
+                                AppScope.io.launch { repo.setThemeMode(mode.key) }
+                            }
                             .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
                             selected = savedTheme == mode.key,
-                            onClick = { AppScope.io.launch { repo.setThemeMode(mode.key) } }
+                            onClick = {
+                                SettingsCache.themeMode = mode.key
+                                AppScope.io.launch { repo.setThemeMode(mode.key) }
+                            }
                         )
                         PaletteSwatch(mode.swatch(systemDark))
                         Column(modifier = Modifier.padding(start = 10.dp)) {

@@ -60,7 +60,10 @@ internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRou
             Switch(
                 checked = savedWebSearch && !webSearchLocked,
                 enabled = !webSearchLocked,
-                onCheckedChange = { on -> AppScope.io.launch { repo.setWebSearchEnabled(on) } }
+                onCheckedChange = { on ->
+                    SettingsCache.webSearchEnabled = on
+                    AppScope.io.launch { repo.setWebSearchEnabled(on) }
+                }
             )
         }
         if (webSearchLocked) {
