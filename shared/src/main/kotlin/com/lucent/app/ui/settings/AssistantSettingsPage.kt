@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lucent.app.data.ApiProfile
@@ -23,8 +22,7 @@ internal fun AssistantSettingsPage(
     selectedProfileIdx: Int,
     onRoute: (SettingsRoute) -> Unit
 ) {
-    var localModelEnabled by remember { mutableStateOf(SettingsCache.localModelEnabled) }
-    LaunchedEffect(Unit) { repo.localModelEnabled.collect { localModelEnabled = it } }
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
 
     BackHeader(S.settingsAssistantTitle) { onRoute(SettingsRoute.Root) }
 

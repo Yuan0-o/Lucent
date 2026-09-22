@@ -37,16 +37,11 @@ internal fun EditorSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    var markdownEnabled by remember { mutableStateOf(SettingsCache.markdownEnabled) }
-    LaunchedEffect(Unit) { repo.markdownEnabled.collect { markdownEnabled = it } }
-    var richTextEnabled by remember { mutableStateOf(SettingsCache.richTextEnabled) }
-    LaunchedEffect(Unit) { repo.richTextEnabled.collect { richTextEnabled = it } }
-    var linksEnabled by remember { mutableStateOf(SettingsCache.linksEnabled) }
-    LaunchedEffect(Unit) { repo.linksEnabled.collect { linksEnabled = it } }
-    var blackoutOn by remember { mutableStateOf(SettingsCache.blackoutEnabled) }
-    LaunchedEffect(Unit) { repo.blackoutEnabled.collect { blackoutOn = it } }
-    var openLinksExternallyOn by remember { mutableStateOf(SettingsCache.openLinksExternally) }
-    LaunchedEffect(Unit) { repo.openLinksExternally.collect { openLinksExternallyOn = it } }
+    val markdownEnabled by repo.markdownEnabled.collectAsState(initial = SettingsCache.markdownEnabled)
+    val richTextEnabled by repo.richTextEnabled.collectAsState(initial = SettingsCache.richTextEnabled)
+    val linksEnabled by repo.linksEnabled.collectAsState(initial = SettingsCache.linksEnabled)
+    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
+    val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = SettingsCache.openLinksExternally)
 
     BackHeader(S.settingsEditorTitle) { onRoute(SettingsRoute.Root) }
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

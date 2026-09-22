@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -47,15 +46,12 @@ internal fun SecuritySettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    var appLockOn by remember { mutableStateOf(SettingsCache.appLockEnabled) }
-    LaunchedEffect(Unit) { repo.appLockEnabled.collect { appLockOn = it } }
-    var selfDestructOn by remember { mutableStateOf(SettingsCache.pwSelfDestructEnabled) }
-    LaunchedEffect(Unit) { repo.pwSelfDestructEnabled.collect { selfDestructOn = it } }
+    val appLockOn by repo.appLockEnabled.collectAsState(initial = SettingsCache.appLockEnabled)
+    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = SettingsCache.pwSelfDestructEnabled)
     val selfDestructThreshold by repo.pwSelfDestructThreshold.collectAsState(
         initial = SettingsCache.pwSelfDestructThreshold
     )
-    var crashShieldOn by remember { mutableStateOf(SettingsCache.crashShieldEnabled) }
-    LaunchedEffect(Unit) { repo.crashShieldEnabled.collect { crashShieldOn = it } }
+    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = SettingsCache.crashShieldEnabled)
     val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
         initial = SettingsCache.pwFirstRoundLimit
     )

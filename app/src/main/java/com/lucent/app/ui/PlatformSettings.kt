@@ -19,7 +19,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -98,8 +97,7 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    var biometricOn by remember { mutableStateOf(SettingsCache.appLockBiometricEnabled) }
-    LaunchedEffect(Unit) { repo.appLockBiometricEnabled.collect { biometricOn = it } }
+    val biometricOn by repo.appLockBiometricEnabled.collectAsState(initial = SettingsCache.appLockBiometricEnabled)
 
     Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -62,20 +62,13 @@ fun CloudSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    var enabled by remember { mutableStateOf(SettingsCache.cloudEnabled) }
-    LaunchedEffect(Unit) { repo.cloudEnabled.collect { enabled = it } }
-    var provider by remember { mutableStateOf(SettingsCache.cloudProvider) }
-    LaunchedEffect(Unit) { repo.cloudProvider.collect { provider = it } }
-    var url by remember { mutableStateOf(SettingsCache.cloudUrl) }
-    LaunchedEffect(Unit) { repo.cloudUrl.collect { url = it } }
-    var user by remember { mutableStateOf(SettingsCache.cloudUser) }
-    LaunchedEffect(Unit) { repo.cloudUser.collect { user = it } }
-    var folder by remember { mutableStateOf(SettingsCache.cloudFolder) }
-    LaunchedEffect(Unit) { repo.cloudFolder.collect { folder = it } }
-    var autoUpload by remember { mutableStateOf(SettingsCache.cloudAutoBackup) }
-    LaunchedEffect(Unit) { repo.cloudAutoBackup.collect { autoUpload = it } }
-    var storedPw by remember { mutableStateOf(SettingsCache.cloudPasswordEnc) }
-    LaunchedEffect(Unit) { repo.cloudPasswordEnc.collect { storedPw = it } }
+    val enabled by repo.cloudEnabled.collectAsState(initial = SettingsCache.cloudEnabled)
+    val provider by repo.cloudProvider.collectAsState(initial = SettingsCache.cloudProvider)
+    val url by repo.cloudUrl.collectAsState(initial = SettingsCache.cloudUrl)
+    val user by repo.cloudUser.collectAsState(initial = SettingsCache.cloudUser)
+    val folder by repo.cloudFolder.collectAsState(initial = SettingsCache.cloudFolder)
+    val autoUpload by repo.cloudAutoBackup.collectAsState(initial = SettingsCache.cloudAutoBackup)
+    val storedPw by repo.cloudPasswordEnc.collectAsState(initial = SettingsCache.cloudPasswordEnc)
 
     var urlDraft by remember { mutableStateOf("") }
     var userDraft by remember { mutableStateOf("") }

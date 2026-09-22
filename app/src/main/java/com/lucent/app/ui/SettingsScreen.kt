@@ -116,23 +116,15 @@ fun SettingsScreen(active: Boolean = true) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    var savedUrl by remember { mutableStateOf(SettingsCache.baseUrl) }
-    LaunchedEffect(Unit) { repo.baseUrl.collect { savedUrl = it } }
-    var savedSpec by remember { mutableStateOf(SettingsCache.apiSpec) }
-    LaunchedEffect(Unit) { repo.apiSpec.collect { savedSpec = it } }
-    var savedKey by remember { mutableStateOf(SettingsCache.apiKey) }
-    LaunchedEffect(Unit) { repo.apiKey.collect { savedKey = it } }
-    var savedModel by remember { mutableStateOf(SettingsCache.model) }
-    LaunchedEffect(Unit) { repo.model.collect { savedModel = it } }
-    var savedFont by remember { mutableStateOf(SettingsCache.font) }
-    LaunchedEffect(Unit) { repo.font.collect { savedFont = it } }
-    var savedAssistantName by remember { mutableStateOf(SettingsCache.assistantName ?: "Lucent") }
-    LaunchedEffect(Unit) { repo.assistantName.collect { savedAssistantName = it } }
-    var savedAssistantStyle by remember { mutableStateOf(SettingsCache.assistantStyle) }
-    LaunchedEffect(Unit) { repo.assistantStyle.collect { savedAssistantStyle = it } }
+    val savedUrl by repo.baseUrl.collectAsState(initial = SettingsCache.baseUrl)
+    val savedSpec by repo.apiSpec.collectAsState(initial = SettingsCache.apiSpec)
+    val savedKey by repo.apiKey.collectAsState(initial = SettingsCache.apiKey)
+    val savedModel by repo.model.collectAsState(initial = SettingsCache.model)
+    val savedFont by repo.font.collectAsState(initial = SettingsCache.font)
+    val savedAssistantName by repo.assistantName.collectAsState(initial = SettingsCache.assistantName ?: "Lucent")
+    val savedAssistantStyle by repo.assistantStyle.collectAsState(initial = SettingsCache.assistantStyle)
     var showSmallModelWarn by remember { mutableStateOf(false) }
-    var localModelEnabled by remember { mutableStateOf(SettingsCache.localModelEnabled) }
-    LaunchedEffect(Unit) { repo.localModelEnabled.collect { localModelEnabled = it } }
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
 
     var url by remember(savedUrl) { mutableStateOf(savedUrl) }
     var spec by remember(savedSpec) { mutableStateOf(savedSpec) }
@@ -141,10 +133,8 @@ fun SettingsScreen(active: Boolean = true) {
     var assistantName by remember(savedAssistantName) { mutableStateOf(savedAssistantName) }
     var assistantStyle by remember(savedAssistantStyle) { mutableStateOf(savedAssistantStyle) }
 
-    var savedProfilesJson by remember { mutableStateOf(SettingsCache.apiProfilesJson) }
-    LaunchedEffect(Unit) { repo.apiProfilesJson.collect { savedProfilesJson = it } }
-    var savedSelectedIdx by remember { mutableStateOf(SettingsCache.apiProfileSelected) }
-    LaunchedEffect(Unit) { repo.apiProfileSelected.collect { savedSelectedIdx = it } }
+    val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = SettingsCache.apiProfilesJson)
+    val savedSelectedIdx by repo.apiProfileSelected.collectAsState(initial = SettingsCache.apiProfileSelected)
     val profiles = remember(savedProfilesJson, savedUrl, savedSpec, savedKey, savedModel) {
         val parsed = com.lucent.app.data.ApiProfiles.parse(savedProfilesJson)
         when {
@@ -173,8 +163,7 @@ fun SettingsScreen(active: Boolean = true) {
     var errorText by remember { mutableStateOf("") }
     var backupStatus by remember { mutableStateOf("") }
 
-    var appLockOn by remember { mutableStateOf(SettingsCache.appLockEnabled) }
-    LaunchedEffect(Unit) { repo.appLockEnabled.collect { appLockOn = it } }
+    val appLockOn by repo.appLockEnabled.collectAsState(initial = SettingsCache.appLockEnabled)
 
     val pwFirstRound by repo.pwFirstRoundLimit.collectAsState(
         initial = SettingsCache.pwFirstRoundLimit
@@ -182,14 +171,12 @@ fun SettingsScreen(active: Boolean = true) {
     val pwLaterRound by repo.pwLaterRoundLimit.collectAsState(
         initial = SettingsCache.pwLaterRoundLimit
     )
-    var selfDestructOn by remember { mutableStateOf(SettingsCache.pwSelfDestructEnabled) }
-    LaunchedEffect(Unit) { repo.pwSelfDestructEnabled.collect { selfDestructOn = it } }
+    val selfDestructOn by repo.pwSelfDestructEnabled.collectAsState(initial = SettingsCache.pwSelfDestructEnabled)
     val selfDestructThreshold by repo.pwSelfDestructThreshold.collectAsState(
         initial = SettingsCache.pwSelfDestructThreshold
     )
 
-    var gateAttemptJson by remember { mutableStateOf(SettingsCache.passwordAttemptState) }
-    LaunchedEffect(Unit) { repo.passwordAttemptState.collect { gateAttemptJson = it } }
+    val gateAttemptJson by repo.passwordAttemptState.collectAsState(initial = SettingsCache.passwordAttemptState)
     val gateAttempt = remember(gateAttemptJson) {
         com.lucent.app.data.PasswordAttempts.State.fromJson(gateAttemptJson)
     }

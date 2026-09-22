@@ -66,12 +66,9 @@ internal fun LocalModelSettingsPage(
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    var localModelEnabled by remember { mutableStateOf(SettingsCache.localModelEnabled) }
-    LaunchedEffect(Unit) { repo.localModelEnabled.collect { localModelEnabled = it } }
-    var localToolsEnabled by remember { mutableStateOf(SettingsCache.localToolsEnabled) }
-    LaunchedEffect(Unit) { repo.localToolsEnabled.collect { localToolsEnabled = it } }
-    var localGpuEnabled by remember { mutableStateOf(SettingsCache.localGpuEnabled) }
-    LaunchedEffect(Unit) { repo.localGpuEnabled.collect { localGpuEnabled = it } }
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
+    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
+    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
     val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(
         initial = SettingsCache.localBackgroundReplyEnabled
     )
