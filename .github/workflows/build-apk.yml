@@ -35,12 +35,18 @@ jobs:
       - name: Resolve version
         id: resolve-version
         run: |
+          set -eu
           VER="${{ inputs.version_name }}"
           if [ -z "$VER" ]; then
             VER=$(sed -n 's/^val MARKETING_VERSION = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)
           fi
+          if [ -z "$VER" ]; then echo "::error::Could not determine the version."; exit 1; fi
+          DIGITS=$(printf '%s' "$VER" | tr -cd '0-9')
+          if [ -z "$DIGITS" ]; then echo "::error::Version '$VER' has no digits to build a version code from."; exit 1; fi
+          CODE=$(( DIGITS * 10000 + GITHUB_RUN_NUMBER ))
           echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "Building APK for version $VER"
+          echo "version_code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Building APK for version $VER (versionCode $CODE)"
 
       - name: Check signing secrets
         env:
@@ -185,7 +191,7 @@ jobs:
           LUCENT_KEY_ALIAS: lucent
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace \
-            -PversionCode=${{ github.run_number }} \
+            -PversionCode=${{ steps.resolve-version.outputs.version_code }} \
             -PversionName='${{ steps.resolve-version.outputs.version }}'
 
       - name: Verify APK

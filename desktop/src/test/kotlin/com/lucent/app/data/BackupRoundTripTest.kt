@@ -142,6 +142,7 @@ class BackupRoundTripTest {
             "richTextEnabled", "openLinksExternally",
             "assistantConfirmToolsEnabled", "smallModelModeEnabled",
             "crashShieldEnabled", "blackoutEnabled",
+            "autoUpdateEnabled", "privilegedEnabled",
             "localModelEnabled", "localToolsEnabled", "localGpuEnabled",
             "localBackgroundReply", "localModelManifest",
             "baseUrl", "apiSpec", "apiKeyEncrypted", "model", "apiProfiles", "apiProfileSelected"
