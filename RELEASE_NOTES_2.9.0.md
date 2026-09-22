@@ -1,6 +1,6 @@
 # Privileges, Provenance, and a Quieter Update
 
-Lucent 2.9 adds a door at the foot of Settings, and behind it the sort of authority that normally belongs to a desktop shell. It is shut by default, which is the point. Beside it, the About page states who made this, what it is built from, and which version you are holding — in four languages, in small print, the way a well-brought-up application does. Neither page is loud. Both are load-bearing.
+Lucent 2.9.0 adds a door at the foot of Settings, and behind it the sort of authority that normally belongs to a desktop shell. It is shut by default, which is the point. Beside it, the About page states who made this, what it is built from, and which version you are holding — in four languages, in small print, the way a well-brought-up application does. Neither page is loud. Both are load-bearing.
 
 **The Advanced page hands you the keys, on request.** At the top of Settings → Advanced sits a single switch, off until you turn it on. Flick it and Lucent asks Shizuku for the shell's identity. The page reports whether Shizuku is installed, whether its service is running, and whether permission has been granted, then offers exactly one button for whatever is missing: fetch Shizuku, open it, or grant. Every privileged operation waits behind the same switch, and once the privilege is granted the page names the uid, so adb's 2000 and root's 0 are told apart at a glance.
 
@@ -10,4 +10,4 @@ Lucent 2.9 adds a door at the foot of Settings, and behind it the sort of author
 
 **The settings pages open on your values.** Every switch and every choice in Settings arrives already showing what you chose, from the very first frame, so a page looks the way you left it. Along the bottom bar, tapping a tab moves straight to that tab, with none of the sideways travel that belongs to a swipe. The four-language catalogue covers all of it — English, 中文, 日本語, 한국어 — including the new pages and every line about privileges.
 
-Nothing here is switched on for you. That is the shape of 2.9: authority kept behind a latch, provenance written down, and an update that arrives quietly when asked. Your notes stay encrypted, an .lcb backup carries every one of these settings with it, and the door is yours to open.
+Nothing here is switched on for you. That is the shape of 2.9.0: authority kept behind a latch, provenance written down, and an update that arrives quietly when asked. Your notes stay encrypted, an .lcb backup carries every one of these settings with it, and the door is yours to open.

@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       release_name:
-        description: 'Release name, e.g. "Lucent 2.9 — Privileges, Provenance, and a Quieter Update".'
+        description: 'Release name, e.g. "Lucent 2.9.0 — Privileges, Provenance, and a Quieter Update".'
         required: true
         type: string
       version_name:
