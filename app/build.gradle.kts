@@ -185,8 +185,6 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.haze.materials)
 
-    implementation("moe.shizuku.privilege:api:13.0.0")
-
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
 
     androidTestImplementation(libs.room.testing)
