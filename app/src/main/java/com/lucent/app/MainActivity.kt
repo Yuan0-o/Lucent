@@ -80,6 +80,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.lucent.app.AppScope
 import com.lucent.app.data.AttachmentMigration
+import com.lucent.app.data.PrivilegedShell
+import com.lucent.app.data.ShizukuShell
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.ShareIntegration
 import com.lucent.app.data.StartupLog
