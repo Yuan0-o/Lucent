@@ -167,7 +167,7 @@ jobs:
           gh release create "v${{ inputs.version }}" \
             --draft \
             --title "${{ inputs.title }}" \
-            --notes "${{ env.RELEASE_NOTES }}" \
+            --notes-file /tmp/notes.txt \
             "${{ env.APK_FILE }}" \
             "${{ env.EXE_FILE }}"
           
