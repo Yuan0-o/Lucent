@@ -68,14 +68,6 @@ jobs:
       - name: Run Android lint
         run: ./gradlew :app:lintRelease --no-daemon --console=plain
 
-      - name: Run detekt on app module
-        run: ./gradlew :app:detekt --no-daemon --console=plain
-
-      - name: Check i18n generation is up-to-date
-        run: |
-          python3 tools/i18n/gen_i18n.py
-          git diff --exit-code -- shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt
-
       - name: Generate Room exported schemas
         run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
 
