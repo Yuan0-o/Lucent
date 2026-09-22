@@ -4,7 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name, e.g. 2.8.4. Leave blank to use MARKETING_VERSION in build files.'
+        description: 'Version name, e.g. 2.8.4'
+        required: true
+      release_title:
+        description: 'Release title, e.g. "Lucent 2.8.4 — The Settings Remember Their Place". Leave blank to use "Lucent {version}"'
         required: false
         default: ''
 
