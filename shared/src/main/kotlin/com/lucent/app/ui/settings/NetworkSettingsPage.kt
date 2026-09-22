@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -36,8 +37,10 @@ internal fun NetworkSettingsPage(repo: SettingsRepository, onRoute: (SettingsRou
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
-    val savedWebSearch by repo.webSearchEnabled.collectAsState(initial = SettingsCache.webSearchEnabled)
+    var localModelEnabled by remember { mutableStateOf(SettingsCache.localModelEnabled) }
+    LaunchedEffect(Unit) { repo.localModelEnabled.collect { localModelEnabled = it } }
+    var savedWebSearch by remember { mutableStateOf(SettingsCache.webSearchEnabled) }
+    LaunchedEffect(Unit) { repo.webSearchEnabled.collect { savedWebSearch = it } }
 
     BackHeader(S.settingsNetworkTitle) { onRoute(SettingsRoute.Assistant) }
 

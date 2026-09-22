@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,14 +64,19 @@ internal fun PrivacySettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
+    var blackoutOn by remember { mutableStateOf(SettingsCache.blackoutEnabled) }
+    LaunchedEffect(Unit) { repo.blackoutEnabled.collect { blackoutOn = it } }
     val systemIntegrationOn by repo.systemIntegrationEnabled.collectAsState(
         initial = SettingsCache.systemIntegrationEnabled
     )
-    val startupLoggingOn by repo.startupLoggingEnabled.collectAsState(initial = SettingsCache.startupLoggingEnabled)
-    val crashShieldOn by repo.crashShieldEnabled.collectAsState(initial = SettingsCache.crashShieldEnabled)
-    val noteHistoryOn by repo.noteHistoryEnabled.collectAsState(initial = SettingsCache.noteHistoryEnabled)
-    val taskHistoryOn by repo.taskHistoryEnabled.collectAsState(initial = SettingsCache.taskHistoryEnabled)
+    var startupLoggingOn by remember { mutableStateOf(SettingsCache.startupLoggingEnabled) }
+    LaunchedEffect(Unit) { repo.startupLoggingEnabled.collect { startupLoggingOn = it } }
+    var crashShieldOn by remember { mutableStateOf(SettingsCache.crashShieldEnabled) }
+    LaunchedEffect(Unit) { repo.crashShieldEnabled.collect { crashShieldOn = it } }
+    var noteHistoryOn by remember { mutableStateOf(SettingsCache.noteHistoryEnabled) }
+    LaunchedEffect(Unit) { repo.noteHistoryEnabled.collect { noteHistoryOn = it } }
+    var taskHistoryOn by remember { mutableStateOf(SettingsCache.taskHistoryEnabled) }
+    LaunchedEffect(Unit) { repo.taskHistoryEnabled.collect { taskHistoryOn = it } }
     val appLockCredsOrNull by repo.appLockCredentials.collectAsState(initial = null)
 
     BackHeader(S.settingsPrivacyTitle) { onRoute(SettingsRoute.Root) }

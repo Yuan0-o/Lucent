@@ -165,26 +165,41 @@ fun AssistantScreen(active: Boolean = true) {
                 m.attachmentMime, m.attachmentData, m.attachmentName, m.attachmentList)
         }
     }
-    val savedUrl by repo.baseUrl.collectAsState(initial = SettingsCache.baseUrl)
-    val savedSpecStr by repo.apiSpec.collectAsState(initial = SettingsCache.apiSpec)
-    val savedKey by repo.apiKey.collectAsState(initial = SettingsCache.apiKey)
-    val savedModel by repo.model.collectAsState(initial = SettingsCache.model)
-    val assistantNameOrNull by repo.assistantName.collectAsState(initial = SettingsCache.assistantName)
+    var savedUrl by remember { mutableStateOf(SettingsCache.baseUrl) }
+    LaunchedEffect(Unit) { repo.baseUrl.collect { savedUrl = it } }
+    var savedSpecStr by remember { mutableStateOf(SettingsCache.apiSpec) }
+    LaunchedEffect(Unit) { repo.apiSpec.collect { savedSpecStr = it } }
+    var savedKey by remember { mutableStateOf(SettingsCache.apiKey) }
+    LaunchedEffect(Unit) { repo.apiKey.collect { savedKey = it } }
+    var savedModel by remember { mutableStateOf(SettingsCache.model) }
+    LaunchedEffect(Unit) { repo.model.collect { savedModel = it } }
+    var assistantNameOrNull by remember { mutableStateOf(SettingsCache.assistantName) }
+    LaunchedEffect(Unit) { repo.assistantName.collect { assistantNameOrNull = it } }
     val assistantName = assistantNameOrNull.orEmpty()
-    val assistantStyle by repo.assistantStyle.collectAsState(initial = SettingsCache.assistantStyle)
-    val memoryTierKey by repo.memoryTier.collectAsState(initial = SettingsCache.memoryTier)
-    val webSearchEnabled by repo.webSearchEnabled.collectAsState(initial = SettingsCache.webSearchEnabled)
-    val typingHapticsEnabled by repo.typingHapticsEnabled.collectAsState(initial = SettingsCache.typingHapticsEnabled)
+    var assistantStyle by remember { mutableStateOf(SettingsCache.assistantStyle) }
+    LaunchedEffect(Unit) { repo.assistantStyle.collect { assistantStyle = it } }
+    var memoryTierKey by remember { mutableStateOf(SettingsCache.memoryTier) }
+    LaunchedEffect(Unit) { repo.memoryTier.collect { memoryTierKey = it } }
+    var webSearchEnabled by remember { mutableStateOf(SettingsCache.webSearchEnabled) }
+    LaunchedEffect(Unit) { repo.webSearchEnabled.collect { webSearchEnabled = it } }
+    var typingHapticsEnabled by remember { mutableStateOf(SettingsCache.typingHapticsEnabled) }
+    LaunchedEffect(Unit) { repo.typingHapticsEnabled.collect { typingHapticsEnabled = it } }
     val confirmToolsEnabled by repo.assistantConfirmToolsEnabled.collectAsState(
         initial = SettingsCache.assistantConfirmToolsEnabled
     )
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
-    val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
-    val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
+    var localModelEnabled by remember { mutableStateOf(SettingsCache.localModelEnabled) }
+    LaunchedEffect(Unit) { repo.localModelEnabled.collect { localModelEnabled = it } }
+    var localToolsEnabled by remember { mutableStateOf(SettingsCache.localToolsEnabled) }
+    LaunchedEffect(Unit) { repo.localToolsEnabled.collect { localToolsEnabled = it } }
+    var localGpuEnabled by remember { mutableStateOf(SettingsCache.localGpuEnabled) }
+    LaunchedEffect(Unit) { repo.localGpuEnabled.collect { localGpuEnabled = it } }
     val modelRecents by repo.modelRecents.collectAsState(initial = emptyList())
-    val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = SettingsCache.smallModelModeEnabled)
-    val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = SettingsCache.apiProfilesJson)
-    val savedSelectedIdx by repo.apiProfileSelected.collectAsState(initial = SettingsCache.apiProfileSelected)
+    var smallModelMode by remember { mutableStateOf(SettingsCache.smallModelModeEnabled) }
+    LaunchedEffect(Unit) { repo.smallModelModeEnabled.collect { smallModelMode = it } }
+    var savedProfilesJson by remember { mutableStateOf(SettingsCache.apiProfilesJson) }
+    LaunchedEffect(Unit) { repo.apiProfilesJson.collect { savedProfilesJson = it } }
+    var savedSelectedIdx by remember { mutableStateOf(SettingsCache.apiProfileSelected) }
+    LaunchedEffect(Unit) { repo.apiProfileSelected.collect { savedSelectedIdx = it } }
     val activeApiProfile = remember(savedProfilesJson, savedSelectedIdx) {
         val parsed = com.lucent.app.data.ApiProfiles.parse(savedProfilesJson)
         parsed.getOrNull(savedSelectedIdx.coerceIn(0, (parsed.size - 1).coerceAtLeast(0)))

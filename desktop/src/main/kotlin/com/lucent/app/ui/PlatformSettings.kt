@@ -40,7 +40,8 @@ fun rememberDynamicColorActive(repo: SettingsRepository): Boolean = false
 fun DesktopIntegrationRows(repo: SettingsRepository) {
     val onGradient = LocalOnGradient.current
     val scope = rememberCoroutineScope()
-    val closeToTray by repo.closeToTray.collectAsState(initial = SettingsCache.closeToTray)
+    var closeToTray by remember { mutableStateOf(SettingsCache.closeToTray) }
+    LaunchedEffect(Unit) { repo.closeToTray.collect { closeToTray = it } }
     var startWithWindows by remember {
         mutableStateOf(com.lucent.desktop.platform.StartupRegistration.isEnabled())
     }
@@ -88,7 +89,8 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val helloEnabled by repo.appLockHelloEnabled.collectAsState(initial = SettingsCache.appLockHelloEnabled)
+    var helloEnabled by remember { mutableStateOf(SettingsCache.appLockHelloEnabled) }
+    LaunchedEffect(Unit) { repo.appLockHelloEnabled.collect { helloEnabled = it } }
 
     Spacer(modifier = Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {

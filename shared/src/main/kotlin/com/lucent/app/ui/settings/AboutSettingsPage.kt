@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +48,8 @@ internal fun AboutSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = SettingsCache.autoUpdateEnabled)
+    var autoUpdateOn by remember { mutableStateOf(SettingsCache.autoUpdateEnabled) }
+    LaunchedEffect(Unit) { repo.autoUpdateEnabled.collect { autoUpdateOn = it } }
     var checkResult by remember { mutableStateOf<String?>(null) }
 
     val appVersion = "2.9.0"

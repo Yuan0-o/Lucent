@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -38,7 +39,8 @@ fun PersonalizationSettingsPage(
     onBack: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
-    val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = SettingsCache.typingHapticsEnabled)
+    var savedTypingHaptics by remember { mutableStateOf(SettingsCache.typingHapticsEnabled) }
+    LaunchedEffect(Unit) { repo.typingHapticsEnabled.collect { savedTypingHaptics = it } }
     val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(
         initial = SettingsCache.assistantConfirmToolsEnabled
     )

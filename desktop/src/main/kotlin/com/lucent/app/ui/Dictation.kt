@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,8 +43,10 @@ fun DictationButton(onText: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = DesktopContext
     val repo = remember { SettingsRepository(context) }
     val scope = rememberCoroutineScope()
-    val baseUrl by repo.baseUrl.collectAsState(initial = com.lucent.app.data.SettingsCache.baseUrl)
-    val apiKey by repo.apiKey.collectAsState(initial = com.lucent.app.data.SettingsCache.apiKey)
+    var baseUrl by remember { mutableStateOf(com.lucent.app.data.SettingsCache.baseUrl) }
+    LaunchedEffect(Unit) { repo.baseUrl.collect { baseUrl = it } }
+    var apiKey by remember { mutableStateOf(com.lucent.app.data.SettingsCache.apiKey) }
+    LaunchedEffect(Unit) { repo.apiKey.collect { apiKey = it } }
 
     var recording by remember { mutableStateOf(false) }
     var transcribing by remember { mutableStateOf(false) }

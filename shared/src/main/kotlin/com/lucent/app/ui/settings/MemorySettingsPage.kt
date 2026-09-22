@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,9 +41,11 @@ internal fun MemorySettingsPage(
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
+    var localModelEnabled by remember { mutableStateOf(SettingsCache.localModelEnabled) }
+    LaunchedEffect(Unit) { repo.localModelEnabled.collect { localModelEnabled = it } }
     val savedMemoryTier by repo.memoryTier.collectAsState(initial = null)
-    val savedSmallModelMode by repo.smallModelModeEnabled.collectAsState(initial = SettingsCache.smallModelModeEnabled)
+    var savedSmallModelMode by remember { mutableStateOf(SettingsCache.smallModelModeEnabled) }
+    LaunchedEffect(Unit) { repo.smallModelModeEnabled.collect { savedSmallModelMode = it } }
     val savedEmbeddingProvider by repo.embeddingProvider.collectAsState(initial = null)
 
     BackHeader(S.settingsMemoryTitle) { onRoute(SettingsRoute.Assistant) }
