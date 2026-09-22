@@ -731,9 +731,11 @@ jobs:
       - name: Create draft release
         run: |
           VER="${{ steps.resolve-version.outputs.version }}"
+          TITLE="${{ inputs.release_title }}"
+          if [ -z "$TITLE" ]; then TITLE="Lucent $VER"; fi
           gh release create "v$VER" \
             --draft \
-            --title "Lucent $VER" \
+            --title "$TITLE" \
             --notes-file /tmp/notes.txt \
             "${{ env.APK_FILE }}" \
             "${{ env.EXE_FILE }}"
