@@ -5,4 +5,5 @@
 <paths>
     <cache-path name="attachment-preview" path="attachment-preview/" />
     <cache-path name="camera-capture" path="camera-capture/" />
+    <cache-path name="updates" path="updates/" />
 </paths>

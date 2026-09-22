@@ -91,6 +91,7 @@ import com.lucent.app.ui.settings.SecuritySettingsPage
 import com.lucent.app.ui.settings.ThemeSettingsPage
 import com.lucent.app.ui.settings.AboutSettingsPage
 import com.lucent.app.ui.settings.AdvancedSettingsPage
+import com.lucent.app.ui.settings.LicenceSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -101,7 +102,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Advanced }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -116,6 +117,16 @@ fun SettingsScreen(active: Boolean = true) {
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
+
+    val appVersionName = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+            ?: com.lucent.app.LucentBuild.VERSION
+    }
+    val appBuildNumber = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toString()
+        }.getOrNull() ?: com.lucent.app.LucentBuild.BUILD_NUMBER
+    }
 
     val savedUrl by repo.baseUrl.collectAsState(initial = SettingsCache.baseUrl)
     val savedSpec by repo.apiSpec.collectAsState(initial = SettingsCache.apiSpec)
@@ -698,6 +709,7 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Api -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.Theme, SettingsRoute.Background -> setRoute(SettingsRoute.Appearance)
+            SettingsRoute.Licences -> setRoute(SettingsRoute.About)
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
             SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data, SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
             else -> setRoute(SettingsRoute.Root)
@@ -2403,22 +2415,106 @@ fun SettingsScreen(active: Boolean = true) {
                 onOpenUrl = { url ->
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     context.startActivity(intent)
+                },
+                versionName = appVersionName,
+                buildNumber = appBuildNumber
+            )
+
+            SettingsRoute.Licences -> LicenceSettingsPage(
+                onRoute = { setRoute(it) },
+                onOpenUrl = { url ->
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    context.startActivity(intent)
                 }
             )
 
             SettingsRoute.Advanced -> {
+                val privilegedOn by repo.privilegedEnabled.collectAsState(initial = SettingsCache.privilegedEnabled)
                 var shizukuReady by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isReady()) }
-                LaunchedEffect(Unit) {
-                    com.lucent.app.data.ShizukuShell.refresh()
+                var shizukuRunning by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isServiceRunning()) }
+                var shizukuInstalled by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isInstalled(context)) }
+                var shizukuUid by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.privilegeUid()) }
+                var shizukuBusy by remember { mutableStateOf(false) }
+                val refreshShizuku = {
+                    shizukuRunning = com.lucent.app.data.ShizukuShell.isServiceRunning()
+                    shizukuInstalled = com.lucent.app.data.ShizukuShell.isInstalled(context)
                     shizukuReady = com.lucent.app.data.ShizukuShell.isReady()
+                    shizukuUid = com.lucent.app.data.ShizukuShell.privilegeUid()
+                }
+                DisposableEffect(Unit) {
+                    com.lucent.app.data.ShizukuShell.observePermission { granted ->
+                        shizukuReady = granted
+                        shizukuUid = com.lucent.app.data.ShizukuShell.privilegeUid()
+                        shizukuBusy = false
+                        if (granted) {
+                            scope.launch { repo.setPrivilegedEnabled(true) }
+                        }
+                        shizukuRunning = com.lucent.app.data.ShizukuShell.isServiceRunning()
+                    }
+                    com.lucent.app.data.ShizukuShell.observeBinder { running ->
+                        shizukuRunning = running
+                        shizukuReady = com.lucent.app.data.ShizukuShell.isReady()
+                        shizukuUid = com.lucent.app.data.ShizukuShell.privilegeUid()
+                    }
+                    onDispose {
+                        com.lucent.app.data.ShizukuShell.observePermission(null)
+                        com.lucent.app.data.ShizukuShell.observeBinder(null)
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    shizukuRunning = com.lucent.app.data.ShizukuShell.isServiceRunning()
+                    shizukuReady = com.lucent.app.data.ShizukuShell.isReady()
+                    shizukuUid = com.lucent.app.data.ShizukuShell.privilegeUid()
+                }
+                val shizukuStatus = when {
+                    !privilegedOn -> S.shizukuStatusOff
+                    !shizukuInstalled -> S.shizukuStatusNoApp
+                    !shizukuRunning -> S.shizukuStatusNoService
+                    !shizukuReady -> S.shizukuStatusNoPermission
+                    shizukuUid >= 0 -> "${S.shizukuReady} \u00b7 uid $shizukuUid"
+                    else -> S.shizukuReady
+                }
+                val shizukuAction = when {
+                    !privilegedOn -> null
+                    !shizukuInstalled -> S.shizukuActionInstall
+                    !shizukuRunning -> S.shizukuActionOpen
+                    !shizukuReady -> S.shizukuActionGrant
+                    else -> null
                 }
                 AdvancedSettingsPage(
-                    shizukuSupported = true,
-                    shizukuReady = shizukuReady,
-                    onPairShizuku = {
-                        val started = com.lucent.app.data.ShizukuShell.requestPermission(context)
-                        if (!started) {
-                            LucentToast.show(context, S.shizukuNotInstalled)
+                    ui = com.lucent.app.ui.settings.AdvancedPrivilegeUi(
+                        title = S.shizukuTitle,
+                        description = S.shizukuEnableDesc,
+                        status = shizukuStatus,
+                        enabled = privilegedOn,
+                        ready = shizukuReady,
+                        busy = shizukuBusy,
+                        actionLabel = shizukuAction
+                    ),
+                    onToggle = { wanted ->
+                        SettingsCache.privilegedEnabled = wanted
+                        scope.launch { repo.setPrivilegedEnabled(wanted) }
+                        if (!wanted) {
+                            refreshShizuku()
+                        } else {
+                            shizukuBusy = true
+                            val started = com.lucent.app.data.ShizukuShell.requestPermission(context)
+                            refreshShizuku()
+                            if (!started) {
+                                shizukuBusy = false
+                                LucentToast.show(context, S.shizukuNotInstalled)
+                            }
+                        }
+                    },
+                    onAction = {
+                        if (!shizukuInstalled) {
+                            com.lucent.app.data.ShizukuShell.openDownloadPage(context)
+                        } else if (!shizukuRunning) {
+                            com.lucent.app.data.ShizukuShell.openManager(context)
+                        } else {
+                            shizukuBusy = true
+                            com.lucent.app.data.ShizukuShell.requestPermission(context)
+                            refreshShizuku()
                         }
                     },
                     onRoute = { setRoute(it) }

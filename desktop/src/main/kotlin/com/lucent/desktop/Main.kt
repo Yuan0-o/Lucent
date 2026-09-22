@@ -19,6 +19,7 @@ import androidx.compose.ui.window.Notification
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.ui.window.Tray
@@ -60,6 +61,8 @@ fun main() {
     AppLockController.markProcessStarted(startup.appLockEnabled)
     com.lucent.app.data.StartupLog.setEnabled(startup.startupLoggingEnabled)
     com.lucent.app.AppScope.appContext = context
+    com.lucent.app.data.PrivilegedShell.install(com.lucent.app.data.DesktopShell)
+    com.lucent.app.data.AutoUpdate.installer = com.lucent.app.data.DesktopUpdateInstaller()
 
     val focusRequests = MutableStateFlow(0L)
     if (!com.lucent.desktop.platform.SingleInstance.acquire(context) {
@@ -100,6 +103,12 @@ fun main() {
         LaunchedEffect(trayState) {
             ReminderScheduler.notifier = { title, message ->
                 trayState.sendNotification(Notification(title, message))
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            snapshotFlow { com.lucent.app.data.DesktopShell.exitRequested }.collect { wanted ->
+                if (wanted) exitApplication()
             }
         }
 

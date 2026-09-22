@@ -226,6 +226,8 @@ You may obtain a copy of the Apache License, Version 2.0 at: https://www.apache.
 
 **llama.cpp** and **GGML** — © 2023–2024 The ggml authors (Georgi Gerganov and contributors) — https://github.com/ggml-org/llama.cpp
 
+**Shizuku API (`dev.rikka.shizuku:api`, `dev.rikka.shizuku:provider`, `dev.rikka.shizuku:aidl`)** — © Rikka and the Shizuku-API contributors — https://github.com/RikkaApps/Shizuku-API — licensed under the MIT License, reproduced below.
+
 ```
 MIT License
 

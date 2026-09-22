@@ -2,81 +2,121 @@ package com.lucent.app.data
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import moe.shizuku.server.IRemoteProcess
+import moe.shizuku.server.IShizukuService
+import rikka.shizuku.Shizuku
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
 
-/**
- * Shizuku-backed privileged shell.
- *
- * Uses reflection so the app builds without a Shizuku compile dependency. When the Shizuku
- * API is not on the classpath the in-app permission dialog cannot be shown, so pairing falls
- * back to opening the Shizuku manager, where the user authorises Lucent.
- */
 object ShizukuShell : PrivilegedShell.PrivilegedShellProvider {
 
-    private const val SHIZUKU_MANAGER_PACKAGE = "moe.shizuku.privileged.api"
+    const val MANAGER_PACKAGE = "moe.shizuku.privileged.api"
 
-    private var pingResult: Boolean? = null
+    const val DOWNLOAD_PAGE = "https://shizuku.rikka.app/download/"
 
-    /** Clears the cached ping so the next isReady() reflects a freshly granted permission. */
-    fun refresh() {
-        pingResult = null
+    const val PERMISSION_REQUEST_CODE = 6021
+
+    private const val MAX_CAPTURE_BYTES = 256 * 1024
+
+    private var permissionCallback: ((Boolean) -> Unit)? = null
+
+    private var binderCallback: ((Boolean) -> Unit)? = null
+
+    private val permissionListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+        permissionCallback?.invoke(grantResult == PackageManager.PERMISSION_GRANTED)
     }
 
-    private fun shizukuClass(): Class<*>? = try {
-        Class.forName("moe.shizuku.api.Shizuku")
-    } catch (t: Throwable) {
-        null
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        binderCallback?.invoke(true)
     }
 
-    private fun shizukuReady(): Boolean {
-        pingResult?.let { return it }
-        val result = try {
-            val cls = shizukuClass() ?: return false
-            cls.getMethod("ping").invoke(null) as? Boolean ?: false
-        } catch (t: Throwable) {
-            false
-        }
-        pingResult = result
-        return result
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        binderCallback?.invoke(false)
     }
 
-    @Suppress("UNCHECKED_CAST")
-    override fun isReady(): Boolean = shizukuReady()
-
-    /**
-     * Asks Shizuku for permission. Returns true when a permission flow was started.
-     *
-     * 1. Tries the in-app request dialog (needs the Shizuku API + provider on the classpath).
-     * 2. Falls back to opening the Shizuku manager app so the user can authorise Lucent there.
-     */
-    fun requestPermission(context: Context?): Boolean {
-        val inApp = try {
-            val cls = shizukuClass() ?: return openShizukuManager(context)
-            cls.getMethod("requestPermission", Int::class.java).invoke(null, 0)
+    fun isInstalled(context: Context?): Boolean {
+        if (context == null) return false
+        return try {
+            context.packageManager.getPackageInfo(MANAGER_PACKAGE, 0)
             true
         } catch (t: Throwable) {
             false
         }
-        return if (inApp) true else openShizukuManager(context)
     }
 
-    /** True when the Shizuku manager app is installed on this device. */
-    fun isShizukuInstalled(context: Context?): Boolean {
-        if (context == null) return false
+    fun isServiceRunning(): Boolean = try {
+        Shizuku.pingBinder()
+    } catch (t: Throwable) {
+        false
+    }
+
+    fun hasPermission(): Boolean = try {
+        isServiceRunning() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+    } catch (t: Throwable) {
+        false
+    }
+
+    override fun isReady(): Boolean = hasPermission()
+
+    fun privilegeUid(): Int = try {
+        if (isServiceRunning()) Shizuku.getUid() else -1
+    } catch (t: Throwable) {
+        -1
+    }
+
+    fun observePermission(callback: ((Boolean) -> Unit)?) {
+        if (callback == null) {
+            if (permissionCallback != null) {
+                runCatching { Shizuku.removeRequestPermissionResultListener(permissionListener) }
+            }
+            permissionCallback = null
+            return
+        }
+        if (permissionCallback == null) {
+            runCatching { Shizuku.addRequestPermissionResultListener(permissionListener) }
+        }
+        permissionCallback = callback
+    }
+
+    fun observeBinder(callback: ((Boolean) -> Unit)?) {
+        if (callback == null) {
+            if (binderCallback != null) {
+                runCatching { Shizuku.removeBinderReceivedListener(binderReceivedListener) }
+                runCatching { Shizuku.removeBinderDeadListener(binderDeadListener) }
+            }
+            binderCallback = null
+            return
+        }
+        if (binderCallback == null) {
+            runCatching { Shizuku.addBinderReceivedListenerSticky(binderReceivedListener) }
+            runCatching { Shizuku.addBinderDeadListener(binderDeadListener) }
+        }
+        binderCallback = callback
+    }
+
+    fun requestPermission(context: Context?): Boolean {
+        if (hasPermission()) return true
+        if (!isServiceRunning()) {
+            return openManager(context) || openDownloadPage(context)
+        }
         return try {
-            context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE) != null
+            Shizuku.requestPermission(PERMISSION_REQUEST_CODE)
+            true
         } catch (t: Throwable) {
             false
         }
     }
 
-    /** Opens the Shizuku manager so the user can grant Lucent access. */
-    fun openShizukuManager(context: Context?): Boolean {
+    fun openManager(context: Context?): Boolean {
         if (context == null) return false
         return try {
-            val intent = context.packageManager.getLaunchIntentForPackage(SHIZUKU_MANAGER_PACKAGE)
-                ?: return false
+            val intent = context.packageManager.getLaunchIntentForPackage(MANAGER_PACKAGE) ?: return false
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
             true
@@ -85,30 +125,99 @@ object ShizukuShell : PrivilegedShell.PrivilegedShellProvider {
         }
     }
 
-    override suspend fun runCommand(command: String): PrivilegedShell.ShellResult {
-        return withContext(Dispatchers.IO) {
+    fun openDownloadPage(context: Context?): Boolean {
+        if (context == null) return false
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DOWNLOAD_PAGE))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            true
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    override suspend fun runCommand(command: String): PrivilegedShell.ShellResult =
+        withContext(Dispatchers.IO) { runProcess(arrayOf("sh", "-c", command), null) }
+
+    override suspend fun installPackage(packagePath: String, sizeBytes: Long): PrivilegedShell.ShellResult =
+        withContext(Dispatchers.IO) {
+            val file = File(packagePath)
+            if (!file.isFile) {
+                return@withContext PrivilegedShell.ShellResult(false, "", "APK not found: $packagePath")
+            }
+            val size = if (sizeBytes > 0) sizeBytes else file.length()
+            val streamed = runProcess(
+                arrayOf("pm", "install", "--user", "0", "-r", "-t", "-S", size.toString()),
+                file
+            )
+            if (streamed.success) streamed else installThroughTempFile(file)
+        }
+
+    private fun installThroughTempFile(file: File): PrivilegedShell.ShellResult {
+        val remote = "/data/local/tmp/lucent-update-${System.currentTimeMillis()}.apk"
+        val pushed = runProcess(arrayOf("sh", "-c", "cat > $remote"), file)
+        if (!pushed.success) return pushed
+        val installed = runProcess(arrayOf("pm", "install", "--user", "0", "-r", "-t", remote), null)
+        runProcess(arrayOf("rm", "-f", remote), null)
+        return installed
+    }
+
+    private fun service(): IShizukuService? = try {
+        if (!isServiceRunning()) null
+        else Shizuku.getBinder()?.let { IShizukuService.Stub.asInterface(it) }
+    } catch (t: Throwable) {
+        null
+    }
+
+    private fun runProcess(command: Array<String>, stdin: File?): PrivilegedShell.ShellResult {
+        val backend = service()
+            ?: return PrivilegedShell.ShellResult(false, "", "Shizuku is not available - grant permission first")
+        return try {
+            val remote = backend.newProcess(command, null, null)
+            val stdout = ByteArrayOutputStream()
+            val stderr = ByteArrayOutputStream()
+            val outThread = drain(remote, true, stdout)
+            val errThread = drain(remote, false, stderr)
+            val sink = ParcelFileDescriptor.AutoCloseOutputStream(remote.outputStream)
+            if (stdin != null) {
+                stdin.inputStream().use { input -> sink.use { output -> input.copyTo(output) } }
+            } else {
+                runCatching { sink.close() }
+            }
+            val exit = remote.waitFor()
+            runCatching { outThread.join() }
+            runCatching { errThread.join() }
+            PrivilegedShell.ShellResult(exit == 0, stdout.toString("UTF-8"), stderr.toString("UTF-8"))
+        } catch (t: Throwable) {
+            PrivilegedShell.ShellResult(false, "", "Shizuku command failed: ${t.message}")
+        }
+    }
+
+    private fun drain(remote: IRemoteProcess, stdout: Boolean, sink: ByteArrayOutputStream): Thread {
+        val thread = Thread {
+            var source: InputStream? = null
             try {
-                if (!shizukuReady()) {
-                    return@withContext PrivilegedShell.ShellResult(
-                        false, "", "Shizuku not ready - grant permission first"
-                    )
+                val descriptor: ParcelFileDescriptor =
+                    if (stdout) remote.inputStream else remote.errorStream
+                source = ParcelFileDescriptor.AutoCloseInputStream(descriptor)
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (true) {
+                    val read = source.read(buffer)
+                    if (read < 0) break
+                    if (total < MAX_CAPTURE_BYTES) {
+                        sink.write(buffer, 0, minOf(read, MAX_CAPTURE_BYTES - total))
+                        total += read
+                    }
                 }
-                val cls = shizukuClass()
-                    ?: return@withContext PrivilegedShell.ShellResult(false, "", "Shizuku missing")
-                val newProcess = cls.getMethod(
-                    "newProcess", Array<String>::class.java, String::class.java, String::class.java
-                )
-                val process = newProcess.invoke(null, arrayOf("sh", "-c", command), null, null)
-                val waitFor = process.javaClass.getMethod("waitFor")
-                val getInput = process.javaClass.getMethod("getInputStream")
-                val getErr = process.javaClass.getMethod("getErrorStream")
-                val exitCode = waitFor.invoke(process) as Int
-                val stdout = (getInput.invoke(process) as java.io.InputStream).bufferedReader().readText()
-                val stderr = (getErr.invoke(process) as java.io.InputStream).bufferedReader().readText()
-                PrivilegedShell.ShellResult(exitCode == 0, stdout, stderr)
-            } catch (t: Throwable) {
-                PrivilegedShell.ShellResult(false, "", "Shizuku exec failed: ${t.message}")
+            } catch (_: Throwable) {
+            } finally {
+                runCatching { source?.close() }
             }
         }
+        thread.isDaemon = true
+        thread.start()
+        return thread
     }
 }

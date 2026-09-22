@@ -4,13 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name, e.g. 2.8.4. Leave blank to use packageVersion.'
+        description: 'Version name, e.g. 2.9.0. Leave blank to use packageVersion.'
         required: false
         default: ''
+  workflow_call:
+    inputs:
+      version_name:
+        description: 'Version name baked into the installer. Blank uses packageVersion.'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      version:
+        description: 'The version name baked into the installer'
+        value: ${{ jobs.build-exe.outputs.version }}
+
+permissions:
+  contents: read
 
 jobs:
   build-exe:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.resolve-version.outputs.version }}
 
     steps:
       - name: Checkout repo

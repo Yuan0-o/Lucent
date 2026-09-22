@@ -185,6 +185,10 @@ dependencies {
 
     implementation(libs.okhttp)
 
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+    implementation("dev.rikka.shizuku:aidl:13.1.5")
+
     implementation(libs.haze)
     implementation(libs.haze.materials)
 

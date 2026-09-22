@@ -1,5 +1,6 @@
 package com.lucent.app.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,15 +14,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.LucentBuild
+import com.lucent.app.data.AutoUpdate
 import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
@@ -30,106 +31,124 @@ import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 
 @Composable
 internal fun AboutSettingsPage(
     repo: SettingsRepository,
     onRoute: (SettingsRoute) -> Unit,
-    onOpenUrl: ((String) -> Unit)? = null
+    onOpenUrl: ((String) -> Unit)? = null,
+    versionName: String = LucentBuild.VERSION,
+    buildNumber: String = LucentBuild.BUILD_NUMBER
+) {
+    val scope = rememberCoroutineScope()
+    val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = SettingsCache.autoUpdateEnabled)
+
+    BackHeader(S.settingsAboutTitle) { onRoute(SettingsRoute.Root) }
+    AboutIdentityCard(versionName, buildNumber)
+    Spacer(modifier = Modifier.height(12.dp))
+    AboutUpdateCard(
+        autoUpdateOn = autoUpdateOn,
+        busy = AutoUpdate.phase != AutoUpdate.Phase.IDLE,
+        status = AutoUpdate.message,
+        onToggle = { checked ->
+            SettingsCache.autoUpdateEnabled = checked
+            scope.launch { repo.setAutoUpdateEnabled(checked) }
+        },
+        onCheck = { scope.launch { AutoUpdate.check(versionName, notifyWhenCurrent = true) } }
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    AboutFooter(
+        versionName = versionName,
+        buildNumber = buildNumber,
+        onOpenUrl = onOpenUrl,
+        onLicences = { onRoute(SettingsRoute.Licences) }
+    )
+}
+
+@Composable
+private fun AboutIdentityCard(versionName: String, buildNumber: String) {
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Text(LucentBuild.PRODUCT_NAME, color = onGradient, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(S.aboutTagline, color = onGradientMuted, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(10.dp))
+        Text("${S.aboutVersion} v$versionName", color = onGradient, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text("${S.aboutBuild} $buildNumber", color = onGradientMuted, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun AboutUpdateCard(
+    autoUpdateOn: Boolean,
+    busy: Boolean,
+    status: String?,
+    onToggle: (Boolean) -> Unit,
+    onCheck: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val scope = rememberCoroutineScope()
-    val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = SettingsCache.autoUpdateEnabled)
-    var checkResult by remember { mutableStateOf<String?>(null) }
-
-    val appVersion = "2.9.0"
-    val buildNumber = "2.9.0.1"
-
-    // NOTE: no verticalScroll here - the settings shell already scrolls, and nesting a
-    // vertically-scrollable Column inside it crashes with "infinity maximum height constraints".
-    BackHeader(S.settingsAboutTitle) { onRoute(SettingsRoute.Root) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .frostedGlass()
-            .padding(16.dp)
-    ) {
-        Text("Lucent", color = onGradient, fontSize = 22.sp)
-        Text("${S.aboutVersion} $appVersion (${S.aboutBuild} $buildNumber)", color = onGradientMuted, fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text("${S.aboutCopyright} \u00A9 2026-2027 Jessica Martinez", color = onGradientMuted, fontSize = 13.sp)
-        Text(S.aboutRights, color = onGradientMuted, fontSize = 13.sp)
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text("${S.aboutDeveloper}: Yuan Yifan", color = onGradient, fontSize = 15.sp)
-        Text("${S.aboutContact}: yuan47578@gmail.com", color = onGradientMuted, fontSize = 13.sp)
-        TextButton(onClick = { onOpenUrl?.invoke("https://github.com/Yuan0-o/Lucent") }) {
-            Text("GitHub: Yuan0-o/Lucent", color = onGradient, fontSize = 13.sp)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(S.aboutLicense, color = onGradient, fontSize = 15.sp)
-        Text(S.aboutLicenseDetail, color = onGradientMuted, fontSize = 12.sp)
-        Text(S.aboutLicenseFull, color = onGradientMuted, fontSize = 12.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.aboutAutoUpdate, color = onGradient, fontSize = 15.sp)
                 Text(S.aboutAutoUpdateDesc, color = onGradientMuted, fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = autoUpdateOn,
-                onCheckedChange = { checked ->
-                    scope.launch { repo.setAutoUpdateEnabled(checked) }
-                    SettingsCache.autoUpdateEnabled = checked
-                }
-            )
+            Switch(checked = autoUpdateOn, onCheckedChange = onToggle)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = {
-            scope.launch {
-                checkResult = "\u2026"
-                try {
-                    val client = OkHttpClient()
-                    val request = Request.Builder()
-                        .url("https://api.github.com/repos/Yuan0-o/Lucent/releases/latest")
-                        .header("Accept", "application/vnd.github.v3+json")
-                        .build()
-                    val response = withContext(Dispatchers.IO) { client.newCall(request).execute() }
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: ""
-                        val tag = JSONObject(body).optString("tag_name", "")
-                        checkResult = if (tag > "v$appVersion") "${S.aboutNewVersion} $tag" else "${S.aboutUpToDate} $tag"
-                    } else {
-                        checkResult = "${S.aboutCheckFailed} (HTTP ${response.code})"
-                    }
-                } catch (t: Throwable) {
-                    checkResult = "${S.aboutCheckError} ${t.message}"
-                }
-            }
-        }) {
+        TextButton(onClick = onCheck, enabled = !busy) {
             Text(S.aboutCheckUpdate, color = onGradient, fontSize = 13.sp)
         }
-        checkResult?.let { msg ->
-            Text(msg, color = onGradientMuted, fontSize = 12.sp, textAlign = TextAlign.Start)
+        status?.let { line ->
+            Text(line, color = onGradientMuted, fontSize = 12.sp)
         }
-        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun AboutFooter(
+    versionName: String,
+    buildNumber: String,
+    onOpenUrl: ((String) -> Unit)?,
+    onLicences: () -> Unit
+) {
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Text(LucentBuild.COPYRIGHT, color = onGradientMuted, fontSize = 11.sp)
+        Text(S.aboutRights, color = onGradientMuted, fontSize = 11.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("${S.aboutDeveloper} ${LucentBuild.DEVELOPER}", color = onGradientMuted, fontSize = 11.sp)
+        AboutLink("${S.aboutHomepage} github.com/Yuan0-o/Lucent", onGradient) {
+            onOpenUrl?.invoke(LucentBuild.HOMEPAGE)
+        }
+        AboutLink("${S.aboutContact} ${LucentBuild.SUPPORT_EMAIL}", onGradient) {
+            onOpenUrl?.invoke("mailto:${LucentBuild.SUPPORT_EMAIL}")
+        }
+        AboutLink("${S.aboutLicense}: ${S.aboutLicensesOpen}", onGradient) {
+            onLicences()
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Lucent v$appVersion (${S.aboutBuild} $buildNumber)",
-            color = onGradientMuted.copy(alpha = 0.5f),
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            "Lucent v$versionName (${S.aboutBuild} $buildNumber)",
+            color = onGradientMuted.copy(alpha = 0.6f),
+            fontSize = 10.sp
         )
     }
+}
+
+@Composable
+private fun AboutLink(text: String, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = color,
+        fontSize = 11.sp,
+        textDecoration = TextDecoration.Underline,
+        modifier = Modifier.clickable { onClick() }.padding(vertical = 2.dp)
+    )
 }

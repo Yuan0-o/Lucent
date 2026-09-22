@@ -73,6 +73,14 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val languageKey by repo.appLanguage.collectAsState(initial = startup.appLanguage)
     LaunchedEffect(languageKey) { com.lucent.app.i18n.L.apply(languageKey) }
 
+    val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = startup.autoUpdateEnabled)
+    LaunchedEffect(autoUpdateOn) {
+        if (autoUpdateOn) {
+            com.lucent.app.data.AutoUpdate.report(null)
+            com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
+        }
+    }
+
     val appLockOn by repo.appLockEnabled.collectAsState(initial = startup.appLockEnabled)
     LaunchedEffect(appLockOn) { com.lucent.app.ui.AppLockController.enabled = appLockOn }
 
@@ -126,6 +134,8 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
                 }
 
                 ToastOverlay()
+
+                com.lucent.app.ui.AutoUpdateDialog()
 
                 if (!splashDone) {
                     LucentSplash(

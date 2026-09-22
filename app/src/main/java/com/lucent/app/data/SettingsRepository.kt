@@ -117,6 +117,8 @@ private object SettingsKeys {
     val MEMORY_TIER_PRELOCAL = stringPreferencesKey("memory_tier_prelocal")
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
     val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
+
+    val PRIVILEGED_ENABLED = booleanPreferencesKey("privileged_enabled")
 }
 
 const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
@@ -219,7 +221,8 @@ class SettingsRepository(private val context: Context) {
         val cloudFolder: String = "Lucent",
         val cloudAutoBackup: Boolean = false,
         val cloudPasswordEnc: String = "",
-        val autoUpdateEnabled: Boolean = false
+        val autoUpdateEnabled: Boolean = false,
+        val privilegedEnabled: Boolean = false
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -285,7 +288,8 @@ class SettingsRepository(private val context: Context) {
             cloudFolder = prefs[SettingsKeys.CLOUD_FOLDER] ?: "Lucent",
             cloudAutoBackup = prefs[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false,
             cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
-            autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false
+            autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false,
+            privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false
         )
     }
 
@@ -340,6 +344,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun passwordAttemptStateOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.PW_ATTEMPT_STATE] ?: ""
     suspend fun setPasswordAttemptState(json: String) {
+        SettingsCache.passwordAttemptState = json
         context.settingsDataStore.edit { it[SettingsKeys.PW_ATTEMPT_STATE] = json }
     }
 
@@ -514,8 +519,14 @@ class SettingsRepository(private val context: Context) {
 
     val autoUpdateEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false }
     suspend fun setAutoUpdateEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.AUTO_UPDATE_ENABLED] = value }
         SettingsCache.autoUpdateEnabled = value
+        context.settingsDataStore.edit { it[SettingsKeys.AUTO_UPDATE_ENABLED] = value }
+    }
+
+    val privilegedEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.PRIVILEGED_ENABLED] ?: false }
+    suspend fun setPrivilegedEnabled(value: Boolean) {
+        SettingsCache.privilegedEnabled = value
+        context.settingsDataStore.edit { it[SettingsKeys.PRIVILEGED_ENABLED] = value }
     }
 
     val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }
@@ -648,9 +659,18 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setBaseUrl(value: String) = putSecret(SettingsKeys.BASE_URL_ENC, SettingsKeys.LEGACY_BASE_URL, value)
-    suspend fun setApiSpec(value: String) = putSecret(SettingsKeys.API_SPEC_ENC, SettingsKeys.LEGACY_API_SPEC, value)
-    suspend fun setModel(value: String) = putSecret(SettingsKeys.MODEL_ENC, SettingsKeys.LEGACY_MODEL, value)
+    suspend fun setBaseUrl(value: String) {
+        SettingsCache.baseUrl = value
+        putSecret(SettingsKeys.BASE_URL_ENC, SettingsKeys.LEGACY_BASE_URL, value)
+    }
+    suspend fun setApiSpec(value: String) {
+        SettingsCache.apiSpec = value
+        putSecret(SettingsKeys.API_SPEC_ENC, SettingsKeys.LEGACY_API_SPEC, value)
+    }
+    suspend fun setModel(value: String) {
+        SettingsCache.model = value
+        putSecret(SettingsKeys.MODEL_ENC, SettingsKeys.LEGACY_MODEL, value)
+    }
 
 
     val modelRecents: Flow<List<String>> =
@@ -683,9 +703,16 @@ class SettingsRepository(private val context: Context) {
             }
             p[SettingsKeys.MODEL_RECENTS] = recents
         }
+        SettingsCache.model = model
     }
-    suspend fun setAssistantName(value: String) = putSecret(SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, value)
-    suspend fun setAssistantStyle(value: String) = putSecret(SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, value)
+    suspend fun setAssistantName(value: String) {
+        SettingsCache.assistantName = value
+        putSecret(SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, value)
+    }
+    suspend fun setAssistantStyle(value: String) {
+        SettingsCache.assistantStyle = value
+        putSecret(SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, value)
+    }
 
     suspend fun setThemeMode(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.THEME_MODE] = value }
@@ -754,6 +781,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setApiKey(value: String) {
+        SettingsCache.apiKey = value
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.API_KEY_ENC] = LocalSecrets.encrypt(value)
             prefs.remove(SettingsKeys.LEGACY_API_KEY)
@@ -766,6 +794,12 @@ class SettingsRepository(private val context: Context) {
         val active = safe.getOrNull(idx)
         val profilesJson = ApiProfiles.serialize(safe)
         val profilesEnc = LocalSecrets.encrypt(profilesJson)
+        SettingsCache.apiProfilesJson = profilesJson
+        SettingsCache.apiProfileSelected = idx
+        SettingsCache.baseUrl = active?.baseUrl ?: ""
+        SettingsCache.apiSpec = active?.spec ?: "openai"
+        SettingsCache.model = active?.model ?: ""
+        active?.apiKey?.let { SettingsCache.apiKey = it }
         val activeKeyEnc = active?.let { LocalSecrets.encrypt(it.apiKey) }
         val activeBaseUrlEnc = LocalSecrets.encrypt(active?.baseUrl ?: "")
         val activeSpecEnc = LocalSecrets.encrypt(active?.spec ?: "openai")

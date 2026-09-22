@@ -162,6 +162,9 @@ object SettingsCache {
     var autoUpdateEnabled: Boolean = false
 
     @Volatile
+    var privilegedEnabled: Boolean = false
+
+    @Volatile
     var cloudPasswordEnc: String = ""
 
     fun seed(prefs: SettingsRepository.StartupPrefs) {
@@ -219,5 +222,6 @@ object SettingsCache {
         cloudAutoBackup = prefs.cloudAutoBackup
         cloudPasswordEnc = prefs.cloudPasswordEnc
         autoUpdateEnabled = prefs.autoUpdateEnabled
+        privilegedEnabled = prefs.privilegedEnabled
     }
 }

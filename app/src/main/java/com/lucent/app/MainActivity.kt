@@ -79,7 +79,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.lucent.app.AppScope
+import com.lucent.app.data.AndroidUpdateInstaller
 import com.lucent.app.data.AttachmentMigration
+import com.lucent.app.data.AutoUpdate
 import com.lucent.app.data.PrivilegedShell
 import com.lucent.app.data.ShizukuShell
 import com.lucent.app.data.SettingsRepository
@@ -94,6 +96,7 @@ import com.lucent.app.ui.AppLockController
 import com.lucent.app.ui.AssistantConfirmationDialog
 import com.lucent.app.ui.AssistantController
 import com.lucent.app.ui.AssistantScreen
+import com.lucent.app.ui.AutoUpdateDialog
 import com.lucent.app.ui.FluidGlassBackground
 import com.lucent.app.ui.LocalBackgroundEnvironment
 import com.lucent.app.ui.rememberBackgroundEnvironment
@@ -142,6 +145,12 @@ enum class Screen {
 }
 
 class MainActivity : FragmentActivity() {
+
+    private val runningVersion: String by lazy {
+        runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
+            ?: com.lucent.app.LucentBuild.VERSION
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -156,6 +165,7 @@ class MainActivity : FragmentActivity() {
         )
 
         PrivilegedShell.install(ShizukuShell)
+        AutoUpdate.installer = AndroidUpdateInstaller(applicationContext)
         val settingsRepo = SettingsRepository(applicationContext)
         val crashShieldWanted = try {
             runBlocking { settingsRepo.crashShieldEnabledOnce() }
@@ -246,6 +256,16 @@ class MainActivity : FragmentActivity() {
 
             val languageKey by settingsRepo.appLanguage.collectAsState(initial = startup.appLanguage)
             LaunchedEffect(languageKey) { com.lucent.app.i18n.L.apply(languageKey) }
+
+            val autoUpdateOn by settingsRepo.autoUpdateEnabled.collectAsState(
+                initial = com.lucent.app.data.SettingsCache.autoUpdateEnabled
+            )
+            LaunchedEffect(autoUpdateOn) {
+                if (autoUpdateOn) {
+                    com.lucent.app.data.AutoUpdate.report(null)
+                    com.lucent.app.data.AutoUpdate.check(runningVersion)
+                }
+            }
 
             val systemDark = isSystemInDarkTheme()
             val themeChoice = com.lucent.app.ui.LucentThemeMode.fromKey(themeMode)
@@ -634,6 +654,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
             ShareIntakeDialog()
             WidgetTaskConfirmDialog()
+            AutoUpdateDialog()
         }
     }
 }
@@ -707,7 +728,7 @@ private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickCon
                 pagerState.scrollToPage(targetPage)
                 onTabClickConsumed()
             } else {
-                pagerState.animateScrollToPage(targetPage)
+                pagerState.scrollToPage(targetPage)
             }
         }
     }

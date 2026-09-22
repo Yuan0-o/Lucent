@@ -382,6 +382,8 @@ internal object BackupImporter {
                 if (s.has("openLinksExternally")) settings.setOpenLinksExternally(s.optBoolean("openLinksExternally"))
                 if (s.has("assistantConfirmToolsEnabled")) settings.setAssistantConfirmTools(s.optBoolean("assistantConfirmToolsEnabled", true))
                 if (s.has("smallModelModeEnabled")) settings.setSmallModelModeEnabled(s.optBoolean("smallModelModeEnabled"))
+                if (s.has("autoUpdateEnabled")) settings.setAutoUpdateEnabled(s.optBoolean("autoUpdateEnabled"))
+                if (s.has("privilegedEnabled")) settings.setPrivilegedEnabled(s.optBoolean("privilegedEnabled"))
             }
             if (restoreLocal && s.has("localBackgroundReply")) {
                 settings.setLocalBackgroundReplyEnabled(s.optBoolean("localBackgroundReply"))

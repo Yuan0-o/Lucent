@@ -7,8 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,47 +22,47 @@ import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
 
-/**
- * Advanced settings: privileged operations and other opt-in power features.
- *
- * [shizukuSupported] is false on desktop, where the Shizuku row is hidden entirely.
- */
+internal data class AdvancedPrivilegeUi(
+    val title: String,
+    val description: String,
+    val status: String,
+    val enabled: Boolean,
+    val ready: Boolean,
+    val busy: Boolean,
+    val actionLabel: String?
+)
+
 @Composable
 internal fun AdvancedSettingsPage(
-    shizukuSupported: Boolean,
-    shizukuReady: Boolean,
-    onPairShizuku: () -> Unit,
+    ui: AdvancedPrivilegeUi,
+    onToggle: (Boolean) -> Unit,
+    onAction: () -> Unit,
     onRoute: (SettingsRoute) -> Unit
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    // No verticalScroll: the settings shell already scrolls its content.
     BackHeader(S.advancedTitle) { onRoute(SettingsRoute.Root) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .frostedGlass()
-            .padding(16.dp)
-    ) {
-        if (shizukuSupported) {
-            Text(S.shizukuTitle, color = onGradient, fontSize = 17.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(S.shizukuDesc, color = onGradientMuted, fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    if (shizukuReady) S.shizukuReady else S.shizukuNotReady,
-                    color = if (shizukuReady) onGradient else onGradientMuted,
-                    fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Button(onClick = onPairShizuku) {
-                    Text(S.shizukuPair, fontSize = 13.sp)
-                }
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(ui.title, color = onGradient, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(ui.description, color = onGradientMuted, fontSize = 12.sp)
             }
-        } else {
-            Text(S.advancedEmptyHint, color = onGradientMuted, fontSize = 13.sp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(checked = ui.enabled, enabled = !ui.busy, onCheckedChange = onToggle)
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(ui.status, color = if (ui.ready) onGradient else onGradientMuted, fontSize = 12.sp)
+        ui.actionLabel?.let { label ->
+            TextButton(onClick = onAction) {
+                Text(label, color = onGradient, fontSize = 13.sp)
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Text(S.advancedMore, color = onGradientMuted, fontSize = 12.sp)
     }
 }

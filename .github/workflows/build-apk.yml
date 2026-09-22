@@ -4,13 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version name, e.g. 2.8.4. Leave blank to use MARKETING_VERSION.'
+        description: 'Version name, e.g. 2.9.0. Leave blank to use MARKETING_VERSION.'
         required: false
         default: ''
+  workflow_call:
+    inputs:
+      version_name:
+        description: 'Version name baked into the APK. Blank uses MARKETING_VERSION.'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      version:
+        description: 'The version name baked into the APK'
+        value: ${{ jobs.build-apk.outputs.version }}
+
+permissions:
+  contents: read
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve-version.outputs.version }}
 
     steps:
       - name: Checkout repo

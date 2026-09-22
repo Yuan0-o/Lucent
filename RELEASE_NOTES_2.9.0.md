@@ -1,23 +1,13 @@
-## ✨ Lucent 2.9.0
+# Privileges, Provenance, and a Quieter Update
 
-### 🆕 新功能
-- **关于页面 (About)** — 设置中新增关于页：版本号、构建信息、开发者、开源许可
-- **高级页面 (Advanced)** — 位于「关于」上方，集中存放 Shizuku 配对等高级功能
-- **Shizuku 配对** — 可在高级页查看 Shizuku 状态并一键发起配对授权
-- **自动更新开关** — 关于页可开启「启动时自动获取并安装最新版本」
-- **多语言 README** — 新增简中 / 日本語 / 한국어 项目说明
+Lucent 2.9 adds a door at the foot of Settings, and behind it the sort of authority that normally belongs to a desktop shell. It is shut by default, which is the point. Beside it, the About page states who made this, what it is built from, and which version you are holding — in four languages, in small print, the way a well-brought-up application does. Neither page is loud. Both are load-bearing.
 
-### 🌍 多语言
-- 关于页、高级页、Shizuku 相关文案全部适配 **简体中文 / English / 日本語 / 한국어** 四国语言
+**The Advanced page hands you the keys, on request.** At the top of Settings → Advanced sits a single switch, off until you turn it on. Flick it and Lucent asks Shizuku for the shell's identity. The page reports whether Shizuku is installed, whether its service is running, and whether permission has been granted, then offers exactly one button for whatever is missing: fetch Shizuku, open it, or grant. Every privileged operation waits behind the same switch, and once the privilege is granted the page names the uid, so adb's 2000 and root's 0 are told apart at a glance.
 
-### 🔧 改进
-- Token 缓存优化：WeakHashMap 缓存提升 token 计算性能
-- PrivilegedShell 抽象层：统一 Android 特权 shell 接口
-- Shizuku 反射集成：无需编译期依赖，降低 APK 体积
-- 构建号自动化：versionCode 随每次构建严格递增，保证覆盖安装兼容
+**The About page keeps receipts.** Version and build number, the copyright line, and the developer's name sit above a catalogue of every open-source component Lucent carries — Kotlin, Compose, SQLCipher, llama.cpp, Shizuku, and the rest — each with its holder and a link to the licence in full. The long legal paragraphs stay off the screen and behind those links, which is where they belong. The homepage, the support address, and the complete third-party notices follow in the same small print. Everything on it is a link rather than a lecture.
 
-### 🐛 修复
-- **修复点击「关于」闪退** — 该页嵌套了滚动容器，与设置外壳的滚动冲突导致
-  `IllegalStateException: Vertically scrollable component was measured with an infinity maximum height constraints`
-- 修复旧版本覆盖安装失败问题
-- 修复设置页面开关闪烁问题
+**Updates can arrive without the installer's parade.** A second switch on the About page, off by default, turns on automatic updates. With it on, every launch asks GitHub for the newest published release, compares it with the version in your hand, and, if there is something newer, asks before doing anything. Say yes and Lucent downloads the APK, hands it to Shizuku, and installs it silently. Without that privilege it steps aside and lets the system package installer take over, and the same path fetches the Windows installer on the desktop.
+
+**The settings pages open on your values.** Every switch and every choice in Settings arrives already showing what you chose, from the very first frame, so a page looks the way you left it. Along the bottom bar, tapping a tab moves straight to that tab, with none of the sideways travel that belongs to a swipe. The four-language catalogue covers all of it — English, 中文, 日本語, 한국어 — including the new pages and every line about privileges.
+
+Nothing here is switched on for you. That is the shape of 2.9: authority kept behind a latch, provenance written down, and an update that arrives quietly when asked. Your notes stay encrypted, an .lcb backup carries every one of these settings with it, and the door is yours to open.

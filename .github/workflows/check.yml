@@ -31,6 +31,12 @@ jobs:
           python3 tools/i18n/gen_i18n.py
           git diff --exit-code -- shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt
 
+      - name: Check the three version numbers agree
+        run: python3 tools/version_check.py
+
+      - name: Check every cached setting is written back on change
+        run: python3 tools/settings_cache_check.py
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v6

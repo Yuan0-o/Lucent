@@ -83,6 +83,7 @@ class SettingsRepository(private val context: Context) {
         const val MEMORY_TIER_PRELOCAL = "memory_tier_prelocal"
         const val WEB_SEARCH_PRELOCAL = "web_search_prelocal"
         const val AUTO_UPDATE_ENABLED = "auto_update_enabled"
+        const val PRIVILEGED_ENABLED = "privileged_enabled"
     }
 
 
@@ -236,7 +237,8 @@ class SettingsRepository(private val context: Context) {
         val cloudFolder: String = "Lucent",
         val cloudAutoBackup: Boolean = false,
         val cloudPasswordEnc: String = "",
-        val autoUpdateEnabled: Boolean = false
+        val autoUpdateEnabled: Boolean = false,
+        val privilegedEnabled: Boolean = false
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -300,7 +302,8 @@ class SettingsRepository(private val context: Context) {
             cloudFolder = str(prefs, K.CLOUD_FOLDER) ?: "Lucent",
             cloudAutoBackup = bool(prefs, K.CLOUD_AUTO_BACKUP) ?: false,
             cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: "",
-            autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false
+            autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false,
+            privilegedEnabled = bool(prefs, K.PRIVILEGED_ENABLED) ?: false
         )
     }
 
@@ -395,13 +398,25 @@ class SettingsRepository(private val context: Context) {
 
     val notesSort: Flow<String> = state.map { str(it, K.NOTES_SORT) ?: "recent" }
     val tasksSort: Flow<String> = state.map { str(it, K.TASKS_SORT) ?: "recent" }
-    suspend fun setNotesSort(value: String) { edit { it[K.NOTES_SORT] = value } }
-    suspend fun setTasksSort(value: String) { edit { it[K.TASKS_SORT] = value } }
+    suspend fun setNotesSort(value: String) {
+        SettingsCache.notesSort = value
+        edit { it[K.NOTES_SORT] = value }
+    }
+    suspend fun setTasksSort(value: String) {
+        SettingsCache.tasksSort = value
+        edit { it[K.TASKS_SORT] = value }
+    }
 
     val noteHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.NOTE_HISTORY_ENABLED) ?: true }
     val taskHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.TASK_HISTORY_ENABLED) ?: true }
-    suspend fun setNoteHistoryEnabled(value: Boolean) { edit { it[K.NOTE_HISTORY_ENABLED] = value } }
-    suspend fun setTaskHistoryEnabled(value: Boolean) { edit { it[K.TASK_HISTORY_ENABLED] = value } }
+    suspend fun setNoteHistoryEnabled(value: Boolean) {
+        SettingsCache.noteHistoryEnabled = value
+        edit { it[K.NOTE_HISTORY_ENABLED] = value }
+    }
+    suspend fun setTaskHistoryEnabled(value: Boolean) {
+        SettingsCache.taskHistoryEnabled = value
+        edit { it[K.TASK_HISTORY_ENABLED] = value }
+    }
 
     val autoBackup: Flow<AutoBackup.State> =
         state.map { AutoBackup.State.fromJson(str(it, K.AUTO_BACKUP) ?: "") }
@@ -430,7 +445,10 @@ class SettingsRepository(private val context: Context) {
     }
 
     val typingHapticsEnabled: Flow<Boolean> = state.map { bool(it, K.TYPING_HAPTICS) ?: true }
-    suspend fun setTypingHapticsEnabled(value: Boolean) { edit { it[K.TYPING_HAPTICS] = value } }
+    suspend fun setTypingHapticsEnabled(value: Boolean) {
+        SettingsCache.typingHapticsEnabled = value
+        edit { it[K.TYPING_HAPTICS] = value }
+    }
 
 
 
@@ -462,6 +480,7 @@ class SettingsRepository(private val context: Context) {
                 prefs.remove(K.SYSTEM_INTEGRATION_PREBLACKOUT)
             }
         }
+        SettingsCache.blackoutEnabled = value
     }
 
     suspend fun appLockWasOnBeforeBlackout(): Boolean =
@@ -474,45 +493,71 @@ class SettingsRepository(private val context: Context) {
             it[K.CRASH_SHIELD_ENABLED] = value
             if (value) it[K.STARTUP_LOGGING_ENABLED] = true
         }
+        SettingsCache.crashShieldEnabled = value
+        if (value) SettingsCache.startupLoggingEnabled = true
     }
 
     val passwordAttemptState: Flow<String> = state.map { str(it, K.PW_ATTEMPT_STATE) ?: "" }
     suspend fun passwordAttemptStateOnce(): String = str(state.first(), K.PW_ATTEMPT_STATE) ?: ""
-    suspend fun setPasswordAttemptState(json: String) { edit { it[K.PW_ATTEMPT_STATE] = json } }
+    suspend fun setPasswordAttemptState(json: String) {
+        SettingsCache.passwordAttemptState = json
+        edit { it[K.PW_ATTEMPT_STATE] = json }
+    }
 
     val pwFirstRoundLimit: Flow<Int> =
         state.map { int(it, K.PW_FIRST_ROUND_LIMIT) ?: PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT }
     val pwLaterRoundLimit: Flow<Int> =
         state.map { int(it, K.PW_LATER_ROUND_LIMIT) ?: PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT }
     suspend fun setPwFirstRoundLimit(value: Int) {
-        edit { it[K.PW_FIRST_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE) }
+        val safe = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
+        SettingsCache.pwFirstRoundLimit = safe
+        edit { it[K.PW_FIRST_ROUND_LIMIT] = safe }
     }
     suspend fun setPwLaterRoundLimit(value: Int) {
-        edit { it[K.PW_LATER_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE) }
+        val safe = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
+        SettingsCache.pwLaterRoundLimit = safe
+        edit { it[K.PW_LATER_ROUND_LIMIT] = safe }
     }
 
     val pwSelfDestructEnabled: Flow<Boolean> = state.map { bool(it, K.PW_SELF_DESTRUCT_ENABLED) ?: false }
     val pwSelfDestructThreshold: Flow<Int> =
         state.map { int(it, K.PW_SELF_DESTRUCT_THRESHOLD) ?: PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD }
-    suspend fun setPwSelfDestructEnabled(value: Boolean) { edit { it[K.PW_SELF_DESTRUCT_ENABLED] = value } }
+    suspend fun setPwSelfDestructEnabled(value: Boolean) {
+        SettingsCache.pwSelfDestructEnabled = value
+        edit { it[K.PW_SELF_DESTRUCT_ENABLED] = value }
+    }
     suspend fun setPwSelfDestructThreshold(value: Int) {
-        edit { it[K.PW_SELF_DESTRUCT_THRESHOLD] = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE) }
+        val safe = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
+        SettingsCache.pwSelfDestructThreshold = safe
+        edit { it[K.PW_SELF_DESTRUCT_THRESHOLD] = safe }
     }
 
     val openLinksExternally: Flow<Boolean> = state.map { bool(it, K.OPEN_LINKS_EXTERNALLY) ?: false }
-    suspend fun setOpenLinksExternally(value: Boolean) { edit { it[K.OPEN_LINKS_EXTERNALLY] = value } }
+    suspend fun setOpenLinksExternally(value: Boolean) {
+        SettingsCache.openLinksExternally = value
+        edit { it[K.OPEN_LINKS_EXTERNALLY] = value }
+    }
 
 
     val autoUpdateEnabled: Flow<Boolean> = state.map { bool(it, K.AUTO_UPDATE_ENABLED) ?: false }
     suspend fun setAutoUpdateEnabled(value: Boolean) {
-        edit { it[K.AUTO_UPDATE_ENABLED] = value }
         SettingsCache.autoUpdateEnabled = value
+        edit { it[K.AUTO_UPDATE_ENABLED] = value }
+    }
+
+    val privilegedEnabled: Flow<Boolean> = state.map { bool(it, K.PRIVILEGED_ENABLED) ?: false }
+    suspend fun setPrivilegedEnabled(value: Boolean) {
+        SettingsCache.privilegedEnabled = value
+        edit { it[K.PRIVILEGED_ENABLED] = value }
     }
 
     val markdownEnabled: Flow<Boolean> = state.map { bool(it, K.MARKDOWN_ENABLED) ?: false }
     val richTextEnabled: Flow<Boolean> = state.map { bool(it, K.RICH_TEXT_ENABLED) ?: false }
     val closeToTray: Flow<Boolean> = state.map { bool(it, K.CLOSE_TO_TRAY) ?: true }
-    suspend fun setCloseToTray(value: Boolean) { edit { it[K.CLOSE_TO_TRAY] = value } }
+    suspend fun setCloseToTray(value: Boolean) {
+        SettingsCache.closeToTray = value
+        edit { it[K.CLOSE_TO_TRAY] = value }
+    }
     val savedSearches: Flow<String> = state.map { str(it, K.SAVED_SEARCHES) ?: "" }
     suspend fun setSavedSearches(json: String) { edit { it[K.SAVED_SEARCHES] = json } }
     val customTemplatesJson: Flow<String> = state.map { str(it, K.CUSTOM_TEMPLATES) ?: "[]" }
@@ -617,10 +662,16 @@ class SettingsRepository(private val context: Context) {
 
 
     val systemIntegrationEnabled: Flow<Boolean> = state.map { bool(it, K.SYSTEM_INTEGRATION_ENABLED) ?: false }
-    suspend fun setSystemIntegrationEnabled(value: Boolean) { edit { it[K.SYSTEM_INTEGRATION_ENABLED] = value } }
+    suspend fun setSystemIntegrationEnabled(value: Boolean) {
+        SettingsCache.systemIntegrationEnabled = value
+        edit { it[K.SYSTEM_INTEGRATION_ENABLED] = value }
+    }
 
     val startupLoggingEnabled: Flow<Boolean> = state.map { bool(it, K.STARTUP_LOGGING_ENABLED) ?: false }
-    suspend fun setStartupLoggingEnabled(value: Boolean) { edit { it[K.STARTUP_LOGGING_ENABLED] = value } }
+    suspend fun setStartupLoggingEnabled(value: Boolean) {
+        SettingsCache.startupLoggingEnabled = value
+        edit { it[K.STARTUP_LOGGING_ENABLED] = value }
+    }
 
 
     private suspend fun putSecret(key: String, value: String) {
@@ -628,9 +679,18 @@ class SettingsRepository(private val context: Context) {
         edit { it[key] = sealed }
     }
 
-    suspend fun setBaseUrl(value: String) = putSecret(K.BASE_URL_ENC, value)
-    suspend fun setApiSpec(value: String) = putSecret(K.API_SPEC_ENC, value)
-    suspend fun setModel(value: String) = putSecret(K.MODEL_ENC, value)
+    suspend fun setBaseUrl(value: String) {
+        SettingsCache.baseUrl = value
+        putSecret(K.BASE_URL_ENC, value)
+    }
+    suspend fun setApiSpec(value: String) {
+        SettingsCache.apiSpec = value
+        putSecret(K.API_SPEC_ENC, value)
+    }
+    suspend fun setModel(value: String) {
+        SettingsCache.model = value
+        putSecret(K.MODEL_ENC, value)
+    }
 
 
     val modelRecents: Flow<List<String>> = state.map { ModelRecents.parse(str(it, K.MODEL_RECENTS)) }
@@ -652,8 +712,14 @@ class SettingsRepository(private val context: Context) {
             it[K.MODEL_RECENTS] = recents
         }
     }
-    suspend fun setAssistantName(value: String) = putSecret(K.ASSISTANT_NAME_ENC, value)
-    suspend fun setAssistantStyle(value: String) = putSecret(K.ASSISTANT_STYLE_ENC, value)
+    suspend fun setAssistantName(value: String) {
+        SettingsCache.assistantName = value
+        putSecret(K.ASSISTANT_NAME_ENC, value)
+    }
+    suspend fun setAssistantStyle(value: String) {
+        SettingsCache.assistantStyle = value
+        putSecret(K.ASSISTANT_STYLE_ENC, value)
+    }
 
     suspend fun setThemeMode(value: String) {
         edit { it[K.THEME_MODE] = value }
@@ -673,6 +739,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setApiKey(value: String) {
+        SettingsCache.apiKey = value
         edit { it[K.API_KEY_ENC] = LocalSecrets.encrypt(value) }
     }
 
@@ -680,6 +747,12 @@ class SettingsRepository(private val context: Context) {
         val safe = profiles.take(ApiProfiles.MAX)
         val idx = if (safe.isEmpty()) 0 else selected.coerceIn(0, safe.size - 1)
         val active = safe.getOrNull(idx)
+        SettingsCache.apiProfilesJson = ApiProfiles.serialize(safe)
+        SettingsCache.apiProfileSelected = idx
+        SettingsCache.baseUrl = active?.baseUrl ?: ""
+        SettingsCache.apiSpec = active?.spec ?: "openai"
+        SettingsCache.model = active?.model ?: ""
+        active?.apiKey?.let { SettingsCache.apiKey = it }
         val profilesEnc = LocalSecrets.encrypt(ApiProfiles.serialize(safe))
         val activeKeyEnc = active?.let { LocalSecrets.encrypt(it.apiKey) }
         val activeBaseUrlEnc = LocalSecrets.encrypt(active?.baseUrl ?: "")

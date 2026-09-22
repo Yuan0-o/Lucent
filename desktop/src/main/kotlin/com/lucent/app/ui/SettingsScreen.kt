@@ -89,6 +89,7 @@ import com.lucent.app.ui.settings.RootSettingsPage
 import com.lucent.app.ui.settings.SecuritySettingsPage
 import com.lucent.app.ui.settings.ThemeSettingsPage
 import com.lucent.app.ui.settings.AboutSettingsPage
+import com.lucent.app.ui.settings.LicenceSettingsPage
 import com.lucent.app.ui.settings.AdvancedSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
@@ -100,7 +101,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Advanced }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -2358,15 +2359,61 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.About -> AboutSettingsPage(
                 repo = repo,
                 onRoute = { setRoute(it) },
-                onOpenUrl = { url -> DesktopShell.requestElevation("") }
+                onOpenUrl = { url -> DesktopShell.openUrl(url) },
+                versionName = com.lucent.app.LucentBuild.VERSION,
+                buildNumber = com.lucent.app.LucentBuild.BUILD_NUMBER
             )
 
-            SettingsRoute.Advanced -> AdvancedSettingsPage(
-                shizukuSupported = false,
-                shizukuReady = false,
-                onPairShizuku = {},
-                onRoute = { setRoute(it) }
+            SettingsRoute.Licences -> LicenceSettingsPage(
+                onRoute = { setRoute(it) },
+                onOpenUrl = { url -> DesktopShell.openUrl(url) }
             )
+
+            SettingsRoute.Advanced -> {
+                val privilegedOn by repo.privilegedEnabled.collectAsState(
+                    initial = SettingsCache.privilegedEnabled
+                )
+                var elevated by remember { mutableStateOf(DesktopShell.isElevated()) }
+                var elevationTried by remember { mutableStateOf(false) }
+                LaunchedEffect(privilegedOn) {
+                    elevated = DesktopShell.isElevated()
+                    if (privilegedOn && !elevated && !elevationTried) {
+                        elevationTried = true
+                        DesktopShell.requestElevation()
+                    }
+                }
+                AdvancedSettingsPage(
+                    ui = com.lucent.app.ui.settings.AdvancedPrivilegeUi(
+                        title = com.lucent.app.i18n.S.advancedElevateTitle,
+                        description = com.lucent.app.i18n.S.advancedElevateDesc,
+                        status = if (elevated) {
+                            com.lucent.app.i18n.S.advancedElevatedStatus
+                        } else {
+                            com.lucent.app.i18n.S.advancedStandardStatus
+                        },
+                        enabled = privilegedOn,
+                        ready = elevated,
+                        busy = false,
+                        actionLabel = if (elevated) null else com.lucent.app.i18n.S.advancedElevateAction
+                    ),
+                    onToggle = { wanted ->
+                        SettingsCache.privilegedEnabled = wanted
+                        scope.launch { repo.setPrivilegedEnabled(wanted) }
+                        if (wanted && !DesktopShell.isElevated()) {
+                            DesktopShell.requestElevation()
+                            elevationTried = true
+                        }
+                        elevated = DesktopShell.isElevated()
+                    },
+                    onAction = {
+                        if (!DesktopShell.requestElevation()) {
+                            LucentToast.show(context, com.lucent.app.i18n.S.advancedElevateFailed)
+                        }
+                        elevated = DesktopShell.isElevated()
+                    },
+                    onRoute = { setRoute(it) }
+                )
+            }
 
             SettingsRoute.Data -> DataSettingsPage(
                 repo = repo,

@@ -41,13 +41,12 @@ internal fun MemorySettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
-    val savedMemoryTier by repo.memoryTier.collectAsState(initial = null)
+    val savedMemoryTier by repo.memoryTier.collectAsState(initial = SettingsCache.memoryTier)
     val savedSmallModelMode by repo.smallModelModeEnabled.collectAsState(initial = SettingsCache.smallModelModeEnabled)
-    val savedEmbeddingProvider by repo.embeddingProvider.collectAsState(initial = null)
+    val savedEmbeddingProvider by repo.embeddingProvider.collectAsState(initial = SettingsCache.embeddingProvider)
 
     BackHeader(S.settingsMemoryTitle) { onRoute(SettingsRoute.Assistant) }
 
-    if (savedMemoryTier == null || savedEmbeddingProvider == null) return
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.memoryCostTitle, color = onGradient, fontSize = 16.sp)
