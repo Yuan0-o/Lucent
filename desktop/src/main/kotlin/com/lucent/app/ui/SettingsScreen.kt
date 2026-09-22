@@ -89,6 +89,7 @@ import com.lucent.app.ui.settings.RootSettingsPage
 import com.lucent.app.ui.settings.SecuritySettingsPage
 import com.lucent.app.ui.settings.ThemeSettingsPage
 import com.lucent.app.ui.settings.AboutSettingsPage
+import com.lucent.app.ui.settings.AdvancedSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -99,7 +100,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Advanced }
 
 internal enum class ExportKind { NOTES, TASKS }
 

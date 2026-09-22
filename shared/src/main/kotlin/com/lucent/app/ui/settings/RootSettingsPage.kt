@@ -27,5 +27,7 @@ internal fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     Spacer(modifier = Modifier.height(12.dp))
     NavCard(S.settingsDataTitle, S.settingsDataSub) { onRoute(SettingsRoute.Data) }
     Spacer(modifier = Modifier.height(12.dp))
-    NavCard("About", "Version, licenses, updates") { onRoute(SettingsRoute.About) }
+    NavCard(S.settingsAdvancedTitle, S.settingsAdvancedSub) { onRoute(SettingsRoute.Advanced) }
+    Spacer(modifier = Modifier.height(12.dp))
+    NavCard(S.settingsAboutTitle, S.settingsAboutSub) { onRoute(SettingsRoute.About) }
 }

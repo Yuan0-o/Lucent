@@ -90,6 +90,7 @@ import com.lucent.app.ui.settings.RootSettingsPage
 import com.lucent.app.ui.settings.SecuritySettingsPage
 import com.lucent.app.ui.settings.ThemeSettingsPage
 import com.lucent.app.ui.settings.AboutSettingsPage
+import com.lucent.app.ui.settings.AdvancedSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -100,7 +101,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Advanced }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -698,7 +699,8 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.Theme, SettingsRoute.Background -> setRoute(SettingsRoute.Appearance)
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
-            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> setRoute(SettingsRoute.Root)
+            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data,
+            SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
             else -> setRoute(SettingsRoute.Root)
         }
     }
@@ -2403,6 +2405,12 @@ fun SettingsScreen(active: Boolean = true) {
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     context.startActivity(intent)
                 }
+            )
+
+            SettingsRoute.Advanced -> AdvancedSettingsPage(
+                shizukuReady = com.lucent.app.data.ShizukuShell.isReady(),
+                onPairShizuku = { com.lucent.app.data.ShizukuShell.requestPermission() },
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Data -> DataSettingsPage(

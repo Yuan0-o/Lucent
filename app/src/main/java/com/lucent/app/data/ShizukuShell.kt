@@ -42,6 +42,15 @@ object ShizukuShell : PrivilegedShell.PrivilegedShellProvider {
     @Suppress("UNCHECKED_CAST")
     override fun isReady(): Boolean = shizukuReady()
 
+    fun requestPermission(context: Any? = null): Boolean = try {
+        val cls = shizukuClass() ?: return false
+        val method = cls.getMethod("requestPermission", Int::class.java)
+        method.invoke(null, 0)
+        true
+    } catch (t: Throwable) {
+        false
+    }
+
     @Suppress("UNCHECKED_CAST")
     override suspend fun runCommand(command: String): PrivilegedShell.ShellResult {
         return withContext(Dispatchers.IO) {
