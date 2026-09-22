@@ -697,7 +697,7 @@ private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickCon
         pageCount = { screens.size }
     )
 
-    LaunchedEffect(active) {
+    LaunchedEffect(active, tabClickTarget) {
         val targetPage = screens.indexOf(active)
         if (pagerState.currentPage != targetPage) {
             if (tabClickTarget != null) {
@@ -718,6 +718,7 @@ private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickCon
 
     HorizontalPager(
         state = pagerState,
+        beyondViewportPageCount = 1,
         modifier = modifier
     ) { page ->
         val screen = screens[page]

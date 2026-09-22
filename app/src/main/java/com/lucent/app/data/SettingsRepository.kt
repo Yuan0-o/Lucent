@@ -315,6 +315,7 @@ class SettingsRepository(private val context: Context) {
                 prefs.remove(SettingsKeys.SYSTEM_INTEGRATION_PREBLACKOUT)
             }
         }
+        SettingsCache.blackoutEnabled = value
     }
 
     suspend fun appLockWasOnBeforeBlackout(): Boolean =
@@ -329,6 +330,7 @@ class SettingsRepository(private val context: Context) {
             prefs[SettingsKeys.CRASH_SHIELD_ENABLED] = value
             if (value) prefs[SettingsKeys.STARTUP_LOGGING_ENABLED] = true
         }
+        SettingsCache.crashShieldEnabled = value
     }
 
     val passwordAttemptState: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PW_ATTEMPT_STATE] ?: "" }
@@ -348,11 +350,13 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit {
             it[SettingsKeys.PW_FIRST_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
         }
+        SettingsCache.pwFirstRoundLimit = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
     }
     suspend fun setPwLaterRoundLimit(value: Int) {
         context.settingsDataStore.edit {
             it[SettingsKeys.PW_LATER_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
         }
+        SettingsCache.pwLaterRoundLimit = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
     }
 
     val pwSelfDestructEnabled: Flow<Boolean> =
@@ -362,21 +366,27 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setPwSelfDestructEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.PW_SELF_DESTRUCT_ENABLED] = value }
+        SettingsCache.pwSelfDestructEnabled = value
     }
     suspend fun setPwSelfDestructThreshold(value: Int) {
         context.settingsDataStore.edit {
             it[SettingsKeys.PW_SELF_DESTRUCT_THRESHOLD] = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
         }
+        SettingsCache.pwSelfDestructThreshold = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
     }
 
     val openLinksExternally: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] ?: false }
     suspend fun setOpenLinksExternally(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] = value }
+        SettingsCache.openLinksExternally = value
     }
 
     val appLanguage: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "system" }
-    suspend fun setAppLanguage(value: String) { context.settingsDataStore.edit { it[SettingsKeys.APP_LANGUAGE] = value } }
+    suspend fun setAppLanguage(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.APP_LANGUAGE] = value }
+        SettingsCache.appLanguage = value
+    }
     suspend fun appLanguageOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LANGUAGE] ?: "system"
 
@@ -404,12 +414,14 @@ class SettingsRepository(private val context: Context) {
                 prefs.remove(SettingsKeys.WEB_SEARCH_PRELOCAL)
             }
         }
+        SettingsCache.localModelEnabled = value
     }
 
     val localBackgroundReplyEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false }
     suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] = value }
+        SettingsCache.localBackgroundReplyEnabled = value
     }
 
     suspend fun localBackgroundReplyEnabledOnce(): Boolean =
@@ -419,13 +431,20 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.data.map { it[SettingsKeys.SMALL_MODEL_MODE] ?: false }
     suspend fun setSmallModelModeEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.SMALL_MODEL_MODE] = value }
+        SettingsCache.smallModelModeEnabled = value
     }
 
     val localToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false }
-    suspend fun setLocalToolsEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_TOOLS_ENABLED] = value } }
+    suspend fun setLocalToolsEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_TOOLS_ENABLED] = value }
+        SettingsCache.localToolsEnabled = value
+    }
 
     val localGpuEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_GPU_ENABLED] ?: false }
-    suspend fun setLocalGpuEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LOCAL_GPU_ENABLED] = value } }
+    suspend fun setLocalGpuEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_GPU_ENABLED] = value }
+        SettingsCache.localGpuEnabled = value
+    }
 
     val apiKey: Flow<String> = context.settingsDataStore.data.map { prefs ->
         val stored = prefs[SettingsKeys.API_KEY_ENC] ?: prefs[SettingsKeys.LEGACY_API_KEY] ?: ""
@@ -451,9 +470,11 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.data.map { it[SettingsKeys.TASK_HISTORY_ENABLED] ?: true }
     suspend fun setNoteHistoryEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.NOTE_HISTORY_ENABLED] = value }
+        SettingsCache.noteHistoryEnabled = value
     }
     suspend fun setTaskHistoryEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.TASK_HISTORY_ENABLED] = value }
+        SettingsCache.taskHistoryEnabled = value
     }
 
     val autoBackup: Flow<AutoBackup.State> = context.settingsDataStore.data
@@ -485,6 +506,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAssistantConfirmTools(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] = value }
+        SettingsCache.assistantConfirmToolsEnabled = value
     }
 
     val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }
@@ -509,42 +531,53 @@ class SettingsRepository(private val context: Context) {
     val cloudEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_ENABLED] ?: false }
     suspend fun setCloudEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_ENABLED] = value }
+        SettingsCache.cloudEnabled = value
     }
     val cloudProvider: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PROVIDER] ?: "Nutstore" }
     suspend fun setCloudProvider(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PROVIDER] = value }
+        SettingsCache.cloudProvider = value
     }
     val embeddingProvider: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.EMBEDDING_PROVIDER] ?: "local"
     }
     suspend fun setEmbeddingProvider(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.EMBEDDING_PROVIDER] = value }
+        SettingsCache.embeddingProvider = value
     }
     val cloudUrl: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_URL] ?: "" }
     suspend fun setCloudUrl(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_URL] = value }
+        SettingsCache.cloudUrl = value
     }
     val cloudUser: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_USER] ?: "" }
     suspend fun setCloudUser(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_USER] = value }
+        SettingsCache.cloudUser = value
     }
     val cloudPasswordEnc: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "" }
     suspend fun setCloudPasswordEnc(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PASSWORD_ENC] = value }
+        SettingsCache.cloudPasswordEnc = value
     }
     val cloudFolder: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_FOLDER] ?: "Lucent" }
     suspend fun setCloudFolder(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_FOLDER] = value }
+        SettingsCache.cloudFolder = value
     }
     val cloudAutoBackup: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false }
     suspend fun setCloudAutoBackup(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_AUTO_BACKUP] = value }
+        SettingsCache.cloudAutoBackup = value
     }
 
     val linksEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LINKS_ENABLED] ?: false }
 
     val backgroundAnimationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true }
-    suspend fun setBackgroundAnimationEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] = value } }
+    suspend fun setBackgroundAnimationEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] = value }
+        SettingsCache.backgroundAnimationEnabled = value
+    }
 
     val appLockEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_ENABLED] ?: false }
     val appLockCredentials: Flow<String> = context.settingsDataStore.data.map { prefs ->
@@ -585,11 +618,13 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.data.first()[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false
     suspend fun setSystemIntegrationEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] = value }
+        SettingsCache.systemIntegrationEnabled = value
     }
 
     val startupLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false }
     suspend fun setStartupLoggingEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.STARTUP_LOGGING_ENABLED] = value }
+        SettingsCache.startupLoggingEnabled = value
     }
 
     private suspend fun putSecret(
@@ -643,11 +678,21 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAssistantName(value: String) = putSecret(SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, value)
     suspend fun setAssistantStyle(value: String) = putSecret(SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, value)
 
-    suspend fun setThemeMode(value: String) { context.settingsDataStore.edit { it[SettingsKeys.THEME_MODE] = value } }
-    suspend fun setPalette(value: String) { context.settingsDataStore.edit { it[SettingsKeys.PALETTE] = value } }
-    suspend fun setFont(value: String) { context.settingsDataStore.edit { it[SettingsKeys.FONT] = value } }
+    suspend fun setThemeMode(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.THEME_MODE] = value }
+        SettingsCache.themeMode = value
+    }
+    suspend fun setPalette(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.PALETTE] = value }
+        SettingsCache.palette = value
+    }
+    suspend fun setFont(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.FONT] = value }
+        SettingsCache.font = value
+    }
     suspend fun setDynamicColorEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] = value }
+        SettingsCache.dynamicColor = value
     }
     suspend fun setAttachmentsMigrated(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.ATTACHMENTS_MIGRATED] = value } }
     suspend fun setBackupPassword(value: String) {
@@ -657,7 +702,10 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setNotesSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value } }
+    suspend fun setNotesSort(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value }
+        SettingsCache.notesSort = value
+    }
 
     suspend fun setSessionSnapshot(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SESSION_SNAPSHOT] = value }
@@ -665,19 +713,36 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun sessionSnapshotOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.SESSION_SNAPSHOT] ?: ""
-    suspend fun setTasksSort(value: String) { context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value } }
+    suspend fun setTasksSort(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value }
+        SettingsCache.tasksSort = value
+    }
     suspend fun setMarkdownEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value }
+        SettingsCache.markdownEnabled = value
     }
 
     suspend fun setRichTextEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.RICH_TEXT_ENABLED] = value }
+        SettingsCache.richTextEnabled = value
     }
-    suspend fun setLinksEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.LINKS_ENABLED] = value } }
+    suspend fun setLinksEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.LINKS_ENABLED] = value }
+        SettingsCache.linksEnabled = value
+    }
 
-    suspend fun setMemoryTier(value: String) { context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER] = value } }
-    suspend fun setWebSearchEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENABLED] = value } }
-    suspend fun setTypingHapticsEnabled(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.TYPING_HAPTICS] = value } }
+    suspend fun setMemoryTier(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER] = value }
+        SettingsCache.memoryTier = value
+    }
+    suspend fun setWebSearchEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENABLED] = value }
+        SettingsCache.webSearchEnabled = value
+    }
+    suspend fun setTypingHapticsEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.TYPING_HAPTICS] = value }
+        SettingsCache.typingHapticsEnabled = value
+    }
 
     suspend fun setApiKey(value: String) {
         context.settingsDataStore.edit { prefs ->

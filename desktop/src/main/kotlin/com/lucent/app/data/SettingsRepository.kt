@@ -303,7 +303,10 @@ class SettingsRepository(private val context: Context) {
 
 
     val appLanguage: Flow<String> = state.map { str(it, K.APP_LANGUAGE) ?: "system" }
-    suspend fun setAppLanguage(value: String) { edit { it[K.APP_LANGUAGE] = value } }
+    suspend fun setAppLanguage(value: String) {
+        edit { it[K.APP_LANGUAGE] = value }
+        SettingsCache.appLanguage = value
+    }
     suspend fun appLanguageOnce(): String = str(state.first(), K.APP_LANGUAGE) ?: "system"
 
 
@@ -329,21 +332,34 @@ class SettingsRepository(private val context: Context) {
                 prefs.remove(K.WEB_SEARCH_PRELOCAL)
             }
         }
+        SettingsCache.localModelEnabled = value
     }
 
     val localBackgroundReplyEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_BACKGROUND_REPLY) ?: false }
-    suspend fun setLocalBackgroundReplyEnabled(value: Boolean) { edit { it[K.LOCAL_BACKGROUND_REPLY] = value } }
+    suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
+        edit { it[K.LOCAL_BACKGROUND_REPLY] = value }
+        SettingsCache.localBackgroundReplyEnabled = value
+    }
     suspend fun localBackgroundReplyEnabledOnce(): Boolean =
         bool(state.first(), K.LOCAL_BACKGROUND_REPLY) ?: false
 
     val localToolsEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_TOOLS_ENABLED) ?: false }
-    suspend fun setLocalToolsEnabled(value: Boolean) { edit { it[K.LOCAL_TOOLS_ENABLED] = value } }
+    suspend fun setLocalToolsEnabled(value: Boolean) {
+        edit { it[K.LOCAL_TOOLS_ENABLED] = value }
+        SettingsCache.localToolsEnabled = value
+    }
 
     val smallModelModeEnabled: Flow<Boolean> = state.map { bool(it, K.SMALL_MODEL_MODE) ?: false }
-    suspend fun setSmallModelModeEnabled(value: Boolean) { edit { it[K.SMALL_MODEL_MODE] = value } }
+    suspend fun setSmallModelModeEnabled(value: Boolean) {
+        edit { it[K.SMALL_MODEL_MODE] = value }
+        SettingsCache.smallModelModeEnabled = value
+    }
 
     val localGpuEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_GPU_ENABLED) ?: false }
-    suspend fun setLocalGpuEnabled(value: Boolean) { edit { it[K.LOCAL_GPU_ENABLED] = value } }
+    suspend fun setLocalGpuEnabled(value: Boolean) {
+        edit { it[K.LOCAL_GPU_ENABLED] = value }
+        SettingsCache.localGpuEnabled = value
+    }
 
 
     val apiKey: Flow<String> = state.map { prefs ->
@@ -393,13 +409,22 @@ class SettingsRepository(private val context: Context) {
     }
 
     val memoryTier: Flow<String> = state.map { str(it, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key }
-    suspend fun setMemoryTier(value: String) { edit { it[K.MEMORY_TIER] = value } }
+    suspend fun setMemoryTier(value: String) {
+        edit { it[K.MEMORY_TIER] = value }
+        SettingsCache.memoryTier = value
+    }
 
     val webSearchEnabled: Flow<Boolean> = state.map { bool(it, K.WEB_SEARCH_ENABLED) ?: false }
-    suspend fun setWebSearchEnabled(value: Boolean) { edit { it[K.WEB_SEARCH_ENABLED] = value } }
+    suspend fun setWebSearchEnabled(value: Boolean) {
+        edit { it[K.WEB_SEARCH_ENABLED] = value }
+        SettingsCache.webSearchEnabled = value
+    }
 
     val assistantConfirmToolsEnabled: Flow<Boolean> = state.map { bool(it, K.ASSISTANT_CONFIRM_TOOLS) ?: true }
-    suspend fun setAssistantConfirmTools(value: Boolean) { edit { it[K.ASSISTANT_CONFIRM_TOOLS] = value } }
+    suspend fun setAssistantConfirmTools(value: Boolean) {
+        edit { it[K.ASSISTANT_CONFIRM_TOOLS] = value }
+        SettingsCache.assistantConfirmToolsEnabled = value
+    }
 
     val typingHapticsEnabled: Flow<Boolean> = state.map { bool(it, K.TYPING_HAPTICS) ?: true }
     suspend fun setTypingHapticsEnabled(value: Boolean) { edit { it[K.TYPING_HAPTICS] = value } }
@@ -487,36 +512,68 @@ class SettingsRepository(private val context: Context) {
     val hiddenTemplatesJson: Flow<String> = state.map { str(it, K.HIDDEN_TEMPLATES) ?: "" }
     suspend fun setHiddenTemplatesJson(json: String) { edit { it[K.HIDDEN_TEMPLATES] = json } }
     val cloudEnabled: Flow<Boolean> = state.map { bool(it, K.CLOUD_ENABLED) ?: false }
-    suspend fun setCloudEnabled(value: Boolean) { edit { it[K.CLOUD_ENABLED] = value } }
+    suspend fun setCloudEnabled(value: Boolean) {
+        edit { it[K.CLOUD_ENABLED] = value }
+        SettingsCache.cloudEnabled = value
+    }
     val cloudProvider: Flow<String> = state.map { str(it, K.CLOUD_PROVIDER) ?: "Nutstore" }
-    suspend fun setCloudProvider(value: String) { edit { it[K.CLOUD_PROVIDER] = value } }
+    suspend fun setCloudProvider(value: String) {
+        edit { it[K.CLOUD_PROVIDER] = value }
+        SettingsCache.cloudProvider = value
+    }
     val cloudUrl: Flow<String> = state.map { str(it, K.CLOUD_URL) ?: "" }
-    suspend fun setCloudUrl(value: String) { edit { it[K.CLOUD_URL] = value } }
+    suspend fun setCloudUrl(value: String) {
+        edit { it[K.CLOUD_URL] = value }
+        SettingsCache.cloudUrl = value
+    }
     val cloudUser: Flow<String> = state.map { str(it, K.CLOUD_USER) ?: "" }
-    suspend fun setCloudUser(value: String) { edit { it[K.CLOUD_USER] = value } }
+    suspend fun setCloudUser(value: String) {
+        edit { it[K.CLOUD_USER] = value }
+        SettingsCache.cloudUser = value
+    }
     val cloudPasswordEnc: Flow<String> = state.map { str(it, K.CLOUD_PASSWORD_ENC) ?: "" }
-    suspend fun setCloudPasswordEnc(value: String) { edit { it[K.CLOUD_PASSWORD_ENC] = value } }
+    suspend fun setCloudPasswordEnc(value: String) {
+        edit { it[K.CLOUD_PASSWORD_ENC] = value }
+        SettingsCache.cloudPasswordEnc = value
+    }
     val embeddingProvider: Flow<String> = state.map { str(it, K.EMBEDDING_PROVIDER) ?: "local" }
-    suspend fun setEmbeddingProvider(value: String) { edit { it[K.EMBEDDING_PROVIDER] = value } }
+    suspend fun setEmbeddingProvider(value: String) {
+        edit { it[K.EMBEDDING_PROVIDER] = value }
+        SettingsCache.embeddingProvider = value
+    }
     val cloudFolder: Flow<String> = state.map { str(it, K.CLOUD_FOLDER) ?: "Lucent" }
-    suspend fun setCloudFolder(value: String) { edit { it[K.CLOUD_FOLDER] = value } }
+    suspend fun setCloudFolder(value: String) {
+        edit { it[K.CLOUD_FOLDER] = value }
+        SettingsCache.cloudFolder = value
+    }
     val cloudAutoBackup: Flow<Boolean> = state.map { bool(it, K.CLOUD_AUTO_BACKUP) ?: false }
-    suspend fun setCloudAutoBackup(value: Boolean) { edit { it[K.CLOUD_AUTO_BACKUP] = value } }
+    suspend fun setCloudAutoBackup(value: Boolean) {
+        edit { it[K.CLOUD_AUTO_BACKUP] = value }
+        SettingsCache.cloudAutoBackup = value
+    }
 
     suspend fun setMarkdownEnabled(value: Boolean) {
         edit { it[K.MARKDOWN_ENABLED] = value }
+        SettingsCache.markdownEnabled = value
     }
 
     suspend fun setRichTextEnabled(value: Boolean) {
         edit { it[K.RICH_TEXT_ENABLED] = value }
+        SettingsCache.richTextEnabled = value
     }
 
     val linksEnabled: Flow<Boolean> = state.map { bool(it, K.LINKS_ENABLED) ?: false }
-    suspend fun setLinksEnabled(value: Boolean) { edit { it[K.LINKS_ENABLED] = value } }
+    suspend fun setLinksEnabled(value: Boolean) {
+        edit { it[K.LINKS_ENABLED] = value }
+        SettingsCache.linksEnabled = value
+    }
 
     val backgroundAnimationEnabled: Flow<Boolean> =
         state.map { bool(it, K.BACKGROUND_ANIMATION_ENABLED) ?: false }
-    suspend fun setBackgroundAnimationEnabled(value: Boolean) { edit { it[K.BACKGROUND_ANIMATION_ENABLED] = value } }
+    suspend fun setBackgroundAnimationEnabled(value: Boolean) {
+        edit { it[K.BACKGROUND_ANIMATION_ENABLED] = value }
+        SettingsCache.backgroundAnimationEnabled = value
+    }
 
 
     val appLockEnabled: Flow<Boolean> = state.map { bool(it, K.APP_LOCK_ENABLED) ?: false }
@@ -588,10 +645,22 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAssistantName(value: String) = putSecret(K.ASSISTANT_NAME_ENC, value)
     suspend fun setAssistantStyle(value: String) = putSecret(K.ASSISTANT_STYLE_ENC, value)
 
-    suspend fun setThemeMode(value: String) { edit { it[K.THEME_MODE] = value } }
-    suspend fun setPalette(value: String) { edit { it[K.PALETTE] = value } }
-    suspend fun setFont(value: String) { edit { it[K.FONT] = value } }
-    suspend fun setDynamicColorEnabled(value: Boolean) { edit { it[K.DYNAMIC_COLOR_ENABLED] = value } }
+    suspend fun setThemeMode(value: String) {
+        edit { it[K.THEME_MODE] = value }
+        SettingsCache.themeMode = value
+    }
+    suspend fun setPalette(value: String) {
+        edit { it[K.PALETTE] = value }
+        SettingsCache.palette = value
+    }
+    suspend fun setFont(value: String) {
+        edit { it[K.FONT] = value }
+        SettingsCache.font = value
+    }
+    suspend fun setDynamicColorEnabled(value: Boolean) {
+        edit { it[K.DYNAMIC_COLOR_ENABLED] = value }
+        SettingsCache.dynamicColor = value
+    }
 
     suspend fun setApiKey(value: String) {
         edit { it[K.API_KEY_ENC] = LocalSecrets.encrypt(value) }
