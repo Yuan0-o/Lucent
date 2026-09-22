@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,31 +51,28 @@ internal fun AboutSettingsPage(
 
     val appVersion = "2.9.0"
     val buildNumber = "2.9.0.1"
-    val appInfo = "Lucent"
-    val developerName = "Yuan Yifan"
-    val contactEmail = "yuan47578@gmail.com"
-    val copyrightYears = "\u00A9 2026-2027 Jessica Martinez"
 
+    // NOTE: no verticalScroll here - the settings shell already scrolls, and nesting a
+    // vertically-scrollable Column inside it crashes with "infinity maximum height constraints".
     BackHeader(S.settingsAboutTitle) { onRoute(SettingsRoute.Root) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .frostedGlass()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState())
     ) {
-        Text(appInfo, color = onGradient, fontSize = 22.sp)
+        Text("Lucent", color = onGradient, fontSize = 22.sp)
         Text("${S.aboutVersion} $appVersion (${S.aboutBuild} $buildNumber)", color = onGradientMuted, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text("${S.aboutCopyright} $copyrightYears", color = onGradientMuted, fontSize = 13.sp)
+        Text("${S.aboutCopyright} \u00A9 2026-2027 Jessica Martinez", color = onGradientMuted, fontSize = 13.sp)
         Text(S.aboutRights, color = onGradientMuted, fontSize = 13.sp)
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text("${S.aboutDeveloper}: $developerName", color = onGradient, fontSize = 15.sp)
-        Text("${S.aboutContact}: $contactEmail", color = onGradientMuted, fontSize = 13.sp)
+        Text("${S.aboutDeveloper}: Yuan Yifan", color = onGradient, fontSize = 15.sp)
+        Text("${S.aboutContact}: yuan47578@gmail.com", color = onGradientMuted, fontSize = 13.sp)
         TextButton(onClick = { onOpenUrl?.invoke("https://github.com/Yuan0-o/Lucent") }) {
-            Text(S.aboutGithub, color = onGradient, fontSize = 13.sp)
+            Text("GitHub: Yuan0-o/Lucent", color = onGradient, fontSize = 13.sp)
         }
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -103,7 +98,7 @@ internal fun AboutSettingsPage(
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = {
             scope.launch {
-                checkResult = "…"
+                checkResult = "\u2026"
                 try {
                     val client = OkHttpClient()
                     val request = Request.Builder()
@@ -130,7 +125,7 @@ internal fun AboutSettingsPage(
         }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "$appInfo v$appVersion (${S.aboutBuild} $buildNumber)",
+            "Lucent v$appVersion (${S.aboutBuild} $buildNumber)",
             color = onGradientMuted.copy(alpha = 0.5f),
             fontSize = 11.sp,
             textAlign = TextAlign.Center,

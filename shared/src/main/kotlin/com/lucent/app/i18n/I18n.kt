@@ -1411,6 +1411,8 @@ open class Tr {
     open val shizukuPair: String = "Pair Shizuku"
     open val shizukuReady: String = "Shizuku is ready"
     open val shizukuNotReady: String = "Shizuku not available"
+    open val shizukuNotInstalled: String = "Shizuku isn't installed on this device"
+    open val advancedEmptyHint: String = "No advanced options are available on this platform yet."
     open val advancedTitle: String = "Advanced"
     open val closeToTraySub: String = "Closing the window hides Lucent to the system tray instead of quitting, so reminders keep firing on time. Use Exit in the tray menu to really quit. Turn this off to make the close button quit as before — reminders then only fire while the window is open."
     open val closeToTrayTitle: String = "Keep running in the tray"
@@ -2790,6 +2792,8 @@ object Zh : Tr() {
     override val shizukuPair: String = "配对 Shizuku"
     override val shizukuReady: String = "Shizuku 已就绪"
     override val shizukuNotReady: String = "Shizuku 不可用"
+    override val shizukuNotInstalled: String = "此设备未安装 Shizuku"
+    override val advancedEmptyHint: String = "此平台暂无高级选项。"
     override val advancedTitle: String = "高级"
 }
 
@@ -4148,6 +4152,8 @@ object Ja : Tr() {
     override val shizukuPair: String = "Shizukuをペアリング"
     override val shizukuReady: String = "Shizuku利用可能"
     override val shizukuNotReady: String = "Shizuku利用不可"
+    override val shizukuNotInstalled: String = "この端末にShizukuがインストールされていません"
+    override val advancedEmptyHint: String = "このプラットフォームで利用できる詳細設定はまだありません。"
     override val advancedTitle: String = "詳細設定"
 }
 
@@ -5506,5 +5512,7 @@ object Ko : Tr() {
     override val shizukuPair: String = "Shizuku 페어링"
     override val shizukuReady: String = "Shizuku 사용 가능"
     override val shizukuNotReady: String = "Shizuku 사용 불가"
+    override val shizukuNotInstalled: String = "이 기기에 Shizuku가 설치되어 있지 않습니다"
+    override val advancedEmptyHint: String = "이 플랫폼에서 아직 사용할 수 있는 고급 옵션이 없습니다."
     override val advancedTitle: String = "고급"
 }

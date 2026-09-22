@@ -671,7 +671,8 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.Theme, SettingsRoute.Background -> setRoute(SettingsRoute.Appearance)
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
-            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data -> setRoute(SettingsRoute.Root)
+            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data,
+            SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
             else -> setRoute(SettingsRoute.Root)
         }
     }
@@ -2358,6 +2359,13 @@ fun SettingsScreen(active: Boolean = true) {
                 repo = repo,
                 onRoute = { setRoute(it) },
                 onOpenUrl = { url -> DesktopShell.requestElevation("") }
+            )
+
+            SettingsRoute.Advanced -> AdvancedSettingsPage(
+                shizukuSupported = false,
+                shizukuReady = false,
+                onPairShizuku = {},
+                onRoute = { setRoute(it) }
             )
 
             SettingsRoute.Data -> DataSettingsPage(

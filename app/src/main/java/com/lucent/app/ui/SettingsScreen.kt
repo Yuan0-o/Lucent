@@ -699,8 +699,7 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.Theme, SettingsRoute.Background -> setRoute(SettingsRoute.Appearance)
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
-            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data,
-            SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
+            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data, SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
             else -> setRoute(SettingsRoute.Root)
         }
     }
@@ -2407,11 +2406,24 @@ fun SettingsScreen(active: Boolean = true) {
                 }
             )
 
-            SettingsRoute.Advanced -> AdvancedSettingsPage(
-                shizukuReady = com.lucent.app.data.ShizukuShell.isReady(),
-                onPairShizuku = { com.lucent.app.data.ShizukuShell.requestPermission() },
-                onRoute = { setRoute(it) }
-            )
+            SettingsRoute.Advanced -> {
+                var shizukuReady by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isReady()) }
+                LaunchedEffect(Unit) {
+                    com.lucent.app.data.ShizukuShell.refresh()
+                    shizukuReady = com.lucent.app.data.ShizukuShell.isReady()
+                }
+                AdvancedSettingsPage(
+                    shizukuSupported = true,
+                    shizukuReady = shizukuReady,
+                    onPairShizuku = {
+                        val started = com.lucent.app.data.ShizukuShell.requestPermission(context)
+                        if (!started) {
+                            LucentToast.show(context, S.shizukuNotInstalled)
+                        }
+                    },
+                    onRoute = { setRoute(it) }
+                )
+            }
 
             SettingsRoute.Data -> DataSettingsPage(
                 repo = repo,
