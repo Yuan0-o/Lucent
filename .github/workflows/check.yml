@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  jvm-check:
+  desktop-jvm-check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -35,7 +35,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: test-results
+          name: desktop-test-results
           path: desktop/build/reports/tests/test
           if-no-files-found: ignore
 
@@ -65,11 +65,19 @@ jobs:
       - name: Run Android JVM unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
 
-      - name: Generate Room exported schemas
-        run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
-
       - name: Run Android lint
         run: ./gradlew :app:lintRelease --no-daemon --console=plain
+
+      - name: Run detekt on shared & app modules
+        run: ./gradlew :shared:detekt :app:detekt --no-daemon --console=plain
+
+      - name: Check i18n generation is up-to-date
+        run: |
+          python3 tools/i18n/gen_i18n.py
+          git diff --exit-code -- shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt
+
+      - name: Generate Room exported schemas
+        run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
 
       - name: Upload lint baseline
         if: always()
