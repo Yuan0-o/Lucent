@@ -26,7 +26,7 @@ object AutoUpdate {
     var lastCheckFailed: Boolean = false
         private set
 
-    fun setPhase(next: Phase) {
+    fun markPhase(next: Phase) {
         phase = next
     }
 

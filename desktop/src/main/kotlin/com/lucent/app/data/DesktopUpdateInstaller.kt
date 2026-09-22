@@ -12,10 +12,10 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
 
     override suspend fun install(info: ReleaseInfo): Boolean {
         val asset = info.installer ?: return false
-        AutoUpdate.setPhase(AutoUpdate.Phase.DOWNLOADING)
+        AutoUpdate.markPhase(AutoUpdate.Phase.DOWNLOADING)
         val file = withContext(Dispatchers.IO) { download(asset) } ?: return false
         log("update: downloaded ${asset.name} (${file.length()} bytes)")
-        AutoUpdate.setPhase(AutoUpdate.Phase.INSTALLING)
+        AutoUpdate.markPhase(AutoUpdate.Phase.INSTALLING)
         val result = PrivilegedShell.installPackage(file.absolutePath, file.length())
         log("update: installer started ok=${result.success} ${result.stderr.take(200).trim()}")
         return result.success

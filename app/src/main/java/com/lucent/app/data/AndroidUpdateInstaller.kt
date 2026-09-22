@@ -14,11 +14,11 @@ class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installe
 
     override suspend fun install(info: ReleaseInfo): Boolean {
         val asset = info.apk ?: return false
-        AutoUpdate.setPhase(AutoUpdate.Phase.DOWNLOADING)
+        AutoUpdate.markPhase(AutoUpdate.Phase.DOWNLOADING)
         val file = withContext(Dispatchers.IO) { download(asset) } ?: return false
         StartupLog.event(context, "update: downloaded ${asset.name} (${file.length()} bytes)")
         if (PrivilegedShell.isReady()) {
-            AutoUpdate.setPhase(AutoUpdate.Phase.INSTALLING)
+            AutoUpdate.markPhase(AutoUpdate.Phase.INSTALLING)
             val result = PrivilegedShell.installPackage(file.absolutePath, file.length())
             StartupLog.event(
                 context,
