@@ -1,5 +1,11 @@
 <div align="center">
 
+[🇬🇧 English](./README.md) · [🇨🇳 简体中文](./README.zh-CN.md) · [🇯🇵 日本語](./README.ja.md) · [🇰🇷 한국어](./README.ko.md)
+
+</div>
+
+<div align="center">
+
 # 𝓛𝓾𝓬𝓮𝓷𝓽
 
 ### Modern · Minimalist · Quietly Overqualified
@@ -26,8 +32,8 @@ or a Windows installer is waiting when you return.
 
 ## One app, wherever you put it
 
-Lucent is **one product with a single shared heart**: the house rule is that every feature lands on
-every platform it ships to. Today that means your pocket and your desk:
+Lucent is **one product with a single shared heart**: the house rule is that every feature lives on
+every platform it ships to. Your pocket and your desk speak the same language:
 
 - **`:app`** — the Android application (Kotlin and Jetpack Compose, Room over SQLCipher, llama.cpp
   through the NDK). Built by `.github/workflows/build.yml` into a signed release APK.
@@ -37,10 +43,10 @@ every platform it ships to. Today that means your pocket and your desk:
 - **`:shared`** — the single source tree both platforms compile: business logic, data, most of the
   interface, one translation catalogue in four languages. Edit once; both machines change.
 
-A feature landed on Tuesday is on both platforms on Tuesday. Everything that can be shared lives in
-`shared/`; the few things that cannot — `SettingsRepository`, `Daos`/`Db`, `DocumentExport` and the
-largest screens — stay once per platform because their seams run deep. The native build stages are
-each optional, so a hiccup in one leaves you with a working app rather than a waiting room.
+Everything that can be shared lives in `shared/`; the few things that cannot — `SettingsRepository`,
+`Daos`/`Db`, `DocumentExport` and the largest screens — stay once per platform because their seams
+run deep. The native build stages are each optional, so a hiccup in one leaves you with a working app
+rather than a waiting room.
 
 ## The assistant with hands, not merely opinions
 
@@ -60,14 +66,14 @@ collapsible trace, one line per tool call.
 
 ## Notes that remember what they used to be
 
-Every meaningful edit is snapshotted, so you can read exactly what a note said last Tuesday and
-restore it when today's confident rewrite turns out to have been optimism. Type `[[Shopping list]]`
-and it becomes a tappable link; point at a title that doesn't exist yet and the link glows red until
-a tap politely brings the note into existence. Markdown renders when you want it and stays exactly as
-typed when you don't. Checklists are first-class citizens: reword items in place, open a roomy pop-out
-editor when a quick item develops ambitions. Tags, colours, pinning, individually encrypted
-attachments, rich text, a doodle canvas for thoughts words can't reach, and a private area with its
-own lock — with drafts beside the trash, so an unfinished thought is never an abandoned one.
+Every meaningful edit is snapshotted, so you can always see what a note used to say and restore it
+when a confident rewrite turns out to have been optimism. Type `[[Shopping list]]` and it becomes a
+tappable link; point at a title that doesn't exist yet and the link glows red until a tap politely
+brings the note into existence. Markdown renders when you want it and stays exactly as typed when you
+don't. Checklists are first-class citizens: reword items in place, open a roomy pop-out editor when a
+quick item develops ambitions. Tags, colours, pinning, individually encrypted attachments, rich text,
+a doodle canvas for thoughts words can't reach, and a private area with its own lock — with drafts
+beside the trash, so an unfinished thought is never an abandoned one.
 
 A blank note offers four one-tap starters — journal, meeting, project idea, checklist — and then the
 real trick: templates of your own. Save one and it greets you on every future blank page; long-press
