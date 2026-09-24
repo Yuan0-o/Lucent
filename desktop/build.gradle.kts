@@ -21,6 +21,9 @@ kotlin {
         main {
             kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
         }
+        test {
+            kotlin.srcDir(rootProject.file("shared/src/test/kotlin"))
+        }
     }
 }
 
@@ -64,7 +67,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
             packageName = "Lucent"
-            packageVersion = "2.9.1"
+            packageVersion = "2.9.2"
 
             includeAllModules = true
 

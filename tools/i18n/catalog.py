@@ -1512,9 +1512,17 @@ ENTRIES = [
 
     ("logsClearedAndOffToast", "Logs cleared. Log recording is now off.", "日志已清除，日志记录已关闭。", "ログを消去し、記録をオフにしました。", "로그를 지우고 기록을 껐습니다."),
 
+    ("tabHome", "Home", "首页", "ホーム", "홈"),
+    ("navArchive", "Archive", "存档", "アーカイブ", "보관함"),
+    ("drawerOpen", "Open menu", "打开菜单", "メニューを開く", "메뉴 열기"),
+    ("drawerSectionLibrary", "Library", "资料库", "ライブラリ", "라이브러리"),
+    ("drawerFooter(version: String)", "Lucent {version}", "Lucent {version}", "Lucent {version}", "Lucent {version}"),
+    ("notebooksTotal(count: Int)", None, None, None, None),
+
 ]
 
 CONDITIONAL_ENTRIES = {
+    "notebooksTotal(count: Int)": ["if (count == 1) \"1 notebook\" else \"$count notebooks\"", "\"$count 个笔记本\"", "\"ノートブック ${count} 冊\"", "\"노트북 ${count}개\""],
     "notebookItemsCount(count: Int)": ["if (count == 1) \"1 item\" else \"$count items\"", "if (count == 1) \"1 个项目\" else \"$count 个项目\"", "if (count == 1) \"1 項目\" else \"$count 項目\"", "if (count == 1) \"항목 1개\" else \"항목 ${count}개\""],
 }
 

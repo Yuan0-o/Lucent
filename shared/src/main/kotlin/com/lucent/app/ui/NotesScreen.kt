@@ -65,14 +65,11 @@ import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
@@ -81,8 +78,6 @@ import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -182,7 +177,7 @@ fun NotesScreen(active: Boolean = true) {
     var doodleData by remember { mutableStateOf("") }
     var checklistItems by remember { mutableStateOf<List<ChecklistItem>>(emptyList()) }
     var newChecklistItemText by remember { mutableStateOf("") }
-    var searchText by remember { mutableStateOf("") }
+    var searchText by HomeSearch.query
     var dateRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     var noteToDelete by remember { mutableStateOf<Note?>(null) }
     var noteToTogglePin by remember { mutableStateOf<Note?>(null) }
@@ -191,12 +186,10 @@ fun NotesScreen(active: Boolean = true) {
     var showTrash by remember { mutableStateOf(false) }
     var showDrafts by remember { mutableStateOf(false) }
     var showHidden by remember { mutableStateOf(false) }
-    var showNotebooks by remember { mutableStateOf(false) }
     var showNotebookPicker by remember { mutableStateOf(false) }
     val draftCount by db.noteDao().getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
     SessionRestoreDialog()
-    var showOverflowMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var actionsExpanded by rememberSaveable { mutableStateOf(false) }
     var historyForId by remember { mutableStateOf<Long?>(null) }
@@ -269,7 +262,8 @@ fun NotesScreen(active: Boolean = true) {
             showSearch = false
             showArchive = false
             showTrash = false
-            showNotebooks = false
+            showDrafts = false
+            showHidden = false
             viewingId = id
             returnToOnClose = AppNavigation.consumeReturnScreen()
         }
@@ -305,7 +299,8 @@ fun NotesScreen(active: Boolean = true) {
             showSearch = false
             showArchive = false
             showTrash = false
-            showNotebooks = false
+            showDrafts = false
+            showHidden = false
             viewingId = null
             startCreate()
         }
@@ -659,7 +654,7 @@ fun NotesScreen(active: Boolean = true) {
         if (noteDirty) showUnsavedDialog = true else discardComposer()
     }
 
-    BackClaim(active && (composing || viewingId != null || historyForId != null || showArchive || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode))
+    BackClaim(active && (composing || viewingId != null || historyForId != null || showArchive || showTrash || showSearch || showDrafts || showHidden || selectionMode))
     BackHandler(enabled = composing) { leaveComposer() }
     BackHandler(enabled = !composing && historyForId != null) { historyForId = null }
     BackHandler(enabled = !composing && historyForId == null && viewingId != null) { closeDetail() }
@@ -669,12 +664,33 @@ fun NotesScreen(active: Boolean = true) {
     BackHandler(enabled = !composing && historyForId == null && viewingId == null && (showDrafts || showHidden)) {
         if (showDrafts) showDrafts = false else showHidden = false
     }
-    BackHandler(enabled = !composing && historyForId == null && viewingId == null &&
-        !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden && showNotebooks) { showNotebooks = false }
     BackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
-    LaunchedEffect(active) {
-        if (!active) showOverflowMenu = false
+    LaunchedEffect(AppNavigation.requestedPanel, active) {
+        if (!active) return@LaunchedEffect
+        val panel = AppNavigation.consumePanel() ?: return@LaunchedEffect
+        historyForId = null
+        viewingId = null
+        showSearch = false
+        showArchive = panel == HomePanel.Archive
+        showTrash = panel == HomePanel.Trash
+        showDrafts = panel == HomePanel.Drafts
+        showHidden = panel == HomePanel.Hidden && HiddenArea.visible
+        com.lucent.app.data.StartupLog.event(context, "notes: opened ${panel.logKey} panel")
+    }
+
+    LaunchedEffect(AppNavigation.pendingEditNoteId) {
+        val id = AppNavigation.consumeEditNoteId() ?: return@LaunchedEffect
+        val note = db.noteDao().getByIdOnce(id) ?: return@LaunchedEffect
+        historyForId = null
+        viewingId = null
+        showSearch = false
+        showArchive = false
+        showTrash = false
+        showDrafts = false
+        showHidden = false
+        startEdit(note)
+        com.lucent.app.data.StartupLog.event(context, "notes: editing draft from the drafts page")
     }
 
     OnAppHidden { actionsExpanded = false }
@@ -1856,14 +1872,6 @@ fun NotesScreen(active: Boolean = true) {
             )
         }
 
-        showNotebooks -> {
-            NotebooksScreen(
-                onBack = { showNotebooks = false },
-                onOpenNote = { note -> openDetail(note) },
-                onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Notes) }
-            )
-        }
-
         showSearch -> {
             SearchScreen(
                 onOpenNote = { note -> openDetail(note) },
@@ -1956,40 +1964,6 @@ fun NotesScreen(active: Boolean = true) {
                                 tint = onGradientMuted,
                                 activeTint = onGradient
                             )
-                            Box {
-                                IconButton(onClick = { showOverflowMenu = true }) {
-                                    Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
-                                }
-                                DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenArchivedNotes) },
-                                        leadingIcon = { Icon(Icons.Default.Inventory2, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showArchive = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenTrash) },
-                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showTrash = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenDrafts) },
-                                        leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showDrafts = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenNotebooks) },
-                                        leadingIcon = { Icon(Icons.Default.Book, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showNotebooks = true }
-                                    )
-                                    if (HiddenArea.visible) {
-                                        DropdownMenuItem(
-                                            text = { Text(com.lucent.app.i18n.S.screenHidden) },
-                                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
-                                            onClick = { showOverflowMenu = false; showHidden = true }
-                                        )
-                                    }
-                                }
-                            }
                         },
                         trailing = {
                             NewItemButton(contentDescription = com.lucent.app.i18n.S.newNote, onClick = { startCreate() })

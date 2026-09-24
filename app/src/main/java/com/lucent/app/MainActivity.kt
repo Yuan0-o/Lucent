@@ -4,42 +4,33 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.OnBackPressedDispatcher
-import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -57,7 +48,6 @@ import androidx.compose.runtime.LaunchedEffect
 import com.lucent.app.ui.LastScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,14 +82,15 @@ import com.lucent.app.data.StartupLog
 import com.lucent.app.data.TrashCleanup
 import com.lucent.app.reminders.Notifications
 import com.lucent.app.reminders.ReminderScheduler
-import com.lucent.app.ui.AndroidRobotIcon
 import com.lucent.app.ui.AppReady
 import com.lucent.app.ui.AppLockController
 import com.lucent.app.ui.AssistantConfirmationDialog
 import com.lucent.app.ui.AssistantController
-import com.lucent.app.ui.AssistantScreen
 import com.lucent.app.ui.AutoUpdateDialog
 import com.lucent.app.ui.FluidGlassBackground
+import com.lucent.app.ui.HomeDrawerSheet
+import com.lucent.app.ui.HomeMode
+import com.lucent.app.ui.HomeModeSwitcher
 import com.lucent.app.ui.LocalBackgroundEnvironment
 import com.lucent.app.ui.rememberBackgroundEnvironment
 import com.lucent.app.ui.LocalHazeState
@@ -113,16 +104,13 @@ import com.lucent.app.ui.LucentToast
 import com.lucent.app.ui.lucentTypography
 import com.lucent.app.ui.LucentPalette
 import com.lucent.app.ui.PALETTE_CYCLE
-import com.lucent.app.ui.NotesScreen
 import com.lucent.app.ui.rememberCyclingPaletteColors
 import com.lucent.app.ui.rememberNotificationPermissionRequester
-import com.lucent.app.ui.SettingsScreen
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.ShareIntake
 import com.lucent.app.ui.ShareIntakeDialog
 import com.lucent.app.ui.ShizukuNoticeDialog
 import com.lucent.app.ui.WidgetTaskConfirmDialog
-import com.lucent.app.ui.TasksScreen
 import com.lucent.app.ui.UnsavedChangesGuard
 import com.lucent.app.widget.WidgetActions
 import dev.chrisbanes.haze.hazeEffect
@@ -137,12 +125,13 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 enum class Screen {
-    Tasks, Notes, Assistant, Settings;
+    Tasks, Notes, Notebooks, Assistant, Settings;
 
     val label: String
         get() = when (this) {
             Tasks -> com.lucent.app.i18n.S.tabTasks
             Notes -> com.lucent.app.i18n.S.tabNotes
+            Notebooks -> com.lucent.app.i18n.S.screenNotebooks
             Assistant -> com.lucent.app.i18n.S.tabAssistant
             Settings -> com.lucent.app.i18n.S.tabSettings
         }
@@ -464,11 +453,13 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
     var currentScreen by rememberSaveable { mutableStateOf(LastScreen.current) }
-    val tabScreens = Screen.entries
+    val tabs = HomeTab.entries
+    val currentTab = HomeTab.of(currentScreen)
     val pagerState = rememberPagerState(
-        initialPage = tabScreens.indexOf(currentScreen),
-        pageCount = { tabScreens.size }
+        initialPage = tabs.indexOf(currentTab),
+        pageCount = { tabs.size }
     )
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val tabScope = rememberCoroutineScope()
     val lastScreenContext = LocalContext.current
     val lastScreenRepo = remember(lastScreenContext) {
@@ -477,6 +468,10 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     LaunchedEffect(currentScreen) {
         LastScreen.remember(currentScreen)
         lastScreenRepo.setLastScreen(LastScreen.persistedName())
+        StartupLog.event(lastScreenContext, "nav: showing ${currentScreen.name.lowercase()}")
+    }
+    LaunchedEffect(currentTab) {
+        if (currentTab != HomeTab.Home && drawerState.isOpen) drawerState.close()
     }
     val hazeState = rememberHazeState()
     val onGradient = LocalOnGradient.current
@@ -558,6 +553,8 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     AppNavigation.resetSettingsRoute()
                     currentScreen = LastScreen.home
                 }
+            currentTab == HomeTab.Notebooks || currentTab == HomeTab.Assistant ->
+                currentScreen = LastScreen.homeMode.screen
             !backArmed -> {
                 backArmed = true
                 LucentToast.show(context, com.lucent.app.i18n.S.pressBackAgainToExit)
@@ -590,6 +587,21 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
     AssistantConfirmationDialog()
 
+    fun selectHomeMode(mode: HomeMode) {
+        if (HomeMode.of(currentScreen) != mode) {
+            currentScreen = mode.screen
+            StartupLog.event(context, "home: switched to ${mode.name.lowercase()}")
+        }
+    }
+
+    fun closeDrawer() {
+        tabScope.launch { drawerState.close() }
+    }
+
+    if (drawerState.isOpen) {
+        BackHandler { closeDrawer() }
+    }
+
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
             FluidGlassBackground(
@@ -601,11 +613,52 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     .hazeSource(state = hazeState)
                     .clearAndSetSemantics { }
             )
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                gesturesEnabled = drawerState.isOpen,
+                scrimColor = Color.Black.copy(alpha = 0.28f),
+                drawerContent = {
+                    HomeDrawerSheet(
+                        mode = HomeMode.of(currentScreen) ?: LastScreen.homeMode,
+                        onSelectMode = { mode -> selectHomeMode(mode) },
+                        onOpenNotebooks = {
+                            closeDrawer()
+                            currentScreen = Screen.Notebooks
+                            StartupLog.event(context, "drawer: opened notebooks")
+                        },
+                        onOpenPanel = { panel ->
+                            closeDrawer()
+                            runOrConfirm {
+                                AppNavigation.requestPanel(panel)
+                                StartupLog.event(context, "drawer: requested ${panel.logKey}")
+                            }
+                        }
+                    )
+                }
+            ) {
             Scaffold(
                 containerColor = Color.Transparent,
                 topBar = {
                     TopAppBar(
-                        title = { Text(currentScreen.label, color = onGradient, fontSize = 30.sp) },
+                        title = {
+                            val homeMode = HomeMode.of(currentScreen)
+                            if (homeMode != null) {
+                                HomeModeSwitcher(mode = homeMode, onSelect = { mode -> selectHomeMode(mode) })
+                            } else {
+                                Text(currentScreen.label, color = onGradient, fontSize = 30.sp)
+                            }
+                        },
+                        navigationIcon = {
+                            if (currentTab == HomeTab.Home) {
+                                IconButton(onClick = {
+                                    com.lucent.app.ui.Haptics.tick(context)
+                                    tabScope.launch { drawerState.open() }
+                                    StartupLog.event(context, "drawer: opened")
+                                }) {
+                                    Icon(Icons.Default.Menu, contentDescription = com.lucent.app.i18n.S.drawerOpen, tint = onGradient)
+                                }
+                            }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent,
                             scrolledContainerColor = Color.Transparent
@@ -668,7 +721,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                     .padding(horizontal = 6.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Screen.entries.forEachIndexed { index, screen ->
+                                tabs.forEachIndexed { index, tab ->
                                     if (index > 0) {
                                         Box(
                                             modifier = Modifier
@@ -678,11 +731,11 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                         )
                                     }
                                     CapsuleNavItem(
-                                        screen = screen,
-                                        selected = currentScreen == screen,
+                                        tab = tab,
+                                        selected = currentTab == tab,
                                         onClick = {
-                                            currentScreen = screen
-                                            tabScope.launch { pagerState.scrollToPage(tabScreens.indexOf(screen)) }
+                                            currentScreen = tab.screen(LastScreen.homeMode)
+                                            tabScope.launch { pagerState.scrollToPage(tabs.indexOf(tab)) }
                                         },
                                         modifier = Modifier.weight(1f)
                                     )
@@ -703,109 +756,12 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     KeepAliveTabs(active = currentScreen, pagerState = pagerState, modifier = contentModifier)
                 }
             }
+            }
 
             ShareIntakeDialog()
             WidgetTaskConfirmDialog()
             AutoUpdateDialog(repo = updateRepo)
             ShizukuNoticeDialog()
-        }
-    }
-}
-
-@Composable
-private fun CapsuleNavItem(
-    screen: Screen,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val onGradient = LocalOnGradient.current
-    val onGradientMuted = LocalOnGradientMuted.current
-    val tint = if (selected) onGradient else onGradientMuted
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(percent = 50))
-            .then(if (selected) Modifier.background(onGradient.copy(alpha = 0.10f)) else Modifier)
-            .clickable {
-                com.lucent.app.ui.Haptics.tick(context)
-                onClick()
-            }
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        if (screen == Screen.Assistant) {
-            Icon(AndroidRobotIcon, contentDescription = screen.label, tint = tint)
-        } else {
-            Icon(iconFor(screen), contentDescription = screen.label, tint = tint)
-        }
-        Text(screen.label, color = tint, fontSize = 11.sp, maxLines = 1)
-    }
-}
-
-fun iconFor(screen: Screen) = when (screen) {
-    Screen.Notes -> Icons.AutoMirrored.Filled.Notes
-    Screen.Tasks -> Icons.Default.CheckCircle
-    Screen.Assistant -> Icons.Default.SmartToy
-    Screen.Settings -> Icons.Default.Settings
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun KeepAliveTabs(active: Screen, pagerState: PagerState, modifier: Modifier = Modifier) {
-    val realBackOwner = LocalOnBackPressedDispatcherOwner.current
-    val inertBackOwner = remember(realBackOwner) {
-        object : OnBackPressedDispatcherOwner {
-            override val lifecycle get() = realBackOwner!!.lifecycle
-            override val onBackPressedDispatcher = OnBackPressedDispatcher()
-        }
-    }
-
-    val sharedHaze = LocalHazeState.current
-
-    val screens = Screen.entries
-
-    LaunchedEffect(active) {
-        val targetPage = screens.indexOf(active)
-        if (pagerState.currentPage != targetPage) pagerState.scrollToPage(targetPage)
-    }
-
-    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-        if (!pagerState.isScrollInProgress && pagerState.currentPage != screens.indexOf(active)) {
-            val newScreen = screens[pagerState.currentPage]
-            AppNavigation.requestScreen(newScreen)
-        }
-    }
-
-    HorizontalPager(
-        state = pagerState,
-        beyondViewportPageCount = screens.lastIndex,
-        userScrollEnabled = !AppNavigation.innerBackActive,
-        modifier = modifier
-    ) { page ->
-        val screen = screens[page]
-        val isActive = screen == active
-        key(screen) {
-            val dummyHaze = rememberHazeState()
-            val tabHaze = if (isActive) sharedHaze else dummyHaze
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                CompositionLocalProvider(
-                    LocalHazeState provides tabHaze,
-                    LocalOnBackPressedDispatcherOwner provides
-                        (if (isActive) realBackOwner!! else inertBackOwner)
-                ) {
-                    when (screen) {
-                        Screen.Notes -> NotesScreen(active = isActive)
-                        Screen.Tasks -> TasksScreen(active = isActive)
-                        Screen.Assistant -> AssistantScreen(active = isActive)
-                        Screen.Settings -> SettingsScreen(active = isActive)
-                    }
-                }
-            }
         }
     }
 }

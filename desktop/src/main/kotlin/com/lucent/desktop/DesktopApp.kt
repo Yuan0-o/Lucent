@@ -18,6 +18,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,7 +42,10 @@ import com.lucent.app.ui.PALETTE_CYCLE
 import com.lucent.app.ui.rememberCyclingPaletteColors
 import com.lucent.app.ui.LucentThemeMode
 import com.lucent.app.ui.AssistantScreen
+import com.lucent.app.ui.HiddenArea
+import com.lucent.app.ui.HomePanelPage
 import com.lucent.app.ui.InsightsScreen
+import com.lucent.app.ui.NotebooksScreen
 import com.lucent.app.ui.LastScreen
 import com.lucent.app.ui.LucentToast
 import com.lucent.app.ui.NotesScreen
@@ -175,7 +179,13 @@ private fun DesktopShell(
     LaunchedEffect(AppNavigation.requestedScreen) {
         AppNavigation.consumeScreen()?.let { current = it }
     }
-    LaunchedEffect(current) { LastScreen.remember(current) }
+    LaunchedEffect(current) {
+        LastScreen.remember(current)
+        com.lucent.app.data.StartupLog.event(DesktopContext, "nav: showing ${current.name.lowercase()}")
+    }
+    LaunchedEffect(HiddenArea.visible) {
+        if (!HiddenArea.visible && current == Screen.Hidden) current = LastScreen.homeMode.screen
+    }
 
     BackHandler(
         enabled = current == Screen.Settings &&
@@ -198,6 +208,14 @@ private fun DesktopShell(
                     Screen.Assistant -> AssistantScreen()
                     Screen.Tasks -> TasksScreen()
                     Screen.Notes -> NotesScreen()
+                    Screen.Notebooks -> NotebooksScreen(
+                        onBack = { AppNavigation.requestScreen(LastScreen.homeMode.screen) },
+                        onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Notebooks) },
+                        onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Notebooks) },
+                        showBack = false
+                    )
+                    Screen.Drafts, Screen.Archive, Screen.Trash, Screen.Hidden ->
+                        current.panel?.let { panel -> key(current) { HomePanelPage(panel = panel, from = current) } }
                     Screen.Insights -> InsightsScreen()
                     Screen.Search -> SearchScreen(
                         onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Search) },

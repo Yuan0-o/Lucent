@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.BackClaim
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Checklist
 import com.lucent.app.data.Note
@@ -59,7 +61,9 @@ import kotlinx.coroutines.launch
 fun NotebooksScreen(
     onBack: () -> Unit,
     onOpenNote: (Note) -> Unit,
-    onOpenTask: (Task) -> Unit
+    onOpenTask: (Task) -> Unit,
+    showBack: Boolean = true,
+    active: Boolean = true
 ) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getInstance(context) }
@@ -74,6 +78,9 @@ fun NotebooksScreen(
     LaunchedEffect(Unit) {
         runCatching { db.notebookDao().pruneOrphans(db.noteDao(), db.taskDao()) }
     }
+
+    BackClaim(active && !showBack && openNotebookId != null)
+    BackHandler(enabled = active && !showBack && openNotebookId != null) { openNotebookId = null }
 
     val open = openNotebookId
     if (open != null) {
@@ -114,10 +121,19 @@ fun NotebooksScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
+                }
+                Text(com.lucent.app.i18n.S.screenNotebooks, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
+            } else {
+                Text(
+                    com.lucent.app.i18n.S.notebooksTotal(notebooks.size),
+                    color = LocalOnGradientMuted.current,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f).padding(start = 4.dp)
+                )
             }
-            Text(com.lucent.app.i18n.S.screenNotebooks, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
             IconButton(onClick = { creating = true }) {
                 Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.notebookNew, tint = onGradient)
             }

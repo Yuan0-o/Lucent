@@ -4,9 +4,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  source-hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: No comments, balanced brackets, no oversized files
+        run: python3 tools/code_hygiene_check.py
+
+      - name: Check i18n generation is up-to-date
+        run: |
+          python3 tools/i18n/gen_i18n.py
+          git diff --exit-code -- shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt
+
+      - name: Check the three version numbers agree
+        run: python3 tools/version_check.py
+
+      - name: Check every cached setting is written back on change
+        run: python3 tools/settings_cache_check.py
+
   desktop-jvm-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
@@ -20,22 +41,18 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Run desktop unit tests (shared logic)
+      - name: Run desktop unit tests (shared and desktop logic)
         run: ./gradlew :desktop:test --no-daemon --console=plain
 
       - name: Run detekt
         run: ./gradlew :desktop:detekt --no-daemon --console=plain
 
-      - name: Check i18n generation is up-to-date
-        run: |
-          python3 tools/i18n/gen_i18n.py
-          git diff --exit-code -- shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt
+      - name: Prove at-rest encryption end to end
+        run: ./gradlew :desktop:cipherSelfCheck --no-daemon --console=plain
 
-      - name: Check the three version numbers agree
-        run: python3 tools/version_check.py
-
-      - name: Check every cached setting is written back on change
-        run: python3 tools/settings_cache_check.py
+      - name: Summarise test results
+        if: always()
+        run: python3 tools/test_report_summary.py desktop/build/test-results/test "Desktop (Linux)"
 
       - name: Upload test reports
         if: always()
@@ -45,9 +62,57 @@ jobs:
           path: desktop/build/reports/tests/test
           if-no-files-found: ignore
 
+  windows-jvm-check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Run desktop unit tests on Windows
+        shell: pwsh
+        run: |
+          ./gradlew :desktop:test --no-daemon --console=plain
+          exit $LASTEXITCODE
+
+      - name: Prove at-rest encryption on Windows
+        shell: pwsh
+        run: |
+          ./gradlew :desktop:cipherSelfCheck --no-daemon --console=plain
+          if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 20; ./gradlew :desktop:cipherSelfCheck --no-daemon --console=plain }
+          exit $LASTEXITCODE
+
+      - name: Compile the Windows desktop entry point
+        shell: pwsh
+        run: |
+          ./gradlew :desktop:compileKotlin --no-daemon --console=plain
+          exit $LASTEXITCODE
+
+      - name: Summarise test results
+        if: always()
+        shell: pwsh
+        run: python tools/test_report_summary.py desktop/build/test-results/test "Desktop (Windows)"
+
+      - name: Upload Windows test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-test-results
+          path: desktop/build/reports/tests/test
+          if-no-files-found: ignore
+
   android-jvm-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v6
@@ -68,14 +133,21 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Run Android JVM unit tests
+      - name: Run Android JVM unit tests (shared and Android logic)
         run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+
+      - name: Compile the release Kotlin sources
+        run: ./gradlew :app:compileReleaseKotlin --no-daemon --console=plain
 
       - name: Run Android lint
         run: ./gradlew :app:lintRelease --no-daemon --console=plain
 
       - name: Generate Room exported schemas
         run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
+
+      - name: Summarise test results
+        if: always()
+        run: python3 tools/test_report_summary.py app/build/test-results/testDebugUnitTest "Android"
 
       - name: Upload lint baseline
         if: always()

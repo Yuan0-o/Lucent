@@ -5,7 +5,7 @@ plugins {
     id("androidx.baselineprofile")
 }
 
-val MARKETING_VERSION = "2.9.1"
+val MARKETING_VERSION = "2.9.2"
 
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull()
     ?: MARKETING_VERSION.replace(".", "").toIntOrNull()
@@ -62,6 +62,9 @@ android {
             jniLibs.directories += layout.buildDirectory.dir("rustJniLibs").get().asFile.path
             kotlin.directories += rootProject.file("shared/src/main/kotlin").path
         }
+        getByName("test") {
+            kotlin.directories += rootProject.file("shared/src/test/kotlin").path
+        }
         getByName("androidTest") {
             assets.directories += "$projectDir/schemas"
         }
@@ -99,6 +102,10 @@ android {
     buildFeatures {
         compose = true
         aidl = true
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     lint {
@@ -193,6 +200,7 @@ dependencies {
     implementation(libs.haze.materials)
 
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
+    testImplementation(libs.org.json)
 
     androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.androidx.test.core)

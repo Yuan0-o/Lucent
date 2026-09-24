@@ -1,6 +1,15 @@
 package com.lucent.desktop
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.VisibilityOff
+import com.lucent.app.ui.HiddenArea
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,19 +67,32 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        Screen.entries.forEach { screen ->
-            NavRow(
-                icon = iconFor(screen),
-                label = screen.label,
-                selected = current == screen,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted,
-                onClick = { Haptics.tick(android.content.DesktopContext); onSelect(screen) }
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            sidebarSections(HiddenArea.visible).forEachIndexed { index, section ->
+                if (index > 0) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(onGradient.copy(alpha = 0.10f))
+                    )
+                }
+                section.forEach { screen ->
+                    NavRow(
+                        icon = iconFor(screen),
+                        label = screen.label,
+                        selected = current == screen,
+                        onGradient = onGradient,
+                        onGradientMuted = onGradientMuted,
+                        onClick = { Haptics.tick(android.content.DesktopContext); onSelect(screen) }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -116,9 +138,20 @@ private fun NavRow(
     }
 }
 
+fun sidebarSections(hiddenVisible: Boolean): List<List<Screen>> = listOf(
+    listOf(Screen.Tasks, Screen.Notes),
+    listOf(Screen.Notebooks, Screen.Drafts, Screen.Archive, Screen.Trash) + if (hiddenVisible) listOf(Screen.Hidden) else emptyList(),
+    listOf(Screen.Assistant, Screen.Search, Screen.Insights, Screen.Settings)
+)
+
 private fun iconFor(screen: Screen): ImageVector = when (screen) {
     Screen.Tasks -> Icons.Default.CheckCircle
     Screen.Notes -> Icons.AutoMirrored.Filled.Notes
+    Screen.Notebooks -> Icons.Default.Book
+    Screen.Drafts -> Icons.Default.EditNote
+    Screen.Archive -> Icons.Default.Inventory2
+    Screen.Trash -> Icons.Default.Delete
+    Screen.Hidden -> Icons.Default.VisibilityOff
     Screen.Assistant -> Icons.Default.SmartToy
     Screen.Search -> Icons.Default.Search
     Screen.Insights -> Icons.Default.Insights

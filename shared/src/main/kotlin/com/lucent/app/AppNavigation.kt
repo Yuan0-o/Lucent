@@ -5,6 +5,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.lucent.app.ui.HomePanel
 import com.lucent.app.ui.SettingsRoute
 
 object AppNavigation {
@@ -28,6 +29,15 @@ object AppNavigation {
         private set
 
     var composeTaskRequested by mutableStateOf(false)
+        private set
+
+    var requestedPanel by mutableStateOf<HomePanel?>(null)
+        private set
+
+    var pendingEditNoteId by mutableStateOf<Long?>(null)
+        private set
+
+    var pendingEditTaskId by mutableStateOf<Long?>(null)
         private set
 
     fun openNote(id: Long, from: Screen? = null) {
@@ -56,6 +66,20 @@ object AppNavigation {
         requestedScreen = screen
     }
 
+    fun requestPanel(panel: HomePanel) {
+        requestedPanel = panel
+    }
+
+    fun editNote(id: Long) {
+        pendingEditNoteId = id
+        requestedScreen = Screen.Notes
+    }
+
+    fun editTask(id: Long) {
+        pendingEditTaskId = id
+        requestedScreen = Screen.Tasks
+    }
+
     internal fun rememberSettingsRoute(route: SettingsRoute) {
         settingsRoute = route
     }
@@ -75,6 +99,12 @@ object AppNavigation {
     fun consumeComposeNote(): Boolean = composeNoteRequested.also { composeNoteRequested = false }
 
     fun consumeComposeTask(): Boolean = composeTaskRequested.also { composeTaskRequested = false }
+
+    fun consumePanel(): HomePanel? = requestedPanel.also { requestedPanel = null }
+
+    fun consumeEditNoteId(): Long? = pendingEditNoteId.also { pendingEditNoteId = null }
+
+    fun consumeEditTaskId(): Long? = pendingEditTaskId.also { pendingEditTaskId = null }
 
     private var backClaims by mutableStateOf(0)
 

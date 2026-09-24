@@ -52,11 +52,9 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Repeat
@@ -66,8 +64,6 @@ import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -154,12 +150,10 @@ fun TasksScreen(active: Boolean = true) {
     var showTrash by remember { mutableStateOf(false) }
     var showDrafts by remember { mutableStateOf(false) }
     var showHidden by remember { mutableStateOf(false) }
-    var showNotebooks by remember { mutableStateOf(false) }
     var showNotebookPicker by remember { mutableStateOf(false) }
     val draftCount by db.taskDao().getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
     SessionRestoreDialog()
-    var showOverflowMenu by remember { mutableStateOf(false) }
     var historyForTaskId by remember { mutableStateOf<Long?>(null) }
     var showSearch by remember { mutableStateOf(false) }
     var actionsExpanded by rememberSaveable { mutableStateOf(false) }
@@ -172,7 +166,8 @@ fun TasksScreen(active: Boolean = true) {
             showSearch = false
             showingHistory = false
             showTrash = false
-            showNotebooks = false
+            showDrafts = false
+            showHidden = false
             viewingId = id
             returnToOnClose = AppNavigation.consumeReturnScreen()
         }
@@ -190,7 +185,7 @@ fun TasksScreen(active: Boolean = true) {
     var repeatRule by remember { mutableStateOf(RepeatRule.NONE) }
     var reminderEnabled by remember { mutableStateOf(false) }
     var composerMinMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-    var searchText by remember { mutableStateOf("") }
+    var searchText by HomeSearch.query
     var dateRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     var taskToDelete by remember { mutableStateOf<Task?>(null) }
     var taskToTogglePin by remember { mutableStateOf<Task?>(null) }
@@ -275,7 +270,8 @@ fun TasksScreen(active: Boolean = true) {
             showSearch = false
             showingHistory = false
             showTrash = false
-            showNotebooks = false
+            showDrafts = false
+            showHidden = false
             viewingId = null
             startCreate()
         }
@@ -463,7 +459,7 @@ fun TasksScreen(active: Boolean = true) {
         if (taskDirty) showUnsavedDialog = true else discardComposer()
     }
 
-    BackClaim(active && (composing || viewingId != null || showingHistory || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode))
+    BackClaim(active && (composing || viewingId != null || showingHistory || showTrash || showSearch || showDrafts || showHidden || selectionMode))
     BackHandler(enabled = composing) { leaveComposer() }
     BackHandler(enabled = !composing && viewingId != null) { closeDetail() }
     BackHandler(enabled = !composing && viewingId == null && showingHistory) { showingHistory = false }
@@ -472,11 +468,31 @@ fun TasksScreen(active: Boolean = true) {
     BackHandler(enabled = !composing && viewingId == null && (showDrafts || showHidden)) {
         if (showDrafts) showDrafts = false else showHidden = false
     }
-    BackHandler(enabled = !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden && showNotebooks) { showNotebooks = false }
     BackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
-    LaunchedEffect(active) {
-        if (!active) showOverflowMenu = false
+    LaunchedEffect(AppNavigation.requestedPanel, active) {
+        if (!active) return@LaunchedEffect
+        val panel = AppNavigation.consumePanel() ?: return@LaunchedEffect
+        viewingId = null
+        showSearch = false
+        showingHistory = panel == HomePanel.Archive
+        showTrash = panel == HomePanel.Trash
+        showDrafts = panel == HomePanel.Drafts
+        showHidden = panel == HomePanel.Hidden && HiddenArea.visible
+        com.lucent.app.data.StartupLog.event(context, "tasks: opened ${panel.logKey} panel")
+    }
+
+    LaunchedEffect(AppNavigation.pendingEditTaskId) {
+        val id = AppNavigation.consumeEditTaskId() ?: return@LaunchedEffect
+        val task = db.taskDao().getByIdOnce(id) ?: return@LaunchedEffect
+        viewingId = null
+        showSearch = false
+        showingHistory = false
+        showTrash = false
+        showDrafts = false
+        showHidden = false
+        startEdit(task)
+        com.lucent.app.data.StartupLog.event(context, "tasks: editing draft from the drafts page")
     }
 
     OnAppHidden { actionsExpanded = false }
@@ -1369,14 +1385,6 @@ fun TasksScreen(active: Boolean = true) {
             )
         }
 
-        showNotebooks -> {
-            NotebooksScreen(
-                onBack = { showNotebooks = false },
-                onOpenTask = { task -> openDetail(task) },
-                onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Tasks) }
-            )
-        }
-
         showSearch -> {
             SearchScreen(
                 onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Tasks) },
@@ -1469,40 +1477,6 @@ fun TasksScreen(active: Boolean = true) {
                                 tint = onGradientMuted,
                                 activeTint = onGradient
                             )
-                            Box {
-                                IconButton(onClick = { showOverflowMenu = true }) {
-                                    Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
-                                }
-                                DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenCompletedTasks) },
-                                        leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showingHistory = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenTrash) },
-                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showTrash = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenDrafts) },
-                                        leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showDrafts = true }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(com.lucent.app.i18n.S.screenNotebooks) },
-                                        leadingIcon = { Icon(Icons.Default.Book, contentDescription = null) },
-                                        onClick = { showOverflowMenu = false; showNotebooks = true }
-                                    )
-                                    if (HiddenArea.visible) {
-                                        DropdownMenuItem(
-                                            text = { Text(com.lucent.app.i18n.S.screenHidden) },
-                                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
-                                            onClick = { showOverflowMenu = false; showHidden = true }
-                                        )
-                                    }
-                                }
-                            }
                         },
                         trailing = {
                             NewItemButton(contentDescription = com.lucent.app.i18n.S.newTask, onClick = { startCreate() })
