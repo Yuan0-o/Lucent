@@ -20,15 +20,16 @@ import kotlinx.coroutines.launch
 fun AutoUpdateDialog() {
     val info = AutoUpdate.offered ?: return
     val phase = AutoUpdate.phase
+    val ready = AutoUpdate.readyForInstall
     val scope = rememberCoroutineScope()
     val busy = phase != AutoUpdate.Phase.IDLE
 
     AlertDialog(
-        onDismissRequest = { if (!busy) AutoUpdate.dismiss() },
+        onDismissRequest = { if (!busy) AutoUpdate.later() },
         title = { Text(S.updateAvailableTitle) },
         text = {
             Column {
-                Text(S.updateAvailableBody(info.version))
+                Text(if (ready) S.updateReadyBody(info.version) else S.updateAvailableBody(info.version))
                 val notes = info.notes.trim()
                 if (notes.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -58,13 +59,16 @@ fun AutoUpdateDialog() {
                 onClick = {
                     AutoUpdate.report(null)
                     scope.launch {
-                        if (!AutoUpdate.installOffered()) AutoUpdate.report(S.updateInstallFailed)
+                        if (!AutoUpdate.readyForInstall) AutoUpdate.downloadOffered()
+                        if (AutoUpdate.readyForInstall && !AutoUpdate.installOffered()) {
+                            AutoUpdate.report(S.updateInstallFailed)
+                        }
                     }
                 }
             ) { Text(S.updateInstallNow) }
         },
         dismissButton = {
-            TextButton(onClick = { AutoUpdate.dismiss() }) { Text(S.updateLater) }
+            TextButton(onClick = { AutoUpdate.later() }) { Text(S.updateLater) }
         }
     )
 }

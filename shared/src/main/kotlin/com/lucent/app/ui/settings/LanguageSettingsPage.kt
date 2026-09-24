@@ -146,10 +146,6 @@ internal fun LanguageSettingsPage(
                 }
             }
         }
-        if (importedFonts.isEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(S.fontNoneImportedHint, color = onGradientMuted, fontSize = 12.sp)
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
         if (fontImporting) {
@@ -162,6 +158,7 @@ internal fun LanguageSettingsPage(
             GlassButton(
                 text = S.fontImportButton,
                 icon = Icons.Default.Add,
+                scale = 0.5f,
                 onClick = onImportFontClick
             )
         } else {

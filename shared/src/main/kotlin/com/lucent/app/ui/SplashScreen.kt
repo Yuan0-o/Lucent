@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.data.SplashStyle
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
@@ -51,10 +52,12 @@ fun LucentSplash(
     paletteColors: List<Color>,
     backdropColor: Color,
     onFinished: () -> Unit,
-    backgroundAnimated: Boolean = true
+    backgroundAnimated: Boolean = true,
+    style: SplashStyle = SplashStyle.DEFAULT
 ) {
     val onGradient = LocalOnGradient.current
     val inspection = LocalInspectionMode.current
+    val totalMs = if (style == SplashStyle.PEN) PEN_TOTAL_MS else TOTAL_MS
 
     var done by remember { mutableStateOf(false) }
     fun finish() {
@@ -67,7 +70,7 @@ fun LucentSplash(
     var elapsed by remember { mutableFloatStateOf(0f) }
     if (!inspection) {
         LaunchedEffect(Unit) {
-            val totalNanos = (TOTAL_MS * 1_000_000f).toLong()
+            val totalNanos = (totalMs * 1_000_000f).toLong()
             val start = withInfiniteAnimationFrameNanos { it }
             var now = start
             while (now - start < totalNanos) {
@@ -79,7 +82,7 @@ fun LucentSplash(
 
     LaunchedEffect(Unit) {
         if (inspection) return@LaunchedEffect
-        delay(TOTAL_MS.toLong())
+        delay(totalMs.toLong())
         finish()
     }
 
@@ -99,71 +102,75 @@ fun LucentSplash(
             modifier = Modifier.fillMaxSize()
         )
 
-        val t = elapsed
-        val enter = (t / ENTER_MS).coerceIn(0f, 1f)
-        val enterEased = 1f - (1f - enter) * (1f - enter)
-        val overshoot = sin(enter * PI.toFloat()) * 0.06f
-        val scaleIn = 0.62f + 0.38f * enterEased + overshoot
+        if (style == SplashStyle.PEN) {
+            PenSplashArtwork(elapsedMs = elapsed, tint = paletteColors.firstOrNull() ?: onGradient)
+        } else {
+            val t = elapsed
+            val enter = (t / ENTER_MS).coerceIn(0f, 1f)
+            val enterEased = 1f - (1f - enter) * (1f - enter)
+            val overshoot = sin(enter * PI.toFloat()) * 0.06f
+            val scaleIn = 0.62f + 0.38f * enterEased + overshoot
 
-        val waveT = ((t - ENTER_MS) / (WAVE_END_MS - ENTER_MS)).coerceIn(0f, 1f)
-        val waveDeg = sin(waveT * WAVE_CYCLES * 2f * PI.toFloat()) * WAVE_AMP_DEG * (1f - waveT * 0.3f)
+            val waveT = ((t - ENTER_MS) / (WAVE_END_MS - ENTER_MS)).coerceIn(0f, 1f)
+            val waveDeg = sin(waveT * WAVE_CYCLES * 2f * PI.toFloat()) * WAVE_AMP_DEG * (1f - waveT * 0.3f)
 
-        val blinkT = ((t - BLINK_START_MS) / (BLINK_END_MS - BLINK_START_MS)).coerceIn(0f, 1f)
-        val blinking = t in BLINK_START_MS..BLINK_END_MS
-        val eyeOpen = if (t < BLINK_START_MS) 1f else 1f - sin(blinkT * PI.toFloat())
-        val blinkSquash = if (blinking) sin(blinkT * PI.toFloat()) * 0.03f else 0f
+            val blinkT = ((t - BLINK_START_MS) / (BLINK_END_MS - BLINK_START_MS)).coerceIn(0f, 1f)
+            val blinking = t in BLINK_START_MS..BLINK_END_MS
+            val eyeOpen = if (t < BLINK_START_MS) 1f else 1f - sin(blinkT * PI.toFloat())
+            val blinkSquash = if (blinking) sin(blinkT * PI.toFloat()) * 0.03f else 0f
 
-        val glass = ((t - MORPH_START_MS) / (MORPH_END_MS - MORPH_START_MS)).coerceIn(0f, 1f)
-        val glassEased = glass * glass * (3f - 2f * glass)
-        val wobble = sin(glass * PI.toFloat()) * 0.055f * sin(t / 90f)
+            val glass = ((t - MORPH_START_MS) / (MORPH_END_MS - MORPH_START_MS)).coerceIn(0f, 1f)
+            val glassEased = glass * glass * (3f - 2f * glass)
+            val wobble = sin(glass * PI.toFloat()) * 0.055f * sin(t / 90f)
 
-        val fishBob = sin(t / FISH_BOB_MS) * FISH_BOB_AMP * (1f - glassEased)
+            val fishBob = sin(t / FISH_BOB_MS) * FISH_BOB_AMP * (1f - glassEased)
 
-        val exit = ((t - EXIT_START_MS) / (TOTAL_MS - EXIT_START_MS)).coerceIn(0f, 1f)
-        val exitEased = exit * exit
-        val alpha = (1f - exitEased).coerceIn(0f, 1f) * enterEased.coerceAtLeast(0.001f)
+            val exit = ((t - EXIT_START_MS) / (TOTAL_MS - EXIT_START_MS)).coerceIn(0f, 1f)
+            val exitEased = exit * exit
+            val alpha = (1f - exitEased).coerceIn(0f, 1f) * enterEased.coerceAtLeast(0.001f)
 
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val unit = size.minDimension / 780f
-            val cx = size.width / 2f
-            val cy = size.height / 2f - 36f * unit - exitEased * 90f * unit
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val unit = size.minDimension / 780f
+                val cx = size.width / 2f
+                val cy = size.height / 2f - 36f * unit - exitEased * 90f * unit
 
-            withTransform({
-                translate(left = cx, top = cy)
-                scale(
-                    scaleX = unit * scaleIn * (1f + wobble),
-                    scaleY = unit * scaleIn * (1f - wobble - blinkSquash),
-                    pivot = Offset.Zero
-                )
-            }) {
-                drawCat(
-                    glass = glassEased,
-                    alpha = alpha,
-                    waveDeg = waveDeg,
-                    eyeOpen = eyeOpen,
-                    fishBob = fishBob,
-                    tint = paletteColors.firstOrNull() ?: Color.White
+                withTransform({
+                    translate(left = cx, top = cy)
+                    scale(
+                        scaleX = unit * scaleIn * (1f + wobble),
+                        scaleY = unit * scaleIn * (1f - wobble - blinkSquash),
+                        pivot = Offset.Zero
+                    )
+                }) {
+                    drawCat(
+                        glass = glassEased,
+                        alpha = alpha,
+                        waveDeg = waveDeg,
+                        eyeOpen = eyeOpen,
+                        fishBob = fishBob,
+                        tint = paletteColors.firstOrNull() ?: Color.White
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(top = 300.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "Lucent",
+                    color = onGradient.copy(alpha = glassEased * (1f - exitEased) * 0.95f),
+                    fontSize = 30.sp,
+                    textAlign = TextAlign.Center
                 )
             }
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(top = 300.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "Lucent",
-                color = onGradient.copy(alpha = glassEased * (1f - exitEased) * 0.95f),
-                fontSize = 30.sp,
-                textAlign = TextAlign.Center
-            )
-        }
-
         Text(
             text = com.lucent.app.i18n.S.skipAnimation,
-            color = onGradient.copy(alpha = (1f - exitEased) * 0.6f),
+            color = onGradient.copy(alpha = skipLabelAlpha(style, elapsed, totalMs) * 0.6f),
             fontSize = 13.sp,
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -173,6 +180,12 @@ fun LucentSplash(
                 .padding(6.dp)
         )
     }
+}
+
+private fun skipLabelAlpha(style: SplashStyle, elapsedMs: Float, totalMs: Float): Float {
+    val fadeStart = if (style == SplashStyle.PEN) PEN_HOLD_END_MS else EXIT_START_MS
+    val fade = ((elapsedMs - fadeStart) / (totalMs - fadeStart)).coerceIn(0f, 1f)
+    return (1f - fade * fade).coerceIn(0f, 1f)
 }
 
 private val Fur = Color(0xFFFFFDFA)

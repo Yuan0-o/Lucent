@@ -350,6 +350,8 @@ internal object BackupImporter {
                 if (s.has("backgroundAnimationEnabled")) {
                     settings.setBackgroundAnimationEnabled(s.optBoolean("backgroundAnimationEnabled", true))
                 }
+                if (s.has("splashEnabled")) settings.setSplashEnabled(s.optBoolean("splashEnabled", true))
+                if (s.has("splashStyle")) settings.setSplashStyle(s.optString("splashStyle"))
                 if (s.has("appLanguage")) settings.setAppLanguage(s.optString("appLanguage"))
                 if (s.has("notesSort")) settings.setNotesSort(s.optString("notesSort"))
                 if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))

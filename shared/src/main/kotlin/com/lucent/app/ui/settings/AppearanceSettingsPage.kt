@@ -59,6 +59,8 @@ internal fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (Settings
         Spacer(modifier = Modifier.height(12.dp))
         PausedNotice(S.dynamicColorPausedBackground)
     }
+    Spacer(modifier = Modifier.height(12.dp))
+    NavCard(S.settingsSplashTitle, S.settingsSplashSub) { onRoute(SettingsRoute.Splash) }
 }
 
 @Composable

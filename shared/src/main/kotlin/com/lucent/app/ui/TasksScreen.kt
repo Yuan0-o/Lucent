@@ -96,6 +96,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -462,7 +463,7 @@ fun TasksScreen(active: Boolean = true) {
         if (taskDirty) showUnsavedDialog = true else discardComposer()
     }
 
-    BackClaim(composing || viewingId != null || showingHistory || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode)
+    BackClaim(active && (composing || viewingId != null || showingHistory || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode))
     BackHandler(enabled = composing) { leaveComposer() }
     BackHandler(enabled = !composing && viewingId != null) { closeDetail() }
     BackHandler(enabled = !composing && viewingId == null && showingHistory) { showingHistory = false }
@@ -475,18 +476,7 @@ fun TasksScreen(active: Boolean = true) {
     BackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
     LaunchedEffect(active) {
-        if (!active) {
-            if (composing) discardComposer()
-            viewingId = null
-            returnToOnClose = null
-            showingHistory = false
-            showTrash = false
-            showSearch = false
-            showOverflowMenu = false
-            showNotebooks = false
-            actionsExpanded = false
-            exitSelection()
-        }
+        if (!active) showOverflowMenu = false
     }
 
     OnAppHidden { actionsExpanded = false }
@@ -887,7 +877,7 @@ fun TasksScreen(active: Boolean = true) {
             )
             }
             Box(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(composerScroll).imePadding().padding(bottom = LocalBottomBarInset.current)) {
+            Column(modifier = Modifier.fillMaxSize().imePadding().padding(16.dp).verticalScroll(composerScroll).padding(bottom = LocalBottomBarInset.current)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
@@ -1027,12 +1017,14 @@ fun TasksScreen(active: Boolean = true) {
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Text(
-                                if (editingTask != null) " " + com.lucent.app.i18n.S.saveChanges else " " + com.lucent.app.i18n.S.addTaskBtn,
+                                text = if (editingTask != null) com.lucent.app.i18n.S.saveChanges
+                                       else com.lucent.app.i18n.S.addTaskBtn,
                                 fontSize = 16.sp,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))

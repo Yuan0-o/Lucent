@@ -42,6 +42,15 @@ object SettingsCache {
     var backgroundAnimationEnabled: Boolean = true
 
     @Volatile
+    var splashEnabled: Boolean = true
+
+    @Volatile
+    var splashStyle: String = SplashStyle.DEFAULT.key
+
+    @Volatile
+    var autoBackup: AutoBackup.State = AutoBackup.State.EMPTY
+
+    @Volatile
     var assistantStyle: String = ""
 
     @Volatile
@@ -181,6 +190,9 @@ object SettingsCache {
         font = prefs.display.font
         dynamicColor = prefs.dynamicColor
         backgroundAnimationEnabled = prefs.backgroundAnimationEnabled
+        splashEnabled = prefs.splashEnabled
+        splashStyle = prefs.splashStyle
+        autoBackup = prefs.autoBackup
         assistantStyle = prefs.assistantStyle
         baseUrl = prefs.baseUrl
         apiSpec = prefs.apiSpec

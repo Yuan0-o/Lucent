@@ -184,7 +184,10 @@ internal fun PrivacySettingsPage(
                 Spacer(modifier = Modifier.width(12.dp))
                 GlassButton(text = S.clearLogs, onClick = {
                     StartupLog.clear(context)
-                    LucentToast.show(context, S.logsClearedToast)
+                    scope.launch { repo.setStartupLoggingEnabled(false) }
+                    SettingsCache.startupLoggingEnabled = false
+                    StartupLog.setEnabled(false)
+                    LucentToast.show(context, S.logsClearedAndOffToast)
                 })
             }
         }

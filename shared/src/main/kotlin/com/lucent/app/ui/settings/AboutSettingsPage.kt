@@ -12,6 +12,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,6 +32,7 @@ import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -43,6 +45,13 @@ internal fun AboutSettingsPage(
 ) {
     val scope = rememberCoroutineScope()
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = SettingsCache.autoUpdateEnabled)
+
+    LaunchedEffect(AutoUpdate.message, AutoUpdate.offered) {
+        if (AutoUpdate.message != null && AutoUpdate.offered == null) {
+            delay(3000)
+            AutoUpdate.report(null)
+        }
+    }
 
     BackHeader(S.settingsAboutTitle) { onRoute(SettingsRoute.Root) }
     AboutIdentityCard(versionName, buildNumber)

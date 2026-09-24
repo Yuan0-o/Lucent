@@ -35,12 +35,16 @@ fun PersonalizationSettingsPage(
     assistantStyle: String,
     onAssistantStyleChange: (String) -> Unit,
     onSave: () -> Unit,
+    onRequestSmallModelWarning: () -> Unit,
     onBack: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
     val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = SettingsCache.typingHapticsEnabled)
     val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(
         initial = SettingsCache.assistantConfirmToolsEnabled
+    )
+    val savedSmallModelMode by repo.smallModelModeEnabled.collectAsState(
+        initial = SettingsCache.smallModelModeEnabled
     )
 
     BackHeader(S.settingsPersonalizationTitle) { onBack() }
@@ -93,6 +97,28 @@ fun PersonalizationSettingsPage(
                 onCheckedChange = { on ->
                     SettingsCache.assistantConfirmToolsEnabled = on
                     AppScope.io.launch { repo.setAssistantConfirmTools(on) }
+                }
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = savedSmallModelMode,
+                onCheckedChange = { on ->
+                    if (on) {
+                        onRequestSmallModelWarning()
+                    } else {
+                        SettingsCache.smallModelModeEnabled = false
+                        AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
+                    }
                 }
             )
         }

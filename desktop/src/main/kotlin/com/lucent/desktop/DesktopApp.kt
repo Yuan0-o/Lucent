@@ -66,7 +66,10 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
         initial = startup.backgroundAnimationEnabled
     )
     val backgroundEnvironment = rememberBackgroundEnvironment(active)
-    var splashDone by remember { mutableStateOf(false) }
+    val splashEnabled by repo.splashEnabled.collectAsState(initial = startup.splashEnabled)
+    val splashStyle by repo.splashStyle.collectAsState(initial = startup.splashStyle)
+    var splashDone by remember { mutableStateOf(!splashEnabled) }
+    val appBackgroundAnimated = backgroundAnimated && (splashDone || !splashEnabled)
 
     val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = startup.dynamicColor)
 
@@ -77,7 +80,17 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     LaunchedEffect(autoUpdateOn) {
         if (autoUpdateOn) {
             com.lucent.app.data.AutoUpdate.report(null)
-            com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
+            if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
+                com.lucent.app.data.AutoUpdate.downloadOffered()
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!autoUpdateOn && com.lucent.app.data.AutoUpdate.pendingVersion != null) {
+            if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
+                com.lucent.app.data.AutoUpdate.downloadOffered()
+            }
         }
     }
 
@@ -122,14 +135,14 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
                     LockScreen(
                         paletteColors = paletteColors,
                         backdropColor = backdropColor,
-                        backgroundAnimated = backgroundAnimated && splashDone
+                        backgroundAnimated = appBackgroundAnimated
                     )
                 } else {
                     DesktopShell(
                         repo = repo,
                         paletteColors = paletteColors,
                         backdropColor = backdropColor,
-                        backgroundAnimated = backgroundAnimated && splashDone
+                        backgroundAnimated = appBackgroundAnimated
                     )
                 }
 
@@ -137,12 +150,13 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
                 com.lucent.app.ui.AutoUpdateDialog()
 
-                if (!splashDone) {
+                if (splashEnabled && !splashDone) {
                     LucentSplash(
                         paletteColors = paletteColors,
                         backdropColor = backdropColor,
                         onFinished = { splashDone = true },
-                        backgroundAnimated = backgroundAnimated
+                        backgroundAnimated = backgroundAnimated,
+                        style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
                     )
                 }
             }

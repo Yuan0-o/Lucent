@@ -62,7 +62,15 @@ fun main() {
     com.lucent.app.data.StartupLog.setEnabled(startup.startupLoggingEnabled)
     com.lucent.app.AppScope.appContext = context
     com.lucent.app.data.PrivilegedShell.install(com.lucent.app.data.DesktopShell)
-    com.lucent.app.data.AutoUpdate.installer = com.lucent.app.data.DesktopUpdateInstaller()
+    val updateInstaller = com.lucent.app.data.DesktopUpdateInstaller()
+    com.lucent.app.data.AutoUpdate.installer = updateInstaller
+    com.lucent.app.data.AutoUpdate.restorePending(startup.pendingUpdateVersion)
+    com.lucent.app.data.AutoUpdate.onPendingChange = { version ->
+        AppScope.io.launch { SettingsRepository(context).setPendingUpdateVersion(version.orEmpty()) }
+    }
+    AppScope.io.launch {
+        updateInstaller.purgeStale(com.lucent.app.LucentBuild.VERSION, com.lucent.app.data.AutoUpdate.pendingVersion)
+    }
 
     val focusRequests = MutableStateFlow(0L)
     if (!com.lucent.desktop.platform.SingleInstance.acquire(context) {

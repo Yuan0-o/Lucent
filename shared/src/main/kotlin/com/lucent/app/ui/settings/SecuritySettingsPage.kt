@@ -19,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.data.CrashShield
-import com.lucent.app.data.EncryptionStatus
 import com.lucent.app.data.PasswordAttempts
 import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
@@ -27,7 +26,6 @@ import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
-import com.lucent.app.ui.OverdueColor
 import com.lucent.app.ui.SecondaryUnlockRow
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.StepperRow
@@ -172,18 +170,5 @@ internal fun SecuritySettingsPage(
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(S.encryptionStatusTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            when {
-                EncryptionStatus.lockedOut -> S.encryptionStatusLockedOut
-                EncryptionStatus.degraded -> S.encryptionStatusDegraded
-                else -> S.encryptionStatusHealthy
-            },
-            color = if (EncryptionStatus.degraded || EncryptionStatus.lockedOut) OverdueColor else onGradientMuted,
-            fontSize = 13.sp
-        )
     }
 }

@@ -141,10 +141,6 @@ ENTRIES = [
     ("linkLegendInternal", "Links to another note", "指向其它笔记", "他のメモへのリンク", "다른 노트로 연결"),
     ("linkLegendExternal", "Opens outside Lucent", "在 Lucent 之外打开", "Lucent の外部で開きます", "Lucent 외부에서 열림"),
 
-    ("encryptionStatusTitle", "Encryption at rest", "静态数据加密", "保存データの暗号化", "저장 데이터 암호화"),
-    ("encryptionStatusHealthy", "Your notes, attachments and saved keys are encrypted on this device.", "你的笔记、附件和已保存的密钥在本设备上均已加密。", "メモ・添付ファイル・保存された鍵は、この端末上で暗号化されています。", "노트, 첨부 파일, 저장된 키가 이 기기에서 암호화되어 있습니다."),
-    ("encryptionStatusDegraded", "Some data is NOT encrypted on this device right now. Tap for details.", "当前有部分数据未在本设备上加密。点击查看详情。", "現在、一部のデータがこの端末で暗号化されていません。詳細はタップしてください。", "현재 일부 데이터가 이 기기에서 암호화되어 있지 않습니다. 자세한 내용은 탭하세요."),
-    ("encryptionStatusLockedOut", "An existing database could not be opened with this device's key. Nothing was deleted — restore from a backup.", "现有数据库无法用本设备的密钥打开。数据没有被删除——请从备份恢复。", "既存のデータベースをこの端末の鍵で開けませんでした。データは削除されていません——バックアップから復元してください。", "기존 데이터베이스를 이 기기의 키로 열 수 없었습니다. 삭제된 것은 없습니다 — 백업에서 복원하세요."),
     ("encryptionRunCheck", "Run encryption check", "运行加密自检", "暗号化チェックを実行", "암호화 검사 실행"),
     ("encryptionCheckPassed", "Check passed — values are sealed and open correctly.", "自检通过——数据可正确加密并解密。", "チェックに合格しました——値は正しく封印され、復号できます。", "검사 통과 — 값이 정상적으로 봉인되고 복호화됩니다."),
     ("encryptionCheckFailed(reason: String)", "Check failed: {reason}", "自检失败：{reason}", "チェックに失敗しました：{reason}", "검사 실패: {reason}"),
@@ -767,7 +763,6 @@ ENTRIES = [
     ("backgroundPaletteDisabledHint", "Living gradient is off — turn it on to choose colours.", "未开启流动渐变背景，无法选择配色", "流れるグラデーションがオフのため、配色を選択できません", "흐르는 그라데이션이 꺼져 있어 색상을 선택할 수 없습니다"),
     ("settingsFontTitle", "Font", "字体", "フォント", "글꼴"),
     ("fontSystemLabel", "System", "系统", "システム", "시스템"),
-    ("fontNoneImportedHint", "No fonts imported yet — the app is using your device's font.", "尚未导入任何字体——应用正在使用设备系统字体。", "まだフォントがインポートされていません。アプリは端末のシステムフォントを使用しています。", "아직 가져온 글꼴이 없습니다. 앱은 기기의 시스템 글꼴을 사용 중입니다."),
     ("fontImportButton", "Import font…", "导入字体…", "フォントをインポート…", "글꼴 가져오기…"),
     ("fontImporting", "Importing font…", "正在导入字体…", "フォントをインポートしています…", "글꼴을 가져오는 중…"),
     ("fontImportedToast", "Font imported.", "字体已导入。", "フォントをインポートしました。", "글꼴을 가져왔습니다."),
@@ -830,7 +825,6 @@ ENTRIES = [
     ("loggingEnabledEvent", "Logging enabled from Settings", "已在设置中开启日志", "設定でログを有効化", "설정에서 로그 사용 설정됨"),
     ("exportLogs", "Export logs", "导出日志", "ログをエクスポート", "로그 내보내기"),
     ("clearLogs", "Clear logs", "清除日志", "ログを消去", "로그 지우기"),
-    ("logsClearedToast", "Logs cleared.", "日志已清除。", "ログを消去しました。", "로그를 지웠습니다."),
     ("logsExported", "Logs exported.", "日志已导出。", "ログをエクスポートしました。", "로그를 내보냈습니다."),
     ("logsExportFailed", "Couldn't export the logs.", "无法导出日志。", "ログをエクスポートできませんでした。", "로그를 내보내지 못했습니다."),
 
@@ -1480,6 +1474,23 @@ ENTRIES = [
     ("updateDownloading", "Downloading\u2026", "正在下载…", "ダウンロード中…", "내려받는 중…"),
     ("updateInstalling", "Installing\u2026", "正在安装…", "インストール中…", "설치 중…"),
     ("updateInstallFailed", "The update could not be installed. You can download it from the release page instead.", "无法安装更新。你可以改为从发布页面下载。", "更新をインストールできませんでした。リリースページからダウンロードしてください。", "업데이트를 설치할 수 없습니다. 릴리스 페이지에서 내려받아 주세요."),
+    ("updateReadyBody(version: String)", "Lucent {version} is downloaded and ready. Install it now, or keep working and Lucent will ask again next time it opens.", "Lucent {version} 已下载完毕。可以立即安装，也可以继续手头的事，下次打开 Lucent 时会再次询问。", "Lucent {version} のダウンロードが完了しました。今すぐインストールするか、作業を続けて次回の起動時に再度確認させることもできます。", "Lucent {version} 내려받기가 끝났습니다. 지금 설치하거나, 하던 일을 계속하고 다음에 Lucent를 열 때 다시 물어보게 할 수 있습니다."),
+    ("updateDownloadFailed", "The download did not finish in time, so the incomplete file has been removed. Lucent will try again later.", "下载未能在限时内完成，未完成的文件已删除。Lucent 稍后会再试一次。", "ダウンロードが時間内に完了しなかったため、不完全なファイルを削除しました。Lucent は後で再試行します。", "내려받기가 제때 끝나지 않아 불완전한 파일을 삭제했습니다. Lucent가 나중에 다시 시도합니다."),
+
+    ("settingsSplashTitle", "Splash animation", "开屏动画", "起動アニメーション", "시작 애니메이션"),
+    ("settingsSplashSub", "What Lucent shows while it opens", "打开 Lucent 时播放的内容", "Lucent の起動中に表示するもの", "Lucent가 열리는 동안 보여 줄 것"),
+    ("splashEnableTitle", "Show the splash animation", "显示开屏动画", "起動アニメーションを表示", "시작 애니메이션 표시"),
+    ("splashEnableSub", "Turn this off to go straight to your notes while Lucent loads. Only the theme and its background animation appear.", "关闭后打开软件会直接进入主页，加载过程只显示主题与背景动画。", "オフにすると読み込み中でもすぐにメモ画面へ進みます。表示されるのはテーマと背景アニメーションだけです。", "끄면 Lucent가 로드되는 동안 곧바로 노트 화면으로 들어갑니다. 테마와 배경 애니메이션만 표시됩니다."),
+    ("splashStyleTitle", "Animation", "动画", "アニメーション", "애니메이션"),
+    ("splashStyleCatTitle", "The cat", "小猫", "ねこ", "고양이"),
+    ("splashStyleCatDesc", "A cat waves, blinks, and turns to glass.", "小猫招手、眨眼，随后化作玻璃。", "ねこが手を振り、まばたきし、ガラスになります。", "고양이가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."),
+    ("splashStylePenTitle", "The pen", "钢笔", "ペン", "펜"),
+    ("splashStylePenDesc", "A pen writes the name in script, then the ink fades away.", "一支钢笔居中写出花体字，随后墨迹慢慢淡去。", "ペンが中央に筆記体で名前を書き、インクがゆっくり消えていきます。", "펜이 가운데에 필기체로 이름을 쓰고, 잉크가 천천히 사라집니다."),
+
+    ("shizukuLostTitle", "Shizuku is not available", "Shizuku 不可用", "Shizuku が利用できません", "Shizuku를 사용할 수 없습니다"),
+    ("shizukuLostBody", "Lucent can no longer reach Shizuku, so the advanced switch has been turned off. Open Shizuku and turn the switch on again when you want privileged actions.", "Lucent 已无法连接 Shizuku，高级开关已自动关闭。需要特权操作时，请先打开 Shizuku，再重新开启该开关。", "Lucent は Shizuku に接続できなくなったため、詳細設定のスイッチを自動でオフにしました。特権操作が必要なときは Shizuku を開き、スイッチを入れ直してください。", "Lucent가 더 이상 Shizuku에 연결할 수 없어 고급 스위치를 자동으로 껐습니다. 특권 작업이 필요하면 Shizuku를 열고 스위치를 다시 켜세요."),
+
+    ("logsClearedAndOffToast", "Logs cleared. Log recording is now off.", "日志已清除，日志记录已关闭。", "ログを消去し、記録をオフにしました。", "로그를 지우고 기록을 껐습니다."),
 
 ]
 

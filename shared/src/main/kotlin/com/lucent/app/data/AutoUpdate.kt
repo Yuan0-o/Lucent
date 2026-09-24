@@ -9,7 +9,10 @@ object AutoUpdate {
     enum class Phase { IDLE, CHECKING, DOWNLOADING, INSTALLING }
 
     interface Installer {
+        suspend fun download(info: ReleaseInfo): Boolean
+        fun isDownloaded(info: ReleaseInfo): Boolean
         suspend fun install(info: ReleaseInfo): Boolean
+        fun discard(info: ReleaseInfo)
     }
 
     var installer: Installer? = null
@@ -23,8 +26,20 @@ object AutoUpdate {
     var message by mutableStateOf<String?>(null)
         private set
 
+    var readyForInstall by mutableStateOf(false)
+        private set
+
     var lastCheckFailed: Boolean = false
         private set
+
+    var pendingVersion: String? = null
+        private set
+
+    var onPendingChange: ((String?) -> Unit)? = null
+
+    fun restorePending(version: String?) {
+        pendingVersion = version?.takeIf { it.isNotBlank() }
+    }
 
     fun markPhase(next: Phase) {
         phase = next
@@ -32,6 +47,7 @@ object AutoUpdate {
 
     fun offer(info: ReleaseInfo) {
         offered = info
+        readyForInstall = installer?.isDownloaded(info) == true
         phase = Phase.IDLE
     }
 
@@ -41,7 +57,19 @@ object AutoUpdate {
 
     fun dismiss() {
         offered = null
+        readyForInstall = false
         phase = Phase.IDLE
+    }
+
+    fun later() {
+        pendingVersion = offered?.tag
+        onPendingChange?.invoke(pendingVersion)
+        dismiss()
+    }
+
+    private fun clearPending() {
+        pendingVersion = null
+        onPendingChange?.invoke(null)
     }
 
     suspend fun check(currentVersion: String, notifyWhenCurrent: Boolean = false): ReleaseInfo? {
@@ -62,6 +90,28 @@ object AutoUpdate {
         return found
     }
 
+    suspend fun downloadOffered(): Boolean {
+        val info = offered ?: return false
+        val engine = installer ?: return false
+        if (engine.isDownloaded(info)) {
+            readyForInstall = true
+            return true
+        }
+        phase = Phase.DOWNLOADING
+        val ok = try {
+            engine.download(info)
+        } catch (t: Throwable) {
+            false
+        }
+        phase = Phase.IDLE
+        readyForInstall = ok
+        if (!ok) {
+            engine.discard(info)
+            message = com.lucent.app.i18n.S.updateDownloadFailed
+        }
+        return ok
+    }
+
     suspend fun installOffered(): Boolean {
         val info = offered ?: return false
         val engine = installer ?: return false
@@ -72,12 +122,17 @@ object AutoUpdate {
             false
         }
         phase = Phase.IDLE
-        if (ok) offered = null
+        if (ok) {
+            readyForInstall = false
+            offered = null
+            clearPending()
+        }
         return ok
     }
 
     fun reset() {
         offered = null
+        readyForInstall = false
         phase = Phase.IDLE
     }
 }

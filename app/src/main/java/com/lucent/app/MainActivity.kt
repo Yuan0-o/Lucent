@@ -84,6 +84,7 @@ import com.lucent.app.data.AttachmentMigration
 import com.lucent.app.data.AutoUpdate
 import com.lucent.app.data.PrivilegedShell
 import com.lucent.app.data.ShizukuShell
+import com.lucent.app.data.ShizukuWatcher
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.ShareIntegration
 import com.lucent.app.data.StartupLog
@@ -117,6 +118,7 @@ import com.lucent.app.ui.SettingsScreen
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.ShareIntake
 import com.lucent.app.ui.ShareIntakeDialog
+import com.lucent.app.ui.ShizukuLostDialog
 import com.lucent.app.ui.WidgetTaskConfirmDialog
 import com.lucent.app.ui.TasksScreen
 import com.lucent.app.ui.UnsavedChangesGuard
@@ -165,7 +167,8 @@ class MainActivity : FragmentActivity() {
         )
 
         PrivilegedShell.install(ShizukuShell)
-        AutoUpdate.installer = AndroidUpdateInstaller(applicationContext)
+        val updateInstaller = AndroidUpdateInstaller(applicationContext)
+        AutoUpdate.installer = updateInstaller
         val settingsRepo = SettingsRepository(applicationContext)
         val crashShieldWanted = try {
             runBlocking { settingsRepo.crashShieldEnabledOnce() }
@@ -198,6 +201,14 @@ class MainActivity : FragmentActivity() {
 
         StartupLog.setEnabled(startup.startupLoggingEnabled)
         AppScope.appContext = applicationContext
+
+        if (startup.privilegedEnabled) ShizukuWatcher.ensureStarted(applicationContext)
+
+        AutoUpdate.restorePending(startup.pendingUpdateVersion)
+        AutoUpdate.onPendingChange = { version ->
+            AppScope.io.launch { settingsRepo.setPendingUpdateVersion(version.orEmpty()) }
+        }
+        AppScope.io.launch { updateInstaller.purgeStale(runningVersion, AutoUpdate.pendingVersion) }
 
         val integrationEnabled = startup.systemIntegrationEnabled
         AppScope.io.launch { ShareIntegration.setEnabled(applicationContext, integrationEnabled) }
@@ -248,7 +259,20 @@ class MainActivity : FragmentActivity() {
                 initial = startup.backgroundAnimationEnabled
             )
             val backgroundEnvironment = rememberBackgroundEnvironment()
+            val splashEnabled by settingsRepo.splashEnabled.collectAsState(
+                initial = com.lucent.app.data.SettingsCache.splashEnabled
+            )
+            val splashStyle by settingsRepo.splashStyle.collectAsState(
+                initial = com.lucent.app.data.SettingsCache.splashStyle
+            )
             var splashDone by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(splashEnabled) {
+                if (!splashEnabled) {
+                    delay(2500)
+                    splashDone = true
+                }
+            }
+            val appBackgroundAnimated = backgroundAnimated && (splashDone || !splashEnabled)
 
             val dynamicColorOn by settingsRepo.dynamicColorEnabled.collectAsState(
                 initial = startup.dynamicColor
@@ -263,7 +287,17 @@ class MainActivity : FragmentActivity() {
             LaunchedEffect(autoUpdateOn) {
                 if (autoUpdateOn) {
                     com.lucent.app.data.AutoUpdate.report(null)
-                    com.lucent.app.data.AutoUpdate.check(runningVersion)
+                    if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                        com.lucent.app.data.AutoUpdate.downloadOffered()
+                    }
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                if (!autoUpdateOn && com.lucent.app.data.AutoUpdate.pendingVersion != null) {
+                    if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                        com.lucent.app.data.AutoUpdate.downloadOffered()
+                    }
                 }
             }
 
@@ -323,23 +357,31 @@ class MainActivity : FragmentActivity() {
                                 LockScreen(
                                     paletteColors = paletteColors,
                                     backdropColor = backdropColor,
-                                    backgroundAnimated = backgroundAnimated && splashDone
+                                    backgroundAnimated = appBackgroundAnimated
                                 )
                             } else {
                                 LucentApp(
                                     paletteColors = paletteColors,
                                     backdropColor = backdropColor,
-                                    backgroundAnimated = backgroundAnimated && splashDone
+                                    backgroundAnimated = appBackgroundAnimated
                                 )
                             }
+                        } else if (!splashEnabled) {
+                            FluidGlassBackground(
+                                palette = paletteColors,
+                                backdropColor = backdropColor,
+                                animated = backgroundAnimated,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
 
-                        if (!splashDone) {
+                        if (splashEnabled && !splashDone) {
                             LucentSplash(
                                 paletteColors = paletteColors,
                                 backdropColor = backdropColor,
                                 onFinished = { splashDone = true },
-                                backgroundAnimated = backgroundAnimated
+                                backgroundAnimated = backgroundAnimated,
+                                style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
                             )
                         }
                     }
@@ -490,7 +532,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
     LaunchedEffect(AppNavigation.requestedScreen) {
         AppNavigation.consumeScreen()?.let { target ->
-            if (target != currentScreen) runOrConfirm { currentScreen = target }
+            if (target != currentScreen) currentScreen = target
         }
     }
 
@@ -626,11 +668,9 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                         screen = screen,
                                         selected = currentScreen == screen,
                                         onClick = {
-                                            runOrConfirm {
-                                                AppNavigation.resetSettingsRoute()
-                                                tabClickTarget = screen
-                                                currentScreen = screen
-                                            }
+                                            AppNavigation.resetSettingsRoute()
+                                            tabClickTarget = screen
+                                            currentScreen = screen
                                         },
                                         modifier = Modifier.weight(1f)
                                     )
@@ -655,6 +695,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
             ShareIntakeDialog()
             WidgetTaskConfirmDialog()
             AutoUpdateDialog()
+            ShizukuLostDialog()
         }
     }
 }
@@ -742,7 +783,8 @@ private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickCon
 
     HorizontalPager(
         state = pagerState,
-        beyondViewportPageCount = 1,
+        beyondViewportPageCount = screens.lastIndex,
+        userScrollEnabled = !AppNavigation.innerBackActive,
         modifier = modifier
     ) { page ->
         val screen = screens[page]

@@ -75,6 +75,8 @@ private object SettingsKeys {
     val LINKS_ENABLED = booleanPreferencesKey("links_enabled")
 
     val BACKGROUND_ANIMATION_ENABLED = booleanPreferencesKey("background_animation_enabled")
+    val SPLASH_ENABLED = booleanPreferencesKey("splash_enabled")
+    val SPLASH_STYLE = stringPreferencesKey("splash_style")
 
     val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
     val APP_LOCK_CREDENTIALS_ENC = stringPreferencesKey("app_lock_credentials_enc")
@@ -117,6 +119,7 @@ private object SettingsKeys {
     val MEMORY_TIER_PRELOCAL = stringPreferencesKey("memory_tier_prelocal")
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
     val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
+    val PENDING_UPDATE_VERSION = stringPreferencesKey("pending_update_version")
 
     val PRIVILEGED_ENABLED = booleanPreferencesKey("privileged_enabled")
 }
@@ -177,6 +180,9 @@ class SettingsRepository(private val context: Context) {
         val appLanguage: String = "system",
         val assistantName: String = "Lucent",
         val backgroundAnimationEnabled: Boolean = true,
+        val splashEnabled: Boolean = true,
+        val splashStyle: String = SplashStyle.DEFAULT.key,
+        val autoBackup: AutoBackup.State = AutoBackup.State.EMPTY,
         val dynamicColor: Boolean = false,
         val notesSort: String = "recent",
         val tasksSort: String = "recent",
@@ -222,7 +228,8 @@ class SettingsRepository(private val context: Context) {
         val cloudAutoBackup: Boolean = false,
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
-        val privilegedEnabled: Boolean = false
+        val privilegedEnabled: Boolean = false,
+        val pendingUpdateVersion: String = ""
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -239,6 +246,9 @@ class SettingsRepository(private val context: Context) {
             appLanguage = prefs[SettingsKeys.APP_LANGUAGE] ?: "system",
             assistantName = secret(prefs, SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, "Lucent"),
             backgroundAnimationEnabled = prefs[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true,
+            splashEnabled = prefs[SettingsKeys.SPLASH_ENABLED] ?: true,
+            splashStyle = prefs[SettingsKeys.SPLASH_STYLE] ?: SplashStyle.DEFAULT.key,
+            autoBackup = AutoBackup.State.fromJson(prefs[SettingsKeys.AUTO_BACKUP] ?: ""),
             dynamicColor = prefs[SettingsKeys.DYNAMIC_COLOR_ENABLED] ?: false,
             notesSort = prefs[SettingsKeys.NOTES_SORT] ?: "recent",
             tasksSort = prefs[SettingsKeys.TASKS_SORT] ?: "recent",
@@ -289,7 +299,8 @@ class SettingsRepository(private val context: Context) {
             cloudAutoBackup = prefs[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false,
             cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
             autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false,
-            privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false
+            privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false,
+            pendingUpdateVersion = prefs[SettingsKeys.PENDING_UPDATE_VERSION] ?: ""
         )
     }
 
@@ -490,6 +501,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun autoBackupOnce(): AutoBackup.State =
         AutoBackup.State.fromJson(context.settingsDataStore.data.first()[SettingsKeys.AUTO_BACKUP] ?: "")
     suspend fun setAutoBackup(state: AutoBackup.State) {
+        SettingsCache.autoBackup = state
         context.settingsDataStore.edit { it[SettingsKeys.AUTO_BACKUP] = state.toJson() }
     }
 
@@ -521,6 +533,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoUpdateEnabled(value: Boolean) {
         SettingsCache.autoUpdateEnabled = value
         context.settingsDataStore.edit { it[SettingsKeys.AUTO_UPDATE_ENABLED] = value }
+    }
+
+    val pendingUpdateVersion: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.PENDING_UPDATE_VERSION] ?: ""
+    }
+    suspend fun setPendingUpdateVersion(value: String) {
+        context.settingsDataStore.edit {
+            if (value.isBlank()) it.remove(SettingsKeys.PENDING_UPDATE_VERSION)
+            else it[SettingsKeys.PENDING_UPDATE_VERSION] = value
+        }
     }
 
     val privilegedEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.PRIVILEGED_ENABLED] ?: false }
@@ -597,6 +619,20 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBackgroundAnimationEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] = value }
         SettingsCache.backgroundAnimationEnabled = value
+    }
+
+    val splashEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.SPLASH_ENABLED] ?: true }
+    suspend fun setSplashEnabled(value: Boolean) {
+        SettingsCache.splashEnabled = value
+        context.settingsDataStore.edit { it[SettingsKeys.SPLASH_ENABLED] = value }
+    }
+
+    val splashStyle: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.SPLASH_STYLE] ?: SplashStyle.DEFAULT.key
+    }
+    suspend fun setSplashStyle(value: String) {
+        SettingsCache.splashStyle = SplashStyle.fromKey(value).key
+        context.settingsDataStore.edit { it[SettingsKeys.SPLASH_STYLE] = SplashStyle.fromKey(value).key }
     }
 
     val appLockEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_ENABLED] ?: false }

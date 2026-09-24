@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.AutoBackup
 import com.lucent.app.data.AutoBackupRunner
 import com.lucent.app.data.DatabaseEncryption
+import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -90,7 +91,7 @@ internal fun DataSettingsPage(
     }
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        var loadedAuto by remember { mutableStateOf<AutoBackup.State?>(null) }
+        var loadedAuto by remember { mutableStateOf<AutoBackup.State?>(SettingsCache.autoBackup) }
         LaunchedEffect(Unit) { repo.autoBackup.collect { loadedAuto = it } }
         val autoState = loadedAuto ?: AutoBackup.State.EMPTY
         val autoLoaded = loadedAuto != null

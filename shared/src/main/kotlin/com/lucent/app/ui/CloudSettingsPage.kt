@@ -70,10 +70,12 @@ fun CloudSettingsPage(
     val autoUpload by repo.cloudAutoBackup.collectAsState(initial = SettingsCache.cloudAutoBackup)
     val storedPw by repo.cloudPasswordEnc.collectAsState(initial = SettingsCache.cloudPasswordEnc)
 
-    var urlDraft by remember { mutableStateOf("") }
-    var userDraft by remember { mutableStateOf("") }
-    var pwDraft by remember { mutableStateOf("") }
-    var folderDraft by remember { mutableStateOf("") }
+    var urlDraft by remember { mutableStateOf(SettingsCache.cloudUrl) }
+    var userDraft by remember { mutableStateOf(SettingsCache.cloudUser) }
+    var pwDraft by remember {
+        mutableStateOf(runCatching { CryptoUtil.decrypt(SettingsCache.cloudPasswordEnc) }.getOrDefault(""))
+    }
+    var folderDraft by remember { mutableStateOf(SettingsCache.cloudFolder.ifBlank { "Lucent" }) }
     var testing by remember { mutableStateOf(false) }
     var uploadBusy by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(false) }
@@ -130,191 +132,193 @@ fun CloudSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Text(S.cloudProviderTitle, color = onGradient, fontSize = 15.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CloudSync.PRESETS.forEach { (name, presetUrl) ->
-                    FilterChip(
-                        selected = provider == name,
-                        onClick = {
-                            val switching = provider != name
-                            scope.launch {
-                                SettingsCache.cloudProvider = name
-                                repo.setCloudProvider(name)
-                                if (presetUrl.isNotBlank()) {
-                                    val current = urlDraft.trim()
-                                    val isAnotherPreset = CloudSync.PRESETS.any {
-                                        it.second.isNotBlank() && current == it.second
+        if (enabled) {
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.cloudProviderTitle, color = onGradient, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CloudSync.PRESETS.forEach { (name, presetUrl) ->
+                        FilterChip(
+                            selected = provider == name,
+                            onClick = {
+                                val switching = provider != name
+                                scope.launch {
+                                    SettingsCache.cloudProvider = name
+                                    repo.setCloudProvider(name)
+                                    if (presetUrl.isNotBlank()) {
+                                        val current = urlDraft.trim()
+                                        val isAnotherPreset = CloudSync.PRESETS.any {
+                                            it.second.isNotBlank() && current == it.second
+                                        }
+                                        if (current.isBlank() || isAnotherPreset) {
+                                            urlDraft = presetUrl
+                                            SettingsCache.cloudUrl = presetUrl
+                                            repo.setCloudUrl(presetUrl)
+                                        }
+                                    } else if (name == "Custom" && switching) {
+                                        urlDraft = ""
+                                        SettingsCache.cloudUrl = ""
+                                        repo.setCloudUrl("")
                                     }
-                                    if (current.isBlank() || isAnotherPreset) {
-                                        urlDraft = presetUrl
-                                        SettingsCache.cloudUrl = presetUrl
-                                        repo.setCloudUrl(presetUrl)
-                                    }
-                                } else if (name == "Custom" && switching) {
-                                    urlDraft = ""
-                                    SettingsCache.cloudUrl = ""
-                                    repo.setCloudUrl("")
                                 }
-                            }
-                        },
-                        label = { Text(if (name == "Custom") S.cloudCustomProvider else name) }
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            OutlinedTextField(
-                value = urlDraft,
-                onValueChange = {
-                    urlDraft = it
-                    scope.launch {
-                        SettingsCache.cloudUrl = it
-                        repo.setCloudUrl(it)
-                    }
-                },
-                label = { Text(S.cloudUrlLabel) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            OutlinedTextField(
-                value = userDraft,
-                onValueChange = {
-                    userDraft = it
-                    scope.launch {
-                        SettingsCache.cloudUser = it
-                        repo.setCloudUser(it)
-                    }
-                },
-                label = { Text(S.cloudUserLabel) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            OutlinedTextField(
-                value = pwDraft,
-                onValueChange = {
-                    pwDraft = it
-                    scope.launch {
-                        SettingsCache.cloudPasswordEnc = CryptoUtil.encrypt(it)
-                        repo.setCloudPasswordEnc(CryptoUtil.encrypt(it))
-                    }
-                },
-                label = { Text(S.cloudPasswordLabel) },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            OutlinedTextField(
-                value = folderDraft,
-                onValueChange = {
-                    folderDraft = it
-                    scope.launch {
-                        SettingsCache.cloudFolder = it
-                        repo.setCloudFolder(it)
-                    }
-                },
-                label = { Text(S.cloudFolderLabel) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            TextButton(
-                enabled = !testing && config() != null,
-                onClick = {
-                    val cfg = config() ?: return@TextButton
-                    testing = true
-                    scope.launch {
-                        val r = CloudSync.test(cfg)
-                        testing = false
-                        showToast(r.fold(
-                            onSuccess = { it },
-                            onFailure = { S.cloudTestRunning.removeSuffix("…") + ": " + (it.message ?: "?") }
-                        ))
-                    }
-                }
-            ) {
-                Text(if (testing) S.cloudTestRunning else S.cloudTestButton)
-            }
-            if (config() == null) {
-                Text(S.cloudNeedsConfig, color = onGradientMuted, fontSize = 12.sp)
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(S.cloudAutoBackupTitle, color = onGradient, fontSize = 15.sp)
-                    Text(S.cloudAutoBackupSub, color = onGradientMuted, fontSize = 13.sp)
-                }
-                Switch(
-                    checked = autoUpload,
-                    onCheckedChange = {
-                        SettingsCache.cloudAutoBackup = it
-                        scope.launch { repo.setCloudAutoBackup(it) }
-                    }
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            var busy by remember { mutableStateOf(false) }
-            TextButton(
-                enabled = enabled && config() != null && !busy,
-                onClick = {
-                    val cfg = config() ?: return@TextButton
-                    busy = true
-                    scope.launch {
-                        val r = runCatching {
-                            val bytes = ByteArrayOutputStream().use { out ->
-                                BackupManager.exportEncrypted(
-                                    context, AppDatabase.getInstance(context), repo, out, null
-                                )
-                                out.toByteArray()
-                            }
-                            CloudSync.upload(cfg, "lucent-backup-${System.currentTimeMillis()}.lcb", bytes)
-                        }
-                        busy = false
-                        showToast(r.fold(
-                            onSuccess = { if (it.isSuccess) S.cloudBackupNowDone else S.cloudBackupNowFailed + (it.exceptionOrNull()?.message ?: "?") },
-                            onFailure = { S.cloudBackupNowFailed + (it.message ?: "?") }
-                        ))
-                    }
-                }
-            ) {
-                Icon(Icons.Default.CloudUpload, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(if (busy) S.cloudTestRunning else S.cloudBackupNow)
-            }
-            TextButton(
-                enabled = enabled && config() != null && !restoring,
-                onClick = {
-                    val cfg = config() ?: return@TextButton
-                    restoring = true
-                    scope.launch {
-                        val r = CloudSync.list(cfg)
-                        restoring = false
-                        r.fold(
-                            onSuccess = {
-                                if (it.isEmpty()) showToast(S.cloudRestoreEmpty) else cloudList = it
                             },
-                            onFailure = {
-                                showToast(S.cloudBackupNowFailed + (it.message ?: "?"))
-                            }
+                            label = { Text(if (name == "Custom") S.cloudCustomProvider else name) }
                         )
                     }
                 }
-            ) {
-                Icon(Icons.Default.CloudDownload, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(if (restoring) S.cloudTestRunning else S.cloudRestore)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                OutlinedTextField(
+                    value = urlDraft,
+                    onValueChange = {
+                        urlDraft = it
+                        scope.launch {
+                            SettingsCache.cloudUrl = it
+                            repo.setCloudUrl(it)
+                        }
+                    },
+                    label = { Text(S.cloudUrlLabel) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = userDraft,
+                    onValueChange = {
+                        userDraft = it
+                        scope.launch {
+                            SettingsCache.cloudUser = it
+                            repo.setCloudUser(it)
+                        }
+                    },
+                    label = { Text(S.cloudUserLabel) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = pwDraft,
+                    onValueChange = {
+                        pwDraft = it
+                        scope.launch {
+                            SettingsCache.cloudPasswordEnc = CryptoUtil.encrypt(it)
+                            repo.setCloudPasswordEnc(CryptoUtil.encrypt(it))
+                        }
+                    },
+                    label = { Text(S.cloudPasswordLabel) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = folderDraft,
+                    onValueChange = {
+                        folderDraft = it
+                        scope.launch {
+                            SettingsCache.cloudFolder = it
+                            repo.setCloudFolder(it)
+                        }
+                    },
+                    label = { Text(S.cloudFolderLabel) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(
+                    enabled = !testing && config() != null,
+                    onClick = {
+                        val cfg = config() ?: return@TextButton
+                        testing = true
+                        scope.launch {
+                            val r = CloudSync.test(cfg)
+                            testing = false
+                            showToast(r.fold(
+                                onSuccess = { it },
+                                onFailure = { S.cloudTestRunning.removeSuffix("…") + ": " + (it.message ?: "?") }
+                            ))
+                        }
+                    }
+                ) {
+                    Text(if (testing) S.cloudTestRunning else S.cloudTestButton)
+                }
+                if (config() == null) {
+                    Text(S.cloudNeedsConfig, color = onGradientMuted, fontSize = 12.sp)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.cloudAutoBackupTitle, color = onGradient, fontSize = 15.sp)
+                        Text(S.cloudAutoBackupSub, color = onGradientMuted, fontSize = 13.sp)
+                    }
+                    Switch(
+                        checked = autoUpload,
+                        onCheckedChange = {
+                            SettingsCache.cloudAutoBackup = it
+                            scope.launch { repo.setCloudAutoBackup(it) }
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                var busy by remember { mutableStateOf(false) }
+                TextButton(
+                    enabled = enabled && config() != null && !busy,
+                    onClick = {
+                        val cfg = config() ?: return@TextButton
+                        busy = true
+                        scope.launch {
+                            val r = runCatching {
+                                val bytes = ByteArrayOutputStream().use { out ->
+                                    BackupManager.exportEncrypted(
+                                        context, AppDatabase.getInstance(context), repo, out, null
+                                    )
+                                    out.toByteArray()
+                                }
+                                CloudSync.upload(cfg, "lucent-backup-${System.currentTimeMillis()}.lcb", bytes)
+                            }
+                            busy = false
+                            showToast(r.fold(
+                                onSuccess = { if (it.isSuccess) S.cloudBackupNowDone else S.cloudBackupNowFailed + (it.exceptionOrNull()?.message ?: "?") },
+                                onFailure = { S.cloudBackupNowFailed + (it.message ?: "?") }
+                            ))
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (busy) S.cloudTestRunning else S.cloudBackupNow)
+                }
+                TextButton(
+                    enabled = enabled && config() != null && !restoring,
+                    onClick = {
+                        val cfg = config() ?: return@TextButton
+                        restoring = true
+                        scope.launch {
+                            val r = CloudSync.list(cfg)
+                            restoring = false
+                            r.fold(
+                                onSuccess = {
+                                    if (it.isEmpty()) showToast(S.cloudRestoreEmpty) else cloudList = it
+                                },
+                                onFailure = {
+                                    showToast(S.cloudBackupNowFailed + (it.message ?: "?"))
+                                }
+                            )
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (restoring) S.cloudTestRunning else S.cloudRestore)
+                }
             }
         }
     }

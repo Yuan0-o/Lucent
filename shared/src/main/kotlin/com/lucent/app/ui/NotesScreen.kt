@@ -113,6 +113,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -658,7 +659,7 @@ fun NotesScreen(active: Boolean = true) {
         if (noteDirty) showUnsavedDialog = true else discardComposer()
     }
 
-    BackClaim(composing || viewingId != null || historyForId != null || showArchive || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode)
+    BackClaim(active && (composing || viewingId != null || historyForId != null || showArchive || showTrash || showSearch || showDrafts || showHidden || showNotebooks || selectionMode))
     BackHandler(enabled = composing) { leaveComposer() }
     BackHandler(enabled = !composing && historyForId != null) { historyForId = null }
     BackHandler(enabled = !composing && historyForId == null && viewingId != null) { closeDetail() }
@@ -673,19 +674,7 @@ fun NotesScreen(active: Boolean = true) {
     BackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
     LaunchedEffect(active) {
-        if (!active) {
-            if (composing) discardComposer()
-            viewingId = null
-            returnToOnClose = null
-            historyForId = null
-            showArchive = false
-            showTrash = false
-            showSearch = false
-            showOverflowMenu = false
-            showNotebooks = false
-            actionsExpanded = false
-            exitSelection()
-        }
+        if (!active) showOverflowMenu = false
     }
 
     OnAppHidden { actionsExpanded = false }
@@ -1187,7 +1176,7 @@ fun NotesScreen(active: Boolean = true) {
             )
             }
             Box(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(composerScroll).imePadding().padding(bottom = LocalBottomBarInset.current)) {
+            Column(modifier = Modifier.fillMaxSize().imePadding().padding(16.dp).verticalScroll(composerScroll).padding(bottom = LocalBottomBarInset.current)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { leaveComposer() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
@@ -1499,20 +1488,17 @@ fun NotesScreen(active: Boolean = true) {
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             modifier = Modifier.weight(1f).height(COMPOSER_ACTION_HEIGHT)
                         ) {
-                            Icon(
-                                if (templateAuthoring) Icons.Default.Star else Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
                             Text(
-                                when {
-                                    templateAuthoring -> " " + com.lucent.app.i18n.S.tplSaveAsTemplate
-                                    editingId != null -> " " + com.lucent.app.i18n.S.saveChanges
-                                    else -> " " + com.lucent.app.i18n.S.addNoteBtn
+                                text = when {
+                                    templateAuthoring -> com.lucent.app.i18n.S.tplSaveAsTemplate
+                                    editingId != null -> com.lucent.app.i18n.S.saveChanges
+                                    else -> com.lucent.app.i18n.S.addNoteBtn
                                 },
                                 fontSize = 16.sp,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))

@@ -187,6 +187,8 @@ internal object BackupManifestBuilder {
             .put("markdownEnabled", settings.markdownEnabled.first())
             .put("linksEnabled", settings.linksEnabled.first())
             .put("backgroundAnimationEnabled", settings.backgroundAnimationEnabled.first())
+            .put("splashEnabled", settings.splashEnabled.first())
+            .put("splashStyle", settings.splashStyle.first())
             .put("appLanguage", settings.appLanguage.first())
             .put("notesSort", settings.notesSort.first())
             .put("tasksSort", settings.tasksSort.first())

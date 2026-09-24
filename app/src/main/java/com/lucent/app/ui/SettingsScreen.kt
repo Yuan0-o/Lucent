@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppNavigation
+import com.lucent.app.BackClaim
 import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.AppLock
@@ -87,6 +89,7 @@ import com.lucent.app.ui.settings.NetworkSettingsPage
 import com.lucent.app.ui.settings.PersonalizationSettingsPage
 import com.lucent.app.ui.settings.PrivacySettingsPage
 import com.lucent.app.ui.settings.RootSettingsPage
+import com.lucent.app.ui.settings.SplashSettingsPage
 import com.lucent.app.ui.settings.SecuritySettingsPage
 import com.lucent.app.ui.settings.ThemeSettingsPage
 import com.lucent.app.ui.settings.AboutSettingsPage
@@ -102,7 +105,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -708,7 +711,7 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Network -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.Api -> setRoute(SettingsRoute.Assistant)
             SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
-            SettingsRoute.Theme, SettingsRoute.Background -> setRoute(SettingsRoute.Appearance)
+            SettingsRoute.Theme, SettingsRoute.Background, SettingsRoute.Splash -> setRoute(SettingsRoute.Appearance)
             SettingsRoute.Licences -> setRoute(SettingsRoute.About)
             SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
             SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data, SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
@@ -780,6 +783,7 @@ fun SettingsScreen(active: Boolean = true) {
     if (showUnsavedDialog) { UnsavedChangesDialog() }
 
     BackHandler(enabled = route != SettingsRoute.Root) { goBack() }
+    BackClaim(active && route != SettingsRoute.Root)
 
     var manualReveal by remember { mutableStateOf(false) }
     var typingReveal by remember { mutableStateOf(false) }
@@ -2184,7 +2188,8 @@ fun SettingsScreen(active: Boolean = true) {
 
     BackHandler(enabled = exportKind != null) { exportKind = null }
 
-    val rootScroll = rememberScrollState()
+    val routeScrolls = remember { mutableMapOf<SettingsRoute, ScrollState>() }
+    val rootScroll = routeScrolls.getOrPut(route) { ScrollState(0) }
 
     if (exportKind != null) {
         when (exportKind) {
@@ -2297,12 +2302,12 @@ fun SettingsScreen(active: Boolean = true) {
                 assistantStyle = assistantStyle,
                 onAssistantStyleChange = { assistantStyle = it },
                 onSave = { persistAssistantSettings() },
+                onRequestSmallModelWarning = { showSmallModelWarn = true },
                 onBack = { leavePersonalization() }
             )
 
             SettingsRoute.Memory -> MemorySettingsPage(
                 repo = repo,
-                onRequestSmallModelWarning = { showSmallModelWarn = true },
                 onRoute = { setRoute(it) }
             )
 
@@ -2364,6 +2369,8 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Theme -> ThemeSettingsPage(repo = repo, onRoute = { setRoute(it) })
 
             SettingsRoute.Background -> BackgroundSettingsPage(repo = repo, onRoute = { setRoute(it) })
+
+            SettingsRoute.Splash -> SplashSettingsPage(repo = repo, onRoute = { setRoute(it) })
 
             SettingsRoute.Editor -> EditorSettingsPage(
                 repo = repo,
@@ -2495,8 +2502,10 @@ fun SettingsScreen(active: Boolean = true) {
                         SettingsCache.privilegedEnabled = wanted
                         scope.launch { repo.setPrivilegedEnabled(wanted) }
                         if (!wanted) {
+                            com.lucent.app.data.ShizukuWatcher.stop()
                             refreshShizuku()
                         } else {
+                            com.lucent.app.data.ShizukuWatcher.ensureStarted(context)
                             shizukuBusy = true
                             val started = com.lucent.app.data.ShizukuShell.requestPermission(context)
                             refreshShizuku()
