@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -2136,7 +2137,10 @@ fun SettingsScreen(active: Boolean = true) {
     BackHandler(enabled = exportKind != null) { exportKind = null }
 
     val routeScrolls = remember { mutableMapOf<SettingsRoute, ScrollState>() }
-    val rootScroll = routeScrolls.getOrPut(route) { ScrollState(0) }
+    val rootScroll = routeScrolls.getOrPut(route) { ScrollState(SettingsScrollMemory.of(route)) }
+    LaunchedEffect(rootScroll) {
+        snapshotFlow { rootScroll.value }.collect { SettingsScrollMemory.write(route, it) }
+    }
 
     if (exportKind != null) {
         when (exportKind) {

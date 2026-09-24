@@ -1487,6 +1487,12 @@ ENTRIES = [
     ("splashStylePenTitle", "The pen", "钢笔", "ペン", "펜"),
     ("splashStylePenDesc", "A pen writes the name in script, then the ink fades away.", "一支钢笔居中写出花体字，随后墨迹慢慢淡去。", "ペンが中央に筆記体で名前を書き、インクがゆっくり消えていきます。", "펜이 가운데에 필기체로 이름을 쓰고, 잉크가 천천히 사라집니다."),
 
+    ("shizukuInstallTitle", "Install Shizuku", "安装 Shizuku", "Shizuku をインストール", "Shizuku 설치"),
+    ("shizukuInstallBody", "Shizuku is not on this device yet. Install it from its official GitHub releases, then turn the Advanced switch on again.", "此设备尚未安装 Shizuku。请从官方 GitHub 发布页安装，然后重新开启高级开关。", "この端末に Shizuku がまだありません。公式 GitHub リリースからインストールし、詳細設定のスイッチを入れ直してください。", "이 기기에 아직 Shizuku가 없습니다. 공식 GitHub 릴리스에서 설치한 뒤 고급 스위치를 다시 켜세요."),
+    ("shizukuStartTitle", "Start Shizuku", "启动 Shizuku", "Shizuku を起動", "Shizuku 시작"),
+    ("shizukuStartBody", "Shizuku is installed but its service is not running, so the Advanced switch has been turned off. Start Shizuku, then turn the switch on again.", "Shizuku 已安装但服务未运行，高级开关已自动关闭。请先启动 Shizuku，再重新开启该开关。", "Shizuku はインストール済みですがサービスが動作していないため、詳細設定のスイッチをオフにしました。Shizuku を起動してからスイッチを入れ直してください。", "Shizuku가 설치되어 있지만 서비스가 실행 중이 아니어서 고급 스위치를 껐습니다. Shizuku를 시작한 뒤 스위치를 다시 켜세요."),
+    ("shizukuGrantTitle", "Grant Shizuku permission", "授予 Shizuku 权限", "Shizuku の権限を許可", "Shizuku 권한 허용"),
+    ("shizukuGrantBody", "Shizuku is running, but Lucent has not been granted permission yet. Tap Grant permission and confirm in the Shizuku dialog.", "Shizuku 正在运行，但尚未授予 Lucent 权限。点击“授予权限”，并在 Shizuku 的弹窗中确认。", "Shizuku は動作中ですが、Lucent にまだ権限がありません。「権限を許可」を押し、Shizuku のダイアログで確認してください。", "Shizuku가 실행 중이지만 Lucent에 아직 권한이 없습니다. 권한 허용을 누르고 Shizuku 대화상자에서 확인하세요."),
     ("shizukuLostTitle", "Shizuku is not available", "Shizuku 不可用", "Shizuku が利用できません", "Shizuku를 사용할 수 없습니다"),
     ("shizukuLostBody", "Lucent can no longer reach Shizuku, so the advanced switch has been turned off. Open Shizuku and turn the switch on again when you want privileged actions.", "Lucent 已无法连接 Shizuku，高级开关已自动关闭。需要特权操作时，请先打开 Shizuku，再重新开启该开关。", "Lucent は Shizuku に接続できなくなったため、詳細設定のスイッチを自動でオフにしました。特権操作が必要なときは Shizuku を開き、スイッチを入れ直してください。", "Lucent가 더 이상 Shizuku에 연결할 수 없어 고급 스위치를 자동으로 껐습니다. 특권 작업이 필요하면 Shizuku를 열고 스위치를 다시 켜세요."),
 

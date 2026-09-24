@@ -18,7 +18,7 @@ object ShizukuShell : PrivilegedShell.PrivilegedShellProvider {
 
     const val MANAGER_PACKAGE = "moe.shizuku.privileged.api"
 
-    const val DOWNLOAD_PAGE = "https://shizuku.rikka.app/download/"
+    const val DOWNLOAD_PAGE = "https://github.com/RikkaApps/Shizuku/releases/latest"
 
     const val PERMISSION_REQUEST_CODE = 6021
 

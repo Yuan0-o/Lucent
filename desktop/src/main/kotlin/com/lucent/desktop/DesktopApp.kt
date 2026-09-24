@@ -192,10 +192,7 @@ private fun DesktopShell(
             modifier = Modifier.fillMaxSize()
         )
         Row(modifier = Modifier.fillMaxSize()) {
-            Sidebar(current = current, onSelect = {
-                AppNavigation.resetSettingsRoute()
-                current = it
-            })
+            Sidebar(current = current, onSelect = { current = it })
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 when (current) {
                     Screen.Assistant -> AssistantScreen()

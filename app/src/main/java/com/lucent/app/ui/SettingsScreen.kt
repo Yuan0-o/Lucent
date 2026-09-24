@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -2189,7 +2190,10 @@ fun SettingsScreen(active: Boolean = true) {
     BackHandler(enabled = exportKind != null) { exportKind = null }
 
     val routeScrolls = remember { mutableMapOf<SettingsRoute, ScrollState>() }
-    val rootScroll = routeScrolls.getOrPut(route) { ScrollState(0) }
+    val rootScroll = routeScrolls.getOrPut(route) { ScrollState(SettingsScrollMemory.of(route)) }
+    LaunchedEffect(rootScroll) {
+        snapshotFlow { rootScroll.value }.collect { SettingsScrollMemory.write(route, it) }
+    }
 
     if (exportKind != null) {
         when (exportKind) {
@@ -2441,7 +2445,6 @@ fun SettingsScreen(active: Boolean = true) {
                 var shizukuRunning by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isServiceRunning()) }
                 var shizukuInstalled by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isInstalled(context)) }
                 var shizukuUid by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.privilegeUid()) }
-                var shizukuBusy by remember { mutableStateOf(false) }
                 val refreshShizuku = {
                     shizukuRunning = com.lucent.app.data.ShizukuShell.isServiceRunning()
                     shizukuInstalled = com.lucent.app.data.ShizukuShell.isInstalled(context)
@@ -2452,10 +2455,6 @@ fun SettingsScreen(active: Boolean = true) {
                     com.lucent.app.data.ShizukuShell.observePermission { granted ->
                         shizukuReady = granted
                         shizukuUid = com.lucent.app.data.ShizukuShell.privilegeUid()
-                        shizukuBusy = false
-                        if (granted) {
-                            scope.launch { repo.setPrivilegedEnabled(true) }
-                        }
                         shizukuRunning = com.lucent.app.data.ShizukuShell.isServiceRunning()
                     }
                     com.lucent.app.data.ShizukuShell.observeBinder { running ->
@@ -2495,36 +2494,27 @@ fun SettingsScreen(active: Boolean = true) {
                         status = shizukuStatus,
                         enabled = privilegedOn,
                         ready = shizukuReady,
-                        busy = shizukuBusy,
+                        busy = false,
                         actionLabel = shizukuAction
                     ),
                     onToggle = { wanted ->
                         SettingsCache.privilegedEnabled = wanted
                         scope.launch { repo.setPrivilegedEnabled(wanted) }
-                        if (!wanted) {
-                            com.lucent.app.data.ShizukuWatcher.stop()
-                            refreshShizuku()
-                        } else {
+                        if (wanted) {
                             com.lucent.app.data.ShizukuWatcher.ensureStarted(context)
-                            shizukuBusy = true
-                            val started = com.lucent.app.data.ShizukuShell.requestPermission(context)
-                            refreshShizuku()
-                            if (!started) {
-                                shizukuBusy = false
-                                LucentToast.show(context, S.shizukuNotInstalled)
-                            }
+                            com.lucent.app.data.ShizukuWatcher.checkNow(context)
+                        } else {
+                            com.lucent.app.data.ShizukuWatcher.stop()
                         }
+                        refreshShizuku()
                     },
                     onAction = {
-                        if (!shizukuInstalled) {
-                            com.lucent.app.data.ShizukuShell.openDownloadPage(context)
-                        } else if (!shizukuRunning) {
-                            com.lucent.app.data.ShizukuShell.openManager(context)
-                        } else {
-                            shizukuBusy = true
-                            com.lucent.app.data.ShizukuShell.requestPermission(context)
-                            refreshShizuku()
+                        when {
+                            !shizukuInstalled -> com.lucent.app.data.ShizukuShell.openDownloadPage(context)
+                            !shizukuRunning -> com.lucent.app.data.ShizukuShell.openManager(context)
+                            else -> com.lucent.app.data.ShizukuShell.requestPermission(context)
                         }
+                        refreshShizuku()
                     },
                     onRoute = { setRoute(it) }
                 )

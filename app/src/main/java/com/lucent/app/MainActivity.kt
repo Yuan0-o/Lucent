@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,9 +58,9 @@ import com.lucent.app.ui.LastScreen
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -118,7 +119,7 @@ import com.lucent.app.ui.SettingsScreen
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.ShareIntake
 import com.lucent.app.ui.ShareIntakeDialog
-import com.lucent.app.ui.ShizukuLostDialog
+import com.lucent.app.ui.ShizukuNoticeDialog
 import com.lucent.app.ui.WidgetTaskConfirmDialog
 import com.lucent.app.ui.TasksScreen
 import com.lucent.app.ui.UnsavedChangesGuard
@@ -462,6 +463,12 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
     var currentScreen by rememberSaveable { mutableStateOf(LastScreen.current) }
+    val tabScreens = Screen.entries
+    val pagerState = rememberPagerState(
+        initialPage = tabScreens.indexOf(currentScreen),
+        pageCount = { tabScreens.size }
+    )
+    val tabScope = rememberCoroutineScope()
     val lastScreenContext = LocalContext.current
     val lastScreenRepo = remember(lastScreenContext) {
         com.lucent.app.data.SettingsRepository(lastScreenContext.applicationContext)
@@ -575,8 +582,6 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
     AssistantConfirmationDialog()
 
-    var tabClickTarget by remember { mutableStateOf<Screen?>(null) }
-
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
             FluidGlassBackground(
@@ -668,9 +673,8 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                         screen = screen,
                                         selected = currentScreen == screen,
                                         onClick = {
-                                            AppNavigation.resetSettingsRoute()
-                                            tabClickTarget = screen
                                             currentScreen = screen
+                                            tabScope.launch { pagerState.scrollToPage(tabScreens.indexOf(screen)) }
                                         },
                                         modifier = Modifier.weight(1f)
                                     )
@@ -688,14 +692,14 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     Modifier.padding(top = topPad).fillMaxSize()
                 }
                 CompositionLocalProvider(LocalBottomBarInset provides bottomInset) {
-                    KeepAliveTabs(active = currentScreen, tabClickTarget = tabClickTarget, onTabClickConsumed = { tabClickTarget = null }, modifier = contentModifier)
+                    KeepAliveTabs(active = currentScreen, pagerState = pagerState, modifier = contentModifier)
                 }
             }
 
             ShareIntakeDialog()
             WidgetTaskConfirmDialog()
             AutoUpdateDialog()
-            ShizukuLostDialog()
+            ShizukuNoticeDialog()
         }
     }
 }
@@ -742,7 +746,7 @@ fun iconFor(screen: Screen) = when (screen) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickConsumed: () -> Unit, modifier: Modifier = Modifier) {
+private fun KeepAliveTabs(active: Screen, pagerState: PagerState, modifier: Modifier = Modifier) {
     val realBackOwner = LocalOnBackPressedDispatcherOwner.current
     val inertBackOwner = remember(realBackOwner) {
         object : OnBackPressedDispatcherOwner {
@@ -753,25 +757,11 @@ private fun KeepAliveTabs(active: Screen, tabClickTarget: Screen?, onTabClickCon
 
     val sharedHaze = LocalHazeState.current
 
-    val visited = remember { mutableStateListOf(active) }
-    if (active !in visited) visited.add(active)
-
     val screens = Screen.entries
-    val pagerState = rememberPagerState(
-        initialPage = screens.indexOf(active),
-        pageCount = { screens.size }
-    )
 
-    LaunchedEffect(active, tabClickTarget) {
+    LaunchedEffect(active) {
         val targetPage = screens.indexOf(active)
-        if (pagerState.currentPage != targetPage) {
-            if (tabClickTarget != null) {
-                pagerState.scrollToPage(targetPage)
-                onTabClickConsumed()
-            } else {
-                pagerState.scrollToPage(targetPage)
-            }
-        }
+        if (pagerState.currentPage != targetPage) pagerState.scrollToPage(targetPage)
     }
 
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
