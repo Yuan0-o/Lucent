@@ -124,9 +124,9 @@ class AppToolsTest {
     @Test
     fun resolveNoteAcceptsTheWaysPeopleNameANote() {
         val notes = listOf(
-            Note(id = 1, title = "Shopping list"),
-            Note(id = 2, title = "Project plan 2026"),
-            Note(id = 3, title = "Reading")
+            Note(id = 1, title = "Shopping list", body = ""),
+            Note(id = 2, title = "Project plan 2026", body = ""),
+            Note(id = 3, title = "Reading", body = "")
         )
         assertEquals(2L, AppTools.resolveNote(notes, "the project plan note")?.id)
         assertEquals(2L, AppTools.resolveNote(notes, "PROJECT PLAN 2026")?.id)
@@ -137,8 +137,8 @@ class AppToolsTest {
     @Test
     fun resolveNotePrefersTheCloserOfTwoCandidates() {
         val notes = listOf(
-            Note(id = 1, title = "Weekly review", updatedAt = 500L),
-            Note(id = 2, title = "Weekly review archive", updatedAt = 100L)
+            Note(id = 1, title = "Weekly review", body = "", updatedAt = 500L),
+            Note(id = 2, title = "Weekly review archive", body = "", updatedAt = 100L)
         )
         assertEquals(2L, AppTools.resolveNote(notes, "archive")?.id)
         assertEquals(1L, AppTools.resolveNote(notes, "weekly review")?.id)
@@ -146,7 +146,7 @@ class AppToolsTest {
 
     @Test
     fun resolveNoteGivesUpRatherThanGuessing() {
-        val notes = listOf(Note(id = 1, title = "Shopping list"))
+        val notes = listOf(Note(id = 1, title = "Shopping list", body = ""))
         assertNull(AppTools.resolveNote(notes, "zzz"))
         assertNull(AppTools.resolveNote(notes, ""))
     }
