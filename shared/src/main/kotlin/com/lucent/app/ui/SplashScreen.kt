@@ -6,13 +6,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +35,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.data.SplashStyle
@@ -67,7 +69,7 @@ fun LucentSplash(
         }
     }
 
-    var elapsed by remember { mutableFloatStateOf(0f) }
+    val elapsed = remember { mutableFloatStateOf(0f) }
     if (!inspection) {
         LaunchedEffect(Unit) {
             val totalNanos = (totalMs * 1_000_000f).toLong()
@@ -75,7 +77,7 @@ fun LucentSplash(
             var now = start
             while (now - start < totalNanos) {
                 now = withInfiniteAnimationFrameNanos { it }
-                elapsed = (now - start) / 1_000_000f
+                elapsed.floatValue = (now - start) / 1_000_000f
             }
         }
     }
@@ -103,74 +105,18 @@ fun LucentSplash(
         )
 
         if (style == SplashStyle.PEN) {
-            PenSplashArtwork(elapsedMs = elapsed, tint = paletteColors.firstOrNull() ?: onGradient)
+            PenSplashArtwork(elapsed = elapsed, tint = paletteColors.firstOrNull() ?: onGradient)
         } else {
-            val t = elapsed
-            val enter = (t / ENTER_MS).coerceIn(0f, 1f)
-            val enterEased = 1f - (1f - enter) * (1f - enter)
-            val overshoot = sin(enter * PI.toFloat()) * 0.06f
-            val scaleIn = 0.62f + 0.38f * enterEased + overshoot
-
-            val waveT = ((t - ENTER_MS) / (WAVE_END_MS - ENTER_MS)).coerceIn(0f, 1f)
-            val waveDeg = sin(waveT * WAVE_CYCLES * 2f * PI.toFloat()) * WAVE_AMP_DEG * (1f - waveT * 0.3f)
-
-            val blinkT = ((t - BLINK_START_MS) / (BLINK_END_MS - BLINK_START_MS)).coerceIn(0f, 1f)
-            val blinking = t in BLINK_START_MS..BLINK_END_MS
-            val eyeOpen = if (t < BLINK_START_MS) 1f else 1f - sin(blinkT * PI.toFloat())
-            val blinkSquash = if (blinking) sin(blinkT * PI.toFloat()) * 0.03f else 0f
-
-            val glass = ((t - MORPH_START_MS) / (MORPH_END_MS - MORPH_START_MS)).coerceIn(0f, 1f)
-            val glassEased = glass * glass * (3f - 2f * glass)
-            val wobble = sin(glass * PI.toFloat()) * 0.055f * sin(t / 90f)
-
-            val fishBob = sin(t / FISH_BOB_MS) * FISH_BOB_AMP * (1f - glassEased)
-
-            val exit = ((t - EXIT_START_MS) / (TOTAL_MS - EXIT_START_MS)).coerceIn(0f, 1f)
-            val exitEased = exit * exit
-            val alpha = (1f - exitEased).coerceIn(0f, 1f) * enterEased.coerceAtLeast(0.001f)
-
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val unit = size.minDimension / 780f
-                val cx = size.width / 2f
-                val cy = size.height / 2f - 36f * unit - exitEased * 90f * unit
-
-                withTransform({
-                    translate(left = cx, top = cy)
-                    scale(
-                        scaleX = unit * scaleIn * (1f + wobble),
-                        scaleY = unit * scaleIn * (1f - wobble - blinkSquash),
-                        pivot = Offset.Zero
-                    )
-                }) {
-                    drawCat(
-                        glass = glassEased,
-                        alpha = alpha,
-                        waveDeg = waveDeg,
-                        eyeOpen = eyeOpen,
-                        fishBob = fishBob,
-                        tint = paletteColors.firstOrNull() ?: Color.White
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(top = 300.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    "Lucent",
-                    color = onGradient.copy(alpha = glassEased * (1f - exitEased) * 0.95f),
-                    fontSize = 30.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
+            CatSplashArtwork(
+                elapsed = elapsed,
+                tint = paletteColors.firstOrNull() ?: Color.White,
+                onGradient = onGradient
+            )
         }
 
         Text(
             text = com.lucent.app.i18n.S.skipAnimation,
-            color = onGradient.copy(alpha = skipLabelAlpha(style, elapsed, totalMs) * 0.6f),
+            color = onGradient.copy(alpha = 0.6f),
             fontSize = 13.sp,
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -182,11 +128,138 @@ fun LucentSplash(
     }
 }
 
-private fun skipLabelAlpha(style: SplashStyle, elapsedMs: Float, totalMs: Float): Float {
-    val fadeStart = if (style == SplashStyle.PEN) PEN_HOLD_END_MS else EXIT_START_MS
-    val fade = ((elapsedMs - fadeStart) / (totalMs - fadeStart)).coerceIn(0f, 1f)
-    return (1f - fade * fade).coerceIn(0f, 1f)
+@Composable
+private fun CatSplashArtwork(elapsed: MutableFloatState, tint: Color, onGradient: Color) {
+    val measurer = rememberTextMeasurer()
+    val art = catArt()
+    val textStyle = androidx.compose.material3.LocalTextStyle.current
+    val word = remember(measurer, textStyle) {
+        measurer.measure(
+            text = AnnotatedString("Lucent"),
+            style = textStyle.copy(fontSize = 30.sp)
+        )
+    }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val t = elapsed.floatValue
+        val enter = (t / ENTER_MS).coerceIn(0f, 1f)
+        val enterEased = 1f - (1f - enter) * (1f - enter)
+        val overshoot = sin(enter * PI.toFloat()) * 0.06f
+        val scaleIn = 0.62f + 0.38f * enterEased + overshoot
+
+        val waveT = ((t - ENTER_MS) / (WAVE_END_MS - ENTER_MS)).coerceIn(0f, 1f)
+        val waveDeg = sin(waveT * WAVE_CYCLES * 2f * PI.toFloat()) * WAVE_AMP_DEG * (1f - waveT * 0.3f)
+
+        val blinkT = ((t - BLINK_START_MS) / (BLINK_END_MS - BLINK_START_MS)).coerceIn(0f, 1f)
+        val blinking = t in BLINK_START_MS..BLINK_END_MS
+        val eyeOpen = if (t < BLINK_START_MS) 1f else 1f - sin(blinkT * PI.toFloat())
+        val blinkSquash = if (blinking) sin(blinkT * PI.toFloat()) * 0.03f else 0f
+
+        val glass = ((t - MORPH_START_MS) / (MORPH_END_MS - MORPH_START_MS)).coerceIn(0f, 1f)
+        val glassEased = glass * glass * (3f - 2f * glass)
+        val wobble = sin(glass * PI.toFloat()) * 0.055f * sin(t / 90f)
+
+        val fishBob = sin(t / FISH_BOB_MS) * FISH_BOB_AMP * (1f - glassEased)
+
+        val exit = ((t - EXIT_START_MS) / (TOTAL_MS - EXIT_START_MS)).coerceIn(0f, 1f)
+        val exitEased = exit * exit
+        val alpha = (1f - exitEased).coerceIn(0f, 1f) * enterEased.coerceAtLeast(0.001f)
+
+        val unit = size.minDimension / 780f
+        val cx = size.width / 2f
+        val cy = size.height / 2f - 36f * unit - exitEased * 90f * unit
+
+        withTransform({
+            translate(left = cx, top = cy)
+            scale(
+                scaleX = unit * scaleIn * (1f + wobble),
+                scaleY = unit * scaleIn * (1f - wobble - blinkSquash),
+                pivot = Offset.Zero
+            )
+        }) {
+            drawCat(
+                art = art,
+                glass = glassEased,
+                alpha = alpha,
+                waveDeg = waveDeg,
+                eyeOpen = eyeOpen,
+                fishBob = fishBob,
+                tint = tint
+            )
+        }
+
+        val wordAlpha = glassEased * (1f - exitEased) * 0.95f
+        if (wordAlpha > 0.004f) {
+            val left = (size.width - word.size.width) / 2f
+            val top = size.height / 2f - word.size.height / 2f + 300.dp.toPx()
+            drawText(
+                textLayoutResult = word,
+                color = onGradient,
+                topLeft = Offset(left, top),
+                alpha = wordAlpha
+            )
+        }
+    }
 }
+
+private class CatArt {
+    val head: Path = Path().apply {
+        addRoundRect(RoundRect(Rect(-130f, -152f, 130f, 28f), CornerRadius(82f, 82f)))
+    }
+        .union(earPath(-1f)).union(earPath(1f))
+        .union(circlePath(-98f, -4f, 45f)).union(circlePath(98f, -4f, 45f))
+
+    val body: Path = Path().apply {
+        addRoundRect(RoundRect(Rect(-120f, 0f, 120f, 210f), CornerRadius(68f, 68f)))
+    }
+
+    val belly: Path = Path().apply {
+        addRoundRect(RoundRect(Rect(-44f, 86f, 44f, 146f), CornerRadius(26f, 26f)))
+    }
+
+    val tail: Path = Path().apply {
+        moveTo(-110f, 180f)
+        cubicTo(-128f, 192f, -142f, 192f, -149f, 182f)
+        cubicTo(-155f, 173f, -153f, 160f, -146f, 154f)
+    }
+
+    val fish: Path = Path().apply {
+        addOval(Rect(-40f, -38f, 52f, 38f))
+    }.union(fishPetal(0f, -1f)).union(fishPetal(0f, 1f))
+
+    val headGlass: Brush = Brush.verticalGradient(
+        0f to Color.White.copy(alpha = 0.28f),
+        1f to Color.Transparent,
+        startY = -152f,
+        endY = -20f
+    )
+
+    val bodyGlass: Brush = Brush.verticalGradient(
+        0f to Color.White.copy(alpha = 0.28f),
+        1f to Color.Transparent,
+        startY = 0f,
+        endY = 110f
+    )
+
+    val blushBody: Brush = blushBrush(Offset(0f, 200f), 70f)
+    val blushPawLeft: Brush = blushBrush(Offset(-78f, 58f), 30f)
+    val blushPawRight: Brush = blushBrush(Offset(78f, 58f), 30f)
+    val blushCheekTopLeft: Brush = blushBrush(Offset(-92f, -152f), 30f)
+    val blushCheekTopRight: Brush = blushBrush(Offset(92f, -152f), 30f)
+    val blushCheekLowLeft: Brush = blushBrush(Offset(-100f, -6f), 54f)
+    val blushCheekLowRight: Brush = blushBrush(Offset(100f, -6f), 54f)
+}
+
+@Composable
+private fun catArt(): CatArt = remember { CatArt() }
+
+private fun blushBrush(center: Offset, radius: Float): Brush = Brush.radialGradient(
+    0f to BlushPink,
+    0.55f to BlushPink.copy(alpha = 0.5f),
+    1f to Color.Transparent,
+    center = center,
+    radius = radius
+)
 
 private val Fur = Color(0xFFFFFDFA)
 private val Line = Color(0xFF8C7276)
@@ -201,6 +274,7 @@ private val FishLine = Color(0xFF8FB4D8)
 private val FishEye = Color(0xFF4A7BAA)
 
 private fun DrawScope.drawCat(
+    art: CatArt,
     glass: Float,
     alpha: Float,
     waveDeg: Float,
@@ -213,16 +287,10 @@ private fun DrawScope.drawCat(
     val solid = (1f - glass) * alpha
     val glassy = glass * alpha
 
-
-    val head = Path().apply {
-        addRoundRect(RoundRect(Rect(-130f, -152f, 130f, 28f), CornerRadius(82f, 82f)))
-    }
-        .union(earPath(-1f)).union(earPath(1f))
-        .union(circlePath(-98f, -4f, 45f)).union(circlePath(98f, -4f, 45f))
-
-    val body = Path().apply {
-        addRoundRect(RoundRect(Rect(-120f, 0f, 120f, 210f), CornerRadius(68f, 68f)))
-    }
+    val head = art.head
+    val body = art.body
+    val fish = art.fish
+    val tail = art.tail
 
     val pawHalfWidth = 29f
     val pawHalfHeight = 57f
@@ -231,27 +299,15 @@ private fun DrawScope.drawCat(
     val pawL = Offset(-78f, 96f)
     val pawR = Offset(78f, 96f)
 
-    val fy = -180f + fishBob
-    val fish = Path().apply {
-        addOval(Rect(-40f, fy - 38f, 52f, fy + 38f))
-    }.union(fishPetal(fy, -1f)).union(fishPetal(fy, 1f))
-
-    val tail = Path().apply {
-        moveTo(-110f, 180f)
-        cubicTo(-128f, 192f, -142f, 192f, -149f, 182f)
-        cubicTo(-155f, 173f, -153f, 160f, -146f, 154f)
-    }
-
     if (solid > 0.002f) {
         drawPath(tail, Line.copy(alpha = solid), style = Stroke(width = 19f, cap = StrokeCap.Round))
         drawPath(tail, Fur.copy(alpha = solid), style = Stroke(width = 11f, cap = StrokeCap.Round))
 
         drawPath(body, Fur.copy(alpha = solid))
         drawPath(body, Line.copy(alpha = solid), style = Stroke(width = 7f))
-        clipPath(body) { blush(Offset(0f, 200f), 70f, 0.43f * solid) }
+        clipPath(body) { blush(art.blushBody, Offset(0f, 200f), 70f, 0.43f * solid) }
 
-        val bellyRect = Rect(-44f, 86f, 44f, 146f)
-        val bellyPath = Path().apply { addRoundRect(RoundRect(bellyRect, CornerRadius(26f, 26f))) }
+        val bellyPath = art.belly
         drawPath(bellyPath, BellyCream.copy(alpha = solid))
         drawPath(bellyPath, Line.copy(alpha = solid), style = Stroke(width = 4f))
 
@@ -263,7 +319,8 @@ private fun DrawScope.drawCat(
                 val topLeft = Offset(c.x - pawHalfWidth, c.y - pawHalfHeight)
                 drawRoundRect(Fur.copy(alpha = solid), topLeft, pawSize, pawCorner)
                 drawRoundRect(Line.copy(alpha = solid), topLeft, pawSize, pawCorner, style = Stroke(width = 7f))
-                blush(Offset(c.x, c.y - 38f), 30f, 0.53f * solid)
+                val pawBlush = if (i == 0) art.blushPawLeft else art.blushPawRight
+                blush(pawBlush, Offset(c.x, c.y - 38f), 30f, 0.53f * solid)
                 drawOval(PawPadPink.copy(alpha = solid), Offset(c.x - 11f, c.y - 38f), Size(22f, 16f))
                 drawOval(PawPadPink.copy(alpha = solid), Offset(c.x - 17.25f, c.y - 50.5f), Size(8.5f, 10f))
                 drawOval(PawPadPink.copy(alpha = solid), Offset(c.x - 4.25f, c.y - 54.5f), Size(8.5f, 10f))
@@ -276,19 +333,24 @@ private fun DrawScope.drawCat(
         clipPath(head) {
             for (i in 0..1) {
                 val side = if (i == 0) -1f else 1f
-                blush(Offset(side * 92f, -152f), 30f, 0.49f * solid)
-                blush(Offset(side * 100f, -6f), 54f, 0.65f * solid)
+                val topBlush = if (side < 0f) art.blushCheekTopLeft else art.blushCheekTopRight
+                val lowBlush = if (side < 0f) art.blushCheekLowLeft else art.blushCheekLowRight
+                blush(topBlush, Offset(side * 92f, -152f), 30f, 0.49f * solid)
+                blush(lowBlush, Offset(side * 100f, -6f), 54f, 0.65f * solid)
             }
         }
 
-        drawPath(fish, FishFill.copy(alpha = solid))
-        drawPath(fish, FishLine.copy(alpha = solid), style = Stroke(width = 5f))
-        drawCircle(FishEye.copy(alpha = solid), 5f, Offset(32f, fy - 7f))
-        drawArc(
-            FishLine.copy(alpha = solid), -55f, 110f, false,
-            Offset(4f, fy - 13f), Size(20f, 26f), style = Stroke(width = 3.2f, cap = StrokeCap.Round)
-        )
-        drawCircle(FishLine.copy(alpha = solid), 5.5f, Offset(-4f, fy + 7f), style = Stroke(width = 2.6f))
+        val fy = -180f + fishBob
+        withTransform({ translate(top = fy) }) {
+            drawPath(fish, FishFill.copy(alpha = solid))
+            drawPath(fish, FishLine.copy(alpha = solid), style = Stroke(width = 5f))
+            drawCircle(FishEye.copy(alpha = solid), 5f, Offset(32f, -7f))
+            drawArc(
+                FishLine.copy(alpha = solid), -55f, 110f, false,
+                Offset(4f, -13f), Size(20f, 26f), style = Stroke(width = 3.2f, cap = StrokeCap.Round)
+            )
+            drawCircle(FishLine.copy(alpha = solid), 5.5f, Offset(-4f, 7f), style = Stroke(width = 2.6f))
+        }
 
         for (i in 0..1) {
             val side = if (i == 0) -1f else 1f
@@ -324,11 +386,16 @@ private fun DrawScope.drawCat(
     if (glassy > 0.002f) {
         drawPath(tail, Color.White.copy(alpha = glassy * 0.55f), style = Stroke(width = 9f, cap = StrokeCap.Round))
 
-        val panes = listOf(body, head, fish)
+        val panes = listOf(body, head)
         for (pane in panes) {
             drawPath(pane, Color.White.copy(alpha = glassy * 0.16f))
             drawPath(pane, tint.copy(alpha = glassy * 0.20f))
             drawPath(pane, Color.White.copy(alpha = glassy * 0.75f), style = Stroke(width = 3f))
+        }
+        withTransform({ translate(top = -180f + fishBob) }) {
+            drawPath(fish, Color.White.copy(alpha = glassy * 0.16f))
+            drawPath(fish, tint.copy(alpha = glassy * 0.20f))
+            drawPath(fish, Color.White.copy(alpha = glassy * 0.75f), style = Stroke(width = 3f))
         }
         for (i in 0..1) {
             val side = if (i == 0) -1f else 1f
@@ -342,40 +409,14 @@ private fun DrawScope.drawCat(
             }
         }
 
-        drawPath(
-            path = head,
-            brush = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = glassy * 0.28f),
-                1f to Color.Transparent,
-                startY = -152f,
-                endY = -20f
-            )
-        )
-        drawPath(
-            path = body,
-            brush = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = glassy * 0.28f),
-                1f to Color.Transparent,
-                startY = 0f,
-                endY = 110f
-            )
-        )
+        drawPath(path = head, brush = art.headGlass, alpha = glassy)
+        drawPath(path = body, brush = art.bodyGlass, alpha = glassy)
     }
 }
 
-private fun DrawScope.blush(center: Offset, radius: Float, alpha: Float) {
+private fun DrawScope.blush(brush: Brush, center: Offset, radius: Float, alpha: Float) {
     if (alpha <= 0.004f) return
-    drawCircle(
-        brush = Brush.radialGradient(
-            0f to BlushPink.copy(alpha = alpha),
-            0.55f to BlushPink.copy(alpha = alpha * 0.5f),
-            1f to Color.Transparent,
-            center = center,
-            radius = radius
-        ),
-        radius = radius,
-        center = center
-    )
+    drawCircle(brush = brush, radius = radius, center = center, alpha = alpha)
 }
 
 private fun fishPetal(fy: Float, sg: Float): Path = Path().apply {

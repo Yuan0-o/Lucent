@@ -158,7 +158,6 @@ internal fun LanguageSettingsPage(
             GlassButton(
                 text = S.fontImportButton,
                 icon = Icons.Default.Add,
-                scale = 0.5f,
                 onClick = onImportFontClick
             )
         } else {

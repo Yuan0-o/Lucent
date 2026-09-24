@@ -317,6 +317,12 @@ SOFTWARE.
 
 ---
 
+## Great Vibes — SIL Open Font License 1.1
+
+**Great Vibes** (the script face used by the pen splash animation) is © 2010 The Great Vibes Pro Project Authors (https://github.com/googlefonts/great-vibes), licensed under the **SIL Open Font License, Version 1.1** — https://openfontlicense.org. The font is bundled unmodified as `great_vibes.ttf`; it may be used, studied, modified and redistributed freely, but may not be sold on its own, and any redistribution must keep this notice and the reserved font name.
+
+---
+
 ## SQLite — Public Domain
 
 **SQLite** (the database engine, used on desktop via the SQLite JDBC driver, and on Android via SQLCipher) is in the **Public Domain**. Reference: https://www.sqlite.org/copyright.html

@@ -26,6 +26,7 @@ private const val BSD3_URL = "https://opensource.org/license/bsd-3-clause"
 private const val SQLCIPHER_URL = "https://www.zetetic.net/sqlcipher/license/"
 private const val JSON_URL = "https://www.json.org/license.html"
 private const val SQLITE_URL = "https://www.sqlite.org/copyright.html"
+private const val OFL_URL = "https://openfontlicense.org"
 
 private data class LicenceEntry(
     val name: String,
@@ -49,7 +50,8 @@ private val ENTRIES = listOf(
     LicenceEntry("SQLCipher", "Zetetic LLC", "BSD-style", SQLCIPHER_URL),
     LicenceEntry("Skia", "Google LLC", "BSD-3-Clause", BSD3_URL),
     LicenceEntry("SQLite", "The SQLite authors", "Public domain", SQLITE_URL),
-    LicenceEntry("org.json", "JSON.org", "JSON License", JSON_URL)
+    LicenceEntry("org.json", "JSON.org", "JSON License", JSON_URL),
+    LicenceEntry("Great Vibes", "The Great Vibes Pro Project Authors", "SIL OFL 1.1", OFL_URL)
 )
 
 @Composable
