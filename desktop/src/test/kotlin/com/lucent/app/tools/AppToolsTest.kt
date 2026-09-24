@@ -161,4 +161,24 @@ class AppToolsTest {
         assertEquals(2L, AppTools.resolveTask(tasks, "the invoice task")?.id)
         assertNull(AppTools.resolveTask(tasks, "zzz"))
     }
+
+    @Test
+    fun resolveNoteKeepsAnExactTitleWhateverItContains() {
+        val notes = listOf(
+            Note(id = 1, title = "\uD83D\uDCCC Groceries", body = ""),
+            Note(id = 2, title = "!!!", body = ""),
+            Note(id = 3, title = "\u5F85\u529E\uFF1A\u4E70\u725B\u5976", body = "")
+        )
+        assertEquals(1L, AppTools.resolveNote(notes, "\uD83D\uDCCC Groceries")?.id)
+        assertEquals(2L, AppTools.resolveNote(notes, "!!!")?.id)
+        assertEquals(3L, AppTools.resolveNote(notes, "\u5F85\u529E\uFF1A\u4E70\u725B\u5976")?.id)
+    }
+
+    @Test
+    fun resolveNoteIgnoresCaseAndSurroundingSpace() {
+        val notes = listOf(Note(id = 7, title = "  Project Plan  ", body = ""))
+        assertEquals(7L, AppTools.resolveNote(notes, "project plan")?.id)
+        assertEquals(7L, AppTools.resolveNote(notes, "PROJECT PLAN")?.id)
+        assertEquals(7L, AppTools.resolveNote(notes, "  Project Plan  ")?.id)
+    }
 }
