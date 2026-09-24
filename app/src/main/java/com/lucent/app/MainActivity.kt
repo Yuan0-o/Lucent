@@ -115,6 +115,7 @@ import com.lucent.app.ui.LucentPalette
 import com.lucent.app.ui.PALETTE_CYCLE
 import com.lucent.app.ui.NotesScreen
 import com.lucent.app.ui.rememberCyclingPaletteColors
+import com.lucent.app.ui.rememberNotificationPermissionRequester
 import com.lucent.app.ui.SettingsScreen
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.ShareIntake
@@ -480,6 +481,13 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     val hazeState = rememberHazeState()
     val onGradient = LocalOnGradient.current
     val context = LocalContext.current
+    val updateRepo = remember {
+        com.lucent.app.data.SettingsRepository(context.applicationContext)
+    }
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
+    LaunchedEffect(AutoUpdate.phase) {
+        if (AutoUpdate.phase == AutoUpdate.Phase.DOWNLOADING) requestNotificationPermission()
+    }
 
     val notesScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val tasksScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
@@ -698,7 +706,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
             ShareIntakeDialog()
             WidgetTaskConfirmDialog()
-            AutoUpdateDialog()
+            AutoUpdateDialog(repo = updateRepo)
             ShizukuNoticeDialog()
         }
     }

@@ -148,7 +148,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
                 ToastOverlay()
 
-                com.lucent.app.ui.AutoUpdateDialog()
+                com.lucent.app.ui.AutoUpdateDialog(repo = repo)
 
                 if (splashEnabled && !splashDone) {
                     LucentSplash(

@@ -18,7 +18,6 @@ data class ReleaseInfo(
     val tag: String,
     val version: String,
     val title: String,
-    val notes: String,
     val apk: ReleaseAsset?,
     val installer: ReleaseAsset?
 )
@@ -92,7 +91,6 @@ object UpdateChecker {
             tag = tag,
             version = tag.trimStart('v', 'V'),
             title = root.optString("name").ifBlank { tag },
-            notes = root.optString("body"),
             apk = apk,
             installer = installer
         )

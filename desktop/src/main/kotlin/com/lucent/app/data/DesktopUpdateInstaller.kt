@@ -1,8 +1,12 @@
 package com.lucent.app.data
 
 import android.content.DesktopContext
+import com.lucent.app.AppScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -18,22 +22,56 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
         const val COPY_BUFFER_BYTES = 64 * 1024
     }
 
-    override suspend fun download(info: ReleaseInfo): Boolean {
-        val asset = info.installer ?: return false
-        val file = withContext(Dispatchers.IO) { download(asset) } ?: return false
-        log("update: downloaded ${asset.name} (${file.length()} bytes)")
-        return true
+    private var job: Job? = null
+
+    override fun hasDownloadFolder(): Boolean = SettingsCache.autoBackup.folderUri.isNotBlank()
+
+    override fun startDownload(info: ReleaseInfo) {
+        val asset = info.installer ?: return
+        job?.cancel()
+        job = AppScope.io.launch {
+            val target = partialFile(asset.name)
+            val finished = try {
+                withTimeoutOrNull(DOWNLOAD_TIMEOUT_MS) { fetch(asset, target) }
+            } catch (t: Throwable) {
+                log("update: download failed (${t::class.simpleName}: ${t.message})")
+                null
+            }
+            if (!isActive) {
+                target.delete()
+                return@launch
+            }
+            if (finished != true || target.length() <= 0L) {
+                target.delete()
+                AutoUpdate.reportDownloadFailed(com.lucent.app.i18n.S.updateDownloadFailed)
+                log("update: the download did not finish, partial file removed")
+                return@launch
+            }
+            log("update: downloaded ${asset.name} (${target.length()} bytes)")
+            if (copyToBackupFolder(target, asset.name)) {
+                log("update: the installer was placed in the backup folder")
+            }
+            AutoUpdate.reportProgress(1f)
+            AutoUpdate.reportDownloadReady()
+            AutoUpdate.report(null)
+        }
+    }
+
+    override fun cancelDownload(info: ReleaseInfo) {
+        job?.cancel()
+        job = null
+        info.installer?.let { partialFile(it.name).delete() }
     }
 
     override fun isDownloaded(info: ReleaseInfo): Boolean {
         val asset = info.installer ?: return false
-        val file = File(directory(), asset.name)
+        val file = partialFile(asset.name)
         return file.exists() && file.length() > 0L
     }
 
     override suspend fun install(info: ReleaseInfo): Boolean {
         val asset = info.installer ?: return false
-        val file = File(directory(), asset.name)
+        val file = partialFile(asset.name)
         if (!file.exists() || file.length() <= 0L) return false
         AutoUpdate.markPhase(AutoUpdate.Phase.INSTALLING)
         val result = PrivilegedShell.installPackage(file.absolutePath, file.length())
@@ -43,7 +81,7 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
 
     override fun discard(info: ReleaseInfo) {
         val asset = info.installer ?: return
-        val file = File(directory(), asset.name)
+        val file = partialFile(asset.name)
         if (file.exists() && file.delete()) log("update: removed the downloaded installer")
     }
 
@@ -62,22 +100,23 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
     private fun directory(): File =
         File(System.getProperty("java.io.tmpdir"), "lucent-updates").apply { mkdirs() }
 
-    private suspend fun download(asset: ReleaseAsset): File? {
-        val target = File(directory(), asset.name)
+    private fun partialFile(name: String): File = File(directory(), name)
+
+    private fun copyToBackupFolder(source: File, name: String): Boolean {
+        val folder = SettingsCache.autoBackup.folderUri
+        if (folder.isBlank()) return false
         return try {
-            withTimeoutOrNull(DOWNLOAD_TIMEOUT_MS) { fetch(asset, target) }
+            val dir = File(folder)
+            if (!dir.isDirectory && !dir.mkdirs()) return false
+            source.copyTo(File(dir, name), overwrite = true)
+            true
         } catch (t: Throwable) {
-            log("update: download failed (${t::class.simpleName}: ${t.message})")
-            target.delete()
-            null
-        } ?: run {
-            log("update: download did not finish in time, removing the partial file")
-            target.delete()
-            null
+            log("update: the installer could not be copied to the backup folder (${t.message})")
+            false
         }
     }
 
-    private suspend fun fetch(asset: ReleaseAsset, target: File): File? = withContext(Dispatchers.IO) {
+    private suspend fun fetch(asset: ReleaseAsset, target: File): Boolean = withContext(Dispatchers.IO) {
         val client = OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(180, TimeUnit.SECONDS)
@@ -85,8 +124,13 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
             .build()
         val request = Request.Builder().url(asset.url).header("User-Agent", "Lucent").build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@withContext null
-            val body = response.body ?: return@withContext null
+            if (!response.isSuccessful) {
+                log("update: the download answered ${response.code}")
+                return@withContext false
+            }
+            val body = response.body ?: return@withContext false
+            val total = body.contentLength().takeIf { it > 0L }
+            var copied = 0L
             body.byteStream().use { input ->
                 target.outputStream().use { output ->
                     val buffer = ByteArray(COPY_BUFFER_BYTES)
@@ -94,12 +138,16 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
                         val read = input.read(buffer)
                         if (read < 0) break
                         output.write(buffer, 0, read)
+                        copied += read
                         coroutineContext.ensureActive()
+                        if (total != null) {
+                            AutoUpdate.reportProgress((copied.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+                        }
                     }
                 }
             }
         }
-        if (target.length() <= 0L) null else target
+        target.length() > 0L
     }
 
     private fun log(message: String) {

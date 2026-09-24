@@ -105,6 +105,11 @@
             android:process=":llm"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name=".UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <provider
             android:name=".local.LocalLlmInitProvider"
             android:authorities="${applicationId}.localllminit"

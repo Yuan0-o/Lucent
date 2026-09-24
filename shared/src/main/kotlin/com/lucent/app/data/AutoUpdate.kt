@@ -9,10 +9,12 @@ object AutoUpdate {
     enum class Phase { IDLE, CHECKING, DOWNLOADING, INSTALLING }
 
     interface Installer {
-        suspend fun download(info: ReleaseInfo): Boolean
+        fun hasDownloadFolder(): Boolean
+        fun startDownload(info: ReleaseInfo)
         fun isDownloaded(info: ReleaseInfo): Boolean
         suspend fun install(info: ReleaseInfo): Boolean
         fun discard(info: ReleaseInfo)
+        fun cancelDownload(info: ReleaseInfo)
     }
 
     var installer: Installer? = null
@@ -27,6 +29,15 @@ object AutoUpdate {
         private set
 
     var readyForInstall by mutableStateOf(false)
+        private set
+
+    var progress by mutableStateOf(-1f)
+        private set
+
+    var awaitingFolder by mutableStateOf(false)
+        private set
+
+    var hidden by mutableStateOf(false)
         private set
 
     var lastCheckFailed: Boolean = false
@@ -48,16 +59,50 @@ object AutoUpdate {
     fun offer(info: ReleaseInfo) {
         offered = info
         readyForInstall = installer?.isDownloaded(info) == true
+        awaitingFolder = false
+        hidden = false
+        progress = -1f
         phase = Phase.IDLE
+    }
+
+    fun hide() {
+        hidden = true
     }
 
     fun report(text: String?) {
         message = text
     }
 
+    fun reportProgress(fraction: Float) {
+        progress = fraction.coerceIn(0f, 1f)
+    }
+
+    fun reportDownloadReady() {
+        phase = Phase.IDLE
+        progress = -1f
+        readyForInstall = true
+        hidden = false
+    }
+
+    fun reportDownloadFailed(text: String?) {
+        phase = Phase.IDLE
+        progress = -1f
+        readyForInstall = false
+        if (text != null) message = text
+    }
+
+    fun reportDownloadCancelled() {
+        phase = Phase.IDLE
+        progress = -1f
+        readyForInstall = false
+    }
+
     fun dismiss() {
         offered = null
         readyForInstall = false
+        awaitingFolder = false
+        hidden = false
+        progress = -1f
         phase = Phase.IDLE
     }
 
@@ -70,6 +115,18 @@ object AutoUpdate {
     private fun clearPending() {
         pendingVersion = null
         onPendingChange?.invoke(null)
+    }
+
+    fun downloadFolderChosen() {
+        awaitingFolder = false
+    }
+
+    fun cancelDownload() {
+        val info = offered ?: return
+        installer?.cancelDownload(info)
+        installer?.discard(info)
+        reportDownloadCancelled()
+        message = com.lucent.app.i18n.S.updateDownloadCancelled
     }
 
     suspend fun check(currentVersion: String, notifyWhenCurrent: Boolean = false): ReleaseInfo? {
@@ -90,26 +147,25 @@ object AutoUpdate {
         return found
     }
 
-    suspend fun downloadOffered(): Boolean {
+    fun downloadOffered(): Boolean {
         val info = offered ?: return false
         val engine = installer ?: return false
         if (engine.isDownloaded(info)) {
             readyForInstall = true
             return true
         }
+        if (!engine.hasDownloadFolder()) {
+            awaitingFolder = true
+            message = null
+            return false
+        }
+        awaitingFolder = false
+        message = null
+        readyForInstall = false
+        progress = 0f
         phase = Phase.DOWNLOADING
-        val ok = try {
-            engine.download(info)
-        } catch (t: Throwable) {
-            false
-        }
-        phase = Phase.IDLE
-        readyForInstall = ok
-        if (!ok) {
-            engine.discard(info)
-            message = com.lucent.app.i18n.S.updateDownloadFailed
-        }
-        return ok
+        engine.startDownload(info)
+        return true
     }
 
     suspend fun installOffered(): Boolean {
@@ -133,6 +189,8 @@ object AutoUpdate {
     fun reset() {
         offered = null
         readyForInstall = false
+        awaitingFolder = false
+        progress = -1f
         phase = Phase.IDLE
     }
 }

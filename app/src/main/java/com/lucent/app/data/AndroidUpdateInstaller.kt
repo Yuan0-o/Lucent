@@ -3,39 +3,35 @@ package com.lucent.app.data
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import com.lucent.app.UpdateDownloadService
 import java.io.File
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.coroutineContext
 
 class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installer {
 
-    private companion object {
-        const val DOWNLOAD_TIMEOUT_MS = 20L * 60L * 1000L
-        const val COPY_BUFFER_BYTES = 64 * 1024
+    override fun hasDownloadFolder(): Boolean = SettingsCache.autoBackup.folderUri.isNotBlank()
+
+    override fun startDownload(info: ReleaseInfo) {
+        val asset = info.apk ?: return
+        val started = runCatching { UpdateDownloadService.start(context, asset) }.isSuccess
+        if (!started) {
+            AutoUpdate.reportDownloadFailed(com.lucent.app.i18n.S.updateDownloadFailed)
+            StartupLog.event(context, "update: the download service could not be started")
+        }
     }
 
-    override suspend fun download(info: ReleaseInfo): Boolean {
-        val asset = info.apk ?: return false
-        val file = withContext(Dispatchers.IO) { download(asset) } ?: return false
-        StartupLog.event(context, "update: downloaded ${asset.name} (${file.length()} bytes)")
-        return true
+    override fun cancelDownload(info: ReleaseInfo) {
+        UpdateDownloadService.cancel(context)
     }
 
     override fun isDownloaded(info: ReleaseInfo): Boolean {
         val asset = info.apk ?: return false
-        val file = File(directory(), asset.name)
+        val file = UpdateDownloadService.partialFile(context, asset.name)
         return file.exists() && file.length() > 0L
     }
 
     override suspend fun install(info: ReleaseInfo): Boolean {
         val asset = info.apk ?: return false
-        val file = File(directory(), asset.name)
+        val file = UpdateDownloadService.partialFile(context, asset.name)
         if (!file.exists() || file.length() <= 0L) return false
         if (PrivilegedShell.isReady()) {
             AutoUpdate.markPhase(AutoUpdate.Phase.INSTALLING)
@@ -56,7 +52,7 @@ class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installe
 
     override fun discard(info: ReleaseInfo) {
         val asset = info.apk ?: return
-        val file = File(directory(), asset.name)
+        val file = UpdateDownloadService.partialFile(context, asset.name)
         if (file.exists() && file.delete()) {
             StartupLog.event(context, "update: removed the downloaded installer")
         }
@@ -64,7 +60,7 @@ class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installe
 
     fun purgeStale(currentVersion: String, pendingTag: String?): Int {
         val keepToken = pendingTag?.trim()?.trimStart('v', 'V')?.takeIf { it.isNotBlank() }
-        val files = directory().listFiles() ?: return 0
+        val files = File(context.cacheDir, "updates").listFiles() ?: return 0
         var removed = 0
         files.forEach { file ->
             val wanted = keepToken != null && file.name.contains(keepToken)
@@ -74,51 +70,6 @@ class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installe
             StartupLog.event(context, "update: cleared $removed downloaded package(s) for $currentVersion")
         }
         return removed
-    }
-
-    private fun directory(): File = File(context.cacheDir, "updates").apply { mkdirs() }
-
-    private suspend fun download(asset: ReleaseAsset): File? {
-        val target = File(directory(), asset.name)
-        return try {
-            withTimeoutOrNull(DOWNLOAD_TIMEOUT_MS) { fetch(asset, target) }
-        } catch (t: Throwable) {
-            StartupLog.event(context, "update: download failed (${t::class.simpleName}: ${t.message})")
-            target.delete()
-            null
-        } ?: run {
-            StartupLog.event(context, "update: download did not finish in time, removing the partial file")
-            target.delete()
-            null
-        }
-    }
-
-    private suspend fun fetch(asset: ReleaseAsset, target: File): File? = withContext(Dispatchers.IO) {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(180, TimeUnit.SECONDS)
-            .callTimeout(DOWNLOAD_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .build()
-        val request = Request.Builder().url(asset.url).header("User-Agent", "Lucent").build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                StartupLog.event(context, "update: download answered ${response.code}")
-                return@withContext null
-            }
-            val body = response.body ?: return@withContext null
-            body.byteStream().use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(COPY_BUFFER_BYTES)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        coroutineContext.ensureActive()
-                    }
-                }
-            }
-        }
-        if (target.length() <= 0L) null else target
     }
 
     private fun openSystemInstaller(file: File): Boolean = try {
