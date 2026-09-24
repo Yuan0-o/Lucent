@@ -181,4 +181,13 @@ class AppToolsTest {
         assertEquals(7L, AppTools.resolveNote(notes, "PROJECT PLAN")?.id)
         assertEquals(7L, AppTools.resolveNote(notes, "  Project Plan  ")?.id)
     }
+
+    @Test
+    fun resolveNoteMatchesWhenUnicodeCompositionDiffers() {
+        val composed = "Caf\u00E9 notes"
+        val decomposed = "Cafe\u0301 notes"
+        val notes = listOf(Note(id = 5, title = composed, body = ""))
+        assertEquals(5L, AppTools.resolveNote(notes, decomposed)?.id)
+        assertEquals(5L, AppTools.resolveNote(notes, composed)?.id)
+    }
 }

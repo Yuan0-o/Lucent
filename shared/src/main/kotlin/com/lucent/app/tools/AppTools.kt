@@ -554,8 +554,15 @@ object AppTools {
 
     internal fun resolveTask(tasks: List<Task>, query: String): Task? = matchTask(tasks, query)
 
+    private fun composed(value: String): String =
+        try {
+            java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFC)
+        } catch (t: Throwable) {
+            value
+        }
+
     private fun normalizeTitle(value: String): String =
-        value.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+        composed(value).lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
     private fun meaningfulTitle(value: String): String =
         normalizeTitle(value).split(' ')
@@ -563,8 +570,8 @@ object AppTools {
             .joinToString(" ")
 
     private fun titleScore(title: String, query: String): Int {
-        val storedRaw = title.trim()
-        val askedRaw = query.trim()
+        val storedRaw = composed(title.trim())
+        val askedRaw = composed(query.trim())
         if (storedRaw.isEmpty() || askedRaw.isEmpty()) return 0
         if (storedRaw.equals(askedRaw, ignoreCase = true)) return 1000
 
