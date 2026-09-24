@@ -735,6 +735,7 @@ ENTRIES = [
     ("saveApi", "Save API", "保存 API", "APIを保存", "API 저장"),
     ("apiDeleteConfirmTitle", "Delete this API?", "删除此 API？", "このAPIを削除しますか？", "이 API를 삭제할까요?"),
     ("apiDeleteConfirmBody(name: String)", "This removes \"{name}\", including its saved key, from this device. It can't be undone. If the key isn't saved anywhere else you'll need to paste it in again to use this API.", "这将从此设备移除“{name}”，包括其已保存的密钥，且无法撤销。若密钥没有保存在其他地方，再次使用此 API 时需要重新粘贴。", "「{name}」は保存済みキーを含めてこの端末から削除され、元に戻せません。キーを他に保存していない場合、このAPIを使うには再入力が必要です。", "\"{name}\"이(가) 저장된 키와 함께 이 기기에서 제거되며 되돌릴 수 없습니다. 키를 다른 곳에 저장하지 않았다면 이 API를 쓰려면 다시 붙여넣어야 합니다."),
+    ("apiUnsavedHint", "Unsaved changes \u2014 tap Save API to keep them.", "有未保存的更改\u2014\u2014点击「保存 API」即可保留。", "未保存の変更があります。「API を保存」で保存されます。", "저장하지 않은 변경 사항이 있습니다. API 저장을 누르면 반영됩니다."),
     ("apiFallbackName(n: Int)", "API {n}", "API {n}", "API {n}", "API {n}"),
     ("thisApiFallback", "this API", "此 API", "このAPI", "이 API"),
     ("apiUrlExampleOpenAi", "e.g. https://api.openai.com/v1", "例如 https://api.openai.com/v1", "例：https://api.openai.com/v1", "예: https://api.openai.com/v1"),

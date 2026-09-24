@@ -360,7 +360,7 @@ internal fun ApiModelPickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onDone(draft) }) { Text(S.actionSave) } },
+        confirmButton = { TextButton(onClick = { onDone(draft) }) { Text(S.actionDone) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(S.actionCancel) } }
     )
 }

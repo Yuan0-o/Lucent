@@ -118,6 +118,16 @@ internal fun ApiSettingsPage(
     var pickerOpen by remember { mutableStateOf(false) }
     val customProvider = provider == ApiProviders.CUSTOM
     val choices = modelChoices(fetchedModels, models)
+    val savedProfile = profiles.getOrNull(selectedProfileIdx)
+    val unsaved = savedProfile != null && (
+        editingProfileName.trim().ifBlank { S.apiFallbackName(selectedProfileIdx + 1) } != savedProfile.name ||
+            provider != savedProfile.provider ||
+            spec != savedProfile.spec ||
+            url.trim() != savedProfile.baseUrl ||
+            key.trim() != savedProfile.apiKey ||
+            selectedModel != savedProfile.model ||
+            models.toSet() != savedProfile.selectedModels.toSet()
+        )
 
     BackHeader(S.settingsApiTitle) { onRoute(SettingsRoute.Assistant) }
 
@@ -324,6 +334,10 @@ internal fun ApiSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
         GlassButton(text = S.saveApi, onClick = onSaveProfile)
+        if (unsaved) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(S.apiUnsavedHint, color = onGradientMuted, fontSize = 12.sp)
+        }
     }
     }
     }

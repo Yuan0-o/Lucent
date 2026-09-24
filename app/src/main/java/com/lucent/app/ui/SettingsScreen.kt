@@ -654,8 +654,7 @@ fun SettingsScreen(active: Boolean = true) {
     fun saveActiveProfile(
         idx: Int,
         providerId: String,
-        selectedModels: List<String>,
-        activate: Boolean = true
+        selectedModels: List<String>
     ) {
         val updated = profiles.toMutableList()
         val edited = com.lucent.app.data.ApiProfile(
@@ -668,7 +667,7 @@ fun SettingsScreen(active: Boolean = true) {
             selectedModels = selectedModels
         )
         if (idx in updated.indices) updated[idx] = edited else updated.add(edited)
-        val newSelected = if (activate) idx.coerceIn(0, updated.size - 1) else selectedProfileIdx
+        val newSelected = idx.coerceIn(0, updated.size - 1)
         AppScope.io.launch {
             repo.saveApiProfiles(updated, newSelected)
             withContext(Dispatchers.Main) { LucentToast.show(appContext, S.apiSavedToast) }
@@ -2353,10 +2352,7 @@ fun SettingsScreen(active: Boolean = true) {
                 selectedModel = selectedModel,
                 onSelectedModelChange = { selectedModel = it },
                 models = models,
-                onModelsChange = { picked ->
-                    models = picked
-                    saveActiveProfile(selectedProfileIdx, provider, picked)
-                },
+                onModelsChange = { picked -> models = picked },
                 loading = loading,
                 onLoadingChange = { loading = it },
                 errorText = errorText,
