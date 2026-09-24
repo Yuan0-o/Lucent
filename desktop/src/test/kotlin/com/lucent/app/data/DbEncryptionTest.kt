@@ -50,6 +50,7 @@ class DbEncryptionTest {
                     st.executeUpdate("INSERT INTO notes (title, body, updatedAt) VALUES ('a', 'b', 1)")
                 }
             }
+            db.close()
             val file = File(dir, "lucent.db")
             assertTrue(file.exists())
             assertFalse(headerIsPlaintext(file), "fresh store must be encrypted at rest")
@@ -88,6 +89,7 @@ class DbEncryptionTest {
                     }
                 }
             }
+            db.close()
             assertEquals("legacy", title)
             assertEquals("row", body)
             assertFalse(headerIsPlaintext(plainFile), "rekey must leave the header encrypted")
@@ -98,8 +100,8 @@ class DbEncryptionTest {
     fun wrongKeyOnExistingEncryptedStoreThrowsActionableError() = runBlocking {
         val dirA = freshDir()
         val dirB = freshDir()
-        use(dirA) { Db.open(TestContext(dirA)) }
-        use(dirB) { Db.open(TestContext(dirB)) }
+        use(dirA) { Db.open(TestContext(dirA)).close() }
+        use(dirB) { Db.open(TestContext(dirB)).close() }
 
         val fileA = File(dirA, "lucent.db")
         assertFalse(headerIsPlaintext(fileA))

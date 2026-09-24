@@ -29,6 +29,10 @@ class Db private constructor(private val connection: Connection) {
         mutex.withLock { block(connection) }
     }
 
+    fun close() {
+        runCatching { connection.close() }
+    }
+
     suspend fun <T> write(vararg tables: String, block: (Connection) -> T): T {
         val result = use(block)
         tables.forEach { changes.tryEmit(it) }

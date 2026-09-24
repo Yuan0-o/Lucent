@@ -163,7 +163,7 @@ object LocalSecrets {
                 out.flush()
                 out.fd.sync()
             }
-            if (tmp.renameTo(file)) true else { tmp.delete(); false }
+            if (AtomicFiles.replace(tmp, file)) true else { tmp.delete(); false }
         } catch (t: Throwable) {
             tmp.delete()
             false

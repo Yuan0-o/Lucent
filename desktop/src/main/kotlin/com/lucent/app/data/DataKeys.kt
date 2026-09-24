@@ -38,7 +38,7 @@ object DataKeys {
                 out.flush()
                 out.fd.sync()
             }
-            if (temp.renameTo(file)) true else { temp.delete(); false }
+            if (AtomicFiles.replace(temp, file)) true else { temp.delete(); false }
         } catch (t: Throwable) {
             temp.delete()
             false
