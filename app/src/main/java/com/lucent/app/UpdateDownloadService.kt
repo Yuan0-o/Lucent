@@ -262,7 +262,7 @@ class UpdateDownloadService : Service() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             )
         } else {
-            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+            postNotification(notification)
         }
     }
 
@@ -301,7 +301,15 @@ class UpdateDownloadService : Service() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+        postNotification(notification)
+    }
+
+    private fun postNotification(notification: Notification) {
+        try {
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+        } catch (t: SecurityException) {
+            StartupLog.event(applicationContext, "update: notifications are not permitted (${t.message})")
+        }
     }
 
     private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(
