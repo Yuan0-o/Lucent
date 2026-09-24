@@ -1,5 +1,7 @@
 package com.lucent.app.tools
 
+import com.lucent.app.data.Note
+import com.lucent.app.data.Task
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -117,5 +119,46 @@ class AppToolsTest {
         val out = AppTools.withArgument("""{"title": "A"}""", "title", "B")
         assertEquals("B", org.json.JSONObject(out).getString("title"))
         assertEquals("{broken", AppTools.withArgument("{broken", "title", "B"))
+    }
+
+    @Test
+    fun resolveNoteAcceptsTheWaysPeopleNameANote() {
+        val notes = listOf(
+            Note(id = 1, title = "Shopping list"),
+            Note(id = 2, title = "Project plan 2026"),
+            Note(id = 3, title = "Reading")
+        )
+        assertEquals(2L, AppTools.resolveNote(notes, "the project plan note")?.id)
+        assertEquals(2L, AppTools.resolveNote(notes, "PROJECT PLAN 2026")?.id)
+        assertEquals(1L, AppTools.resolveNote(notes, "shopping")?.id)
+        assertEquals(3L, AppTools.resolveNote(notes, "reading list")?.id)
+    }
+
+    @Test
+    fun resolveNotePrefersTheCloserOfTwoCandidates() {
+        val notes = listOf(
+            Note(id = 1, title = "Weekly review", updatedAt = 500L),
+            Note(id = 2, title = "Weekly review archive", updatedAt = 100L)
+        )
+        assertEquals(2L, AppTools.resolveNote(notes, "archive")?.id)
+        assertEquals(1L, AppTools.resolveNote(notes, "weekly review")?.id)
+    }
+
+    @Test
+    fun resolveNoteGivesUpRatherThanGuessing() {
+        val notes = listOf(Note(id = 1, title = "Shopping list"))
+        assertNull(AppTools.resolveNote(notes, "zzz"))
+        assertNull(AppTools.resolveNote(notes, ""))
+    }
+
+    @Test
+    fun resolveTaskMatchesPartialTitles() {
+        val tasks = listOf(
+            Task(id = 1, title = "Call the dentist"),
+            Task(id = 2, title = "Send the invoice")
+        )
+        assertEquals(1L, AppTools.resolveTask(tasks, "dentist")?.id)
+        assertEquals(2L, AppTools.resolveTask(tasks, "the invoice task")?.id)
+        assertNull(AppTools.resolveTask(tasks, "zzz"))
     }
 }

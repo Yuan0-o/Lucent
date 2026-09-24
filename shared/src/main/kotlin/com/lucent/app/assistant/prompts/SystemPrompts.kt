@@ -9,7 +9,8 @@ object SystemPrompts {
     fun local(
         tools: List<ToolDefinition>,
         userText: String,
-        compact: Boolean = false
+        compact: Boolean = false,
+        recentItems: String = ""
     ): String {
         val today = java.time.ZonedDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("EEEE, yyyy-MM-dd, HH:mm"))
@@ -62,6 +63,14 @@ object SystemPrompts {
             append("to the user in their language as plain text (no JSON). ")
             append("If the user is only chatting and no action is needed, just answer directly with no tool.")
 
+            if (recentItems.isNotBlank()) {
+                append("\n\nItems changed most recently (when the user says \"it\" or \"that one\", ")
+                append("they mean one of these; copy a title exactly as written):\n")
+                append(recentItems)
+                append("\nAlways reuse the exact title a tool reports. If a tool says nothing matched, ")
+                append("it lists the closest real titles - call that tool again with one of them.")
+            }
+
             com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append("\n\n").append(it) }
         }
     }
@@ -71,7 +80,8 @@ object SystemPrompts {
         tier: MemoryTier,
         webSearchEnabled: Boolean,
         userText: String,
-        crossMemory: String
+        crossMemory: String,
+        recentItems: String = ""
     ): String {
         val today = java.time.ZonedDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
@@ -95,6 +105,15 @@ object SystemPrompts {
                 append("\nBackground from your other chats with this user (older context, keep it brief):\n")
                 append(crossMemory).append("\n")
             }
+            if (recentItems.isNotBlank()) {
+                append("\nThese are the items changed most recently. When the person says \"it\", ")
+                append("\"that one\" or \"the one we just made\", this is what they mean; copy a title ")
+                append("exactly as written.\n")
+                append(recentItems).append("\n")
+                append("Always reuse the exact title a tool reports back. If a tool says nothing ")
+                append("matched, it also lists the closest real titles - call the same tool again with ")
+                append("the closest one straight away, in this same turn.\n")
+            }
             com.lucent.app.i18n.ReplyLanguage.instructionFor(userText)?.let { append(it) }
         }
     }
@@ -105,7 +124,8 @@ object SystemPrompts {
         tier: MemoryTier,
         webSearchEnabled: Boolean,
         crossMemory: String,
-        userText: String
+        userText: String,
+        recentItems: String = ""
     ): String {
         val effectiveStyle = style.ifBlank { DEFAULT_ASSISTANT_STYLE }
         return buildString {
@@ -419,6 +439,23 @@ object SystemPrompts {
                 append("\n\nRecent context from the person's other conversations (most recent last):\n")
                 append(crossMemory)
                 append("\n\n")
+            }
+
+            if (recentItems.isNotBlank()) {
+                append("WHAT THE PERSON MEANS BY \"IT\". These are the items you or they changed ")
+                append("most recently. When they say \"it\", \"that note\", \"that one\" or \"the one we ")
+                append("just made\", this list is what they mean, and these titles are current right ")
+                append("now:\n")
+                append(recentItems)
+                append("\n\nKeep the exact titles you act on. A tool result repeats the real title of ")
+                append("whatever it touched — reuse that title verbatim in every later call about the same ")
+                append("item, in this and in later turns, instead of paraphrasing, translating or ")
+                append("shortening it. When a tool answers that nothing matched, it also lists the closest ")
+                append("titles that do exist: immediately call that same tool again with the closest one, ")
+                append("in the same turn, rather than asking the person to spell it out or giving up. ")
+                append("Only ask which one they meant when two of those titles are genuinely equally ")
+                append("likely. And if a request needs several steps, keep calling tools until every step ")
+                append("is done — the item titles you need stay in this list the whole time. ")
             }
 
             append("Above all: be genuinely warm, actually helpful, and completely human. Confirm what you ")

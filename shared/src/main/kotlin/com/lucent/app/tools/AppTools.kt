@@ -26,6 +26,13 @@ import org.json.JSONObject
 
 object AppTools {
 
+    private const val MATCH_MIN_SCORE = 300
+
+    private val TITLE_NOISE_WORDS = setOf(
+        "the", "a", "an", "my", "our", "of", "called", "named",
+        "note", "notes", "task", "tasks", "item", "items", "draft", "drafts"
+    )
+
     fun definitions(includeWebSearch: Boolean = false): List<ToolDefinition> =
         baseDefinitions() + NotebookTools.definitions() +
             (if (includeWebSearch) listOf(webSearchDefinition()) else emptyList())
@@ -526,10 +533,102 @@ object AppTools {
         db.taskDao().getAllOnce().filter { it.trashedAt != null && !it.hidden }
 
     private fun matchNote(notes: List<Note>, query: String): Note? =
-        notes.firstOrNull { it.title.contains(query, ignoreCase = true) }
+        bestMatch(notes, query, { it.title }, { it.updatedAt })
 
     private fun matchTask(tasks: List<Task>, query: String): Task? =
-        tasks.firstOrNull { it.title.contains(query, ignoreCase = true) }
+        bestMatch(tasks, query, { it.title }, { it.createdAt })
+
+    internal fun resolveNote(notes: List<Note>, query: String): Note? = matchNote(notes, query)
+
+    internal fun resolveTask(tasks: List<Task>, query: String): Task? = matchTask(tasks, query)
+
+    private fun normalizeTitle(value: String): String =
+        value.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+
+    private fun meaningfulTitle(value: String): String =
+        normalizeTitle(value).split(' ')
+            .filter { it.isNotBlank() && it !in TITLE_NOISE_WORDS }
+            .joinToString(" ")
+
+    private fun titleScore(title: String, query: String): Int {
+        val stored = normalizeTitle(title)
+        val asked = normalizeTitle(query)
+        if (stored.isBlank() || asked.isBlank()) return 0
+        if (stored == asked) return 1000
+        val storedCore = meaningfulTitle(stored)
+        val askedCore = meaningfulTitle(asked)
+        if (storedCore.isNotBlank() && storedCore == askedCore) return 900
+        if (stored.startsWith(asked)) return 800 + asked.length.coerceAtMost(60)
+        if (stored.contains(asked)) return 700 + asked.length.coerceAtMost(60)
+        if (asked.contains(stored) && stored.length >= 3) return 600 + stored.length.coerceAtMost(60)
+        val askedTokens = askedCore.split(' ').filter { it.length >= 2 }
+        if (askedTokens.isEmpty()) return 0
+        val storedTokens = storedCore.split(' ').filter { it.isNotBlank() }
+        if (storedTokens.isEmpty()) return 0
+        val hits = askedTokens.count { token ->
+            storedTokens.any { it.contains(token) || token.contains(it) }
+        }
+        val coverage = hits.toDouble() / askedTokens.size
+        return if (coverage >= 0.6) 300 + (coverage * 100).toInt() else 0
+    }
+
+    private fun <T> rankByTitle(items: List<T>, query: String, titleOf: (T) -> String): List<Pair<T, Int>> =
+        items.map { it to titleScore(titleOf(it), query) }
+
+    private fun <T> bestMatch(
+        items: List<T>,
+        query: String,
+        titleOf: (T) -> String,
+        recencyOf: (T) -> Long
+    ): T? = rankByTitle(items, query, titleOf)
+        .filter { it.second >= MATCH_MIN_SCORE }
+        .sortedWith(compareByDescending<Pair<T, Int>> { it.second }.thenByDescending { recencyOf(it.first) })
+        .firstOrNull()
+        ?.first
+
+    private fun <T> closestTitles(
+        items: List<T>,
+        query: String,
+        titleOf: (T) -> String,
+        recencyOf: (T) -> Long,
+        limit: Int = 5
+    ): List<String> {
+        if (items.isEmpty()) return emptyList()
+        val ranked = rankByTitle(items, query, titleOf)
+        val ordered = if (ranked.any { it.second > 0 }) {
+            ranked.sortedWith(compareByDescending<Pair<T, Int>> { it.second }.thenByDescending { recencyOf(it.first) })
+        } else {
+            ranked.sortedByDescending { recencyOf(it.first) }
+        }
+        return ordered.take(limit).map { titleOf(it.first) }.filter { it.isNotBlank() }
+    }
+
+    private fun noMatchMessage(kind: String, query: String, candidates: List<String>): String {
+        if (candidates.isEmpty()) {
+            return "No $kind matched \"$query\", and there is nothing to match against yet."
+        }
+        val list = candidates.joinToString("; ") { "\"$it\"" }
+        return "No $kind matched \"$query\". Closest existing titles: $list. " +
+            "Call the same tool again with one of those exact titles."
+    }
+
+    private fun noteNotFound(query: String, candidates: List<Note>): ToolExecResult =
+        ToolExecResult(
+            noMatchMessage("note", query, closestTitles(candidates, query, { it.title }, { it.updatedAt })),
+            success = false
+        )
+
+    private suspend fun noteNotFound(db: AppDatabase, query: String): ToolExecResult =
+        noteNotFound(query, activeNotes(db))
+
+    private fun taskNotFound(query: String, candidates: List<Task>): ToolExecResult =
+        ToolExecResult(
+            noMatchMessage("task", query, closestTitles(candidates, query, { it.title }, { it.createdAt })),
+            success = false
+        )
+
+    private suspend fun taskNotFound(db: AppDatabase, query: String): ToolExecResult =
+        taskNotFound(query, activeTasks(db))
 
     private fun attachmentSummary(json: String): String {
         val names = Attachments.parse(json).map { it.name }
@@ -680,7 +779,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val attachments = Attachments.parse(match.attachments)
                     val sb = StringBuilder()
@@ -718,7 +817,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else if (match.isDoodle) {
                     ToolExecResult("\"${match.title}\" is a doodle note. The assistant can delete doodle notes but cannot edit them — the user edits the drawing in the app.", success = false)
                 } else if (!args.hasAny("new_title", "new_body", "new_tags")) {
@@ -739,7 +838,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     TaskActions.trashNote(db, match)
                     ToolExecResult("Moved note \"${match.title}\" to Trash. The user can restore it from there.")
@@ -750,7 +849,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else if (match.isDoodle) {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
@@ -764,7 +863,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else if (match.isDoodle) {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
@@ -783,7 +882,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val raw = args.firstString("color", "colour").trim().lowercase()
                     val color = when {
@@ -807,7 +906,7 @@ object AppTools {
                 val item = args.firstString("item", "text")
                 val match = matchNote(activeNotes(db), titleQuery)
                 when {
-                    match == null -> ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    match == null -> noteNotFound(db, titleQuery)
                     item.isBlank() -> ToolExecResult("No checklist item text was provided.", success = false)
                     else -> {
                         val becameChecklist = !match.isChecklist
@@ -824,7 +923,7 @@ object AppTools {
                 val itemQuery = args.firstString("item", "text")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val item = Checklist.findByText(match.checklist, itemQuery)
                     if (item == null) {
@@ -844,7 +943,7 @@ object AppTools {
                 val newText = args.firstString("new_text", "new_item")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else if (newText.isBlank()) {
                     ToolExecResult("No new text was provided for the item.", success = false)
                 } else {
@@ -865,7 +964,7 @@ object AppTools {
                 val itemQuery = args.firstString("item", "text")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val item = Checklist.findByText(match.checklist, itemQuery)
                     if (item == null) {
@@ -883,7 +982,7 @@ object AppTools {
                 val titleQuery = args.firstString("note_title", "title")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val toChecklist = args.optBoolean("checklist", !match.isChecklist)
                     if (toChecklist == match.isChecklist) {
@@ -904,7 +1003,7 @@ object AppTools {
                 val content = args.optString("content", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val att = Attachments.textAttachment(appContext, fileName, content)
                     if (att == null) {
@@ -922,7 +1021,7 @@ object AppTools {
                 val fileName = args.optString("file_name", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val existing = Attachments.parse(match.attachments)
                     val resolved = resolveAttachmentName(existing, fileName)
@@ -949,7 +1048,7 @@ object AppTools {
                 val requestedName = args.optString("file_name", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     storeUpload(appContext, db, uploadMime, uploadData, uploadName, requestedName) { att ->
                         val list = Attachments.upsert(appContext, Attachments.parse(match.attachments), att)
@@ -963,7 +1062,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val versions = db.noteVersionDao().getForNoteOnce(match.id)
                     if (versions.isEmpty()) {
@@ -987,7 +1086,7 @@ object AppTools {
                 val versionIndex = args.optInt("version", 0)
                 val match = matchNote(activeNotes(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No note found matching \"$titleQuery\".", success = false)
+                    noteNotFound(db, titleQuery)
                 } else {
                     val versions = db.noteVersionDao().getForNoteOnce(match.id)
                     val version = versions.getOrNull(versionIndex - 1)
@@ -1075,7 +1174,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val attachments = Attachments.parse(match.attachments)
                     val subtaskItems = Checklist.parse(match.subtasks)
@@ -1110,7 +1209,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val next = TaskActions.complete(appContext, db, match)
                     val note = next?.dueAt?.let { " It repeats, so the next occurrence was created, due ${DueParsing.format(it)}." } ?: ""
@@ -1133,7 +1232,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else if (!args.hasAny("new_title", "new_notes", "new_priority", "new_due", "new_repeat", "new_reminder")) {
                     ToolExecResult("No changes were provided.", success = false)
                 } else {
@@ -1190,7 +1289,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     TaskActions.trash(appContext, db, match)
                     ToolExecResult("Moved task \"${match.title}\" to Trash. The user can restore it from there.")
@@ -1201,7 +1300,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val pinned = args.optBoolean("pinned", true)
                     db.taskDao().update(match.copy(pinned = pinned))
@@ -1213,7 +1312,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val priority = TaskPriority.fromKey(args.optString("priority", "none"))
                     db.taskDao().update(match.copy(priority = priority.value))
@@ -1228,7 +1327,7 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val raw = args.firstString("due_at", "due")
                     if (DueParsing.isClearRequest(raw)) {
@@ -1263,7 +1362,7 @@ object AppTools {
                 val item = args.firstString("item", "subtask_text", "text")
                 val match = matchTask(activeTasks(db), titleQuery)
                 when {
-                    match == null -> ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    match == null -> taskNotFound(db, titleQuery)
                     item.isBlank() -> ToolExecResult("No checklist item text was provided.", success = false)
                     else -> {
                         db.taskDao().update(match.copy(subtasks = Checklist.add(match.subtasks, item)))
@@ -1277,7 +1376,7 @@ object AppTools {
                 val itemQuery = args.firstString("item", "subtask_text", "text")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val item = Checklist.findByText(match.subtasks, itemQuery)
                     if (item == null) {
@@ -1297,7 +1396,7 @@ object AppTools {
                 val newText = args.firstString("new_text", "new_item")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else if (newText.isBlank()) {
                     ToolExecResult("No new text was provided for the item.", success = false)
                 } else {
@@ -1317,7 +1416,7 @@ object AppTools {
                 val itemQuery = args.firstString("item", "subtask_text", "text")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val item = Checklist.findByText(match.subtasks, itemQuery)
                     if (item == null) {
@@ -1336,7 +1435,7 @@ object AppTools {
                 val content = args.optString("content", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val att = Attachments.textAttachment(appContext, fileName, content)
                     if (att == null) {
@@ -1354,7 +1453,7 @@ object AppTools {
                 val fileName = args.optString("file_name", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     val existing = Attachments.parse(match.attachments)
                     val resolved = resolveAttachmentName(existing, fileName)
@@ -1381,7 +1480,7 @@ object AppTools {
                 val requestedName = args.optString("file_name", "")
                 val match = matchTask(activeTasks(db), titleQuery)
                 if (match == null) {
-                    ToolExecResult("No task found matching \"$titleQuery\".", success = false)
+                    taskNotFound(db, titleQuery)
                 } else {
                     storeUpload(appContext, db, uploadMime, uploadData, uploadName, requestedName) { att ->
                         val list = Attachments.upsert(appContext, Attachments.parse(match.attachments), att)
@@ -1418,17 +1517,17 @@ object AppTools {
                 val titleQuery = args.optString("title", "")
                 when (kind) {
                     "note" -> {
-                        val match = matchNote(draftNotes(db), titleQuery)
-                        if (match == null) ToolExecResult("No draft note found matching \"$titleQuery\".", success = false)
-                        else {
+                        val candidates = draftNotes(db)
+                        val match = matchNote(candidates, titleQuery)
+                        if (match == null) noteNotFound(titleQuery, candidates) else {
                             db.noteDao().delete(match)
                             ToolExecResult("Deleted draft note \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
                     }
                     "task" -> {
-                        val match = matchTask(draftTasks(db), titleQuery)
-                        if (match == null) ToolExecResult("No draft task found matching \"$titleQuery\".", success = false)
-                        else {
+                        val candidates = draftTasks(db)
+                        val match = matchTask(candidates, titleQuery)
+                        if (match == null) taskNotFound(titleQuery, candidates) else {
                             db.taskDao().delete(match)
                             ToolExecResult("Deleted draft task \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
@@ -1471,9 +1570,12 @@ object AppTools {
 
             "restore_note_from_trash" -> {
                 val titleQuery = args.optString("title", "")
-                val match = matchNote(trashedNotes(db), titleQuery)
+                val candidates = trashedNotes(db)
+                val match = matchNote(candidates, titleQuery)
                 if (match == null) {
-                    ToolExecResult("No trashed note found matching \"$titleQuery\". Call list_trash to see what's in the Trash.", success = false)
+                    ToolExecResult("No trashed note matched \"$titleQuery\". " +
+                        noMatchMessage("trashed note", titleQuery, closestTitles(candidates, titleQuery, { it.title }, { it.updatedAt })) +
+                        " Call list_trash to see what is in the Trash.", success = false)
                 } else {
                     TaskActions.untrashNote(db, match)
                     ToolExecResult(
@@ -1485,9 +1587,12 @@ object AppTools {
 
             "restore_task_from_trash" -> {
                 val titleQuery = args.optString("title", "")
-                val match = matchTask(trashedTasks(db), titleQuery)
+                val candidates = trashedTasks(db)
+                val match = matchTask(candidates, titleQuery)
                 if (match == null) {
-                    ToolExecResult("No trashed task found matching \"$titleQuery\". Call list_trash to see what's in the Trash.", success = false)
+                    ToolExecResult("No trashed task matched \"$titleQuery\". " +
+                        noMatchMessage("trashed task", titleQuery, closestTitles(candidates, titleQuery, { it.title }, { it.createdAt })) +
+                        " Call list_trash to see what is in the Trash.", success = false)
                 } else {
                     TaskActions.untrash(appContext, db, match)
                     ToolExecResult("Restored task \"${match.title}\" from the Trash.")

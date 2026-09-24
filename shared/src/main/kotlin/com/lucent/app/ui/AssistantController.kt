@@ -77,7 +77,11 @@ class AssistantControllerImpl(
     private val genScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val REVEAL_STEP_MS = 22L
-    private val MAX_TOOL_ROUNDS = 6
+    private val MAX_TOOL_ROUNDS = 12
+
+    private val RECENT_ITEMS_MAX = 6
+
+    private val RECENT_CONVERSATIONS_MAX = 24
 
 
     val sending: Boolean get() = turns.isNotEmpty()
@@ -625,9 +629,10 @@ class AssistantControllerImpl(
                     else ""
                 val parkedRefine = refinementContext
                 refinementContext = null
+                val recentItems = recentItemsContext(db, conversationId)
                 val basePrompt =
-                    if (smallModelMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory)
-                    else SystemPrompts.full(name, style, memoryTier, webSearchEnabled, crossMemory, text)
+                    if (smallModelMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory, recentItems = recentItems)
+                    else SystemPrompts.full(name, style, memoryTier, webSearchEnabled, crossMemory, text, recentItems = recentItems)
                 val systemPrompt = if (parkedRefine != null) {
                     basePrompt +
                         "\n\nIMPORTANT (the user is refining an earlier proposal of yours): you proposed this before, " +
@@ -718,6 +723,7 @@ class AssistantControllerImpl(
                         }
                         turn.recorder.finishTool(stepIndex, r)
                         if (!r.success) logToolFailure(call.name, null)
+                        rememberTouched(db, conversationId, call.name, confirmed.argumentsJson, r)
                         executed[sig] = r
                         results.add(r)
                     }
@@ -876,7 +882,12 @@ class AssistantControllerImpl(
             .takeLast(com.lucent.app.local.LocalLlm.HISTORY_TURNS * 2)
         val lastUserText = turns.lastOrNull { it.first == "user" }?.second ?: ""
 
-        val localPrompt = SystemPrompts.local(tools, lastUserText, smallModelMode)
+        val localPrompt = SystemPrompts.local(
+            tools,
+            lastUserText,
+            smallModelMode,
+            recentItems = recentItemsContext(db, conversationId)
+        )
         val messages = mutableListOf<Pair<String, String>>()
         messages.add("system" to localPrompt)
         messages.addAll(localTranscriptWithin(localPrompt, turns))
@@ -986,6 +997,7 @@ class AssistantControllerImpl(
                     }
                     turn.recorder.finishTool(stepIndex, r)
                     if (!r.success) logToolFailure(call.name, null)
+                    rememberTouched(db, conversationId, call.name, confirmed.argumentsJson, r)
                     executed[sig] = r
                     r
                 }
@@ -1123,7 +1135,7 @@ class AssistantControllerImpl(
         turn.completionBuzz()
     }
 
-    private val MAX_LOCAL_TOOL_ROUNDS = 6
+    private val MAX_LOCAL_TOOL_ROUNDS = 10
 
     private fun localTranscriptWithin(
         systemPrompt: String,
@@ -1186,6 +1198,79 @@ class AssistantControllerImpl(
             sb.append(who).append(": ").append(m.content.trim().take(400)).append("\n")
         }
         return sb.toString().trim()
+    }
+
+    private data class TouchedItem(val kind: String, val id: Long)
+
+    private val touchedByConversation = LinkedHashMap<Long, MutableList<TouchedItem>>()
+
+    private fun toolItemKind(toolName: String, result: ToolExecResult): String? = when {
+        result.openNoteId != null && result.openNoteId > 0L -> "note"
+        result.openTaskId != null && result.openTaskId > 0L -> "task"
+        toolName.contains("notebook") -> null
+        toolName.endsWith("_note") || toolName.startsWith("note_") || toolName.contains("_note_") -> "note"
+        toolName.endsWith("_task") || toolName.startsWith("task_") || toolName.contains("_task_") -> "task"
+        toolName.contains("subtask") -> "task"
+        else -> null
+    }
+
+    private fun titleQueryOf(argsJson: String): String = try {
+        val args = org.json.JSONObject(argsJson)
+        listOf("title", "note_title", "task_title", "new_title", "query", "name")
+            .firstNotNullOfOrNull { key -> args.optString(key, "").takeIf { it.isNotBlank() } }
+            .orEmpty()
+    } catch (t: Throwable) {
+        ""
+    }
+
+    private suspend fun rememberTouched(
+        db: AppDatabase,
+        conversationId: Long,
+        toolName: String,
+        argsJson: String,
+        result: ToolExecResult
+    ) {
+        if (!result.success) return
+        val kind = toolItemKind(toolName, result) ?: return
+        val query = titleQueryOf(argsJson)
+        val id = if (kind == "note") {
+            result.openNoteId ?: AppTools.resolveNote(AppTools.activeNotes(db), query)?.id
+        } else {
+            result.openTaskId ?: AppTools.resolveTask(AppTools.activeTasks(db), query)?.id
+        } ?: return
+        while (touchedByConversation.size >= RECENT_CONVERSATIONS_MAX &&
+            !touchedByConversation.containsKey(conversationId)
+        ) {
+            val oldest = touchedByConversation.keys.firstOrNull() ?: break
+            touchedByConversation.remove(oldest)
+        }
+        val list = touchedByConversation.getOrPut(conversationId) { mutableListOf() }
+        list.removeAll { it.kind == kind && it.id == id }
+        list.add(TouchedItem(kind, id))
+        while (list.size > RECENT_ITEMS_MAX) list.removeAt(0)
+    }
+
+    private suspend fun recentItemsContext(db: AppDatabase, conversationId: Long): String {
+        val notes = AppTools.activeNotes(db)
+        val tasks = AppTools.activeTasks(db)
+        val noteById = notes.associateBy { it.id }
+        val taskById = tasks.associateBy { it.id }
+        val lines = LinkedHashSet<String>()
+        touchedByConversation[conversationId].orEmpty().asReversed().forEach { item ->
+            if (item.kind == "note") {
+                noteById[item.id]?.let { lines.add("note \"" + it.title.ifBlank { "Untitled" } + "\"") }
+            } else {
+                taskById[item.id]?.let { lines.add("task \"" + it.title.ifBlank { "Untitled" } + "\"") }
+            }
+        }
+        if (lines.size < RECENT_ITEMS_MAX) {
+            val fallback = buildList {
+                notes.sortedByDescending { it.updatedAt }.forEach { add("note \"" + it.title.ifBlank { "Untitled" } + "\"") }
+                tasks.sortedByDescending { it.createdAt }.forEach { add("task \"" + it.title.ifBlank { "Untitled" } + "\"") }
+            }
+            fallback.forEach { if (lines.size < RECENT_ITEMS_MAX) lines.add(it) }
+        }
+        return lines.joinToString("\n") { "- " + it }
     }
 
     private fun signatureOf(name: String, argsJson: String): String {

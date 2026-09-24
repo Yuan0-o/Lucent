@@ -107,4 +107,36 @@ class SystemPromptsTest {
         )
         assertTrue(Regex("\\d{4}-\\d{2}-\\d{2}").containsMatchIn(p))
     }
+
+    @Test
+    fun fullPromptCarriesRecentItemsWhenGiven() {
+        val p = SystemPrompts.full(
+            name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
+            webSearchEnabled = false, crossMemory = "", userText = "add a line to it",
+            recentItems = "- note \"Project plan\""
+        )
+        assertTrue(p.contains("WHAT THE PERSON MEANS"))
+        assertTrue(p.contains("Project plan"))
+        assertTrue(p.contains("call that same tool again"))
+    }
+
+    @Test
+    fun fullPromptLeavesRecentItemsOutWhenEmpty() {
+        val p = SystemPrompts.full(
+            name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
+            webSearchEnabled = false, crossMemory = "", userText = "hello"
+        )
+        assertFalse(p.contains("WHAT THE PERSON MEANS"))
+    }
+
+    @Test
+    fun localPromptCarriesRecentItemsWhenGiven() {
+        val withItems = SystemPrompts.local(
+            tools, userText = "edit it", compact = false, recentItems = "- note \"Project plan\""
+        )
+        val without = SystemPrompts.local(tools, userText = "edit it", compact = false)
+        assertTrue(withItems.contains("Project plan"))
+        assertTrue(withItems.contains("copy a title exactly as written"))
+        assertFalse(withItems == without)
+    }
 }
