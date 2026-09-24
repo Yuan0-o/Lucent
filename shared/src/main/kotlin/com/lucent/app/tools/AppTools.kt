@@ -604,26 +604,36 @@ object AppTools {
     }
 
     private fun noMatchMessage(kind: String, query: String, candidates: List<String>): String {
+        val retry = "Call the same tool again with one of those exact titles."
         if (candidates.isEmpty()) {
-            return "No $kind matched \"$query\", and there is nothing to match against yet."
+            return "No $kind matched \"$query\", and there is nothing to match against yet. $retry"
         }
         val list = candidates.joinToString("; ") { "\"$it\"" }
-        return "No $kind matched \"$query\". Closest existing titles: $list. " +
-            "Call the same tool again with one of those exact titles."
+        return "No $kind matched \"$query\". Closest existing titles: $list. $retry"
     }
 
-    private fun noteNotFound(query: String, candidates: List<Note>): ToolExecResult =
+    private fun noteNotFound(
+        query: String,
+        candidates: List<Note>,
+        kind: String = "note",
+        extra: String = ""
+    ): ToolExecResult =
         ToolExecResult(
-            noMatchMessage("note", query, closestTitles(candidates, query, { it.title }, { it.updatedAt })),
+            noMatchMessage(kind, query, closestTitles(candidates, query, { it.title }, { it.updatedAt })) + extra,
             success = false
         )
 
     private suspend fun noteNotFound(db: AppDatabase, query: String): ToolExecResult =
         noteNotFound(query, activeNotes(db))
 
-    private fun taskNotFound(query: String, candidates: List<Task>): ToolExecResult =
+    private fun taskNotFound(
+        query: String,
+        candidates: List<Task>,
+        kind: String = "task",
+        extra: String = ""
+    ): ToolExecResult =
         ToolExecResult(
-            noMatchMessage("task", query, closestTitles(candidates, query, { it.title }, { it.createdAt })),
+            noMatchMessage(kind, query, closestTitles(candidates, query, { it.title }, { it.createdAt })) + extra,
             success = false
         )
 
@@ -1519,7 +1529,7 @@ object AppTools {
                     "note" -> {
                         val candidates = draftNotes(db)
                         val match = matchNote(candidates, titleQuery)
-                        if (match == null) noteNotFound(titleQuery, candidates) else {
+                        if (match == null) noteNotFound(titleQuery, candidates, kind = "draft note") else {
                             db.noteDao().delete(match)
                             ToolExecResult("Deleted draft note \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
@@ -1527,7 +1537,7 @@ object AppTools {
                     "task" -> {
                         val candidates = draftTasks(db)
                         val match = matchTask(candidates, titleQuery)
-                        if (match == null) taskNotFound(titleQuery, candidates) else {
+                        if (match == null) taskNotFound(titleQuery, candidates, kind = "draft task") else {
                             db.taskDao().delete(match)
                             ToolExecResult("Deleted draft task \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
@@ -1573,9 +1583,12 @@ object AppTools {
                 val candidates = trashedNotes(db)
                 val match = matchNote(candidates, titleQuery)
                 if (match == null) {
-                    ToolExecResult("No trashed note matched \"$titleQuery\". " +
-                        noMatchMessage("trashed note", titleQuery, closestTitles(candidates, titleQuery, { it.title }, { it.updatedAt })) +
-                        " Call list_trash to see what is in the Trash.", success = false)
+                    noteNotFound(
+                        titleQuery,
+                        candidates,
+                        kind = "trashed note",
+                        extra = " Call list_trash to see what is in the Trash."
+                    )
                 } else {
                     TaskActions.untrashNote(db, match)
                     ToolExecResult(
@@ -1590,9 +1603,12 @@ object AppTools {
                 val candidates = trashedTasks(db)
                 val match = matchTask(candidates, titleQuery)
                 if (match == null) {
-                    ToolExecResult("No trashed task matched \"$titleQuery\". " +
-                        noMatchMessage("trashed task", titleQuery, closestTitles(candidates, titleQuery, { it.title }, { it.createdAt })) +
-                        " Call list_trash to see what is in the Trash.", success = false)
+                    taskNotFound(
+                        titleQuery,
+                        candidates,
+                        kind = "trashed task",
+                        extra = " Call list_trash to see what is in the Trash."
+                    )
                 } else {
                     TaskActions.untrash(appContext, db, match)
                     ToolExecResult("Restored task \"${match.title}\" from the Trash.")
