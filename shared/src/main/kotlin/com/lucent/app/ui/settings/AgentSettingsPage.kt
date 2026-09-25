@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,7 +51,7 @@ internal fun AgentSettingsPage(
     }
 
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })
-    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Section(onGradient, onGradientMuted, S.agentToolkitTitle, S.agentToolkitSub) {
             ToolkitToggleRow(S.agentToolkitEnabled, S.agentToolkitEnabledSub, config.enabled, onGradient, onGradientMuted) {
                 update(config.copy(enabled = it))

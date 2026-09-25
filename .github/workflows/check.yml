@@ -28,6 +28,9 @@ jobs:
       - name: Check every agent tool group is covered by tests
         run: python3 tools/harness_coverage_check.py
 
+      - name: Check no scrolling container is nested inside another
+        run: python3 tools/compose_scroll_check.py
+
   desktop-jvm-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20

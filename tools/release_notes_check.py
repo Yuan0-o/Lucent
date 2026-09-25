@@ -34,8 +34,13 @@ def check(text):
         problems.append("languages belong in their own <details> blocks, not as ### sections of one block")
 
     separators = [index for index, line in enumerate(lines) if line.strip() == "---"]
-    if len(separators) < 4:
-        problems.append("each language block is preceded by a '---' rule, and one closes the English notes")
+    with_build_info = "**Build info**" in text
+    needed = 4 if with_build_info else 3
+    if len(separators) < needed:
+        problems.append(
+            f"expected a '---' rule after the English notes and after every language block "
+            f"({needed} of them here), found {len(separators)}"
+        )
 
     english = text.split("<details>")[0]
     words = len(re.findall(r"[A-Za-z][A-Za-z'-]*", english))
@@ -44,9 +49,9 @@ def check(text):
 
     if "**Build info**" in text:
         tail = text[text.index("**Build info**"):]
-        for needed in ("Android APK", "Windows installer", "Built from commit"):
-            if needed not in tail:
-                problems.append(f"the build info block is missing '{needed}'")
+        for field in ("Android APK", "Windows installer", "Built from commit"):
+            if field not in tail:
+                problems.append(f"the build info block is missing '{field}'")
 
     return problems, words
 

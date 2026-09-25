@@ -54,7 +54,9 @@ The rules the checker enforces:
 
 - One first-level title at the very top, and it is the subtitle alone, not the whole release name.
 - Three separate `<details>` blocks, summarised exactly `简体中文`, `日本語`, `한국어`, in that order, each opening with its own `# ` title. Never one block with `###` sections inside.
-- A `---` rule before every block, and one closing the English notes.
+- A `---` rule before every block, and one closing the English notes. The release workflow appends the
+  closing rule with the build info block, so notes handed to it carry three rules and the published
+  body carries four.
 - The English notes stay between 300 and 700 words.
 - If a build info block is present it carries the APK size, the installer size and the commit.
 

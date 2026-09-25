@@ -921,33 +921,39 @@ fun AssistantScreen(active: Boolean = true) {
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                IconButton(
+                GlassRoundButton(
+                    icon = Icons.Default.Archive,
+                    contentDescription = com.lucent.app.i18n.S.a11yExportChat,
                     onClick = {
                         pendingZipSave = buildChatExportEntries(messages, assistantName.ifBlank { "Lucent" })
                         zipSaveLauncher.launch("lucent-chat.zip")
                     },
-                    enabled = messages.isNotEmpty()
-                ) {
-                    Icon(Icons.Default.Archive, contentDescription = com.lucent.app.i18n.S.a11yExportChat, tint = onGradient)
-                }
-                IconButton(
+                    tint = onGradient,
+                    enabled = messages.isNotEmpty(),
+                    diameter = 40.dp
+                )
+                GlassRoundButton(
+                    icon = Icons.Default.Add,
+                    contentDescription = com.lucent.app.i18n.S.newConversation,
                     onClick = {
                         conversationMenuOpen = false
                         conversationSearch = ""
                         pendingJump = null
                         AssistantController.startNewConversation(context.applicationContext)
-                    }
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.newConversation, tint = onGradient)
-                }
-                IconButton(
+                    },
+                    tint = onGradient,
+                    diameter = 40.dp
+                )
+                GlassRoundButton(
+                    icon = Icons.Default.Delete,
+                    contentDescription = com.lucent.app.i18n.S.deleteConversationTitle.removeSuffix("?").removeSuffix("？"),
                     onClick = { showClearConfirm = true },
-                    enabled = AssistantController.currentConversationId != null && messages.isNotEmpty()
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.deleteConversationTitle.removeSuffix("?").removeSuffix("？"), tint = onGradient)
-                }
+                    tint = onGradient,
+                    enabled = AssistantController.currentConversationId != null && messages.isNotEmpty(),
+                    diameter = 40.dp
+                )
             }
         }
 
@@ -1316,9 +1322,12 @@ fun AssistantScreen(active: Boolean = true) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box {
-                IconButton(onClick = { attachMenuOpen = true }, modifier = Modifier.height(56.dp)) {
-                    Icon(Icons.Default.AttachFile, contentDescription = com.lucent.app.i18n.S.a11yAttachFile, tint = onGradient)
-                }
+                GlassRoundButton(
+                    icon = Icons.Default.AttachFile,
+                    contentDescription = com.lucent.app.i18n.S.a11yAttachFile,
+                    onClick = { attachMenuOpen = true },
+                    tint = onGradient
+                )
                 DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
                     DropdownMenuItem(
                         text = { Text(com.lucent.app.i18n.S.attachFromFiles) },
@@ -1422,7 +1431,6 @@ fun AssistantScreen(active: Boolean = true) {
                 mutedTint = onGradientMuted,
                 onPickCloudModel = { model -> scope.launch { repo.setActiveModel(model) } },
                 onSelectedModelsChange = { picked -> persistSelectedModels(picked) },
-                modifier = Modifier.height(56.dp),
                 reasoningProviderId = com.lucent.app.data.ApiProviders.forRequest(savedSpecStr, savedUrl),
                 reasoningCurrent = reasoningKey,
                 onPickReasoning = { picked ->
@@ -1432,25 +1440,29 @@ fun AssistantScreen(active: Boolean = true) {
             )
             Spacer(modifier = Modifier.width(4.dp))
             if (sending) {
-                IconButton(
-                    modifier = Modifier.height(56.dp),
-                    onClick = { AssistantController.stopGeneration() }
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = com.lucent.app.i18n.S.a11yStopGenerating, tint = onGradient)
-                }
+                GlassRoundButton(
+                    icon = Icons.Default.Stop,
+                    contentDescription = com.lucent.app.i18n.S.a11yStopGenerating,
+                    onClick = { AssistantController.stopGeneration() },
+                    tint = onGradient,
+                    filled = true
+                )
             } else {
-                IconButton(
-                    modifier = Modifier.height(56.dp),
+                GlassRoundButton(
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = com.lucent.app.i18n.S.a11ySend,
+                    tint = onGradient,
+                    filled = true,
                     onClick = {
                         val text = input.trim()
                         val attachments = pendingAttachments.map {
                             com.lucent.app.data.Attachment(it.mime, it.data, it.name)
                         }
-                        if (text.isBlank() && attachments.isEmpty()) return@IconButton
+                        if (text.isBlank() && attachments.isEmpty()) return@GlassRoundButton
                         val useLocal = localModelEnabled
                         if (!useLocal && (savedUrl.isBlank() || savedModel.isBlank())) {
                             localError = com.lucent.app.i18n.S.setupApiFirst
-                            return@IconButton
+                            return@GlassRoundButton
                         }
                         input = ""
                         pendingAttachments = emptyList()
@@ -1483,9 +1495,7 @@ fun AssistantScreen(active: Boolean = true) {
                             reasoning = reasoningKey
                         )
                     }
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = com.lucent.app.i18n.S.a11ySend, tint = onGradient)
-                }
+                )
             }
         }
     }

@@ -66,7 +66,7 @@ collapsible trace, one line per tool call.
 
 ## The workshop behind the assistant
 
-Notes and tasks are the front of house. Behind it, a switch away in Settings → Agent toolkit, there
+Notes and tasks are the front of house. Behind it, a switch away in Settings → Toolkit, there
 is a workshop the assistant is allowed into. It has a workspace folder of your choosing, and inside
 it, real tools: read, write, search, edit with a diff, snapshot and roll back. It can run commands
 with a timeout and a working directory, keep long ones as background jobs, and show you the output.

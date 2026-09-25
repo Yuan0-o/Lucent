@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,7 +46,7 @@ internal fun PluginSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     val canInstall = HarnessRuntime.pluginHost?.isReady() == true
 
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
-    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.agentPluginsTitle, color = onGradient, fontSize = 15.sp)
             Spacer(modifier = Modifier.height(2.dp))

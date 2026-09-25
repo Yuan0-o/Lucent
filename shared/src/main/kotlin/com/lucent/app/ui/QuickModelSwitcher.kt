@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,6 +72,7 @@ fun QuickModelSwitcher(
     onPickCloudModel: (String) -> Unit,
     onSelectedModelsChange: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
+    buttonSize: Dp = 46.dp,
     reasoningProviderId: String = "",
     reasoningCurrent: String = ReasoningEffort.DEFAULT.key,
     onPickReasoning: (ReasoningEffort) -> Unit = {}
@@ -139,7 +140,9 @@ fun QuickModelSwitcher(
     }
 
     Box(modifier = modifier) {
-        IconButton(
+        GlassRoundButton(
+            icon = Icons.Default.SwapHoriz,
+            contentDescription = com.lucent.app.i18n.S.quickModelTitle,
             onClick = {
                 fetched = emptyList()
                 fetchNote = ""
@@ -148,19 +151,15 @@ fun QuickModelSwitcher(
                     autoFetchTried = true
                     loadAllModels()
                 }
-            }
-        ) {
-            Icon(
-                Icons.Default.SwapHoriz,
-                contentDescription = com.lucent.app.i18n.S.quickModelTitle,
-                tint = tint
-            )
-        }
+            },
+            tint = tint,
+            diameter = buttonSize
+        )
 
         if (menu != MENU_CLOSED) {
             Popup(
                 alignment = Alignment.BottomStart,
-                offset = IntOffset(0, -with(density) { 52.dp.roundToPx() }),
+                offset = IntOffset(0, -with(density) { (buttonSize + 6.dp).roundToPx() }),
                 onDismissRequest = { menu = MENU_CLOSED },
                 properties = PopupProperties(focusable = true)
             ) {

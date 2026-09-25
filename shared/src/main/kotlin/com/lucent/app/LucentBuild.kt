@@ -4,7 +4,7 @@ object LucentBuild {
 
     const val VERSION = "3.0.0"
 
-    const val BUILD_NUMBER = "300"
+    const val BUILD_NUMBER = "301"
 
     const val PRODUCT_NAME = "Lucent"
 
