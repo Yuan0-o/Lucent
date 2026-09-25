@@ -288,6 +288,31 @@ class MainActivity : FragmentActivity() {
             val splashStyle by settingsRepo.splashStyle.collectAsState(
                 initial = com.lucent.app.data.SettingsCache.splashStyle
             )
+            val harnessQuestion by com.lucent.app.harness.HarnessAsk.pending.collectAsState(initial = null)
+            harnessQuestion?.let { request ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { com.lucent.app.harness.HarnessAsk.respond("") },
+                    title = { androidx.compose.material3.Text(request.question) },
+                    text = {
+                        androidx.compose.foundation.layout.Column {
+                            request.options.forEach { option ->
+                                androidx.compose.material3.TextButton(
+                                    onClick = { com.lucent.app.harness.HarnessAsk.respond(option) }
+                                ) {
+                                    androidx.compose.material3.Text(option)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = { com.lucent.app.harness.HarnessAsk.respond("") }
+                        ) {
+                            androidx.compose.material3.Text(com.lucent.app.i18n.S.actionCancel)
+                        }
+                    }
+                )
+            }
             var splashDone by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(splashEnabled) {
                 if (!splashEnabled) {

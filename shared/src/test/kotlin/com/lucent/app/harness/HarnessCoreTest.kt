@@ -23,7 +23,7 @@ private fun withSandbox(config: HarnessConfig = HarnessConfig(), block: (File) -
     HarnessRuntime.android = false
     HarnessRuntime.update(config)
     try {
-        File(HarnessRuntime.workspace()).mkdirs()
+        HarnessRuntime.workspace().mkdirs()
         block(root)
     } finally {
         HarnessRuntime.host = previousHost
