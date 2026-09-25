@@ -287,7 +287,8 @@ class MainActivity : FragmentActivity() {
                     delay(UPDATE_CHECK_INTERVAL_MS)
                     if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
                     if (com.lucent.app.data.AutoUpdate.offered != null) continue
-                    if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                    val found = com.lucent.app.data.AutoUpdate.check(runningVersion)
+                    if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
                         com.lucent.app.data.AutoUpdate.downloadOffered()
                     }
                 }

@@ -93,7 +93,8 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
             kotlinx.coroutines.delay(UPDATE_CHECK_INTERVAL_MS)
             if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
             if (com.lucent.app.data.AutoUpdate.offered != null) continue
-            if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
+            val found = com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
+            if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
                 com.lucent.app.data.AutoUpdate.downloadOffered()
             }
         }
