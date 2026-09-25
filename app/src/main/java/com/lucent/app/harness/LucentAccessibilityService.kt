@@ -160,8 +160,8 @@ class LucentAccessibilityService : AccessibilityService() {
                     service.takeScreenshot(
                         android.view.Display.DEFAULT_DISPLAY,
                         service.mainExecutor,
-                        object : TakeScreenshotCallback {
-                            override fun onSuccess(result: ScreenshotResult) {
+                        object : AccessibilityService.TakeScreenshotCallback {
+                            override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
                                 val bitmap = Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
                                 val out = ByteArrayOutputStream()
                                 val software = bitmap?.copy(Bitmap.Config.ARGB_8888, false)

@@ -2473,18 +2473,20 @@ fun SettingsScreen(active: Boolean = true) {
                 onOpenAccessibility = {
                     runCatching {
                         context.startActivity(
-                            android.content.Intent(android.content.Intent.ACTION_ACCESSIBILITY_SETTINGS)
+                            android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
                         )
                     }
                 },
                 onGrantStorage = {
-                    runCatching {
-                        context.startActivity(
-                            android.content.Intent(
-                                android.content.Intent.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                                android.net.Uri.parse("package:" + context.packageName)
+                    if (android.os.Build.VERSION.SDK_INT >= 30) {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    android.net.Uri.parse("package:" + context.packageName)
+                                )
                             )
-                        )
+                        }
                     }
                 },
                 accessibilityRunning = com.lucent.app.harness.LucentAccessibilityService.isRunning()

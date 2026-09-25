@@ -1,6 +1,8 @@
 package com.lucent.app.harness
 
 import com.lucent.app.AppScope
+import com.lucent.app.harness.plugins.PluginSource
+import com.lucent.app.harness.plugins.PluginSpec
 import java.io.File
 
 data class ShellOutcome(

@@ -1,6 +1,7 @@
 package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -16,7 +17,7 @@ object HtmlText {
     )
 
     fun title(html: String): String =
-        Regex("<title[^>]*>(.*?)</title>", RegexOption.DOT_MATCHES_ALL | RegexOption.IGNORE_CASE)
+        Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
             .find(html)?.groupValues?.get(1)?.let { clean(it) }?.trim().orEmpty()
 
     fun description(html: String): String =
@@ -27,7 +28,7 @@ object HtmlText {
         var body = html
         SCRIPT_BLOCKS.forEach { tag ->
             body = body.replace(
-                Regex("<$tag\\b.*?</$tag>", RegexOption.DOT_MATCHES_ALL | RegexOption.IGNORE_CASE),
+                Regex("<$tag\\b.*?</$tag>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)),
                 " "
             )
             body = body.replace(Regex("<$tag\\b[^>]*/?>", RegexOption.IGNORE_CASE), " ")
@@ -45,7 +46,7 @@ object HtmlText {
 
     fun links(html: String, baseUrl: String, limit: Int = 60): List<Pair<String, String>> {
         val out = mutableListOf<Pair<String, String>>()
-        val pattern = Regex("<a\\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL | RegexOption.IGNORE_CASE)
+        val pattern = Regex("<a\\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
         pattern.findAll(html).forEach { match ->
             if (out.size >= limit) return@forEach
             val href = match.groupValues[1].trim()
@@ -59,7 +60,7 @@ object HtmlText {
     fun absolute(baseUrl: String, href: String): String {
         if (href.startsWith("http://") || href.startsWith("https://")) return href
         return try {
-            val base = okhttp3.HttpUrl.Companion.toHttpUrlOrNull(baseUrl) ?: return href
+            val base = baseUrl.toHttpUrlOrNull() ?: return href
             base.resolve(href)?.toString() ?: href
         } catch (t: Throwable) {
             href
@@ -245,7 +246,7 @@ object BrowserTools : HarnessGroupTools {
         }
     }
 
-    private fun search(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun search(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val query = args.optString("query", "").trim()
         if (query.isEmpty()) return ToolExecResult("What should I look up?", success = false)
         val engine = com.lucent.app.data.WebSearchEngine.AUTO.key

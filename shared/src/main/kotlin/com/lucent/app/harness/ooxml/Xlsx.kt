@@ -359,6 +359,7 @@ object Xlsx {
 
 private class StyleBook(private val styles: Document) {
 
+    private val ns = SpreadsheetNs.of(styles)
     private val fontIds = HashMap<String, Int>()
     private val fillIds = HashMap<String, Int>()
     private val borderIds = HashMap<String, Int>()
@@ -383,13 +384,13 @@ private class StyleBook(private val styles: Document) {
         val key = "$rgb|$fillRgb"
         val existing = dxfIds[key]
         if (existing != null) return existing
-        val builder = node("dxf")
-        if (rgb.isNotEmpty()) builder.child("font").child("color").attr("rgb", rgb)
+        val builder = node(ns.tag("dxf"))
+        if (rgb.isNotEmpty()) builder.child(ns.tag("font")).child(ns.tag("color")).attr("rgb", rgb)
         if (fillRgb.isNotEmpty()) {
-            builder.child("fill").child("patternFill").child("bgColor").attr("rgb", fillRgb)
+            builder.child(ns.tag("fill")).child(ns.tag("patternFill")).child(ns.tag("bgColor")).attr("rgb", fillRgb)
         }
-        val container = ensureOrdered(styles, styles.documentElement, "dxfs", STYLESHEET_ORDER)
-        val element = appendXml(styles, container, builder.render(), SpreadsheetNs.of(styles).declaration) ?: return 0
+        val container = ensureOrdered(styles, styles.documentElement, ns.tag("dxfs"), STYLESHEET_ORDER)
+        val element = appendXml(styles, container, builder.render(), ns.declaration) ?: return 0
         syncCount(container)
         val index = indexOfChild(container, element)
         dxfIds[key] = index
@@ -403,7 +404,7 @@ private class StyleBook(private val styles: Document) {
         val formatCode = stringOf(style, "format")
         val format = if (formatCode.isBlank()) 0 else numFmtId(formatCode)
         val alignment = alignmentAttributes(style)
-        val builder = node("xf")
+        val builder = node(ns.tag("xf"))
         builder.attr("numFmtId", format).attr("fontId", font).attr("fillId", fill).attr("borderId", border)
         builder.attr("xfId", 0)
         if (format != 0) builder.attr("applyNumberFormat", 1)
@@ -412,11 +413,11 @@ private class StyleBook(private val styles: Document) {
         if (border != 0) builder.attr("applyBorder", 1)
         if (alignment.isNotEmpty()) {
             builder.attr("applyAlignment", 1)
-            val element = builder.child("alignment")
+            val element = builder.child(ns.tag("alignment"))
             alignment.forEach { entry -> element.attr(entry.key, entry.value) }
         }
-        val container = ensureOrdered(styles, styles.documentElement, "cellXfs", STYLESHEET_ORDER)
-        val created = appendXml(styles, container, builder.render(), SpreadsheetNs.of(styles).declaration) ?: return 0
+        val container = ensureOrdered(styles, styles.documentElement, ns.tag("cellXfs"), STYLESHEET_ORDER)
+        val created = appendXml(styles, container, builder.render(), ns.declaration) ?: return 0
         syncCount(container)
         return indexOfChild(container, created)
     }
@@ -434,17 +435,17 @@ private class StyleBook(private val styles: Document) {
         val existing = fontIds[key]
         if (existing != null) return existing
         val rgb = colourValue(colour).ifEmpty { "FF000000" }
-        val builder = node("font")
-        if (bold) builder.child("b")
-        if (italic) builder.child("i")
-        if (strike) builder.child("strike")
-        if (underline) builder.child("u")
-        builder.child("sz").attr("val", numberText(if (size > 0.0) size else 11.0))
-        builder.child("color").attr("rgb", rgb)
-        builder.child("name").attr("val", if (name.isBlank()) "Calibri" else name)
-        builder.child("family").attr("val", 2)
-        val container = ensureOrdered(styles, styles.documentElement, "fonts", STYLESHEET_ORDER)
-        val created = appendXml(styles, container, builder.render(), SpreadsheetNs.of(styles).declaration) ?: return 0
+        val builder = node(ns.tag("font"))
+        if (bold) builder.child(ns.tag("b"))
+        if (italic) builder.child(ns.tag("i"))
+        if (strike) builder.child(ns.tag("strike"))
+        if (underline) builder.child(ns.tag("u"))
+        builder.child(ns.tag("sz")).attr("val", numberText(if (size > 0.0) size else 11.0))
+        builder.child(ns.tag("color")).attr("rgb", rgb)
+        builder.child(ns.tag("name")).attr("val", if (name.isBlank()) "Calibri" else name)
+        builder.child(ns.tag("family")).attr("val", 2)
+        val container = ensureOrdered(styles, styles.documentElement, ns.tag("fonts"), STYLESHEET_ORDER)
+        val created = appendXml(styles, container, builder.render(), ns.declaration) ?: return 0
         syncCount(container)
         val index = indexOfChild(container, created)
         fontIds[key] = index
@@ -457,13 +458,13 @@ private class StyleBook(private val styles: Document) {
         if (rgb.isEmpty()) return 0
         val existing = fillIds[rgb]
         if (existing != null) return existing
-        val builder = node("fill")
-        builder.child("patternFill").attr("patternType", "solid").apply {
-            child("fgColor").attr("rgb", rgb)
-            child("bgColor").attr("indexed", 64)
+        val builder = node(ns.tag("fill"))
+        builder.child(ns.tag("patternFill")).attr("patternType", "solid").apply {
+            child(ns.tag("fgColor")).attr("rgb", rgb)
+            child(ns.tag("bgColor")).attr("indexed", 64)
         }
-        val container = ensureOrdered(styles, styles.documentElement, "fills", STYLESHEET_ORDER)
-        val created = appendXml(styles, container, builder.render(), SpreadsheetNs.of(styles).declaration) ?: return 0
+        val container = ensureOrdered(styles, styles.documentElement, ns.tag("fills"), STYLESHEET_ORDER)
+        val created = appendXml(styles, container, builder.render(), ns.declaration) ?: return 0
         syncCount(container)
         val index = indexOfChild(container, created)
         fillIds[rgb] = index
@@ -474,13 +475,13 @@ private class StyleBook(private val styles: Document) {
         val key = "thin"
         val existing = borderIds[key]
         if (existing != null) return existing
-        val builder = node("border")
+        val builder = node(ns.tag("border"))
         listOf("left", "right", "top", "bottom").forEach { side ->
-            builder.child(side).attr("style", "thin").child("color").attr("rgb", "FFBFBFBF")
+            builder.child(ns.tag(side)).attr("style", "thin").child(ns.tag("color")).attr("rgb", "FFBFBFBF")
         }
-        builder.child("diagonal")
-        val container = ensureOrdered(styles, styles.documentElement, "borders", STYLESHEET_ORDER)
-        val created = appendXml(styles, container, builder.render(), SpreadsheetNs.of(styles).declaration) ?: return 0
+        builder.child(ns.tag("diagonal"))
+        val container = ensureOrdered(styles, styles.documentElement, ns.tag("borders"), STYLESHEET_ORDER)
+        val created = appendXml(styles, container, builder.render(), ns.declaration) ?: return 0
         syncCount(container)
         val index = indexOfChild(container, created)
         borderIds[key] = index
@@ -492,14 +493,14 @@ private class StyleBook(private val styles: Document) {
         if (builtin != null) return builtin
         val existing = formatIds[code]
         if (existing != null) return existing
-        val container = ensureOrdered(styles, styles.documentElement, "numFmts", STYLESHEET_ORDER)
+        val container = ensureOrdered(styles, styles.documentElement, ns.tag("numFmts"), STYLESHEET_ORDER)
         var id = 164
         children(container, "numFmt").forEach { item ->
             val used = attr(item, "numFmtId").toIntOrNull() ?: 0
             if (used >= id) id = used + 1
         }
-        val builder = node("numFmt").attr("numFmtId", id).attr("formatCode", code)
-        appendXml(styles, container, builder.render(), SpreadsheetNs.of(styles).declaration)
+        val builder = node(ns.tag("numFmt")).attr("numFmtId", id).attr("formatCode", code)
+        appendXml(styles, container, builder.render(), ns.declaration)
         syncCount(container)
         formatIds[code] = id
         return id
@@ -717,6 +718,7 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
         parts[partName] = serialize(document)
         addOverride(contentTypes, "/$partName", CT_XL_WORKSHEET)
         val relId = addRelationship(workbookRels, REL_XL_WORKSHEET, "worksheets/sheet$index.xml")
+        ensureRelationshipPrefix(workbook)
         val container = ensureOrdered(workbook, workbook.documentElement, "sheets", WORKBOOK_ORDER)
         val element = workbook.createElement("sheet")
         element.setAttribute("name", clean)
@@ -1398,6 +1400,11 @@ private fun addRelationship(rels: Document, type: String, target: String): Strin
     return id
 }
 
+private fun ensureRelationshipPrefix(document: Document) {
+    val root = document.documentElement ?: return
+    if (attr(root, "xmlns:r").isEmpty()) root.setAttribute("xmlns:r", NS_OFFICE_RELATIONSHIPS)
+}
+
 private fun addOrderedXml(
     document: Document,
     parent: Element,
@@ -1636,7 +1643,11 @@ private fun emptyWorksheetBytes(): ByteArray = documentBytes(
 )
 
 private fun emptyDrawingBytes(): ByteArray = documentBytes(
-    node("xdr:wsDr").attr("xmlns:xdr", NS_SPREADSHEET_DRAWING).attr("xmlns:a", NS_DRAWING)
+    node("xdr:wsDr")
+        .attr("xmlns:xdr", NS_SPREADSHEET_DRAWING)
+        .attr("xmlns:a", NS_DRAWING)
+        .attr("xmlns:c", NS_CHART)
+        .attr("xmlns:r", NS_OFFICE_RELATIONSHIPS)
 )
 
 private fun emptyRelationshipsBytes(): ByteArray =

@@ -3,9 +3,9 @@ package com.lucent.app.harness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
+import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.io.IOUtils
 import org.apache.pdfbox.multipdf.PDFMergerUtility
-import org.apache.pdfbox.multipdf.Splitter
 import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
 import org.apache.pdfbox.text.PDFTextStripper
@@ -143,7 +143,7 @@ object DesktopHarnessHost : HarnessHost {
     override fun notify(title: String, text: String): Boolean = try {
         if (!SystemTray.isSupported()) false else {
             val tray = SystemTray.getSystemTray()
-            val icon = java.awt.ImageIO.read(java.io.ByteArrayInputStream(emptyPng())) ?: return false
+            val icon = ImageIO.read(java.io.ByteArrayInputStream(emptyPng())) ?: return false
             val trayIcon = TrayIcon(icon, "Lucent")
             trayIcon.isImageAutoSize = true
             tray.add(trayIcon)
@@ -280,15 +280,15 @@ object DesktopHarnessHost : HarnessHost {
             val from = bounds.getOrNull(0)?.trim()?.toIntOrNull() ?: 1
             val to = bounds.getOrNull(1)?.trim()?.toIntOrNull() ?: from
             Loader.loadPDF(File(input)).use { document ->
-                val splitter = Splitter()
-                splitter.startPage = from.coerceAtLeast(1)
-                splitter.endPage = to.coerceAtMost(document.numberOfPages)
-                val parts = splitter.split(document)
-                if (parts.isEmpty()) return@withContext false
-                val target = File(out)
-                target.parentFile?.mkdirs()
-                parts.first().save(target)
-                parts.drop(1).forEach { it.close() }
+                val first = from.coerceAtLeast(1)
+                val last = to.coerceAtMost(document.numberOfPages)
+                if (first > last) return@withContext false
+                PDDocument().use { target ->
+                    for (page in first..last) target.importPage(document.getPage(page - 1))
+                    val file = File(out)
+                    file.parentFile?.mkdirs()
+                    target.save(file)
+                }
                 true
             }
         } catch (t: Throwable) {

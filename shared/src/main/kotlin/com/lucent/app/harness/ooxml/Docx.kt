@@ -437,7 +437,7 @@ object Docx {
         return paragraph
     }
 
-    private fun simpleRun(text: String): XmlBuilder {
+    internal fun simpleRun(text: String): XmlBuilder {
         val run = node("w:r")
         run.child("w:t").attr("xml:space", "preserve").text(text)
         return run
@@ -656,7 +656,6 @@ object Docx {
         if (existing != null) {
             setParagraphText(document, existing, text)
         } else {
-            val section = children(body, "sectPr").firstOrNull()
             val created = parseFragment(
                 "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t xml:space=\"preserve\">" +
                     escapeXml(text) + "</w:t></w:r></w:p>",
@@ -664,7 +663,8 @@ object Docx {
             ).firstOrNull()
             if (created != null) {
                 val imported = document.importNode(created, true) as Element
-                if (section != null) body.insertBefore(imported, section) else body.insertBefore(imported, body.firstChild)
+                val first = body.firstChild
+                if (first != null) body.insertBefore(imported, first) else body.appendChild(imported)
             }
         }
         val bytes = parts[CORE_PART] ?: return
@@ -755,6 +755,7 @@ object Docx {
     }
 
     private fun addSectionReference(document: Document, section: Element, tag: String, relId: String) {
+        ensureRelationshipPrefix(document)
         val reference = document.createElement("w:$tag")
         reference.setAttribute("w:type", "default")
         reference.setAttribute("r:id", relId)
@@ -769,6 +770,11 @@ object Docx {
             child = child.nextSibling
         }
         if (anchor != null) section.insertBefore(reference, anchor) else section.appendChild(reference)
+    }
+
+    private fun ensureRelationshipPrefix(document: Document) {
+        val root = document.documentElement ?: return
+        if (attr(root, "xmlns:r").isEmpty()) root.setAttribute("xmlns:r", NS_OFFICE_RELATIONSHIPS)
     }
 
     private fun relationshipPart(rels: Document, relId: String): String {
@@ -1169,7 +1175,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
             val text = cells.getOrNull(index) ?: ""
             val paragraph = node("w:p")
             if (text.isEmpty()) {
-                paragraph.add(simpleRun(""))
+                paragraph.add(Docx.simpleRun(""))
             } else {
                 val base = if (header) headerStyle() else null
                 paragraph.addAll(runs(text, base))
@@ -1299,8 +1305,6 @@ private fun imageKind(bytes: ByteArray): Pair<String, String>? {
     if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) return "jpeg" to "image/jpeg"
     return null
 }
-
-
 
 private fun imageSize(bytes: ByteArray): Pair<Int, Int>? {
     if (bytes.size < 24) return null

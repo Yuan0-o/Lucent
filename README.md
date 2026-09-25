@@ -64,6 +64,34 @@ opinion and no hands is a chat; this is a butler who has been told to knock firs
 Conversations run as long as you like and travel with you; the model's reasoning can be shown as a
 collapsible trace, one line per tool call.
 
+## The workshop behind the assistant
+
+Notes and tasks are the front of house. Behind it, a switch away in Settings → Agent toolkit, there
+is a workshop the assistant is allowed into. It has a workspace folder of your choosing, and inside
+it, real tools: read, write, search, edit with a diff, snapshot and roll back. It can run commands
+with a timeout and a working directory, keep long ones as background jobs, and show you the output.
+It can create and edit Word, Excel and PowerPoint files — the formats are written natively, by
+Lucent, with no office library underneath — and read PDFs, render them to pictures, split and merge
+them. It can clone, diff, commit and push with Git, raise and read GitHub issues, pull requests and
+CI logs, fetch and read web pages, query SQLite, and run a job inside Docker, PRoot or a plain
+shell, whichever this machine can offer.
+
+It remembers three ways: this conversation, this project, and you. It keeps a plan you can watch,
+writes down skills so it stops re-learning your conventions, and can call for sub-agents when a
+task is heavy enough to deserve them — a switch in Personalisation, off unless you want it.
+
+Anything large stays out of the installer: a Linux userland, Python with its document libraries,
+LibreOffice, Node.js, a browser engine, OCR and media tools are listed as plugins, downloaded only
+if you ask, from the project's own servers or a fast mirror, whichever answers first. Permissions
+are a page of their own — read, write, delete, commands, network, Git, GitHub, browsing, the space
+beyond the workspace, and the device itself — each set to allow, ask or block, and every tool call
+written to an activity log you can read and clear.
+
+On a phone the same workshop reaches the device: read the screen, tap, type, swipe, take a
+screenshot, list and open apps, read notifications, use the clipboard and the flashlight, and run
+real command-line tools through Termux. It also speaks MCP, so any server you point it at becomes
+part of the toolkit.
+
 ## Notes that remember what they used to be
 
 Every meaningful edit is snapshotted, so you can always see what a note used to say and restore it

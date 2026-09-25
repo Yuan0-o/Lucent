@@ -2,6 +2,8 @@ package com.lucent.app.harness
 
 import com.lucent.app.harness.plugins.PluginCatalog
 import com.lucent.app.harness.plugins.PluginDownload
+import com.lucent.app.harness.plugins.PluginSource
+import com.lucent.app.harness.plugins.PluginSpec
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.delay
 import org.json.JSONObject
@@ -77,7 +79,7 @@ object PluginTools : HarnessGroupTools {
         else -> null
     }
 
-    private fun describe(plugin: com.lucent.app.harness.plugins.PluginSpec, ctx: HarnessCtx): String {
+    private fun describe(plugin: PluginSpec, ctx: HarnessCtx): String {
         val state = ctx.config.plugin(plugin.id)
         val installed = state?.installed == true
         val size = when {
@@ -158,7 +160,7 @@ object PluginTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun detectAndRecord(ctx: HarnessCtx, plugin: com.lucent.app.harness.plugins.PluginSpec): Boolean {
+    private suspend fun detectAndRecord(ctx: HarnessCtx, plugin: PluginSpec): Boolean {
         val host = HarnessRuntime.pluginHost ?: return false
         return host.detect(plugin)
     }

@@ -355,8 +355,8 @@ class HttpToolsTest {
             assertTrue(status.success)
             assertTrue(status.summary.contains("GitHub: token set"), status.summary)
             assertTrue(status.summary.contains("https://api.github.com"), status.summary)
-            assertTrue(status.summary.contains("Slack: configured, token saved (account: lucent)"), status.summary)
-            assertTrue(status.summary.contains("Notion: not configured"), status.summary)
+            assertTrue(status.summary.contains("Slack (slack): configured, token saved (account: lucent)"), status.summary)
+            assertTrue(status.summary.contains("Notion (notion): not configured"), status.summary)
             assertFalse(status.summary.contains("ghp-secret-value"), status.summary)
             assertFalse(status.summary.contains("xoxb-secret-value"), status.summary)
         }

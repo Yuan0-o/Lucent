@@ -1,30 +1,40 @@
+
 package com.lucent.app.harness
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.hardware.Sensor
+import android.hardware.SensorManager
+import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.location.LocationManager
 import android.media.AudioManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.MediaStore
 import android.provider.Settings
-import android.hardware.Sensor
-import android.hardware.SensorManager
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.lucent.app.MainActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.coroutines.resume
 
 class AndroidHarnessHost(private val context: Context) : HarnessHost {
 
@@ -96,7 +106,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     override fun notify(title: String, text: String): Boolean = try {
         val manager = NotificationManagerCompat.from(context)
         val notification = NotificationCompat.Builder(context, "lucent_agent")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(com.lucent.app.R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -109,7 +119,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     }
 
     override fun toast(text: String): Boolean = try {
-        android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
         true
     } catch (t: Throwable) {
         false
@@ -175,8 +185,8 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     }
 
     private fun batteryLine(): String = try {
-        val manager = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
-        val level = manager?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val manager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        val level = manager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
         if (level < 0) "" else "Battery: $level%"
     } catch (t: Throwable) {
         ""
@@ -200,7 +210,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
         val manager = context.packageManager
         val packages = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                manager.getInstalledPackages(android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                manager.getInstalledPackages(PackageManager.PackageInfoFlags.of(0))
             } else {
                 @Suppress("DEPRECATION")
                 manager.getInstalledPackages(0)
@@ -218,7 +228,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
             }
             val entry = "$label — ${info.packageName}"
             if (query.isNotBlank() && !entry.contains(query, ignoreCase = true)) return@forEach
-            val isSystem = (info.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0
+            val isSystem = (info.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM != 0
             if (isSystem) system.add(entry) else user.add(entry)
         }
         buildString {
@@ -270,7 +280,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
         val manager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager ?: return false
         val id = manager.cameraIdList.firstOrNull { camera ->
             manager.getCameraCharacteristics(camera)
-                .get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
         } ?: return false
         manager.setTorchMode(id, on)
         true
@@ -282,7 +292,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
         val source = File(path)
         if (!source.isFile) return false
         return try {
-            val values = android.content.ContentValues().apply {
+            val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, source.name)
                 put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
                 put(MediaStore.Downloads.IS_PENDING, 1)
@@ -310,10 +320,10 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
 
     override suspend fun sqliteQuery(dbPath: String, sql: String, limit: Int): String = withContext(Dispatchers.IO) {
         try {
-            android.database.sqlite.SQLiteDatabase.openDatabase(
+            SQLiteDatabase.openDatabase(
                 dbPath,
                 null,
-                android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+                SQLiteDatabase.OPEN_READONLY
             ).use { database ->
                 database.rawQuery(sql, null).use { cursor ->
                     val sb = StringBuilder()
@@ -322,8 +332,8 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
                     while (cursor.moveToNext() && count < limit.coerceIn(1, 5000)) {
                         val row = (0 until cursor.columnCount).joinToString(",") { index ->
                             when (cursor.getType(index)) {
-                                android.database.Cursor.FIELD_TYPE_NULL -> ""
-                                android.database.Cursor.FIELD_TYPE_BLOB -> "<blob>"
+                                Cursor.FIELD_TYPE_NULL -> ""
+                                Cursor.FIELD_TYPE_BLOB -> "<blob>"
                                 else -> cursor.getString(index).orEmpty().replace(",", "\\,")
                             }
                         }
@@ -341,10 +351,10 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
 
     override suspend fun sqliteExec(dbPath: String, sql: String): String = withContext(Dispatchers.IO) {
         try {
-            android.database.sqlite.SQLiteDatabase.openDatabase(
+            SQLiteDatabase.openDatabase(
                 dbPath,
                 null,
-                android.database.sqlite.SQLiteDatabase.OPEN_READWRITE or android.database.sqlite.SQLiteDatabase.CREATE_IF_NECESSARY
+                SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY
             ).use { database ->
                 database.execSQL(sql)
                 "ok"
@@ -361,16 +371,16 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     override suspend fun renderPdfPage(path: String, page: Int, width: Int): ByteArray? = withContext(Dispatchers.IO) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return@withContext null
         try {
-            android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(File(path), android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
+            PdfRenderer(ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
                 if (page < 1 || page > renderer.pageCount) return@withContext null
                 renderer.openPage(page - 1).use { pdfPage ->
                     val target = width.coerceIn(200, 3000)
                     val height = (target.toFloat() / pdfPage.width * pdfPage.height).toInt().coerceAtLeast(1)
-                    val bitmap = android.graphics.Bitmap.createBitmap(target, height, android.graphics.Bitmap.Config.ARGB_8888)
-                    bitmap.eraseColor(android.graphics.Color.WHITE)
-                    pdfPage.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    val bitmap = Bitmap.createBitmap(target, height, Bitmap.Config.ARGB_8888)
+                    bitmap.eraseColor(Color.WHITE)
+                    pdfPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     val out = java.io.ByteArrayOutputStream()
-                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, out)
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
                     bitmap.recycle()
                     out.toByteArray()
                 }

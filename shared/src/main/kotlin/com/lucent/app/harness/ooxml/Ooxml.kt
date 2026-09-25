@@ -231,11 +231,11 @@ private fun parseXml(bytes: ByteArray): Document {
     } catch (e: Exception) {
     }
     try {
-        factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "")
+        factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
     } catch (e: Exception) {
     }
     try {
-        factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+        factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
     } catch (e: Exception) {
     }
     val builder = factory.newDocumentBuilder()

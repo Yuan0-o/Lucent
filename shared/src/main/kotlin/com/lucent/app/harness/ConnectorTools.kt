@@ -172,8 +172,10 @@ object HttpJson {
     }
 
     fun action(raw: String, allowed: List<String>): String {
+        val trimmed = raw.trim()
+        val source = if (trimmed.any { it.isLowerCase() }) trimmed else trimmed.lowercase()
         val spaced = StringBuilder()
-        raw.trim().forEachIndexed { index, ch ->
+        source.forEachIndexed { index, ch ->
             if (index > 0 && ch.isUpperCase() && spaced.isNotEmpty() && spaced.last().isLowerCase()) {
                 spaced.append('_')
             }
@@ -1618,7 +1620,7 @@ object ConnectorTools : HarnessGroupTools {
         sb.append(" (api ").append(config.githubApi.trim().ifBlank { "https://api.github.com" }).append(")\n")
         CATALOG.forEach { entry ->
             val connector = lookup(entry.second)
-            sb.append(entry.first).append(": ")
+            sb.append(entry.first).append(" (").append(entry.second.first()).append("): ")
             when {
                 connector == null -> sb.append("not configured")
                 connector.token.isBlank() -> sb.append("configured, no token saved")
