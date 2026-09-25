@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.harness.HarnessConfig
 import com.lucent.app.harness.HarnessRuntime
+import com.lucent.app.harness.ConnectorConfig
 import com.lucent.app.harness.McpServer
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
@@ -144,8 +145,95 @@ internal fun McpSettingsPage(onRoute: (SettingsRoute) -> Unit) {
                 Text(S.agentMcpAddAction, color = onGradient, fontSize = 13.sp)
             }
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        ConnectorEditor(config = config, onUpdate = { update(it) }, onGradient = onGradient, onGradientMuted = onGradientMuted)
     }
 }
+
+private val CONNECTOR_IDS = listOf("notion", "slack", "gdrive", "onedrive", "gitlab", "jira", "linear", "webdav")
+
+@Composable
+private fun ConnectorEditor(
+    config: HarnessConfig,
+    onUpdate: (HarnessConfig) -> Unit,
+    onGradient: androidx.compose.ui.graphics.Color,
+    onGradientMuted: androidx.compose.ui.graphics.Color
+) {
+    var open by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf("") }
+    var account by remember { mutableStateOf("") }
+    var base by remember { mutableStateOf("") }
+
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Text(S.agentConnectorsTitle, color = onGradient, fontSize = 15.sp)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(S.agentConnectorsSub, color = onGradientMuted, fontSize = 11.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        CONNECTOR_IDS.forEach { id ->
+            val existing = config.connector(id)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(id, color = onGradient, fontSize = 14.sp)
+                    Text(
+                        if (existing == null || existing.token.isBlank()) S.agentConnectorEmpty else S.agentConnectorSet,
+                        color = onGradientMuted,
+                        fontSize = 11.sp
+                    )
+                }
+                TextButton(onClick = {
+                    open = if (open == id) "" else id
+                    token = existing?.token.orEmpty()
+                    account = existing?.account.orEmpty()
+                    base = existing?.baseUrl.orEmpty()
+                }) {
+                    Text(if (open == id) S.actionCancel else S.actionSave, color = onGradient, fontSize = 13.sp)
+                }
+                if (existing != null) {
+                    TextButton(onClick = { onUpdate(config.withConnector(ConnectorConfig(id = id))) }) {
+                        Text("✕", color = onGradientMuted, fontSize = 14.sp)
+                    }
+                }
+            }
+            if (open == id) {
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text(S.agentConnectorToken) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = account,
+                    onValueChange = { account = it },
+                    label = { Text(S.agentConnectorAccount) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = base,
+                    onValueChange = { base = it },
+                    label = { Text(S.agentConnectorBase) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                TextButton(onClick = {
+                    onUpdate(
+                        config.withConnector(
+                            ConnectorConfig(id = id, token = token.trim(), account = account.trim(), baseUrl = base.trim())
+                        )
+                    )
+                    open = ""
+                }) {
+                    Text(S.actionSave, color = onGradient, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 internal fun AuditSettingsPage(onRoute: (SettingsRoute) -> Unit) {

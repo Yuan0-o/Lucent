@@ -108,21 +108,22 @@ object Snapshots {
         try { index().writeText(kept.joinToString("\n") + "\n") } catch (_: Throwable) {
         }
     }
+
+    fun capture(ctx: HarnessCtx, file: File) = capture(file)
+
+    fun history(ctx: HarnessCtx, path: String, limit: Int = 20): List<SnapshotEntry> = history(path, limit)
+
+    fun all(ctx: HarnessCtx): List<SnapshotEntry> = all()
+
+    fun restore(ctx: HarnessCtx, id: String): File = restore(id)
+
+    fun latest(ctx: HarnessCtx, path: String): SnapshotEntry? = latest(path)
+
+    fun totalBytes(ctx: HarnessCtx): Long = totalBytes()
+
+    fun clear(ctx: HarnessCtx) = clear()
+
 }
-
-fun capture(ctx: HarnessCtx, file: File) = capture(file)
-
-fun history(ctx: HarnessCtx, path: String, limit: Int = 20): List<SnapshotEntry> = history(path, limit)
-
-fun all(ctx: HarnessCtx): List<SnapshotEntry> = all()
-
-fun restore(ctx: HarnessCtx, id: String): File = restore(id)
-
-fun latest(ctx: HarnessCtx, path: String): SnapshotEntry? = latest(path)
-
-fun totalBytes(ctx: HarnessCtx): Long = totalBytes()
-
-fun clear(ctx: HarnessCtx) = clear()
 
 data class DiffLine(val kind: Char, val text: String)
 
