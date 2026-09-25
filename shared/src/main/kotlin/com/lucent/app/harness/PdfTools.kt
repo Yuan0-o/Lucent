@@ -781,7 +781,9 @@ private fun pdfShiftText(text: String, delta: Int): String {
 
 private fun pdfBuildFont(objects: Map<Int, PdfValue>, dict: PdfDict): PdfFont {
     val subtype = dict.name("Subtype") ?: ""
-    val type0 = subtype == "Type0"
+    val encoding = dict.name("Encoding") ?: ""
+    val type0 = subtype == "Type0" || encoding == "Identity-H" || encoding == "Identity-V" ||
+        dict.get("DescendantFonts") != null
     val codes = HashMap<Int, String>()
     var spaces = mutableListOf<IntArray>()
     val toUnicode = pdfAsStream(pdfResolve(objects, dict.get("ToUnicode")))
