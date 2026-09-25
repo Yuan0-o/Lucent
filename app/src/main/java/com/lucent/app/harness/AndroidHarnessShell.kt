@@ -12,7 +12,7 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
     override fun isReady(): Boolean = privilegedReady() || TermuxBridge.installed(context)
 
     private fun privilegedReady(): Boolean = try {
-        PrivilegedShell.isReady()
+        HarnessRuntime.config().shizukuForAssistant && PrivilegedShell.isReady()
     } catch (t: Throwable) {
         false
     }
@@ -20,13 +20,14 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
     override fun describe(): String = when {
         privilegedReady() -> "privileged shell (Shizuku or root)"
         TermuxBridge.installed(context) -> "Termux — ${TermuxBridge.describe(context)}"
-        else -> "no shell: install Termux or enable the privileged shell"
+        else -> "no shell: install Termux or grant the privileged shell in Settings"
     }
 
     override fun capabilityNames(): Set<String> {
         val out = mutableSetOf("shell")
         if (privilegedReady()) {
             out.add("privileged")
+            out.add("shizuku")
             out.add("root-files")
         }
         if (TermuxBridge.installed(context)) out.add("termux")

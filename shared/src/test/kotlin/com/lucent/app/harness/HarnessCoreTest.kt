@@ -15,13 +15,13 @@ private class TestHost(private val root: File) : HarnessHost {
     override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
 }
 
-private fun withSandbox(config: HarnessConfig = HarnessConfig(), block: (File) -> Unit) {
+private fun withSandbox(config: HarnessConfig = HarnessConfig(enabled = true), block: (File) -> Unit) {
     val root = java.nio.file.Files.createTempDirectory("lucent-harness").toFile()
     val previousHost = HarnessRuntime.host
     val previousConfig = HarnessRuntime.config()
     HarnessRuntime.host = TestHost(root)
     HarnessRuntime.android = false
-    HarnessRuntime.update(config)
+    HarnessRuntime.update(config.copy(enabled = true))
     try {
         HarnessRuntime.workspace().mkdirs()
         block(root)
@@ -126,7 +126,9 @@ class HarnessDataTest {
             connectors = listOf(ConnectorConfig(id = "slack", token = "xoxb", account = "team")),
             plugins = listOf(PluginState(id = "ubuntu", installed = true, source = "tuna", sizeBytes = 42)),
             mirrors = mapOf("ubuntu" to "tuna"),
-            githubToken = "gh"
+            githubToken = "gh",
+            githubTokens = listOf(GithubToken(id = "gh-1", name = "work", token = "gh")),
+            shizukuForAssistant = true
         )
         val parsed = HarnessConfig.parse(config.toJson())
         assertEquals(config.workspace, parsed.workspace)
@@ -139,13 +141,37 @@ class HarnessDataTest {
         assertTrue(parsed.pluginInstalled("ubuntu"))
         assertEquals("tuna", parsed.mirrors["ubuntu"])
         assertEquals("gh", parsed.githubToken)
+        assertEquals("work", parsed.githubTokens.single().name)
+        assertTrue(parsed.shizukuForAssistant)
     }
 
     @Test
-    fun brokenConfigFallsBackToDefaults() {
+    fun aSingleOldTokenBecomesTheFirstTokenInTheList() {
+        val parsed = HarnessConfig.parse("""{"githubToken":"ghp_legacy"}""")
+        assertEquals("ghp_legacy", parsed.githubToken)
+        assertEquals("ghp_legacy", parsed.githubTokens.single().token)
+    }
+
+    @Test
+    fun theTokenListKeepsAtMostFiveAndSetsTheActiveOne() {
+        val many = (1..7).map { GithubToken(id = "gh-$it", name = "t$it", token = "tok-$it") }
+        val config = HarnessConfig().withGithubTokens(many)
+        assertEquals(HarnessConfig.MAX_GITHUB_TOKENS, config.githubTokens.size)
+        assertEquals("tok-1", config.githubToken)
+        assertEquals("gh-1", config.githubActiveId)
+        val switched = config.withGithubTokens(config.githubTokens, "gh-3")
+        assertEquals("tok-3", switched.githubToken)
+        assertEquals("gh-3", switched.githubActiveId)
+        val removed = switched.withGithubTokens(switched.githubTokens.filterNot { it.id == "gh-3" }, "")
+        assertEquals("tok-1", removed.githubToken)
+    }
+
+    @Test
+    fun theToolkitIsOffUntilItIsSwitchedOn() {
+        assertFalse(HarnessConfig.DEFAULT.enabled)
         val parsed = HarnessConfig.parse("{ this is not json")
         assertEquals(HarnessConfig.DEFAULT.groups, parsed.groups)
-        assertTrue(parsed.enabled)
+        assertFalse(parsed.enabled)
     }
 
     @Test

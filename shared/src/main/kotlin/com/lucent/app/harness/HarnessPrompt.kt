@@ -23,6 +23,11 @@ object HarnessPrompt {
 
             append(shellLine(config, capabilities))
 
+            if (HarnessRuntime.android && capabilities.contains(HarnessRuntime.CAP_PRIVILEGED)) {
+                append("Shizuku is granted to you, so shell commands can run with its privileges on this device; ")
+                append("use that reach only for the job in front of you. ")
+            }
+
             val plugins = config.installedPlugins()
             if (plugins.isEmpty()) {
                 append("No optional plugins are installed yet. When a job genuinely needs one — a Linux userland, ")

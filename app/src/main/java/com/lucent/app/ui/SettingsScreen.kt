@@ -108,7 +108,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Plugins, Mcp, Audit }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Workspace, Permissions, Groups, Execution, Github, Plugins, Mcp, Audit, Shizuku }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -2198,6 +2198,29 @@ fun SettingsScreen(active: Boolean = true) {
     }
     var pendingExportBytes by remember { mutableStateOf<ByteArray?>(null) }
     var pendingExportName by remember { mutableStateOf("lucent-export.md") }
+    var pickedWorkspace by remember { mutableStateOf<String?>(null) }
+    val workspacePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+        if (uri != null) pickedWorkspace = com.lucent.app.harness.AndroidWorkspacePicker.pathFromTree(uri)
+    }
+
+    fun grantAllFiles() {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:" + context.packageName)
+                    )
+                )
+            }
+        }
+    }
+
+    fun openAccessibilitySettings() {
+        runCatching {
+            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+    }
     val selectiveExportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri: Uri? ->
@@ -2231,6 +2254,14 @@ fun SettingsScreen(active: Boolean = true) {
     val rootScroll = routeScrolls.getOrPut(route) { ScrollState(SettingsScrollMemory.of(route)) }
     LaunchedEffect(rootScroll) {
         snapshotFlow { rootScroll.value }.collect { SettingsScrollMemory.write(route, it) }
+    }
+
+    val settingsScrolling = rootScroll.isScrollInProgress
+    LaunchedEffect(settingsScrolling) {
+        com.lucent.app.ui.BackgroundMotion.hold(settingsScrolling)
+    }
+    DisposableEffect(Unit) {
+        onDispose { com.lucent.app.ui.BackgroundMotion.hold(false) }
     }
 
     if (exportKind != null) {
@@ -2470,35 +2501,43 @@ fun SettingsScreen(active: Boolean = true) {
 
             SettingsRoute.Agent -> AgentSettingsPage(
                 onRoute = { navigate(it) },
-                onOpenAccessibility = {
-                    runCatching {
-                        context.startActivity(
-                            android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        )
-                    }
-                },
-                onGrantStorage = {
-                    if (android.os.Build.VERSION.SDK_INT >= 30) {
-                        runCatching {
-                            context.startActivity(
-                                android.content.Intent(
-                                    android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                                    android.net.Uri.parse("package:" + context.packageName)
-                                )
-                            )
-                        }
-                    }
-                },
+                onOpenAccessibility = { openAccessibilitySettings() },
                 accessibilityRunning = com.lucent.app.harness.LucentAccessibilityService.isRunning()
             )
 
-            SettingsRoute.Plugins -> PluginSettingsPage(onRoute = { navigate(it) })
+            SettingsRoute.Workspace -> WorkspaceSettingsPage(
+                onRoute = { navigate(it) },
+                picked = pickedWorkspace,
+                onPick = { workspacePicker.launch(null) },
+                onGrantStorage = { grantAllFiles() },
+                storageGranted = com.lucent.app.harness.AndroidWorkspacePicker.storageGranted()
+            )
+
+            SettingsRoute.Permissions -> PermissionsSettingsPage(onRoute = { navigate(it) })
+
+            SettingsRoute.Groups -> ToolGroupsSettingsPage(onRoute = { navigate(it) })
+
+            SettingsRoute.Execution -> ExecutionSettingsPage(onRoute = { navigate(it) })
+
+            SettingsRoute.Github -> GithubSettingsPage(onRoute = { navigate(it) })
+
+            SettingsRoute.Plugins -> PluginSettingsPage(
+                onRoute = { navigate(it) },
+                onOpenUrl = { url ->
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        )
+                    }
+                },
+                termuxInstalled = com.lucent.app.harness.AndroidWorkspacePicker.termuxInstalled(context)
+            )
 
             SettingsRoute.Mcp -> McpSettingsPage(onRoute = { navigate(it) })
 
             SettingsRoute.Audit -> AuditSettingsPage(onRoute = { navigate(it) })
 
-            SettingsRoute.Advanced -> {
+            SettingsRoute.Shizuku -> {
                 val privilegedOn by repo.privilegedEnabled.collectAsState(initial = SettingsCache.privilegedEnabled)
                 var shizukuReady by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isReady()) }
                 var shizukuRunning by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isServiceRunning()) }
@@ -2546,7 +2585,7 @@ fun SettingsScreen(active: Boolean = true) {
                     !shizukuReady -> S.shizukuActionGrant
                     else -> null
                 }
-                AdvancedSettingsPage(
+                ShizukuSettingsPage(
                     ui = com.lucent.app.ui.settings.AdvancedPrivilegeUi(
                         title = S.shizukuTitle,
                         description = S.shizukuEnableDesc,
@@ -2578,6 +2617,8 @@ fun SettingsScreen(active: Boolean = true) {
                     onRoute = { navigate(it) }
                 )
             }
+
+            SettingsRoute.Advanced -> AdvancedSettingsPage(onRoute = { navigate(it) })
 
             SettingsRoute.Data -> DataSettingsPage(
                 repo = repo,

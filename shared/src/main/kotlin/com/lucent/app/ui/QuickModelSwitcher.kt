@@ -1,8 +1,9 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -10,20 +11,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,13 +36,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.lucent.app.data.ReasoningEffort
 import com.lucent.app.data.ReasoningEfforts
@@ -56,6 +61,22 @@ private const val MENU_CLOSED = 0
 private const val MENU_ROOT = 1
 private const val MENU_MODELS = 2
 private const val MENU_REASONING = 3
+
+private val MENU_WIDTH = 214.dp
+
+private val menuPosition = object : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        val x = ((windowSize.width - popupContentSize.width) / 2).coerceAtLeast(0)
+        val above = anchorBounds.top - popupContentSize.height - 12
+        val y = if (above >= 0) above else (windowSize.height - popupContentSize.height).coerceAtLeast(0)
+        return IntOffset(x, y)
+    }
+}
 
 @Composable
 fun QuickModelSwitcher(
@@ -73,20 +94,19 @@ fun QuickModelSwitcher(
     onSelectedModelsChange: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
     buttonSize: Dp = 46.dp,
+    plain: Boolean = false,
     reasoningProviderId: String = "",
     reasoningCurrent: String = ReasoningEffort.DEFAULT.key,
     onPickReasoning: (ReasoningEffort) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val density = LocalDensity.current
 
     var menu by remember { mutableStateOf(MENU_CLOSED) }
+    var query by remember { mutableStateOf("") }
     var fetched by remember { mutableStateOf<List<String>>(emptyList()) }
     var fetching by remember { mutableStateOf(false) }
     var fetchNote by remember { mutableStateOf("") }
-    var typing by remember { mutableStateOf(false) }
-    var typed by remember { mutableStateOf("") }
     var autoFetchTried by remember { mutableStateOf(false) }
 
     val profileModels = remember(selectedModels) {
@@ -114,6 +134,7 @@ fun QuickModelSwitcher(
 
     fun pickCloud(model: String) {
         menu = MENU_CLOSED
+        query = ""
         onPickCloudModel(model)
         LucentToast.show(context, com.lucent.app.i18n.S.quickModelSwitched(model))
     }
@@ -144,7 +165,7 @@ fun QuickModelSwitcher(
             icon = Icons.Default.SwapHoriz,
             contentDescription = com.lucent.app.i18n.S.quickModelTitle,
             onClick = {
-                fetched = emptyList()
+                query = ""
                 fetchNote = ""
                 menu = MENU_ROOT
                 if (hasProfile && profileModels.isEmpty() && canFetch && !autoFetchTried) {
@@ -153,22 +174,25 @@ fun QuickModelSwitcher(
                 }
             },
             tint = tint,
-            diameter = buttonSize
+            diameter = buttonSize,
+            plain = plain
         )
 
         if (menu != MENU_CLOSED) {
             Popup(
-                alignment = Alignment.BottomStart,
-                offset = IntOffset(0, -with(density) { (buttonSize + 6.dp).roundToPx() }),
-                onDismissRequest = { menu = MENU_CLOSED },
+                popupPositionProvider = menuPosition,
+                onDismissRequest = {
+                    menu = MENU_CLOSED
+                    query = ""
+                },
                 properties = PopupProperties(focusable = true)
             ) {
                 Surface(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     tonalElevation = 6.dp,
-                    shadowElevation = 8.dp
+                    shadowElevation = 10.dp
                 ) {
-                    Column(modifier = Modifier.width(268.dp)) {
+                    Column(modifier = Modifier.width(MENU_WIDTH)) {
                         when (menu) {
                             MENU_ROOT -> rootMenu(
                                 currentModel = currentModel,
@@ -197,7 +221,7 @@ fun QuickModelSwitcher(
                                     onPickReasoning(option)
                                 }
                             )
-                            else -> modelMenu(
+                            else -> modelsMenu(
                                 localModelEnabled = localModelEnabled,
                                 currentModel = currentModel,
                                 slots = slots,
@@ -210,6 +234,8 @@ fun QuickModelSwitcher(
                                 canFetch = canFetch,
                                 recents = recents,
                                 fetched = fetched,
+                                query = query,
+                                onQuery = { query = it },
                                 tint = tint,
                                 mutedTint = mutedTint,
                                 onBack = { menu = MENU_ROOT },
@@ -225,52 +251,13 @@ fun QuickModelSwitcher(
                                         LucentToast.show(context, com.lucent.app.i18n.S.quickModelSwitched(slot))
                                     }
                                 },
-                                onFetch = { loadAllModels() },
-                                onCustom = {
-                                    typed = currentModel
-                                    menu = MENU_CLOSED
-                                    typing = true
-                                }
+                                onFetch = { loadAllModels() }
                             )
                         }
                     }
                 }
             }
         }
-    }
-
-    if (typing) {
-        AlertDialog(
-            onDismissRequest = { typing = false },
-            title = { Text(com.lucent.app.i18n.S.quickModelTitle) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = typed,
-                        onValueChange = { typed = it },
-                        label = { Text(com.lucent.app.i18n.S.quickModelCustomLabel) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(com.lucent.app.i18n.S.quickModelSameApiHint, fontSize = 12.sp)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = typed.isNotBlank(),
-                    onClick = {
-                        val model = typed.trim()
-                        typing = false
-                        if (model.isNotBlank()) {
-                            onPickCloudModel(model)
-                            LucentToast.show(context, com.lucent.app.i18n.S.quickModelSwitched(model))
-                        }
-                    }
-                ) { Text(com.lucent.app.i18n.S.actionSave) }
-            },
-            dismissButton = { TextButton(onClick = { typing = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
-        )
     }
 }
 
@@ -286,13 +273,20 @@ private fun rootMenu(
     onModels: () -> Unit,
     onReasoning: () -> Unit
 ) {
-    MenuHeader(com.lucent.app.i18n.S.quickModelTitle, mutedTint)
     MenuRow(
         title = if (localModelEnabled) com.lucent.app.i18n.S.quickModelLocalSection
         else com.lucent.app.i18n.S.quickModelCurrent,
         subtitle = localModelLabel,
         tint = tint,
         mutedTint = mutedTint,
+        icon = {
+            Icon(
+                Icons.Default.Memory,
+                contentDescription = null,
+                tint = mutedTint,
+                modifier = Modifier.size(18.dp)
+            )
+        },
         onClick = onModels
     )
     if (reasoningOffered) {
@@ -324,20 +318,22 @@ private fun reasoningMenu(
     onPick: (ReasoningEffort) -> Unit
 ) {
     MenuHeader(com.lucent.app.i18n.S.reasoningTitle, mutedTint, onBack)
-    options.forEach { option ->
-        MenuRow(
-            title = option.label,
-            subtitle = option.detail,
-            tint = if (option == current) tint else mutedTint,
-            mutedTint = mutedTint,
-            selected = option == current,
-            onClick = { onPick(option) }
-        )
+    Column(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+        options.forEach { option ->
+            MenuRow(
+                title = option.label,
+                subtitle = option.detail,
+                tint = if (option == current) tint else mutedTint,
+                mutedTint = mutedTint,
+                selected = option == current,
+                onClick = { onPick(option) }
+            )
+        }
     }
 }
 
 @Composable
-private fun modelMenu(
+private fun modelsMenu(
     localModelEnabled: Boolean,
     currentModel: String,
     slots: List<LocalModelStore.ModelSlot>,
@@ -350,21 +346,38 @@ private fun modelMenu(
     canFetch: Boolean,
     recents: List<String>,
     fetched: List<String>,
+    query: String,
+    onQuery: (String) -> Unit,
     tint: Color,
     mutedTint: Color,
     onBack: () -> Unit,
     onPickCloud: (String) -> Unit,
     onPickLocal: (String) -> Unit,
-    onFetch: () -> Unit,
-    onCustom: () -> Unit
+    onFetch: () -> Unit
 ) {
     MenuHeader(com.lucent.app.i18n.S.quickModelTitle, mutedTint, onBack)
-    Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQuery,
+        placeholder = { Text(com.lucent.app.i18n.S.quickModelSearch, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null, tint = mutedTint, modifier = Modifier.size(16.dp))
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(50),
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(48.dp)
+    )
+    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+
+    val needle = query.trim()
+    Column(modifier = Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
         if (localModelEnabled) {
-            if (slots.isEmpty()) {
+            val visible = slots.filter { needle.isBlank() || it.name.contains(needle, ignoreCase = true) }
+            if (visible.isEmpty()) {
                 MenuNote(com.lucent.app.i18n.S.quickModelLocalEmpty, mutedTint)
             } else {
-                slots.forEach { slot ->
+                visible.forEach { slot ->
                     MenuRow(
                         title = slot.name,
                         tint = if (slot.id == activeSlotId) tint else mutedTint,
@@ -375,16 +388,26 @@ private fun modelMenu(
                 }
             }
         } else {
+            if (needle.isNotBlank()) {
+                MenuRow(
+                    title = com.lucent.app.i18n.S.quickModelUseNamed(needle),
+                    tint = tint,
+                    mutedTint = mutedTint,
+                    onClick = { onPickCloud(needle) }
+                )
+            }
             when {
-                profileMenu -> profileModels.forEach { model ->
-                    MenuRow(
-                        title = model,
-                        tint = if (model == currentModel) tint else mutedTint,
-                        mutedTint = mutedTint,
-                        selected = model == currentModel,
-                        onClick = { if (model != currentModel) onPickCloud(model) }
-                    )
-                }
+                profileMenu -> profileModels
+                    .filter { needle.isBlank() || it.contains(needle, ignoreCase = true) }
+                    .forEach { model ->
+                        MenuRow(
+                            title = model,
+                            tint = if (model == currentModel) tint else mutedTint,
+                            mutedTint = mutedTint,
+                            selected = model == currentModel,
+                            onClick = { if (model != currentModel) onPickCloud(model) }
+                        )
+                    }
 
                 hasProfile -> {
                     MenuRow(
@@ -407,63 +430,54 @@ private fun modelMenu(
                 }
 
                 else -> {
-                    val shownRecents = recents.filter { it.isNotBlank() && it != currentModel }
+                    val shownRecents = recents
+                        .filter { it.isNotBlank() && it != currentModel }
+                        .filter { needle.isBlank() || it.contains(needle, ignoreCase = true) }
                     if (shownRecents.isNotEmpty()) {
                         MenuHeader(com.lucent.app.i18n.S.quickModelRecent, mutedTint)
                         shownRecents.forEach { model ->
                             MenuRow(model, tint = tint, mutedTint = mutedTint, onClick = { onPickCloud(model) })
                         }
                     }
-                    if (fetched.isEmpty()) {
-                        MenuRow(
-                            title = if (fetching) com.lucent.app.i18n.S.quickModelFetching
-                            else com.lucent.app.i18n.S.quickModelFetch,
-                            tint = tint,
-                            mutedTint = mutedTint,
-                            enabled = !fetching && canFetch,
-                            icon = {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = mutedTint,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            onClick = onFetch
-                        )
+                    val shownFetched = fetched
+                        .filter { it != currentModel }
+                        .filter { needle.isBlank() || it.contains(needle, ignoreCase = true) }
+                    if (shownFetched.isEmpty() && shownRecents.isEmpty()) {
                         if (fetchNote.isNotBlank()) MenuNote(fetchNote, mutedTint)
                     } else {
-                        fetched.filter { it != currentModel }.forEach { model ->
+                        shownFetched.forEach { model ->
                             MenuRow(model, tint = tint, mutedTint = mutedTint, onClick = { onPickCloud(model) })
                         }
                     }
+                    MenuRow(
+                        title = if (fetching) com.lucent.app.i18n.S.quickModelFetching
+                        else com.lucent.app.i18n.S.quickModelFetch,
+                        tint = tint,
+                        mutedTint = mutedTint,
+                        enabled = !fetching && canFetch,
+                        icon = {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = mutedTint,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = onFetch
+                    )
                 }
             }
-
-            HorizontalDivider()
-            MenuRow(
-                title = com.lucent.app.i18n.S.quickModelCustom,
-                tint = tint,
-                mutedTint = mutedTint,
-                icon = {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = null,
-                        tint = mutedTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = onCustom
-            )
         }
     }
     if (!localModelEnabled) {
         Text(
             com.lucent.app.i18n.S.quickModelSameApiHint,
             color = mutedTint,
-            fontSize = 11.sp,
-            lineHeight = 14.sp,
-            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp)
+            fontSize = 10.sp,
+            lineHeight = 13.sp,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp)
         )
     }
 }
@@ -474,16 +488,33 @@ private fun MenuHeader(
     mutedTint: Color,
     onBack: (() -> Unit)? = null
 ) {
-    androidx.compose.foundation.layout.Row(
+    Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, top = 10.dp, end = 8.dp)
+        modifier = Modifier.fillMaxWidth().padding(start = 6.dp, top = 8.dp, end = 10.dp, bottom = 2.dp)
     ) {
         if (onBack != null) {
-            TextButton(onClick = onBack, modifier = Modifier.height(28.dp)) {
-                Text("‹", color = mutedTint, fontSize = 16.sp)
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = com.lucent.app.i18n.S.actionBack,
+                    tint = mutedTint,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
-        Text(text, color = mutedTint, fontSize = 11.sp)
+        Text(
+            text,
+            color = mutedTint,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = if (onBack == null) 8.dp else 2.dp)
+        )
     }
 }
 
@@ -493,7 +524,7 @@ private fun MenuNote(text: String, mutedTint: Color) {
         text,
         color = mutedTint,
         fontSize = 11.sp,
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
     )
 }
 
@@ -516,10 +547,16 @@ private fun MenuRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = if (enabled) tint else mutedTint,
-                    fontSize = 14.sp
+                    fontSize = 13.sp
                 )
                 if (subtitle.isNotBlank()) {
-                    Text(subtitle, color = mutedTint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        subtitle,
+                        color = mutedTint,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         },

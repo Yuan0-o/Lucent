@@ -204,7 +204,7 @@ can be turned off.
 
 Beyond notes and tasks, the assistant can be given a real toolkit: a workspace folder it may read
 and write, shell commands, documents, plugins, and connections to outside services. Each of those
-is a separate switch in Settings → Agent, and the parts that reach outside your device only do
+is a separate switch in Settings → Advanced → Toolkit, and the parts that reach outside your device only do
 anything when you turn them on and, by default, ask you first.
 
 - **Workspace.** You choose one folder. Everything the assistant reads or writes lives inside it.
@@ -222,6 +222,11 @@ anything when you turn them on and, by default, ask you first.
   any MCP server you add are reached directly from your device with a token you supply. Only the
   request you asked for is sent, and only to the service you configured. Lucent has no server of
   its own in the middle, and stores the tokens encrypted on your device.
+- **Tokens and the privileged shell.** GitHub access tokens are stored encrypted and are never shown
+  again once saved; you may keep up to five. On Android, giving the assistant the Shizuku permission
+  is a switch of its own, off by default, and only then can a command run with those privileges.
+- **Sub-agent reports.** A sub-agent report you save by hand is written as a Markdown file in the
+  workspace's `sub-agents` folder on your device, and nothing is sent anywhere.
 - **Device control (Android).** If you enable it and switch on the accessibility service, the
   assistant can read the screen, tap, type, take screenshots, list and open apps, read
   notifications, and use the clipboard and sensors. Screen reading happens on the device; it is

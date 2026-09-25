@@ -32,7 +32,11 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun PluginSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+internal fun PluginSettingsPage(
+    onRoute: (SettingsRoute) -> Unit,
+    onOpenUrl: (String) -> Unit = {},
+    termuxInstalled: Boolean = false
+) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
@@ -42,11 +46,34 @@ internal fun PluginSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     var progress by remember { mutableStateOf(0f) }
 
     val android = HarnessRuntime.android
-    val plugins = remember(android) { PluginCatalog.forPlatform(android) }
+    val plugins = remember(android) { PluginCatalog.forPlatform(android).filterNot { it.id == "termux" } }
+    val termux = remember { PluginCatalog.forPlatform(true).firstOrNull { it.id == "termux" } }
     val canInstall = HarnessRuntime.pluginHost?.isReady() == true
 
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (android && termux != null) {
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.agentTermuxTitle, color = onGradient, fontSize = 14.sp)
+                        Text(S.agentTermuxSub, color = onGradientMuted, fontSize = 11.sp)
+                        if (termuxInstalled) {
+                            Text(S.agentTermuxInstalled, color = onGradientMuted, fontSize = 11.sp)
+                        }
+                    }
+                    if (!termuxInstalled) {
+                        TextButton(onClick = {
+                            val url = termux.sources.firstOrNull { it.official }?.url ?: termux.homepage
+                            onOpenUrl(url)
+                        }) {
+                            Text(S.agentTermuxAction, color = onGradient, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             Text(S.agentPluginsTitle, color = onGradient, fontSize = 15.sp)
             Spacer(modifier = Modifier.height(2.dp))

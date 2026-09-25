@@ -886,6 +886,14 @@ fun AssistantScreen(active: Boolean = true) {
                     diameter = 40.dp
                 )
                 GlassRoundButton(
+                    icon = Icons.Default.Delete,
+                    contentDescription = com.lucent.app.i18n.S.deleteConversationTitle.removeSuffix("?").removeSuffix("？"),
+                    onClick = { showClearConfirm = true },
+                    tint = onGradient,
+                    enabled = AssistantController.currentConversationId != null && messages.isNotEmpty(),
+                    diameter = 40.dp
+                )
+                GlassRoundButton(
                     icon = Icons.Default.Add,
                     contentDescription = com.lucent.app.i18n.S.newConversation,
                     onClick = {
@@ -897,18 +905,18 @@ fun AssistantScreen(active: Boolean = true) {
                     tint = onGradient,
                     diameter = 40.dp
                 )
-                GlassRoundButton(
-                    icon = Icons.Default.Delete,
-                    contentDescription = com.lucent.app.i18n.S.deleteConversationTitle.removeSuffix("?").removeSuffix("？"),
-                    onClick = { showClearConfirm = true },
-                    tint = onGradient,
-                    enabled = AssistantController.currentConversationId != null && messages.isNotEmpty(),
-                    diameter = 40.dp
-                )
             }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        val toolkit = com.lucent.app.harness.HarnessRuntime.config()
+        SubAgentStrip(
+            visible = toolkit.enabled && toolkit.subAgents,
+            tint = onGradient,
+            mutedTint = onGradientMuted,
+            modifier = Modifier.padding(top = 8.dp)
+        )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
@@ -1314,6 +1322,7 @@ fun AssistantScreen(active: Boolean = true) {
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box {
@@ -1360,6 +1369,32 @@ fun AssistantScreen(active: Boolean = true) {
                         androidx.compose.runtime.mutableStateOf(false)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        QuickModelSwitcher(
+                            currentModel = savedModel,
+                            recents = modelRecents,
+                            baseUrl = savedUrl,
+                            spec = when (savedSpecStr) {
+                                "anthropic" -> ApiSpec.ANTHROPIC
+                                "google" -> ApiSpec.GOOGLE
+                                else -> ApiSpec.OPENAI
+                            },
+                            apiKey = savedKey,
+                            selectedModels = activeApiProfile?.selectedModels ?: emptyList(),
+                            hasProfile = activeApiProfile != null,
+                            localModelEnabled = localModelEnabled,
+                            tint = onGradient,
+                            mutedTint = onGradientMuted,
+                            onPickCloudModel = { model -> scope.launch { repo.setActiveModel(model) } },
+                            onSelectedModelsChange = { picked -> persistSelectedModels(picked) },
+                            buttonSize = 34.dp,
+                            plain = true,
+                            reasoningProviderId = com.lucent.app.data.ApiProviders.forRequest(savedSpecStr, savedUrl),
+                            reasoningCurrent = reasoningKey,
+                            onPickReasoning = { picked ->
+                                SettingsCache.reasoning = picked.key
+                                scope.launch { repo.setReasoning(picked.key) }
+                            }
+                        )
                         DictationButton(
                             onText = { spoken ->
                                 input = if (input.isBlank()) spoken
@@ -1407,31 +1442,6 @@ fun AssistantScreen(active: Boolean = true) {
                         }
                     }
             )
-            QuickModelSwitcher(
-                currentModel = savedModel,
-                recents = modelRecents,
-                baseUrl = savedUrl,
-                spec = when (savedSpecStr) {
-                    "anthropic" -> ApiSpec.ANTHROPIC
-                    "google" -> ApiSpec.GOOGLE
-                    else -> ApiSpec.OPENAI
-                },
-                apiKey = savedKey,
-                selectedModels = activeApiProfile?.selectedModels ?: emptyList(),
-                hasProfile = activeApiProfile != null,
-                localModelEnabled = localModelEnabled,
-                tint = onGradient,
-                mutedTint = onGradientMuted,
-                onPickCloudModel = { model -> scope.launch { repo.setActiveModel(model) } },
-                onSelectedModelsChange = { picked -> persistSelectedModels(picked) },
-                reasoningProviderId = com.lucent.app.data.ApiProviders.forRequest(savedSpecStr, savedUrl),
-                reasoningCurrent = reasoningKey,
-                onPickReasoning = { picked ->
-                    SettingsCache.reasoning = picked.key
-                    scope.launch { repo.setReasoning(picked.key) }
-                }
-            )
-            Spacer(modifier = Modifier.width(4.dp))
             if (sending) {
                 GlassRoundButton(
                     icon = Icons.Default.Stop,

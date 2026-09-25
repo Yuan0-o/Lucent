@@ -1,6 +1,6 @@
 # The agent harness
 
-Lucent's assistant is not limited to notes and tasks. Behind **Settings → Toolkit** there is a
+Lucent's assistant is not limited to notes and tasks. Behind **Settings → Advanced → Toolkit** there is a
 tool gateway, and everything the assistant does passes through it: a permission check, an approval
 policy, and an entry in the activity log.
 

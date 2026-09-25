@@ -20,6 +20,8 @@ class SubAgent internal constructor(
     internal val transcript = mutableListOf<String>()
     internal var job: Job? = null
 
+    fun transcriptLines(): List<String> = transcript.toList()
+
     fun render(withResult: Boolean): String {
         val head = "$id [$status] rounds=$rounds — ${task.take(200)}"
         val tail = transcript.takeLast(6).joinToString("\n")

@@ -29,8 +29,14 @@ data class PluginState(
     val installedAt: Long = 0L
 )
 
+data class GithubToken(
+    val id: String,
+    val name: String = "",
+    val token: String = ""
+)
+
 data class HarnessConfig(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val workspace: String = "",
     val writeRoots: List<String> = emptyList(),
     val readOnlyRoots: List<String> = emptyList(),
@@ -48,7 +54,10 @@ data class HarnessConfig(
     val maxSubAgents: Int = 3,
     val skillDirs: List<String> = emptyList(),
     val githubToken: String = "",
+    val githubTokens: List<GithubToken> = emptyList(),
+    val githubActiveId: String = "",
     val githubApi: String = "https://api.github.com",
+    val shizukuForAssistant: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val connectors: List<ConnectorConfig> = emptyList(),
     val plugins: List<PluginState> = emptyList(),
@@ -89,6 +98,16 @@ data class HarnessConfig(
 
     fun connector(id: String): ConnectorConfig? = connectors.firstOrNull { it.id == id }
 
+    fun withGithubTokens(tokens: List<GithubToken>, activeId: String = githubActiveId): HarnessConfig {
+        val kept = tokens.filter { it.token.isNotBlank() }.take(MAX_GITHUB_TOKENS)
+        val active = kept.firstOrNull { it.id == activeId } ?: kept.firstOrNull()
+        return copy(
+            githubTokens = kept,
+            githubActiveId = active?.id.orEmpty(),
+            githubToken = active?.token.orEmpty()
+        )
+    }
+
     fun toJson(): String = toJsonObject().toString()
 
     fun toJsonObject(): JSONObject = JSONObject().apply {
@@ -110,7 +129,18 @@ data class HarnessConfig(
         put("maxSubAgents", maxSubAgents)
         put("skillDirs", JSONArray(skillDirs))
         put("githubToken", githubToken)
+        put("githubTokens", JSONArray().apply {
+            githubTokens.forEach { entry ->
+                put(JSONObject().apply {
+                    put("id", entry.id)
+                    put("name", entry.name)
+                    put("token", entry.token)
+                })
+            }
+        })
+        put("githubActiveId", githubActiveId)
         put("githubApi", githubApi)
+        put("shizukuForAssistant", shizukuForAssistant)
         put("mcpServers", JSONArray().apply {
             mcpServers.forEach { server ->
                 put(JSONObject().apply {
@@ -152,6 +182,8 @@ data class HarnessConfig(
 
     companion object {
 
+        const val MAX_GITHUB_TOKENS = 5
+
         val DEFAULT = HarnessConfig()
 
         fun parse(raw: String): HarnessConfig {
@@ -177,7 +209,10 @@ data class HarnessConfig(
                 maxSubAgents = o.optInt("maxSubAgents", defaults.maxSubAgents),
                 skillDirs = strings(o.optJSONArray("skillDirs")),
                 githubToken = o.optString("githubToken", ""),
+                githubTokens = githubTokens(o.optJSONArray("githubTokens"), o.optString("githubToken", "")),
+                githubActiveId = o.optString("githubActiveId", ""),
                 githubApi = o.optString("githubApi", defaults.githubApi).ifBlank { defaults.githubApi },
+                shizukuForAssistant = o.optBoolean("shizukuForAssistant", defaults.shizukuForAssistant),
                 mcpServers = servers(o.optJSONArray("mcpServers")),
                 connectors = connectors(o.optJSONArray("connectors")),
                 plugins = plugins(o.optJSONArray("plugins")),
@@ -205,6 +240,26 @@ data class HarnessConfig(
                 out[key] = obj.optString(key, "")
             }
             return out
+        }
+
+        private fun githubTokens(array: JSONArray?, legacy: String): List<GithubToken> {
+            val out = mutableListOf<GithubToken>()
+            if (array != null) {
+                for (i in 0 until array.length()) {
+                    val o = array.optJSONObject(i) ?: continue
+                    val token = o.optString("token", "")
+                    if (token.isBlank()) continue
+                    out.add(
+                        GithubToken(
+                            id = o.optString("id", "").ifBlank { "gh-${out.size + 1}" },
+                            name = o.optString("name", ""),
+                            token = token
+                        )
+                    )
+                }
+            }
+            if (out.isEmpty() && legacy.isNotBlank()) out.add(GithubToken(id = "gh-1", token = legacy))
+            return out.take(MAX_GITHUB_TOKENS)
         }
 
         private fun servers(array: JSONArray?): List<McpServer> {

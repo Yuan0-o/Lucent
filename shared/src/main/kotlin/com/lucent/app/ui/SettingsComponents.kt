@@ -159,6 +159,10 @@ internal object SettingsTrail {
         SettingsRoute.Theme, SettingsRoute.Background, SettingsRoute.Splash -> SettingsRoute.Appearance
         SettingsRoute.Licences -> SettingsRoute.About
         SettingsRoute.Personalization, SettingsRoute.CloudModel, SettingsRoute.LocalModel -> SettingsRoute.Assistant
+        SettingsRoute.Agent, SettingsRoute.Shizuku -> SettingsRoute.Advanced
+        SettingsRoute.Workspace, SettingsRoute.Permissions, SettingsRoute.Groups,
+        SettingsRoute.Execution, SettingsRoute.Github, SettingsRoute.Plugins,
+        SettingsRoute.Mcp, SettingsRoute.Audit -> SettingsRoute.Agent
         else -> SettingsRoute.Root
     }
 
@@ -177,6 +181,12 @@ internal object SettingsTrail {
     fun title(route: SettingsRoute): String = when (route) {
         SettingsRoute.Root -> S.tabSettings
         SettingsRoute.Agent -> S.settingsAgentTitle
+        SettingsRoute.Workspace -> S.agentWorkspaceTitle
+        SettingsRoute.Permissions -> S.agentPermissionsTitle
+        SettingsRoute.Groups -> S.agentGroupsTitle
+        SettingsRoute.Execution -> S.agentSandboxTitle
+        SettingsRoute.Github -> S.agentGithubTitle
+        SettingsRoute.Shizuku -> S.shizukuTitle
         SettingsRoute.Plugins -> S.agentPluginsTitle
         SettingsRoute.Mcp -> S.agentMcpTitle
         SettingsRoute.Audit -> S.agentAuditTitle
