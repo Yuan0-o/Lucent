@@ -176,6 +176,10 @@ internal object SettingsTrail {
 
     fun title(route: SettingsRoute): String = when (route) {
         SettingsRoute.Root -> S.tabSettings
+        SettingsRoute.Agent -> S.settingsAgentTitle
+        SettingsRoute.Plugins -> S.agentPluginsTitle
+        SettingsRoute.Mcp -> S.agentMcpTitle
+        SettingsRoute.Audit -> S.agentAuditTitle
         SettingsRoute.Language -> S.settingsLanguageTitle
         SettingsRoute.Assistant -> S.settingsAssistantTitle
         SettingsRoute.Personalization -> S.settingsPersonalizationTitle

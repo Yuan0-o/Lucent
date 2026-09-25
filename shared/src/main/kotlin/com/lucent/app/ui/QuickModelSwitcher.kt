@@ -173,6 +173,10 @@ fun QuickModelSwitcher(
                         when (menu) {
                             MENU_ROOT -> rootMenu(
                                 currentModel = currentModel,
+                                localModelLabel = if (localModelEnabled) {
+                                    runCatching { LocalModelStore.displayName(context) }.getOrNull()
+                                        ?: com.lucent.app.i18n.S.quickModelNone
+                                } else currentModel.ifBlank { com.lucent.app.i18n.S.quickModelNone },
                                 localModelEnabled = localModelEnabled,
                                 reasoningOffered = reasoningOffered,
                                 reasoningLabel = if (settledReasoning == ReasoningEffort.PROVIDER_DEFAULT) {
@@ -274,6 +278,7 @@ fun QuickModelSwitcher(
 @Composable
 private fun rootMenu(
     currentModel: String,
+    localModelLabel: String,
     localModelEnabled: Boolean,
     reasoningOffered: Boolean,
     reasoningLabel: String,
@@ -286,10 +291,7 @@ private fun rootMenu(
     MenuRow(
         title = if (localModelEnabled) com.lucent.app.i18n.S.quickModelLocalSection
         else com.lucent.app.i18n.S.quickModelCurrent,
-        subtitle = if (localModelEnabled) {
-            runCatching { LocalModelStore.displayName(androidx.compose.ui.platform.LocalContext.current) }.getOrNull()
-                ?: com.lucent.app.i18n.S.quickModelNone
-        } else currentModel.ifBlank { com.lucent.app.i18n.S.quickModelNone },
+        subtitle = localModelLabel,
         tint = tint,
         mutedTint = mutedTint,
         onClick = onModels
@@ -339,7 +341,7 @@ private fun reasoningMenu(
 private fun modelMenu(
     localModelEnabled: Boolean,
     currentModel: String,
-    slots: List<LocalModelStore.Slot>,
+    slots: List<LocalModelStore.ModelSlot>,
     activeSlotId: String?,
     profileMenu: Boolean,
     profileModels: List<String>,

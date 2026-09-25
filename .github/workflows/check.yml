@@ -25,6 +25,9 @@ jobs:
       - name: Check every cached setting is written back on change
         run: python3 tools/settings_cache_check.py
 
+      - name: Check every agent tool group is covered by tests
+        run: python3 tools/harness_coverage_check.py
+
   desktop-jvm-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,6 +43,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Run the agent harness unit tests
+        run: ./gradlew :desktop:test --no-daemon --console=plain --tests 'com.lucent.app.harness.*'
 
       - name: Run desktop unit tests (shared and desktop logic)
         run: ./gradlew :desktop:test --no-daemon --console=plain
@@ -135,6 +141,10 @@ jobs:
 
       - name: Run Android JVM unit tests (shared and Android logic)
         run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+
+      - name: Count the tests that actually ran
+        if: always()
+        run: python3 tools/test_inventory.py
 
       - name: Compile the release Kotlin sources
         run: ./gradlew :app:compileReleaseKotlin --no-daemon --console=plain

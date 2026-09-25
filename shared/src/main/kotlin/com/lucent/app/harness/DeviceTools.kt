@@ -63,7 +63,7 @@ object DeviceTools : HarnessGroupTools {
             HarnessSchema.text("text", "Text to share"),
             HarnessSchema.text("subject", "Subject line", false)
         )),
-        tool("open_url", "Open a link in the phone's browser.", listOf(
+        tool("open_link_on_device", "Open a link in the phone's browser.", listOf(
             HarnessSchema.text("url", "Link to open")
         )),
         tool("notify_user", "Post a notification on the phone, for a long job that has finished.", listOf(
@@ -117,7 +117,7 @@ object DeviceTools : HarnessGroupTools {
                 host.shareText(args.optString("text", ""), args.optString("subject", "")),
                 "Sharing did not open."
             )
-            "open_url" -> flag(host.openUrl(args.optString("url", "")), "The link could not be opened.")
+            "open_link_on_device" -> flag(host.openUrl(args.optString("url", "")), "The link could not be opened.")
             "notify_user" -> flag(
                 host.notify(args.optString("title", "Lucent"), args.optString("text", "")),
                 "The notification could not be posted."

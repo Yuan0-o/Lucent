@@ -168,7 +168,8 @@ object BrowserTools : HarnessGroupTools {
         return try {
             val request = Request.Builder().url(url).header("User-Agent", AGENT).build()
             client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty().take(2 * 1024 * 1024)
+                val raw = response.body?.string() ?: ""
+                val body = raw.take(2 * 1024 * 1024)
                 val type = response.header("Content-Type", "").lowercase()
                 val textLike = type.contains("text") || type.contains("json") || type.contains("xml") || type.contains("html")
                 if (!textLike) {

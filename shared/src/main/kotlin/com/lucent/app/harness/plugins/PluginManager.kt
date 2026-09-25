@@ -6,7 +6,6 @@ import com.lucent.app.harness.AuditTrail
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.PluginHost
 import com.lucent.app.harness.PluginOutcome
-import com.lucent.app.harness.PluginSource
 import com.lucent.app.harness.PluginState
 import com.lucent.app.harness.ShellOutcome
 import java.io.File

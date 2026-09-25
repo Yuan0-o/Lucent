@@ -15,15 +15,15 @@ object Snapshots {
 
     private const val INDEX = "index.jsonl"
 
-    private fun dir(ctx: HarnessCtx): File = HarnessRuntime.subDir("snapshots")
+    private fun dir(): File = HarnessRuntime.subDir("snapshots")
 
-    private fun index(ctx: HarnessCtx): File = File(dir(ctx), INDEX)
+    private fun index(): File = File(dir(), INDEX)
 
-    fun capture(ctx: HarnessCtx, file: File) {
+    fun capture(file: File) {
         if (!file.exists() || file.isDirectory) return
         try {
             val id = "${System.currentTimeMillis()}-${(1000..9999).random()}"
-            val store = File(dir(ctx), id)
+            val store = File(dir(), id)
             store.mkdirs()
             val copy = File(store, file.name)
             file.copyTo(copy, overwrite = true)
@@ -34,17 +34,17 @@ object Snapshots {
                 put("store", copy.canonicalPath)
                 put("bytes", copy.length())
             }.toString()
-            index(ctx).appendText(line + "\n")
-            prune(ctx)
+            index().appendText(line + "\n")
+            prune()
         } catch (_: Throwable) {
         }
     }
 
-    fun history(ctx: HarnessCtx, path: String, limit: Int = 20): List<SnapshotEntry> =
-        all(ctx).filter { it.path == path }.takeLast(limit.coerceIn(1, 200)).reversed()
+    fun history(path: String, limit: Int = 20): List<SnapshotEntry> =
+        all().filter { it.path == path }.takeLast(limit.coerceIn(1, 200)).reversed()
 
-    fun all(ctx: HarnessCtx): List<SnapshotEntry> {
-        val target = index(ctx)
+    fun all(): List<SnapshotEntry> {
+        val target = index()
         if (!target.exists()) return emptyList()
         return try {
             target.readLines().mapNotNull { line ->
@@ -64,32 +64,32 @@ object Snapshots {
         }
     }
 
-    fun restore(ctx: HarnessCtx, id: String): File {
-        val entry = all(ctx).firstOrNull { it.id == id } ?: throw HarnessError("No snapshot with id $id")
+    fun restore(id: String): File {
+        val entry = all().firstOrNull { it.id == id } ?: throw HarnessError("No snapshot with id $id")
         val copy = File(entry.store)
         if (!copy.exists()) throw HarnessError("That snapshot is no longer on disk")
         val target = File(entry.path)
-        if (!Workspace.writable(ctx, target)) throw HarnessError("${entry.path} is outside the workspace", blocked = true)
+        if (!Workspace.writable(HarnessRuntime.config(), target)) throw HarnessError("${entry.path} is outside the workspace", blocked = true)
         target.parentFile?.mkdirs()
         copy.copyTo(target, overwrite = true)
         return target
     }
 
-    fun latest(ctx: HarnessCtx, path: String): SnapshotEntry? = history(ctx, path, 1).firstOrNull()
+    fun latest(path: String): SnapshotEntry? = history(path, 1).firstOrNull()
 
-    fun totalBytes(ctx: HarnessCtx): Long = all(ctx).sumOf { it.bytes }
+    fun totalBytes(): Long = all().sumOf { it.bytes }
 
-    fun clear(ctx: HarnessCtx) {
+    fun clear() {
         try {
-            dir(ctx).deleteRecursively()
-            dir(ctx).mkdirs()
+            dir().deleteRecursively()
+            dir().mkdirs()
         } catch (_: Throwable) {
         }
     }
 
-    private fun prune(ctx: HarnessCtx) {
+    private fun prune() {
         val limit = HarnessRuntime.config().snapshotLimit.coerceIn(10, 1000)
-        val entries = all(ctx)
+        val entries = all()
         if (entries.size <= limit) return
         val doomed = entries.take(entries.size - limit)
         doomed.forEach { entry ->
@@ -98,17 +98,31 @@ object Snapshots {
         }
         val keep = entries.drop(entries.size - limit).map { it.id }.toSet()
         val kept = try {
-            index(ctx).readLines().filter { line ->
+            index().readLines().filter { line ->
                 val id = try { JSONObject(line).optString("id", "") } catch (e: Exception) { "" }
                 keep.contains(id)
             }
         } catch (e: Exception) {
             emptyList()
         }
-        try { index(ctx).writeText(kept.joinToString("\n") + "\n") } catch (_: Throwable) {
+        try { index().writeText(kept.joinToString("\n") + "\n") } catch (_: Throwable) {
         }
     }
 }
+
+fun capture(ctx: HarnessCtx, file: File) = capture(file)
+
+fun history(ctx: HarnessCtx, path: String, limit: Int = 20): List<SnapshotEntry> = history(path, limit)
+
+fun all(ctx: HarnessCtx): List<SnapshotEntry> = all()
+
+fun restore(ctx: HarnessCtx, id: String): File = restore(id)
+
+fun latest(ctx: HarnessCtx, path: String): SnapshotEntry? = latest(path)
+
+fun totalBytes(ctx: HarnessCtx): Long = totalBytes()
+
+fun clear(ctx: HarnessCtx) = clear()
 
 data class DiffLine(val kind: Char, val text: String)
 

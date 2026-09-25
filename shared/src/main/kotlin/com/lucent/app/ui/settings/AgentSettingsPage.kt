@@ -55,16 +55,16 @@ internal fun AgentSettingsPage(
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         Section(onGradient, onGradientMuted, S.agentToolkitTitle, S.agentToolkitSub) {
-            ToggleRow(S.agentToolkitEnabled, S.agentToolkitEnabledSub, config.enabled, onGradient, onGradientMuted) {
+            ToolkitToggleRow(S.agentToolkitEnabled, S.agentToolkitEnabledSub, config.enabled, onGradient, onGradientMuted) {
                 update(config.copy(enabled = it))
             }
-            ToggleRow(S.agentSubAgents, S.agentSubAgentsSub, config.subAgents, onGradient, onGradientMuted) {
+            ToolkitToggleRow(S.agentSubAgents, S.agentSubAgentsSub, config.subAgents, onGradient, onGradientMuted) {
                 update(config.copy(subAgents = it))
             }
-            ToggleRow(S.agentSnapshots, S.agentSnapshotsSub, config.snapshots, onGradient, onGradientMuted) {
+            ToolkitToggleRow(S.agentSnapshots, S.agentSnapshotsSub, config.snapshots, onGradient, onGradientMuted) {
                 update(config.copy(snapshots = it))
             }
-            ToggleRow(S.agentDeviceControl, S.agentDeviceControlSub, config.deviceEnabled, onGradient, onGradientMuted) {
+            ToolkitToggleRow(S.agentDeviceControl, S.agentDeviceControlSub, config.deviceEnabled, onGradient, onGradientMuted) {
                 update(config.copy(deviceEnabled = it))
             }
             if (!accessibilityRunning) {
@@ -221,7 +221,7 @@ internal fun Section(
 }
 
 @Composable
-internal fun ToggleRow(
+internal fun ToolkitToggleRow(
     title: String,
     subtitle: String,
     checked: Boolean,

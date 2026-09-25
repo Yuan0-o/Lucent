@@ -34,7 +34,7 @@ object Workspace {
         return false
     }
 
-    fun resolve(ctx: HarnessCtx, raw: String): File {
+    fun resolve(raw: String): File {
         val clean = raw.trim()
         if (clean.isEmpty()) throw HarnessError("No path was given")
         if (blocked(clean)) throw HarnessError("$clean is off limits", blocked = true)
@@ -47,18 +47,24 @@ object Workspace {
         return file.canonicalFile
     }
 
-    fun writable(ctx: HarnessCtx, file: File): Boolean {
+    fun resolve(ctx: HarnessCtx, raw: String): File = resolve(raw)
+
+    fun writable(config: HarnessConfig, file: File): Boolean {
         val roots = mutableListOf(HarnessRuntime.workspace())
-        ctx.config.writeRoots.forEach { roots.add(File(it)) }
+        config.writeRoots.forEach { roots.add(File(it)) }
         return roots.any { isInside(file, it) }
     }
 
-    fun readable(ctx: HarnessCtx, file: File): Boolean {
+    fun writable(ctx: HarnessCtx, file: File): Boolean = writable(ctx.config, file)
+
+    fun readable(config: HarnessConfig, file: File): Boolean {
         val roots = mutableListOf(HarnessRuntime.workspace())
-        ctx.config.writeRoots.forEach { roots.add(File(it)) }
-        ctx.config.readOnlyRoots.forEach { roots.add(File(it)) }
+        config.writeRoots.forEach { roots.add(File(it)) }
+        config.readOnlyRoots.forEach { roots.add(File(it)) }
         return roots.any { isInside(file, it) }
     }
+
+    fun readable(ctx: HarnessCtx, file: File): Boolean = readable(ctx.config, file)
 
     fun forRead(ctx: HarnessCtx, raw: String): File {
         val file = resolve(ctx, raw)
@@ -77,13 +83,15 @@ object Workspace {
         return file
     }
 
-    fun display(ctx: HarnessCtx, file: File): String {
+    fun display(file: File): String {
         val root = HarnessRuntime.workspace()
         return if (isInside(file, root)) {
             val rel = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
             if (rel.isEmpty()) "." else rel
         } else file.path
     }
+
+    fun display(ctx: HarnessCtx, file: File): String = display(file)
 
     fun readBytes(file: File, maxBytes: Long = 32L * 1024 * 1024): ByteArray {
         if (file.length() > maxBytes) throw HarnessError("${file.name} is larger than ${maxBytes / 1048576} MiB")
