@@ -63,6 +63,15 @@ jobs:
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "Releasing tag $TAG as version $VER"
 
+      - name: Check the notes match the house format
+        if: ${{ inputs.release_notes != '' }}
+        env:
+          NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -eu
+          printf '%s\n' "$NOTES" > /tmp/notes.md
+          python3 tools/release_notes_check.py /tmp/notes.md
+
   apk:
     needs: prepare
     uses: ./.github/workflows/build-apk.yml
