@@ -97,6 +97,12 @@ import com.lucent.app.ui.settings.LicenceSettingsPage
 import com.lucent.app.ui.settings.AgentSettingsPage
 import com.lucent.app.ui.settings.PluginSettingsPage
 import com.lucent.app.ui.settings.McpSettingsPage
+import com.lucent.app.ui.settings.ExecutionSettingsPage
+import com.lucent.app.ui.settings.GithubSettingsPage
+import com.lucent.app.ui.settings.PermissionsSettingsPage
+import com.lucent.app.ui.settings.ShizukuSettingsPage
+import com.lucent.app.ui.settings.ToolGroupsSettingsPage
+import com.lucent.app.ui.settings.WorkspaceSettingsPage
 import com.lucent.app.ui.settings.AuditSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
