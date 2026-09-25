@@ -78,7 +78,7 @@ object HarnessGate {
         val config = HarnessRuntime.config()
         if (!config.enabled) return emptyList()
         return allTools().filter { tool ->
-            config.groupEnabled(tool.group) &&
+            (config.groupEnabled(tool.group) || (tool.group == HarnessGroup.DEVICE && config.deviceEnabled)) &&
                 (tool.group != HarnessGroup.DEVICE || config.deviceEnabled) &&
                 tool.available(android, capabilities) &&
                 supports(tool, capabilities)

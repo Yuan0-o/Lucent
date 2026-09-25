@@ -720,8 +720,12 @@ private fun pdfParseCMap(bytes: ByteArray): PdfCMap {
         parser.skip()
         if (parser.eof()) break
         val token = parser.parse()
-        if (token !is PdfName) continue
-        when (token.name) {
+        val keyword = when (token) {
+            is PdfName -> token.name
+            is PdfOperator -> token.name
+            else -> continue
+        }
+        when (keyword) {
             "beginbfchar" -> {
                 while (true) {
                     val source = parser.parse() as? PdfString ?: break
