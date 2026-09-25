@@ -151,11 +151,12 @@ entirely.
 
 ### 5.3 Semantic search
 
-Lucent's semantic search can work in two ways. The on-device option keeps everything on the device
-but is not implemented in the current build. The cloud option uses your configured AI provider: to
-produce each vector, the text being indexed is sent to that provider's embeddings endpoint. That
-means note text leaves your device when this option is selected. It is a setting you control, and
-the default is the on-device option.
+Lucent's semantic search follows whichever assistant you are using, so there is nothing extra to
+choose. While the local model is the active assistant, indexing stays on the device and is not
+implemented in the current build, so nothing leaves it. While the cloud model is active, the text
+being indexed is sent to your configured AI provider's embeddings endpoint to produce each vector,
+which means note text leaves your device. Switching between the two models switches the behaviour
+with it.
 
 ### 5.4 Cloud backup
 
@@ -291,11 +292,15 @@ main ones:
   other applications' share sheets.
 - **Version history.** Settings → Privacy. Note history and task history can each be switched off,
   which stops new snapshots being kept.
-- **Assistant provider and memory.** Settings → Assistant. Choose the provider, or import and use a
-  local model with no network at all. The memory setting controls how much past conversation is
-  included in each request; lower memory means less text leaves the device.
-- **Web search.** Settings → Assistant, off by default.
-- **Semantic search.** Settings → Assistant. Choose the on-device option or the cloud option.
+- **Assistant provider and memory.** Settings → Assistant, then Cloud model or Local model. Choose
+  the provider, or import a local model with no network at all. Each model keeps its own memory
+  setting, which controls how much past conversation is included in each request; lower memory means
+  less text leaves the device.
+- **Web search.** Settings → Assistant: the cloud assistant's switch sits under Personalisation,
+  the local model's under Local model. Both are off by default.
+- **Semantic search.** Settings → Assistant. It follows the active model: the local model keeps
+  indexing on the device, the cloud model sends the text to your provider. Switch models to switch
+  the behaviour, or leave the assistant off entirely.
 - **Backup contents and password.** Settings → Data. Choose what a backup includes, and whether it
   is password-protected. Automatic backup, its folder, its interval and how many copies are kept
   are all yours to set, and it is off by default.
