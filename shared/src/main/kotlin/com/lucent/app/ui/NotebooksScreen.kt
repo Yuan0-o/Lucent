@@ -296,10 +296,10 @@ fun NotebooksScreen(
     fun drop(beforeId: Long?, afterId: Long?) {
         val movingId = draggingNotebookId ?: reorderState.draggingId
         draggingNotebookId = null
-        val picked = if (selectionMode && selectedIds.isNotEmpty()) {
+        val picked: List<Notebook> = if (selectionMode && selectedIds.isNotEmpty()) {
             visible.filter { it.id in selectedIds }
         } else {
-            movingId?.let { id -> visible.filter { it.id == id } }
+            visible.filter { it.id == movingId }
         }
         if (picked.isEmpty()) { reorderState.cancel(); return }
         val reordered = reorderedAround(visible, picked, beforeId, afterId) { it.id }
