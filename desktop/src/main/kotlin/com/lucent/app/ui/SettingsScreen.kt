@@ -687,6 +687,17 @@ fun SettingsScreen(active: Boolean = true) {
         }
     }
 
+    fun requestCloudOn() {
+        val profile = profiles.getOrNull(selectedProfileIdx)
+        val usable = profile != null && profile.baseUrl.isNotBlank() && profile.model.isNotBlank()
+        if (!usable) {
+            LucentToast.show(context, S.setupApiFirst, longDuration = true)
+            return
+        }
+        SettingsCache.localModelEnabled = false
+        AppScope.io.launch { repo.setLocalModelEnabled(false) }
+    }
+
     fun navigate(next: SettingsRoute) {
         if (next == route) return
         if (settingsDirty) {
@@ -2250,7 +2261,9 @@ fun SettingsScreen(active: Boolean = true) {
                 repo = repo,
                 profiles = profiles,
                 selectedProfileIdx = selectedProfileIdx,
-                onRoute = { navigate(it) }
+                onRoute = { navigate(it) },
+                onRequestCloudOn = { requestCloudOn() },
+                onRequestLocalOn = { lmConfirmUseLocalOn = true }
             )
 
             SettingsRoute.LocalModel -> LocalModelSettingsPage(
@@ -2267,7 +2280,6 @@ fun SettingsScreen(active: Boolean = true) {
                 onImportModelClick = { pickLocalModel() },
                 onImportMmprojClick = { pickMmproj() },
                 onRemoveMmproj = { removeMmproj() },
-                onRequestUseLocalOn = { lmConfirmUseLocalOn = true },
                 onRequestToolsOn = { lmConfirmToolsOn = true },
                 onRequestGpuOn = { lmConfirmGpuOn = true },
                 onRequestBackgroundOn = { lmConfirmBackgroundOn = true },

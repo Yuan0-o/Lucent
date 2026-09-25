@@ -349,6 +349,7 @@ class AssistantControllerImpl(
         val smallModelMode: Boolean = false,
         val agentMode: Boolean = true,
         val localWebSearch: Boolean = false,
+        val reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
         val answersMessageId: Long = 0
     )
     private var lastSend: LastSend? = null
@@ -372,6 +373,7 @@ class AssistantControllerImpl(
             smallModelMode = p.smallModelMode,
             agentMode = p.agentMode,
             localWebSearch = p.localWebSearch,
+            reasoning = p.reasoning,
             answersMessageId = p.answersMessageId,
             targetConversationId = target
         )
@@ -503,7 +505,8 @@ class AssistantControllerImpl(
         confirmTools: Boolean,
         smallModelMode: Boolean,
         agentMode: Boolean = true,
-        localWebSearch: Boolean = false
+        localWebSearch: Boolean = false,
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
     ) {
         if (message.role != "user") return
         send(
@@ -526,6 +529,7 @@ class AssistantControllerImpl(
             smallModelMode = smallModelMode,
             agentMode = agentMode,
             localWebSearch = localWebSearch,
+            reasoning = reasoning,
             answersMessageId = message.id,
             targetConversationId = message.conversationId
         )
@@ -563,6 +567,7 @@ class AssistantControllerImpl(
         smallModelMode: Boolean = false,
         agentMode: Boolean = true,
         localWebSearch: Boolean = false,
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
         answersMessageId: Long = 0,
         targetConversationId: Long? = null,
         attachmentListJson: String? = null,
@@ -580,7 +585,7 @@ class AssistantControllerImpl(
             url, spec, key, model,
             name, style, memoryTier, webSearchEnabled, typingHapticsEnabled, useLocalModel,
             useLocalTools, useLocalGpu, confirmTools, smallModelMode, agentMode, localWebSearch,
-            answersMessageId
+            reasoning, answersMessageId
         )
         turn.thinking = true
         if (errorConversationId == targetKey) {
@@ -645,6 +650,7 @@ class AssistantControllerImpl(
                 refinementContext = null
                 val recentItems = recentItemsContext(db, conversationId)
                 val fastMode = !agentMode
+                val useReasoning = if (fastMode) com.lucent.app.data.ReasoningEffort.DEFAULT.key else reasoning
                 val compactMemory = if (smallModelMode || fastMode) {
                     crossConversationMemory(db, conversationId, memoryTier, cap = SMALL_MODEL_CROSS_BUDGET)
                 } else {
@@ -689,7 +695,8 @@ class AssistantControllerImpl(
                         url, spec, key, model, history, systemPrompt, tools,
                         { delta -> turn.onDelta(roundEpoch, delta) },
                         { piece -> turn.recorder.appendReasoning(piece) },
-                        { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) }
+                        { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) },
+                        reasoning = useReasoning
                     )
 
                     if (result.isFailure) {
@@ -763,7 +770,8 @@ class AssistantControllerImpl(
                     history = history + ChatTurn(
                         role = "assistant",
                         content = reply.text?.trim().orEmpty(),
-                        toolCalls = reply.toolCalls
+                        toolCalls = reply.toolCalls,
+                        thinkingBlocksJson = reply.thinkingBlocksJson
                     )
                     val resultTurns = reply.toolCalls.zip(results).map { (call, r) ->
                         ToolResultTurn(id = call.id, name = call.name, content = r.summary)
@@ -815,7 +823,8 @@ class AssistantControllerImpl(
                             url, spec, key, model, history, systemPrompt, emptyList(),
                             { delta -> turn.onDelta(forcedEpoch, delta) },
                             { piece -> turn.recorder.appendReasoning(piece) },
-                            { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) }
+                            { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) },
+                            reasoning = reasoning
                         )
                         if (forced.isFailure) {
                             fail(turn, forced.exceptionOrNull() ?: Exception("Unknown error"))
@@ -1577,11 +1586,12 @@ object AssistantController {
         confirmTools: Boolean,
         smallModelMode: Boolean,
         agentMode: Boolean = true,
-        localWebSearch: Boolean = false
+        localWebSearch: Boolean = false,
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
     ) = impl(appContext).resend(
         appContext, message, url, spec, key, model, name, style, memoryTier, webSearchEnabled,
         typingHapticsEnabled, useLocalModel, useLocalTools, useLocalGpu, confirmTools, smallModelMode,
-        agentMode, localWebSearch
+        agentMode, localWebSearch, reasoning
     )
 
     fun send(
@@ -1607,6 +1617,7 @@ object AssistantController {
         smallModelMode: Boolean = false,
         agentMode: Boolean = true,
         localWebSearch: Boolean = false,
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
         answersMessageId: Long = 0,
         targetConversationId: Long? = null,
         attachmentListJson: String? = null,
@@ -1619,7 +1630,7 @@ object AssistantController {
         insertUserMessage = insertUserMessage, useLocalModel = useLocalModel,
         useLocalTools = useLocalTools, useLocalGpu = useLocalGpu, confirmTools = confirmTools,
         smallModelMode = smallModelMode, agentMode = agentMode, localWebSearch = localWebSearch,
-        answersMessageId = answersMessageId,
+        reasoning = reasoning, answersMessageId = answersMessageId,
         targetConversationId = targetConversationId, attachmentListJson = attachmentListJson,
         attachments = attachments
     )

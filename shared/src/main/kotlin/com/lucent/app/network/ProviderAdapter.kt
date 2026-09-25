@@ -1,5 +1,7 @@
 package com.lucent.app.network
 
+import com.lucent.app.data.ReasoningEffort
+import com.lucent.app.data.ReasoningEfforts
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,7 +20,8 @@ sealed interface ProviderAdapter {
         history: List<ChatTurn>,
         systemPrompt: String,
         tools: List<ToolDefinition>,
-        streaming: Boolean
+        streaming: Boolean,
+        reasoning: String = ReasoningEffort.DEFAULT.key
     ): JSONObject
 
     fun parseReply(bodyStr: String): RawModelReply
@@ -34,6 +37,42 @@ sealed interface ProviderAdapter {
 class StreamAccumulator {
     val fullText = StringBuilder()
     val fullReasoning = StringBuilder()
+    val anthropicThinking = JSONArray()
+    private val anthropicThinkingIndex = HashMap<Int, JSONObject>()
+    private val anthropicThinkingSignature = HashMap<Int, String>()
+
+    fun beginThinkingBlock(index: Int, type: String, data: String?) {
+        val block = JSONObject().put("type", type)
+        if (type == "thinking") block.put("thinking", "") else if (data != null) block.put("data", data)
+        anthropicThinkingIndex[index] = block
+        anthropicThinking.put(block)
+    }
+
+    fun appendThinkingText(index: Int, text: String) {
+        val block = anthropicThinkingIndex[index] ?: return
+        block.put("thinking", block.optString("thinking", "") + text)
+    }
+
+    fun appendThinkingSignature(index: Int, signature: String) {
+        val block = anthropicThinkingIndex[index] ?: return
+        anthropicThinkingSignature[index] = (anthropicThinkingSignature[index] ?: "") + signature
+        block.put("signature", anthropicThinkingSignature[index])
+    }
+
+    fun thinkingBlocksJson(): String {
+        if (anthropicThinking.length() == 0) return ""
+        val kept = JSONArray()
+        for (i in 0 until anthropicThinking.length()) {
+            val block = anthropicThinking.optJSONObject(i) ?: continue
+            when (block.optString("type")) {
+                "thinking" -> if (block.optString("thinking").isNotEmpty() && block.optString("signature").isNotEmpty()) {
+                    kept.put(block)
+                }
+                "redacted_thinking" -> if (block.optString("data").isNotEmpty()) kept.put(block)
+            }
+        }
+        return if (kept.length() == 0) "" else kept.toString()
+    }
     val openAiToolAcc = LinkedHashMap<Int, ToolAcc>()
     val anthropicToolAcc = LinkedHashMap<Int, ToolAcc>()
     var returnedImageMime: String? = null
@@ -204,7 +243,8 @@ object OpenAiAdapter : ProviderAdapter {
         history: List<ChatTurn>,
         systemPrompt: String,
         tools: List<ToolDefinition>,
-        streaming: Boolean
+        streaming: Boolean,
+        reasoning: String
     ): JSONObject {
         val messages = JSONArray()
         messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
@@ -239,12 +279,16 @@ object OpenAiAdapter : ProviderAdapter {
             }
         }
 
+        val effort = ReasoningEfforts.openAiEffort(ReasoningEffort.fromKey(reasoning))
         val root = JSONObject()
             .put("model", model)
             .put("messages", messages)
-            .put("temperature", TEMPERATURE)
-            .put("top_p", TOP_P)
             .put("max_tokens", MAX_TOKENS)
+        if (effort == null) {
+            root.put("temperature", TEMPERATURE).put("top_p", TOP_P)
+        } else {
+            root.put("reasoning_effort", effort)
+        }
         if (tools.isNotEmpty()) {
             val toolsArray = JSONArray()
             for (t in toolSchema(tools)) {
@@ -346,13 +390,23 @@ object AnthropicAdapter : ProviderAdapter {
         history: List<ChatTurn>,
         systemPrompt: String,
         tools: List<ToolDefinition>,
-        streaming: Boolean
+        streaming: Boolean,
+        reasoning: String
     ): JSONObject {
         val messages = JSONArray()
         for (turn in history) {
             when {
                 turn.toolCalls.isNotEmpty() -> {
                     val content = JSONArray()
+                    if (turn.thinkingBlocksJson.isNotBlank()) {
+                        try {
+                            val blocks = JSONArray(turn.thinkingBlocksJson)
+                            for (i in 0 until blocks.length()) {
+                                blocks.optJSONObject(i)?.let { content.put(it) }
+                            }
+                        } catch (e: Exception) {
+                        }
+                    }
                     if (turn.content.isNotBlank()) {
                         content.put(JSONObject().put("type", "text").put("text", turn.content))
                     }
@@ -388,13 +442,17 @@ object AnthropicAdapter : ProviderAdapter {
             }
         }
 
+        val budget = ReasoningEfforts.anthropicBudgetTokens(ReasoningEffort.fromKey(reasoning))
         val root = JSONObject()
             .put("model", model)
-            .put("max_tokens", MAX_TOKENS)
-            .put("temperature", TEMPERATURE)
-            .put("top_p", TOP_P)
             .put("system", systemPrompt)
             .put("messages", messages)
+        if (budget == null) {
+            root.put("max_tokens", MAX_TOKENS).put("temperature", TEMPERATURE).put("top_p", TOP_P)
+        } else {
+            root.put("max_tokens", budget + 4096)
+            root.put("thinking", JSONObject().put("type", "enabled").put("budget_tokens", budget))
+        }
         if (tools.isNotEmpty()) {
             val toolsArray = JSONArray()
             for (t in toolSchema(tools)) {
@@ -437,9 +495,11 @@ object AnthropicAdapter : ProviderAdapter {
         when (json.optString("type")) {
             "content_block_start" -> {
                 val block = json.optJSONObject("content_block")
-                if (block?.optString("type") == "tool_use") {
-                    val idx = json.optInt("index", 0)
-                    acc.anthropicToolAcc[idx] = ToolAcc(id = block.optString("id"), name = block.optString("name"))
+                val idx = json.optInt("index", 0)
+                when (block?.optString("type")) {
+                    "tool_use" -> acc.anthropicToolAcc[idx] = ToolAcc(id = block.optString("id"), name = block.optString("name"))
+                    "thinking" -> acc.beginThinkingBlock(idx, "thinking", null)
+                    "redacted_thinking" -> acc.beginThinkingBlock(idx, "redacted_thinking", block.optString("data"))
                 }
             }
             "content_block_delta" -> {
@@ -453,8 +513,13 @@ object AnthropicAdapter : ProviderAdapter {
                         val piece = if (delta.isNull("thinking")) "" else delta.optString("thinking", "")
                         if (piece.isNotEmpty()) {
                             acc.fullReasoning.append(piece)
+                            acc.appendThinkingText(json.optInt("index", 0), piece)
                             onReasoning(piece)
                         }
+                    }
+                    "signature_delta" -> {
+                        val signature = if (delta.isNull("signature")) "" else delta.optString("signature", "")
+                        if (signature.isNotEmpty()) acc.appendThinkingSignature(json.optInt("index", 0), signature)
                     }
                     "input_json_delta" -> {
                         val idx = json.optInt("index", 0)
@@ -500,7 +565,8 @@ object GoogleAdapter : ProviderAdapter {
         history: List<ChatTurn>,
         systemPrompt: String,
         tools: List<ToolDefinition>,
-        streaming: Boolean
+        streaming: Boolean,
+        reasoning: String
     ): JSONObject {
         val contents = JSONArray()
         for (turn in history) {
@@ -544,13 +610,15 @@ object GoogleAdapter : ProviderAdapter {
         }
 
         val root = JSONObject().put("contents", contents)
-        root.put(
-            "generationConfig",
-            JSONObject()
-                .put("temperature", TEMPERATURE)
-                .put("topP", TOP_P)
-                .put("maxOutputTokens", MAX_TOKENS)
-        )
+        val thinkingBudget = ReasoningEfforts.googleThinkingBudget(ReasoningEffort.fromKey(reasoning))
+        val generation = JSONObject()
+            .put("temperature", TEMPERATURE)
+            .put("topP", TOP_P)
+            .put("maxOutputTokens", if (thinkingBudget != null && thinkingBudget > 0) thinkingBudget + 2048 else MAX_TOKENS)
+        if (thinkingBudget != null) {
+            generation.put("thinkingConfig", JSONObject().put("thinkingBudget", thinkingBudget))
+        }
+        root.put("generationConfig", generation)
         if (systemPrompt.isNotBlank()) {
             root.put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
         }

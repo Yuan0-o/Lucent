@@ -143,11 +143,12 @@ off either means the model can chat but cannot read or modify your notes and tas
 ### 5.2 Web search
 
 Web search is off by default. When you switch it on and the assistant decides a search is needed,
-Lucent sends the search query to DuckDuckGo's search endpoints. If those return nothing usable, it
-may also query the English Wikipedia search API. The query text leaves your device; the results are
-returned to the assistant and included in its answer. The search service sees the query and your IP
-address. Web search is unavailable while the on-device model is in use, and Blackout Mode blocks it
-entirely.
+Lucent sends the search query to a public search engine. You choose which one, or leave it on
+Automatic, which tries them in turn until one answers: Bing, DuckDuckGo, Google, Brave, Mojeek,
+Yandex, Baidu, Sogou, 360 Search, and the Wikipedia search API. No search API key is used and no
+account is created. The query text leaves your device; the results come back to the assistant and
+are included in its answer. The engine that answers sees the query and your IP address. Web search
+needs the agent mode and, on the local model, the tool switch; Blackout Mode blocks it entirely.
 
 ### 5.3 Semantic search
 
@@ -296,8 +297,9 @@ main ones:
   the provider, or import a local model with no network at all. Each model keeps its own memory
   setting, which controls how much past conversation is included in each request; lower memory means
   less text leaves the device.
-- **Web search.** Settings → Assistant: the cloud assistant's switch sits under Personalisation,
-  the local model's under Local model. Both are off by default.
+- **Web search.** Settings → Assistant → Personalisation. One switch, off by default, with the
+  search engine beside it. It is hidden while the local model runs without agent mode, because
+  nothing can use it then, and it comes back exactly as you left it.
 - **Semantic search.** Settings → Assistant. It follows the active model: the local model keeps
   indexing on the device, the cloud model sends the text to your provider. Switch models to switch
   the behaviour, or leave the assistant off entirely.

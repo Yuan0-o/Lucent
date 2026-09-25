@@ -129,27 +129,6 @@ internal fun CloudModelSettingsPage(
 
     BackHeader(onBack = { onRoute(SettingsRoute.Assistant) })
 
-    val cloudAgentMode by repo.cloudAgentMode.collectAsState(initial = SettingsCache.cloudAgentMode)
-    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.agentModeTitle, color = onGradient, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(S.agentModeSub, color = onGradientMuted, fontSize = 12.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            androidx.compose.material3.Switch(
-                checked = cloudAgentMode,
-                onCheckedChange = { on ->
-                    SettingsCache.cloudAgentMode = on
-                    scope.launch { repo.setCloudAgentMode(on) }
-                }
-            )
-        }
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(S.apiSelectionTitle, color = onGradient, modifier = Modifier.weight(1f))

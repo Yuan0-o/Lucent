@@ -97,13 +97,13 @@ private object SettingsKeys {
 
     val LOCAL_BACKGROUND_REPLY = booleanPreferencesKey("local_background_reply")
 
-    val LOCAL_WEB_SEARCH_ENABLED = booleanPreferencesKey("local_web_search_enabled")
-
     val MEMORY_TIER_LOCAL = stringPreferencesKey("memory_tier_local")
 
-    val CLOUD_AGENT_MODE = booleanPreferencesKey("cloud_agent_mode")
+    val AGENT_MODE = booleanPreferencesKey("cloud_agent_mode")
 
-    val LOCAL_AGENT_MODE = booleanPreferencesKey("local_agent_mode")
+    val REASONING_EFFORT = stringPreferencesKey("reasoning_effort")
+
+    val WEB_SEARCH_ENGINE = stringPreferencesKey("web_search_engine")
 
     val MODEL_RECENTS = stringPreferencesKey("model_recents")
 
@@ -226,9 +226,9 @@ class SettingsRepository(private val context: Context) {
         val localToolsEnabled: Boolean = false,
         val localGpuEnabled: Boolean = false,
         val localBackgroundReplyEnabled: Boolean = false,
-        val localWebSearchEnabled: Boolean = false,
-        val cloudAgentMode: Boolean = true,
-        val localAgentMode: Boolean = true,
+        val agentMode: Boolean = true,
+        val reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
+        val webSearchEngine: String = com.lucent.app.data.WebSearchEngine.DEFAULT.key,
         val smallModelModeEnabled: Boolean = false,
         val webSearchEnabled: Boolean = false,
         val memoryTier: String = MemoryTier.DEFAULT.key,
@@ -302,9 +302,9 @@ class SettingsRepository(private val context: Context) {
             localToolsEnabled = prefs[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false,
             localGpuEnabled = prefs[SettingsKeys.LOCAL_GPU_ENABLED] ?: false,
             localBackgroundReplyEnabled = prefs[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false,
-            localWebSearchEnabled = prefs[SettingsKeys.LOCAL_WEB_SEARCH_ENABLED] ?: false,
-            cloudAgentMode = prefs[SettingsKeys.CLOUD_AGENT_MODE] ?: true,
-            localAgentMode = prefs[SettingsKeys.LOCAL_AGENT_MODE] ?: true,
+            agentMode = prefs[SettingsKeys.AGENT_MODE] ?: true,
+            reasoning = prefs[SettingsKeys.REASONING_EFFORT] ?: com.lucent.app.data.ReasoningEffort.DEFAULT.key,
+            webSearchEngine = prefs[SettingsKeys.WEB_SEARCH_ENGINE] ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key,
             smallModelModeEnabled = prefs[SettingsKeys.SMALL_MODEL_MODE] ?: false,
             webSearchEnabled = prefs[SettingsKeys.WEB_SEARCH_ENABLED] ?: false,
             memoryTier = prefs[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key,
@@ -435,13 +435,6 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.localModelEnabled = value
     }
 
-    val localWebSearchEnabled: Flow<Boolean> =
-        context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_WEB_SEARCH_ENABLED] ?: false }
-    suspend fun setLocalWebSearchEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_WEB_SEARCH_ENABLED] = value }
-        SettingsCache.localWebSearchEnabled = value
-    }
-
     val memoryTierLocal: Flow<String> =
         context.settingsDataStore.data.map { it[SettingsKeys.MEMORY_TIER_LOCAL] ?: MemoryTier.LOW.key }
     suspend fun setMemoryTierLocal(value: String) {
@@ -449,17 +442,32 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.memoryTierLocal = value
     }
 
-    val cloudAgentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_AGENT_MODE] ?: true }
-    suspend fun setCloudAgentMode(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_AGENT_MODE] = value }
-        SettingsCache.cloudAgentMode = value
+    val agentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AGENT_MODE] ?: true }
+    suspend fun setAgentMode(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.AGENT_MODE] = value }
+        SettingsCache.agentMode = value
     }
 
-    val localAgentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_AGENT_MODE] ?: true }
-    suspend fun setLocalAgentMode(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_AGENT_MODE] = value }
-        SettingsCache.localAgentMode = value
+    val reasoning: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.REASONING_EFFORT] ?: com.lucent.app.data.ReasoningEffort.DEFAULT.key
     }
+    suspend fun setReasoning(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.REASONING_EFFORT] = value }
+        SettingsCache.reasoning = value
+    }
+
+    val webSearchEngine: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.WEB_SEARCH_ENGINE] ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key
+    }
+    suspend fun setWebSearchEngine(value: String) {
+        val engine = com.lucent.app.data.WebSearchEngine.fromKey(value).key
+        context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENGINE] = engine }
+        SettingsCache.webSearchEngine = engine
+    }
+
+    suspend fun webSearchEngineOnce(): String =
+        context.settingsDataStore.data.first()[SettingsKeys.WEB_SEARCH_ENGINE]
+            ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key
 
     val localBackgroundReplyEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false }

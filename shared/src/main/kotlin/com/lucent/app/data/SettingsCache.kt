@@ -141,13 +141,13 @@ object SettingsCache {
     var localBackgroundReplyEnabled: Boolean = false
 
     @Volatile
-    var localWebSearchEnabled: Boolean = false
+    var agentMode: Boolean = true
 
     @Volatile
-    var cloudAgentMode: Boolean = true
+    var reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
 
     @Volatile
-    var localAgentMode: Boolean = true
+    var webSearchEngine: String = com.lucent.app.data.WebSearchEngine.DEFAULT.key
 
     @Volatile
     var smallModelModeEnabled: Boolean = false
@@ -238,9 +238,9 @@ object SettingsCache {
         localToolsEnabled = prefs.localToolsEnabled
         localGpuEnabled = prefs.localGpuEnabled
         localBackgroundReplyEnabled = prefs.localBackgroundReplyEnabled
-        localWebSearchEnabled = prefs.localWebSearchEnabled
-        cloudAgentMode = prefs.cloudAgentMode
-        localAgentMode = prefs.localAgentMode
+        agentMode = prefs.agentMode
+        reasoning = prefs.reasoning
+        webSearchEngine = prefs.webSearchEngine
         smallModelModeEnabled = prefs.smallModelModeEnabled
         webSearchEnabled = prefs.webSearchEnabled
         memoryTier = prefs.memoryTier

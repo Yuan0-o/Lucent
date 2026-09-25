@@ -8,7 +8,8 @@ data class ChatTurn(
     val attachmentMime: String? = null,
     val attachmentData: String? = null,
     val toolCalls: List<ToolCallRequest> = emptyList(),
-    val toolResults: List<ToolResultTurn> = emptyList()
+    val toolResults: List<ToolResultTurn> = emptyList(),
+    val thinkingBlocksJson: String = ""
 )
 
 data class ToolResultTurn(val id: String, val name: String, val content: String)
@@ -38,7 +39,8 @@ data class RawModelReply(
     val text: String?,
     val toolCalls: List<ToolCallRequest>,
     val imageMime: String? = null,
-    val imageData: String? = null
+    val imageData: String? = null,
+    val thinkingBlocksJson: String = ""
 )
 
 class ApiHttpException(val code: Int, val bodyText: String) :

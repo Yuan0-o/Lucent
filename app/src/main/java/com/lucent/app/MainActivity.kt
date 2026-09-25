@@ -137,6 +137,8 @@ enum class Screen {
         }
 }
 
+private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
+
 class MainActivity : FragmentActivity() {
 
     private val runningVersion: String by lazy {
@@ -276,8 +278,15 @@ class MainActivity : FragmentActivity() {
                 initial = com.lucent.app.data.SettingsCache.autoUpdateEnabled
             )
             LaunchedEffect(autoUpdateOn) {
-                if (autoUpdateOn) {
-                    com.lucent.app.data.AutoUpdate.report(null)
+                if (!autoUpdateOn) return@LaunchedEffect
+                com.lucent.app.data.AutoUpdate.report(null)
+                if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                    com.lucent.app.data.AutoUpdate.downloadOffered()
+                }
+                while (true) {
+                    delay(UPDATE_CHECK_INTERVAL_MS)
+                    if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
+                    if (com.lucent.app.data.AutoUpdate.offered != null) continue
                     if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
                         com.lucent.app.data.AutoUpdate.downloadOffered()
                     }

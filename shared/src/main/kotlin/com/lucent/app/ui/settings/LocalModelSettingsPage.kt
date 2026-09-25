@@ -57,7 +57,6 @@ internal fun LocalModelSettingsPage(
     onImportModelClick: () -> Unit,
     onImportMmprojClick: () -> Unit,
     onRemoveMmproj: () -> Unit,
-    onRequestUseLocalOn: () -> Unit,
     onRequestToolsOn: () -> Unit,
     onRequestGpuOn: () -> Unit,
     onRequestBackgroundOn: () -> Unit,
@@ -66,48 +65,19 @@ internal fun LocalModelSettingsPage(
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
     val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
     val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
     val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(
         initial = SettingsCache.localBackgroundReplyEnabled
     )
-    val localWebSearch by repo.localWebSearchEnabled.collectAsState(
-        initial = SettingsCache.localWebSearchEnabled
-    )
-    val localAgentMode by repo.localAgentMode.collectAsState(initial = SettingsCache.localAgentMode)
 
     BackHeader(onBack = { onRoute(SettingsRoute.Assistant) })
 
+    Spacer(modifier = Modifier.height(12.dp))
+
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.lmUseLocalToggle, color = onGradient, fontSize = 16.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = localModelEnabled,
-                onCheckedChange = { on ->
-                    if (on) onRequestUseLocalOn()
-                    else {
-                        SettingsCache.localModelEnabled = false
-                        AppScope.io.launch { repo.setLocalModelEnabled(false) }
-                    }
-                }
-            )
-        }
-        if (!localModelEnabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(S.lmEnableToConfigureNote, color = onGradientMuted, fontSize = 12.sp)
-        }
-    }
-
-    if (localModelEnabled) {
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(S.lmModelsTitle, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(S.lmModelsTitle, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
                 Text("${lmModels.size}/${LocalModelStore.MAX_MODELS}", color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -191,10 +161,8 @@ internal fun LocalModelSettingsPage(
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             LocalToggleRow(
                 title = S.lmGpuToggle,
-                detail = S.lmGpuSub,
                 checked = localGpuEnabled,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted
+                onGradient = onGradient
             ) { on ->
                 if (on) onRequestGpuOn()
                 else {
@@ -207,10 +175,8 @@ internal fun LocalModelSettingsPage(
 
             LocalToggleRow(
                 title = S.lmToolsToggle,
-                detail = S.lmToolsSub,
                 checked = localToolsEnabled,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted
+                onGradient = onGradient
             ) { on ->
                 if (on) onRequestToolsOn()
                 else {
@@ -222,37 +188,9 @@ internal fun LocalModelSettingsPage(
             Spacer(modifier = Modifier.height(14.dp))
 
             LocalToggleRow(
-                title = S.lmWebSearchToggle,
-                detail = S.lmWebSearchSub,
-                checked = localWebSearch,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted
-            ) { on ->
-                SettingsCache.localWebSearchEnabled = on
-                AppScope.io.launch { repo.setLocalWebSearchEnabled(on) }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            LocalToggleRow(
-                title = S.agentModeTitle,
-                detail = S.agentModeSub,
-                checked = localAgentMode,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted
-            ) { on ->
-                SettingsCache.localAgentMode = on
-                AppScope.io.launch { repo.setLocalAgentMode(on) }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            LocalToggleRow(
                 title = S.lmBackgroundToggle,
-                detail = S.lmBackgroundSub,
                 checked = localBackgroundReply,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted
+                onGradient = onGradient
             ) { on ->
                 if (on) onRequestBackgroundOn()
                 else {
@@ -262,29 +200,20 @@ internal fun LocalModelSettingsPage(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 
-        AssistantMemorySection(repo = repo, local = true)
-    }
+    AssistantMemorySection(repo = repo, local = true)
 }
 
 @Composable
 private fun LocalToggleRow(
     title: String,
-    detail: String,
     checked: Boolean,
     onGradient: Color,
-    onGradientMuted: Color,
     onChange: (Boolean) -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = onGradient, fontSize = 16.sp)
-            if (detail.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(detail, color = onGradientMuted, fontSize = 12.sp)
-            }
-        }
+        Text(title, color = onGradient, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Spacer(modifier = Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = onChange)
     }

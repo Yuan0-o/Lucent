@@ -17,7 +17,8 @@ interface AssistantLlmClient {
         tools: List<ToolDefinition>,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit = {},
-        onRetry: (Int) -> Unit = {}
+        onRetry: (Int) -> Unit = {},
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
     ): Result<RawModelReply>
 }
 
@@ -32,10 +33,11 @@ object RealAssistantLlmClient : AssistantLlmClient {
         tools: List<ToolDefinition>,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit,
-        onRetry: (Int) -> Unit
+        onRetry: (Int) -> Unit,
+        reasoning: String
     ): Result<RawModelReply> =
         LlmClient.streamChat(
             baseUrl, spec, apiKey, model, history, systemPrompt, tools,
-            onDelta, onReasoning, onRetry
+            onDelta, onReasoning, onRetry, reasoning
         )
 }

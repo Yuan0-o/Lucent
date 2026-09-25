@@ -104,13 +104,13 @@ class SettingsRepositoryTest {
         repo.setMemoryTier(MemoryTier.MEDIUM.key)
         repo.setWebSearchEnabled(true)
         repo.setMemoryTierLocal(MemoryTier.LOW.key)
-        repo.setLocalWebSearchEnabled(false)
+        repo.setAgentMode(true)
 
         repo.setLocalModelEnabled(true)
         assertEquals(MemoryTier.MEDIUM.key, repo.memoryTier.first())
         assertEquals(true, repo.webSearchEnabled.first())
         assertEquals(MemoryTier.LOW.key, repo.memoryTierLocal.first())
-        assertEquals(false, repo.localWebSearchEnabled.first())
+        assertEquals(true, repo.agentMode.first())
 
         repo.setLocalModelEnabled(false)
         assertEquals(MemoryTier.MEDIUM.key, repo.memoryTier.first())

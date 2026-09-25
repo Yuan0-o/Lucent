@@ -344,8 +344,10 @@ internal object BackupImporter {
             if (restoreGeneral) {
                 if (s.has("memoryTier")) settings.setMemoryTier(s.optString("memoryTier"))
                 if (s.has("memoryTierLocal")) settings.setMemoryTierLocal(s.optString("memoryTierLocal"))
-                if (s.has("cloudAgentMode")) settings.setCloudAgentMode(s.optBoolean("cloudAgentMode", true))
-                if (s.has("localAgentMode")) settings.setLocalAgentMode(s.optBoolean("localAgentMode", true))
+                if (s.has("agentMode")) settings.setAgentMode(s.optBoolean("agentMode", true))
+                if (s.has("cloudAgentMode")) settings.setAgentMode(s.optBoolean("cloudAgentMode", true))
+                if (s.has("reasoning")) settings.setReasoning(s.optString("reasoning"))
+                if (s.has("webSearchEngine")) settings.setWebSearchEngine(s.optString("webSearchEngine"))
                 if (s.has("webSearchEnabled")) settings.setWebSearchEnabled(s.optBoolean("webSearchEnabled"))
                 if (s.has("typingHaptics")) settings.setTypingHapticsEnabled(s.optBoolean("typingHaptics", true))
                 if (s.has("markdownEnabled")) settings.setMarkdownEnabled(s.optBoolean("markdownEnabled"))
@@ -393,9 +395,6 @@ internal object BackupImporter {
             }
             if (restoreLocal && s.has("localBackgroundReply")) {
                 settings.setLocalBackgroundReplyEnabled(s.optBoolean("localBackgroundReply"))
-            }
-            if (restoreLocal && s.has("localWebSearchEnabled")) {
-                settings.setLocalWebSearchEnabled(s.optBoolean("localWebSearchEnabled"))
             }
 
             if (restoreGeneral && s.has("systemIntegrationEnabled")) {

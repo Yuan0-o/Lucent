@@ -57,6 +57,8 @@ import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.lucentTypography
 import kotlinx.coroutines.delay
 
+private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
+
 @Composable
 fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val context = DesktopContext
@@ -82,8 +84,15 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = startup.autoUpdateEnabled)
     LaunchedEffect(autoUpdateOn) {
-        if (autoUpdateOn) {
-            com.lucent.app.data.AutoUpdate.report(null)
+        if (!autoUpdateOn) return@LaunchedEffect
+        com.lucent.app.data.AutoUpdate.report(null)
+        if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
+            com.lucent.app.data.AutoUpdate.downloadOffered()
+        }
+        while (true) {
+            kotlinx.coroutines.delay(UPDATE_CHECK_INTERVAL_MS)
+            if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
+            if (com.lucent.app.data.AutoUpdate.offered != null) continue
             if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
                 com.lucent.app.data.AutoUpdate.downloadOffered()
             }

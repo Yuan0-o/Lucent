@@ -1805,7 +1805,10 @@ object AppTools {
                 if (query.isBlank()) {
                     ToolExecResult("No search query was provided.", success = false)
                 } else {
-                    WebSearchClient.search(query).fold(
+                    val engine = runCatching {
+                        com.lucent.app.data.SettingsRepository(appContext).webSearchEngineOnce()
+                    }.getOrDefault(com.lucent.app.data.WebSearchEngine.AUTO.key)
+                    WebSearchClient.search(query, engine).fold(
                         onSuccess = { ToolExecResult(it) },
                         onFailure = { ToolExecResult("Web search couldn't be completed: ${it.message ?: "network error"}.", success = false) }
                     )

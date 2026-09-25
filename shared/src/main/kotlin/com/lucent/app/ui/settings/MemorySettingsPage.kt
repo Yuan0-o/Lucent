@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -34,28 +33,53 @@ internal fun AssistantMemorySection(repo: SettingsRepository, local: Boolean) {
     )
     val current = MemoryTier.fromKey(savedMemoryTier)
 
-    LaunchedEffect(current) {
-        if (current == MemoryTier.HIGH) writeTier(repo, local, MemoryTier.MEDIUM)
-    }
-
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.memoryCostTitle, color = onGradient, fontSize = 16.sp)
         Spacer(modifier = Modifier.height(12.dp))
 
-        MemoryTierRow(
-            selected = current == MemoryTier.LOW,
-            title = S.memoryWeakTitle,
-            onGradient = onGradient,
-            onGradientMuted = onGradientMuted,
-            onClick = { writeTier(repo, local, MemoryTier.LOW) }
-        )
-        MemoryTierRow(
-            selected = current == MemoryTier.MEDIUM,
-            title = S.memoryStrongTitle,
-            onGradient = onGradient,
-            onGradientMuted = onGradientMuted,
-            onClick = { writeTier(repo, local, MemoryTier.MEDIUM) }
-        )
+        if (local) {
+            MemoryTierRow(
+                selected = current == MemoryTier.MEDIUM,
+                title = S.memoryStrongTitle,
+                detail = S.memoryLocalStrongSub,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = { writeTier(repo, true, MemoryTier.MEDIUM) }
+            )
+            MemoryTierRow(
+                selected = current == MemoryTier.LOW,
+                title = S.memoryWeakTitle,
+                detail = S.memoryLocalWeakSub,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = { writeTier(repo, true, MemoryTier.LOW) }
+            )
+        } else {
+            MemoryTierRow(
+                selected = current == MemoryTier.HIGH,
+                title = S.memoryHighTitle,
+                detail = S.memoryCloudHighSub,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = { writeTier(repo, false, MemoryTier.HIGH) }
+            )
+            MemoryTierRow(
+                selected = current == MemoryTier.MEDIUM,
+                title = S.memoryMediumTitle,
+                detail = S.memoryCloudMediumSub,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = { writeTier(repo, false, MemoryTier.MEDIUM) }
+            )
+            MemoryTierRow(
+                selected = current == MemoryTier.LOW,
+                title = S.memoryLowTitle,
+                detail = S.memoryCloudLowSub,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = { writeTier(repo, false, MemoryTier.LOW) }
+            )
+        }
     }
 }
 

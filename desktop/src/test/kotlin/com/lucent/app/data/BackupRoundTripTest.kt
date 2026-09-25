@@ -131,7 +131,7 @@ class BackupRoundTripTest {
             "themeMode", "palette", "dynamicColorEnabled", "font", "fontLibrary",
             "assistantName", "assistantStyle",
             "memoryTier", "memoryTierLocal", "webSearchEnabled", "typingHaptics", "markdownEnabled",
-            "cloudAgentMode", "localAgentMode",
+            "agentMode", "reasoning", "webSearchEngine",
             "linksEnabled", "backgroundAnimationEnabled", "appLanguage", "notesSort",
             "tasksSort", "notebooksSort", "systemIntegrationEnabled", "startupLoggingEnabled",
             "savedSearches", "customTemplates", "templateDraft", "hiddenTemplates",
@@ -145,7 +145,7 @@ class BackupRoundTripTest {
             "crashShieldEnabled", "blackoutEnabled",
             "autoUpdateEnabled", "privilegedEnabled",
             "localModelEnabled", "localToolsEnabled", "localGpuEnabled",
-            "localBackgroundReply", "localWebSearchEnabled", "localModelManifest",
+            "localBackgroundReply", "localModelManifest",
             "baseUrl", "apiSpec", "apiKeyEncrypted", "model", "apiProfiles", "apiProfileSelected"
         )
         val manifestSource = listOf(

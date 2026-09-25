@@ -181,11 +181,8 @@ fun AssistantScreen(active: Boolean = true) {
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
     val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
     val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
-    val localWebSearchEnabled by repo.localWebSearchEnabled.collectAsState(
-        initial = SettingsCache.localWebSearchEnabled
-    )
-    val cloudAgentMode by repo.cloudAgentMode.collectAsState(initial = SettingsCache.cloudAgentMode)
-    val localAgentMode by repo.localAgentMode.collectAsState(initial = SettingsCache.localAgentMode)
+    val agentModeOn by repo.agentMode.collectAsState(initial = SettingsCache.agentMode)
+    val reasoningKey by repo.reasoning.collectAsState(initial = SettingsCache.reasoning)
     val memoryTierLocalKey by repo.memoryTierLocal.collectAsState(initial = SettingsCache.memoryTierLocal)
     val modelRecents by repo.modelRecents.collectAsState(initial = emptyList())
     val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = SettingsCache.smallModelModeEnabled)
@@ -1120,8 +1117,9 @@ fun AssistantScreen(active: Boolean = true) {
                                         useLocalGpu = localGpuEnabled,
                                         confirmTools = confirmToolsEnabled,
                                         smallModelMode = smallModelMode,
-                                        agentMode = if (useLocal) localAgentMode else cloudAgentMode,
-                                        localWebSearch = localWebSearchEnabled
+                                        agentMode = agentModeOn,
+                                        localWebSearch = webSearchEnabled,
+                                        reasoning = reasoningKey
                                     )
                                 },
                                 enabled = !sending,
@@ -1301,8 +1299,9 @@ fun AssistantScreen(active: Boolean = true) {
                 useLocalGpu = localGpuEnabled,
                 confirmTools = confirmToolsEnabled,
                 smallModelMode = smallModelMode,
-                agentMode = if (useLocal) localAgentMode else cloudAgentMode,
-                localWebSearch = localWebSearchEnabled
+                agentMode = agentModeOn,
+                localWebSearch = webSearchEnabled,
+                reasoning = reasoningKey
             )
             inputFocus.requestFocus()
         }
@@ -1311,6 +1310,18 @@ fun AssistantScreen(active: Boolean = true) {
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (!localModelEnabled && agentModeOn) {
+                ReasoningMenuButton(
+                    providerId = activeApiProfile?.provider ?: com.lucent.app.data.ApiProviders.CUSTOM,
+                    currentKey = reasoningKey,
+                    onSelect = { picked ->
+                        SettingsCache.reasoning = picked.key
+                        scope.launch { repo.setReasoning(picked.key) }
+                    },
+                    tint = onGradient,
+                    mutedTint = onGradientMuted
+                )
+            }
             Box {
                 IconButton(onClick = { attachMenuOpen = true }, modifier = Modifier.height(56.dp)) {
                     Icon(Icons.Default.AttachFile, contentDescription = com.lucent.app.i18n.S.a11yAttachFile, tint = onGradient)

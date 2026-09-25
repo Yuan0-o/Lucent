@@ -92,12 +92,13 @@ object LlmClient {
 
     suspend fun sendChat(
         baseUrl: String, spec: ApiSpec, apiKey: String, model: String,
-        history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>
+        history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>,
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
     ): Result<RawModelReply> = withContext(Dispatchers.IO) {
         try {
             val adapter = adapterFor(spec)
             val url = adapter.chatUrl(baseUrl, model, streaming = false)
-            val body = adapter.buildBody(model, history, systemPrompt, tools, streaming = false)
+            val body = adapter.buildBody(model, history, systemPrompt, tools, streaming = false, reasoning = reasoning)
             val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
             adapter.addAuthHeaders(requestBuilder, apiKey)
             val response = client.newCall(requestBuilder.build()).execute()
@@ -115,7 +116,8 @@ object LlmClient {
         history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit = {},
-        onRetry: (Int) -> Unit = {}
+        onRetry: (Int) -> Unit = {},
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
     ): Result<RawModelReply> = withContext(Dispatchers.IO) {
         val adapter = adapterFor(spec)
         val streamJob = coroutineContext[kotlinx.coroutines.Job]
@@ -125,7 +127,9 @@ object LlmClient {
 
             val result: Result<RawModelReply> = try {
                 val url = adapter.chatUrl(baseUrl, model, streaming = true)
-                val body = adapter.buildBody(model, history, systemPrompt, tools, streaming = true)
+                val body = adapter.buildBody(
+                    model, history, systemPrompt, tools, streaming = true, reasoning = reasoning
+                )
                 if (spec != ApiSpec.GOOGLE) body.put("stream", true)
 
                 val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
@@ -148,7 +152,12 @@ object LlmClient {
                             try { response.close() } catch (_: Throwable) {}
                         }
                         val toolCalls = acc.toolCalls(useAnthropicAcc = spec == ApiSpec.ANTHROPIC)
-                        Result.success(RawModelReply(acc.fullText.toString(), toolCalls, acc.returnedImageMime, acc.returnedImageData))
+                        Result.success(
+                            RawModelReply(
+                                acc.fullText.toString(), toolCalls, acc.returnedImageMime, acc.returnedImageData,
+                                acc.thinkingBlocksJson()
+                            )
+                        )
                     }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {

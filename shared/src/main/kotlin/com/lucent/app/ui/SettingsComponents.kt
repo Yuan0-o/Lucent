@@ -108,19 +108,31 @@ internal fun StepperRow(
 }
 
 @Composable
-internal fun NavCard(title: String, subtitle: String, onClick: () -> Unit) {
+internal fun NavCard(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null
+) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .frostedGlass()
             .clickable { onClick() }
-            .padding(16.dp)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, color = onGradient, fontSize = 18.sp)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(subtitle, color = onGradientMuted, fontSize = 13.sp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = onGradient, fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(subtitle, color = onGradientMuted, fontSize = 13.sp)
+        }
+        if (trailing != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            trailing()
+        }
     }
 }
 
@@ -205,12 +217,11 @@ internal fun SettingsBreadcrumb(
                     modifier = Modifier.padding(horizontal = 4.dp).alignByBaseline()
                 )
             }
-            val isRoot = crumb == SettingsRoute.Root
             val isLast = index == crumbs.lastIndex
             Text(
                 text = SettingsTrail.title(crumb),
                 color = if (isLast) onGradient else onGradientMuted,
-                fontSize = if (isRoot) rootSize else rootSize / 2,
+                fontSize = rootSize,
                 maxLines = 1,
                 modifier = Modifier
                     .alignByBaseline()

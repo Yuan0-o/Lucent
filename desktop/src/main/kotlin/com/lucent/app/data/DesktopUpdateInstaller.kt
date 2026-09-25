@@ -76,7 +76,24 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
         AutoUpdate.markPhase(AutoUpdate.Phase.INSTALLING)
         val result = PrivilegedShell.installPackage(file.absolutePath, file.length())
         log("update: installer started ok=${result.success} ${result.stderr.take(200).trim()}")
+        if (result.success) scheduleRelaunch()
         return result.success
+    }
+
+    private fun scheduleRelaunch() {
+        val launcher = System.getProperty("jpackage.app-path")
+            ?: ProcessHandle.current().parent().orElse(null)?.info()?.command().orElse("")
+            ?: return
+        if (launcher.isBlank()) return
+        runCatching {
+            ProcessBuilder(
+                "cmd", "/c",
+                "ping -n 13 127.0.0.1 > nul & start \"\" \"" + launcher + "\""
+            ).start()
+            log("update: Lucent will reopen once the installer finishes")
+        }.onFailure {
+            log("update: could not arrange a relaunch (${it::class.simpleName})")
+        }
     }
 
     override fun discard(info: ReleaseInfo) {

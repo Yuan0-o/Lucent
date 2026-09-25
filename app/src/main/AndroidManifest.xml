@@ -127,6 +127,15 @@
         </provider>
 
         <receiver
+            android:name=".data.PostUpdateReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".widget.NewNoteWidget"
             android:label="@string/widget_label_new_note"
             android:exported="true">

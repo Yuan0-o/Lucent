@@ -1,6 +1,6 @@
 <div align="center">
 
-[🇬🇧 English](./README.md) · [🇨🇳 简体中文](./README.zh-CN.md) · [🇯🇵 日本語](./README.ja.md) · [🇰🇷 한국어](./README.ko.md)
+[🇬🇧 English](./README.md) · [🇨🇳 简体中文](./docs/README.zh-CN.md) · [🇯🇵 日本語](./docs/README.ja.md) · [🇰🇷 한국어](./docs/README.ko.md)
 
 </div>
 
@@ -169,7 +169,7 @@ month, and notice that you stopped noticing.
 
 Underneath the glass, Lucent is a great deal of other people's excellent work. It would be poor
 manners — and, in one or two cases, an outright licence violation — not to say so out loud. The full
-texts and copyright notices live in **[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md)**; the
+texts and copyright notices live in **[`THIRD-PARTY-NOTICES.md`](./docs/THIRD-PARTY-NOTICES.md)**; the
 short version, with our gratitude, is this:
 
 | Borrowed brilliance | Doing the job of | Under |
@@ -222,7 +222,7 @@ so if you reuse Lucent, keep the `LICENSE` file (and the name on it) with what y
 square. The third-party components above make their own, similarly modest requests; honour those in
 the same spirit and everyone stays friends.
 
-Privacy policy: **[`PRIVACY.md`](https://github.com/Yuan0-o/Lucent/blob/main/PRIVACY.md)** — what Lucent stores, what leaves your device, and every control you hold.
+Privacy policy: **[`PRIVACY/PRIVACY.md`](https://github.com/Yuan0-o/Lucent/blob/main/PRIVACY/PRIVACY.md)** — what Lucent stores, what leaves your device, and every control you hold.
 
 ## Contributing
 
