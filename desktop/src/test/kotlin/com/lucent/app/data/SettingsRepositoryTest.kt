@@ -98,18 +98,22 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun localModelToggleParksAndRestoresTier() = runBlocking {
+    fun localModelToggleLeavesTheCloudSettingsAlone() = runBlocking {
         val dir = freshDir()
         val repo = SettingsRepository(TestContext(dir))
-        repo.setMemoryTier(MemoryTier.HIGH.key)
+        repo.setMemoryTier(MemoryTier.MEDIUM.key)
         repo.setWebSearchEnabled(true)
+        repo.setMemoryTierLocal(MemoryTier.LOW.key)
+        repo.setLocalWebSearchEnabled(false)
 
         repo.setLocalModelEnabled(true)
-        assertEquals(MemoryTier.LOW.key, repo.memoryTier.first())
-        assertEquals(false, repo.webSearchEnabled.first())
+        assertEquals(MemoryTier.MEDIUM.key, repo.memoryTier.first())
+        assertEquals(true, repo.webSearchEnabled.first())
+        assertEquals(MemoryTier.LOW.key, repo.memoryTierLocal.first())
+        assertEquals(false, repo.localWebSearchEnabled.first())
 
         repo.setLocalModelEnabled(false)
-        assertEquals(MemoryTier.HIGH.key, repo.memoryTier.first())
+        assertEquals(MemoryTier.MEDIUM.key, repo.memoryTier.first())
         assertEquals(true, repo.webSearchEnabled.first())
     }
 }

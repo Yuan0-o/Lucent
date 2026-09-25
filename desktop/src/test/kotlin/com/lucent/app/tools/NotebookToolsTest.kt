@@ -254,8 +254,16 @@ class NotebookToolsTest {
             assertTrue(deleted.success, deleted.summary)
             assertTrue(deleted.summary.contains("not deleted"), "got ${deleted.summary}")
             assertTrue(db.notebookDao().getAllOnce().isEmpty())
-            assertEquals(0, db.notebookDao().getItemsOnce(tripsId).size)
+            assertEquals(1, db.notebookDao().getTrashedOnce().size)
+            assertEquals(1, db.notebookDao().getItemsOnce(tripsId).size)
             assertNotNull(db.noteDao().getByIdOnce(noteId))
+
+            val trash = exec(db, "list_notebook_trash", "{}")
+            assertTrue(trash.summary.contains("Trips"), trash.summary)
+
+            val restored = exec(db, "restore_notebook_from_trash", """{"notebook":"Trips"}""")
+            assertTrue(restored.success, restored.summary)
+            assertEquals(1, db.notebookDao().getAllOnce().size)
         }
     }
 
