@@ -15,6 +15,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.math.roundToInt
 
 enum class ExportFormat(val label: String, val extension: String, val mime: String) {
     MARKDOWN("Markdown (.md)", "md", "text/markdown"),
@@ -189,11 +190,14 @@ object DocumentExport {
         val spans = RichText.load(spansJson, text)
         if (spans.isEmpty()) return docxPara(text, spaceBeforeTwips = spaceBeforeTwips)
 
-        val highlightNames = listOf("yellow", "green", "cyan", "magenta", "darkYellow")
+        val highlightNames = listOf(
+            "yellow", "green", "cyan", "magenta", "darkYellow", "darkMagenta", "darkCyan", "red"
+        )
 
         fun styleAt(i: Int): DocxRunStyle {
             var bold = false; var light = false; var italic = false; var hl = -1
             var col = RichText.TEXT_COLOR_DEFAULT
+            var size = RichText.TEXT_SIZE_DEFAULT
             spans.forEach { s ->
                 if (i >= s.start && i < s.end) when (s.kind) {
                     RichSpan.Kind.BOLD -> bold = true
@@ -201,9 +205,10 @@ object DocumentExport {
                     RichSpan.Kind.ITALIC -> italic = true
                     RichSpan.Kind.HIGHLIGHT -> hl = s.color
                     RichSpan.Kind.COLOR -> col = s.color
+                    RichSpan.Kind.SIZE -> size = s.color
                 }
             }
-            return DocxRunStyle(bold && !light, italic, hl, col)
+            return DocxRunStyle(bold && !light, italic, hl, col, size)
         }
 
         val runs = StringBuilder()
@@ -217,12 +222,15 @@ object DocumentExport {
                 while (j < line.length && styleAt(lineStart + j) == style) j++
                 val bold = style.bold; val italic = style.italic; val hl = style.highlight
                 val argb = RichText.textColorArgb(style.color)
+                val sizeHalfPt = (DOCX_RICH_BASE_PT * RichText.textSizeScale(style.size)).roundToInt() * 2
+                val sized = style.size != RichText.TEXT_SIZE_DEFAULT
                 val rPr = buildString {
-                    if (bold || italic || hl >= 0 || argb != null) {
+                    if (bold || italic || hl >= 0 || argb != null || sized) {
                         append("<w:rPr>")
                         if (bold) append("<w:b/>")
                         if (italic) append("<w:i/>")
                         if (argb != null) append("<w:color w:val=\"" + hex6(argb) + "\"/>")
+                        if (sized) append("<w:sz w:val=\"$sizeHalfPt\"/><w:szCs w:val=\"$sizeHalfPt\"/>")
                         if (hl >= 0) append("<w:highlight w:val=\"" +
                             highlightNames[hl.coerceIn(0, highlightNames.lastIndex)] + "\"/>")
                         append("</w:rPr>")
@@ -341,6 +349,7 @@ object DocumentExport {
     private const val PAGE_W = 595f
     private const val PAGE_H = 842f
     private const val MARGIN = 42f
+    private const val DOCX_RICH_BASE_PT = 12f
 
     private data class PdfStyle(val size: Float, val bold: Boolean, val gray: Boolean = false)
 
@@ -502,7 +511,7 @@ object DocumentExport {
             }
             if (pieces.isEmpty()) { y += lineAdvance; return }
 
-            fun sizeOf(run: RichText.StyledRun) = if (run.light) base.size * 0.94f else base.size
+            fun sizeOf(run: RichText.StyledRun) = (if (run.light) base.size * 0.94f else base.size) * run.sizeScale
             fun widthOf(p: Piece) = width(fontFor(p.text), p.text, sizeOf(p.run))
 
             var line = ArrayList<Piece>()
@@ -767,7 +776,8 @@ private data class DocxRunStyle(
     val bold: Boolean,
     val italic: Boolean,
     val highlight: Int,
-    val color: Int
+    val color: Int,
+    val size: Int
 )
 
 private fun hex6(argb: Int): String = String.format("%06X", argb and 0xFFFFFF)

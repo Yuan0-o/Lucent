@@ -63,6 +63,43 @@ class UpdateDownloadService : Service() {
 
         fun partialFile(context: Context, name: String): File =
             File(File(context.cacheDir, "updates").apply { mkdirs() }, name)
+
+        fun deleteStoredCopy(context: Context, name: String): Boolean {
+            if (name.isBlank()) return false
+            val folder = SettingsCache.autoBackup.folderUri
+            if (folder.isBlank()) return false
+            return try {
+                val tree = Uri.parse(folder)
+                val resolver = context.contentResolver
+                val children = DocumentsContract.buildChildDocumentsUriUsingTree(
+                    tree,
+                    DocumentsContract.getTreeDocumentId(tree)
+                )
+                var found: Uri? = null
+                resolver.query(
+                    children,
+                    arrayOf(
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                    ),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        if (cursor.getString(1) == name) {
+                            found = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0))
+                            break
+                        }
+                    }
+                }
+                val document = found ?: return false
+                DocumentsContract.deleteDocument(resolver, document)
+            } catch (t: Throwable) {
+                StartupLog.event(context, "update: the stored copy could not be removed (${t.message})")
+                false
+            }
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -132,7 +169,7 @@ class UpdateDownloadService : Service() {
                 StartupLog.event(applicationContext, "update: the installer was placed in the backup folder")
             }
             AutoUpdate.reportProgress(1f)
-            AutoUpdate.reportDownloadReady()
+            AutoUpdate.reportDownloadReady(listOf(name))
             AutoUpdate.report(null)
             stopForegroundCompat()
             notifyReady(stored)

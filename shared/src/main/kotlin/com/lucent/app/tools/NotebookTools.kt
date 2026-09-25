@@ -30,6 +30,21 @@ object NotebookTools {
             )
         ),
         ToolDefinition(
+            name = "read_notebook",
+            description = "Show one NOTEBOOK in full, matched by its name: its cover colour, whether it is pinned, when it was created and last changed, how many notes and tasks it groups, and every note and task inside it with the same summaries list_notes and list_tasks give. It also says which other notebooks each item also sits in, so you can see the whole structure before you change anything. Read-only.",
+            params = listOf(ToolParam("notebook", "string", "The name (or part of it) of the notebook"))
+        ),
+        ToolDefinition(
+            name = "update_notebook",
+            description = "Change a NOTEBOOK itself in one go, matched by its current name: give it a new name, a new cover colour, and/or pin or unpin it. The notes and tasks inside are untouched. Use add_to_notebook, remove_from_notebook and move_to_notebook to change what it holds instead.",
+            params = listOf(
+                ToolParam("notebook", "string", "The current name (or part of it) of the notebook"),
+                ToolParam("new_title", "string", "A new name for the notebook. Leave out to keep the current one.", required = false),
+                ToolParam("cover", "string", "A new cover colour: crimson, ocean, forest, amber, or plum. Leave out to keep the current one.", required = false),
+                ToolParam("pinned", "boolean", "true to pin it to the front of the shelf, false to unpin it. Leave out to leave it as it is.", required = false)
+            )
+        ),
+        ToolDefinition(
             name = "rename_notebook",
             description = "Rename a NOTEBOOK, matched by its current name (a close partial match is accepted). The notes and tasks inside it are untouched.",
             params = listOf(
@@ -139,6 +154,8 @@ object NotebookTools {
                 if (a.optBoolean("pinned", true)) S.ccPinNotebook(s("notebook", "title", "name"))
                 else S.ccUnpinNotebook(s("notebook", "title", "name"))
             "move_notebook" -> S.ccMoveNotebook(s("notebook"), s("position"))
+            "read_notebook" -> S.ccReadNotebook(s("notebook", "title", "name"))
+            "update_notebook" -> S.ccUpdateNotebook(s("notebook", "title", "name"))
             "restore_notebook_from_trash" -> S.ccRestoreNotebook(s("notebook", "title", "name"))
             "rename_notebook" -> S.ccRenameNotebook(s("notebook"), s("new_title", "new_name"))
             "delete_notebook" -> S.ccTrashNotebook(s("notebook", "title", "name"))
@@ -156,7 +173,7 @@ object NotebookTools {
             argOf(a, "position", S.confirmEditItemLabel),
             argOf(a, "relative_to", S.confirmEditTitleLabel)
         )
-        "rename_notebook" -> listOfNotNull(argOf(a, "new_title", S.confirmEditNewTitleLabel))
+        "rename_notebook", "update_notebook" -> listOfNotNull(argOf(a, "new_title", S.confirmEditNewTitleLabel))
         else -> emptyList()
     }
 
@@ -382,6 +399,111 @@ object NotebookTools {
             }
         }
 
+        "read_notebook" -> {
+            val all = db.notebookDao().getAllOnce()
+            val query = args.firstString("notebook", "title", "name")
+            val notebook = matchNotebook(all, query)
+            if (notebook == null) {
+                notFoundNotebook(query, all)
+            } else {
+                val members = db.notebookDao().getItemsOnce(notebook.id)
+                val notes = notesIn(db, members)
+                val tasks = tasksIn(db, members)
+                val shown = notes.size + tasks.size
+                val elsewhere = membershipLabels(db, all, notebook.id)
+                val sb = StringBuilder()
+                sb.append("Notebook \"").append(displayName(notebook)).append("\"\n")
+                sb.append("- cover: ").append(notebook.color.ifBlank { "crimson" })
+                sb.append(", ").append(if (notebook.pinned) "pinned to the front" else "not pinned").append("\n")
+                sb.append("- created ").append(stamp(notebook.createdAt))
+                sb.append(", last changed ").append(stamp(notebook.updatedAt)).append("\n")
+                sb.append("- holds ").append(itemCountLabel(notes.size, tasks.size)).append("\n")
+                if (members.size > shown) {
+                    sb.append("- ").append(members.size - shown)
+                    sb.append(" grouped item(s) are in the Trash or hidden, so they are not listed here\n")
+                }
+                if (notes.isNotEmpty()) {
+                    sb.append("Notes:\n")
+                    notes.forEach { entry ->
+                        sb.append("- ").append(AppTools.summarize(entry.second))
+                        elsewhere[NotebookItem.KIND_NOTE to entry.second.id]?.let { sb.append(" ").append(it) }
+                        sb.append("\n")
+                    }
+                }
+                if (tasks.isNotEmpty()) {
+                    sb.append("Tasks:\n")
+                    tasks.forEach { entry ->
+                        sb.append("- ").append(AppTools.summarize(entry.second))
+                        elsewhere[NotebookItem.KIND_TASK to entry.second.id]?.let { sb.append(" ").append(it) }
+                        sb.append("\n")
+                    }
+                }
+                if (shown == 0) {
+                    sb.append("Nothing is grouped in this notebook yet. Use add_to_notebook to put a note ")
+                    sb.append("or task in it.")
+                }
+                ToolExecResult(sb.toString().trim())
+            }
+        }
+
+        "update_notebook" -> {
+            val all = db.notebookDao().getAllOnce()
+            val query = args.firstString("notebook", "title", "name")
+            val notebook = matchNotebook(all, query)
+            val newTitle = args.firstString("new_title", "new_name").trim()
+            val coverRaw = args.firstString("cover", "colour", "color").trim().lowercase()
+            val pinned = if (args.has("pinned")) args.optBoolean("pinned") else null
+            val cover = if (coverRaw.isBlank()) {
+                null
+            } else {
+                com.lucent.app.ui.NotebookColor.entries.firstOrNull { it.key == coverRaw }
+            }
+            if (notebook == null) {
+                notFoundNotebook(query, all)
+            } else if (newTitle.isBlank() && coverRaw.isBlank() && pinned == null) {
+                ToolExecResult(
+                    "Nothing was given to change. Pass new_title, cover, or pinned.",
+                    success = false
+                )
+            } else if (coverRaw.isNotBlank() && cover == null) {
+                ToolExecResult(
+                    "\"$coverRaw\" isn't a cover colour this app has. Use one of: " +
+                        com.lucent.app.ui.NotebookColor.entries.joinToString(", ") { it.key } + ".",
+                    success = false
+                )
+            } else {
+                val updated = notebook.copy(
+                    title = newTitle.ifBlank { notebook.title },
+                    color = cover?.key ?: notebook.color,
+                    pinned = pinned ?: notebook.pinned,
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.notebookDao().update(updated)
+                val changes = ArrayList<String>()
+                if (newTitle.isNotBlank() && newTitle != notebook.title) {
+                    changes.add("renamed to \"$newTitle\"")
+                }
+                if (cover != null && cover.key != notebook.color) {
+                    changes.add("given a ${cover.key} cover")
+                }
+                if (pinned != null && pinned != notebook.pinned) {
+                    changes.add(if (pinned) "pinned to the front of the shelf" else "unpinned")
+                }
+                val kept = db.notebookDao().getItemsOnce(notebook.id).size
+                val holding = if (kept == 0) {
+                    "It is empty."
+                } else {
+                    "Its $kept grouped item${if (kept == 1) "" else "s"} ${if (kept == 1) "is" else "are"} unchanged."
+                }
+                val what = if (changes.isEmpty()) {
+                    "\"${displayName(notebook)}\" was already like that"
+                } else {
+                    "Updated the notebook \"${displayName(notebook)}\": " + changes.joinToString(", ")
+                }
+                ToolExecResult("$what. $holding")
+            }
+        }
+
         "list_notebook_items" -> {
             val all = db.notebookDao().getAllOnce()
             val query = args.firstString("notebook", "title", "name")
@@ -495,6 +617,33 @@ object NotebookTools {
         val names = all.joinToString(", ") { "\"" + displayName(it) + "\"" }
         val asked = if (query.isBlank()) "No notebook name was given." else "No notebook found matching \"$query\"."
         return ToolExecResult("$asked The notebooks are: $names.", success = false)
+    }
+
+    private fun stamp(millis: Long): String =
+        java.time.Instant.ofEpochMilli(millis)
+            .atZone(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+
+    private suspend fun membershipLabels(
+        db: AppDatabase,
+        all: List<Notebook>,
+        current: Long
+    ): Map<Pair<String, Long>, String> {
+        val names = all.associate { it.id to displayName(it) }
+        val out = HashMap<Pair<String, Long>, String>()
+        val kinds = listOf(NotebookItem.KIND_NOTE, NotebookItem.KIND_TASK)
+        kinds.forEach { kind ->
+            val grouped = db.notebookDao().getItemsByKindOnce(kind)
+                .filter { it.notebookId != current }
+                .groupBy { it.itemId }
+            grouped.forEach { (itemId, members) ->
+                val labels = members.mapNotNull { names[it.notebookId] }.distinct()
+                if (labels.isNotEmpty()) {
+                    out[kind to itemId] = "(also in " + labels.joinToString(", ") { "\"$it\"" } + ")"
+                }
+            }
+        }
+        return out
     }
 
     private suspend fun itemCounts(db: AppDatabase): Map<Long, Pair<Int, Int>> {

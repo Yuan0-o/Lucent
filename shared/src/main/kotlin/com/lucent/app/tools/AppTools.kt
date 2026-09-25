@@ -45,8 +45,8 @@ object AppTools {
 
     private val READ_ONLY_TOOLS = setOf(
         "list_notes", "read_note", "list_tasks", "read_task", "search_items", "recall_notes", "web_search",
-        "read_attachment", "list_note_versions", "list_trash", "list_drafts",
-        "list_notebooks", "list_notebook_items", "search_notebook", "list_notebook_trash"
+        "read_attachment", "list_note_versions", "list_trash", "list_drafts", "read_note_formatting",
+        "list_notebooks", "read_notebook", "list_notebook_items", "search_notebook", "list_notebook_trash"
     )
 
     fun isMutating(name: String): Boolean = name !in READ_ONLY_TOOLS

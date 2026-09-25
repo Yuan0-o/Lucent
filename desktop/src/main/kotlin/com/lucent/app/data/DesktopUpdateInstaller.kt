@@ -52,7 +52,7 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
                 log("update: the installer was placed in the backup folder")
             }
             AutoUpdate.reportProgress(1f)
-            AutoUpdate.reportDownloadReady()
+            AutoUpdate.reportDownloadReady(listOf(asset.name))
             AutoUpdate.report(null)
         }
     }
@@ -100,6 +100,25 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
         val asset = info.installer ?: return
         val file = partialFile(asset.name)
         if (file.exists() && file.delete()) log("update: removed the downloaded installer")
+        storedCopy(asset.name)?.let { if (it.exists() && it.delete()) log("update: removed the stored copy") }
+    }
+
+    override fun purgeStaged(files: List<String>): Int {
+        if (files.isEmpty()) return 0
+        var removed = 0
+        files.forEach { name ->
+            val cached = partialFile(name)
+            if (cached.exists() && cached.delete()) removed += 1
+            storedCopy(name)?.let { if (it.exists() && it.delete()) removed += 1 }
+        }
+        if (removed > 0) log("update: cleared $removed installer file(s) after the update went in")
+        return removed
+    }
+
+    private fun storedCopy(name: String): File? {
+        val folder = SettingsCache.autoBackup.folderUri
+        if (folder.isBlank()) return null
+        return File(folder, name)
     }
 
     fun purgeStale(currentVersion: String, pendingTag: String?): Int {

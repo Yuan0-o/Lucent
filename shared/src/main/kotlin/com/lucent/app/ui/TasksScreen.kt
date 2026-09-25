@@ -219,11 +219,12 @@ fun TasksScreen(active: Boolean = true) {
     var pendingHighlight by remember(composing) { mutableStateOf<Int?>(null) }
     var pendingExplicit by remember(composing) { mutableStateOf(false) }
     var pendingColor by remember(composing) { mutableStateOf<Int?>(null) }
+    var pendingSize by remember(composing) { mutableStateOf<Int?>(null) }
     var spansText by remember(composing) { mutableStateOf(newNotes) }
     LaunchedEffect(newNotes) {
         if (spansText != newNotes) {
             bodySpans = com.lucent.app.data.RichText.applyEdit(
-                bodySpans, spansText, newNotes, pendingKinds, pendingHighlight, pendingColor, pendingExplicit
+                bodySpans, spansText, newNotes, pendingKinds, pendingHighlight, pendingColor, pendingSize, pendingExplicit
             )
             spansText = newNotes
         }
@@ -855,6 +856,9 @@ fun TasksScreen(active: Boolean = true) {
                     } else if (kind == com.lucent.app.data.RichSpan.Kind.COLOR) {
                         pendingExplicit = true
                         pendingColor = if (pendingColor == color) null else color
+                    } else if (kind == com.lucent.app.data.RichSpan.Kind.SIZE) {
+                        pendingExplicit = true
+                        pendingSize = if (pendingSize == color) null else color
                     } else {
                         pendingExplicit = true
                         val opposite = when (kind) {
@@ -876,6 +880,7 @@ fun TasksScreen(active: Boolean = true) {
                         pendingKinds = emptySet()
                         pendingHighlight = null
                         pendingColor = null
+                        pendingSize = null
                     }
                 },
                 activeKinds = if (bodySelEnd > bodySelStart)
@@ -887,6 +892,9 @@ fun TasksScreen(active: Boolean = true) {
                 activeColor = if (bodySelEnd > bodySelStart)
                     com.lucent.app.data.RichText.colorCovering(bodySpans, bodySelStart, bodySelEnd)
                 else pendingColor,
+                activeSize = if (bodySelEnd > bodySelStart)
+                    com.lucent.app.data.RichText.sizeCovering(bodySpans, bodySelStart, bodySelEnd)
+                else pendingSize,
                 onNeedSelection = { LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.richTextNeedSelection) },
                 modifier = Modifier.align(Alignment.BottomEnd)
                     .padding(end = 14.dp, bottom = LocalBottomBarInset.current + 14.dp)

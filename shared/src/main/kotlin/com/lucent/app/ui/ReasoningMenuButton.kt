@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lucent.app.data.ApiProviders
 import com.lucent.app.data.ReasoningEffort
 import com.lucent.app.data.ReasoningEfforts
 import com.lucent.app.i18n.S
@@ -27,15 +26,16 @@ import com.lucent.app.i18n.S
 @Composable
 fun ReasoningMenuButton(
     providerId: String,
+    model: String,
     currentKey: String,
     onSelect: (ReasoningEffort) -> Unit,
     tint: Color,
     mutedTint: Color,
     modifier: Modifier = Modifier
 ) {
-    val options = remember(providerId) { ReasoningEfforts.optionsFor(providerId) }
-    val current = ReasoningEffort.fromKey(currentKey)
-    val custom = providerId == ApiProviders.CUSTOM
+    val options = remember(providerId, model) { ReasoningEfforts.optionsFor(providerId, model) }
+    if (options.size <= 1) return
+    val current = remember(providerId, model, currentKey) { ReasoningEfforts.settled(providerId, model, currentKey) }
     var open by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
@@ -49,13 +49,7 @@ fun ReasoningMenuButton(
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(
-                text = {
-                    Text(
-                        if (custom) S.reasoningTitleCustom else S.reasoningTitle,
-                        fontSize = 13.sp,
-                        color = mutedTint
-                    )
-                },
+                text = { Text(S.reasoningTitle, fontSize = 13.sp, color = mutedTint) },
                 enabled = false,
                 onClick = {}
             )
@@ -73,20 +67,6 @@ fun ReasoningMenuButton(
                         open = false
                         onSelect(option)
                     }
-                )
-            }
-            if (options.size == 1) {
-                DropdownMenuItem(
-                    text = { Text(S.reasoningFixedByProvider, fontSize = 12.sp, color = mutedTint) },
-                    enabled = false,
-                    onClick = {}
-                )
-            }
-            if (custom) {
-                DropdownMenuItem(
-                    text = { Text(S.reasoningCustomHint, fontSize = 12.sp, color = mutedTint) },
-                    enabled = false,
-                    onClick = {}
                 )
             }
         }

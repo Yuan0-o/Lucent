@@ -5,7 +5,7 @@ plugins {
     id("androidx.baselineprofile")
 }
 
-val MARKETING_VERSION = "2.9.6"
+val MARKETING_VERSION = "2.9.7"
 
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull()
     ?: MARKETING_VERSION.replace(".", "").toIntOrNull()

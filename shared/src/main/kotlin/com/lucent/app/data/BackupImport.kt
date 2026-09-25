@@ -237,7 +237,9 @@ internal object BackupImporter {
                         attachmentList = if (o.isNull("attachmentList")) null else o.optString("attachmentList"),
                         conversationId = newConvId,
                         tokens = o.optInt("tokens", 0),
-                        agentTrace = if (o.isNull("agentTrace")) null else o.optString("agentTrace")
+                        agentTrace = if (o.isNull("agentTrace")) null else o.optString("agentTrace"),
+                        reasoningBlocks = if (o.isNull("reasoningBlocks")) null else o.optString("reasoningBlocks"),
+                        reasoningText = if (o.isNull("reasoningText")) null else o.optString("reasoningText")
                     )
                 )
                 importedChats++

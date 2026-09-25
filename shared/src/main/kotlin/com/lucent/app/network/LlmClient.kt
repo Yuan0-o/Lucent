@@ -93,12 +93,17 @@ object LlmClient {
     suspend fun sendChat(
         baseUrl: String, spec: ApiSpec, apiKey: String, model: String,
         history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>,
-        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
+        cacheKey: String = "",
+        context: String = ""
     ): Result<RawModelReply> = withContext(Dispatchers.IO) {
         try {
             val adapter = adapterFor(spec)
             val url = adapter.chatUrl(baseUrl, model, streaming = false)
-            val body = adapter.buildBody(model, history, systemPrompt, tools, streaming = false, reasoning = reasoning)
+            val body = adapter.buildBody(
+                model, history, systemPrompt, tools, streaming = false, reasoning = reasoning,
+                provider = providerOf(spec, baseUrl), cacheKey = cacheKey, context = context
+            )
             val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
             adapter.addAuthHeaders(requestBuilder, apiKey)
             val response = client.newCall(requestBuilder.build()).execute()
@@ -111,15 +116,21 @@ object LlmClient {
         }
     }
 
+    private fun providerOf(spec: ApiSpec, baseUrl: String): String =
+        com.lucent.app.data.ApiProviders.forRequest(spec.name.lowercase(), baseUrl)
+
     suspend fun streamChat(
         baseUrl: String, spec: ApiSpec, apiKey: String, model: String,
         history: List<ChatTurn>, systemPrompt: String, tools: List<ToolDefinition>,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit = {},
         onRetry: (Int) -> Unit = {},
-        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key
+        reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
+        cacheKey: String = "",
+        context: String = ""
     ): Result<RawModelReply> = withContext(Dispatchers.IO) {
         val adapter = adapterFor(spec)
+        val provider = providerOf(spec, baseUrl)
         val streamJob = coroutineContext[kotlinx.coroutines.Job]
         var attempt = 0
         while (true) {
@@ -128,7 +139,8 @@ object LlmClient {
             val result: Result<RawModelReply> = try {
                 val url = adapter.chatUrl(baseUrl, model, streaming = true)
                 val body = adapter.buildBody(
-                    model, history, systemPrompt, tools, streaming = true, reasoning = reasoning
+                    model, history, systemPrompt, tools, streaming = true, reasoning = reasoning,
+                    provider = provider, cacheKey = cacheKey, context = context
                 )
                 if (spec != ApiSpec.GOOGLE) body.put("stream", true)
 
@@ -155,7 +167,7 @@ object LlmClient {
                         Result.success(
                             RawModelReply(
                                 acc.fullText.toString(), toolCalls, acc.returnedImageMime, acc.returnedImageData,
-                                acc.thinkingBlocksJson()
+                                acc.thinkingBlocksJson(), acc.fullReasoning.toString(), acc.usage
                             )
                         )
                     }

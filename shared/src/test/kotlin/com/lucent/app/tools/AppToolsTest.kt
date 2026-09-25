@@ -45,7 +45,8 @@ class AppToolsTest {
     fun readOnlyToolsAreNotMutating() {
         for (name in listOf(
             "list_notes", "read_note", "list_tasks", "read_task", "search_items", "list_trash",
-            "list_notebooks", "list_notebook_items", "search_notebook"
+            "list_notebooks", "read_notebook", "list_notebook_items", "search_notebook",
+            "read_note_formatting"
         )) {
             assertFalse(AppTools.isMutating(name), "$name should be read-only")
         }
@@ -55,8 +56,8 @@ class AppToolsTest {
     fun mutatingToolsRequireConfirmation() {
         for (name in listOf(
             "create_note", "update_note", "delete_note", "create_task", "complete_task", "pin_task",
-            "create_notebook", "rename_notebook", "delete_notebook", "add_to_notebook",
-            "remove_from_notebook", "move_to_notebook"
+            "create_notebook", "rename_notebook", "update_notebook", "delete_notebook",
+            "add_to_notebook", "remove_from_notebook", "move_to_notebook", "format_note_text"
         )) {
             assertTrue(AppTools.isMutating(name), "$name should be mutating")
         }

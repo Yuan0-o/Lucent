@@ -170,7 +170,9 @@ data class ChatMessage(
     val conversationId: Long = 1,
     val tokens: Int = 0,
     val replyToId: Long = 0,
-    val agentTrace: String? = null
+    val agentTrace: String? = null,
+    val reasoningBlocks: String? = null,
+    val reasoningText: String? = null
 )
 
 @Entity(tableName = "chat_conversations")

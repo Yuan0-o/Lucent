@@ -13,6 +13,7 @@ data class RichSpan(
         LIGHT,
         BOLD,
         ITALIC,
+        SIZE,
         HIGHLIGHT,
         COLOR;
 
@@ -28,9 +29,17 @@ data class RichSpan(
 
 object RichText {
 
-    const val HIGHLIGHT_COLORS = 5
+    const val HIGHLIGHT_COLORS = 8
 
-    const val TEXT_COLORS = 5
+    const val TEXT_COLORS = 9
+
+    const val TEXT_SIZES = 5
+
+    const val TEXT_SIZE_DEFAULT = 0
+
+    val TEXT_SIZE_SCALES = floatArrayOf(1f, 0.8f, 1.25f, 1.6f, 2.1f)
+
+    fun textSizeScale(index: Int): Float = TEXT_SIZE_SCALES[index.coerceIn(0, TEXT_SIZE_SCALES.size - 1)]
 
     const val TEXT_COLOR_DEFAULT = 0
     val TEXT_COLOR_ARGB = intArrayOf(
@@ -38,7 +47,11 @@ object RichText {
         0xFF43A047.toInt(),
         0xFFF9A825.toInt(),
         0xFF1E88E5.toInt(),
-        0xFFE53935.toInt()
+        0xFFE53935.toInt(),
+        0xFF00897B.toInt(),
+        0xFF8E24AA.toInt(),
+        0xFFF4511E.toInt(),
+        0xFFD81B60.toInt()
     )
 
     const val EMPTY = ""
@@ -52,11 +65,17 @@ object RichText {
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
                 val kind = RichSpan.Kind.fromName(o.optString("k")) ?: continue
+                val maxIndex = when (kind) {
+                    RichSpan.Kind.SIZE -> TEXT_SIZES - 1
+                    RichSpan.Kind.COLOR -> TEXT_COLORS - 1
+                    RichSpan.Kind.HIGHLIGHT -> HIGHLIGHT_COLORS - 1
+                    else -> 0
+                }
                 val span = RichSpan(
                     start = o.optInt("s", 0),
                     end = o.optInt("e", 0),
                     kind = kind,
-                    color = o.optInt("c", 0).coerceIn(0, HIGHLIGHT_COLORS - 1)
+                    color = o.optInt("c", 0).coerceIn(0, maxIndex)
                 )
                 if (!span.isEmpty) out.add(span)
             }
@@ -103,7 +122,7 @@ object RichText {
         var cursor = start
         for (s in normalise(spans)) {
             if (s.kind != kind) continue
-            if (kind == RichSpan.Kind.HIGHLIGHT && s.color != color) continue
+            if ((kind == RichSpan.Kind.HIGHLIGHT || kind == RichSpan.Kind.SIZE) && s.color != color) continue
             if (s.start > cursor) break
             if (s.end > cursor) cursor = s.end
             if (cursor >= end) return true
@@ -127,6 +146,7 @@ object RichText {
                 RichSpan.Kind.BOLD -> remove(spans, start, end, RichSpan.Kind.LIGHT, null)
                 RichSpan.Kind.HIGHLIGHT -> remove(spans, start, end, RichSpan.Kind.HIGHLIGHT, null)
                 RichSpan.Kind.COLOR -> remove(spans, start, end, RichSpan.Kind.COLOR, null)
+                RichSpan.Kind.SIZE -> remove(spans, start, end, RichSpan.Kind.SIZE, null)
                 RichSpan.Kind.ITALIC -> spans
             }
             normalise(cleared + RichSpan(start, end, kind, color))
@@ -182,7 +202,7 @@ object RichText {
 
     fun kindsCovering(spans: List<RichSpan>, start: Int, end: Int): Set<RichSpan.Kind> =
         RichSpan.Kind.entries
-            .filter { it != RichSpan.Kind.HIGHLIGHT && it != RichSpan.Kind.COLOR && covers(spans, start, end, it) }
+            .filter { it != RichSpan.Kind.HIGHLIGHT && it != RichSpan.Kind.SIZE && it != RichSpan.Kind.COLOR && covers(spans, start, end, it) }
             .toSet()
 
     fun colorCovering(spans: List<RichSpan>, start: Int, end: Int): Int? =
@@ -191,6 +211,9 @@ object RichText {
     fun highlightCovering(spans: List<RichSpan>, start: Int, end: Int): Int? =
         (0 until HIGHLIGHT_COLORS).firstOrNull { covers(spans, start, end, RichSpan.Kind.HIGHLIGHT, it) }
 
+    fun sizeCovering(spans: List<RichSpan>, start: Int, end: Int): Int? =
+        (0 until TEXT_SIZES).firstOrNull { covers(spans, start, end, RichSpan.Kind.SIZE, it) }
+
     fun applyEdit(
         spans: List<RichSpan>,
         old: String,
@@ -198,6 +221,7 @@ object RichText {
         pendingKinds: Set<RichSpan.Kind> = emptySet(),
         pendingHighlight: Int? = null,
         pendingColor: Int? = null,
+        pendingSize: Int? = null,
         pendingExplicit: Boolean = false
     ): List<RichSpan> {
         if (old == new) return reconcile(spans, new.length)
@@ -221,6 +245,9 @@ object RichText {
             if (pendingColor == null) {
                 out = remove(out, prefix, prefix + inserted, RichSpan.Kind.COLOR, null)
             }
+            if (pendingSize == null) {
+                out = remove(out, prefix, prefix + inserted, RichSpan.Kind.SIZE, null)
+            }
         }
         if (inserted > 0) {
             pendingKinds.forEach { kind ->
@@ -239,6 +266,10 @@ object RichText {
                 out = remove(out, prefix, prefix + inserted, RichSpan.Kind.COLOR, null)
                 out = normalise(out + RichSpan(prefix, prefix + inserted, RichSpan.Kind.COLOR, pendingColor))
             }
+            if (pendingSize != null) {
+                out = remove(out, prefix, prefix + inserted, RichSpan.Kind.SIZE, null)
+                out = normalise(out + RichSpan(prefix, prefix + inserted, RichSpan.Kind.SIZE, pendingSize))
+            }
         }
         return reconcile(out, new.length)
     }
@@ -251,7 +282,10 @@ object RichText {
         0xFF81C784.toInt(),
         0xFF4FC3F7.toInt(),
         0xFFF48FB1.toInt(),
-        0xFFFFB74D.toInt()
+        0xFFFFB74D.toInt(),
+        0xFFBA68C8.toInt(),
+        0xFF4DB6AC.toInt(),
+        0xFFE57373.toInt()
     )
 
     data class StyledRun(
@@ -260,10 +294,11 @@ object RichText {
         val light: Boolean,
         val italic: Boolean,
         val highlight: Int,
-        val color: Int = TEXT_COLOR_DEFAULT
+        val color: Int = TEXT_COLOR_DEFAULT,
+        val sizeScale: Float = 1f
     ) {
         val plain: Boolean
-            get() = !bold && !light && !italic && highlight < 0 && color == TEXT_COLOR_DEFAULT
+            get() = !bold && !light && !italic && highlight < 0 && color == TEXT_COLOR_DEFAULT && sizeScale == 1f
     }
 
     fun textColorArgb(index: Int): Int? =
@@ -279,12 +314,14 @@ object RichText {
             val light: Boolean,
             val italic: Boolean,
             val highlight: Int,
-            val color: Int
+            val color: Int,
+            val size: Int
         )
 
         fun styleAt(abs: Int): CharStyle {
             var bold = false; var light = false; var italic = false; var hl = -1
             var col = TEXT_COLOR_DEFAULT
+            var size = TEXT_SIZE_DEFAULT
             spans.forEach { s ->
                 if (abs >= s.start && abs < s.end) when (s.kind) {
                     RichSpan.Kind.BOLD -> bold = true
@@ -292,10 +329,11 @@ object RichText {
                     RichSpan.Kind.ITALIC -> italic = true
                     RichSpan.Kind.HIGHLIGHT -> hl = s.color
                     RichSpan.Kind.COLOR -> col = s.color
+                    RichSpan.Kind.SIZE -> size = s.color
                 }
             }
             if (bold) light = false
-            return CharStyle(bold, light, italic, hl, col)
+            return CharStyle(bold, light, italic, hl, col, size)
         }
 
         val out = ArrayList<StyledRun>()
@@ -304,7 +342,7 @@ object RichText {
             val style = styleAt(lineStart + i)
             var j = i + 1
             while (j < line.length && styleAt(lineStart + j) == style) j++
-            out.add(StyledRun(line.substring(i, j), style.bold, style.light, style.italic, style.highlight, style.color))
+            out.add(StyledRun(line.substring(i, j), style.bold, style.light, style.italic, style.highlight, style.color, textSizeScale(style.size)))
             i = j
         }
         return out

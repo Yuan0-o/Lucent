@@ -9,7 +9,8 @@ data class ChatTurn(
     val attachmentData: String? = null,
     val toolCalls: List<ToolCallRequest> = emptyList(),
     val toolResults: List<ToolResultTurn> = emptyList(),
-    val thinkingBlocksJson: String = ""
+    val thinkingBlocksJson: String = "",
+    val reasoningContent: String = ""
 )
 
 data class ToolResultTurn(val id: String, val name: String, val content: String)
@@ -35,12 +36,29 @@ data class ToolExecResult(
     val openTaskId: Long? = null
 )
 
+data class TokenUsage(
+    val promptTokens: Int = 0,
+    val cachedTokens: Int = 0,
+    val outputTokens: Int = 0
+) {
+    val known: Boolean get() = promptTokens > 0 || cachedTokens > 0
+
+    val hitPercent: Int
+        get() = if (promptTokens <= 0) 0 else ((cachedTokens.toLong() * 100L) / promptTokens.toLong()).toInt()
+
+    companion object {
+        val NONE = TokenUsage()
+    }
+}
+
 data class RawModelReply(
     val text: String?,
     val toolCalls: List<ToolCallRequest>,
     val imageMime: String? = null,
     val imageData: String? = null,
-    val thinkingBlocksJson: String = ""
+    val thinkingBlocksJson: String = "",
+    val reasoningContent: String = "",
+    val usage: TokenUsage = TokenUsage.NONE
 )
 
 class ApiHttpException(val code: Int, val bodyText: String) :

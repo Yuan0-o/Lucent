@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalView
@@ -69,11 +70,13 @@ fun ExpandableGlassTextField(
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
     textColors: List<Color> = emptyList(),
+    sizeScaleBase: TextUnit = 16.sp,
     extraAction: (@Composable () -> Unit)? = null,
     tools: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val onGradientMuted = LocalOnGradientMuted.current
     var expanded by remember { mutableStateOf(false) }
+    val spanBase = LocalTextStyle.current.fontSize.let { if (it.isUnspecified) sizeScaleBase else it }
 
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
     if (fieldValue.text != value) {
@@ -83,9 +86,9 @@ fun ExpandableGlassTextField(
                                   fieldValue.selection.end.coerceIn(0, value.length))
         )
     }
-    val transformation = remember(spans, highlightColors, textColors) {
+    val transformation = remember(spans, highlightColors, textColors, spanBase) {
         if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
-        else RichSpanTransformation(spans, highlightColors, textColors)
+        else RichSpanTransformation(spans, highlightColors, textColors, spanBase)
     }
     val lastLineRequester = remember { BringIntoViewRequester() }
     var followedLength by remember { mutableStateOf(value.length) }
@@ -154,6 +157,7 @@ fun ExpandableGlassTextField(
             onSelectionChange = onSelectionChange,
             highlightColors = highlightColors,
             textColors = textColors,
+            sizeScaleBase = sizeScaleBase,
             tools = tools
         )
     }
@@ -170,6 +174,7 @@ private fun ExpandedEditor(
     onSelectionChange: (Int, Int) -> Unit = { _, _ -> },
     highlightColors: List<Color> = emptyList(),
     textColors: List<Color> = emptyList(),
+    sizeScaleBase: TextUnit = 16.sp,
     tools: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     var expandedField by remember { mutableStateOf(TextFieldValue(value)) }
@@ -180,9 +185,10 @@ private fun ExpandedEditor(
                                   expandedField.selection.end.coerceIn(0, value.length))
         )
     }
-    val expandedTransformation = remember(spans, highlightColors, textColors) {
+    val spanBase = LocalTextStyle.current.fontSize.let { if (it.isUnspecified) sizeScaleBase else it }
+    val expandedTransformation = remember(spans, highlightColors, textColors, spanBase) {
         if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
-        else RichSpanTransformation(spans, highlightColors, textColors)
+        else RichSpanTransformation(spans, highlightColors, textColors, spanBase)
     }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -267,7 +273,8 @@ private fun panelSurfaceColor(onGradient: Color): Color =
 private class RichSpanTransformation(
     private val spans: List<RichSpan>,
     private val highlightColors: List<Color>,
-    private val textColors: List<Color>
+    private val textColors: List<Color>,
+    private val sizeBase: TextUnit
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         if (spans.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
@@ -278,6 +285,7 @@ private class RichSpanTransformation(
                     RichSpan.Kind.LIGHT -> SpanStyle(fontWeight = FontWeight.Light)
                     RichSpan.Kind.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
                     RichSpan.Kind.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
+                    RichSpan.Kind.SIZE -> SpanStyle(fontSize = sizeBase * RichText.textSizeScale(s.color))
                     RichSpan.Kind.HIGHLIGHT -> SpanStyle(
                         background = highlightColors[s.color.coerceIn(0, highlightColors.lastIndex)]
                             .copy(alpha = 0.45f)

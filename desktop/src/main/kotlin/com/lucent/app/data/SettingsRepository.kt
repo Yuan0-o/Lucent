@@ -91,6 +91,8 @@ class SettingsRepository(private val context: Context) {
         const val WEB_SEARCH_PRELOCAL = "web_search_prelocal"
         const val AUTO_UPDATE_ENABLED = "auto_update_enabled"
         const val PENDING_UPDATE_VERSION = "pending_update_version"
+        const val STAGED_UPDATE_TAG = "staged_update_tag"
+        const val STAGED_UPDATE_FILES = "staged_update_files"
         const val PRIVILEGED_ENABLED = "privileged_enabled"
     }
 
@@ -255,7 +257,9 @@ class SettingsRepository(private val context: Context) {
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
-        val pendingUpdateVersion: String = ""
+        val pendingUpdateVersion: String = "",
+        val stagedUpdateTag: String = "",
+        val stagedUpdateFiles: String = ""
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -329,7 +333,9 @@ class SettingsRepository(private val context: Context) {
             cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: "",
             autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false,
             privilegedEnabled = bool(prefs, K.PRIVILEGED_ENABLED) ?: false,
-            pendingUpdateVersion = str(prefs, K.PENDING_UPDATE_VERSION) ?: ""
+            pendingUpdateVersion = str(prefs, K.PENDING_UPDATE_VERSION) ?: "",
+            stagedUpdateTag = str(prefs, K.STAGED_UPDATE_TAG) ?: "",
+            stagedUpdateFiles = str(prefs, K.STAGED_UPDATE_FILES) ?: ""
         )
     }
 
@@ -590,6 +596,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoUpdateEnabled(value: Boolean) {
         SettingsCache.autoUpdateEnabled = value
         edit { it[K.AUTO_UPDATE_ENABLED] = value }
+    }
+
+    suspend fun setStagedUpdate(tag: String, files: List<String>) {
+        edit { prefs ->
+            if (tag.isBlank()) {
+                prefs.remove(K.STAGED_UPDATE_TAG)
+                prefs.remove(K.STAGED_UPDATE_FILES)
+            } else {
+                prefs[K.STAGED_UPDATE_TAG] = tag
+                prefs[K.STAGED_UPDATE_FILES] = files.joinToString(",")
+            }
+        }
     }
 
     val pendingUpdateVersion: Flow<String> = state.map { str(it, K.PENDING_UPDATE_VERSION) ?: "" }

@@ -1312,7 +1312,8 @@ fun AssistantScreen(active: Boolean = true) {
         ) {
             if (!localModelEnabled && agentModeOn) {
                 ReasoningMenuButton(
-                    providerId = activeApiProfile?.provider ?: com.lucent.app.data.ApiProviders.CUSTOM,
+                    providerId = com.lucent.app.data.ApiProviders.forRequest(savedSpecStr, savedUrl),
+                    model = savedModel,
                     currentKey = reasoningKey,
                     onSelect = { picked ->
                         SettingsCache.reasoning = picked.key

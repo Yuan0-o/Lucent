@@ -56,6 +56,21 @@ class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installe
         if (file.exists() && file.delete()) {
             StartupLog.event(context, "update: removed the downloaded installer")
         }
+        UpdateDownloadService.deleteStoredCopy(context, asset.name)
+    }
+
+    override fun purgeStaged(files: List<String>): Int {
+        if (files.isEmpty()) return 0
+        var removed = 0
+        files.forEach { name ->
+            val cached = UpdateDownloadService.partialFile(context, name)
+            if (cached.exists() && cached.delete()) removed += 1
+            if (UpdateDownloadService.deleteStoredCopy(context, name)) removed += 1
+        }
+        if (removed > 0) {
+            StartupLog.event(context, "update: cleared $removed installer file(s) after the update went in")
+        }
+        return removed
     }
 
     fun purgeStale(currentVersion: String, pendingTag: String?): Int {

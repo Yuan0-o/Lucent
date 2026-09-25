@@ -44,7 +44,7 @@ class SystemPromptsTest {
     fun fullPromptCarriesCoreRules() {
         val p = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
-            webSearchEnabled = false, crossMemory = "", userText = "hello"
+            webSearchEnabled = false
         )
         assertTrue(p.contains("LANGUAGE RULE"))
         assertTrue(p.contains("plain, natural, everyday language"))
@@ -58,11 +58,11 @@ class SystemPromptsTest {
     fun fullPromptEnablesWebSearchWhenConfigured() {
         val on = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
-            webSearchEnabled = true, crossMemory = "", userText = "hello"
+            webSearchEnabled = true
         )
         val off = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.LOW,
-            webSearchEnabled = false, crossMemory = "", userText = "hello"
+            webSearchEnabled = false
         )
         assertTrue(on.contains("call the web_search tool"))
         assertFalse(off.contains("call the web_search tool"))
@@ -73,26 +73,27 @@ class SystemPromptsTest {
     fun fullPromptLaysOutMemoryTierRules() {
         val low = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.LOW,
-            webSearchEnabled = false, crossMemory = "", userText = "hello"
+            webSearchEnabled = false
         )
         assertTrue(low.contains("single-turn"))
         val high = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.HIGH,
-            webSearchEnabled = false, crossMemory = "digest", userText = "hello"
+            webSearchEnabled = false
         )
         assertTrue(high.contains("cross-conversation memory"))
-        assertTrue(high.contains("digest"))
+        val context = SystemPrompts.context("hello", crossMemory = "digest")
+        assertTrue(context.contains("digest"))
     }
 
     @Test
     fun compactPromptIsSubstantiallyShorterAndKeyed() {
         val full = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.LOW,
-            webSearchEnabled = false, crossMemory = "", userText = "hello"
+            webSearchEnabled = false
         )
         val compact = SystemPrompts.compact(
             name = "Lucent", style = "", tier = MemoryTier.LOW,
-            webSearchEnabled = false, userText = "hello", crossMemory = ""
+            webSearchEnabled = false
         )
         assertTrue(compact.length < full.length)
         assertTrue(compact.contains("No markdown"))
@@ -100,32 +101,31 @@ class SystemPromptsTest {
     }
 
     @Test
-    fun promptsEmbedCurrentDate() {
-        val p = SystemPrompts.full(
-            name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
-            webSearchEnabled = false, crossMemory = "", userText = "hello"
-        )
+    fun contextCarriesTheCurrentDate() {
+        val p = SystemPrompts.context("hello")
         assertTrue(Regex("\\d{4}-\\d{2}-\\d{2}").containsMatchIn(p))
     }
 
     @Test
-    fun fullPromptCarriesRecentItemsWhenGiven() {
+    fun promptKeepsTheDateOutOfTheCacheablePart() {
         val p = SystemPrompts.full(
             name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
-            webSearchEnabled = false, crossMemory = "", userText = "add a line to it",
-            recentItems = "- note \"Project plan\""
+            webSearchEnabled = false
         )
+        assertFalse(Regex("\\d{4}-\\d{2}-\\d{2}").containsMatchIn(p))
+    }
+
+    @Test
+    fun contextCarriesRecentItemsWhenGiven() {
+        val p = SystemPrompts.context("add a line to it", recentItems = "- note \"Project plan\"")
         assertTrue(p.contains("WHAT THE PERSON MEANS"))
         assertTrue(p.contains("Project plan"))
         assertTrue(p.contains("call that same tool again"))
     }
 
     @Test
-    fun fullPromptLeavesRecentItemsOutWhenEmpty() {
-        val p = SystemPrompts.full(
-            name = "Lucent", style = "", tier = MemoryTier.MEDIUM,
-            webSearchEnabled = false, crossMemory = "", userText = "hello"
-        )
+    fun contextLeavesRecentItemsOutWhenEmpty() {
+        val p = SystemPrompts.context("hello")
         assertFalse(p.contains("WHAT THE PERSON MEANS"))
     }
 

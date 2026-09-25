@@ -12,37 +12,55 @@ import org.json.JSONObject
 
 object FormattingTools {
 
-    private val HIGHLIGHT_NAMES = listOf("yellow", "green", "blue", "pink", "orange")
+    private val HIGHLIGHT_NAMES = listOf("yellow", "green", "blue", "pink", "orange", "purple", "teal", "red")
 
-    private val TEXT_COLOUR_NAMES = listOf("default", "green", "yellow", "blue", "red")
+    private val TEXT_COLOUR_NAMES = listOf("default", "green", "yellow", "blue", "red", "teal", "purple", "orange", "pink")
+
+    private val SIZE_NAMES = listOf("default", "small", "medium", "large", "huge")
+
+    private val SPAN_KIND_LABELS = mapOf(
+        RichSpan.Kind.BOLD to "bold",
+        RichSpan.Kind.LIGHT to "light",
+        RichSpan.Kind.ITALIC to "italic"
+    )
 
     fun definitions(): List<ToolDefinition> = listOf(
         ToolDefinition(
             name = "format_note_text",
-            description = "Change how part of a NOTE's text LOOKS — bold, light, italic, a highlighter colour, or a text colour — the same rich-text formatting the note editor's toolbar offers. Give the exact words to format in \"find\"; every occurrence is formatted unless all is false. Formatting only changes appearance, never the words themselves. Use read_note first when you need the exact wording.",
+            description = "Change how a NOTE's text LOOKS — bold, light, italic, a highlighter colour, a text colour, or a font size (small, medium, large, huge) — the same rich-text formatting the note editor's toolbar offers. Name the exact words to format in \"find\"; leave find out to restyle the whole note. Every occurrence is formatted unless all is false. Formatting only changes appearance, never the words themselves. Call read_note_formatting first when you need to know what the text currently looks like, and read_note when you need the exact wording.",
             params = listOf(
                 ToolParam("title", "string", "The title (or part of it) of the note"),
-                ToolParam("find", "string", "The exact text inside the note to format — it must appear in the note's body"),
+                ToolParam("find", "string", "The exact text inside the note to format. Leave it out to format every bit of the note's text.", required = false),
                 ToolParam("bold", "boolean", "true to make it bold, false to remove bold. Leave out to leave boldness alone.", required = false),
                 ToolParam("italic", "boolean", "true for italic, false to remove italic. Leave out to leave it alone.", required = false),
                 ToolParam("light", "boolean", "true for the light (thin) weight, false to remove it. Leave out to leave it alone.", required = false),
-                ToolParam("highlight", "string", "Highlighter colour: yellow, green, blue, pink, orange, or none to clear the highlight. Leave out to leave it alone.", required = false),
-                ToolParam("colour", "string", "Text colour: default, green, yellow, blue, red. Leave out to leave it alone.", required = false),
+                ToolParam("size", "string", "Font size: default, small, medium, large, huge. Leave out to leave the size alone.", required = false),
+                ToolParam("highlight", "string", "Highlighter colour: yellow, green, blue, pink, orange, purple, teal, red, or none to clear the highlight. Leave out to leave it alone.", required = false),
+                ToolParam("colour", "string", "Text colour: default, green, yellow, blue, red, teal, purple, orange, pink. Leave out to leave it alone.", required = false),
                 ToolParam("all", "boolean", "true (the default) formats every occurrence of the text; false formats only the first one.", required = false)
             )
         ),
         ToolDefinition(
             name = "format_task_notes",
-            description = "Change how part of a TASK's notes/description text LOOKS — bold, light, italic, a highlighter colour, or a text colour — the same rich-text formatting the task editor's toolbar offers. Give the exact words to format in \"find\"; every occurrence is formatted unless all is false. Formatting only changes appearance, never the words.",
+            description = "Change how a TASK's notes/description text LOOKS — bold, light, italic, a highlighter colour, a text colour, or a font size (small, medium, large, huge) — the same rich-text formatting the task editor's toolbar offers. Name the exact words to format in \"find\"; leave find out to restyle the whole notes. Every occurrence is formatted unless all is false. Formatting only changes appearance, never the words.",
             params = listOf(
                 ToolParam("title", "string", "The title (or part of it) of the task"),
-                ToolParam("find", "string", "The exact text inside the task's notes to format"),
+                ToolParam("find", "string", "The exact text inside the task's notes to format. Leave it out to format all of the notes.", required = false),
                 ToolParam("bold", "boolean", "true to make it bold, false to remove bold. Leave out to leave boldness alone.", required = false),
                 ToolParam("italic", "boolean", "true for italic, false to remove italic. Leave out to leave it alone.", required = false),
                 ToolParam("light", "boolean", "true for the light (thin) weight, false to remove it. Leave out to leave it alone.", required = false),
-                ToolParam("highlight", "string", "Highlighter colour: yellow, green, blue, pink, orange, or none to clear the highlight. Leave out to leave it alone.", required = false),
-                ToolParam("colour", "string", "Text colour: default, green, yellow, blue, red. Leave out to leave it alone.", required = false),
+                ToolParam("size", "string", "Font size: default, small, medium, large, huge. Leave out to leave the size alone.", required = false),
+                ToolParam("highlight", "string", "Highlighter colour: yellow, green, blue, pink, orange, purple, teal, red, or none to clear the highlight. Leave out to leave it alone.", required = false),
+                ToolParam("colour", "string", "Text colour: default, green, yellow, blue, red, teal, purple, orange, pink. Leave out to leave it alone.", required = false),
                 ToolParam("all", "boolean", "true (the default) formats every occurrence of the text; false formats only the first one.", required = false)
+            )
+        ),
+        ToolDefinition(
+            name = "read_note_formatting",
+            description = "Show how the text of a NOTE or TASK is styled right now: which words are bold, light or italic, which have a size, a text colour or a highlighter colour, matched by its title. Read-only — it changes nothing. Call it before restyling so you know what is already there, and call read_note or read_task when you also need the exact words.",
+            params = listOf(
+                ToolParam("title", "string", "The title (or part of it) of the note or task"),
+                ToolParam("item_type", "string", "Optional: note or task. Leave out to look in both.", required = false)
             )
         ),
         ToolDefinition(
@@ -134,6 +152,7 @@ object FormattingTools {
             "set_task_hidden" ->
                 if (args.optBoolean("hidden", true)) com.lucent.app.i18n.S.ccHideTask(s("title"))
                 else com.lucent.app.i18n.S.ccShowTask(s("title"))
+            "read_note_formatting" -> com.lucent.app.i18n.S.ccReadFormatting(s("title"))
             "move_note" -> com.lucent.app.i18n.S.ccMoveNote(s("title"), s("position"))
             "move_task" -> com.lucent.app.i18n.S.ccMoveTask(s("title"), s("position"))
             else -> null
@@ -168,6 +187,7 @@ object FormattingTools {
         "set_task_format" -> setTaskFormat(db, args)
         "set_note_hidden" -> setNoteHidden(db, args)
         "set_task_hidden" -> setTaskHidden(db, args)
+        "read_note_formatting" -> readFormatting(db, args)
         "move_note" -> moveNote(db, args)
         "move_task" -> moveTask(db, args)
         else -> null
@@ -177,12 +197,14 @@ object FormattingTools {
         val bold: Boolean?,
         val italic: Boolean?,
         val light: Boolean?,
+        val size: Int?,
         val highlight: Int?,
         val colour: Int?,
         val all: Boolean
     ) {
         val anything: Boolean
-            get() = bold != null || italic != null || light != null || highlight != null || colour != null
+            get() = bold != null || italic != null || light != null || size != null ||
+                highlight != null || colour != null
     }
 
     private data class StyleRead(val error: ToolExecResult?, val styles: Styles?)
@@ -211,6 +233,22 @@ object FormattingTools {
                 highlight = index
             }
         }
+        var size: Int? = null
+        if (args.has("size")) {
+            val raw = args.optString("size").trim().lowercase()
+            val index = SIZE_NAMES.indexOf(raw)
+            if (index < 0) {
+                return StyleRead(
+                    ToolExecResult(
+                        "The size \"$raw\" isn't one this app has. Use one of: " +
+                            SIZE_NAMES.joinToString(", ") + ".",
+                        success = false
+                    ),
+                    null
+                )
+            }
+            size = index
+        }
         var colour: Int? = null
         if (args.has("colour") || args.has("color")) {
             val key = if (args.has("colour")) "colour" else "color"
@@ -229,7 +267,7 @@ object FormattingTools {
             colour = index
         }
         val all = if (args.has("all")) args.optBoolean("all", true) else true
-        return StyleRead(null, Styles(bold, italic, light, highlight, colour, all))
+        return StyleRead(null, Styles(bold, italic, light, size, highlight, colour, all))
     }
 
     private fun occurrences(haystack: String, needle: String): List<IntRange> {
@@ -275,6 +313,13 @@ object FormattingTools {
                 out = RichText.normalise(out + RichSpan(range.first, range.last + 1, RichSpan.Kind.COLOR, index))
             }
         }
+        styles.size?.let { index ->
+            if (index == RichText.TEXT_SIZE_DEFAULT) set(RichSpan.Kind.SIZE, false)
+            else {
+                out = RichText.remove(out, range.first, range.last + 1, RichSpan.Kind.SIZE, null)
+                out = RichText.normalise(out + RichSpan(range.first, range.last + 1, RichSpan.Kind.SIZE, index))
+            }
+        }
         return RichText.normalise(out)
     }
 
@@ -283,6 +328,7 @@ object FormattingTools {
         styles.bold?.let { parts.add(if (it) "bold" else "not bold") }
         styles.light?.let { parts.add(if (it) "light" else "normal weight") }
         styles.italic?.let { parts.add(if (it) "italic" else "not italic") }
+        styles.size?.let { parts.add(if (it == RichText.TEXT_SIZE_DEFAULT) "default size" else "size ${SIZE_NAMES[it]}") }
         styles.highlight?.let { parts.add(if (it < 0) "no highlight" else "highlighted ${HIGHLIGHT_NAMES[it]}") }
         styles.colour?.let { parts.add("coloured ${TEXT_COLOUR_NAMES[it]}") }
         return parts.joinToString(", ")
@@ -296,12 +342,10 @@ object FormattingTools {
         val styles = read.styles ?: return ToolExecResult("No formatting was asked for.", success = false)
         if (!styles.anything) {
             return ToolExecResult(
-                "No formatting was asked for — give at least one of bold, italic, light, highlight or colour.",
+                "No formatting was asked for — give at least one of bold, italic, light, size, " +
+                    "highlight or colour.",
                 success = false
             )
-        }
-        if (find.isBlank()) {
-            return ToolExecResult("No text was given to format, so nothing was changed.", success = false)
         }
         val note = AppTools.resolveNote(AppTools.editableNotes(db), titleQuery)
             ?: return AppTools.noteNotFound(db, titleQuery)
@@ -319,23 +363,28 @@ object FormattingTools {
                 success = false
             )
         }
-        val hits = occurrences(note.body, find)
+        if (find.isBlank() && note.body.isBlank()) {
+            return ToolExecResult("The note \"${note.title}\" is empty, so there is nothing to format.")
+        }
+        val hits = if (find.isBlank()) listOf(note.body.indices) else occurrences(note.body, find)
         if (hits.isEmpty()) {
             return ToolExecResult(
                 "The text \"$find\" does not appear in the note \"${note.title}\", so nothing was " +
-                    "formatted. Read the note first and pass the wording exactly as it is written.",
+                    "formatted. Read the note first and pass the wording exactly as it is written, " +
+                    "or leave find out to format the whole note.",
                 success = false
             )
         }
-        val chosen = if (styles.all) hits else listOf(hits.first())
+        val chosen = if (styles.all || find.isBlank()) hits else listOf(hits.first())
         var spans = RichText.load(note.bodySpans, note.body)
         chosen.forEach { spans = applyStyles(spans, it, styles) }
         db.noteDao().update(
             note.copy(bodySpans = RichText.encode(spans), updatedAt = System.currentTimeMillis())
         )
-        val times = if (chosen.size == 1) "once" else "${chosen.size} times"
+        val where = if (find.isBlank()) "the whole note" else "\"$find\""
+        val times = if (find.isBlank() || chosen.size == 1) "" else " (${chosen.size} times)"
         return ToolExecResult(
-            "Formatted \"$find\" in the note \"${note.title}\" ($times): ${describeStyles(styles)}. " +
+            "Formatted $where in the note \"${note.title}\"$times: ${describeStyles(styles)}. " +
                 "The words themselves are unchanged.",
             openNoteId = note.id
         )
@@ -349,32 +398,103 @@ object FormattingTools {
         val styles = read.styles ?: return ToolExecResult("No formatting was asked for.", success = false)
         if (!styles.anything) {
             return ToolExecResult(
-                "No formatting was asked for — give at least one of bold, italic, light, highlight or colour.",
+                "No formatting was asked for — give at least one of bold, italic, light, size, " +
+                    "highlight or colour.",
                 success = false
             )
-        }
-        if (find.isBlank()) {
-            return ToolExecResult("No text was given to format, so nothing was changed.", success = false)
         }
         val task = AppTools.resolveTask(AppTools.editableTasks(db), titleQuery)
             ?: return AppTools.taskNotFound(db, titleQuery)
-        val hits = occurrences(task.notes, find)
+        if (find.isBlank() && task.notes.isBlank()) {
+            return ToolExecResult("The task \"${task.title}\" has no notes text to format.")
+        }
+        val hits = if (find.isBlank()) listOf(task.notes.indices) else occurrences(task.notes, find)
         if (hits.isEmpty()) {
             return ToolExecResult(
                 "The text \"$find\" does not appear in the notes of the task \"${task.title}\", so " +
-                    "nothing was formatted. Read the task first and pass the wording exactly as written.",
+                    "nothing was formatted. Read the task first and pass the wording exactly as " +
+                    "written, or leave find out to format all of the notes.",
                 success = false
             )
         }
-        val chosen = if (styles.all) hits else listOf(hits.first())
+        val chosen = if (styles.all || find.isBlank()) hits else listOf(hits.first())
         var spans = RichText.load(task.notesSpans, task.notes)
         chosen.forEach { spans = applyStyles(spans, it, styles) }
         db.taskDao().update(task.copy(notesSpans = RichText.encode(spans)))
-        val times = if (chosen.size == 1) "once" else "${chosen.size} times"
+        val where = if (find.isBlank()) "the whole description" else "\"$find\""
+        val times = if (find.isBlank() || chosen.size == 1) "" else " (${chosen.size} times)"
         return ToolExecResult(
-            "Formatted \"$find\" in the notes of \"${task.title}\" ($times): ${describeStyles(styles)}. " +
+            "Formatted $where in the notes of \"${task.title}\"$times: ${describeStyles(styles)}. " +
                 "The words themselves are unchanged.",
             openTaskId = task.id
+        )
+    }
+
+    private fun styleLabel(span: RichSpan): String = when (span.kind) {
+        RichSpan.Kind.HIGHLIGHT -> "highlighted " + HIGHLIGHT_NAMES.getOrElse(span.color) { "?" }
+        RichSpan.Kind.COLOR -> "coloured " + TEXT_COLOUR_NAMES.getOrElse(span.color) { "?" }
+        RichSpan.Kind.SIZE -> "size " + SIZE_NAMES.getOrElse(span.color) { "?" }
+        else -> SPAN_KIND_LABELS[span.kind] ?: span.kind.name.lowercase()
+    }
+
+    private fun styleReport(text: String, spansJson: String): String {
+        val spans = RichText.load(spansJson, text)
+        if (spans.isEmpty()) return "Nothing is styled — the text is plain."
+        val lines = ArrayList<String>()
+        spans.forEach { span ->
+            val slice = text.substring(
+                span.start.coerceIn(0, text.length),
+                span.end.coerceIn(0, text.length)
+            ).replace("\n", " ").trim()
+            if (slice.isNotEmpty()) {
+                lines.add("- \"" + slice.take(90) + "\" is " + styleLabel(span))
+            }
+        }
+        if (lines.isEmpty()) return "Nothing is styled — the text is plain."
+        return "Styled parts (" + lines.size + "):\n" + lines.joinToString("\n")
+    }
+
+    private suspend fun readFormatting(db: AppDatabase, args: JSONObject): ToolExecResult {
+        val titleQuery = args.optString("title", "")
+        val type = args.optString("item_type", args.optString("kind", args.optString("type", "")))
+            .trim().lowercase()
+        val wantNote = type != "task" && type != "tasks"
+        val wantTask = type != "note" && type != "notes"
+        val note = if (wantNote) AppTools.resolveNote(AppTools.editableNotes(db), titleQuery) else null
+        val task = if (wantTask) AppTools.resolveTask(AppTools.editableTasks(db), titleQuery) else null
+        if (note == null && task == null) {
+            return if (wantNote) AppTools.noteNotFound(db, titleQuery) else AppTools.taskNotFound(db, titleQuery)
+        }
+        if (note != null && task != null) {
+            return ToolExecResult(
+                "Both a note (\"${note.title}\") and a task (\"${task.title}\") match \"$titleQuery\". " +
+                    "Pass item_type = note or item_type = task to say which one.",
+                success = false
+            )
+        }
+        if (note != null) {
+            if (note.isDoodle) {
+                return ToolExecResult(
+                    "The note \"${note.title}\" is a doodle note: it holds a drawing, so it has no text " +
+                        "styling at all.",
+                    success = false
+                )
+            }
+            if (note.isChecklist) {
+                return ToolExecResult(
+                    "The note \"${note.title}\" is a checklist, so it has no body text to style — " +
+                        "rich text applies to a note's body text, not to checklist items.",
+                    success = false
+                )
+            }
+            return ToolExecResult(
+                "How the note \"${note.title}\" is styled:\n" + styleReport(note.body, note.bodySpans)
+            )
+        }
+        val found = task ?: return AppTools.taskNotFound(db, titleQuery)
+        return ToolExecResult(
+            "How the notes on the task \"${found.title}\" are styled:\n" +
+                styleReport(found.notes, found.notesSpans)
         )
     }
 

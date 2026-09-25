@@ -45,7 +45,13 @@ class BackupRoundTripTest {
             ChatMessage(role = "user", content = "where is the best okonomiyaki?", timestamp = 1700000003000)
         )
         db.chatDao().insert(
-            ChatMessage(role = "assistant", content = "Osaka, obviously.", timestamp = 1700000004000)
+            ChatMessage(
+                role = "assistant",
+                content = "Osaka, obviously.",
+                timestamp = 1700000004000,
+                reasoningBlocks = """[{"type":"thinking","thinking":"keep it short","signature":"sig"}]""",
+                reasoningText = "the person wants a city"
+            )
         )
     }
 
@@ -96,7 +102,16 @@ class BackupRoundTripTest {
                 assertEquals("Book shinkansen", restoredTasks[0].title)
                 assertEquals("window seat", restoredTasks[0].notes)
 
-                assertEquals(2, db2.chatDao().getAllOnce().size)
+                val restoredChats = db2.chatDao().getAllOnce()
+                assertEquals(2, restoredChats.size)
+                assertEquals(
+                    "the person wants a city",
+                    restoredChats.first { it.role == "assistant" }.reasoningText
+                )
+                assertTrue(
+                    restoredChats.first { it.role == "assistant" }
+                        .reasoningBlocks.orEmpty().contains("keep it short")
+                )
                 assertEquals(1, db2.chatConversationDao().getAllOnce().size)
 
                 assertEquals("dark", settings2.themeMode.first())

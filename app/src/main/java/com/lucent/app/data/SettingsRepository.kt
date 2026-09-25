@@ -129,6 +129,8 @@ private object SettingsKeys {
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
     val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
     val PENDING_UPDATE_VERSION = stringPreferencesKey("pending_update_version")
+    val STAGED_UPDATE_TAG = stringPreferencesKey("staged_update_tag")
+    val STAGED_UPDATE_FILES = stringPreferencesKey("staged_update_files")
 
     val PRIVILEGED_ENABLED = booleanPreferencesKey("privileged_enabled")
 }
@@ -243,7 +245,9 @@ class SettingsRepository(private val context: Context) {
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
-        val pendingUpdateVersion: String = ""
+        val pendingUpdateVersion: String = "",
+        val stagedUpdateTag: String = "",
+        val stagedUpdateFiles: String = ""
     )
 
     suspend fun startupPrefsOnce(): StartupPrefs {
@@ -319,7 +323,9 @@ class SettingsRepository(private val context: Context) {
             cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
             autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false,
             privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false,
-            pendingUpdateVersion = prefs[SettingsKeys.PENDING_UPDATE_VERSION] ?: ""
+            pendingUpdateVersion = prefs[SettingsKeys.PENDING_UPDATE_VERSION] ?: "",
+            stagedUpdateTag = prefs[SettingsKeys.STAGED_UPDATE_TAG] ?: "",
+            stagedUpdateFiles = prefs[SettingsKeys.STAGED_UPDATE_FILES] ?: ""
         )
     }
 
@@ -576,6 +582,18 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit {
             if (value.isBlank()) it.remove(SettingsKeys.PENDING_UPDATE_VERSION)
             else it[SettingsKeys.PENDING_UPDATE_VERSION] = value
+        }
+    }
+
+    suspend fun setStagedUpdate(tag: String, files: List<String>) {
+        context.settingsDataStore.edit {
+            if (tag.isBlank()) {
+                it.remove(SettingsKeys.STAGED_UPDATE_TAG)
+                it.remove(SettingsKeys.STAGED_UPDATE_FILES)
+            } else {
+                it[SettingsKeys.STAGED_UPDATE_TAG] = tag
+                it[SettingsKeys.STAGED_UPDATE_FILES] = files.joinToString(",")
+            }
         }
     }
 

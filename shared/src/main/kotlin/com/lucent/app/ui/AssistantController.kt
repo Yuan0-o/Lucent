@@ -657,8 +657,14 @@ class AssistantControllerImpl(
                     compactCrossMemory
                 }
                 val basePrompt =
-                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactMemory, recentItems = recentItems)
-                    else SystemPrompts.full(name, style, memoryTier, webSearchEnabled, crossMemory, text, recentItems = recentItems)
+                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled)
+                    else SystemPrompts.full(name, style, memoryTier, webSearchEnabled)
+                val promptContext = SystemPrompts.context(
+                    userText = text,
+                    crossMemory = if (smallModelMode || fastMode) compactMemory else crossMemory,
+                    recentItems = recentItems
+                )
+                val conversationCacheKey = "lucent-$conversationId"
                 val directPrompt = if (fastMode) {
                     basePrompt +
                         "\n\nAGENT MODE IS OFF in this conversation. Call no tools at all — no JSON, no " +
@@ -696,7 +702,9 @@ class AssistantControllerImpl(
                         { delta -> turn.onDelta(roundEpoch, delta) },
                         { piece -> turn.recorder.appendReasoning(piece) },
                         { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) },
-                        reasoning = useReasoning
+                        reasoning = useReasoning,
+                        cacheKey = conversationCacheKey,
+                        context = promptContext
                     )
 
                     if (result.isFailure) {
@@ -706,6 +714,7 @@ class AssistantControllerImpl(
                     }
                     val reply = result.getOrThrow()
                     turn.recorder.endReasoningBlock()
+                    reportCacheUse(turn, reply.usage)
 
                     if (reply.toolCalls.isEmpty()) {
                         finalReply = reply
@@ -771,7 +780,8 @@ class AssistantControllerImpl(
                         role = "assistant",
                         content = reply.text?.trim().orEmpty(),
                         toolCalls = reply.toolCalls,
-                        thinkingBlocksJson = reply.thinkingBlocksJson
+                        thinkingBlocksJson = reply.thinkingBlocksJson,
+                        reasoningContent = reply.reasoningContent
                     )
                     val resultTurns = reply.toolCalls.zip(results).map { (call, r) ->
                         ToolResultTurn(id = call.id, name = call.name, content = r.summary)
@@ -824,7 +834,9 @@ class AssistantControllerImpl(
                             { delta -> turn.onDelta(forcedEpoch, delta) },
                             { piece -> turn.recorder.appendReasoning(piece) },
                             { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) },
-                            reasoning = reasoning
+                            reasoning = useReasoning,
+                            cacheKey = conversationCacheKey,
+                            context = promptContext
                         )
                         if (forced.isFailure) {
                             fail(turn, forced.exceptionOrNull() ?: Exception("Unknown error"))
@@ -832,6 +844,7 @@ class AssistantControllerImpl(
                         } else {
                             finalReply = forced.getOrThrow()
                             turn.recorder.endReasoningBlock()
+                            reportCacheUse(turn, finalReply?.usage ?: com.lucent.app.network.TokenUsage.NONE)
                         }
                     }
                     if (!errored) finalReply?.let { reply ->
@@ -846,7 +859,9 @@ class AssistantControllerImpl(
                         turn.recorder.finish(AgentStepStatus.DONE)
                         insertAssistant(
                             db, conversationId, content, reply.imageMime, img, tokens, answeredId,
-                            traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
+                            traceJson = AgentTraceCodec.encode(turn.recorder.snapshot()),
+                            thinkingBlocks = reply.thinkingBlocksJson,
+                            reasoningText = reply.reasoningContent
                         )
                         turn.turnPersisted = true
                         turn.completionBuzz()
@@ -1212,7 +1227,13 @@ class AssistantControllerImpl(
 
     private suspend fun buildHistory(db: AppDatabase, conversationId: Long, tier: MemoryTier): List<ChatTurn> {
         val current = db.chatDao().getForConversationOnce(conversationId)
-            .map { ChatTurn(it.role, it.content, it.attachmentMime, it.attachmentData) }
+            .map {
+                ChatTurn(
+                    it.role, it.content, it.attachmentMime, it.attachmentData,
+                    thinkingBlocksJson = it.reasoningBlocks.orEmpty(),
+                    reasoningContent = it.reasoningText.orEmpty()
+                )
+            }
         return when (tier) {
             MemoryTier.LOW -> current.takeLast(1)
             MemoryTier.MEDIUM, MemoryTier.HIGH -> current
@@ -1411,7 +1432,9 @@ class AssistantControllerImpl(
         data: String?,
         tokens: Int = 0,
         replyToId: Long = 0,
-        traceJson: String? = null
+        traceJson: String? = null,
+        thinkingBlocks: String = "",
+        reasoningText: String = ""
     ) {
         val hasImage = !data.isNullOrBlank()
         db.chatDao().insert(
@@ -1424,9 +1447,26 @@ class AssistantControllerImpl(
                 conversationId = conversationId,
                 tokens = tokens,
                 replyToId = replyToId,
-                agentTrace = traceJson
+                agentTrace = traceJson,
+                reasoningBlocks = thinkingBlocks.takeIf { it.isNotBlank() },
+                reasoningText = reasoningText.takeIf { it.isNotBlank() }
             )
         )
+    }
+
+    private fun reportCacheUse(turn: Turn, usage: com.lucent.app.network.TokenUsage) {
+        if (!usage.known) return
+        appContextRef?.let { ctx ->
+            com.lucent.app.data.StartupLog.event(
+                ctx,
+                "prompt cache: ${usage.cachedTokens} of ${usage.promptTokens} input tokens reused " +
+                    "(${usage.hitPercent}%), ${usage.outputTokens} generated"
+            )
+        }
+        if (usage.cachedTokens > 0) {
+            val tokens = java.text.NumberFormat.getIntegerInstance().format(usage.cachedTokens.toLong())
+            turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceCacheUsed(tokens, usage.hitPercent))
+        }
     }
 
 

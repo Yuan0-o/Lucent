@@ -65,11 +65,21 @@ fun main() {
     val updateInstaller = com.lucent.app.data.DesktopUpdateInstaller()
     com.lucent.app.data.AutoUpdate.installer = updateInstaller
     com.lucent.app.data.AutoUpdate.restorePending(startup.pendingUpdateVersion)
+    com.lucent.app.data.AutoUpdate.restoreStaged(
+        startup.stagedUpdateTag,
+        startup.stagedUpdateFiles.split(",").filter { it.isNotBlank() }
+    )
     com.lucent.app.data.AutoUpdate.onPendingChange = { version ->
         AppScope.io.launch { SettingsRepository(context).setPendingUpdateVersion(version.orEmpty()) }
     }
+    com.lucent.app.data.AutoUpdate.onStagedChange = { tag, files ->
+        AppScope.io.launch { SettingsRepository(context).setStagedUpdate(tag.orEmpty(), files) }
+    }
     AppScope.io.launch {
-        updateInstaller.purgeStale(com.lucent.app.LucentBuild.VERSION, com.lucent.app.data.AutoUpdate.pendingVersion)
+        val running = com.lucent.app.LucentBuild.VERSION
+        val keepTag = com.lucent.app.data.AutoUpdate.stagedTagFor(running) ?: com.lucent.app.data.AutoUpdate.pendingVersion
+        updateInstaller.purgeStale(running, keepTag)
+        com.lucent.app.data.AutoUpdate.cleanUpAfterUpdate(running)
     }
 
     val focusRequests = MutableStateFlow(0L)

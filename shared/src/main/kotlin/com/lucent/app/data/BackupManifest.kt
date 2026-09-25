@@ -126,6 +126,8 @@ internal object BackupManifestBuilder {
                     .put("conversationId", it.conversationId)
                     .put("tokens", it.tokens)
                     .put("agentTrace", it.agentTrace ?: JSONObject.NULL)
+                    .put("reasoningBlocks", it.reasoningBlocks ?: JSONObject.NULL)
+                    .put("reasoningText", it.reasoningText ?: JSONObject.NULL)
             )
         }
 

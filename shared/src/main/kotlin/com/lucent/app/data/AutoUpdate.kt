@@ -15,6 +15,7 @@ object AutoUpdate {
         suspend fun install(info: ReleaseInfo): Boolean
         fun discard(info: ReleaseInfo)
         fun cancelDownload(info: ReleaseInfo)
+        fun purgeStaged(files: List<String>): Int
     }
 
     var installer: Installer? = null
@@ -46,10 +47,48 @@ object AutoUpdate {
     var pendingVersion: String? = null
         private set
 
+    var stagedVersion: String? = null
+        private set
+
+    var stagedFiles: List<String> = emptyList()
+        private set
+
     var onPendingChange: ((String?) -> Unit)? = null
+
+    var onStagedChange: ((String?, List<String>) -> Unit)? = null
 
     fun restorePending(version: String?) {
         pendingVersion = version?.takeIf { it.isNotBlank() }
+    }
+
+    fun restoreStaged(version: String?, files: List<String>) {
+        stagedVersion = version?.takeIf { it.isNotBlank() }
+        stagedFiles = files.filter { it.isNotBlank() }
+    }
+
+    fun recordStaged(version: String, files: List<String>) {
+        val tag = version.takeIf { it.isNotBlank() } ?: return
+        stagedVersion = tag
+        stagedFiles = files.filter { it.isNotBlank() }
+        onStagedChange?.invoke(stagedVersion, stagedFiles)
+    }
+
+    private fun clearStaged() {
+        stagedVersion = null
+        stagedFiles = emptyList()
+        onStagedChange?.invoke(null, emptyList())
+    }
+
+    fun stagedTagFor(runningVersion: String): String? {
+        val staged = stagedVersion ?: return null
+        return if (UpdateChecker.isNewer(staged, runningVersion)) null else staged
+    }
+
+    fun cleanUpAfterUpdate(runningVersion: String): Int {
+        val staged = stagedTagFor(runningVersion) ?: return 0
+        val removed = installer?.purgeStaged(stagedFiles) ?: 0
+        clearStaged()
+        return removed
     }
 
     fun markPhase(next: Phase) {
@@ -77,11 +116,14 @@ object AutoUpdate {
         progress = fraction.coerceIn(0f, 1f)
     }
 
-    fun reportDownloadReady() {
+    fun reportDownloadReady(files: List<String> = emptyList()) {
         phase = Phase.IDLE
         progress = -1f
         readyForInstall = true
         hidden = false
+        offered?.let { info ->
+            if (files.isNotEmpty()) recordStaged(info.tag, files)
+        }
     }
 
     fun reportDownloadFailed(text: String?) {

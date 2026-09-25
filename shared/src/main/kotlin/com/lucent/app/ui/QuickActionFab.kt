@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.FormatClear
 import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TextFormat
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -127,7 +128,8 @@ fun QuickActionFab(
     onNeedSelection: () -> Unit = {},
     activeKinds: Set<RichSpan.Kind> = emptySet(),
     activeHighlight: Int? = null,
-    activeColor: Int? = null
+    activeColor: Int? = null,
+    activeSize: Int? = null
 ) {
     val context = LocalContext.current
     val onGradient = LocalOnGradient.current
@@ -136,21 +138,27 @@ fun QuickActionFab(
     var formatPage by remember { mutableStateOf(false) }
     var highlightOpen by remember { mutableStateOf(false) }
     var colorOpen by remember { mutableStateOf(false) }
-    if (!expanded && (formatPage || highlightOpen || colorOpen)) {
+    var sizeOpen by remember { mutableStateOf(false) }
+    if (!expanded && (formatPage || highlightOpen || colorOpen || sizeOpen)) {
         formatPage = false
         highlightOpen = false
         colorOpen = false
+        sizeOpen = false
     }
 
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
 
-        if (reveal > 0.01f && (formatPage || highlightOpen || colorOpen)) {
+        if (reveal > 0.01f && (formatPage || highlightOpen || colorOpen || sizeOpen)) {
             FormatPanel(
                 highlightOpen = highlightOpen,
                 colorOpen = colorOpen,
+                sizeOpen = sizeOpen,
                 activeColor = activeColor,
+                activeSize = activeSize,
                 onOpenColors = { colorOpen = true },
                 onCloseColors = { colorOpen = false },
+                onOpenSizes = { sizeOpen = true },
+                onCloseSizes = { sizeOpen = false },
                 canUndo = canUndo,
                 canRedo = canRedo,
                 activeKinds = activeKinds,
@@ -166,7 +174,7 @@ fun QuickActionFab(
         }
 
         Box(modifier = Modifier.size(RING_DIAMETER), contentAlignment = Alignment.BottomEnd) {
-            if (reveal > 0.01f && !formatPage && !highlightOpen && !colorOpen) {
+            if (reveal > 0.01f && !formatPage && !highlightOpen && !colorOpen && !sizeOpen) {
                 RingAction(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, RING_ANGLES_3[0], reveal, canUndo, onUndo)
                 RingAction(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, RING_ANGLES_3[1], reveal, canRedo, onRedo)
                 if (richTextEnabled) {
@@ -201,6 +209,7 @@ fun QuickActionFab(
                         when {
                             highlightOpen -> highlightOpen = false
                             colorOpen -> colorOpen = false
+                            sizeOpen -> sizeOpen = false
                             formatPage -> formatPage = false
                             expanded -> onToggleExpanded()
                             scrollingUp -> onScrollTop()
@@ -273,9 +282,13 @@ private val RING_RADIUS = 72.dp
 private fun FormatPanel(
     highlightOpen: Boolean,
     colorOpen: Boolean,
+    sizeOpen: Boolean,
     activeColor: Int?,
+    activeSize: Int?,
     onOpenColors: () -> Unit,
     onCloseColors: () -> Unit,
+    onOpenSizes: () -> Unit,
+    onCloseSizes: () -> Unit,
     canUndo: Boolean,
     canRedo: Boolean,
     activeKinds: Set<RichSpan.Kind>,
@@ -295,61 +308,123 @@ private fun FormatPanel(
         horizontalAlignment = Alignment.End
     ) {
         if (colorOpen) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                richTextColors().forEachIndexed { index, swatch ->
-                    PanelCell(
-                        label = com.lucent.app.i18n.S.richTextColor,
-                        enabled = true,
-                        active = activeColor == index,
-                        onClick = { onToggleStyle(RichSpan.Kind.COLOR, index); onCloseColors() }
-                    ) {
-                        Box(
-                            modifier = Modifier.size(22.dp).clip(CircleShape).background(swatch)
-                        )
+            val swatches = richTextColors()
+            (0..swatches.size).chunked(5).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { index ->
+                        if (index < swatches.size) {
+                            PanelCell(
+                                label = com.lucent.app.i18n.S.richTextColor,
+                                enabled = true,
+                                active = activeColor == index,
+                                onClick = { onToggleStyle(RichSpan.Kind.COLOR, index); onCloseColors() }
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(22.dp).clip(CircleShape).background(swatches[index])
+                                )
+                            }
+                        } else {
+                            PanelCell(
+                                label = com.lucent.app.i18n.S.actionBack,
+                                enabled = true,
+                                active = false,
+                                onClick = onCloseColors
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Undo,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
-                PanelCell(
-                    label = com.lucent.app.i18n.S.actionBack,
-                    enabled = true,
-                    active = false,
-                    onClick = onCloseColors
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            return@Column
+        }
+
+        if (sizeOpen) {
+            val labels = listOf(
+                com.lucent.app.i18n.S.richTextSizeDefault,
+                com.lucent.app.i18n.S.richTextSizeSmall,
+                com.lucent.app.i18n.S.richTextSizeMedium,
+                com.lucent.app.i18n.S.richTextSizeLarge,
+                com.lucent.app.i18n.S.richTextSizeHuge
+            )
+            (0..com.lucent.app.data.RichText.TEXT_SIZES).chunked(5).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { index ->
+                        if (index < com.lucent.app.data.RichText.TEXT_SIZES) {
+                            PanelCell(
+                                label = com.lucent.app.i18n.S.richTextSize,
+                                enabled = true,
+                                active = activeSize == index,
+                                onClick = { onToggleStyle(RichSpan.Kind.SIZE, index); onCloseSizes() }
+                            ) {
+                                Text(
+                                    labels[index.coerceIn(0, labels.lastIndex)],
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        } else {
+                            PanelCell(
+                                label = com.lucent.app.i18n.S.actionBack,
+                                enabled = true,
+                                active = false,
+                                onClick = onCloseSizes
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Undo,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
             }
             return@Column
         }
 
         if (highlightOpen) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                RichHighlightColors.forEachIndexed { index, swatch ->
-                    PanelCell(
-                        label = com.lucent.app.i18n.S.richTextHighlight,
-                        enabled = true,
-                        active = activeHighlight == index,
-                        onClick = { onToggleStyle(RichSpan.Kind.HIGHLIGHT, index); onCloseHighlights() }
-                    ) {
-                        Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(swatch))
+            (0..RichHighlightColors.size).chunked(5).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { index ->
+                        if (index < RichHighlightColors.size) {
+                            PanelCell(
+                                label = com.lucent.app.i18n.S.richTextHighlight,
+                                enabled = true,
+                                active = activeHighlight == index,
+                                onClick = { onToggleStyle(RichSpan.Kind.HIGHLIGHT, index); onCloseHighlights() }
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(22.dp).clip(CircleShape).background(RichHighlightColors[index])
+                                )
+                            }
+                        } else {
+                            PanelCell(
+                                label = com.lucent.app.i18n.S.actionBack,
+                                enabled = true,
+                                active = false,
+                                onClick = onCloseHighlights
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Undo,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
-                PanelCell(
-                    label = com.lucent.app.i18n.S.actionBack,
-                    enabled = true,
-                    active = false,
-                    onClick = onCloseHighlights
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.height(4.dp))
             }
             return@Column
         }
@@ -363,6 +438,8 @@ private fun FormatPanel(
                 RichSpan.Kind.LIGHT in activeKinds) { onToggleStyle(RichSpan.Kind.LIGHT, 0) },
             PanelItem(Icons.Default.Brush, com.lucent.app.i18n.S.richTextHighlight, true,
                 activeHighlight != null) { onOpenHighlights() },
+            PanelItem(Icons.Default.TextFields, com.lucent.app.i18n.S.richTextSize, true,
+                activeSize != null) { onOpenSizes() },
             PanelItem(Icons.AutoMirrored.Filled.Undo, com.lucent.app.i18n.S.actionUndo, canUndo, false) { onUndo() },
             PanelItem(Icons.AutoMirrored.Filled.Redo, com.lucent.app.i18n.S.actionRedo, canRedo, false) { onRedo() },
             PanelItem(Icons.Default.FormatClear, com.lucent.app.i18n.S.richTextClear, true, false) { onClearStyle() },

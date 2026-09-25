@@ -2,9 +2,9 @@ package com.lucent.app
 
 object LucentBuild {
 
-    const val VERSION = "2.9.6"
+    const val VERSION = "2.9.7"
 
-    const val BUILD_NUMBER = "296"
+    const val BUILD_NUMBER = "297"
 
     const val PRODUCT_NAME = "Lucent"
 

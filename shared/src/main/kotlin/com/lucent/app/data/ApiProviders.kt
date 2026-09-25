@@ -34,5 +34,20 @@ object ApiProviders {
     fun resolve(provider: String, spec: String, baseUrl: String): String =
         if (provider in ALL) provider else match(spec, baseUrl)
 
+    fun forRequest(spec: String, baseUrl: String): String {
+        val matched = match(spec, baseUrl)
+        if (matched != CUSTOM) return matched
+        val url = baseUrl.trim().lowercase()
+        if (url.isBlank()) return CUSTOM
+        return when {
+            url.contains("moonshot") || url.contains("kimi") -> KIMI
+            url.contains("deepseek") -> DEEPSEEK
+            url.contains("openai.com") -> CHATGPT
+            url.contains("anthropic.com") || url.contains("claude.ai") -> CLAUDE
+            url.contains("generativelanguage") || url.contains("googleapis.com") -> GEMINI
+            else -> CUSTOM
+        }
+    }
+
     private fun normalize(url: String): String = url.trim().trimEnd('/').lowercase()
 }

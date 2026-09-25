@@ -50,7 +50,7 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        internal const val SCHEMA_VERSION = 23
+        internal const val SCHEMA_VERSION = 24
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -300,6 +300,8 @@ class Db private constructor(private val connection: Connection) {
                             addColumnIfMissing(conn, "notebooks", "manualOrder", "INTEGER NOT NULL DEFAULT 0") &&
                             addColumnIfMissing(conn, "notebooks", "trashedAt", "INTEGER")
                         23 -> addColumnIfMissing(conn, "notebooks", "pinned", "INTEGER NOT NULL DEFAULT 0")
+                        24 -> addColumnIfMissing(conn, "chat_messages", "reasoningBlocks", "TEXT") &&
+                            addColumnIfMissing(conn, "chat_messages", "reasoningText", "TEXT")
                         else -> true
                     }
                 } catch (t: Throwable) {

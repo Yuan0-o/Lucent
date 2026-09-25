@@ -198,10 +198,24 @@ class MainActivity : FragmentActivity() {
         if (startup.privilegedEnabled) ShizukuWatcher.ensureStarted(applicationContext)
 
         AutoUpdate.restorePending(startup.pendingUpdateVersion)
+        AutoUpdate.restoreStaged(
+            startup.stagedUpdateTag,
+            startup.stagedUpdateFiles.split(",").filter { it.isNotBlank() }
+        )
         AutoUpdate.onPendingChange = { version ->
             AppScope.io.launch { settingsRepo.setPendingUpdateVersion(version.orEmpty()) }
         }
-        AppScope.io.launch { updateInstaller.purgeStale(runningVersion, AutoUpdate.pendingVersion) }
+        AutoUpdate.onStagedChange = { tag, files ->
+            AppScope.io.launch { settingsRepo.setStagedUpdate(tag.orEmpty(), files) }
+        }
+        AppScope.io.launch {
+            val keepTag = AutoUpdate.stagedTagFor(runningVersion) ?: AutoUpdate.pendingVersion
+            updateInstaller.purgeStale(runningVersion, keepTag)
+            val cleared = AutoUpdate.cleanUpAfterUpdate(runningVersion)
+            if (cleared > 0) {
+                StartupLog.event(applicationContext, "update: $cleared installer file(s) removed after a successful update")
+            }
+        }
 
         val integrationEnabled = startup.systemIntegrationEnabled
         AppScope.io.launch { ShareIntegration.setEnabled(applicationContext, integrationEnabled) }

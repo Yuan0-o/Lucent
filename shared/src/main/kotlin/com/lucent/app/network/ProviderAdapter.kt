@@ -21,7 +21,10 @@ sealed interface ProviderAdapter {
         systemPrompt: String,
         tools: List<ToolDefinition>,
         streaming: Boolean,
-        reasoning: String = ReasoningEffort.DEFAULT.key
+        reasoning: String = ReasoningEffort.DEFAULT.key,
+        provider: String = "",
+        cacheKey: String = "",
+        context: String = ""
     ): JSONObject
 
     fun parseReply(bodyStr: String): RawModelReply
@@ -38,6 +41,7 @@ class StreamAccumulator {
     val fullText = StringBuilder()
     val fullReasoning = StringBuilder()
     val anthropicThinking = JSONArray()
+    var usage: TokenUsage = TokenUsage.NONE
     private val anthropicThinkingIndex = HashMap<Int, JSONObject>()
     private val anthropicThinkingSignature = HashMap<Int, String>()
 
@@ -189,6 +193,58 @@ internal const val TEMPERATURE = 0.6
 internal const val TOP_P = 0.9
 internal const val MAX_TOKENS = 2048
 
+internal fun openAiUsage(usage: JSONObject?): TokenUsage {
+    if (usage == null || usage.length() == 0) return TokenUsage.NONE
+    val prompt = usage.optInt("prompt_tokens", usage.optInt("input_tokens", 0))
+    val details = usage.optJSONObject("prompt_tokens_details")?.optInt("cached_tokens", 0)
+        ?: usage.optJSONObject("input_tokens_details")?.optInt("cached_tokens", 0)
+        ?: 0
+    val cached = maxOf(details, usage.optInt("prompt_cache_hit_tokens", 0), usage.optInt("cached_tokens", 0))
+    val output = usage.optInt("completion_tokens", usage.optInt("output_tokens", 0))
+    return TokenUsage(prompt.coerceAtLeast(0), cached.coerceAtLeast(0), output.coerceAtLeast(0))
+}
+
+internal fun googleUsage(meta: JSONObject?): TokenUsage {
+    if (meta == null) return TokenUsage.NONE
+    val prompt = meta.optInt("promptTokenCount", 0)
+    val cached = meta.optInt("cachedContentTokenCount", 0)
+    val output = meta.optInt("candidatesTokenCount", 0) + meta.optInt("thoughtsTokenCount", 0)
+    return TokenUsage(prompt.coerceAtLeast(0), cached.coerceAtLeast(0), output.coerceAtLeast(0))
+}
+
+internal fun anthropicUsage(usage: JSONObject?): TokenUsage {
+    if (usage == null || usage.length() == 0) return TokenUsage.NONE
+    val fresh = usage.optInt("input_tokens", 0)
+    val created = usage.optInt("cache_creation_input_tokens", 0)
+    val read = usage.optInt("cache_read_input_tokens", 0)
+    val output = usage.optInt("output_tokens", 0)
+    return TokenUsage(
+        promptTokens = (fresh + created + read).coerceAtLeast(0),
+        cachedTokens = read.coerceAtLeast(0),
+        outputTokens = output.coerceAtLeast(0)
+    )
+}
+
+private fun markMessageBreakpoint(message: JSONObject?) {
+    val target = message ?: return
+    val breakpoint = JSONObject().put("type", "ephemeral")
+    when (val content = target.opt("content")) {
+        is JSONArray -> content.optJSONObject(content.length() - 1)?.put("cache_control", breakpoint)
+        is String -> {
+            target.put(
+                "content",
+                JSONArray().put(JSONObject().put("type", "text").put("text", content).put("cache_control", breakpoint))
+            )
+        }
+    }
+}
+
+internal fun mergeUsage(current: TokenUsage, fresh: TokenUsage): TokenUsage = TokenUsage(
+    promptTokens = if (fresh.promptTokens > 0) fresh.promptTokens else current.promptTokens,
+    cachedTokens = if (fresh.promptTokens > 0) fresh.cachedTokens else current.cachedTokens,
+    outputTokens = if (fresh.outputTokens > 0) fresh.outputTokens else current.outputTokens
+)
+
 private fun toolSchema(tools: List<ToolDefinition>): List<JSONObject> {
     return tools.map { t ->
         val props = JSONObject()
@@ -244,8 +300,13 @@ object OpenAiAdapter : ProviderAdapter {
         systemPrompt: String,
         tools: List<ToolDefinition>,
         streaming: Boolean,
-        reasoning: String
+        reasoning: String,
+        provider: String,
+        cacheKey: String,
+        context: String
     ): JSONObject {
+        val echoReasoning = provider == com.lucent.app.data.ApiProviders.DEEPSEEK ||
+            provider == com.lucent.app.data.ApiProviders.KIMI
         val messages = JSONArray()
         messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
         for (turn in history) {
@@ -263,6 +324,9 @@ object OpenAiAdapter : ProviderAdapter {
                         )
                     }
                     msg.put("tool_calls", calls)
+                    if (echoReasoning && turn.reasoningContent.isNotBlank()) {
+                        msg.put("reasoning_content", turn.reasoningContent)
+                    }
                     messages.put(msg)
                 }
                 turn.toolResults.isNotEmpty() -> {
@@ -275,19 +339,44 @@ object OpenAiAdapter : ProviderAdapter {
                         messages.put(JSONObject().put("role", "user").put("content", openAiContent(turn.copy(toolResults = emptyList()))))
                     }
                 }
-                else -> messages.put(JSONObject().put("role", turn.role).put("content", openAiContent(turn)))
+                else -> {
+                    val msg = JSONObject().put("role", turn.role).put("content", openAiContent(turn))
+                    if (echoReasoning && turn.role == "assistant" && turn.reasoningContent.isNotBlank()) {
+                        msg.put("reasoning_content", turn.reasoningContent)
+                    }
+                    messages.put(msg)
+                }
             }
         }
 
-        val effort = ReasoningEfforts.openAiEffort(ReasoningEffort.fromKey(reasoning))
+        val plan = ReasoningEfforts.planFor(provider, model, reasoning)
         val root = JSONObject()
             .put("model", model)
             .put("messages", messages)
             .put("max_tokens", MAX_TOKENS)
-        if (effort == null) {
+        if (context.isNotBlank()) {
+            messages.put(JSONObject().put("role", "system").put("content", context))
+        }
+        if (plan.empty) {
             root.put("temperature", TEMPERATURE).put("top_p", TOP_P)
         } else {
-            root.put("reasoning_effort", effort)
+            plan.effort?.let { root.put("reasoning_effort", it) }
+            if (plan.thinkingOff) root.put("thinking", JSONObject().put("type", "disabled"))
+        }
+        if (streaming && (provider == com.lucent.app.data.ApiProviders.CHATGPT ||
+                provider == com.lucent.app.data.ApiProviders.KIMI)
+        ) {
+            root.put("stream_options", JSONObject().put("include_usage", true))
+        }
+        val cacheTtls = ReasoningEfforts.cacheOptionsFor(provider, model)
+        if (cacheTtls.isNotEmpty()) {
+            root.put("prompt_cache_options", JSONObject().put("mode", "implicit").put("ttl", cacheTtls.first()))
+        }
+        if (cacheKey.isNotBlank() &&
+            (provider == com.lucent.app.data.ApiProviders.KIMI ||
+                provider == com.lucent.app.data.ApiProviders.CHATGPT)
+        ) {
+            root.put("prompt_cache_key", cacheKey)
         }
         if (tools.isNotEmpty()) {
             val toolsArray = JSONArray()
@@ -321,7 +410,14 @@ object OpenAiAdapter : ProviderAdapter {
             }
         }
         val image = imageFromOpenAiImages(message.optJSONArray("images"))
-        return RawModelReply(text, toolCalls, image?.first, image?.second)
+        return RawModelReply(
+            text,
+            toolCalls,
+            image?.first,
+            image?.second,
+            reasoningContent = message.optString("reasoning_content", ""),
+            usage = openAiUsage(json.optJSONObject("usage"))
+        )
     }
 
     override fun parseStreamEvent(
@@ -330,6 +426,9 @@ object OpenAiAdapter : ProviderAdapter {
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
+        json.optJSONObject("usage")?.let { reported ->
+            if (reported.length() > 0) acc.usage = openAiUsage(reported)
+        }
         val delta = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
         val reasoning = reasoningChannel(delta)
         if (reasoning.isNotEmpty()) {
@@ -391,7 +490,10 @@ object AnthropicAdapter : ProviderAdapter {
         systemPrompt: String,
         tools: List<ToolDefinition>,
         streaming: Boolean,
-        reasoning: String
+        reasoning: String,
+        provider: String,
+        cacheKey: String,
+        context: String
     ): JSONObject {
         val messages = JSONArray()
         for (turn in history) {
@@ -442,16 +544,34 @@ object AnthropicAdapter : ProviderAdapter {
             }
         }
 
-        val budget = ReasoningEfforts.anthropicBudgetTokens(ReasoningEffort.fromKey(reasoning))
+        val plan = ReasoningEfforts.planFor(provider, model, reasoning)
+        val systemBlocks = JSONArray()
+        systemBlocks.put(
+            JSONObject()
+                .put("type", "text")
+                .put("text", systemPrompt)
+                .put("cache_control", JSONObject().put("type", "ephemeral"))
+        )
+        if (context.isNotBlank()) {
+            systemBlocks.put(JSONObject().put("type", "text").put("text", context))
+        }
         val root = JSONObject()
             .put("model", model)
-            .put("system", systemPrompt)
+            .put("system", systemBlocks)
             .put("messages", messages)
-        if (budget == null) {
-            root.put("max_tokens", MAX_TOKENS).put("temperature", TEMPERATURE).put("top_p", TOP_P)
-        } else {
-            root.put("max_tokens", budget + 4096)
-            root.put("thinking", JSONObject().put("type", "enabled").put("budget_tokens", budget))
+        when {
+            plan.claudeBudgetTokens != null -> {
+                root.put("max_tokens", plan.claudeBudgetTokens + 4096)
+                root.put("thinking", JSONObject().put("type", "enabled").put("budget_tokens", plan.claudeBudgetTokens))
+            }
+            plan.claudeAdaptive -> {
+                root.put("max_tokens", MAX_TOKENS)
+                root.put("thinking", JSONObject().put("type", "adaptive"))
+                plan.claudeEffort?.let { root.put("output_config", JSONObject().put("effort", it)) }
+            }
+            else -> {
+                root.put("max_tokens", MAX_TOKENS).put("temperature", TEMPERATURE).put("top_p", TOP_P)
+            }
         }
         if (tools.isNotEmpty()) {
             val toolsArray = JSONArray()
@@ -463,7 +583,12 @@ object AnthropicAdapter : ProviderAdapter {
                         .put("input_schema", t.getJSONObject("_schema"))
                 )
             }
+            toolsArray.optJSONObject(toolsArray.length() - 1)
+                ?.put("cache_control", JSONObject().put("type", "ephemeral"))
             root.put("tools", toolsArray)
+        }
+        if (messages.length() > 0) {
+            markMessageBreakpoint(messages.optJSONObject(messages.length() - 1))
         }
         return root
     }
@@ -483,7 +608,7 @@ object AnthropicAdapter : ProviderAdapter {
                 }
             }
         }
-        return RawModelReply(text, toolCalls)
+        return RawModelReply(text, toolCalls, usage = anthropicUsage(json.optJSONObject("usage")))
     }
 
     override fun parseStreamEvent(
@@ -493,6 +618,16 @@ object AnthropicAdapter : ProviderAdapter {
         onReasoning: (String) -> Unit
     ) {
         when (json.optString("type")) {
+            "message_start" -> {
+                json.optJSONObject("message")?.optJSONObject("usage")?.let {
+                    acc.usage = mergeUsage(acc.usage, anthropicUsage(it))
+                }
+            }
+            "message_delta" -> {
+                json.optJSONObject("usage")?.let {
+                    acc.usage = mergeUsage(acc.usage, anthropicUsage(it))
+                }
+            }
             "content_block_start" -> {
                 val block = json.optJSONObject("content_block")
                 val idx = json.optInt("index", 0)
@@ -566,7 +701,10 @@ object GoogleAdapter : ProviderAdapter {
         systemPrompt: String,
         tools: List<ToolDefinition>,
         streaming: Boolean,
-        reasoning: String
+        reasoning: String,
+        provider: String,
+        cacheKey: String,
+        context: String
     ): JSONObject {
         val contents = JSONArray()
         for (turn in history) {
@@ -610,15 +748,30 @@ object GoogleAdapter : ProviderAdapter {
         }
 
         val root = JSONObject().put("contents", contents)
-        val thinkingBudget = ReasoningEfforts.googleThinkingBudget(ReasoningEffort.fromKey(reasoning))
+        val plan = ReasoningEfforts.planFor(provider, model, reasoning)
+        val budget = plan.googleThinkingBudget
         val generation = JSONObject()
             .put("temperature", TEMPERATURE)
             .put("topP", TOP_P)
-            .put("maxOutputTokens", if (thinkingBudget != null && thinkingBudget > 0) thinkingBudget + 2048 else MAX_TOKENS)
-        if (thinkingBudget != null) {
-            generation.put("thinkingConfig", JSONObject().put("thinkingBudget", thinkingBudget))
+            .put("maxOutputTokens", if (budget != null && budget > 0) budget + 2048 else MAX_TOKENS)
+        when {
+            plan.googleThinkingLevel != null ->
+                generation.put("thinkingConfig", JSONObject().put("thinkingLevel", plan.googleThinkingLevel))
+            budget != null ->
+                generation.put("thinkingConfig", JSONObject().put("thinkingBudget", budget))
         }
         root.put("generationConfig", generation)
+        if (context.isNotBlank()) {
+            val last = contents.optJSONObject(contents.length() - 1)
+            val parts = last?.optJSONArray("parts")
+            if (last != null && parts != null && last.optString("role") == "user") {
+                parts.put(JSONObject().put("text", context))
+            } else {
+                contents.put(
+                    JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", context)))
+                )
+            }
+        }
         if (systemPrompt.isNotBlank()) {
             root.put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
         }
@@ -661,7 +814,7 @@ object GoogleAdapter : ProviderAdapter {
                 imageData = inlineData.optString("data")
             }
         }
-        return RawModelReply(text, toolCalls, imageMime, imageData)
+        return RawModelReply(text, toolCalls, imageMime, imageData, usage = googleUsage(json.optJSONObject("usageMetadata")))
     }
 
     override fun parseStreamEvent(
@@ -670,6 +823,7 @@ object GoogleAdapter : ProviderAdapter {
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
+        json.optJSONObject("usageMetadata")?.let { acc.usage = googleUsage(it) }
         val parts = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
         if (parts != null) {
             for (i in 0 until parts.length()) {
