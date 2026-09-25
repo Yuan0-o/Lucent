@@ -460,7 +460,7 @@
     <issue
         id="GradleDependency"
         message="A newer version of `compileSdk` than 36 is available: 37"
-        errorLine1="    compileSdk = 36 // Newest androidx requires API 37, whose platform is not on any SDK channel yet; 36 is the newest installable platform (AGP 9.4 supports it)."
+        errorLine1="    compileSdk = 36"
         errorLine2="    ~~~~~~~~~~~~~~~">
         <location
             file="build.gradle.kts"

@@ -1,4 +1,3 @@
-# Build outputs and local tool state.
 build/
 .gradle/
 local.properties
@@ -6,16 +5,11 @@ local.properties
 .idea/
 __pycache__/
 
-# Native sources fetched by CI at build time (see .github/workflows/build.yml).
 app/src/main/cpp/llama.cpp-src/
 rust/target/
 
-# Signing material. The release keystore lives in a GitHub Actions secret and in your own
-# backup, never here. This is a safety net for git clients; GitHub's *web* uploader does not
-# read .gitignore, so the real rule is: never select these files when uploading.
 *.keystore
 *.jks
 keystore-base64.txt
 
-# Release notes live on the release page, not in the repository root.
 RELEASE_NOTES*.md
