@@ -107,6 +107,11 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     override fun shareFile(path: String, mime: String): Boolean = false
 
     override fun notify(title: String, text: String): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
         val manager = NotificationManagerCompat.from(context)
         val notification = NotificationCompat.Builder(context, "lucent_agent")
             .setSmallIcon(com.lucent.app.R.mipmap.ic_launcher)
@@ -253,6 +258,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
         } else outcome.text
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
     override suspend fun location(): String = withContext(Dispatchers.IO) {
         try {
             val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
