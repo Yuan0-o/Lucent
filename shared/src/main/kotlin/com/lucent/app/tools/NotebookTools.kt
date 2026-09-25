@@ -38,6 +38,14 @@ object NotebookTools {
             )
         ),
         ToolDefinition(
+            name = "pin_notebook",
+            description = "Pin or unpin a NOTEBOOK, matched by its name. Pinned notebooks stay at the front of the shelf, whichever sort order is chosen.",
+            params = listOf(
+                ToolParam("notebook", "string", "The name (or part of it) of the notebook"),
+                ToolParam("pinned", "boolean", "true to pin it, false to unpin it")
+            )
+        ),
+        ToolDefinition(
             name = "set_notebook_cover",
             description = "Change the colour of a NOTEBOOK's cover, matched by its name. This is only the colour of the book on the shelf: crimson, ocean, forest, amber, or plum.",
             params = listOf(
@@ -127,6 +135,9 @@ object NotebookTools {
         return when (name) {
             "create_notebook" -> S.ccCreateNotebook(s("title", "name"))
             "set_notebook_cover" -> S.ccSetNotebookCover(s("notebook"), s("cover", "colour", "color"))
+            "pin_notebook" ->
+                if (a.optBoolean("pinned", true)) S.ccPinNotebook(s("notebook", "title", "name"))
+                else S.ccUnpinNotebook(s("notebook", "title", "name"))
             "move_notebook" -> S.ccMoveNotebook(s("notebook"), s("position"))
             "restore_notebook_from_trash" -> S.ccRestoreNotebook(s("notebook", "title", "name"))
             "rename_notebook" -> S.ccRenameNotebook(s("notebook"), s("new_title", "new_name"))
@@ -182,6 +193,24 @@ object NotebookTools {
                 db.notebookDao().insert(Notebook(title = title, color = colorKey))
                 val coverNote = if (colorKey.isBlank()) "" else " Its cover is $cover."
                 ToolExecResult("Created notebook \"$title\".$coverNote Add notes or tasks to it with add_to_notebook.")
+            }
+        }
+
+        "pin_notebook" -> {
+            val all = db.notebookDao().getAllOnce()
+            val query = args.firstString("notebook", "title", "name")
+            val notebook = matchNotebook(all, query)
+            if (notebook == null) {
+                notFoundNotebook(query, all)
+            } else {
+                val pinned = args.optBoolean("pinned", true)
+                db.notebookDao().update(
+                    notebook.copy(pinned = pinned, updatedAt = System.currentTimeMillis())
+                )
+                ToolExecResult(
+                    if (pinned) "Pinned the notebook \"${displayName(notebook)}\" to the front of the shelf."
+                    else "Unpinned the notebook \"${displayName(notebook)}\"."
+                )
             }
         }
 

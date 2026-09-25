@@ -99,7 +99,8 @@ data class Notebook(
     val updatedAt: Long = System.currentTimeMillis(),
     val color: String = "",
     val manualOrder: Int = 0,
-    val trashedAt: Long? = null
+    val trashedAt: Long? = null,
+    val pinned: Boolean = false
 )
 
 data class NotebookItem(

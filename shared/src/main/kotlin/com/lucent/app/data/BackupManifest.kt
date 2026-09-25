@@ -239,6 +239,9 @@ internal object BackupManifestBuilder {
                     .put("title", nb.title)
                     .put("createdAt", nb.createdAt)
                     .put("updatedAt", nb.updatedAt)
+                    .put("color", nb.color)
+                    .put("manualOrder", nb.manualOrder)
+                    .put("pinned", nb.pinned)
             )
         }
         val notebookItemsArray = JSONArray()

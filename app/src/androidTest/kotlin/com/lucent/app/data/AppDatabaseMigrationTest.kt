@@ -541,4 +541,24 @@ class AppDatabaseMigrationTest {
             assertTrue(c.isNull(3))
         }
     }
+
+    @Test
+    fun migrate22To23_addsPinnedToNotebooks() {
+        helper.createDatabase(TEST_DB, 22).apply {
+            execSQL(
+                "INSERT INTO notebooks (id, title, createdAt, updatedAt, color, manualOrder, trashedAt) " +
+                    "VALUES (1, 'Trips', 1000, 1000, 'ocean', 0, NULL)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 23, true, MIGRATION_22_23)
+
+        db.query("SELECT title, color, pinned FROM notebooks WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("Trips", c.getString(0))
+            assertEquals("ocean", c.getString(1))
+            assertEquals(0, c.getInt(2))
+        }
+    }
 }

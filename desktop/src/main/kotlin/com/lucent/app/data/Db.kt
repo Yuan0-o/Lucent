@@ -50,7 +50,7 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        internal const val SCHEMA_VERSION = 22
+        internal const val SCHEMA_VERSION = 23
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -299,6 +299,7 @@ class Db private constructor(private val connection: Connection) {
                         22 -> addColumnIfMissing(conn, "notebooks", "color", "TEXT NOT NULL DEFAULT ''") &&
                             addColumnIfMissing(conn, "notebooks", "manualOrder", "INTEGER NOT NULL DEFAULT 0") &&
                             addColumnIfMissing(conn, "notebooks", "trashedAt", "INTEGER")
+                        23 -> addColumnIfMissing(conn, "notebooks", "pinned", "INTEGER NOT NULL DEFAULT 0")
                         else -> true
                     }
                 } catch (t: Throwable) {
@@ -464,7 +465,8 @@ class Db private constructor(private val connection: Connection) {
                         "updatedAt INTEGER NOT NULL, " +
                         "color TEXT NOT NULL DEFAULT '', " +
                         "manualOrder INTEGER NOT NULL DEFAULT 0, " +
-                        "trashedAt INTEGER)"
+                        "trashedAt INTEGER, " +
+                        "pinned INTEGER NOT NULL DEFAULT 0)"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS notebook_items (" +

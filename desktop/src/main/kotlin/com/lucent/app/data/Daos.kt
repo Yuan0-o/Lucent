@@ -782,7 +782,8 @@ private fun notebookOf(rs: ResultSet) = Notebook(
     updatedAt = rs.getLong("updatedAt"),
     color = rs.getString("color") ?: "",
     manualOrder = rs.getInt("manualOrder"),
-    trashedAt = rs.getLong("trashedAt").let { if (rs.wasNull()) null else it }
+    trashedAt = rs.getLong("trashedAt").let { if (rs.wasNull()) null else it },
+    pinned = rs.getInt("pinned") == 1
 )
 
 private fun notebookItemOf(rs: ResultSet) = NotebookItem(
@@ -843,6 +844,10 @@ class NotebookDao internal constructor(private val db: Db) {
             .apply { setString(1, kind) }.executeQuery().mapAll(::notebookItemOf)
     }
 
+    suspend fun getAllItemsOnce(): List<NotebookItem> = db.use { c ->
+        c.prepareStatement("SELECT * FROM notebook_items").executeQuery().mapAll(::notebookItemOf)
+    }
+
     suspend fun membershipExistsOnce(notebookId: Long, kind: String, itemId: Long): Int = db.use { c ->
         c.prepareStatement(
             "SELECT COUNT(*) FROM notebook_items WHERE notebookId = ? AND itemKind = ? AND itemId = ?"
@@ -852,13 +857,14 @@ class NotebookDao internal constructor(private val db: Db) {
 
     suspend fun insert(notebook: Notebook): Long = db.write("notebooks", "notebook_items") { c ->
         val ps = c.prepareStatement(
-            "INSERT INTO notebooks (title, createdAt, updatedAt, color, manualOrder, trashedAt) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO notebooks (title, createdAt, updatedAt, color, manualOrder, trashedAt, pinned) VALUES (?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, notebook.title); ps.setLong(2, notebook.createdAt); ps.setLong(3, notebook.updatedAt)
         ps.setString(4, notebook.color); ps.setInt(5, notebook.manualOrder)
         if (notebook.trashedAt == null) ps.setNull(6, java.sql.Types.INTEGER)
         else ps.setLong(6, notebook.trashedAt)
+        ps.setInt(7, if (notebook.pinned) 1 else 0)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
@@ -866,14 +872,15 @@ class NotebookDao internal constructor(private val db: Db) {
     suspend fun update(notebook: Notebook) {
         db.write("notebooks") { c ->
             c.prepareStatement(
-                "UPDATE notebooks SET title=?, createdAt=?, updatedAt=?, color=?, manualOrder=?, trashedAt=? WHERE id=?"
+                "UPDATE notebooks SET title=?, createdAt=?, updatedAt=?, color=?, manualOrder=?, trashedAt=?, pinned=? WHERE id=?"
             ).apply {
                 setString(1, notebook.title); setLong(2, notebook.createdAt)
                 setLong(3, notebook.updatedAt); setString(4, notebook.color)
                 setInt(5, notebook.manualOrder)
                 if (notebook.trashedAt == null) setNull(6, java.sql.Types.INTEGER)
                 else setLong(6, notebook.trashedAt)
-                setLong(7, notebook.id)
+                setInt(7, if (notebook.pinned) 1 else 0)
+                setLong(8, notebook.id)
             }.executeUpdate()
         }
     }

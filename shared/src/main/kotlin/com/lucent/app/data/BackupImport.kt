@@ -257,7 +257,14 @@ internal object BackupImporter {
                     val createdAt = o.optLong("createdAt", System.currentTimeMillis())
                     val updatedAt = o.optLong("updatedAt", createdAt)
                     val newId = db.notebookDao().insert(
-                        Notebook(title = title, createdAt = createdAt, updatedAt = updatedAt)
+                        Notebook(
+                            title = title,
+                            createdAt = createdAt,
+                            updatedAt = updatedAt,
+                            color = o.optString("color", ""),
+                            manualOrder = o.optInt("manualOrder", 0),
+                            pinned = o.optBoolean("pinned", false)
+                        )
                     )
                     notebookIdByTitle[title] = newId
                 }

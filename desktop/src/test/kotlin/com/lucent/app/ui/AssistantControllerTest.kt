@@ -65,7 +65,8 @@ class AssistantControllerTest {
             tools: List<ToolDefinition>,
             onDelta: (String) -> Unit,
             onReasoning: (String) -> Unit,
-            onRetry: (Int) -> Unit
+            onRetry: (Int) -> Unit,
+            reasoning: String
         ): Result<RawModelReply> {
             val i = index.getAndIncrement()
             return scripted.getOrElse(i) { scripted.last() }

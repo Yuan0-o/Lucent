@@ -2,6 +2,8 @@ package com.lucent.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -206,14 +208,18 @@ internal fun SettingsBreadcrumb(
     val onGradientMuted = LocalOnGradientMuted.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val crumbs = remember(route) { SettingsTrail.trail(route) }
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    val scroll = rememberScrollState()
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(scroll),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         leading()
         crumbs.forEachIndexed { index, crumb ->
             if (index > 0) {
                 Text(
                     "\u2013",
                     color = onGradientMuted,
-                    fontSize = 10.sp,
+                    fontSize = rootSize / 2,
                     modifier = Modifier.padding(horizontal = 4.dp).alignByBaseline()
                 )
             }

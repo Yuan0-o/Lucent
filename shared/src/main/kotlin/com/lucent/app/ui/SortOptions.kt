@@ -82,13 +82,15 @@ enum class NotebookSort(val key: String) {
     }
 }
 
-fun List<com.lucent.app.data.Notebook>.sortedForDisplay(sort: NotebookSort): List<com.lucent.app.data.Notebook> =
-    when (sort) {
-        NotebookSort.RECENT -> sortedByDescending { it.updatedAt }
-        NotebookSort.OLDEST -> sortedBy { it.updatedAt }
-        NotebookSort.TITLE_AZ -> sortedBy { it.title.lowercase() }
-        NotebookSort.CUSTOM -> sortedWith(compareBy({ it.manualOrder }, { -it.updatedAt }))
+fun List<com.lucent.app.data.Notebook>.sortedForDisplay(sort: NotebookSort): List<com.lucent.app.data.Notebook> {
+    val chosen: Comparator<com.lucent.app.data.Notebook> = when (sort) {
+        NotebookSort.RECENT -> compareByDescending { it.updatedAt }
+        NotebookSort.OLDEST -> compareBy { it.updatedAt }
+        NotebookSort.TITLE_AZ -> compareBy { it.title.lowercase() }
+        NotebookSort.CUSTOM -> compareBy({ it.manualOrder }, { -it.updatedAt })
     }
+    return sortedWith(compareByDescending<com.lucent.app.data.Notebook> { it.pinned }.then(chosen))
+}
 
 fun List<Note>.sortedForDisplay(sort: NoteSort, query: SearchQuery = SearchQuery()): List<Note> {
     val chosen: Comparator<Note> = when (sort) {

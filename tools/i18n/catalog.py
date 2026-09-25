@@ -1577,6 +1577,12 @@ ENTRIES = [
     ("updateRelaunchTitle", "Lucent is updated", "Lucent 已更新", "Lucent を更新しました", "Lucent가 업데이트되었습니다"),
     ("updateRelaunchBody", "Tap to open Lucent.", "点击打开 Lucent。", "タップして Lucent を開きます。", "탭하여 Lucent를 엽니다."),
     ("updateRelaunchBodyVersion(version: String)", "Updated to {version}. Tap to open Lucent.", "已更新到 {version}。点击打开 Lucent。", "{version} に更新しました。タップして Lucent を開きます。", "{version}(으)로 업데이트되었습니다. 탭하여 Lucent를 엽니다."),
+    ("actionSelect", "Select", "选择", "選択", "선택"),
+    ("notebookBatchTrashBody(count: Int)", "Move {count} notebooks to the trash? The notes and tasks inside them are kept.", "把 {count} 个笔记本移入回收站？里面的笔记和任务都会保留。", "{count} 冊のノートブックをゴミ箱に移動しますか？中のノートとタスクは残ります。", "노트북 {count}개를 휴지통으로 옮길까요? 안에 있는 노트와 할 일은 그대로 남습니다."),
+    ("notebookPinA11y", "Pin or unpin the selected notebooks", "置顶或取消置顶所选笔记本", "選択したノートブックを固定／解除", "선택한 노트북 고정 또는 해제"),
+    ("notebookPinnedA11y", "Pinned", "已置顶", "固定済み", "고정됨"),
+    ("ccPinNotebook(title: String)", "Pin the notebook \"{title}\"", "置顶笔记本“{title}”", "ノートブック「{title}」を固定", "노트북 \"{title}\" 고정"),
+    ("ccUnpinNotebook(title: String)", "Unpin the notebook \"{title}\"", "取消置顶笔记本“{title}”", "ノートブック「{title}」の固定を解除", "노트북 \"{title}\" 고정 해제"),
 ]
 
 CONDITIONAL_ENTRIES = {

@@ -2,6 +2,7 @@ package com.lucent.app.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -21,7 +23,10 @@ import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -42,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,12 +97,33 @@ fun NotebooksScreen(
     var showTrash by remember { mutableStateOf(false) }
 
     var draggingNotebookId by remember { mutableStateOf<Long?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<Long>()) }
+    var batchDeleting by remember { mutableStateOf(false) }
+    var itemTitles by remember { mutableStateOf(emptyMap<Long, List<String>>()) }
     var searchText by remember { mutableStateOf("") }
     var dateRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     var actionsExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         runCatching { db.notebookDao().pruneOrphans(db.noteDao(), db.taskDao()) }
+    }
+
+    LaunchedEffect(notebooks.size) {
+        itemTitles = runCatching {
+            val noteTitles = db.noteDao().getAllOnce().associate { it.id to it.title }
+            val taskTitles = db.taskDao().getAllOnce().associate { it.id to it.title }
+            val grouped = HashMap<Long, MutableList<String>>()
+            db.notebookDao().getAllItemsOnce().forEach { item ->
+                val title = when (item.itemKind) {
+                    NotebookItem.KIND_NOTE -> noteTitles[item.itemId]
+                    NotebookItem.KIND_TASK -> taskTitles[item.itemId]
+                    else -> null
+                } ?: return@forEach
+                grouped.getOrPut(item.notebookId) { mutableListOf() }.add(title)
+            }
+            grouped.mapValues { entry -> entry.value.toList() }
+        }.getOrDefault(emptyMap())
     }
 
     val reorderState = rememberReorderDragState()
@@ -106,9 +133,16 @@ fun NotebooksScreen(
     val placementSpec = rememberReorderPlacementSpec()
     val reorderEnabled = true
 
-    BackClaim(active && !showBack && (openNotebookId != null || showTrash))
-    BackHandler(enabled = active && !showBack && (openNotebookId != null || showTrash)) {
-        if (showTrash) showTrash = false else openNotebookId = null
+    BackClaim(active && (selectionMode || (!showBack && (openNotebookId != null || showTrash))))
+    BackHandler(enabled = active && (selectionMode || (!showBack && (openNotebookId != null || showTrash)))) {
+        when {
+            selectionMode -> {
+                selectionMode = false
+                selectedIds = emptySet()
+            }
+            showTrash -> showTrash = false
+            else -> openNotebookId = null
+        }
     }
 
     val open = openNotebookId
@@ -144,6 +178,31 @@ fun NotebooksScreen(
             },
             dismissButton = {
                 TextButton(onClick = { deleting = null }) { Text(com.lucent.app.i18n.S.actionCancel) }
+            }
+        )
+    }
+
+    if (batchDeleting) {
+        val count = selectedIds.size
+        AlertDialog(
+            onDismissRequest = { batchDeleting = false },
+            title = { Text(com.lucent.app.i18n.S.notebookDeleteTitle) },
+            text = { Text(com.lucent.app.i18n.S.notebookBatchTrashBody(count)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val ids = selectedIds
+                    batchDeleting = false
+                    selectionMode = false
+                    selectedIds = emptySet()
+                    AppScope.io.launch {
+                        notebooks.filter { it.id in ids }.forEach { notebook ->
+                            db.notebookDao().update(notebook.copy(trashedAt = System.currentTimeMillis()))
+                        }
+                    }
+                }) { Text(com.lucent.app.i18n.S.actionDelete) }
+            },
+            dismissButton = {
+                TextButton(onClick = { batchDeleting = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
             }
         )
     }
@@ -202,25 +261,48 @@ fun NotebooksScreen(
         )
     }
 
-    val visible = remember(notebooks, searchText, dateRange, sortOption) {
+    val visible = remember(notebooks, searchText, dateRange, sortOption, itemTitles) {
+        val trimmed = searchText.trim()
+        val tokens = trimmed.split(" ").filter { it.isNotBlank() }
+        val pinnedOnly = tokens.any { it.equals("is:pinned", ignoreCase = true) }
+        val colourToken = tokens.firstOrNull { it.startsWith("color:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()?.lowercase()
+        val words = tokens.filterNot { it.startsWith("is:", ignoreCase = true) || it.startsWith("color:", ignoreCase = true) }
         notebooks
             .filter { notebook ->
-                val matchesQuery = searchText.isBlank() ||
-                    notebook.title.contains(searchText.trim(), ignoreCase = true)
+                val matchesPinned = !pinnedOnly || notebook.pinned
+                val matchesColour = colourToken.isNullOrBlank() ||
+                    NotebookColor.fromKey(notebook.color).key == colourToken ||
+                    NotebookColor.fromKey(notebook.color).label.contains(colourToken, ignoreCase = true)
+                val contained = itemTitles[notebook.id].orEmpty()
+                val matchesWords = words.isEmpty() || words.all { word ->
+                    notebook.title.contains(word, ignoreCase = true) ||
+                        NotebookColor.fromKey(notebook.color).label.contains(word, ignoreCase = true) ||
+                        contained.any { it.contains(word, ignoreCase = true) }
+                }
                 val range = dateRange
                 val matchesDate = range == null ||
                     (notebook.updatedAt >= range.first && notebook.updatedAt <= range.second + DAY_MS)
-                matchesQuery && matchesDate
+                matchesPinned && matchesColour && matchesWords && matchesDate
             }
             .sortedForDisplay(sortOption)
+    }
+
+    fun exitSelection() {
+        selectionMode = false
+        selectedIds = emptySet()
     }
 
     fun drop(beforeId: Long?, afterId: Long?) {
         val movingId = draggingNotebookId ?: reorderState.draggingId
         draggingNotebookId = null
-        val moving = movingId?.let { id -> visible.firstOrNull { it.id == id } }
-        if (moving == null) { reorderState.cancel(); return }
-        val reordered = reorderedAround(visible, listOf(moving), beforeId, afterId) { it.id }
+        val picked = if (selectionMode && selectedIds.isNotEmpty()) {
+            visible.filter { it.id in selectedIds }
+        } else {
+            movingId?.let { id -> visible.filter { it.id == id } }
+        }
+        if (picked.isEmpty()) { reorderState.cancel(); return }
+        val reordered = reorderedAround(visible, picked, beforeId, afterId) { it.id }
         if (reordered === visible) { reorderState.cancel(); return }
         AppScope.io.launch {
             reordered.forEachIndexed { index, notebook ->
@@ -232,6 +314,15 @@ fun NotebooksScreen(
         if (sortOption != NotebookSort.CUSTOM) {
             scope.launch { settingsRepo.setNotebooksSort(NotebookSort.CUSTOM.key) }
         }
+        exitSelection()
+    }
+
+    fun setPinned(targets: List<Notebook>, pinned: Boolean) {
+        AppScope.io.launch {
+            targets.forEach { notebook ->
+                db.notebookDao().update(notebook.copy(pinned = pinned, updatedAt = System.currentTimeMillis()))
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -239,51 +330,102 @@ fun NotebooksScreen(
             BackHeader(onBack = onBack)
         }
 
-        CollapsibleActionBar(
-            expanded = actionsExpanded,
-            onToggleExpanded = { actionsExpanded = !actionsExpanded },
-            search = {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotebooks) },
-                    trailingIcon = { SearchHelpButton() },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            actions = {
-                DateFilterIconButton(
-                    active = dateRange != null,
-                    onClick = {
-                        showDateRangePicker(context, dateRange?.first, dateRange?.second) { start, end ->
-                            dateRange = start to end
-                        }
-                    }
-                )
-                SortMenuButton(
-                    current = sortOption,
-                    options = NotebookSort.entries.toList(),
-                    label = { it.label },
-                    onSelect = { option -> scope.launch { settingsRepo.setNotebooksSort(option.key) } },
-                    tint = onGradientMuted,
-                    activeTint = onGradient
-                )
-                IconButton(onClick = { showTrash = true }) {
+        if (selectionMode) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                IconButton(onClick = { exitSelection() }) {
                     Icon(
-                        Icons.Default.Delete,
-                        contentDescription = com.lucent.app.i18n.S.screenTrash,
-                        tint = onGradientMuted
+                        Icons.Default.Close,
+                        contentDescription = com.lucent.app.i18n.S.a11yCancelSelection,
+                        tint = onGradient
                     )
                 }
-            },
-            trailing = {
-                NewItemButton(
-                    contentDescription = com.lucent.app.i18n.S.notebookNew,
-                    onClick = { creating = true }
+                Text(
+                    com.lucent.app.i18n.S.nSelected(selectedIds.size),
+                    color = onGradient,
+                    fontSize = 18.sp,
+                    modifier = Modifier.weight(1f)
                 )
+                IconButton(onClick = {
+                    val targets = visible.filter { it.id in selectedIds }
+                    val anyUnpinned = targets.any { !it.pinned }
+                    setPinned(targets, anyUnpinned)
+                    exitSelection()
+                }) {
+                    Icon(
+                        if (visible.filter { it.id in selectedIds }.all { it.pinned }) Icons.Default.PushPin
+                        else Icons.Default.PushPin,
+                        contentDescription = com.lucent.app.i18n.S.notebookPinA11y,
+                        tint = onGradient
+                    )
+                }
+                TextButton(onClick = {
+                    val allIds = visible.map { it.id }.toSet()
+                    selectedIds = if (selectedIds.containsAll(allIds)) emptySet() else allIds
+                }) {
+                    Text(
+                        if (selectedIds.containsAll(visible.map { it.id }.toSet()) && visible.isNotEmpty())
+                            com.lucent.app.i18n.S.clearAllSelection
+                        else com.lucent.app.i18n.S.selectAll
+                    )
+                }
+                IconButton(
+                    onClick = { if (selectedIds.isNotEmpty()) batchDeleting = true },
+                    enabled = selectedIds.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = com.lucent.app.i18n.S.a11yDeleteSelected,
+                        tint = onGradient
+                    )
+                }
             }
-        )
+        } else {
+            CollapsibleActionBar(
+                expanded = actionsExpanded,
+                onToggleExpanded = { actionsExpanded = !actionsExpanded },
+                search = {
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotebooks) },
+                        trailingIcon = { SearchHelpButton() },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                actions = {
+                    DateFilterIconButton(
+                        active = dateRange != null,
+                        onClick = {
+                            showDateRangePicker(context, dateRange?.first, dateRange?.second) { start, end ->
+                                dateRange = start to end
+                            }
+                        }
+                    )
+                    SortMenuButton(
+                        current = sortOption,
+                        options = NotebookSort.entries.toList(),
+                        label = { it.label },
+                        onSelect = { option -> scope.launch { settingsRepo.setNotebooksSort(option.key) } },
+                        tint = onGradientMuted,
+                        activeTint = onGradient
+                    )
+                    IconButton(onClick = { showTrash = true }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = com.lucent.app.i18n.S.screenTrash,
+                            tint = onGradientMuted
+                        )
+                    }
+                },
+                trailing = {
+                    NewItemButton(
+                        contentDescription = com.lucent.app.i18n.S.notebookNew,
+                        onClick = { creating = true }
+                    )
+                }
+            )
+        }
 
         dateRange?.let { (start, end) ->
             Spacer(modifier = Modifier.height(8.dp))
@@ -313,18 +455,34 @@ fun NotebooksScreen(
                 NotebookShelfItem(
                     notebook = notebook,
                     count = countById[notebook.id] ?: 0,
+                    selectionMode = selectionMode,
+                    selected = notebook.id in selectedIds,
                     itemModifier = Modifier
                         .animateItem(placementSpec = placementSpec)
-                        .reorderVisuals(notebook.id, reorderState, reorderSlots),
+                        .reorderVisuals(notebook.id, reorderState, reorderSlots, shadow = false),
                     reorderModifier = Modifier.reorderableGridItem(
                         id = notebook.id,
                         enabled = reorderEnabled,
                         gridState = gridState,
                         state = reorderState,
-                        onLongPress = { draggingNotebookId = notebook.id },
+                        onLongPress = {
+                            draggingNotebookId = notebook.id
+                            selectionMode = true
+                            if (notebook.id !in selectedIds) selectedIds = selectedIds + notebook.id
+                        },
                         onDrop = { beforeId, afterId -> drop(beforeId, afterId) }
                     ),
-                    onOpen = { openNotebookId = notebook.id },
+                    onOpen = {
+                        if (selectionMode) {
+                            selectedIds = if (notebook.id in selectedIds) selectedIds - notebook.id else selectedIds + notebook.id
+                        } else {
+                            openNotebookId = notebook.id
+                        }
+                    },
+                    onToggleSelect = {
+                        selectedIds = if (notebook.id in selectedIds) selectedIds - notebook.id else selectedIds + notebook.id
+                    },
+                    onTogglePin = { setPinned(listOf(notebook), !notebook.pinned) },
                     onRename = { renaming = notebook },
                     onRecolour = { recolouring = notebook },
                     onDelete = { deleting = notebook }
@@ -340,9 +498,13 @@ private const val DAY_MS = 24L * 60 * 60 * 1000
 private fun NotebookShelfItem(
     notebook: Notebook,
     count: Int,
+    selectionMode: Boolean,
+    selected: Boolean,
     itemModifier: Modifier,
     reorderModifier: Modifier,
     onOpen: () -> Unit,
+    onToggleSelect: () -> Unit,
+    onTogglePin: () -> Unit,
     onRename: () -> Unit,
     onRecolour: () -> Unit,
     onDelete: () -> Unit
@@ -358,43 +520,87 @@ private fun NotebookShelfItem(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box {
-            NotebookCover(
-                colorKey = notebook.color,
-                label = title,
+            Box(
                 modifier = Modifier
-                    .width(84.dp)
-                    .height(112.dp)
                     .clickable {
                         Haptics.tick(context)
-                        onOpen()
+                        if (selectionMode) onToggleSelect() else onOpen()
                     }
                     .then(reorderModifier)
-            )
-            Box(modifier = Modifier.align(Alignment.TopEnd)) {
-                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(30.dp)) {
+            ) {
+                NotebookCover(
+                    colorKey = notebook.color,
+                    label = title,
+                    modifier = Modifier.width(84.dp).height(112.dp)
+                )
+                if (notebook.pinned) {
                     Icon(
-                        Icons.Default.MoreVert,
-                        contentDescription = com.lucent.app.i18n.S.a11yMoreOptions,
-                        tint = Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier.size(16.dp)
+                        Icons.Default.PushPin,
+                        contentDescription = com.lucent.app.i18n.S.notebookPinnedA11y,
+                        tint = Color.White.copy(alpha = 0.95f),
+                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(14.dp)
                     )
                 }
-                androidx.compose.material3.DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false }
-                ) {
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(com.lucent.app.i18n.S.notebookRename) },
-                        onClick = { menuOpen = false; onRename() }
-                    )
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(com.lucent.app.i18n.S.notebookCoverTitle) },
-                        onClick = { menuOpen = false; onRecolour() }
-                    )
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(com.lucent.app.i18n.S.actionDelete) },
-                        onClick = { menuOpen = false; onDelete() }
-                    )
+                if (selectionMode && selected) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(6.dp)
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(onGradient)
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = com.lucent.app.i18n.S.a11ySelected,
+                            tint = onGradientMuted,
+                            modifier = Modifier.align(Alignment.Center).size(14.dp)
+                        )
+                    }
+                }
+            }
+            if (!selectionMode) {
+                Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(30.dp)) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = com.lucent.app.i18n.S.a11yMoreOptions,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (notebook.pinned) com.lucent.app.i18n.S.actionUnpin
+                                    else com.lucent.app.i18n.S.actionPin
+                                )
+                            },
+                            leadingIcon = { Icon(Icons.Default.PushPin, contentDescription = null) },
+                            onClick = { menuOpen = false; onTogglePin() }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(com.lucent.app.i18n.S.actionSelect) },
+                            leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                            onClick = { menuOpen = false; onToggleSelect() }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(com.lucent.app.i18n.S.notebookRename) },
+                            onClick = { menuOpen = false; onRename() }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(com.lucent.app.i18n.S.notebookCoverTitle) },
+                            onClick = { menuOpen = false; onRecolour() }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(com.lucent.app.i18n.S.actionDelete) },
+                            onClick = { menuOpen = false; onDelete() }
+                        )
+                    }
                 }
             }
         }

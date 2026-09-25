@@ -377,6 +377,9 @@ interface NotebookDao {
     @Query("SELECT * FROM notebook_items WHERE itemKind = :kind")
     suspend fun getItemsByKindOnce(kind: String): List<NotebookItem>
 
+    @Query("SELECT * FROM notebook_items")
+    suspend fun getAllItemsOnce(): List<NotebookItem>
+
     @Query("SELECT COUNT(*) FROM notebook_items WHERE notebookId = :notebookId AND itemKind = :kind AND itemId = :itemId")
     suspend fun membershipExistsOnce(notebookId: Long, kind: String, itemId: Long): Int
 

@@ -48,7 +48,7 @@ object AgentTraceLabels {
         "read_note" -> S.agentStepReadNote
         "update_note" -> S.agentStepUpdateNote
         "delete_note", "delete_task", "delete_draft", "delete_notebook" -> S.agentStepDelete
-        "pin_note", "pin_task" -> if (variant == VARIANT_OFF) S.agentStepUnpin else S.agentStepPin
+        "pin_note", "pin_task", "pin_notebook" -> if (variant == VARIANT_OFF) S.agentStepUnpin else S.agentStepPin
         "archive_note" -> if (variant == VARIANT_OFF) S.agentStepUnarchive else S.agentStepArchive
         "set_note_color" -> S.agentStepNoteColor
         "add_note_checklist_item", "set_note_checklist_item_done",
@@ -86,7 +86,8 @@ object AgentTraceLabels {
     }
 
     fun variantFor(toolName: String, argumentsJson: String): String = when (toolName) {
-        "pin_note", "pin_task" -> if (readBool(argumentsJson, "pinned", true)) VARIANT_ON else VARIANT_OFF
+        "pin_note", "pin_task", "pin_notebook" ->
+            if (readBool(argumentsJson, "pinned", true)) VARIANT_ON else VARIANT_OFF
         "archive_note" -> if (readBool(argumentsJson, "archived", true)) VARIANT_ON else VARIANT_OFF
         "set_note_hidden", "set_task_hidden" ->
             if (readBool(argumentsJson, "hidden", true)) VARIANT_ON else VARIANT_OFF

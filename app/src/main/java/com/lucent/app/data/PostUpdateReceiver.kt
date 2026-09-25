@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -48,6 +49,7 @@ class PostUpdateReceiver : BroadcastReceiver() {
         false
     }
 
+    @SuppressLint("MissingPermission")
     private fun notifyTapToOpen(context: Context, version: String) {
         if (!canPost(context)) return
         val channel = NotificationChannelCompat
