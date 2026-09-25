@@ -13,6 +13,7 @@ Two shapes are reported:
      inside a scrollable container, which is how the settings host wraps pages.
 
 Run from the repository root:  python3 tools/compose_scroll_check.py
+Prove the detector itself still works:  python3 tools/compose_scroll_check.py --self-test
 """
 
 from __future__ import annotations
@@ -77,12 +78,7 @@ def enclosing_call(src: str, pos: int):
     return name, i, j, block
 
 
-def axis_of(kind: str) -> str:
-    return "h" if kind in HORIZONTAL else "v"
-
-
 def body_range(src: str, fun_match) -> tuple[int, int]:
-    """Return the source range of a function body, so nesting stays inside it."""
     i = fun_match.end() - 1
     depth = 0
     while i < len(src):
@@ -125,16 +121,56 @@ def body_range(src: str, fun_match) -> tuple[int, int]:
     return i, i
 
 
-def scan_file(path: str):
-    src = open(path, encoding="utf-8").read()
+def axis_of(kind: str) -> str:
+    return "h" if kind in HORIZONTAL else "v"
+
+
+def call_block(src: str, open_paren: int):
+    d = 0
+    j = open_paren
+    while j < len(src):
+        if src[j] == "(":
+            d += 1
+        elif src[j] == ")":
+            d -= 1
+            if d == 0:
+                break
+        j += 1
+    k = j + 1
+    while k < len(src) and src[k] in " \t\r\n":
+        k += 1
+    if k < len(src) and src[k] == "{":
+        d2 = 0
+        e = k
+        while e < len(src):
+            if src[e] == "{":
+                d2 += 1
+            elif src[e] == "}":
+                d2 -= 1
+                if d2 == 0:
+                    break
+            e += 1
+        return k, e
+    return None
+
+
+def scan_source(src: str) -> list[dict]:
     occurrences = []
     for m in SCROLL.finditer(src):
         kind = m.group(1)
-        enc = enclosing_call(src, m.start() - 1)
-        if not enc:
-            continue
-        name, cstart, _, block = enc
-        chain = src[cstart:m.end()]
+        before = src[:m.start()].rstrip()
+        if kind not in HORIZONTAL and kind != "verticalScroll" and not before.endswith("."):
+            name = kind
+            open_paren = src.index("(", m.start())
+            block = call_block(src, open_paren)
+            chain = src[m.start():m.end()]
+            cstart = m.start()
+        else:
+            enc = enclosing_call(src, m.start() - 1)
+            if not enc:
+                continue
+            name, cstart, _, block = enc
+            chain = src[cstart:m.end()]
         occurrences.append(
             {
                 "kind": kind,
@@ -144,38 +180,35 @@ def scan_file(path: str):
                 "cstart": cstart,
                 "line": src.count("\n", 0, cstart) + 1,
                 "block": block,
-                "chain": " ".join(chain.split())[-70:],
             }
         )
-    return src, occurrences
+    return occurrences
 
 
-def kt_files():
-    for base, dirs, files in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in {".git", "build", ".gradle", ".idea"}]
-        for name in files:
-            if name.endswith(".kt"):
-                yield os.path.join(base, name)
+def scrolling_functions(src: str, occurrences: list[dict]) -> dict[str, int]:
+    found = {}
+    for m in FUN.finditer(src):
+        name = m.group(1)
+        _, body_end = body_range(src, m)
+        nested = [o for o in occurrences if m.end() < o["cstart"] < body_end]
+        if not nested:
+            continue
+        if all(o["guarded"] or o["axis"] == "h" for o in nested):
+            continue
+        found.setdefault(name, src.count("\n", 0, m.start()) + 1)
+    return found
 
 
-def main() -> int:
-    rel = lambda p: os.path.relpath(p, ROOT)  # noqa: E731
+def analyse(sources: dict[str, str]) -> list[str]:
     problems: list[str] = []
     pages: dict[str, tuple[str, int]] = {}
     files: dict[str, tuple[str, list]] = {}
 
-    for path in kt_files():
-        src, occurrences = scan_file(path)
+    for path, src in sources.items():
+        occurrences = scan_source(src)
         files[path] = (src, occurrences)
-        for m in FUN.finditer(src):
-            name = m.group(1)
-            _, body_end = body_range(src, m)
-            nested = [o for o in occurrences if m.end() < o["cstart"] < body_end]
-            if not nested:
-                continue
-            if all(o["guarded"] or o["axis"] == "h" for o in nested):
-                continue
-            pages.setdefault(name, (path, src.count("\n", 0, m.start()) + 1))
+        for name, line in scrolling_functions(src, occurrences).items():
+            pages.setdefault(name, (path, line))
 
     for path, (src, occurrences) in files.items():
         for outer in occurrences:
@@ -187,7 +220,7 @@ def main() -> int:
                     continue
                 if start < inner["cstart"] < end:
                     problems.append(
-                        f"{rel(path)}:{outer['line']} {outer['container']}({outer['kind']}) "
+                        f"{path}:{outer['line']} {outer['container']}({outer['kind']}) "
                         f"contains {inner['container']}({inner['kind']}) at line {inner['line']} "
                         f"without a height bound"
                     )
@@ -195,20 +228,96 @@ def main() -> int:
                 for call in re.finditer(rf"(?<![\w.]){re.escape(name)}\s*\(", src):
                     if not (start < call.start() < end):
                         continue
-                    owner = src.rfind("fun ", 0, start)
-                    if owner != -1 and re.match(rf"\s*{re.escape(name)}\s*\(", src[call.end() - 1:]):
-                        continue
                     problems.append(
-                        f"{rel(path)}:{src.count(chr(10), 0, call.start()) + 1} calls {name} "
+                        f"{path}:{src.count(chr(10), 0, call.start()) + 1} calls {name} "
                         f"inside {outer['container']}({outer['kind']}) at line {outer['line']}, "
-                        f"but {name} scrolls itself ({rel(page_path)}:{page_line})"
+                        f"but {name} scrolls itself ({page_path}:{page_line})"
                     )
+    return sorted(set(problems))
 
-    unique = sorted(set(problems))
-    for item in unique:
+
+def kt_sources() -> dict[str, str]:
+    sources = {}
+    for base, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in {".git", "build", ".gradle", ".idea"}]
+        for name in files:
+            if name.endswith(".kt"):
+                full = os.path.join(base, name)
+                sources[os.path.relpath(full, ROOT)] = open(full, encoding="utf-8").read()
+    return sources
+
+
+NESTED_FIXTURE = """
+@Composable
+fun Page() {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            item { Text("one") }
+        }
+    }
+}
+"""
+
+GUARDED_FIXTURE = """
+@Composable
+fun Page() {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+            Text("one")
+        }
+    }
+}
+"""
+
+HOST_FIXTURE = """
+@Composable
+fun Host(route: Int) {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        when (route) {
+            1 -> ChildPage()
+            else -> Text("root")
+        }
+    }
+}
+"""
+
+CHILD_FIXTURE = """
+@Composable
+fun ChildPage() {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Text("child")
+    }
+}
+"""
+
+
+def self_test() -> int:
+    failures = []
+    nested = analyse({"Nested.kt": NESTED_FIXTURE})
+    if not nested:
+        failures.append("a lazy list inside a scrolling column was not reported")
+    guarded = analyse({"Guarded.kt": GUARDED_FIXTURE})
+    if guarded:
+        failures.append("a height-bounded inner scroller was wrongly reported: " + guarded[0])
+    cross = analyse({"Host.kt": HOST_FIXTURE, "Child.kt": CHILD_FIXTURE})
+    if not any("ChildPage" in item for item in cross):
+        failures.append("a scrolling page called from a scrolling host was not reported")
+    for item in failures:
+        print(f"::error::{item}")
+    if failures:
+        return 1
+    print("The nested scroll detector reports both shapes and spares the guarded one.")
+    return 0
+
+
+def main() -> int:
+    if "--self-test" in sys.argv:
+        return self_test()
+    problems = analyse(kt_sources())
+    for item in problems:
         print(item)
-    print(f"nested scroll problems: {len(unique)}")
-    return 1 if unique else 0
+    print(f"nested scroll problems: {len(problems)}")
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":

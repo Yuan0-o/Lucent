@@ -73,7 +73,9 @@ jobs:
           python3 tools/release_notes_check.py /tmp/notes.md
 
       - name: Check no screen would die on a nested scrolling container
-        run: python3 tools/compose_scroll_check.py
+        run: |
+          python3 tools/compose_scroll_check.py --self-test
+          python3 tools/compose_scroll_check.py
 
   apk:
     needs: prepare
