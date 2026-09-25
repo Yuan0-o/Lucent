@@ -645,8 +645,13 @@ class AssistantControllerImpl(
                 refinementContext = null
                 val recentItems = recentItemsContext(db, conversationId)
                 val fastMode = !agentMode
+                val compactMemory = if (smallModelMode || fastMode) {
+                    crossConversationMemory(db, conversationId, memoryTier, cap = SMALL_MODEL_CROSS_BUDGET)
+                } else {
+                    compactCrossMemory
+                }
                 val basePrompt =
-                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory, recentItems = recentItems)
+                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactMemory, recentItems = recentItems)
                     else SystemPrompts.full(name, style, memoryTier, webSearchEnabled, crossMemory, text, recentItems = recentItems)
                 val directPrompt = if (fastMode) {
                     basePrompt +
