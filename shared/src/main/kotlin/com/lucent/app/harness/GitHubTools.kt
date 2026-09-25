@@ -428,9 +428,13 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("POST", "$root/issues", payload)
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
-                ToolExecResult(
-                    "Created #${issue?.optInt("number", 0)} ${issue?.optString("html_url", "").orEmpty()}".trim()
-                )
+                val created = issue?.optString("html_url", "").orEmpty()
+                val createdNumber = issue?.optInt("number", 0) ?: 0
+                if (createdNumber > 0) {
+                    ToolExecResult("Created #$createdNumber $created".trim())
+                } else {
+                    ToolExecResult("Created the issue. $created".trim())
+                }
             }
             "update" -> {
                 if (number <= 0) return numberNeeded("issue")
@@ -518,9 +522,13 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("POST", "$root/pulls", payload)
                 problem(reply)?.let { return it }
                 val pull = HttpJson.objectOf(reply.body)
-                ToolExecResult(
-                    "Created #${pull?.optInt("number", 0)} ${pull?.optString("html_url", "").orEmpty()}".trim()
-                )
+                val created = pull?.optString("html_url", "").orEmpty()
+                val createdNumber = pull?.optInt("number", 0) ?: 0
+                if (createdNumber > 0) {
+                    ToolExecResult("Created #$createdNumber $created".trim())
+                } else {
+                    ToolExecResult("Created the pull request. $created".trim())
+                }
             }
             "update" -> {
                 if (number <= 0) return numberNeeded("pull request")

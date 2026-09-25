@@ -1088,9 +1088,13 @@ object ConnectorTools : HarnessGroupTools {
                 )
                 problem(reply, "GitLab")?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
-                ToolExecResult(
-                    "Created issue !${issue?.optInt("iid", 0)} ${issue?.optString("web_url", "").orEmpty()}".trim()
-                )
+                val created = issue?.optString("web_url", "").orEmpty()
+                val createdIid = issue?.optInt("iid", 0) ?: 0
+                if (createdIid > 0) {
+                    ToolExecResult("Created issue !$createdIid $created".trim())
+                } else {
+                    ToolExecResult("Created the issue. $created".trim())
+                }
             }
             "issue_comment" -> {
                 if (project.isEmpty() || iid <= 0) {
