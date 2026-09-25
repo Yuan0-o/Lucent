@@ -111,8 +111,8 @@ internal fun StepperRow(
 internal fun NavCard(
     title: String,
     subtitle: String,
-    onClick: () -> Unit,
-    trailing: @Composable (() -> Unit)? = null
+    trailing: @Composable (() -> Unit)? = null,
+    onClick: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current

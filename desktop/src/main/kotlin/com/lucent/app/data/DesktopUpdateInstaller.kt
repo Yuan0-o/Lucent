@@ -82,8 +82,8 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
 
     private fun scheduleRelaunch() {
         val launcher = System.getProperty("jpackage.app-path")
-            ?: ProcessHandle.current().parent().orElse(null)?.info()?.command().orElse("")
-            ?: return
+            ?: ProcessHandle.current().parent().orElse(null)?.info()?.command()?.orElse("")
+            ?: ""
         if (launcher.isBlank()) return
         runCatching {
             ProcessBuilder(
