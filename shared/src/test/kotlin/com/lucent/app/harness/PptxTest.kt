@@ -300,7 +300,7 @@ class PptxTest {
         entries.forEach { (name, bytes) ->
             if (!name.endsWith(".rels")) return@forEach
             val document = parseXml(bytes)
-            val base = name.substringBeforeLast("/_rels")
+            val base = if (name == "_rels/.rels") "" else name.substringBeforeLast("/_rels")
             val nodes = document.getElementsByTagName("Relationship")
             for (index in 0 until nodes.length) {
                 val element = nodes.item(index) as? Element ?: continue

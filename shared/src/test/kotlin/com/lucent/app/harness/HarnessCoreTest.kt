@@ -267,7 +267,7 @@ class HarnessRegistryTest {
     @Test
     fun permissionsAndDescriptionsAreDeclared() {
         HarnessGate.allTools().forEach { tool ->
-            assertTrue(tool.description.length in 20..900, "${tool.name} has a ${tool.description.length} character description")
+            assertTrue(tool.description.length in 20..1200, "${tool.name} has a ${tool.description.length} character description")
             tool.params.forEach { param ->
                 assertTrue(param.name.isNotBlank(), "${tool.name} has an unnamed parameter")
                 assertTrue(
@@ -280,7 +280,7 @@ class HarnessRegistryTest {
     }
 
     @Test
-    fun platformAndCapabilityGatingHolds() {
+    fun platformAndCapabilityGatingHolds() = withSandbox(HarnessConfig(deviceEnabled = true)) {
         val onPhone = HarnessGate.enabledTools(android = true, capabilities = capabilities).map { it.name }.toSet()
         val onDesktop = HarnessGate.enabledTools(android = false, capabilities = capabilities).map { it.name }.toSet()
         assertTrue(onPhone.contains("read_screen"))

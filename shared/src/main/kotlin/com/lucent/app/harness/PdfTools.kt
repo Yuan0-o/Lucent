@@ -605,8 +605,13 @@ private fun pdfDecodeStream(dict: PdfDict, raw: ByteArray): ByteArray {
 
 private fun pdfInflate(data: ByteArray): ByteArray? {
     if (data.isEmpty()) return null
+    val zlibWrapped = data.size > 2 && (data[0].toInt() and 0x0F) == 8
+    if (zlibWrapped) {
+        val wrapped = pdfInflateAt(data, 2)
+        if (wrapped != null && wrapped.isNotEmpty()) return wrapped
+    }
     val direct = pdfInflateAt(data, 0)
-    if (direct != null) return direct
+    if (direct != null && direct.isNotEmpty()) return direct
     if (data.size > 2) return pdfInflateAt(data, 2)
     return null
 }
