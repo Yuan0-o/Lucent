@@ -300,6 +300,16 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     override fun exportFile(path: String): Boolean {
         val source = File(path)
         if (!source.isFile) return false
+        if (Build.VERSION.SDK_INT < 29) {
+            return try {
+                val folder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (folder == null || (!folder.isDirectory && !folder.mkdirs())) return false
+                source.copyTo(File(folder, source.name), overwrite = true)
+                true
+            } catch (t: Throwable) {
+                false
+            }
+        }
         return try {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, source.name)
