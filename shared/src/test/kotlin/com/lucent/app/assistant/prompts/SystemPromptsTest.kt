@@ -93,7 +93,7 @@ class SystemPromptsTest {
         )
         val compact = SystemPrompts.compact(
             name = "Lucent", style = "", tier = MemoryTier.LOW,
-            webSearchEnabled = false
+            webSearchEnabled = false, userText = "hello"
         )
         assertTrue(compact.length < full.length)
         assertTrue(compact.contains("No markdown"))

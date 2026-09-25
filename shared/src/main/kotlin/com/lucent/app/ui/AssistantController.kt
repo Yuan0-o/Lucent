@@ -657,7 +657,7 @@ class AssistantControllerImpl(
                     compactCrossMemory
                 }
                 val basePrompt =
-                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled)
+                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text)
                     else SystemPrompts.full(name, style, memoryTier, webSearchEnabled)
                 val promptContext = SystemPrompts.context(
                     userText = text,

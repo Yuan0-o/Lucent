@@ -72,7 +72,8 @@ fun ExpandableGlassTextField(
     val onGradientMuted = LocalOnGradientMuted.current
     var expanded by remember { mutableStateOf(false) }
 
-    val spanBase = LocalTextStyle.current.fontSize.let { if (it.isUnspecified) sizeScaleBase else it }
+    val styleFontSize = LocalTextStyle.current.fontSize
+    val spanBase = if (styleFontSize == TextUnit.Unspecified) sizeScaleBase else styleFontSize
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
     if (fieldValue.text != value) {
         fieldValue = fieldValue.copy(
@@ -177,7 +178,8 @@ private fun ExpandedEditor(
                                   expandedField.selection.end.coerceIn(0, value.length))
         )
     }
-    val spanBase = LocalTextStyle.current.fontSize.let { if (it.isUnspecified) sizeScaleBase else it }
+    val styleFontSize = LocalTextStyle.current.fontSize
+    val spanBase = if (styleFontSize == TextUnit.Unspecified) sizeScaleBase else styleFontSize
     val expandedTransformation = remember(spans, highlightColors, textColors, spanBase) {
         if (spans.isEmpty() || highlightColors.isEmpty()) VisualTransformation.None
         else RichSpanTransformation(spans, highlightColors, textColors, spanBase)

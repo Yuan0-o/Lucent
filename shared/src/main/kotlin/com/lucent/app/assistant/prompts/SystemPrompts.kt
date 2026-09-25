@@ -125,7 +125,8 @@ object SystemPrompts {
         name: String,
         style: String,
         tier: MemoryTier,
-        webSearchEnabled: Boolean
+        webSearchEnabled: Boolean,
+        userText: String
     ): String {
         return buildString {
             append("You are $name, a friendly assistant inside Lucent, a notes and tasks app. ")

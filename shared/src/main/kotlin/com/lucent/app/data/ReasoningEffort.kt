@@ -223,6 +223,7 @@ object ReasoningEfforts {
                 name.contains("gemini-3.8") || name.contains("gemini-3.7") ||
                     name.contains("gemini3.8") || name.contains("gemini3.7") -> GEMINI_NO_MINIMAL
                 name.contains("flash-lite-image") -> levels(ReasoningEffort.MINIMAL, ReasoningEffort.HIGH)
+                name.contains("pro") -> GEMINI_NO_MINIMAL
                 name.contains("gemini-3") || name.contains("gemini3") -> GEMINI_LEVELS
                 name.contains("gemini-2.5") || name.contains("gemini2.5") ->
                     if (name.contains("pro")) GEMINI_BUDGETS_NO_OFF else GEMINI_BUDGETS
