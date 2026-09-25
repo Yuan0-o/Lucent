@@ -765,7 +765,14 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                 repo = updateRepo,
                 onOpenUrl = { url ->
                     runCatching {
-                        startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                        var owner: android.content.Context = context
+                        while (owner is android.content.ContextWrapper && owner !is Activity) owner = owner.baseContext
+                        (owner as? Activity)?.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(url)
+                            )
+                        )
                     }
                 }
             )

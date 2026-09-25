@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
@@ -57,6 +57,7 @@ import com.lucent.app.data.NotebookItem
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.Task
 import com.lucent.app.data.pruneOrphans
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 @Composable
@@ -532,7 +533,7 @@ fun NotebookTrashScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
         ) {
-            androidx.compose.foundation.lazy.items(trashed, key = { it.id }) { notebook ->
+            listItems(trashed, key = { it.id }) { notebook ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

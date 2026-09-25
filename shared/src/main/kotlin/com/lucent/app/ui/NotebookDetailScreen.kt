@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.AppNavigation
 import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Checklist
@@ -50,6 +51,7 @@ import com.lucent.app.data.Notebook
 import com.lucent.app.data.NotebookItem
 import com.lucent.app.data.Task
 import com.lucent.app.tools.TaskActions
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 @Composable

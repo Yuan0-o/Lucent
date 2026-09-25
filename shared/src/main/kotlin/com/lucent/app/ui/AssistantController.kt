@@ -1570,10 +1570,13 @@ object AssistantController {
         useLocalTools: Boolean,
         useLocalGpu: Boolean,
         confirmTools: Boolean,
-        smallModelMode: Boolean
+        smallModelMode: Boolean,
+        agentMode: Boolean = true,
+        localWebSearch: Boolean = false
     ) = impl(appContext).resend(
         appContext, message, url, spec, key, model, name, style, memoryTier, webSearchEnabled,
-        typingHapticsEnabled, useLocalModel, useLocalTools, useLocalGpu, confirmTools, smallModelMode
+        typingHapticsEnabled, useLocalModel, useLocalTools, useLocalGpu, confirmTools, smallModelMode,
+        agentMode, localWebSearch
     )
 
     fun send(
@@ -1597,6 +1600,8 @@ object AssistantController {
         useLocalGpu: Boolean = false,
         confirmTools: Boolean = true,
         smallModelMode: Boolean = false,
+        agentMode: Boolean = true,
+        localWebSearch: Boolean = false,
         answersMessageId: Long = 0,
         targetConversationId: Long? = null,
         attachmentListJson: String? = null,
@@ -1608,7 +1613,8 @@ object AssistantController {
         webSearchEnabled = webSearchEnabled, typingHapticsEnabled = typingHapticsEnabled,
         insertUserMessage = insertUserMessage, useLocalModel = useLocalModel,
         useLocalTools = useLocalTools, useLocalGpu = useLocalGpu, confirmTools = confirmTools,
-        smallModelMode = smallModelMode, answersMessageId = answersMessageId,
+        smallModelMode = smallModelMode, agentMode = agentMode, localWebSearch = localWebSearch,
+        answersMessageId = answersMessageId,
         targetConversationId = targetConversationId, attachmentListJson = attachmentListJson,
         attachments = attachments
     )

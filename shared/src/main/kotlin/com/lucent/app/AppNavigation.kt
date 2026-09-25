@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 import com.lucent.app.ui.HomePanel
 import com.lucent.app.ui.SettingsRoute
 
-object SettingsNav {
+internal object SettingsNav {
     var handler: ((SettingsRoute) -> Unit)? = null
 
     fun go(route: SettingsRoute) {
