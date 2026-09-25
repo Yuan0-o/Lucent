@@ -70,6 +70,9 @@ internal fun LocalModelSettingsPage(
     val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(
         initial = SettingsCache.localBackgroundReplyEnabled
     )
+    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
+    val agentModeOn by repo.agentMode.collectAsState(initial = SettingsCache.agentMode)
+    val toolsShown = !localModelEnabled || agentModeOn
 
     BackHeader(onBack = { onRoute(SettingsRoute.Assistant) })
 
@@ -171,17 +174,19 @@ internal fun LocalModelSettingsPage(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            if (toolsShown) {
+                Spacer(modifier = Modifier.height(14.dp))
 
-            LocalToggleRow(
-                title = S.lmToolsToggle,
-                checked = localToolsEnabled,
-                onGradient = onGradient
-            ) { on ->
-                if (on) onRequestToolsOn()
-                else {
-                    SettingsCache.localToolsEnabled = false
-                    AppScope.io.launch { repo.setLocalToolsEnabled(false) }
+                LocalToggleRow(
+                    title = S.lmToolsToggle,
+                    checked = localToolsEnabled,
+                    onGradient = onGradient
+                ) { on ->
+                    if (on) onRequestToolsOn()
+                    else {
+                        SettingsCache.localToolsEnabled = false
+                        AppScope.io.launch { repo.setLocalToolsEnabled(false) }
+                    }
                 }
             }
 
