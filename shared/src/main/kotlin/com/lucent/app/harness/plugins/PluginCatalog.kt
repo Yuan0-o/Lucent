@@ -128,7 +128,7 @@ object PluginCatalog {
                 "pkg install -y proot tar xz-utils || true; " +
                 "tar -xzf {file} -C ~/lucent/ubuntu/rootfs && " +
                 "printf 'nameserver 223.5.5.5\\n' > ~/lucent/ubuntu/rootfs/etc/resolv.conf && " +
-                "sed -i 's|ports.ubuntu.com|mirrors.tuna.tsinghua.edu.cn|g' ~/lucent/ubuntu/rootfs/etc/apt/sources.list 2>/dev/null || true",
+                "sed -i 's|http://ports.ubuntu.com/ubuntu-ports|https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports|g' ~/lucent/ubuntu/rootfs/etc/apt/sources.list 2>/dev/null || true",
             removeScript = "rm -rf ~/lucent/ubuntu",
             licence = "Ubuntu base image, mixed free licences",
             homepage = "https://cdimage.ubuntu.com/ubuntu-base/"
@@ -181,18 +181,27 @@ object PluginCatalog {
                     "The Document Foundation (official)",
                     "https://download.documentfoundation.org/libreoffice/stable/26.8.0/win/x86_64/$LO_MSI",
                     official = true,
+                    sha256 = "4aa6c6e1895f4055104effcb556bd3362d20c6ad707c149543304f395ef9db95",
                     bytes = LO_SIZE
                 ),
                 PluginSource(
                     "tuna",
                     "Tsinghua TUNA",
-                    "https://mirrors.tuna.tsinghua.edu.cn/tdf-pub/libreoffice/stable/26.8.0/win/x86_64/$LO_MSI",
+                    "https://mirrors.tuna.tsinghua.edu.cn/libreoffice/libreoffice/stable/26.8.0/win/x86_64/$LO_MSI",
+                    bytes = LO_SIZE
+                ),
+                PluginSource(
+                    "aliyun",
+                    "Aliyun",
+                    "https://mirrors.aliyun.com/libreoffice/stable/26.8.0/win/x86_64/$LO_MSI",
                     bytes = LO_SIZE
                 )
             ),
             detectCommand = "command -v soffice",
-            installScript = "apt-get update && apt-get install -y --no-install-recommends " +
-                "libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui",
+            installScript = "apt-get update && (" +
+                "apt-get install -y --no-install-recommends libreoffice-writer-nogui libreoffice-calc-nogui " +
+                "libreoffice-impress-nogui || " +
+                "apt-get install -y --no-install-recommends libreoffice-writer-nogui libreoffice-calc-nogui)",
             removeScript = "apt-get remove -y 'libreoffice*'",
             licence = "MPL-2.0",
             homepage = "https://www.libreoffice.org"
