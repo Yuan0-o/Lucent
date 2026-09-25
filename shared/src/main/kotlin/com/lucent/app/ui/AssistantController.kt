@@ -940,6 +940,7 @@ class AssistantControllerImpl(
         }
 
         val tools = AppTools.definitions(includeWebSearch = webSearchEnabled)
+            .filterNot { com.lucent.app.harness.HarnessGate.isHarnessTool(it.name) }
         val validToolNames = tools.map { it.name }.toHashSet()
 
         val turns = buildHistory(db, conversationId, localTier(memoryTier))
