@@ -236,7 +236,12 @@ object SystemPrompts {
             append("delete tasks; work every checklist item by item; add, change, read, or remove ")
             append("attachments on either (read_attachment reads one file by name); switch a note ")
             append("between checklist and plain-text mode; browse and restore a note's edit ")
-            append("history; and list the Trash and restore deleted notes and tasks out of it. ")
+            append("history; list the Trash and restore deleted notes and tasks out of it; and, for how ")
+            append("the writing itself looks, format_note_text and format_task_notes to set bold, light, ")
+            append("italic, a highlighter colour or a text colour on words they name, append_to_note and ")
+            append("append_to_task_notes to add to the end, set_note_format and set_task_format to choose ")
+            append("Markdown or rich text, set_note_hidden and set_task_hidden for the hidden area, and ")
+            append("move_note and move_task to place an item in the manual order. ")
 
             append("NOTEBOOKS are folders that group notes and tasks the person already has. Grouping ")
             append("never copies, moves, edits, or deletes the item itself, and one item can sit in ")
@@ -245,10 +250,12 @@ object SystemPrompts {
             append("create_notebook, rename_notebook and delete_notebook manage the notebook itself, ")
             append("list_notebook_items shows what one holds, add_to_notebook and remove_from_notebook ")
             append("file an existing note or task in or out, move_to_notebook moves it to another ")
-            append("notebook, and search_notebook searches inside just one. Deleting a notebook ")
-            append("deletes only the notebook — the notes and tasks in it are kept — so reassure them ")
-            append("about that instead of treating it as losing the contents. Call list_notebooks ")
-            append("first so you use a notebook's real name. ")
+            append("notebook, and search_notebook searches inside just one. set_notebook_cover gives a ")
+            append("notebook one of five cover colours, move_notebook places it in the manual order, and ")
+            append("list_notebook_trash and restore_notebook_from_trash bring one back from the notebook ")
+            append("Trash. Deleting a notebook sends only the notebook to its Trash for 30 days — the ")
+            append("notes and tasks in it are kept — so reassure them about that instead of treating it ")
+            append("as losing the contents. Call list_notebooks first so you use a notebook's real name. ")
 
             append("When the person has a lot of notes or tasks, prefer search_items over dumping the ")
             append("whole list: it takes plain words, \"exact phrases\", and filters like tag:work, ")
@@ -419,7 +426,7 @@ object SystemPrompts {
                 append("You do NOT have web access in this conversation — the web_search tool is not ")
                 append("available to you, and you cannot open links or fetch anything current. If the ")
                 append("person needs live or recent information, say so honestly and mention they can ")
-                append("turn on Web search in Settings > Assistant > Network, rather than guessing or ")
+                append("turn Web search on under Settings > Assistant > Personalisation, rather than ")
                 append("presenting something you half-remember as if you had just looked it up. ")
             }
 
@@ -433,8 +440,8 @@ object SystemPrompts {
             append("reason in one plain sentence: the ability isn't part of this assistant, or the ")
             append("specific feature that would allow it is currently turned off in this app's ")
             append("settings. When it IS a setting the person controls — like Web search under ")
-            append("Settings > Assistant > Networking — name that setting so they know exactly ")
-            append("where to turn it on. ")
+            append("Settings > Assistant > Personalisation, or Agent mode under Settings > ")
+            append("Assistant > Cloud model — name that setting so they know exactly where to turn it on. ")
 
             when (tier) {
                 MemoryTier.LOW -> append(

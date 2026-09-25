@@ -350,7 +350,7 @@ ENTRIES = [
     ("downloadReplyTxt", "Reply text (.txt)", "回复文本 (.txt)", "返信テキスト (.txt)", "답장 텍스트 (.txt)"),
     ("downloadNone", "This reply has no files to download.", "此回复没有可下载的文件。", "この返信にはダウンロードできるファイルがありません。", "이 답장에는 다운로드할 파일이 없습니다."),
     ("actionDownload", "Download", "下载", "ダウンロード", "다운로드"),
-    ("setupApiFirst", "No assistant is set up yet. Add an API in Settings > Assistant > API, or import a local model (Settings > Assistant > Local model) to chat offline with no API key.", "还没有可用的助手。请在「设置 > 助手 > API」中添加一个 API；或在「设置 > 助手 > 本地模型」中导入本地模型，无需 API 密钥即可离线聊天。", "アシスタントがまだ設定されていません。「設定 > アシスタント > API」でAPIを追加するか、「設定 > アシスタント > ローカルモデル」からモデルをインポートすると、APIキーなしでオフラインで会話できます。", "아직 설정된 어시스턴트가 없습니다. '설정 > 어시스턴트 > API'에서 API를 추가하거나, '설정 > 어시스턴트 > 로컬 모델'에서 모델을 가져오면 API 키 없이 오프라인으로 대화할 수 있습니다."),
+    ("setupApiFirst", "No assistant is set up yet. Add an API under Settings > Assistant > Cloud model, or import a local model (Settings > Assistant > Local model) to chat offline with no API key.", "还没有可用的助手。请在「设置 > 助手 > 云端模型」中添加 API；或在「设置 > 助手 > 本地模型」中导入本地模型，无需 API 密钥即可离线聊天。", "アシスタントがまだ設定されていません。「設定 > アシスタント > クラウドモデル」でAPIを追加するか、「設定 > アシスタント > ローカルモデル」からモデルをインポートすると、APIキーなしでオフラインで会話できます。", "아직 설정된 어시스턴트가 없습니다. '설정 > 어시스턴트 > 클라우드 모델'에서 API를 추가하거나, '설정 > 어시스턴트 > 로컬 모델'에서 모델을 가져오면 API 키 없이 오프라인으로 대화할 수 있습니다."),
     ("exportYou", "You", "你", "あなた", "나"),
     ("inputAttachedFile(name: String)", "[Attached file: {name}]", "[附件：{name}]", "[添付ファイル：{name}]", "[첨부 파일: {name}]"),
     ("inputAttachedFileTooLarge(name: String)", "[Attached file: {name} (too large to read here)]", "[附件：{name}（太大，无法在此读取）]", "[添付ファイル：{name}（大きすぎるためここでは読み込めません）]", "[첨부 파일: {name} (너무 커서 여기서 읽을 수 없음)]"),
