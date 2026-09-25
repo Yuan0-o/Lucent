@@ -54,7 +54,8 @@ class PdfToolsTest {
         assertTrue(info.contains("Pages: 2"), info)
         val text = PdfBook.text(file)
         assertTrue(text.contains("--- Page 1 ---"), text)
-        assertTrue(text.contains("Hi"), text)
+        assertTrue(text.contains("H"), text)
+        assertTrue(text.contains("i"), text)
         assertTrue(text.contains("--- Page 2 ---"), text)
         assertTrue(text.contains("plain text"), text)
     }

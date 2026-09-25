@@ -1379,10 +1379,11 @@ object PdfTools : HarnessGroupTools {
             name = "read_pdf",
             group = group,
             permission = HarnessPermission.READ,
-            description = "Extract the text of a PDF, page by page, with a hand-written parser that understands " +
-                "Flate-compressed content streams and ToUnicode CMaps, so Chinese, Japanese and Korean documents come " +
-                "out correctly. Arguments: path, pages (for example \"1-5,9\"), max_chars. Use pdf_info first when you " +
-                "only need the metadata or the page count.",
+            description = "Extract the text of a PDF, page by page, with a hand-written parser. Flate-compressed " +
+                "content streams are decoded and simple ToUnicode maps are applied, so most text comes out " +
+                "readable; a page whose glyphs cannot be mapped is reported as having no extractable text. " +
+                "Arguments: path, pages (for example \"1-5,9\"), max_chars. Use pdf_info first when you only " +
+                "need the metadata or the page count.",
             params = listOf(
                 HarnessSchema.text("path", "PDF file to read"),
                 HarnessSchema.text("pages", "Pages to read, for example 1-3,7 (default all)", false),
