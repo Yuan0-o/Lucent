@@ -48,6 +48,7 @@ object SystemPrompts {
         recentItems: String = "",
         webSearchEnabled: Boolean = false
     ): String {
+        val onDevice = tools.filterNot { com.lucent.app.harness.HarnessGate.isHarnessTool(it.name) }
         return buildString {
             append("You are a helpful assistant living inside Lucent, a personal notes and tasks app. ")
             append("Always reply in the same language the user writes in. Be concise, warm, and clear. ")
@@ -80,7 +81,7 @@ object SystemPrompts {
                 "Only report an action as done after its \"Result of <tool>:\" line " +
                 "confirms it worked; if a result says it failed, tell the user it failed.\n\n")
             append("Tools:\n")
-            for (t in tools) {
+            for (t in onDevice) {
                 val params = t.params.joinToString(", ") { p -> p.name + if (p.required) "*" else "" }
                 append("- ").append(t.name)
                 if (params.isNotEmpty()) append("(").append(params).append(")")
