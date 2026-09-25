@@ -146,6 +146,7 @@ object SystemPrompts {
                 append("Background from other chats with this user arrives in the Lucent context block.\n")
             }
             append("\n")
+            append(com.lucent.app.harness.HarnessPrompt.compactBlock())
             append(context(userText))
         }
     }
@@ -483,5 +484,6 @@ object SystemPrompts {
 
             append("Above all: be genuinely warm, actually helpful, and completely human. Confirm what you ")
             append("did the way a friend would mention it in passing, never in a scripted way.")
+            append(com.lucent.app.harness.HarnessPrompt.block())
         }
     }}

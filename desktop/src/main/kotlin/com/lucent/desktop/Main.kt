@@ -82,6 +82,20 @@ fun main() {
         com.lucent.app.data.AutoUpdate.cleanUpAfterUpdate(running)
     }
 
+    com.lucent.app.harness.HarnessRuntime.android = false
+    com.lucent.app.harness.HarnessRuntime.host = com.lucent.app.harness.DesktopHarnessHost
+    com.lucent.app.harness.HarnessRuntime.shell = com.lucent.app.harness.DesktopHarnessShell
+    com.lucent.app.harness.HarnessRuntime.pluginHost = com.lucent.app.harness.plugins.PluginManager.desktop()
+    AppScope.io.launch {
+        val raw = runCatching { SettingsRepository(context).harnessConfigOnce() }.getOrDefault("")
+        val config = com.lucent.app.harness.HarnessConfig.parse(raw)
+        com.lucent.app.data.SettingsCache.harnessConfigJson = config.toJson()
+        com.lucent.app.harness.HarnessRuntime.install(config)
+    }
+    com.lucent.app.harness.HarnessRuntime.observe { config ->
+        AppScope.io.launch { runCatching { SettingsRepository(context).setHarnessConfig(config.toJson()) } }
+    }
+
     val focusRequests = MutableStateFlow(0L)
     if (!com.lucent.desktop.platform.SingleInstance.acquire(context) {
             focusRequests.value = System.currentTimeMillis()

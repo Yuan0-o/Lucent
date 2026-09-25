@@ -5,7 +5,7 @@ plugins {
     id("androidx.baselineprofile")
 }
 
-val MARKETING_VERSION = "2.9.7"
+val MARKETING_VERSION = "3.0.0"
 
 val ciVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull()
     ?: MARKETING_VERSION.replace(".", "").toIntOrNull()
@@ -24,19 +24,18 @@ android {
 
     defaultConfig {
         applicationId = "com.jiaying.yuan.lucentapp"
-        minSdk = if (project.hasProperty("cpuOnly")) 26 else 28
+        minSdk = 28
         targetSdk = 36
         versionCode = ciVersionCode
         versionName = ciVersionName
 
         ndk {
-            abiFilters += if (project.hasProperty("cpuOnly")) listOf("arm64-v8a", "armeabi-v7a")
-                          else listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
 
         externalNativeBuild {
             cmake {
-                arguments += "-DLUCENT_ENABLE_VULKAN=${if (project.hasProperty("cpuOnly")) "OFF" else "ON"}"
+                arguments += "-DLUCENT_ENABLE_VULKAN=ON"
 
                 System.getenv("LUCENT_SPIRV_HEADERS_DIR")?.takeIf { it.isNotBlank() }?.let { dir ->
                     arguments += "-DSPIRV-Headers_DIR=$dir"
@@ -145,8 +144,7 @@ val cargoNdkBuild = tasks.register<Exec>("cargoNdkBuild") {
     group = "build"
     description = "Compile rust/ into liblucent_native.so for every packaged ABI"
     workingDir = rustProjectDir
-    val rustTargets = if (project.hasProperty("cpuOnly"))
-        listOf("arm64-v8a", "armeabi-v7a") else listOf("arm64-v8a")
+    val rustTargets = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
     commandLine(
         buildList {
             add("cargo"); add("ndk")

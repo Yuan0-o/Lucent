@@ -133,6 +133,8 @@ private object SettingsKeys {
     val STAGED_UPDATE_FILES = stringPreferencesKey("staged_update_files")
 
     val PRIVILEGED_ENABLED = booleanPreferencesKey("privileged_enabled")
+
+    val HARNESS_CONFIG_ENC = stringPreferencesKey("harness_config_enc")
 }
 
 const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
@@ -610,6 +612,20 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSavedSearches(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SAVED_SEARCHES] = json }
     }
+
+    val harnessConfig: Flow<String> = context.settingsDataStore.data.map {
+        val stored = it[SettingsKeys.HARNESS_CONFIG_ENC] ?: return@map ""
+        LocalSecrets.decrypt(stored)
+    }
+
+    suspend fun setHarnessConfig(json: String) {
+        SettingsCache.harnessConfigJson = json
+        val sealed = LocalSecrets.encrypt(json)
+        context.settingsDataStore.edit { it[SettingsKeys.HARNESS_CONFIG_ENC] = sealed }
+    }
+
+    suspend fun harnessConfigOnce(): String =
+        LocalSecrets.decrypt(context.settingsDataStore.data.first()[SettingsKeys.HARNESS_CONFIG_ENC] ?: "")
     val customTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CUSTOM_TEMPLATES] ?: "[]" }
     suspend fun setCustomTemplatesJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CUSTOM_TEMPLATES] = json }

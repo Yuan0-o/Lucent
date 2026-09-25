@@ -371,6 +371,7 @@ internal object BackupImporter {
                 if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))
                 if (s.has("notebooksSort")) settings.setNotebooksSort(s.optString("notebooksSort"))
                 if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
+                if (restoreGeneral && s.has("harnessConfig")) settings.setHarnessConfig(s.optString("harnessConfig"))
                 if (restoreGeneral && s.has("customTemplates")) settings.setCustomTemplatesJson(s.optString("customTemplates"))
                 if (restoreGeneral && s.has("templateDraft")) settings.setTemplateDraftJson(s.optString("templateDraft"))
                 if (restoreGeneral && s.has("hiddenTemplates")) settings.setHiddenTemplatesJson(s.optString("hiddenTemplates"))

@@ -94,6 +94,7 @@ class SettingsRepository(private val context: Context) {
         const val STAGED_UPDATE_TAG = "staged_update_tag"
         const val STAGED_UPDATE_FILES = "staged_update_files"
         const val PRIVILEGED_ENABLED = "privileged_enabled"
+        const val HARNESS_CONFIG_ENC = "harness_config_enc"
     }
 
 
@@ -633,6 +634,16 @@ class SettingsRepository(private val context: Context) {
     }
     val savedSearches: Flow<String> = state.map { str(it, K.SAVED_SEARCHES) ?: "" }
     suspend fun setSavedSearches(json: String) { edit { it[K.SAVED_SEARCHES] = json } }
+
+    val harnessConfig: Flow<String> = state.map { secret(it, K.HARNESS_CONFIG_ENC, "") }
+
+    suspend fun setHarnessConfig(json: String) {
+        SettingsCache.harnessConfigJson = json
+        val sealed = LocalSecrets.encrypt(json)
+        edit { it[K.HARNESS_CONFIG_ENC] = sealed }
+    }
+
+    suspend fun harnessConfigOnce(): String = secret(state.first(), K.HARNESS_CONFIG_ENC, "")
     val customTemplatesJson: Flow<String> = state.map { str(it, K.CUSTOM_TEMPLATES) ?: "[]" }
     suspend fun setCustomTemplatesJson(json: String) { edit { it[K.CUSTOM_TEMPLATES] = json } }
     val templateDraftJson: Flow<String> = state.map { str(it, K.TEMPLATE_DRAFT) ?: "" }

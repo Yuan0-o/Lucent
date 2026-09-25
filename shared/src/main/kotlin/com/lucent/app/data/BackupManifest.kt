@@ -202,6 +202,7 @@ internal object BackupManifestBuilder {
             .put("systemIntegrationEnabled", settings.systemIntegrationEnabled.first())
             .put("startupLoggingEnabled", settings.startupLoggingEnabled.first())
             .put("savedSearches", settings.savedSearches.first())
+            .put("harnessConfig", settings.harnessConfig.first())
             .put("customTemplates", settings.customTemplatesJson.first())
             .put("templateDraft", settings.templateDraftJson.first())
             .put("hiddenTemplates", settings.hiddenTemplatesJson.first())

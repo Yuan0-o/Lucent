@@ -117,6 +117,22 @@ fun PersonalizationSettingsPage(
             AppScope.io.launch { repo.setAgentMode(on) }
         }
 
+        var subAgentsOn by remember { mutableStateOf(com.lucent.app.harness.HarnessRuntime.config().subAgents) }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        ToggleRow(
+            title = S.agentSubAgents,
+            detail = S.agentSubAgentsSub,
+            checked = subAgentsOn,
+            onGradient = onGradient,
+            onGradientMuted = onGradientMuted
+        ) { on ->
+            subAgentsOn = on
+            val config = com.lucent.app.harness.HarnessRuntime.config()
+            com.lucent.app.harness.HarnessRuntime.update(config.copy(subAgents = on))
+        }
+
         if (webSearchShown) {
             Spacer(modifier = Modifier.height(14.dp))
 

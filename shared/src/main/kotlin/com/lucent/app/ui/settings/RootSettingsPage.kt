@@ -17,6 +17,8 @@ internal fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     Spacer(modifier = Modifier.height(12.dp))
     NavCard(S.settingsAssistantTitle, S.settingsAssistantSub) { onRoute(SettingsRoute.Assistant) }
     Spacer(modifier = Modifier.height(12.dp))
+    NavCard(S.settingsAgentTitle, S.settingsAgentSub) { onRoute(SettingsRoute.Agent) }
+    Spacer(modifier = Modifier.height(12.dp))
     NavCard(S.settingsEditorTitle, S.settingsEditorSub) { onRoute(SettingsRoute.Editor) }
     Spacer(modifier = Modifier.height(12.dp))
     NavCard(S.cloudTitle, S.cloudSub) { onRoute(SettingsRoute.Cloud) }

@@ -94,6 +94,10 @@ import com.lucent.app.ui.settings.ThemeSettingsPage
 import com.lucent.app.ui.settings.AboutSettingsPage
 import com.lucent.app.ui.settings.AdvancedSettingsPage
 import com.lucent.app.ui.settings.LicenceSettingsPage
+import com.lucent.app.ui.settings.AgentSettingsPage
+import com.lucent.app.ui.settings.PluginSettingsPage
+import com.lucent.app.ui.settings.McpSettingsPage
+import com.lucent.app.ui.settings.AuditSettingsPage
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -104,7 +108,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Plugins, Mcp, Audit }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -2463,6 +2467,34 @@ fun SettingsScreen(active: Boolean = true) {
                     context.startActivity(intent)
                 }
             )
+
+            SettingsRoute.Agent -> AgentSettingsPage(
+                onRoute = { navigate(it) },
+                onOpenAccessibility = {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(android.content.Intent.ACTION_ACCESSIBILITY_SETTINGS)
+                        )
+                    }
+                },
+                onGrantStorage = {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                android.net.Uri.parse("package:" + context.packageName)
+                            )
+                        )
+                    }
+                },
+                accessibilityRunning = com.lucent.app.harness.LucentAccessibilityService.isRunning()
+            )
+
+            SettingsRoute.Plugins -> PluginSettingsPage(onRoute = { navigate(it) })
+
+            SettingsRoute.Mcp -> McpSettingsPage(onRoute = { navigate(it) })
+
+            SettingsRoute.Audit -> AuditSettingsPage(onRoute = { navigate(it) })
 
             SettingsRoute.Advanced -> {
                 val privilegedOn by repo.privilegedEnabled.collectAsState(initial = SettingsCache.privilegedEnabled)

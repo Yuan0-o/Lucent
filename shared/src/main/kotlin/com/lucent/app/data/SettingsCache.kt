@@ -191,6 +191,9 @@ object SettingsCache {
     @Volatile
     var cloudPasswordEnc: String = ""
 
+    @Volatile
+    var harnessConfigJson: String = ""
+
     fun seed(prefs: SettingsRepository.StartupPrefs) {
         assistantName = prefs.assistantName
         notesSort = prefs.notesSort

@@ -200,6 +200,38 @@ generating a reply. The model file stays on your device, and the model is unload
 the app. Local tools are a separate switch and are off by default. GPU acceleration is optional and
 can be turned off.
 
+### 5.8 The agent toolkit
+
+Beyond notes and tasks, the assistant can be given a real toolkit: a workspace folder it may read
+and write, shell commands, documents, plugins, and connections to outside services. Each of those
+is a separate switch in Settings → Agent, and the parts that reach outside your device only do
+anything when you turn them on and, by default, ask you first.
+
+- **Workspace.** You choose one folder. Everything the assistant reads or writes lives inside it.
+  Files outside it are refused unless you allow the "outside the workspace" permission, and nothing
+  outside it can ever be written.
+- **Commands.** Running a shell command asks you first unless you change that permission. Commands
+  run on your machine with the working directory inside the workspace, with a timeout you set, and
+  each one is written to the activity log.
+- **Documents.** Word, Excel and PowerPoint files are written and read on your device by Lucent's
+  own code. Nothing is uploaded to convert or create a file at any point.
+- **Plugins.** Optional tools — a Linux userland, Python with document libraries, LibreOffice,
+  Node.js, media and OCR tools — are downloaded only when you ask for them, from the upstream
+  project or a public mirror, straight into your own storage. Lucent sends no telemetry about them.
+- **Connections.** GitHub, Notion, Slack, Google Drive, OneDrive, GitLab, Jira, Linear, WebDAV and
+  any MCP server you add are reached directly from your device with a token you supply. Only the
+  request you asked for is sent, and only to the service you configured. Lucent has no server of
+  its own in the middle, and stores the tokens encrypted on your device.
+- **Device control (Android).** If you enable it and switch on the accessibility service, the
+  assistant can read the screen, tap, type, take screenshots, list and open apps, read
+  notifications, and use the clipboard and sensors. Screen reading happens on the device; it is
+  only ever sent anywhere if a tool result containing it goes to the assistant provider you chose,
+  which is the same channel as any other message you send.
+- **What stays local.** The workspace, snapshots taken before a file is changed, the activity log,
+  remembered facts, and skill files all stay on your device. The activity log records the tool
+  name, the arguments (shortened to 300 characters) and the outcome; it is stored encrypted and
+  can be cleared at any time from the same settings page.
+
 ## 6. Backups
 
 A backup is a single `.lcb` file that you create. It can contain notes, tasks, version history,
@@ -256,10 +288,15 @@ section 8.
 | Vibration (Android `VIBRATE`) | Typing haptics and tactile feedback. |
 | Install packages (Android `REQUEST_INSTALL_PACKAGES`) | Installing an update that you chose to download, using the system installer. |
 | Shizuku service permission (Android `moe.shizuku.manager.permission.API_V23`) | The optional privileged integration described in section 7. Declared only so that Shizuku can be used at all; it has no effect unless you install Shizuku and grant it. |
+| All-files access (Android `MANAGE_EXTERNAL_STORAGE`) | Optional, off unless you grant it, and used only so that the workspace folder you choose can be read and written as ordinary files. Without it Lucent keeps the workspace inside its own storage. |
+| Location (Android `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`) | Only read when the assistant calls its location tool, which itself only happens when device control is enabled and you have granted the permission. Lucent never tracks you in the background. |
+| Termux commands (Android `com.termux.permission.RUN_COMMAND`) | Lets Lucent hand a command to Termux, which is the only supported way to run real command-line tools on Android. Termux must also be installed, configured to allow external apps, and started by you; otherwise the permission does nothing. |
 
-Lucent does not request broad access to your files or your storage. Files and folders are chosen by
-you through the system's own document picker, and Lucent only receives the specific item you
-selected. Fonts and model files are the same: you pick them, and they are copied into the app's own
+Lucent does not ask for broad access to your files or your storage unless you turn the agent
+toolkit on and point it at a workspace folder, in which case all-files access is what lets that one
+folder be read and written as ordinary files; you can decline it and keep the workspace inside
+Lucent's own storage instead. Elsewhere, files and folders are chosen by you through the system's
+own document picker, and Lucent only receives the specific item you selected. Fonts and model files are the same: you pick them, and they are copied into the app's own
 storage.
 
 ## 9. The controls you hold

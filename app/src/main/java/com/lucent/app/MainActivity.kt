@@ -217,6 +217,22 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        com.lucent.app.harness.HarnessRuntime.android = true
+        com.lucent.app.harness.HarnessRuntime.host = com.lucent.app.harness.AndroidHarnessHost(applicationContext)
+        com.lucent.app.harness.HarnessRuntime.shell = com.lucent.app.harness.AndroidHarnessShell(applicationContext)
+        com.lucent.app.harness.HarnessRuntime.pluginHost =
+            com.lucent.app.harness.plugins.PluginManager.android(applicationContext)
+        AppScope.io.launch {
+            val raw = runCatching { settingsRepo.harnessConfigOnce() }.getOrDefault("")
+            val config = com.lucent.app.harness.HarnessConfig.parse(raw)
+            com.lucent.app.data.SettingsCache.harnessConfigJson = config.toJson()
+            com.lucent.app.harness.HarnessRuntime.install(config)
+            StartupLog.event(applicationContext, "agent toolkit: " + com.lucent.app.harness.HarnessPrompt.capabilitySummary())
+        }
+        com.lucent.app.harness.HarnessRuntime.observe { config ->
+            AppScope.io.launch { runCatching { settingsRepo.setHarnessConfig(config.toJson()) } }
+        }
+
         val integrationEnabled = startup.systemIntegrationEnabled
         AppScope.io.launch { ShareIntegration.setEnabled(applicationContext, integrationEnabled) }
 

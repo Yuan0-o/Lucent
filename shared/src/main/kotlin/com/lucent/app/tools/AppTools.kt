@@ -35,7 +35,8 @@ object AppTools {
 
     fun definitions(includeWebSearch: Boolean = false): List<ToolDefinition> =
         baseDefinitions() + NotebookTools.definitions() + FormattingTools.definitions() +
-            (if (includeWebSearch) listOf(webSearchDefinition()) else emptyList())
+            (if (includeWebSearch) listOf(webSearchDefinition()) else emptyList()) +
+            com.lucent.app.harness.HarnessGate.definitions(com.lucent.app.harness.HarnessRuntime.android)
 
     private fun webSearchDefinition(): ToolDefinition = ToolDefinition(
         name = "web_search",
@@ -49,7 +50,9 @@ object AppTools {
         "list_notebooks", "read_notebook", "list_notebook_items", "search_notebook", "list_notebook_trash"
     )
 
-    fun isMutating(name: String): Boolean = name !in READ_ONLY_TOOLS
+    fun isMutating(name: String): Boolean =
+        if (com.lucent.app.harness.HarnessGate.isHarnessTool(name)) com.lucent.app.harness.HarnessGate.needsConfirmation(name)
+        else name !in READ_ONLY_TOOLS
 
     fun describeToolCall(name: String, argumentsJson: String): String {
         val a = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
@@ -1817,7 +1820,11 @@ object AppTools {
 
             else -> FormattingTools.execute(db, name, args)
                 ?: NotebookTools.execute(db, name, args)
-                ?: ToolExecResult("Unknown tool: $name", success = false)
+                ?: if (com.lucent.app.harness.HarnessGate.isHarnessTool(name)) {
+                    com.lucent.app.harness.HarnessGate.execute(appContext, db, name, argumentsJson)
+                } else {
+                    ToolExecResult("Unknown tool: $name", success = false)
+                }
         }
     }
 }

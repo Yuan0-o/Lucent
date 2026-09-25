@@ -335,4 +335,48 @@ The desktop UI renders through Skiko, which embeds **Skia** — © Google LLC, l
 
 ---
 
+## Optional components Lucent can fetch for you
+
+Lucent 3.0 bundles no heavy toolchains. From Settings → Agent → Plugins, or through the assistant's own `install_plugin` tool, Lucent can download the components below **at your instruction**, directly from the upstream project or from a public mirror, into storage you own. They are not part of the Lucent package, are not modified or relinked by Lucent, and stay under their own licences, which you accept by choosing to install them. None of them is required for Lucent to work.
+
+| Component | Licence | Upstream |
+|---|---|---|
+| Termux | GPL-3.0 | https://termux.dev |
+| PRoot, proot-distro | GPL-2.0 | https://proot-me.github.io |
+| Ubuntu Base 24.04 | Mixed free licences (Ubuntu) | https://cdimage.ubuntu.com/ubuntu-base/ |
+| LibreOffice | MPL-2.0 | https://www.libreoffice.org |
+| Python | PSF-2.0 | https://www.python.org |
+| python-docx | MIT | https://github.com/python-openxml/python-docx |
+| openpyxl | MIT | https://openpyxl.readthedocs.io |
+| XlsxWriter | BSD-2-Clause | https://github.com/jmcnamara/XlsxWriter |
+| python-pptx | MIT | https://github.com/scanny/python-pptx |
+| pandas | BSD-3-Clause | https://pandas.pydata.org |
+| PyMuPDF | AGPL-3.0, or commercial from Artifex | https://github.com/pymupdf/PyMuPDF |
+| Node.js | MIT | https://nodejs.org |
+| Playwright | Apache-2.0 | https://playwright.dev |
+| Git | GPL-2.0 | https://git-scm.com |
+| Pandoc | GPL-2.0-or-later | https://pandoc.org |
+| FFmpeg | LGPL-2.1 or GPL-2.0, depending on the build | https://ffmpeg.org |
+| ripgrep | MIT or Unlicense | https://github.com/BurntSushi/ripgrep |
+| 7-Zip | LGPL-2.1 with the unRAR restriction | https://7-zip.org |
+| Tesseract OCR | Apache-2.0 | https://github.com/tesseract-ocr/tesseract |
+| ImageMagick | ImageMagick Licence | https://imagemagick.org |
+| qpdf | Apache-2.0 | https://qpdf.readthedocs.io |
+| Poppler | GPL-2.0 or GPL-3.0 | https://poppler.freedesktop.org |
+| yt-dlp | Unlicense | https://github.com/yt-dlp/yt-dlp |
+
+The copyleft licences in that table (GPL, AGPL, MPL) govern those components themselves. Lucent does not ship them, does not link against them, and does not relicense them: it starts a download you asked for, into storage you own, and afterwards runs them as separate programs. If you redistribute any of them yourself, their terms become yours to keep.
+
+Downloads are taken either from the project's own servers or from a public mirror, whichever answers fastest at the time. The mirrors Lucent knows about are Tsinghua TUNA (https://mirrors.tuna.tsinghua.edu.cn), USTC (https://mirrors.ustc.edu.cn), Aliyun (https://mirrors.aliyun.com), Huawei Cloud (https://repo.huaweicloud.com), npmmirror (https://registry.npmmirror.com), F-Droid (https://f-droid.org) and the Ubuntu cdimage service (https://cdimage.ubuntu.com).
+
+## Model Context Protocol
+
+Lucent speaks the Model Context Protocol as a **client**. The protocol itself is an open specification from Anthropic (https://modelcontextprotocol.io), licensed under the MIT Licence, and Lucent's client is an original implementation: no MCP SDK code is bundled. Any MCP server you configure is third-party software, downloaded and run by you or reached over the network, under whatever licence its authors chose.
+
+## Document formats
+
+The Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) readers and writers in Lucent are original implementations of the Office Open XML formats built on the Java platform's own zip and XML libraries. No Apache POI, no third-party office library and no third-party PDF library is bundled.
+
+---
+
 *If you believe an attribution is missing or incorrect, please open an issue so it can be corrected.*

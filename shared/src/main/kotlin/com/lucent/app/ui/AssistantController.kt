@@ -680,6 +680,14 @@ class AssistantControllerImpl(
                         "the matching tool again. The app will show them a confirmation dialog - only call the tool; never " +
                         "claim anything was done, because it only happens after they approve it."
                 } else directPrompt
+                com.lucent.app.harness.HarnessRuntime.conversationId = conversationId
+                com.lucent.app.harness.HarnessRuntime.noteSink = { line -> turn.recorder.addPlanning(line) }
+                com.lucent.app.harness.HarnessRuntime.llm = SubAgentBridge(url, spec, key, model)
+                if (com.lucent.app.harness.HarnessRuntime.config().enabled) {
+                    runCatching {
+                        com.lucent.app.harness.HarnessGate.dynamicTools = com.lucent.app.harness.McpTools.dynamicTools()
+                    }
+                }
                 val tools = if (fastMode) emptyList() else AppTools.definitions(includeWebSearch = webSearchEnabled)
 
                 val (uploadMime, uploadData, uploadName) =
@@ -1546,6 +1554,51 @@ class AssistantControllerImpl(
         operator fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: T) {
             backing.value = value
             publishState()
+        }
+    }
+
+    private inner class SubAgentBridge(
+        private val url: String,
+        private val spec: ApiSpec,
+        private val key: String,
+        private val defaultModel: String
+    ) : com.lucent.app.harness.SubAgentLlm {
+
+        override suspend fun step(
+            systemPrompt: String,
+            userPrompt: String,
+            transcript: List<String>,
+            allowedTools: Set<String>,
+            model: String
+        ): com.lucent.app.harness.SubAgentStep {
+            val history = mutableListOf(ChatTurn(role = "user", content = userPrompt))
+            transcript.takeLast(24).forEach { line ->
+                history.add(ChatTurn(role = "user", content = "Progress: " + line.take(2000)))
+            }
+            val definitions = AppTools.definitions(includeWebSearch = true).filter { definition ->
+                definition.name != "spawn_agent" &&
+                    (allowedTools.isEmpty() || allowedTools.contains(definition.name))
+            }
+            val chosen = model.ifBlank { defaultModel }
+            val reply = llmClient.streamChat(
+                url, spec, key, chosen, history, systemPrompt, definitions,
+                { delta -> com.lucent.app.harness.HarnessRuntime.note("sub-agent: " + delta.take(200)) },
+                { },
+                { },
+                reasoning = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
+                cacheKey = "lucent-subagent",
+                context = ""
+            )
+            val value = reply.getOrElse { error ->
+                return com.lucent.app.harness.SubAgentStep("", emptyList(), true, error.message ?: "request failed")
+            }
+            return com.lucent.app.harness.SubAgentStep(
+                text = value.text.orEmpty(),
+                toolCalls = value.toolCalls.map {
+                    com.lucent.app.harness.SubAgentCall(it.name, it.argumentsJson)
+                },
+                done = value.toolCalls.isEmpty()
+            )
         }
     }
 }

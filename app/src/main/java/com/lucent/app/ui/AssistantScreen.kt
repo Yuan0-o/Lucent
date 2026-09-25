@@ -1315,19 +1315,6 @@ fun AssistantScreen(active: Boolean = true) {
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (!localModelEnabled && agentModeOn) {
-                ReasoningMenuButton(
-                    providerId = com.lucent.app.data.ApiProviders.forRequest(savedSpecStr, savedUrl),
-                    model = savedModel,
-                    currentKey = reasoningKey,
-                    onSelect = { picked ->
-                        SettingsCache.reasoning = picked.key
-                        scope.launch { repo.setReasoning(picked.key) }
-                    },
-                    tint = onGradient,
-                    mutedTint = onGradientMuted
-                )
-            }
             Box {
                 IconButton(onClick = { attachMenuOpen = true }, modifier = Modifier.height(56.dp)) {
                     Icon(Icons.Default.AttachFile, contentDescription = com.lucent.app.i18n.S.a11yAttachFile, tint = onGradient)
@@ -1435,7 +1422,13 @@ fun AssistantScreen(active: Boolean = true) {
                 mutedTint = onGradientMuted,
                 onPickCloudModel = { model -> scope.launch { repo.setActiveModel(model) } },
                 onSelectedModelsChange = { picked -> persistSelectedModels(picked) },
-                modifier = Modifier.height(56.dp)
+                modifier = Modifier.height(56.dp),
+                reasoningProviderId = com.lucent.app.data.ApiProviders.forRequest(savedSpecStr, savedUrl),
+                reasoningCurrent = reasoningKey,
+                onPickReasoning = { picked ->
+                    SettingsCache.reasoning = picked.key
+                    scope.launch { repo.setReasoning(picked.key) }
+                }
             )
             Spacer(modifier = Modifier.width(4.dp))
             if (sending) {

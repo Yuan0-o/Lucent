@@ -96,7 +96,7 @@ jobs:
       - name: Set up Rust for Android
         run: |
           set -eu
-          rustup target add aarch64-linux-android armv7-linux-androideabi
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
           if cargo ndk --version 2>/dev/null | grep -q "4.1.2"; then
             echo "cargo-ndk 4.1.2 already present (cache hit)."
           else
