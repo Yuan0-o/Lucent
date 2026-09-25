@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -43,8 +42,8 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.ApiProfile
 import com.lucent.app.data.ApiProfiles
 import com.lucent.app.data.ApiProviders
-import com.lucent.app.data.ModelSearch
 import com.lucent.app.data.SettingsCache
+import com.lucent.app.data.ModelSearch
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import com.lucent.app.network.ApiSpec
@@ -79,7 +78,7 @@ private fun modelChoices(fetched: List<String>, saved: List<String>): List<Strin
 }
 
 @Composable
-internal fun ApiSettingsPage(
+internal fun CloudModelSettingsPage(
     repo: SettingsRepository,
     profiles: List<ApiProfile>,
     selectedProfileIdx: Int,
@@ -112,7 +111,6 @@ internal fun ApiSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
-    val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
     var menuExpanded by remember { mutableStateOf(false) }
     var fetchedModels by remember { mutableStateOf<List<String>>(emptyList()) }
     var pickerOpen by remember { mutableStateOf(false) }
@@ -129,19 +127,28 @@ internal fun ApiSettingsPage(
             models.toSet() != savedProfile.selectedModels.toSet()
         )
 
-    BackHeader(S.settingsApiTitle) { onRoute(SettingsRoute.Assistant) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Assistant) })
 
-    if (localModelEnabled) {
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Text(S.apiFrozenTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(S.apiFrozenBody, color = onGradientMuted, fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            GlassButton(text = S.apiFrozenManage, onClick = { onRoute(SettingsRoute.LocalModel) })
+    val cloudAgentMode by repo.cloudAgentMode.collectAsState(initial = SettingsCache.cloudAgentMode)
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(S.agentModeTitle, color = onGradient, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(S.agentModeSub, color = onGradientMuted, fontSize = 12.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            androidx.compose.material3.Switch(
+                checked = cloudAgentMode,
+                onCheckedChange = { on ->
+                    SettingsCache.cloudAgentMode = on
+                    scope.launch { repo.setCloudAgentMode(on) }
+                }
+            )
         }
     }
 
-    if (!localModelEnabled) {
+    Spacer(modifier = Modifier.height(12.dp))
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -176,8 +183,6 @@ internal fun ApiSettingsPage(
             GlassButton(text = S.apiAddButton, icon = Icons.Default.Add, onClick = onAddProfile)
         }
     }
-
-    if (profiles.isNotEmpty()) {
 
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -339,8 +344,10 @@ internal fun ApiSettingsPage(
             Text(S.apiUnsavedHint, color = onGradientMuted, fontSize = 12.sp)
         }
     }
-    }
-    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    AssistantMemorySection(repo = repo, local = false)
 
     if (pickerOpen) {
         ApiModelPickerDialog(

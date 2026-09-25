@@ -25,6 +25,8 @@ object TrashCleanup {
             purgeTask(appContext, db, task)
         }
 
+        db.notebookDao().purgeTrashedBefore(cutoff)
+
         db.noteVersionDao().pruneOrphaned()
         db.taskVersionDao().pruneOrphaned()
 

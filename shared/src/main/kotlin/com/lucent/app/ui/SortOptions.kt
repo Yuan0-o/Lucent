@@ -63,6 +63,33 @@ enum class TaskSort(val key: String) {
     }
 }
 
+enum class NotebookSort(val key: String) {
+    RECENT("recent"),
+    OLDEST("oldest"),
+    TITLE_AZ("title_az"),
+    CUSTOM("custom");
+
+    val label: String
+        get() = when (this) {
+            RECENT -> com.lucent.app.i18n.S.sortLastEdited
+            OLDEST -> com.lucent.app.i18n.S.sortOldestFirst
+            TITLE_AZ -> com.lucent.app.i18n.S.sortTitleAz
+            CUSTOM -> com.lucent.app.i18n.S.sortCustom
+        }
+
+    companion object {
+        fun fromKey(key: String?): NotebookSort = entries.firstOrNull { it.key == key } ?: RECENT
+    }
+}
+
+fun List<com.lucent.app.data.Notebook>.sortedForDisplay(sort: NotebookSort): List<com.lucent.app.data.Notebook> =
+    when (sort) {
+        NotebookSort.RECENT -> sortedByDescending { it.updatedAt }
+        NotebookSort.OLDEST -> sortedBy { it.updatedAt }
+        NotebookSort.TITLE_AZ -> sortedBy { it.title.lowercase() }
+        NotebookSort.CUSTOM -> sortedWith(compareBy({ it.manualOrder }, { -it.updatedAt }))
+    }
+
 fun List<Note>.sortedForDisplay(sort: NoteSort, query: SearchQuery = SearchQuery()): List<Note> {
     val chosen: Comparator<Note> = when (sort) {
         NoteSort.RECENT -> compareByDescending { it.updatedAt }

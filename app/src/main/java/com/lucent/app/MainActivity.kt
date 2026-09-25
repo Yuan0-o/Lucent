@@ -317,13 +317,13 @@ class MainActivity : FragmentActivity() {
                 backdropColor = themeChoice.backdrop(systemDark)
                 paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
                     com.lucent.app.ui.rememberRandomPaletteColors(
-                        animated = backgroundAnimated,
+                        animated = appBackgroundAnimated,
                         environment = backgroundEnvironment
                     )
                 } else if (paletteName == PALETTE_CYCLE) {
                     rememberCyclingPaletteColors(
                         LucentPalette.pickerEntries.map { it.colors },
-                        animated = backgroundAnimated,
+                        animated = appBackgroundAnimated,
                         environment = backgroundEnvironment
                     )
                 } else {
@@ -361,7 +361,7 @@ class MainActivity : FragmentActivity() {
                             FluidGlassBackground(
                                 palette = paletteColors,
                                 backdropColor = backdropColor,
-                                animated = backgroundAnimated,
+                                animated = appBackgroundAnimated,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -371,7 +371,7 @@ class MainActivity : FragmentActivity() {
                                 paletteColors = paletteColors,
                                 backdropColor = backdropColor,
                                 onFinished = { splashDone = true },
-                                backgroundAnimated = backgroundAnimated,
+                                backgroundAnimated = appBackgroundAnimated,
                                 style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
                             )
                         }
@@ -621,11 +621,6 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     HomeDrawerSheet(
                         mode = HomeMode.of(currentScreen) ?: LastScreen.homeMode,
                         onSelectMode = { mode -> selectHomeMode(mode) },
-                        onOpenNotebooks = {
-                            closeDrawer()
-                            currentScreen = Screen.Notebooks
-                            StartupLog.event(context, "drawer: opened notebooks")
-                        },
                         onOpenPanel = { panel ->
                             closeDrawer()
                             runOrConfirm {
@@ -644,6 +639,12 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                             val homeMode = HomeMode.of(currentScreen)
                             if (homeMode != null) {
                                 HomeModeSwitcher(mode = homeMode, onSelect = { mode -> selectHomeMode(mode) })
+                            } else if (currentScreen == Screen.Settings) {
+                                com.lucent.app.ui.SettingsBreadcrumb(
+                                    route = AppNavigation.settingsRoute,
+                                    onNavigate = { SettingsNav.go(it) },
+                                    rootSize = 30.sp
+                                )
                             } else {
                                 Text(currentScreen.label, color = onGradient, fontSize = 30.sp)
                             }
@@ -760,7 +761,14 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 
             ShareIntakeDialog()
             WidgetTaskConfirmDialog()
-            AutoUpdateDialog(repo = updateRepo)
+            AutoUpdateDialog(
+                repo = updateRepo,
+                onOpenUrl = { url ->
+                    runCatching {
+                        startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    }
+                }
+            )
             ShizukuNoticeDialog()
         }
     }

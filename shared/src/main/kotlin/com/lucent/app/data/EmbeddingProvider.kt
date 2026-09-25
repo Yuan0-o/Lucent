@@ -17,11 +17,12 @@ object EmbeddingProvider {
 
     suspend fun embed(context: Context, text: String): Outcome {
         val repo = SettingsRepository(context)
-        return when (repo.embeddingProvider.first()) {
-            "cloud" -> embedCloud(repo, text)
-            else -> Outcome.Unavailable(
+        return if (repo.localModelEnabled.first()) {
+            Outcome.Unavailable(
                 "Local embedding generation isn't implemented in this build yet — see EmbeddingProvider.kt."
             )
+        } else {
+            embedCloud(repo, text)
         }
     }
 

@@ -125,7 +125,7 @@ internal fun NavCard(title: String, subtitle: String, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun BackHeader(title: String, onBack: () -> Unit) {
+internal fun BackHeader(onBack: () -> Unit) {
     val onGradient = LocalOnGradient.current
     Row(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -134,9 +134,93 @@ internal fun BackHeader(title: String, onBack: () -> Unit) {
         IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = S.actionBack, tint = onGradient)
         }
-        Text(title, color = onGradient, fontSize = 20.sp)
     }
     Spacer(modifier = Modifier.height(8.dp))
+}
+
+internal object SettingsTrail {
+
+    fun parent(route: SettingsRoute): SettingsRoute? = when (route) {
+        SettingsRoute.Root -> null
+        SettingsRoute.Theme, SettingsRoute.Background, SettingsRoute.Splash -> SettingsRoute.Appearance
+        SettingsRoute.Licences -> SettingsRoute.About
+        SettingsRoute.Personalization, SettingsRoute.CloudModel, SettingsRoute.LocalModel -> SettingsRoute.Assistant
+        else -> SettingsRoute.Root
+    }
+
+    fun trail(route: SettingsRoute): List<SettingsRoute> {
+        val out = ArrayList<SettingsRoute>()
+        var cursor: SettingsRoute? = route
+        var guard = 0
+        while (cursor != null && guard++ < 8) {
+            out.add(0, cursor)
+            cursor = parent(cursor)
+        }
+        if (out.firstOrNull() != SettingsRoute.Root) out.add(0, SettingsRoute.Root)
+        return out
+    }
+
+    fun title(route: SettingsRoute): String = when (route) {
+        SettingsRoute.Root -> S.tabSettings
+        SettingsRoute.Language -> S.settingsLanguageTitle
+        SettingsRoute.Assistant -> S.settingsAssistantTitle
+        SettingsRoute.Personalization -> S.settingsPersonalizationTitle
+        SettingsRoute.CloudModel -> S.settingsCloudModelTitle
+        SettingsRoute.LocalModel -> S.settingsLocalModelTitle
+        SettingsRoute.Appearance -> S.settingsAppearanceTitle
+        SettingsRoute.Theme -> S.settingsThemeTitle
+        SettingsRoute.Background -> S.settingsBackgroundTitle
+        SettingsRoute.Splash -> S.settingsSplashTitle
+        SettingsRoute.Editor -> S.settingsEditorTitle
+        SettingsRoute.Cloud -> S.cloudTitle
+        SettingsRoute.Security -> S.settingsSecurityTitle
+        SettingsRoute.Privacy -> S.settingsPrivacyTitle
+        SettingsRoute.Data -> S.settingsDataTitle
+        SettingsRoute.About -> S.settingsAboutTitle
+        SettingsRoute.Licences -> S.licencesTitle
+        SettingsRoute.Advanced -> S.settingsAdvancedTitle
+    }
+}
+
+@Composable
+internal fun SettingsBreadcrumb(
+    route: SettingsRoute,
+    onNavigate: (SettingsRoute) -> Unit,
+    modifier: Modifier = Modifier,
+    rootSize: androidx.compose.ui.unit.TextUnit = 20.sp,
+    leading: @Composable () -> Unit = {}
+) {
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val crumbs = remember(route) { SettingsTrail.trail(route) }
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        leading()
+        crumbs.forEachIndexed { index, crumb ->
+            if (index > 0) {
+                Text(
+                    "\u2013",
+                    color = onGradientMuted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp).alignByBaseline()
+                )
+            }
+            val isRoot = crumb == SettingsRoute.Root
+            val isLast = index == crumbs.lastIndex
+            Text(
+                text = SettingsTrail.title(crumb),
+                color = if (isLast) onGradient else onGradientMuted,
+                fontSize = if (isRoot) rootSize else rootSize / 2,
+                maxLines = 1,
+                modifier = Modifier
+                    .alignByBaseline()
+                    .clickable(enabled = !isLast) {
+                        Haptics.tick(context)
+                        onNavigate(crumb)
+                    }
+            )
+        }
+    }
 }
 
 @Composable

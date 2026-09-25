@@ -19,8 +19,12 @@ data class ReleaseInfo(
     val version: String,
     val title: String,
     val apk: ReleaseAsset?,
-    val installer: ReleaseAsset?
-)
+    val installer: ReleaseAsset?,
+    val notesUrl: String = ""
+) {
+    val releaseUrl: String
+        get() = notesUrl.ifBlank { LucentBuild.HOMEPAGE + "/releases/tag/" + tag }
+}
 
 object UpdateChecker {
 
@@ -92,7 +96,8 @@ object UpdateChecker {
             version = tag.trimStart('v', 'V'),
             title = root.optString("name").ifBlank { tag },
             apk = apk,
-            installer = installer
+            installer = installer,
+            notesUrl = root.optString("html_url")
         )
     }
 }

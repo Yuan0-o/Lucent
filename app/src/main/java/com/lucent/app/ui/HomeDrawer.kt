@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.History
@@ -52,7 +51,6 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 fun HomeDrawerSheet(
     mode: HomeMode,
     onSelectMode: (HomeMode) -> Unit,
-    onOpenNotebooks: () -> Unit,
     onOpenPanel: (HomePanel) -> Unit
 ) {
     val context = LocalContext.current
@@ -62,7 +60,6 @@ fun HomeDrawerSheet(
     val glassDark = isDarkGlass()
     val sheetShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
 
-    val notebooks by remember { db.notebookDao().getAll() }.collectAsState(initial = emptyList())
     val noteDrafts by remember { db.noteDao().getDrafts() }.collectAsState(initial = emptyList())
     val noteArchive by remember { db.noteDao().getArchived() }.collectAsState(initial = emptyList())
     val noteTrash by remember { db.noteDao().getTrashed() }.collectAsState(initial = emptyList())
@@ -124,15 +121,6 @@ fun HomeDrawerSheet(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            DrawerRow(
-                icon = Icons.Default.Book,
-                label = com.lucent.app.i18n.S.screenNotebooks,
-                count = notebooks.size,
-                onClick = {
-                    Haptics.tick(context)
-                    onOpenNotebooks()
-                }
-            )
             HomePanel.visible(HiddenArea.visible).forEach { panel ->
                 DrawerRow(
                     icon = drawerIcon(panel, mode),

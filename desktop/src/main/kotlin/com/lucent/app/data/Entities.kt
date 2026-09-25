@@ -96,7 +96,10 @@ data class Notebook(
     val id: Long = 0,
     val title: String,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val color: String = "",
+    val manualOrder: Int = 0,
+    val trashedAt: Long? = null
 )
 
 data class NotebookItem(

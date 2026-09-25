@@ -42,7 +42,7 @@ internal fun AdvancedSettingsPage(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    BackHeader(S.advancedTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {

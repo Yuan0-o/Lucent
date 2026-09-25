@@ -24,25 +24,19 @@ internal fun AssistantSettingsPage(
 ) {
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
 
-    BackHeader(S.settingsAssistantTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
 
     NavCard(S.settingsPersonalizationTitle, S.settingsPersonalizationSub) { onRoute(SettingsRoute.Personalization) }
 
     Spacer(modifier = Modifier.height(12.dp))
 
     val activeName = profiles.getOrNull(selectedProfileIdx)?.name ?: ""
+    NavCard(S.settingsCloudModelTitle, S.settingsCloudModelSub(activeName)) { onRoute(SettingsRoute.CloudModel) }
+
+    Spacer(modifier = Modifier.height(12.dp))
+
     NavCard(
-        S.settingsApiTitle,
-        if (localModelEnabled) S.settingsApiSubFrozen else S.settingsApiSub(activeName)
-    ) { onRoute(SettingsRoute.Api) }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    NavCard(S.settingsMemoryTitle, S.settingsMemorySub) { onRoute(SettingsRoute.Memory) }
-    Spacer(modifier = Modifier.height(12.dp))
-    NavCard(S.settingsNetworkTitle, S.settingsNetworkSub) { onRoute(SettingsRoute.Network) }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    NavCard(S.settingsLocalModelTitle, S.settingsLocalModelSub) { onRoute(SettingsRoute.LocalModel) }
+        S.settingsLocalModelTitle,
+        if (localModelEnabled) S.settingsLocalModelSubOn else S.settingsLocalModelSub
+    ) { onRoute(SettingsRoute.LocalModel) }
 }

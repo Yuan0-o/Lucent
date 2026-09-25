@@ -10,7 +10,8 @@ object SystemPrompts {
         tools: List<ToolDefinition>,
         userText: String,
         compact: Boolean = false,
-        recentItems: String = ""
+        recentItems: String = "",
+        webSearchEnabled: Boolean = false
     ): String {
         val today = java.time.ZonedDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("EEEE, yyyy-MM-dd, HH:mm"))
@@ -20,17 +21,32 @@ object SystemPrompts {
             append("Write plain conversational text only — never markdown, asterisks, bullet points, or headings.\n\n")
             append("Right now it is ").append(today).append(" in the user's local time. ")
             append("Work any concrete date out from this and pass it as an absolute value.\n\n")
-            if (compact) append("The tools below are the ONLY things you can do. You have NO internet " +
-                "access. Never say you did something unless its \"Result of <tool>:\" line says it " +
-                "worked.\n\n")
-            else append("The tools listed below are the ONLY actions available to you. If something is " +
+            val netLine = if (webSearchEnabled)
+                "you CAN search the web with the web_search tool, and you should reach for it " +
+                    "whenever an answer needs current or factual information; everything else " +
+                    "that is not in the tool list you cannot do, so say so plainly with the real " +
+                    "reason in the user's language rather than claiming you did it."
+            else
+                "you have NO internet access in this mode: you cannot search the web, open " +
+                    "links, or fetch anything current, so never present a guess as a looked-up " +
+                    "fact, and if something is not in the tool list say so plainly with the real " +
+                    "reason in the user's language rather than claiming you did it."
+            if (compact) {
+                append("The tools below are the ONLY things you can do. ")
+                append(
+                    if (webSearchEnabled) "You can search the web when a question needs it. "
+                    else "You have NO internet access. "
+                )
+                append(
+                    "Never say you did something unless its \"Result of <tool>:\" line says it " +
+                        "worked.\n\n"
+                )
+            } else append("The tools listed below are the ONLY actions available to you. If something is " +
                 "not in that list you cannot do it, and you must say so rather than claiming you " +
                 "did it — and say the real reason in the user's language (this assistant doesn't " +
                 "have that ability in this app), never a bare \"I can't\" and never that their " +
-                "request itself is impossible. In particular you have NO internet access in this " +
-                "mode: you cannot search " +
-                "the web, open links, or fetch anything current, so never present a guess as a " +
-                "looked-up fact. Only report an action as done after its \"Result of <tool>:\" line " +
+                "request itself is impossible. In particular " + netLine + " " +
+                "Only report an action as done after its \"Result of <tool>:\" line " +
                 "confirms it worked; if a result says it failed, tell the user it failed.\n\n")
             append("Tools:\n")
             for (t in tools) {

@@ -347,11 +347,20 @@ data class NotebookCount(val notebookId: Long, val count: Int)
 
 @Dao
 interface NotebookDao {
-    @Query("SELECT * FROM notebooks ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM notebooks WHERE trashedAt IS NULL ORDER BY updatedAt DESC")
     fun getAll(): Flow<List<Notebook>>
 
-    @Query("SELECT * FROM notebooks ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM notebooks WHERE trashedAt IS NULL ORDER BY updatedAt DESC")
     suspend fun getAllOnce(): List<Notebook>
+
+    @Query("SELECT * FROM notebooks ORDER BY updatedAt DESC")
+    suspend fun getAllIncludingTrashedOnce(): List<Notebook>
+
+    @Query("SELECT * FROM notebooks WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+    fun getTrashed(): Flow<List<Notebook>>
+
+    @Query("SELECT * FROM notebooks WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+    suspend fun getTrashedOnce(): List<Notebook>
 
     @Query("SELECT * FROM notebooks WHERE id = :id")
     suspend fun getByIdOnce(id: Long): Notebook?
@@ -388,6 +397,9 @@ interface NotebookDao {
 
     @Query("DELETE FROM notebooks WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM notebooks WHERE trashedAt IS NOT NULL AND trashedAt < :cutoff")
+    suspend fun purgeTrashedBefore(cutoff: Long)
 
     @Query("DELETE FROM notebooks")
     suspend fun clearAll()

@@ -181,7 +181,7 @@ private fun HomePages(mode: HomeMode, active: Boolean) {
 
     LaunchedEffect(mode) {
         val target = modes.indexOf(mode)
-        if (pagerState.currentPage != target) pagerState.animateScrollToPage(target)
+        if (pagerState.currentPage != target) pagerState.scrollToPage(target)
     }
 
     HorizontalPager(

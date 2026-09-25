@@ -53,18 +53,20 @@ internal fun AboutSettingsPage(
         }
     }
 
-    BackHeader(S.settingsAboutTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     AboutIdentityCard(versionName, buildNumber)
     Spacer(modifier = Modifier.height(12.dp))
     AboutUpdateCard(
         autoUpdateOn = autoUpdateOn,
         busy = AutoUpdate.phase != AutoUpdate.Phase.IDLE,
         status = AutoUpdate.message,
+        offered = AutoUpdate.offered,
         onToggle = { checked ->
             SettingsCache.autoUpdateEnabled = checked
             scope.launch { repo.setAutoUpdateEnabled(checked) }
         },
-        onCheck = { scope.launch { AutoUpdate.check(versionName, notifyWhenCurrent = true) } }
+        onCheck = { scope.launch { AutoUpdate.check(versionName, notifyWhenCurrent = true) } },
+        onOpenUrl = onOpenUrl
     )
     Spacer(modifier = Modifier.height(12.dp))
     AboutFooter(
@@ -95,8 +97,10 @@ private fun AboutUpdateCard(
     autoUpdateOn: Boolean,
     busy: Boolean,
     status: String?,
+    offered: com.lucent.app.data.ReleaseInfo?,
     onToggle: (Boolean) -> Unit,
-    onCheck: () -> Unit
+    onCheck: () -> Unit,
+    onOpenUrl: ((String) -> Unit)?
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -115,6 +119,17 @@ private fun AboutUpdateCard(
         }
         status?.let { line ->
             Text(line, color = onGradientMuted, fontSize = 12.sp)
+        }
+        offered?.let { info ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                S.updateAvailableBody(info.version),
+                color = onGradientMuted,
+                fontSize = 12.sp
+            )
+            if (onOpenUrl != null) {
+                ReleaseNotesLink(url = info.releaseUrl, onOpenUrl = onOpenUrl, fontSize = 11.sp)
+            }
         }
     }
 }
@@ -141,6 +156,9 @@ private fun AboutFooter(
         }
         AboutLink("${S.aboutLicense}: ${S.aboutLicensesOpen}", onGradient) {
             onLicences()
+        }
+        AboutLink("${S.aboutPrivacy}: ${S.aboutPrivacyOpen}", onGradient) {
+            onOpenUrl?.invoke(LucentBuild.privacyPage(com.lucent.app.i18n.currentLanguageKey()))
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(

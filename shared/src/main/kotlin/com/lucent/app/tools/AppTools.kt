@@ -34,7 +34,7 @@ object AppTools {
     )
 
     fun definitions(includeWebSearch: Boolean = false): List<ToolDefinition> =
-        baseDefinitions() + NotebookTools.definitions() +
+        baseDefinitions() + NotebookTools.definitions() + FormattingTools.definitions() +
             (if (includeWebSearch) listOf(webSearchDefinition()) else emptyList())
 
     private fun webSearchDefinition(): ToolDefinition = ToolDefinition(
@@ -46,7 +46,7 @@ object AppTools {
     private val READ_ONLY_TOOLS = setOf(
         "list_notes", "read_note", "list_tasks", "read_task", "search_items", "recall_notes", "web_search",
         "read_attachment", "list_note_versions", "list_trash", "list_drafts",
-        "list_notebooks", "list_notebook_items", "search_notebook"
+        "list_notebooks", "list_notebook_items", "search_notebook", "list_notebook_trash"
     )
 
     fun isMutating(name: String): Boolean = name !in READ_ONLY_TOOLS
@@ -92,7 +92,9 @@ object AppTools {
             "remove_task_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromTask(s("file_name"), title)
             "attach_upload_to_task" -> com.lucent.app.i18n.S.ccAttachUploadToTask(title)
             "restore_task_from_trash" -> com.lucent.app.i18n.S.ccRestoreTaskFromTrash(title)
-            else -> NotebookTools.describeToolCall(name, a) ?: com.lucent.app.i18n.S.ccRunGeneric(name)
+            else -> FormattingTools.describeToolCall(name, a)
+                ?: NotebookTools.describeToolCall(name, a)
+                ?: com.lucent.app.i18n.S.ccRunGeneric(name)
         }
     }
 
@@ -143,7 +145,8 @@ object AppTools {
                 of("file_name", com.lucent.app.i18n.S.confirmEditFileNameLabel),
                 of("content", com.lucent.app.i18n.S.confirmEditContentLabel, multiline = true)
             )
-            else -> NotebookTools.editableArguments(name, a)
+            else -> FormattingTools.editableArguments(name, a)
+                .ifEmpty { NotebookTools.editableArguments(name, a) }
         }
     }
 
@@ -644,7 +647,7 @@ object AppTools {
         return "No $kind matched \"$query\". Closest existing titles: $list. $retry"
     }
 
-    private fun noteNotFound(
+    internal fun noteNotFound(
         query: String,
         candidates: List<Note>,
         kind: String = "note",
@@ -662,7 +665,7 @@ object AppTools {
         success = false
     )
 
-    private suspend fun noteNotFound(db: AppDatabase, query: String): ToolExecResult {
+    internal suspend fun noteNotFound(db: AppDatabase, query: String): ToolExecResult {
         if (query.isBlank()) return blankTitleResult("note")
         bestMatch(hiddenNotes(db), query, { it.title }, { it.updatedAt }, minScore = 700)?.let { hit ->
             return ToolExecResult(
@@ -683,7 +686,7 @@ object AppTools {
         return noteNotFound(query, editableNotes(db))
     }
 
-    private fun taskNotFound(
+    internal fun taskNotFound(
         query: String,
         candidates: List<Task>,
         kind: String = "task",
@@ -694,7 +697,7 @@ object AppTools {
             success = false
         )
 
-    private suspend fun taskNotFound(db: AppDatabase, query: String): ToolExecResult {
+    internal suspend fun taskNotFound(db: AppDatabase, query: String): ToolExecResult {
         if (query.isBlank()) return blankTitleResult("task")
         bestMatch(hiddenTasks(db), query, { it.title }, { it.createdAt }, minScore = 700)?.let { hit ->
             return ToolExecResult(
@@ -1809,7 +1812,8 @@ object AppTools {
                 }
             }
 
-            else -> NotebookTools.execute(db, name, args)
+            else -> FormattingTools.execute(db, name, args)
+                ?: NotebookTools.execute(db, name, args)
                 ?: ToolExecResult("Unknown tool: $name", success = false)
         }
     }

@@ -77,7 +77,7 @@ import com.lucent.app.data.StartupLog
 import com.lucent.app.i18n.S
 import com.lucent.app.local.LocalLlm
 import com.lucent.app.local.LocalModelStore
-import com.lucent.app.ui.settings.ApiSettingsPage
+import com.lucent.app.ui.settings.CloudModelSettingsPage
 import com.lucent.app.ui.settings.AppearanceSettingsPage
 import com.lucent.app.ui.settings.AssistantSettingsPage
 import com.lucent.app.ui.settings.BackgroundSettingsPage
@@ -85,8 +85,6 @@ import com.lucent.app.ui.settings.DataSettingsPage
 import com.lucent.app.ui.settings.EditorSettingsPage
 import com.lucent.app.ui.settings.LanguageSettingsPage
 import com.lucent.app.ui.settings.LocalModelSettingsPage
-import com.lucent.app.ui.settings.MemorySettingsPage
-import com.lucent.app.ui.settings.NetworkSettingsPage
 import com.lucent.app.ui.settings.PersonalizationSettingsPage
 import com.lucent.app.ui.settings.PrivacySettingsPage
 import com.lucent.app.ui.settings.RootSettingsPage
@@ -106,7 +104,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, Memory, Network, Api, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -629,11 +627,23 @@ fun SettingsScreen(active: Boolean = true) {
         AppNavigation.rememberSettingsRoute(next)
     }
 
+    val activeApiProfile = profiles.getOrNull(selectedProfileIdx)
+    val apiDirty = route == SettingsRoute.CloudModel && activeApiProfile != null && (
+        editingProfileName.trim().ifBlank { S.apiFallbackName(selectedProfileIdx + 1) } != activeApiProfile.name ||
+            provider != activeApiProfile.provider ||
+            spec != activeApiProfile.spec ||
+            url.trim() != activeApiProfile.baseUrl ||
+            key.trim() != activeApiProfile.apiKey ||
+            selectedModel != activeApiProfile.model ||
+            models.toSet() != activeApiProfile.selectedModels.toSet()
+        )
     val assistantDirty = route == SettingsRoute.Personalization && (
         assistantName.ifBlank { "Lucent" } != savedAssistantName ||
             assistantStyle != savedAssistantStyle
         )
+    val settingsDirty = assistantDirty || apiDirty
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    var pendingRoute by remember { mutableStateOf(SettingsRoute.Assistant) }
 
     val appContext = context.applicationContext
     fun persistAssistantSettings() {
@@ -700,35 +710,49 @@ fun SettingsScreen(active: Boolean = true) {
         AppScope.io.launch { repo.saveApiProfiles(newList, newSelected) }
     }
 
-    fun leavePersonalization() {
-        if (assistantDirty) showUnsavedDialog = true else setRoute(SettingsRoute.Assistant)
+    fun savePendingEdits() {
+        if (assistantDirty) persistAssistantSettings()
+        if (apiDirty) saveActiveProfile(selectedProfileIdx, provider, models)
     }
 
-    fun goBack() {
-        when (route) {
-            SettingsRoute.Personalization -> leavePersonalization()
-            SettingsRoute.Memory -> setRoute(SettingsRoute.Assistant)
-            SettingsRoute.Network -> setRoute(SettingsRoute.Assistant)
-            SettingsRoute.Api -> setRoute(SettingsRoute.Assistant)
-            SettingsRoute.LocalModel -> setRoute(SettingsRoute.Assistant)
-            SettingsRoute.Theme, SettingsRoute.Background, SettingsRoute.Splash -> setRoute(SettingsRoute.Appearance)
-            SettingsRoute.Licences -> setRoute(SettingsRoute.About)
-            SettingsRoute.Language, SettingsRoute.Assistant, SettingsRoute.Appearance, SettingsRoute.Editor,
-            SettingsRoute.Cloud, SettingsRoute.Security, SettingsRoute.Privacy, SettingsRoute.Data, SettingsRoute.About, SettingsRoute.Advanced -> setRoute(SettingsRoute.Root)
-            else -> setRoute(SettingsRoute.Root)
+    fun discardPendingEdits() {
+        if (assistantDirty) discardAssistantSettings()
+        if (apiDirty) {
+            url = savedUrl; spec = savedSpec; key = savedKey; selectedModel = savedModel
+            editingProfileName = activeApiProfile?.name.orEmpty()
+            provider = activeApiProfile?.provider ?: com.lucent.app.data.ApiProviders.CUSTOM
+            models = activeApiProfile?.selectedModels ?: emptyList()
         }
     }
 
+    fun navigate(next: SettingsRoute) {
+        if (next == route) return
+        if (settingsDirty) {
+            pendingRoute = next
+            showUnsavedDialog = true
+        } else {
+            setRoute(next)
+        }
+    }
+
+    fun goBack() {
+        val parent = com.lucent.app.ui.SettingsTrail.parent(route) ?: SettingsRoute.Root
+        navigate(parent)
+    }
+
+    SideEffect { com.lucent.app.SettingsNav.handler = ::navigate }
+    DisposableEffect(Unit) { onDispose { com.lucent.app.SettingsNav.handler = null } }
+
     LaunchedEffect(route) {
         if (route == SettingsRoute.LocalModel) lmError = ""
-        if (route == SettingsRoute.Api) errorText = ""
+        if (route == SettingsRoute.CloudModel) errorText = ""
         if (route == SettingsRoute.Data) backupStatus = ""
         if (route == SettingsRoute.Language) fontError = ""
     }
 
     SideEffect {
-        if (assistantDirty) {
-            UnsavedChangesGuard.register("settings", ::persistAssistantSettings, ::discardAssistantSettings)
+        if (settingsDirty) {
+            UnsavedChangesGuard.register("settings", ::savePendingEdits, ::discardPendingEdits)
         } else {
             UnsavedChangesGuard.clear("settings")
         }
@@ -763,17 +787,17 @@ fun SettingsScreen(active: Boolean = true) {
             text = { Text(S.settingsUnsavedBody) },
             confirmButton = {
                 TextButton(onClick = {
-                    persistAssistantSettings()
+                    savePendingEdits()
                     showUnsavedDialog = false
-                    setRoute(SettingsRoute.Assistant)
+                    setRoute(pendingRoute)
                 }) { Text(S.actionSave) }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = {
-                        discardAssistantSettings()
+                        discardPendingEdits()
                         showUnsavedDialog = false
-                        setRoute(SettingsRoute.Assistant)
+                        setRoute(pendingRoute)
                     }) { Text(S.actionDiscard) }
                     TextButton(onClick = { showUnsavedDialog = false }) { Text(S.actionCancel) }
                 }
@@ -2257,7 +2281,7 @@ fun SettingsScreen(active: Boolean = true) {
         modifier = Modifier.fillMaxWidth().verticalScroll(rootScroll).hazeSource(state = LocalHazeState.current).padding(16.dp).padding(bottom = LocalBottomBarInset.current)
     ) {
         when (route) {
-            SettingsRoute.Root -> RootSettingsPage(onRoute = { setRoute(it) })
+            SettingsRoute.Root -> RootSettingsPage(onRoute = { navigate(it) })
 
             SettingsRoute.Language -> LanguageSettingsPage(
                 repo = repo,
@@ -2267,14 +2291,14 @@ fun SettingsScreen(active: Boolean = true) {
                 fontError = fontError,
                 onRequestDeleteFont = { fontPendingDelete = it },
                 onImportFontClick = { fontImportLauncher.launch(arrayOf("*/*")) },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
             SettingsRoute.Assistant -> AssistantSettingsPage(
                 repo = repo,
                 profiles = profiles,
                 selectedProfileIdx = selectedProfileIdx,
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
             SettingsRoute.LocalModel -> LocalModelSettingsPage(
@@ -2295,7 +2319,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestToolsOn = { lmConfirmToolsOn = true },
                 onRequestGpuOn = { lmConfirmGpuOn = true },
                 onRequestBackgroundOn = { lmConfirmBackgroundOn = true },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
             SettingsRoute.Personalization -> PersonalizationSettingsPage(
@@ -2306,17 +2330,10 @@ fun SettingsScreen(active: Boolean = true) {
                 onAssistantStyleChange = { assistantStyle = it },
                 onSave = { persistAssistantSettings() },
                 onRequestSmallModelWarning = { showSmallModelWarn = true },
-                onBack = { leavePersonalization() }
+                onBack = { navigate(SettingsRoute.Assistant) }
             )
 
-            SettingsRoute.Memory -> MemorySettingsPage(
-                repo = repo,
-                onRoute = { setRoute(it) }
-            )
-
-            SettingsRoute.Network -> NetworkSettingsPage(repo = repo, onRoute = { setRoute(it) })
-
-            SettingsRoute.Api -> ApiSettingsPage(
+            SettingsRoute.CloudModel -> CloudModelSettingsPage(
                 repo = repo,
                 profiles = profiles,
                 selectedProfileIdx = selectedProfileIdx,
@@ -2361,21 +2378,21 @@ fun SettingsScreen(active: Boolean = true) {
                 onSelectProfile = { selectProfile(it) },
                 onAddProfile = { addProfile() },
                 onSaveProfile = { saveActiveProfile(selectedProfileIdx, provider, models) },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
-            SettingsRoute.Appearance -> AppearanceSettingsPage(repo = repo, onRoute = { setRoute(it) })
+            SettingsRoute.Appearance -> AppearanceSettingsPage(repo = repo, onRoute = { navigate(it) })
 
-            SettingsRoute.Theme -> ThemeSettingsPage(repo = repo, onRoute = { setRoute(it) })
+            SettingsRoute.Theme -> ThemeSettingsPage(repo = repo, onRoute = { navigate(it) })
 
-            SettingsRoute.Background -> BackgroundSettingsPage(repo = repo, onRoute = { setRoute(it) })
+            SettingsRoute.Background -> BackgroundSettingsPage(repo = repo, onRoute = { navigate(it) })
 
-            SettingsRoute.Splash -> SplashSettingsPage(repo = repo, onRoute = { setRoute(it) })
+            SettingsRoute.Splash -> SplashSettingsPage(repo = repo, onRoute = { navigate(it) })
 
             SettingsRoute.Editor -> EditorSettingsPage(
                 repo = repo,
                 onRequestOpenLinksWarning = { showOpenLinksWarning = true },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
             SettingsRoute.Cloud -> CloudSettingsPage(
@@ -2400,7 +2417,7 @@ fun SettingsScreen(active: Boolean = true) {
                     showSelfDestructWarning = true
                 },
                 onRequestCrashShieldInfo = { showCrashShieldInfo = true },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
             SettingsRoute.Privacy -> PrivacySettingsPage(
@@ -2413,12 +2430,12 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestBlackoutWarning = { showBlackoutWarning = true },
                 onRequestShareWarning = { showShareWarning = true },
                 onExportLogsClick = { logsExportLauncher.launch("lucent-startup-log.txt") },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
 
             SettingsRoute.About -> AboutSettingsPage(
                 repo = repo,
-                onRoute = { setRoute(it) },
+                onRoute = { navigate(it) },
                 onOpenUrl = { url ->
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     context.startActivity(intent)
@@ -2428,7 +2445,7 @@ fun SettingsScreen(active: Boolean = true) {
             )
 
             SettingsRoute.Licences -> LicenceSettingsPage(
-                onRoute = { setRoute(it) },
+                onRoute = { navigate(it) },
                 onOpenUrl = { url ->
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     context.startActivity(intent)
@@ -2512,7 +2529,7 @@ fun SettingsScreen(active: Boolean = true) {
                         }
                         refreshShizuku()
                     },
-                    onRoute = { setRoute(it) }
+                    onRoute = { navigate(it) }
                 )
             }
 
@@ -2530,7 +2547,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onRequestClearTasks = { showClearTasks = true },
                 onRequestClearChats = { showClearChats = true },
                 onRequestClearData = { showClearData = true },
-                onRoute = { setRoute(it) }
+                onRoute = { navigate(it) }
             )
         }
     }

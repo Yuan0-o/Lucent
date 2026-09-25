@@ -8,6 +8,14 @@ import androidx.compose.runtime.setValue
 import com.lucent.app.ui.HomePanel
 import com.lucent.app.ui.SettingsRoute
 
+object SettingsNav {
+    var handler: ((SettingsRoute) -> Unit)? = null
+
+    fun go(route: SettingsRoute) {
+        handler?.invoke(route)
+    }
+}
+
 object AppNavigation {
 
     var requestedScreen by mutableStateOf<Screen?>(null)

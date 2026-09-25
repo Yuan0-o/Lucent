@@ -23,8 +23,11 @@ object NotebookTools {
         ),
         ToolDefinition(
             name = "create_notebook",
-            description = "Create a new empty NOTEBOOK with the given name. Notebooks group the notes and tasks the user already has, so put items in afterwards with add_to_notebook.",
-            params = listOf(ToolParam("title", "string", "The name for the new notebook"))
+            description = "Create a new empty NOTEBOOK with the given name, shown on the shelf as a book with a coloured cover. Notebooks group the notes and tasks the user already has, so put items in afterwards with add_to_notebook.",
+            params = listOf(
+                ToolParam("title", "string", "The name for the new notebook"),
+                ToolParam("cover", "string", "Optional cover colour: crimson, ocean, forest, amber, or plum. Defaults to crimson.", required = false)
+            )
         ),
         ToolDefinition(
             name = "rename_notebook",
@@ -35,9 +38,36 @@ object NotebookTools {
             )
         ),
         ToolDefinition(
+            name = "set_notebook_cover",
+            description = "Change the colour of a NOTEBOOK's cover, matched by its name. This is only the colour of the book on the shelf: crimson, ocean, forest, amber, or plum.",
+            params = listOf(
+                ToolParam("notebook", "string", "The name (or part of it) of the notebook"),
+                ToolParam("cover", "string", "One of: crimson, ocean, forest, amber, plum")
+            )
+        ),
+        ToolDefinition(
+            name = "move_notebook",
+            description = "Move a NOTEBOOK to another position on the shelf, matched by its name — the same order the person gets by dragging books around when the sort is set to Custom. Use it when they ask for a notebook to go first, last, or before/after another one.",
+            params = listOf(
+                ToolParam("notebook", "string", "The name (or part of it) of the notebook to move"),
+                ToolParam("position", "string", "One of: first, last, before, after"),
+                ToolParam("relative_to", "string", "For before/after: the name (or part of it) of the notebook to sit next to", required = false)
+            )
+        ),
+        ToolDefinition(
             name = "delete_notebook",
-            description = "Delete a NOTEBOOK, matched by its name. Only the notebook itself goes — this is permanent, it does not go to the Trash — and the notes and tasks grouped in it are NOT deleted, they stay in the notes and tasks lists. Call list_notebooks first so you use its real name.",
+            description = "Delete a NOTEBOOK, matched by its name. Only the notebook itself goes to the Trash — the notes and tasks grouped in it are NOT deleted, they stay in the notes and tasks lists, and the person can restore the notebook within 30 days. Call list_notebooks first so you use its real name.",
             params = listOf(ToolParam("notebook", "string", "The name (or part of it) of the notebook to delete"))
+        ),
+        ToolDefinition(
+            name = "list_notebook_trash",
+            description = "List the notebooks currently in the Trash, with when each was deleted. Notebooks stay there for 30 days. Use this when the person deleted a notebook and wants it back, then restore it with restore_notebook_from_trash.",
+            params = emptyList()
+        ),
+        ToolDefinition(
+            name = "restore_notebook_from_trash",
+            description = "Bring a deleted NOTEBOOK back out of the Trash onto the shelf, matched by its name. The notes and tasks it grouped are put back with it. Call list_notebook_trash first to see what is there.",
+            params = listOf(ToolParam("notebook", "string", "The name (or part of it) of the trashed notebook to restore"))
         ),
         ToolDefinition(
             name = "list_notebook_items",
@@ -96,8 +126,11 @@ object NotebookTools {
         }
         return when (name) {
             "create_notebook" -> S.ccCreateNotebook(s("title", "name"))
+            "set_notebook_cover" -> S.ccSetNotebookCover(s("notebook"), s("cover", "colour", "color"))
+            "move_notebook" -> S.ccMoveNotebook(s("notebook"), s("position"))
+            "restore_notebook_from_trash" -> S.ccRestoreNotebook(s("notebook", "title", "name"))
             "rename_notebook" -> S.ccRenameNotebook(s("notebook"), s("new_title", "new_name"))
-            "delete_notebook" -> S.notebookDeleteBody(s("notebook", "title", "name"))
+            "delete_notebook" -> S.ccTrashNotebook(s("notebook", "title", "name"))
             "add_to_notebook" -> S.ccAddToNotebook(s("title"), s("notebook"))
             "remove_from_notebook" -> S.ccRemoveFromNotebook(s("title"), s("notebook"))
             "move_to_notebook" -> S.ccMoveToNotebook(s("title"), s("to_notebook", "notebook"))
@@ -107,6 +140,11 @@ object NotebookTools {
 
     fun editableArguments(name: String, a: JSONObject): List<AppTools.EditableArgument> = when (name) {
         "create_notebook" -> listOfNotNull(argOf(a, "title", S.confirmEditTitleLabel))
+        "set_notebook_cover" -> listOfNotNull(argOf(a, "cover", S.notebookCoverTitle))
+        "move_notebook" -> listOfNotNull(
+            argOf(a, "position", S.confirmEditItemLabel),
+            argOf(a, "relative_to", S.confirmEditTitleLabel)
+        )
         "rename_notebook" -> listOfNotNull(argOf(a, "new_title", S.confirmEditNewTitleLabel))
         else -> emptyList()
     }
@@ -137,8 +175,97 @@ object NotebookTools {
             if (title.isBlank()) {
                 ToolExecResult("No notebook name was provided.", success = false)
             } else {
-                db.notebookDao().insert(Notebook(title = title))
-                ToolExecResult("Created notebook \"$title\". Add notes or tasks to it with add_to_notebook.")
+                val cover = args.firstString("cover", "colour", "color").trim().lowercase()
+                val colorKey = com.lucent.app.ui.NotebookColor.entries
+                    .firstOrNull { it.key == cover }?.key
+                    .orEmpty()
+                db.notebookDao().insert(Notebook(title = title, color = colorKey))
+                val coverNote = if (colorKey.isBlank()) "" else " Its cover is $cover."
+                ToolExecResult("Created notebook \"$title\".$coverNote Add notes or tasks to it with add_to_notebook.")
+            }
+        }
+
+        "set_notebook_cover" -> {
+            val all = db.notebookDao().getAllOnce()
+            val query = args.firstString("notebook", "title", "name")
+            val notebook = matchNotebook(all, query)
+            val raw = args.firstString("cover", "colour", "color").trim().lowercase()
+            val color = com.lucent.app.ui.NotebookColor.entries.firstOrNull { it.key == raw }
+            if (notebook == null) {
+                notFoundNotebook(query, all)
+            } else if (color == null) {
+                ToolExecResult(
+                    "\"$raw\" isn't a cover colour this app has. Use one of: " +
+                        com.lucent.app.ui.NotebookColor.entries.joinToString(", ") { it.key } + ".",
+                    success = false
+                )
+            } else {
+                db.notebookDao().update(
+                    notebook.copy(color = color.key, updatedAt = System.currentTimeMillis())
+                )
+                ToolExecResult("The notebook \"${displayName(notebook)}\" now has a ${color.key} cover.")
+            }
+        }
+
+        "move_notebook" -> {
+            val all = db.notebookDao().getAllOnce()
+            val query = args.firstString("notebook", "title", "name")
+            val notebook = matchNotebook(all, query)
+            val position = args.firstString("position", "where").trim().lowercase()
+            if (notebook == null) {
+                notFoundNotebook(query, all)
+            } else {
+                val ordered = all.sortedBy { it.manualOrder }.map { it.id }
+                val without = ordered.filter { it != notebook.id }
+                val relative = if (position == "before" || position == "after") {
+                    val relQuery = args.firstString("relative_to", "relative")
+                    if (relQuery.isBlank()) {
+                        ToolExecResult(
+                            "\"$position\" needs relative_to — the name of the notebook it should sit next to.",
+                            success = false
+                        )
+                    } else {
+                        val target = matchNotebook(all.filter { it.id != notebook.id }, relQuery)
+                        if (target == null) {
+                            notFoundNotebook(relQuery, all.filter { it.id != notebook.id })
+                        } else {
+                            target.id
+                        }
+                    }
+                } else null
+                if (relative is ToolExecResult) {
+                    relative
+                } else {
+                    val index = when (position) {
+                        "first", "top" -> 0
+                        "last", "bottom" -> without.size
+                        "before" -> without.indexOf(relative as Long?).takeIf { it >= 0 }
+                        "after" -> without.indexOf(relative as Long?).takeIf { it >= 0 }?.plus(1)
+                        else -> null
+                    }
+                    if (index == null) {
+                        ToolExecResult(
+                            "\"$position\" isn't a position this app has. Use one of: first, last, before, after.",
+                            success = false
+                        )
+                    } else {
+                        val finalOrder = without.toMutableList().also { it.add(index, notebook.id) }
+                        val byId = all.associateBy { it.id }
+                        finalOrder.forEachIndexed { i, id ->
+                            byId[id]?.let { db.notebookDao().update(it.copy(manualOrder = i * 1000)) }
+                        }
+                        val where = when (position) {
+                            "first", "top" -> "to the front of the shelf"
+                            "last", "bottom" -> "to the end of the shelf"
+                            "before" -> "just before \"${args.firstString("relative_to")}\""
+                            else -> "just after \"${args.firstString("relative_to")}\""
+                        }
+                        ToolExecResult(
+                            "Moved the notebook \"${displayName(notebook)}\" $where. The order is used " +
+                                "when the person sorts their notebooks by Custom.",
+                        )
+                    }
+                }
             }
         }
 
@@ -169,15 +296,60 @@ object NotebookTools {
                 notFoundNotebook(query, all)
             } else {
                 val held = db.notebookDao().getItemsOnce(notebook.id).size
-                db.notebookDao().deleteItemsForNotebook(notebook.id)
-                db.notebookDao().deleteById(notebook.id)
+                db.notebookDao().update(
+                    notebook.copy(trashedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
+                )
                 val kept = if (held == 0) {
                     "It was empty."
                 } else {
                     "Its $held item${if (held == 1) "" else "s"} ${if (held == 1) "was" else "were"} not deleted — " +
                         "${if (held == 1) "it stays" else "they stay"} in the notes and tasks lists."
                 }
-                ToolExecResult("Deleted notebook \"${displayName(notebook)}\" for good — notebooks do not go to the Trash. $kept")
+                ToolExecResult(
+                    "Moved the notebook \"${displayName(notebook)}\" to the Trash; it can be restored for 30 " +
+                        "days. $kept"
+                )
+            }
+        }
+
+        "list_notebook_trash" -> {
+            val trashed = db.notebookDao().getTrashedOnce()
+            if (trashed.isEmpty()) {
+                ToolExecResult("The notebook Trash is empty.")
+            } else {
+                val sb = StringBuilder("Notebooks in the Trash (${trashed.size}):\n")
+                trashed.forEach { notebook ->
+                    val held = db.notebookDao().getItemsOnce(notebook.id).size
+                    sb.append("- \"").append(displayName(notebook)).append("\" (")
+                    sb.append(held).append(if (held == 1) " item)\n" else " items)\n")
+                }
+                ToolExecResult(sb.toString().trim())
+            }
+        }
+
+        "restore_notebook_from_trash" -> {
+            val trashed = db.notebookDao().getTrashedOnce()
+            val query = args.firstString("notebook", "title", "name")
+            val notebook = matchNotebook(trashed, query)
+            if (notebook == null) {
+                val names = trashed.joinToString(", ") { "\"" + displayName(it) + "\"" }
+                if (trashed.isEmpty()) {
+                    ToolExecResult("The notebook Trash is empty, so there is nothing to restore.", success = false)
+                } else {
+                    ToolExecResult(
+                        "No trashed notebook matches \"$query\". In the Trash: $names.",
+                        success = false
+                    )
+                }
+            } else {
+                val held = db.notebookDao().getItemsOnce(notebook.id).size
+                db.notebookDao().update(
+                    notebook.copy(trashedAt = null, updatedAt = System.currentTimeMillis())
+                )
+                ToolExecResult(
+                    "Restored the notebook \"${displayName(notebook)}\" to the shelf with its $held " +
+                        "grouped item${if (held == 1) "" else "s"}."
+                )
             }
         }
 

@@ -59,7 +59,7 @@ internal fun LicenceSettingsPage(onRoute: (SettingsRoute) -> Unit, onOpenUrl: ((
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
-    BackHeader(S.licencesTitle) { onRoute(SettingsRoute.About) }
+    BackHeader(onBack = { onRoute(SettingsRoute.About) })
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Text(S.licencesIntro, color = onGradientMuted, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(12.dp))

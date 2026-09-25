@@ -57,7 +57,7 @@ internal fun SecuritySettingsPage(
         initial = SettingsCache.pwLaterRoundLimit
     )
 
-    BackHeader(S.settingsSecurityTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

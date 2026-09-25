@@ -222,6 +222,8 @@ so if you reuse Lucent, keep the `LICENSE` file (and the name on it) with what y
 square. The third-party components above make their own, similarly modest requests; honour those in
 the same spirit and everyone stays friends.
 
+Privacy policy: **[`PRIVACY.md`](https://github.com/Yuan0-o/Lucent/blob/main/PRIVACY.md)** — what Lucent stores, what leaves your device, and every control you hold.
+
 ## Contributing
 
 Should you be seized by the urge to improve Lucent, we should be quietly delighted. Bug reports, thoughtful suggestions, and pull requests submitted with good grace are entirely welcome. We ask only that everyone remain strictly civil, keep the tea warm, and treat fellow contributors with the courtesy one expects in a respectable reading room.

@@ -152,7 +152,10 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
                 ToastOverlay()
 
-                com.lucent.app.ui.AutoUpdateDialog(repo = repo)
+                com.lucent.app.ui.AutoUpdateDialog(
+                    repo = repo,
+                    onOpenUrl = { url -> com.lucent.app.data.DesktopShell.openUrl(url) }
+                )
 
                 if (splashEnabled && !splashDone) {
                     LucentSplash(

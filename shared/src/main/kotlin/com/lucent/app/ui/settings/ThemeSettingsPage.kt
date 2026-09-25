@@ -39,15 +39,8 @@ internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute
     val savedTheme by repo.themeMode.collectAsState(initial = SettingsCache.themeMode)
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
-    BackHeader(S.settingsThemeTitle) { onRoute(SettingsRoute.Appearance) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Appearance) })
 
-
-    if (dynamicColorActive) {
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Text(S.dynamicColorPausedTheme, color = onGradientMuted, fontSize = 13.sp)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-    }
     if (!dynamicColorActive) {
         val systemDark = isSystemInDarkTheme()
         val offered = LucentThemeMode.pickerEntries

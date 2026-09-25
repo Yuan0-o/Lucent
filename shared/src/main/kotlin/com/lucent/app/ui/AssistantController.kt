@@ -347,6 +347,8 @@ class AssistantControllerImpl(
         val useLocalGpu: Boolean = false,
         val confirmTools: Boolean = true,
         val smallModelMode: Boolean = false,
+        val agentMode: Boolean = true,
+        val localWebSearch: Boolean = false,
         val answersMessageId: Long = 0
     )
     private var lastSend: LastSend? = null
@@ -368,6 +370,8 @@ class AssistantControllerImpl(
             useLocalTools = p.useLocalTools, useLocalGpu = p.useLocalGpu,
             confirmTools = p.confirmTools,
             smallModelMode = p.smallModelMode,
+            agentMode = p.agentMode,
+            localWebSearch = p.localWebSearch,
             answersMessageId = p.answersMessageId,
             targetConversationId = target
         )
@@ -497,7 +501,9 @@ class AssistantControllerImpl(
         useLocalTools: Boolean,
         useLocalGpu: Boolean,
         confirmTools: Boolean,
-        smallModelMode: Boolean
+        smallModelMode: Boolean,
+        agentMode: Boolean = true,
+        localWebSearch: Boolean = false
     ) {
         if (message.role != "user") return
         send(
@@ -518,6 +524,8 @@ class AssistantControllerImpl(
             useLocalGpu = useLocalGpu,
             confirmTools = confirmTools,
             smallModelMode = smallModelMode,
+            agentMode = agentMode,
+            localWebSearch = localWebSearch,
             answersMessageId = message.id,
             targetConversationId = message.conversationId
         )
@@ -553,6 +561,8 @@ class AssistantControllerImpl(
         useLocalGpu: Boolean = false,
         confirmTools: Boolean = true,
         smallModelMode: Boolean = false,
+        agentMode: Boolean = true,
+        localWebSearch: Boolean = false,
         answersMessageId: Long = 0,
         targetConversationId: Long? = null,
         attachmentListJson: String? = null,
@@ -569,7 +579,8 @@ class AssistantControllerImpl(
             else attachmentListJson,
             url, spec, key, model,
             name, style, memoryTier, webSearchEnabled, typingHapticsEnabled, useLocalModel,
-            useLocalTools, useLocalGpu, confirmTools, smallModelMode, answersMessageId
+            useLocalTools, useLocalGpu, confirmTools, smallModelMode, agentMode, localWebSearch,
+            answersMessageId
         )
         turn.thinking = true
         if (errorConversationId == targetKey) {
@@ -618,7 +629,10 @@ class AssistantControllerImpl(
                 }
 
                 if (useLocalModel) {
-                    runLocalTurn(turn, db, conversationId, useLocalTools, useLocalGpu, confirmTools, memoryTier, smallModelMode, answeredId)
+                    runLocalTurn(
+                        turn, db, conversationId, useLocalTools, useLocalGpu, confirmTools,
+                        memoryTier, smallModelMode, answeredId, agentMode, localWebSearch
+                    )
                     return@launch
                 }
 
@@ -630,9 +644,17 @@ class AssistantControllerImpl(
                 val parkedRefine = refinementContext
                 refinementContext = null
                 val recentItems = recentItemsContext(db, conversationId)
+                val fastMode = !agentMode
                 val basePrompt =
-                    if (smallModelMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory, recentItems = recentItems)
+                    if (smallModelMode || fastMode) SystemPrompts.compact(name, style, tier = memoryTier, webSearchEnabled = webSearchEnabled, userText = text, crossMemory = compactCrossMemory, recentItems = recentItems)
                     else SystemPrompts.full(name, style, memoryTier, webSearchEnabled, crossMemory, text, recentItems = recentItems)
+                val directPrompt = if (fastMode) {
+                    basePrompt +
+                        "\n\nAGENT MODE IS OFF in this conversation. Call no tools at all — no JSON, no " +
+                        "function calls, no \"Result of\" lines. Answer the person directly, in one short " +
+                        "reply, as quickly as you can. If they asked for something that would need a tool, " +
+                        "say briefly that agent mode is off in Settings and answer in words instead."
+                } else basePrompt
                 val systemPrompt = if (parkedRefine != null) {
                     basePrompt +
                         "\n\nIMPORTANT (the user is refining an earlier proposal of yours): you proposed this before, " +
@@ -640,8 +662,8 @@ class AssistantControllerImpl(
                         "\nThe user has now told you what to change. Re-propose the action with their adjustments by calling " +
                         "the matching tool again. The app will show them a confirmation dialog - only call the tool; never " +
                         "claim anything was done, because it only happens after they approve it."
-                } else basePrompt
-                val tools = AppTools.definitions(includeWebSearch = webSearchEnabled)
+                } else directPrompt
+                val tools = if (fastMode) emptyList() else AppTools.definitions(includeWebSearch = webSearchEnabled)
 
                 val (uploadMime, uploadData, uploadName) =
                     resolveUpload(db, conversationId, attachmentMime, attachmentData, attachmentName)
@@ -842,7 +864,9 @@ class AssistantControllerImpl(
         confirmTools: Boolean,
         memoryTier: MemoryTier,
         smallModelMode: Boolean,
-        answeredId: Long
+        answeredId: Long,
+        agentMode: Boolean,
+        webSearchEnabled: Boolean
     ) {
         val ctx = appContextRef ?: return
 
@@ -870,9 +894,15 @@ class AssistantControllerImpl(
             return
         }
 
-        if (!useTools) { runLocalChatOnly(turn, db, conversationId, memoryTier, smallModelMode, answeredId); return }
+        if (!useTools || !agentMode) {
+            runLocalChatOnly(
+                turn, db, conversationId, memoryTier, smallModelMode, answeredId,
+                toolsAllowed = useTools, agentMode = agentMode
+            )
+            return
+        }
 
-        val tools = AppTools.definitions(includeWebSearch = false)
+        val tools = AppTools.definitions(includeWebSearch = webSearchEnabled)
         val validToolNames = tools.map { it.name }.toHashSet()
 
         val turns = buildHistory(db, conversationId, localTier(memoryTier))
@@ -886,7 +916,8 @@ class AssistantControllerImpl(
             tools,
             lastUserText,
             smallModelMode,
-            recentItems = recentItemsContext(db, conversationId)
+            recentItems = recentItemsContext(db, conversationId),
+            webSearchEnabled = webSearchEnabled
         )
         val messages = mutableListOf<Pair<String, String>>()
         messages.add("system" to localPrompt)
@@ -1049,7 +1080,9 @@ class AssistantControllerImpl(
         conversationId: Long,
         memoryTier: MemoryTier,
         smallModelMode: Boolean,
-        answeredId: Long
+        answeredId: Long,
+        toolsAllowed: Boolean,
+        agentMode: Boolean
     ) {
         val historyTurns =
             if (smallModelMode) com.lucent.app.local.LocalLlm.HISTORY_TURNS
@@ -1073,6 +1106,14 @@ class AssistantControllerImpl(
             }
         } else emptyList()
 
+        val offReason = if (!agentMode) {
+            "Agent mode is OFF — the \"Agent mode\" switch under Settings > Assistant > Local " +
+                "model — so this turn is a plain, quick reply with no tools and no step-by-step " +
+                "working."
+        } else {
+            "tool permission has not been granted — the \"Allow tools\" switch under Settings > " +
+                "Assistant > Local model is OFF."
+        }
         val messages = buildList {
             add(
                 "system" to (
@@ -1084,25 +1125,22 @@ class AssistantControllerImpl(
                     "create, read, edit, complete, or delete notes or tasks, you cannot attach " +
                     "files, and you cannot see the user's existing notes or tasks at all. You also " +
                     "have NO internet access, so you cannot look anything up or fetch anything " +
-                    "current. The ONLY reason for all of this is a setting: the user has not " +
-                    "granted you tool permission — the \"Allow tools\" switch under Settings > " +
-                    "Assistant > Local model is OFF. It is a setting, not a flaw in their request; " +
-                    "their requests are not impossible.\n\n" +
+                    "current. The ONLY reason for all of this is a setting: $offReason " +
+                    "It is a setting, not a flaw in their request; their requests are not impossible.\n\n" +
                     "Because of that, you must NEVER say or imply that you have created, added, " +
                     "saved, changed, completed, deleted, or found anything. Never say \"done\", " +
                     "\"added it\", \"I've made that note\", or anything of that shape. That would be " +
                     "false, and the user would go looking for something that does not exist.\n\n" +
                     "If they ask you to create, change, find, or do anything with a note or task " +
                     "(for example \"add a task for tomorrow morning\"), you MUST give them the real " +
-                    "reason, in their own language: you can't act right now because tool " +
-                    "permission is turned off, and they can enable it under Settings > Assistant > " +
-                    "Local model > Allow tools (or add the item themselves on the Notes or Tasks " +
-                    "tab). NEVER answer with only a bare refusal like \"I can't do that\" or " +
-                    "\"your task cannot be completed\" — a refusal that hides the reason reads as " +
-                    "a malfunction and leaves them stuck, when one sentence about the setting " +
-                    "fixes it. If they ask WHY you can't, that setting IS the answer. You can " +
-                    "still help fully in words — draft the wording, think it through, talk it " +
-                    "over — and offering that is far more useful than an apology."
+                    "reason, in their own language: you can't act right now because " + offReason + " " +
+                    "They can change that under Settings > Assistant > Local model (or add the item " +
+                    "themselves on the Notes or Tasks tab). NEVER answer with only a bare refusal " +
+                    "like \"I can't do that\" or \"your task cannot be completed\" — a refusal that " +
+                    "hides the reason reads as a malfunction and leaves them stuck, when one " +
+                    "sentence about the setting fixes it. If they ask WHY you can't, that setting " +
+                    "IS the answer. You can still help fully in words — draft the wording, think " +
+                    "it through, talk it over — and offering that is far more useful than an apology."
                 )
             )
             com.lucent.app.i18n.ReplyLanguage.instructionFor(lastUserText)?.let { add("system" to it) }

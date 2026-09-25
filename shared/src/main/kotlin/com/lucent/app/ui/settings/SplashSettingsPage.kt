@@ -47,14 +47,12 @@ internal fun SplashSettingsPage(
     val savedStyle by repo.splashStyle.collectAsState(initial = SettingsCache.splashStyle)
     val current = SplashStyle.fromKey(savedStyle)
 
-    BackHeader(S.settingsSplashTitle) { onRoute(SettingsRoute.Appearance) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Appearance) })
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.splashEnableTitle, color = onGradient, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(S.splashEnableSub, color = onGradientMuted, fontSize = 13.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(

@@ -521,4 +521,24 @@ class AppDatabaseMigrationTest {
             assertTrue(c.moveToFirst()); assertTrue(c.isNull(0))
         }
     }
+
+    @Test
+    fun migrate21To22_addsCoverOrderAndTrashToNotebooks() {
+        helper.createDatabase(TEST_DB, 21).apply {
+            execSQL(
+                "INSERT INTO notebooks (id, title, createdAt, updatedAt) VALUES (1, 'Ideas', 1000, 1000)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 22, true, MIGRATION_21_22)
+
+        db.query("SELECT title, color, manualOrder, trashedAt FROM notebooks WHERE id = 1").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("Ideas", c.getString(0))
+            assertEquals("", c.getString(1))
+            assertEquals(0, c.getInt(2))
+            assertTrue(c.isNull(3))
+        }
+    }
 }

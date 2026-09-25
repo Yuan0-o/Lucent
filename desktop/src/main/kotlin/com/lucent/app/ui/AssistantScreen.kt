@@ -181,6 +181,12 @@ fun AssistantScreen(active: Boolean = true) {
     val localModelEnabled by repo.localModelEnabled.collectAsState(initial = SettingsCache.localModelEnabled)
     val localToolsEnabled by repo.localToolsEnabled.collectAsState(initial = SettingsCache.localToolsEnabled)
     val localGpuEnabled by repo.localGpuEnabled.collectAsState(initial = SettingsCache.localGpuEnabled)
+    val localWebSearchEnabled by repo.localWebSearchEnabled.collectAsState(
+        initial = SettingsCache.localWebSearchEnabled
+    )
+    val cloudAgentMode by repo.cloudAgentMode.collectAsState(initial = SettingsCache.cloudAgentMode)
+    val localAgentMode by repo.localAgentMode.collectAsState(initial = SettingsCache.localAgentMode)
+    val memoryTierLocalKey by repo.memoryTierLocal.collectAsState(initial = SettingsCache.memoryTierLocal)
     val modelRecents by repo.modelRecents.collectAsState(initial = emptyList())
     val smallModelMode by repo.smallModelModeEnabled.collectAsState(initial = SettingsCache.smallModelModeEnabled)
     val savedProfilesJson by repo.apiProfilesJson.collectAsState(initial = SettingsCache.apiProfilesJson)
@@ -1106,14 +1112,16 @@ fun AssistantScreen(active: Boolean = true) {
                                         },
                                         key = savedKey, model = savedModel,
                                         name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
-                                        memoryTier = MemoryTier.fromKey(memoryTierKey),
+                                        memoryTier = MemoryTier.fromKey(if (useLocal) memoryTierLocalKey else memoryTierKey),
                                         webSearchEnabled = webSearchEnabled,
                                         typingHapticsEnabled = typingHapticsEnabled,
                                         useLocalModel = useLocal,
                                         useLocalTools = localToolsEnabled,
                                         useLocalGpu = localGpuEnabled,
                                         confirmTools = confirmToolsEnabled,
-                                        smallModelMode = smallModelMode
+                                        smallModelMode = smallModelMode,
+                                        agentMode = if (useLocal) localAgentMode else cloudAgentMode,
+                                        localWebSearch = localWebSearchEnabled
                                     )
                                 },
                                 enabled = !sending,
@@ -1285,14 +1293,16 @@ fun AssistantScreen(active: Boolean = true) {
                 attachments = attachments,
                 url = savedUrl, spec = spec, key = savedKey, model = savedModel,
                 name = assistantName.ifBlank { "Lucent" }, style = assistantStyle,
-                memoryTier = MemoryTier.fromKey(memoryTierKey),
+                memoryTier = MemoryTier.fromKey(if (useLocal) memoryTierLocalKey else memoryTierKey),
                 webSearchEnabled = webSearchEnabled,
                 typingHapticsEnabled = typingHapticsEnabled,
                 useLocalModel = useLocal,
                 useLocalTools = localToolsEnabled,
                 useLocalGpu = localGpuEnabled,
                 confirmTools = confirmToolsEnabled,
-                smallModelMode = smallModelMode
+                smallModelMode = smallModelMode,
+                agentMode = if (useLocal) localAgentMode else cloudAgentMode,
+                localWebSearch = localWebSearchEnabled
             )
             inputFocus.requestFocus()
         }

@@ -58,7 +58,7 @@ internal fun LanguageSettingsPage(
     val savedLanguage by repo.appLanguage.collectAsState(initial = SettingsCache.appLanguage)
     val savedFont by repo.font.collectAsState(initial = SettingsCache.font)
 
-    BackHeader(S.settingsLanguageTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
 
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

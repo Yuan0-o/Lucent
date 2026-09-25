@@ -53,14 +53,8 @@ internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (Settings
     val savedPalette by repo.palette.collectAsState(initial = SettingsCache.palette)
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
-    BackHeader(S.settingsBackgroundTitle) { onRoute(SettingsRoute.Appearance) }
-    
-    if (dynamicColorActive) {
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Text(S.dynamicColorPausedBackground, color = onGradientMuted, fontSize = 13.sp)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-    }
+    BackHeader(onBack = { onRoute(SettingsRoute.Appearance) })
+
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {

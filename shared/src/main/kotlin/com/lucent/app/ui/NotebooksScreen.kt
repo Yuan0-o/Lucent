@@ -14,19 +14,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -39,22 +37,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.AppNavigation
+import com.lucent.app.AppScope
 import com.lucent.app.BackClaim
 import com.lucent.app.data.AppDatabase
-import com.lucent.app.data.Checklist
 import com.lucent.app.data.Note
 import com.lucent.app.data.Notebook
 import com.lucent.app.data.NotebookItem
+import com.lucent.app.data.SettingsRepository
 import com.lucent.app.data.Task
 import com.lucent.app.data.pruneOrphans
-import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 @Composable
@@ -68,19 +70,45 @@ fun NotebooksScreen(
     val context = LocalContext.current
     val db = remember { AppDatabase.getInstance(context) }
     val scope = rememberCoroutineScope()
+    val settingsRepo = remember { SettingsRepository(context) }
     val notebooks by db.notebookDao().getAll().collectAsState(initial = emptyList())
     val counts by db.notebookDao().itemCounts().collectAsState(initial = emptyList())
     val countById = remember(counts) { counts.associate { it.notebookId to it.count } }
     val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+
+    val sortKey by settingsRepo.notebooksSort.collectAsState(initial = com.lucent.app.data.SettingsCache.notebooksSort ?: "recent")
+    val sortOption = NotebookSort.fromKey(sortKey)
 
     var openNotebookId by remember { mutableStateOf<Long?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    var coverForNew by remember { mutableStateOf(NotebookColor.DEFAULT) }
+    var nameForNew by remember { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<Notebook?>(null) }
+    var recolouring by remember { mutableStateOf<Notebook?>(null) }
+    var deleting by remember { mutableStateOf<Notebook?>(null) }
+    var showTrash by remember { mutableStateOf(false) }
+
+    var draggingNotebookId by remember { mutableStateOf<Long?>(null) }
+    var searchText by remember { mutableStateOf("") }
+    var dateRange by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    var actionsExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         runCatching { db.notebookDao().pruneOrphans(db.noteDao(), db.taskDao()) }
     }
 
-    BackClaim(active && !showBack && openNotebookId != null)
-    BackHandler(enabled = active && !showBack && openNotebookId != null) { openNotebookId = null }
+    val reorderState = rememberReorderDragState()
+    val gridState = rememberRestoredGridState("NotebooksScreen#grid")
+    val reorderSlots = rememberGridSlots(gridState)
+    ReorderSettleEffect(reorderState, reorderSlots)
+    val placementSpec = rememberReorderPlacementSpec()
+    val reorderEnabled = true
+
+    BackClaim(active && !showBack && (openNotebookId != null || showTrash))
+    BackHandler(enabled = active && !showBack && (openNotebookId != null || showTrash)) {
+        if (showTrash) showTrash = false else openNotebookId = null
+    }
 
     val open = openNotebookId
     if (open != null) {
@@ -93,22 +121,22 @@ fun NotebooksScreen(
         return
     }
 
-    var creating by remember { mutableStateOf(false) }
-    var renaming by remember { mutableStateOf<Notebook?>(null) }
-    var deleting by remember { mutableStateOf<Notebook?>(null) }
+    if (showTrash) {
+        NotebookTrashScreen(onBack = { showTrash = false })
+        return
+    }
 
     deleting?.let { notebook ->
         AlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text(com.lucent.app.i18n.S.notebookDeleteTitle) },
-            text = { Text(com.lucent.app.i18n.S.notebookDeleteBody(notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle })) },
+            text = { Text(com.lucent.app.i18n.S.notebookTrashBody(notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle })) },
             confirmButton = {
                 TextButton(onClick = {
                     val target = notebook
                     deleting = null
-                    scope.launch {
-                        db.notebookDao().deleteItemsForNotebook(target.id)
-                        db.notebookDao().deleteById(target.id)
+                    AppScope.io.launch {
+                        db.notebookDao().update(target.copy(trashedAt = System.currentTimeMillis()))
                         LucentToast.show(context, com.lucent.app.i18n.S.notebookDeletedToast)
                     }
                 }) { Text(com.lucent.app.i18n.S.actionDelete) }
@@ -119,58 +147,17 @@ fun NotebooksScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (showBack) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
-                }
-                Text(com.lucent.app.i18n.S.screenNotebooks, color = onGradient, fontSize = 20.sp, modifier = Modifier.weight(1f))
-            } else {
-                Text(
-                    com.lucent.app.i18n.S.notebooksTotal(notebooks.size),
-                    color = LocalOnGradientMuted.current,
-                    fontSize = 14.sp,
-                    modifier = Modifier.weight(1f).padding(start = 4.dp)
-                )
-            }
-            IconButton(onClick = { creating = true }) {
-                Icon(Icons.Default.Add, contentDescription = com.lucent.app.i18n.S.notebookNew, tint = onGradient)
-            }
-        }
-
-        if (notebooks.isEmpty()) {
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(24.dp)) {
-                Text(com.lucent.app.i18n.S.notebookEmpty, color = onGradient.copy(alpha = 0.65f))
-            }
-        } else {
-            LazyColumn(
-                state = rememberRestoredListState("NotebooksScreen#1"),
-                modifier = Modifier.hazeSource(state = LocalHazeState.current),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
-            ) {
-                items(notebooks, key = { it.id }) { notebook ->
-                    NotebookRow(
-                        notebook = notebook,
-                        count = countById[notebook.id] ?: 0,
-                        onOpen = { openNotebookId = notebook.id },
-                        onRename = { renaming = notebook },
-                        onDelete = { deleting = notebook }
-                    )
-                }
-            }
-        }
-    }
-
     if (creating) {
-        NotebookNameDialog(
+        NotebookEditorDialog(
             title = com.lucent.app.i18n.S.notebookNew,
             confirmLabel = com.lucent.app.i18n.S.notebookCreate,
-            initial = "",
-            onConfirm = { name ->
+            initialName = nameForNew,
+            initialColor = coverForNew,
+            onConfirm = { name, color ->
+                nameForNew = ""
+                coverForNew = NotebookColor.DEFAULT
                 scope.launch {
-                    db.notebookDao().insert(Notebook(title = name.trim()))
+                    db.notebookDao().insert(Notebook(title = name.trim(), color = color.key))
                 }
             },
             onDismiss = { creating = false }
@@ -178,109 +165,302 @@ fun NotebooksScreen(
     }
 
     renaming?.let { notebook ->
-        NotebookNameDialog(
+        NotebookEditorDialog(
             title = com.lucent.app.i18n.S.notebookRename,
             confirmLabel = com.lucent.app.i18n.S.notebookRenameAction,
-            initial = notebook.title,
-            onConfirm = { name ->
+            initialName = notebook.title,
+            initialColor = NotebookColor.fromKey(notebook.color),
+            showColorPicker = false,
+            onConfirm = { name, _ ->
                 scope.launch {
-                    db.notebookDao().update(notebook.copy(title = name.trim(), updatedAt = System.currentTimeMillis()))
+                    db.notebookDao().update(
+                        notebook.copy(title = name.trim(), updatedAt = System.currentTimeMillis())
+                    )
                     LucentToast.show(context, com.lucent.app.i18n.S.notebookRenamedToast)
                 }
             },
             onDismiss = { renaming = null }
         )
     }
-}
 
-@Composable
-private fun NotebookRow(
-    notebook: Notebook,
-    count: Int,
-    onOpen: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val context = LocalContext.current
-    val onGradient = LocalOnGradient.current
-    val onGradientMuted = LocalOnGradientMuted.current
-    var menuOpen by remember { mutableStateOf(false) }
+    recolouring?.let { notebook ->
+        NotebookEditorDialog(
+            title = com.lucent.app.i18n.S.notebookCoverTitle,
+            confirmLabel = com.lucent.app.i18n.S.actionSave,
+            initialName = notebook.title,
+            initialColor = NotebookColor.fromKey(notebook.color),
+            showNameField = false,
+            onConfirm = { _, color ->
+                scope.launch {
+                    db.notebookDao().update(
+                        notebook.copy(color = color.key, updatedAt = System.currentTimeMillis())
+                    )
+                }
+            },
+            onDismiss = { recolouring = null }
+        )
+    }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .frostedGlass()
-            .clickable {
-                Haptics.tick(context)
-                onOpen()
+    val visible = remember(notebooks, searchText, dateRange, sortOption) {
+        notebooks
+            .filter { notebook ->
+                val matchesQuery = searchText.isBlank() ||
+                    notebook.title.contains(searchText.trim(), ignoreCase = true)
+                val range = dateRange
+                val matchesDate = range == null ||
+                    (notebook.updatedAt >= range.first && notebook.updatedAt <= range.second + DAY_MS)
+                matchesQuery && matchesDate
             }
-            .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.Book, contentDescription = null, tint = onGradient, modifier = Modifier.size(22.dp))
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle },
-                color = onGradient,
-                fontSize = 15.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                com.lucent.app.i18n.S.notebookItemsCount(count),
-                color = onGradientMuted,
-                fontSize = 12.sp
-            )
+            .sortedForDisplay(sortOption)
+    }
+
+    fun drop(beforeId: Long?, afterId: Long?) {
+        val movingId = draggingNotebookId ?: reorderState.draggingId
+        draggingNotebookId = null
+        val moving = movingId?.let { id -> visible.firstOrNull { it.id == id } }
+        if (moving == null) { reorderState.cancel(); return }
+        val reordered = reorderedAround(visible, listOf(moving), beforeId, afterId) { it.id }
+        if (reordered === visible) { reorderState.cancel(); return }
+        AppScope.io.launch {
+            reordered.forEachIndexed { index, notebook ->
+                if (notebook.manualOrder != index * 1000) {
+                    db.notebookDao().update(notebook.copy(manualOrder = index * 1000))
+                }
+            }
         }
-        Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = com.lucent.app.i18n.S.a11yMoreOptions, tint = onGradientMuted)
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(com.lucent.app.i18n.S.notebookRename) },
-                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                    onClick = { menuOpen = false; onRename() }
+        if (sortOption != NotebookSort.CUSTOM) {
+            scope.launch { settingsRepo.setNotebooksSort(NotebookSort.CUSTOM.key) }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        if (showBack) {
+            BackHeader(onBack = onBack)
+        }
+
+        CollapsibleActionBar(
+            expanded = actionsExpanded,
+            onToggleExpanded = { actionsExpanded = !actionsExpanded },
+            search = {
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { searchText = it },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotebooks) },
+                    trailingIcon = { SearchHelpButton() },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                DropdownMenuItem(
-                    text = { Text(com.lucent.app.i18n.S.actionDelete) },
-                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                    onClick = { menuOpen = false; onDelete() }
+            },
+            actions = {
+                DateFilterIconButton(
+                    active = dateRange != null,
+                    onClick = {
+                        showDateRangePicker(context, dateRange?.first, dateRange?.second) { start, end ->
+                            dateRange = start to end
+                        }
+                    }
+                )
+                SortMenuButton(
+                    current = sortOption,
+                    options = NotebookSort.entries.toList(),
+                    label = { it.label },
+                    onSelect = { option -> scope.launch { settingsRepo.setNotebooksSort(option.key) } },
+                    tint = onGradientMuted,
+                    activeTint = onGradient
+                )
+                IconButton(onClick = { showTrash = true }) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = com.lucent.app.i18n.S.screenTrash,
+                        tint = onGradientMuted
+                    )
+                }
+            },
+            trailing = {
+                NewItemButton(
+                    contentDescription = com.lucent.app.i18n.S.notebookNew,
+                    onClick = { creating = true }
+                )
+            }
+        )
+
+        dateRange?.let { (start, end) ->
+            Spacer(modifier = Modifier.height(8.dp))
+            DateFilterChip(startMillis = start, endMillis = end, onClear = { dateRange = null })
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (visible.isEmpty()) {
+            EmptyState(
+                isFiltered = searchText.isNotBlank() || dateRange != null,
+                emptyMessage = com.lucent.app.i18n.S.notebookEmpty,
+                noMatchMessage = com.lucent.app.i18n.S.notebookNoMatch
+            )
+            return@Column
+        }
+
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = 104.dp),
+            modifier = Modifier.fillMaxSize().hazeSource(state = LocalHazeState.current),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = LocalBottomBarInset.current + 12.dp)
+        ) {
+            items(visible, key = { it.id }) { notebook ->
+                NotebookShelfItem(
+                    notebook = notebook,
+                    count = countById[notebook.id] ?: 0,
+                    itemModifier = Modifier
+                        .animateItem(placementSpec = placementSpec)
+                        .reorderVisuals(notebook.id, reorderState, reorderSlots),
+                    reorderModifier = Modifier.reorderableGridItem(
+                        id = notebook.id,
+                        enabled = reorderEnabled,
+                        gridState = gridState,
+                        state = reorderState,
+                        onLongPress = { draggingNotebookId = notebook.id },
+                        onDrop = { beforeId, afterId -> drop(beforeId, afterId) }
+                    ),
+                    onOpen = { openNotebookId = notebook.id },
+                    onRename = { renaming = notebook },
+                    onRecolour = { recolouring = notebook },
+                    onDelete = { deleting = notebook }
                 )
             }
         }
     }
 }
 
+private const val DAY_MS = 24L * 60 * 60 * 1000
+
 @Composable
-private fun NotebookNameDialog(
+private fun NotebookShelfItem(
+    notebook: Notebook,
+    count: Int,
+    itemModifier: Modifier,
+    reorderModifier: Modifier,
+    onOpen: () -> Unit,
+    onRename: () -> Unit,
+    onRecolour: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
+    val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
+    var menuOpen by remember { mutableStateOf(false) }
+    val title = notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle }
+
+    Column(
+        modifier = itemModifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box {
+            NotebookCover(
+                colorKey = notebook.color,
+                label = title,
+                modifier = Modifier
+                    .width(84.dp)
+                    .height(112.dp)
+                    .clickable {
+                        Haptics.tick(context)
+                        onOpen()
+                    }
+                    .then(reorderModifier)
+            )
+            Box(modifier = Modifier.align(Alignment.TopEnd)) {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(30.dp)) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = com.lucent.app.i18n.S.a11yMoreOptions,
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false }
+                ) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(com.lucent.app.i18n.S.notebookRename) },
+                        onClick = { menuOpen = false; onRename() }
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(com.lucent.app.i18n.S.notebookCoverTitle) },
+                        onClick = { menuOpen = false; onRecolour() }
+                    )
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(com.lucent.app.i18n.S.actionDelete) },
+                        onClick = { menuOpen = false; onDelete() }
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            title,
+            color = onGradient,
+            fontSize = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            com.lucent.app.i18n.S.notebookItemsCount(count),
+            color = onGradientMuted,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+internal fun NotebookEditorDialog(
     title: String,
     confirmLabel: String,
-    initial: String,
-    onConfirm: (String) -> Unit,
+    initialName: String,
+    initialColor: NotebookColor,
+    showNameField: Boolean = true,
+    showColorPicker: Boolean = true,
+    onConfirm: (String, NotebookColor) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var name by remember { mutableStateOf(initial) }
+    var name by remember { mutableStateOf(initialName) }
+    var color by remember { mutableStateOf(initialColor) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(com.lucent.app.i18n.S.notebookName) },
-                singleLine = true
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (showNameField) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(com.lucent.app.i18n.S.notebookName) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (showColorPicker) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        com.lucent.app.i18n.S.notebookCoverTitle,
+                        color = LocalOnGradient.current,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NotebookCoverPicker(selected = color, onSelect = { color = it })
+                }
+            }
         },
         confirmButton = {
             TextButton(onClick = {
-                if (name.isBlank()) {
+                if (showNameField && name.isBlank()) {
                     LucentToast.show(context, com.lucent.app.i18n.S.notebookNameRequired)
                 } else {
-                    onConfirm(name)
+                    onConfirm(name, color)
                     onDismiss()
                 }
             }) { Text(confirmLabel) }
@@ -292,227 +472,105 @@ private fun NotebookNameDialog(
 }
 
 @Composable
-fun NotebookDetailScreen(
-    notebookId: Long,
-    onBack: () -> Unit,
-    onOpenNote: (Note) -> Unit,
-    onOpenTask: (Task) -> Unit
-) {
+fun NotebookTrashScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getInstance(context) }
-    val scope = rememberCoroutineScope()
+    val trashed by db.notebookDao().getTrashed().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
+    var confirmEmpty by remember { mutableStateOf(false) }
 
-    var notebook by remember { mutableStateOf<Notebook?>(null) }
-    LaunchedEffect(notebookId) {
-        notebook = db.notebookDao().getByIdOnce(notebookId)
-    }
-    val items by db.notebookDao().getItems(notebookId).collectAsState(initial = emptyList())
-
-    val noteMembers = remember(items) { items.filter { it.itemKind == NotebookItem.KIND_NOTE } }
-    val taskMembers = remember(items) { items.filter { it.itemKind == NotebookItem.KIND_TASK } }
-    var notesById by remember { mutableStateOf(emptyMap<Long, Note>()) }
-    var tasksById by remember { mutableStateOf(emptyMap<Long, Task>()) }
-    LaunchedEffect(noteMembers, taskMembers) {
-        val notes = if (noteMembers.isEmpty()) emptyMap()
-        else db.noteDao().getByIds(noteMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
-        val tasks = if (taskMembers.isEmpty()) emptyMap()
-        else db.taskDao().getByIds(taskMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
-        notesById = notes
-        tasksById = tasks
-        val ghosts = noteMembers.filter { it.itemId !in notes } + taskMembers.filter { it.itemId !in tasks }
-        if (ghosts.isNotEmpty()) ghosts.forEach { db.notebookDao().deleteItemById(it.id) }
-    }
-
-    var renaming by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf(false) }
-
-    if (deleting) {
+    if (confirmEmpty) {
         AlertDialog(
-            onDismissRequest = { deleting = false },
-            title = { Text(com.lucent.app.i18n.S.notebookDeleteTitle) },
-            text = { Text(com.lucent.app.i18n.S.notebookDeleteBody(notebook?.title?.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle } ?: com.lucent.app.i18n.S.notebookEmptyTitle)) },
+            onDismissRequest = { confirmEmpty = false },
+            title = { Text(com.lucent.app.i18n.S.emptyTrashTitle) },
+            text = { Text(com.lucent.app.i18n.S.notebookEmptyTrashBody) },
             confirmButton = {
                 TextButton(onClick = {
-                    deleting = false
-                    scope.launch {
-                        db.notebookDao().deleteItemsForNotebook(notebookId)
-                        db.notebookDao().deleteById(notebookId)
-                        LucentToast.show(context, com.lucent.app.i18n.S.notebookDeletedToast)
+                    val rows = trashed.toList()
+                    confirmEmpty = false
+                    AppScope.io.launch {
+                        rows.forEach { row ->
+                            db.notebookDao().deleteItemsForNotebook(row.id)
+                            db.notebookDao().deleteById(row.id)
+                        }
                     }
-                    onBack()
-                }) { Text(com.lucent.app.i18n.S.actionDelete) }
+                }) { Text(com.lucent.app.i18n.S.emptyTrash) }
             },
-            dismissButton = {
-                TextButton(onClick = { deleting = false }) { Text(com.lucent.app.i18n.S.actionCancel) }
-            }
+            dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text(com.lucent.app.i18n.S.actionCancel) } }
         )
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = com.lucent.app.i18n.S.actionBack, tint = onGradient)
-            }
-            Text(
-                notebook?.title?.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle } ?: "",
-                color = onGradient,
-                fontSize = 20.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Box {
-                IconButton(onClick = { renaming = true }) {
-                    Icon(Icons.Default.Edit, contentDescription = com.lucent.app.i18n.S.notebookRename, tint = onGradient)
-                }
-            }
-            IconButton(onClick = { deleting = true }) {
-                Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.actionDelete, tint = onGradient)
-            }
-        }
+        BackHeader(onBack = onBack)
+        Text(
+            com.lucent.app.i18n.S.trashRetention(com.lucent.app.data.TrashCleanup.RETENTION_DAYS),
+            color = onGradientMuted,
+            fontSize = 12.sp
+        )
+        Spacer(modifier = Modifier.height(12.dp))
 
-        if (items.isEmpty()) {
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(24.dp)) {
-                Text(com.lucent.app.i18n.S.notebookDetailEmpty, color = onGradientMuted)
-            }
+        if (trashed.isEmpty()) {
+            EmptyState(
+                isFiltered = false,
+                emptyMessage = com.lucent.app.i18n.S.notebookTrashEmpty,
+                noMatchMessage = com.lucent.app.i18n.S.notebookTrashEmpty
+            )
             return@Column
         }
 
-        LazyColumn(
-            state = rememberRestoredListState("NotebooksScreen#2"),
+        if (trashed.isNotEmpty()) {
+            TextButton(onClick = { confirmEmpty = true }) {
+                Text(com.lucent.app.i18n.S.emptyTrash, color = onGradient, fontSize = 13.sp)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        androidx.compose.foundation.lazy.LazyColumn(
+            state = rememberRestoredListState("NotebookTrashScreen#1"),
             modifier = Modifier.hazeSource(state = LocalHazeState.current),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = LocalBottomBarInset.current)
         ) {
-            items(items, key = { it.id }) { member ->
-                when (member.itemKind) {
-                    NotebookItem.KIND_NOTE -> notesById[member.itemId]?.let { note ->
-                        NotebookItemRow(
-                            title = note.title.ifBlank { com.lucent.app.i18n.S.untitledNote },
-                            preview = notebookPreview(note),
-                            kindLabel = com.lucent.app.i18n.S.notebookItemNote,
-                            colorKey = note.color,
-                            timestamp = note.updatedAt,
-                            onOpen = { onOpenNote(note) },
-                            onRemove = {
-                                scope.launch {
-                                    db.notebookDao().deleteItemById(member.id)
-                                    LucentToast.show(context, com.lucent.app.i18n.S.notebookRemovedToast)
-                                }
-                            }
+            androidx.compose.foundation.lazy.items(trashed, key = { it.id }) { notebook ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .frostedGlass()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Book, contentDescription = null, tint = onGradient, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle },
+                            color = onGradient,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        notebook.trashedAt?.let { at ->
+                            Text(formatTimestamp(at), color = onGradientMuted, fontSize = 12.sp)
+                        }
                     }
-                    NotebookItem.KIND_TASK -> tasksById[member.itemId]?.let { task ->
-                        NotebookItemRow(
-                            title = task.title.ifBlank { com.lucent.app.i18n.S.untitledTask },
-                            preview = taskPreview(task),
-                            kindLabel = com.lucent.app.i18n.S.notebookItemTask,
-                            colorKey = "",
-                            timestamp = task.createdAt,
-                            onOpen = { onOpenTask(task) },
-                            onRemove = {
-                                scope.launch {
-                                    db.notebookDao().deleteItemById(member.id)
-                                    LucentToast.show(context, com.lucent.app.i18n.S.notebookRemovedToast)
-                                }
-                            }
-                        )
+                    TextButton(onClick = {
+                        AppScope.io.launch {
+                            db.notebookDao().update(
+                                notebook.copy(trashedAt = null, updatedAt = System.currentTimeMillis())
+                            )
+                        }
+                    }) { Text(com.lucent.app.i18n.S.actionRestore) }
+                    IconButton(onClick = {
+                        AppScope.io.launch {
+                            db.notebookDao().deleteItemsForNotebook(notebook.id)
+                            db.notebookDao().deleteById(notebook.id)
+                        }
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.deleteForever, tint = onGradientMuted)
                     }
                 }
             }
-        }
-    }
-
-    if (renaming) {
-        NotebookNameDialog(
-            title = com.lucent.app.i18n.S.notebookRename,
-            confirmLabel = com.lucent.app.i18n.S.notebookRenameAction,
-            initial = notebook?.title ?: "",
-            onConfirm = { name ->
-                val row = notebook
-                if (row != null) {
-                    scope.launch {
-                        db.notebookDao().update(row.copy(title = name.trim(), updatedAt = System.currentTimeMillis()))
-                        notebook = row.copy(title = name.trim(), updatedAt = System.currentTimeMillis())
-                        LucentToast.show(context, com.lucent.app.i18n.S.notebookRenamedToast)
-                    }
-                }
-            },
-            onDismiss = { renaming = false }
-        )
-    }
-}
-
-private fun notebookPreview(note: Note): String =
-    if (note.isChecklist) {
-        val items = Checklist.parse(note.checklist)
-        if (items.isEmpty()) "" else com.lucent.app.i18n.S.checklistDoneCount(items.count { it.done }, items.size)
-    } else note.body
-
-private fun taskPreview(task: Task): String {
-    val notes = task.notes.trim()
-    if (notes.isNotEmpty()) return notes
-    val due = task.dueAt
-    return if (due != null) com.lucent.app.i18n.S.exportDocDue(formatTimestamp(due)) else ""
-}
-
-@Composable
-private fun NotebookItemRow(
-    title: String,
-    preview: String,
-    kindLabel: String,
-    colorKey: String,
-    timestamp: Long,
-    onOpen: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val context = LocalContext.current
-    val onGradient = LocalOnGradient.current
-    val onGradientMuted = LocalOnGradientMuted.current
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .frostedGlass()
-            .clickable {
-                Haptics.tick(context)
-                onOpen()
-            }
-            .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NoteColorDot(colorKey)
-                if (colorKey.isNotEmpty()) Spacer(modifier = Modifier.width(6.dp))
-                Text(kindLabel, color = onGradientMuted, fontSize = 11.sp)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    title,
-                    color = onGradient,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-            }
-            if (preview.isNotBlank()) {
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    preview,
-                    color = onGradientMuted,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(formatTimestamp(timestamp), color = onGradientMuted, fontSize = 11.sp)
-        }
-        IconButton(onClick = onRemove) {
-            Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.notebookA11yRemove, tint = onGradientMuted)
         }
     }
 }
@@ -532,8 +590,7 @@ fun AddToNotebookDialog(
 
     var creatingNew by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
-
-    val total = noteIds.size + taskIds.size
+    var newColor by remember { mutableStateOf(NotebookColor.DEFAULT) }
 
     fun fileInto(notebookId: Long) {
         scope.launch {
@@ -575,7 +632,11 @@ fun AddToNotebookDialog(
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Book, contentDescription = null, tint = onGradient, modifier = Modifier.size(18.dp))
+                        NotebookCover(
+                            colorKey = notebook.color,
+                            label = notebook.title,
+                            modifier = Modifier.width(22.dp).height(30.dp)
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle },
@@ -588,6 +649,7 @@ fun AddToNotebookDialog(
                     }
                 }
                 if (creatingNew) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },
@@ -595,6 +657,8 @@ fun AddToNotebookDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    NotebookCoverPicker(selected = newColor, onSelect = { newColor = it })
                 } else {
                     Row(
                         modifier = Modifier
@@ -603,7 +667,12 @@ fun AddToNotebookDialog(
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = onGradient, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Book,
+                            contentDescription = null,
+                            tint = onGradient,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(com.lucent.app.i18n.S.notebookNewPrompt, color = onGradient, fontSize = 15.sp)
                     }
@@ -617,8 +686,9 @@ fun AddToNotebookDialog(
                         LucentToast.show(context, com.lucent.app.i18n.S.notebookNameRequired)
                     } else {
                         val name = newName.trim()
+                        val colorKey = newColor.key
                         scope.launch {
-                            val id = db.notebookDao().insert(Notebook(title = name))
+                            val id = db.notebookDao().insert(Notebook(title = name, color = colorKey))
                             noteIds.forEach { nid ->
                                 db.notebookDao().insertItem(
                                     NotebookItem(notebookId = id, itemKind = NotebookItem.KIND_NOTE, itemId = nid)

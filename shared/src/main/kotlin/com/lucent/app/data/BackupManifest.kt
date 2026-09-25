@@ -182,6 +182,9 @@ internal object BackupManifestBuilder {
             .put("assistantStyle", settings.assistantStyle.first())
         if (wantSettings) settingsObj
             .put("memoryTier", settings.memoryTier.first())
+            .put("memoryTierLocal", settings.memoryTierLocal.first())
+            .put("cloudAgentMode", settings.cloudAgentMode.first())
+            .put("localAgentMode", settings.localAgentMode.first())
             .put("webSearchEnabled", settings.webSearchEnabled.first())
             .put("typingHaptics", settings.typingHapticsEnabled.first())
             .put("markdownEnabled", settings.markdownEnabled.first())
@@ -192,6 +195,7 @@ internal object BackupManifestBuilder {
             .put("appLanguage", settings.appLanguage.first())
             .put("notesSort", settings.notesSort.first())
             .put("tasksSort", settings.tasksSort.first())
+            .put("notebooksSort", settings.notebooksSort.first())
             .put("systemIntegrationEnabled", settings.systemIntegrationEnabled.first())
             .put("startupLoggingEnabled", settings.startupLoggingEnabled.first())
             .put("savedSearches", settings.savedSearches.first())
@@ -224,6 +228,7 @@ internal object BackupManifestBuilder {
             .put("localModelEnabled", settings.localModelEnabled.first())
             .put("localToolsEnabled", settings.localToolsEnabled.first())
             .put("localGpuEnabled", settings.localGpuEnabled.first())
+            .put("localWebSearchEnabled", settings.localWebSearchEnabled.first())
             .put("localBackgroundReply", settings.localBackgroundReplyEnabled.first())
             .put("localModelManifest", com.lucent.app.local.LocalModelStore.exportManifestJson(context))
 

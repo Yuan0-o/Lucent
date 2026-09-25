@@ -43,7 +43,7 @@ internal fun EditorSettingsPage(
     val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
     val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = SettingsCache.openLinksExternally)
 
-    BackHeader(S.settingsEditorTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {

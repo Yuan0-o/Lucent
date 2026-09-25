@@ -1,5 +1,10 @@
 package com.lucent.app.i18n
 
+fun currentLanguageKey(): String {
+    val language = L.language
+    return if (language == AppLanguage.SYSTEM) AppLanguage.systemDefault().key else language.key
+}
+
 object ReplyLanguage {
 
     enum class Lang(val englishName: String, val nativeName: String) {

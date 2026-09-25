@@ -2,9 +2,9 @@ package com.lucent.app
 
 object LucentBuild {
 
-    const val VERSION = "2.9.2"
+    const val VERSION = "2.9.5"
 
-    const val BUILD_NUMBER = "292"
+    const val BUILD_NUMBER = "295"
 
     const val PRODUCT_NAME = "Lucent"
 
@@ -19,4 +19,13 @@ object LucentBuild {
     const val LICENSES_PAGE = "https://github.com/Yuan0-o/Lucent/blob/main/THIRD-PARTY-NOTICES.md"
 
     const val RELEASES_API = "https://api.github.com/repos/Yuan0-o/Lucent/releases/latest"
+
+    private const val PRIVACY_PAGE = "https://github.com/Yuan0-o/Lucent/blob/main/PRIVACY"
+
+    fun privacyPage(languageKey: String): String = when (languageKey) {
+        "zh" -> "$PRIVACY_PAGE.zh-CN.md"
+        "ja" -> "$PRIVACY_PAGE.ja.md"
+        "ko" -> "$PRIVACY_PAGE.ko.md"
+        else -> "$PRIVACY_PAGE.md"
+    }
 }

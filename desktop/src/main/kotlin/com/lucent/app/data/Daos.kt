@@ -779,7 +779,10 @@ private fun notebookOf(rs: ResultSet) = Notebook(
     id = rs.getLong("id"),
     title = rs.getString("title"),
     createdAt = rs.getLong("createdAt"),
-    updatedAt = rs.getLong("updatedAt")
+    updatedAt = rs.getLong("updatedAt"),
+    color = rs.getString("color") ?: "",
+    manualOrder = rs.getInt("manualOrder"),
+    trashedAt = rs.getLong("trashedAt").let { if (rs.wasNull()) null else it }
 )
 
 private fun notebookItemOf(rs: ResultSet) = NotebookItem(
@@ -797,7 +800,21 @@ class NotebookDao internal constructor(private val db: Db) {
     fun getAll(): Flow<List<Notebook>> = db.watch("notebooks") { getAllOnce() }
 
     suspend fun getAllOnce(): List<Notebook> = db.use { c ->
+        c.prepareStatement(
+            "SELECT * FROM notebooks WHERE trashedAt IS NULL ORDER BY updatedAt DESC"
+        ).executeQuery().mapAll(::notebookOf)
+    }
+
+    suspend fun getAllIncludingTrashedOnce(): List<Notebook> = db.use { c ->
         c.prepareStatement("SELECT * FROM notebooks ORDER BY updatedAt DESC").executeQuery().mapAll(::notebookOf)
+    }
+
+    fun getTrashed(): Flow<List<Notebook>> = db.watch("notebooks") { getTrashedOnce() }
+
+    suspend fun getTrashedOnce(): List<Notebook> = db.use { c ->
+        c.prepareStatement(
+            "SELECT * FROM notebooks WHERE trashedAt IS NOT NULL ORDER BY trashedAt DESC"
+        ).executeQuery().mapAll(::notebookOf)
     }
 
     suspend fun getByIdOnce(id: Long): Notebook? = db.use { c ->
@@ -835,21 +852,40 @@ class NotebookDao internal constructor(private val db: Db) {
 
     suspend fun insert(notebook: Notebook): Long = db.write("notebooks", "notebook_items") { c ->
         val ps = c.prepareStatement(
-            "INSERT INTO notebooks (title, createdAt, updatedAt) VALUES (?,?,?)",
+            "INSERT INTO notebooks (title, createdAt, updatedAt, color, manualOrder, trashedAt) VALUES (?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, notebook.title); ps.setLong(2, notebook.createdAt); ps.setLong(3, notebook.updatedAt)
+        ps.setString(4, notebook.color); ps.setInt(5, notebook.manualOrder)
+        if (notebook.trashedAt == null) ps.setNull(6, java.sql.Types.INTEGER)
+        else ps.setLong(6, notebook.trashedAt)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }
 
     suspend fun update(notebook: Notebook) {
         db.write("notebooks") { c ->
-            c.prepareStatement("UPDATE notebooks SET title=?, createdAt=?, updatedAt=? WHERE id=?")
-                .apply {
-                    setString(1, notebook.title); setLong(2, notebook.createdAt)
-                    setLong(3, notebook.updatedAt); setLong(4, notebook.id)
-                }.executeUpdate()
+            c.prepareStatement(
+                "UPDATE notebooks SET title=?, createdAt=?, updatedAt=?, color=?, manualOrder=?, trashedAt=? WHERE id=?"
+            ).apply {
+                setString(1, notebook.title); setLong(2, notebook.createdAt)
+                setLong(3, notebook.updatedAt); setString(4, notebook.color)
+                setInt(5, notebook.manualOrder)
+                if (notebook.trashedAt == null) setNull(6, java.sql.Types.INTEGER)
+                else setLong(6, notebook.trashedAt)
+                setLong(7, notebook.id)
+            }.executeUpdate()
+        }
+    }
+
+    suspend fun purgeTrashedBefore(cutoff: Long) {
+        db.write("notebooks", "notebook_items") { c ->
+            c.prepareStatement("SELECT id FROM notebooks WHERE trashedAt IS NOT NULL AND trashedAt < ?")
+                .apply { setLong(1, cutoff) }.executeQuery().mapAll { it.getLong("id") }
+                .forEach { id ->
+                    c.prepareStatement("DELETE FROM notebook_items WHERE notebookId=?").apply { setLong(1, id) }.executeUpdate()
+                    c.prepareStatement("DELETE FROM notebooks WHERE id=?").apply { setLong(1, id) }.executeUpdate()
+                }
         }
     }
 

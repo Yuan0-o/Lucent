@@ -72,8 +72,12 @@ internal fun LocalModelSettingsPage(
     val localBackgroundReply by repo.localBackgroundReplyEnabled.collectAsState(
         initial = SettingsCache.localBackgroundReplyEnabled
     )
+    val localWebSearch by repo.localWebSearchEnabled.collectAsState(
+        initial = SettingsCache.localWebSearchEnabled
+    )
+    val localAgentMode by repo.localAgentMode.collectAsState(initial = SettingsCache.localAgentMode)
 
-    BackHeader(S.settingsLocalModelTitle) { onRoute(SettingsRoute.Assistant) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Assistant) })
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -185,64 +189,103 @@ internal fun LocalModelSettingsPage(
         Spacer(modifier = Modifier.height(12.dp))
 
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(S.lmToolsToggle, color = onGradient, fontSize = 16.sp)
+            LocalToggleRow(
+                title = S.lmGpuToggle,
+                detail = S.lmGpuSub,
+                checked = localGpuEnabled,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            ) { on ->
+                if (on) onRequestGpuOn()
+                else {
+                    SettingsCache.localGpuEnabled = false
+                    AppScope.io.launch { repo.setLocalGpuEnabled(false) }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Switch(
-                    checked = localToolsEnabled,
-                    onCheckedChange = { on ->
-                        if (on) onRequestToolsOn()
-                        else {
-                            SettingsCache.localToolsEnabled = false
-                            AppScope.io.launch { repo.setLocalToolsEnabled(false) }
-                        }
-                    }
-                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            LocalToggleRow(
+                title = S.lmToolsToggle,
+                detail = S.lmToolsSub,
+                checked = localToolsEnabled,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            ) { on ->
+                if (on) onRequestToolsOn()
+                else {
+                    SettingsCache.localToolsEnabled = false
+                    AppScope.io.launch { repo.setLocalToolsEnabled(false) }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            LocalToggleRow(
+                title = S.lmWebSearchToggle,
+                detail = S.lmWebSearchSub,
+                checked = localWebSearch,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            ) { on ->
+                SettingsCache.localWebSearchEnabled = on
+                AppScope.io.launch { repo.setLocalWebSearchEnabled(on) }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            LocalToggleRow(
+                title = S.agentModeTitle,
+                detail = S.agentModeSub,
+                checked = localAgentMode,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            ) { on ->
+                SettingsCache.localAgentMode = on
+                AppScope.io.launch { repo.setLocalAgentMode(on) }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            LocalToggleRow(
+                title = S.lmBackgroundToggle,
+                detail = S.lmBackgroundSub,
+                checked = localBackgroundReply,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            ) { on ->
+                if (on) onRequestBackgroundOn()
+                else {
+                    SettingsCache.localBackgroundReplyEnabled = false
+                    AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(S.lmGpuToggle, color = onGradient, fontSize = 16.sp)
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Switch(
-                    checked = localGpuEnabled,
-                    onCheckedChange = { on ->
-                        if (on) onRequestGpuOn()
-                        else {
-                            SettingsCache.localGpuEnabled = false
-                            AppScope.io.launch { repo.setLocalGpuEnabled(false) }
-                        }
-                    }
-                )
+        AssistantMemorySection(repo = repo, local = true)
+    }
+}
+
+@Composable
+private fun LocalToggleRow(
+    title: String,
+    detail: String,
+    checked: Boolean,
+    onGradient: Color,
+    onGradientMuted: Color,
+    onChange: (Boolean) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = onGradient, fontSize = 16.sp)
+            if (detail.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(detail, color = onGradientMuted, fontSize = 12.sp)
             }
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(S.lmBackgroundToggle, color = onGradient, fontSize = 16.sp)
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Switch(
-                    checked = localBackgroundReply,
-                    onCheckedChange = { on ->
-                        if (on) onRequestBackgroundOn()
-                        else {
-                            SettingsCache.localBackgroundReplyEnabled = false
-                            AppScope.io.launch { repo.setLocalBackgroundReplyEnabled(false) }
-                        }
-                    }
-                )
-            }
-        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }

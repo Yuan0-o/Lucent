@@ -50,7 +50,7 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        internal const val SCHEMA_VERSION = 21
+        internal const val SCHEMA_VERSION = 22
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -296,6 +296,9 @@ class Db private constructor(private val connection: Connection) {
                         20 -> addColumnIfMissing(conn, "chat_messages", "agentTrace", "TEXT")
                         21 -> addColumnIfMissing(conn, "notes", "formatOverride", "TEXT") &&
                             addColumnIfMissing(conn, "tasks", "formatOverride", "TEXT")
+                        22 -> addColumnIfMissing(conn, "notebooks", "color", "TEXT NOT NULL DEFAULT ''") &&
+                            addColumnIfMissing(conn, "notebooks", "manualOrder", "INTEGER NOT NULL DEFAULT 0") &&
+                            addColumnIfMissing(conn, "notebooks", "trashedAt", "INTEGER")
                         else -> true
                     }
                 } catch (t: Throwable) {
@@ -458,7 +461,10 @@ class Db private constructor(private val connection: Connection) {
                         "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
                         "title TEXT NOT NULL, " +
                         "createdAt INTEGER NOT NULL, " +
-                        "updatedAt INTEGER NOT NULL)"
+                        "updatedAt INTEGER NOT NULL, " +
+                        "color TEXT NOT NULL DEFAULT '', " +
+                        "manualOrder INTEGER NOT NULL DEFAULT 0, " +
+                        "trashedAt INTEGER)"
                 )
                 st.executeUpdate(
                     "CREATE TABLE IF NOT EXISTS notebook_items (" +

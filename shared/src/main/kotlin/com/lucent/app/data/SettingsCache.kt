@@ -12,6 +12,9 @@ object SettingsCache {
     var tasksSort: String? = null
 
     @Volatile
+    var notebooksSort: String? = null
+
+    @Volatile
     var sessionSnapshot: String? = null
 
     @Volatile
@@ -138,6 +141,15 @@ object SettingsCache {
     var localBackgroundReplyEnabled: Boolean = false
 
     @Volatile
+    var localWebSearchEnabled: Boolean = false
+
+    @Volatile
+    var cloudAgentMode: Boolean = true
+
+    @Volatile
+    var localAgentMode: Boolean = true
+
+    @Volatile
     var smallModelModeEnabled: Boolean = false
 
     @Volatile
@@ -145,6 +157,9 @@ object SettingsCache {
 
     @Volatile
     var memoryTier: String = MemoryTier.DEFAULT.key
+
+    @Volatile
+    var memoryTierLocal: String = MemoryTier.LOW.key
 
     @Volatile
     var embeddingProvider: String = "local"
@@ -180,6 +195,7 @@ object SettingsCache {
         assistantName = prefs.assistantName
         notesSort = prefs.notesSort
         tasksSort = prefs.tasksSort
+        notebooksSort = prefs.notebooksSort
         sessionSnapshot = prefs.sessionSnapshot.ifBlank { null }
         appLockEnabled = prefs.appLockEnabled
         startupLoggingEnabled = prefs.startupLoggingEnabled
@@ -222,9 +238,13 @@ object SettingsCache {
         localToolsEnabled = prefs.localToolsEnabled
         localGpuEnabled = prefs.localGpuEnabled
         localBackgroundReplyEnabled = prefs.localBackgroundReplyEnabled
+        localWebSearchEnabled = prefs.localWebSearchEnabled
+        cloudAgentMode = prefs.cloudAgentMode
+        localAgentMode = prefs.localAgentMode
         smallModelModeEnabled = prefs.smallModelModeEnabled
         webSearchEnabled = prefs.webSearchEnabled
         memoryTier = prefs.memoryTier
+        memoryTierLocal = prefs.memoryTierLocal
         embeddingProvider = prefs.embeddingProvider
         cloudEnabled = prefs.cloudEnabled
         cloudProvider = prefs.cloudProvider

@@ -34,6 +34,7 @@ class SettingsRepository(private val context: Context) {
         const val NOTE_HISTORY_ENABLED = "note_history_enabled"
         const val TASK_HISTORY_ENABLED = "task_history_enabled"
         const val TASKS_SORT = "tasks_sort"
+        const val NOTEBOOKS_SORT = "notebooks_sort"
         const val MEMORY_TIER = "memory_tier"
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
         const val ASSISTANT_CONFIRM_TOOLS = "assistant_confirm_tools"
@@ -82,6 +83,10 @@ class SettingsRepository(private val context: Context) {
         const val LOCAL_TOOLS_ENABLED = "local_tools_enabled"
         const val LOCAL_GPU_ENABLED = "local_gpu_enabled"
         const val LOCAL_BACKGROUND_REPLY = "local_background_reply"
+        const val LOCAL_WEB_SEARCH_ENABLED = "local_web_search_enabled"
+        const val MEMORY_TIER_LOCAL = "memory_tier_local"
+        const val CLOUD_AGENT_MODE = "cloud_agent_mode"
+        const val LOCAL_AGENT_MODE = "local_agent_mode"
         const val MEMORY_TIER_PRELOCAL = "memory_tier_prelocal"
         const val WEB_SEARCH_PRELOCAL = "web_search_prelocal"
         const val AUTO_UPDATE_ENABLED = "auto_update_enabled"
@@ -202,6 +207,7 @@ class SettingsRepository(private val context: Context) {
         val dynamicColor: Boolean = false,
         val notesSort: String = "recent",
         val tasksSort: String = "recent",
+        val notebooksSort: String = "recent",
         val sessionSnapshot: String = "",
         val assistantStyle: String = "",
         val baseUrl: String = "",
@@ -232,9 +238,13 @@ class SettingsRepository(private val context: Context) {
         val localToolsEnabled: Boolean = false,
         val localGpuEnabled: Boolean = false,
         val localBackgroundReplyEnabled: Boolean = false,
+        val localWebSearchEnabled: Boolean = false,
+        val cloudAgentMode: Boolean = true,
+        val localAgentMode: Boolean = true,
         val smallModelModeEnabled: Boolean = false,
         val webSearchEnabled: Boolean = false,
         val memoryTier: String = MemoryTier.DEFAULT.key,
+        val memoryTierLocal: String = MemoryTier.LOW.key,
         val embeddingProvider: String = "local",
         val cloudEnabled: Boolean = false,
         val cloudProvider: String = "Nutstore",
@@ -268,6 +278,7 @@ class SettingsRepository(private val context: Context) {
             dynamicColor = bool(prefs, K.DYNAMIC_COLOR_ENABLED) ?: false,
             notesSort = str(prefs, K.NOTES_SORT) ?: "recent",
             tasksSort = str(prefs, K.TASKS_SORT) ?: "recent",
+            notebooksSort = str(prefs, K.NOTEBOOKS_SORT) ?: "recent",
             sessionSnapshot = str(prefs, K.SESSION_SNAPSHOT) ?: "",
             assistantStyle = secret(prefs, K.ASSISTANT_STYLE_ENC, ""),
             baseUrl = secret(prefs, K.BASE_URL_ENC, ""),
@@ -301,9 +312,13 @@ class SettingsRepository(private val context: Context) {
             localToolsEnabled = bool(prefs, K.LOCAL_TOOLS_ENABLED) ?: false,
             localGpuEnabled = bool(prefs, K.LOCAL_GPU_ENABLED) ?: false,
             localBackgroundReplyEnabled = bool(prefs, K.LOCAL_BACKGROUND_REPLY) ?: false,
+            localWebSearchEnabled = bool(prefs, K.LOCAL_WEB_SEARCH_ENABLED) ?: false,
+            cloudAgentMode = bool(prefs, K.CLOUD_AGENT_MODE) ?: true,
+            localAgentMode = bool(prefs, K.LOCAL_AGENT_MODE) ?: true,
             smallModelModeEnabled = bool(prefs, K.SMALL_MODEL_MODE) ?: false,
             webSearchEnabled = bool(prefs, K.WEB_SEARCH_ENABLED) ?: false,
             memoryTier = str(prefs, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key,
+            memoryTierLocal = str(prefs, K.MEMORY_TIER_LOCAL) ?: MemoryTier.LOW.key,
             embeddingProvider = str(prefs, K.EMBEDDING_PROVIDER) ?: "local",
             cloudEnabled = bool(prefs, K.CLOUD_ENABLED) ?: false,
             cloudProvider = str(prefs, K.CLOUD_PROVIDER) ?: "Nutstore",
@@ -330,26 +345,32 @@ class SettingsRepository(private val context: Context) {
     val localModelEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_MODEL_ENABLED) ?: false }
 
     suspend fun setLocalModelEnabled(value: Boolean) {
-        edit { prefs ->
-            val wasEnabled = prefs[K.LOCAL_MODEL_ENABLED] as? Boolean ?: false
-            prefs[K.LOCAL_MODEL_ENABLED] = value
-            if (value) {
-                if (!wasEnabled) {
-                    prefs[K.MEMORY_TIER_PRELOCAL] = prefs[K.MEMORY_TIER] as? String ?: MemoryTier.DEFAULT.key
-                    prefs[K.WEB_SEARCH_PRELOCAL] = prefs[K.WEB_SEARCH_ENABLED] as? Boolean ?: false
-                }
-                prefs[K.MEMORY_TIER] = MemoryTier.LOW.key
-                prefs[K.WEB_SEARCH_ENABLED] = false
-                prefs[K.LOCAL_TOOLS_ENABLED] = false
-                prefs[K.LOCAL_GPU_ENABLED] = false
-            } else {
-                prefs[K.MEMORY_TIER] = prefs[K.MEMORY_TIER_PRELOCAL] as? String ?: MemoryTier.DEFAULT.key
-                prefs[K.WEB_SEARCH_ENABLED] = prefs[K.WEB_SEARCH_PRELOCAL] as? Boolean ?: false
-                prefs.remove(K.MEMORY_TIER_PRELOCAL)
-                prefs.remove(K.WEB_SEARCH_PRELOCAL)
-            }
-        }
+        edit { it[K.LOCAL_MODEL_ENABLED] = value }
         SettingsCache.localModelEnabled = value
+    }
+
+    val localWebSearchEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_WEB_SEARCH_ENABLED) ?: false }
+    suspend fun setLocalWebSearchEnabled(value: Boolean) {
+        edit { it[K.LOCAL_WEB_SEARCH_ENABLED] = value }
+        SettingsCache.localWebSearchEnabled = value
+    }
+
+    val memoryTierLocal: Flow<String> = state.map { str(it, K.MEMORY_TIER_LOCAL) ?: MemoryTier.LOW.key }
+    suspend fun setMemoryTierLocal(value: String) {
+        edit { it[K.MEMORY_TIER_LOCAL] = value }
+        SettingsCache.memoryTierLocal = value
+    }
+
+    val cloudAgentMode: Flow<Boolean> = state.map { bool(it, K.CLOUD_AGENT_MODE) ?: true }
+    suspend fun setCloudAgentMode(value: Boolean) {
+        edit { it[K.CLOUD_AGENT_MODE] = value }
+        SettingsCache.cloudAgentMode = value
+    }
+
+    val localAgentMode: Flow<Boolean> = state.map { bool(it, K.LOCAL_AGENT_MODE) ?: true }
+    suspend fun setLocalAgentMode(value: Boolean) {
+        edit { it[K.LOCAL_AGENT_MODE] = value }
+        SettingsCache.localAgentMode = value
     }
 
     val localBackgroundReplyEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_BACKGROUND_REPLY) ?: false }
@@ -409,6 +430,7 @@ class SettingsRepository(private val context: Context) {
 
     val notesSort: Flow<String> = state.map { str(it, K.NOTES_SORT) ?: "recent" }
     val tasksSort: Flow<String> = state.map { str(it, K.TASKS_SORT) ?: "recent" }
+    val notebooksSort: Flow<String> = state.map { str(it, K.NOTEBOOKS_SORT) ?: "recent" }
     suspend fun setNotesSort(value: String) {
         SettingsCache.notesSort = value
         edit { it[K.NOTES_SORT] = value }
@@ -416,6 +438,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTasksSort(value: String) {
         SettingsCache.tasksSort = value
         edit { it[K.TASKS_SORT] = value }
+    }
+
+    suspend fun setNotebooksSort(value: String) {
+        SettingsCache.notebooksSort = value
+        edit { it[K.NOTEBOOKS_SORT] = value }
     }
 
     val noteHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.NOTE_HISTORY_ENABLED) ?: true }

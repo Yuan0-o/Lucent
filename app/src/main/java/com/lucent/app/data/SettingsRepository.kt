@@ -45,6 +45,7 @@ private object SettingsKeys {
     val NOTES_SORT = stringPreferencesKey("notes_sort")
     val SESSION_SNAPSHOT = stringPreferencesKey("session_snapshot")
     val TASKS_SORT = stringPreferencesKey("tasks_sort")
+    val NOTEBOOKS_SORT = stringPreferencesKey("notebooks_sort")
 
     val AUTO_BACKUP = stringPreferencesKey("auto_backup_state")
 
@@ -95,6 +96,14 @@ private object SettingsKeys {
     val LOCAL_GPU_ENABLED = booleanPreferencesKey("local_gpu_enabled")
 
     val LOCAL_BACKGROUND_REPLY = booleanPreferencesKey("local_background_reply")
+
+    val LOCAL_WEB_SEARCH_ENABLED = booleanPreferencesKey("local_web_search_enabled")
+
+    val MEMORY_TIER_LOCAL = stringPreferencesKey("memory_tier_local")
+
+    val CLOUD_AGENT_MODE = booleanPreferencesKey("cloud_agent_mode")
+
+    val LOCAL_AGENT_MODE = booleanPreferencesKey("local_agent_mode")
 
     val MODEL_RECENTS = stringPreferencesKey("model_recents")
 
@@ -186,6 +195,7 @@ class SettingsRepository(private val context: Context) {
         val dynamicColor: Boolean = false,
         val notesSort: String = "recent",
         val tasksSort: String = "recent",
+        val notebooksSort: String = "recent",
         val sessionSnapshot: String = "",
         val assistantStyle: String = "",
         val baseUrl: String = "",
@@ -216,9 +226,13 @@ class SettingsRepository(private val context: Context) {
         val localToolsEnabled: Boolean = false,
         val localGpuEnabled: Boolean = false,
         val localBackgroundReplyEnabled: Boolean = false,
+        val localWebSearchEnabled: Boolean = false,
+        val cloudAgentMode: Boolean = true,
+        val localAgentMode: Boolean = true,
         val smallModelModeEnabled: Boolean = false,
         val webSearchEnabled: Boolean = false,
         val memoryTier: String = MemoryTier.DEFAULT.key,
+        val memoryTierLocal: String = MemoryTier.LOW.key,
         val embeddingProvider: String = "local",
         val cloudEnabled: Boolean = false,
         val cloudProvider: String = "Nutstore",
@@ -252,6 +266,7 @@ class SettingsRepository(private val context: Context) {
             dynamicColor = prefs[SettingsKeys.DYNAMIC_COLOR_ENABLED] ?: false,
             notesSort = prefs[SettingsKeys.NOTES_SORT] ?: "recent",
             tasksSort = prefs[SettingsKeys.TASKS_SORT] ?: "recent",
+            notebooksSort = prefs[SettingsKeys.NOTEBOOKS_SORT] ?: "recent",
             sessionSnapshot = prefs[SettingsKeys.SESSION_SNAPSHOT] ?: "",
             assistantStyle = secret(prefs, SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, ""),
             baseUrl = secret(prefs, SettingsKeys.BASE_URL_ENC, SettingsKeys.LEGACY_BASE_URL, ""),
@@ -287,9 +302,13 @@ class SettingsRepository(private val context: Context) {
             localToolsEnabled = prefs[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false,
             localGpuEnabled = prefs[SettingsKeys.LOCAL_GPU_ENABLED] ?: false,
             localBackgroundReplyEnabled = prefs[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false,
+            localWebSearchEnabled = prefs[SettingsKeys.LOCAL_WEB_SEARCH_ENABLED] ?: false,
+            cloudAgentMode = prefs[SettingsKeys.CLOUD_AGENT_MODE] ?: true,
+            localAgentMode = prefs[SettingsKeys.LOCAL_AGENT_MODE] ?: true,
             smallModelModeEnabled = prefs[SettingsKeys.SMALL_MODEL_MODE] ?: false,
             webSearchEnabled = prefs[SettingsKeys.WEB_SEARCH_ENABLED] ?: false,
             memoryTier = prefs[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key,
+            memoryTierLocal = prefs[SettingsKeys.MEMORY_TIER_LOCAL] ?: MemoryTier.LOW.key,
             embeddingProvider = prefs[SettingsKeys.EMBEDDING_PROVIDER] ?: "local",
             cloudEnabled = prefs[SettingsKeys.CLOUD_ENABLED] ?: false,
             cloudProvider = prefs[SettingsKeys.CLOUD_PROVIDER] ?: "Nutstore",
@@ -412,28 +431,34 @@ class SettingsRepository(private val context: Context) {
     val localModelEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false }
 
     suspend fun setLocalModelEnabled(value: Boolean) {
-        context.settingsDataStore.edit { prefs ->
-            val wasEnabled = prefs[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false
-            prefs[SettingsKeys.LOCAL_MODEL_ENABLED] = value
-            if (value) {
-                if (!wasEnabled) {
-                    prefs[SettingsKeys.MEMORY_TIER_PRELOCAL] =
-                        prefs[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key
-                    prefs[SettingsKeys.WEB_SEARCH_PRELOCAL] = prefs[SettingsKeys.WEB_SEARCH_ENABLED] ?: false
-                }
-                prefs[SettingsKeys.MEMORY_TIER] = MemoryTier.LOW.key
-                prefs[SettingsKeys.WEB_SEARCH_ENABLED] = false
-                prefs[SettingsKeys.LOCAL_TOOLS_ENABLED] = false
-                prefs[SettingsKeys.LOCAL_GPU_ENABLED] = false
-            } else {
-                prefs[SettingsKeys.MEMORY_TIER] =
-                    prefs[SettingsKeys.MEMORY_TIER_PRELOCAL] ?: MemoryTier.DEFAULT.key
-                prefs[SettingsKeys.WEB_SEARCH_ENABLED] = prefs[SettingsKeys.WEB_SEARCH_PRELOCAL] ?: false
-                prefs.remove(SettingsKeys.MEMORY_TIER_PRELOCAL)
-                prefs.remove(SettingsKeys.WEB_SEARCH_PRELOCAL)
-            }
-        }
+        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_MODEL_ENABLED] = value }
         SettingsCache.localModelEnabled = value
+    }
+
+    val localWebSearchEnabled: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_WEB_SEARCH_ENABLED] ?: false }
+    suspend fun setLocalWebSearchEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_WEB_SEARCH_ENABLED] = value }
+        SettingsCache.localWebSearchEnabled = value
+    }
+
+    val memoryTierLocal: Flow<String> =
+        context.settingsDataStore.data.map { it[SettingsKeys.MEMORY_TIER_LOCAL] ?: MemoryTier.LOW.key }
+    suspend fun setMemoryTierLocal(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER_LOCAL] = value }
+        SettingsCache.memoryTierLocal = value
+    }
+
+    val cloudAgentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_AGENT_MODE] ?: true }
+    suspend fun setCloudAgentMode(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.CLOUD_AGENT_MODE] = value }
+        SettingsCache.cloudAgentMode = value
+    }
+
+    val localAgentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_AGENT_MODE] ?: true }
+    suspend fun setLocalAgentMode(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.LOCAL_AGENT_MODE] = value }
+        SettingsCache.localAgentMode = value
     }
 
     val localBackgroundReplyEnabled: Flow<Boolean> =
@@ -507,6 +532,7 @@ class SettingsRepository(private val context: Context) {
 
     val notesSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTES_SORT] ?: "recent" }
     val tasksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TASKS_SORT] ?: "recent" }
+    val notebooksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTEBOOKS_SORT] ?: "recent" }
 
     val memoryTier: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key
@@ -788,6 +814,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTasksSort(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value }
         SettingsCache.tasksSort = value
+    }
+    suspend fun setNotebooksSort(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.NOTEBOOKS_SORT] = value }
+        SettingsCache.notebooksSort = value
     }
     suspend fun setMarkdownEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value }

@@ -73,7 +73,7 @@ internal fun PrivacySettingsPage(
     val taskHistoryOn by repo.taskHistoryEnabled.collectAsState(initial = SettingsCache.taskHistoryEnabled)
     val appLockCredsOrNull by repo.appLockCredentials.collectAsState(initial = null)
 
-    BackHeader(S.settingsPrivacyTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

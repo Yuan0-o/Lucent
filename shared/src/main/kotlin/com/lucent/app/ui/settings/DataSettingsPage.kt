@@ -65,7 +65,7 @@ internal fun DataSettingsPage(
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
 
-    BackHeader(S.settingsDataTitle) { onRoute(SettingsRoute.Root) }
+    BackHeader(onBack = { onRoute(SettingsRoute.Root) })
 
     if (lockedNotice != null && !lockedDismissed) {
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {

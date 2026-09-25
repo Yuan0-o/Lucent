@@ -24,6 +24,7 @@ import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.GlassButton
 import com.lucent.app.ui.LocalOnGradient
+import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
@@ -39,6 +40,7 @@ fun PersonalizationSettingsPage(
     onBack: () -> Unit
 ) {
     val onGradient = LocalOnGradient.current
+    val onGradientMuted = LocalOnGradientMuted.current
     val savedTypingHaptics by repo.typingHapticsEnabled.collectAsState(initial = SettingsCache.typingHapticsEnabled)
     val savedConfirmTools by repo.assistantConfirmToolsEnabled.collectAsState(
         initial = SettingsCache.assistantConfirmToolsEnabled
@@ -46,8 +48,9 @@ fun PersonalizationSettingsPage(
     val savedSmallModelMode by repo.smallModelModeEnabled.collectAsState(
         initial = SettingsCache.smallModelModeEnabled
     )
+    val savedWebSearch by repo.webSearchEnabled.collectAsState(initial = SettingsCache.webSearchEnabled)
 
-    BackHeader(S.settingsPersonalizationTitle) { onBack() }
+    BackHeader(onBack = onBack)
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         OutlinedTextField(
             value = assistantName,
@@ -69,58 +72,80 @@ fun PersonalizationSettingsPage(
     Spacer(modifier = Modifier.height(12.dp))
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.typingHapticsTitle, color = onGradient, fontSize = 16.sp)
+        ToggleRow(
+            title = S.typingHapticsTitle,
+            detail = S.typingHapticsSub,
+            checked = savedTypingHaptics,
+            onGradient = onGradient,
+            onGradientMuted = onGradientMuted
+        ) { on ->
+            SettingsCache.typingHapticsEnabled = on
+            AppScope.io.launch { repo.setTypingHapticsEnabled(on) }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        ToggleRow(
+            title = S.webSearchTitle,
+            detail = S.webSearchSub,
+            checked = savedWebSearch,
+            onGradient = onGradient,
+            onGradientMuted = onGradientMuted
+        ) { on ->
+            SettingsCache.webSearchEnabled = on
+            AppScope.io.launch { repo.setWebSearchEnabled(on) }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        ToggleRow(
+            title = S.assistantConfirmToolsTitle,
+            detail = S.assistantConfirmToolsSub,
+            checked = savedConfirmTools,
+            onGradient = onGradient,
+            onGradientMuted = onGradientMuted
+        ) { on ->
+            SettingsCache.assistantConfirmToolsEnabled = on
+            AppScope.io.launch { repo.setAssistantConfirmTools(on) }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        ToggleRow(
+            title = S.smallModelModeTitle,
+            detail = S.smallModelModeSub,
+            checked = savedSmallModelMode,
+            onGradient = onGradient,
+            onGradientMuted = onGradientMuted
+        ) { on ->
+            if (on) {
+                onRequestSmallModelWarning()
+            } else {
+                SettingsCache.smallModelModeEnabled = false
+                AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = savedTypingHaptics,
-                onCheckedChange = { on ->
-                    SettingsCache.typingHapticsEnabled = on
-                    AppScope.io.launch { repo.setTypingHapticsEnabled(on) }
-                }
-            )
         }
     }
+}
 
-    Spacer(modifier = Modifier.height(12.dp))
-
-    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.assistantConfirmToolsTitle, color = onGradient, fontSize = 16.sp)
+@Composable
+private fun ToggleRow(
+    title: String,
+    detail: String,
+    checked: Boolean,
+    onGradient: androidx.compose.ui.graphics.Color,
+    onGradientMuted: androidx.compose.ui.graphics.Color,
+    onChange: (Boolean) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = onGradient, fontSize = 16.sp)
+            if (detail.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(detail, color = onGradientMuted, fontSize = 12.sp)
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = savedConfirmTools,
-                onCheckedChange = { on ->
-                    SettingsCache.assistantConfirmToolsEnabled = on
-                    AppScope.io.launch { repo.setAssistantConfirmTools(on) }
-                }
-            )
         }
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.smallModelModeTitle, color = onGradient, fontSize = 16.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = savedSmallModelMode,
-                onCheckedChange = { on ->
-                    if (on) {
-                        onRequestSmallModelWarning()
-                    } else {
-                        SettingsCache.smallModelModeEnabled = false
-                        AppScope.io.launch { repo.setSmallModelModeEnabled(false) }
-                    }
-                }
-            )
-        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }

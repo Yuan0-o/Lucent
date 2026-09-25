@@ -343,6 +343,9 @@ internal object BackupImporter {
 
             if (restoreGeneral) {
                 if (s.has("memoryTier")) settings.setMemoryTier(s.optString("memoryTier"))
+                if (s.has("memoryTierLocal")) settings.setMemoryTierLocal(s.optString("memoryTierLocal"))
+                if (s.has("cloudAgentMode")) settings.setCloudAgentMode(s.optBoolean("cloudAgentMode", true))
+                if (s.has("localAgentMode")) settings.setLocalAgentMode(s.optBoolean("localAgentMode", true))
                 if (s.has("webSearchEnabled")) settings.setWebSearchEnabled(s.optBoolean("webSearchEnabled"))
                 if (s.has("typingHaptics")) settings.setTypingHapticsEnabled(s.optBoolean("typingHaptics", true))
                 if (s.has("markdownEnabled")) settings.setMarkdownEnabled(s.optBoolean("markdownEnabled"))
@@ -355,6 +358,7 @@ internal object BackupImporter {
                 if (s.has("appLanguage")) settings.setAppLanguage(s.optString("appLanguage"))
                 if (s.has("notesSort")) settings.setNotesSort(s.optString("notesSort"))
                 if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))
+                if (s.has("notebooksSort")) settings.setNotebooksSort(s.optString("notebooksSort"))
                 if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
                 if (restoreGeneral && s.has("customTemplates")) settings.setCustomTemplatesJson(s.optString("customTemplates"))
                 if (restoreGeneral && s.has("templateDraft")) settings.setTemplateDraftJson(s.optString("templateDraft"))
@@ -389,6 +393,9 @@ internal object BackupImporter {
             }
             if (restoreLocal && s.has("localBackgroundReply")) {
                 settings.setLocalBackgroundReplyEnabled(s.optBoolean("localBackgroundReply"))
+            }
+            if (restoreLocal && s.has("localWebSearchEnabled")) {
+                settings.setLocalWebSearchEnabled(s.optBoolean("localWebSearchEnabled"))
             }
 
             if (restoreGeneral && s.has("systemIntegrationEnabled")) {

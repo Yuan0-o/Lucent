@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -36,16 +35,13 @@ const val crashShieldLocksStartupLogging: Boolean = true
 
 private val dynamicColorSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-private object DynamicColorState {
-    @Volatile
-    var active: Boolean = SettingsCache.dynamicColor && dynamicColorSupported
-}
-
 @Composable
 fun DynamicColorRow(repo: SettingsRepository) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = DynamicColorState.active)
+    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(
+        initial = SettingsCache.dynamicColor
+    )
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -78,10 +74,10 @@ fun DynamicColorRow(repo: SettingsRepository) {
 
 @Composable
 fun rememberDynamicColorActive(repo: SettingsRepository): Boolean {
-    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = DynamicColorState.active)
-    val active = dynamicColorOn && dynamicColorSupported
-    SideEffect { DynamicColorState.active = active }
-    return active
+    val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(
+        initial = SettingsCache.dynamicColor && dynamicColorSupported
+    )
+    return dynamicColorOn && dynamicColorSupported
 }
 
 @Composable
