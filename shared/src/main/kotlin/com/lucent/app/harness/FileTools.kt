@@ -411,7 +411,7 @@ object FileTools : HarnessGroupTools {
             return ToolExecResult("$shown is named .$extension but the bytes are $sniffed.", success = false)
         }
         val bytes = Workspace.readBytes(file, ceiling)
-        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val encoded = java.util.Base64.getEncoder().encodeToString(bytes)
         FileObservations.note(file.path)
         return ToolExecResult(
             "$shown ($sniffed, ${Workspace.humanSize(file.length())}).",

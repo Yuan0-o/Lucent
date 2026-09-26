@@ -71,7 +71,7 @@ object AuditTrail {
     }
 
     fun entries(context: Context, limit: Int = 200): List<AuditEntry> {
-        val target = file(context.applicationContext)
+        val target = file(context)
         if (!target.exists()) return emptyList()
         val lines = synchronized(lock) {
             try { target.readLines() } catch (e: Exception) { emptyList() }
@@ -81,7 +81,7 @@ object AuditTrail {
 
     fun clear(context: Context) {
         synchronized(lock) {
-            try { file(context.applicationContext).writeText("") } catch (_: Throwable) {
+            try { file(context).writeText("") } catch (_: Throwable) {
             }
         }
     }
