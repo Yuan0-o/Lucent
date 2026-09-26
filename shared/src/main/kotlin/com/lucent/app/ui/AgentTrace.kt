@@ -30,10 +30,11 @@ data class AgentStep(
 data class AgentTrace(
     val steps: List<AgentStep> = emptyList(),
     val reasoning: String = "",
-    val status: AgentStepStatus = AgentStepStatus.RUNNING
+    val status: AgentStepStatus = AgentStepStatus.RUNNING,
+    val budgetLabel: String = ""
 ) {
 
-    val hasContent: Boolean get() = steps.isNotEmpty() || reasoning.isNotBlank()
+    val hasContent: Boolean get() = steps.isNotEmpty() || reasoning.isNotBlank() || budgetLabel.isNotBlank()
 
     val isTerminal: Boolean get() = status != AgentStepStatus.RUNNING
 }
@@ -159,6 +160,7 @@ object AgentTraceCodec {
             .put("v", VERSION)
             .put("status", trace.status.name)
             .put("reasoning", trace.reasoning.take(MAX_REASONING_CHARS))
+            .put("budget", trace.budgetLabel)
             .put("steps", steps)
             .toString()
     }
@@ -186,7 +188,8 @@ object AgentTraceCodec {
         val trace = AgentTrace(
             steps = steps,
             reasoning = root.optString("reasoning"),
-            status = statusOf(root.optString("status"))
+            status = statusOf(root.optString("status")),
+            budgetLabel = root.optString("budget")
         )
         return if (trace.hasContent) trace else null
     }
@@ -214,11 +217,15 @@ class AgentTraceRecorder {
 
     private var statusValue by mutableStateOf(AgentStepStatus.RUNNING)
 
+    private var budgetValue by mutableStateOf("")
+
     private var reasoningStepsInBlock = 0
 
     val steps: List<AgentStep> get() = _steps
 
     val status: AgentStepStatus get() = statusValue
+
+    val budgetLabel: String get() = budgetValue
 
     val reasoning: String
         get() {
@@ -229,8 +236,13 @@ class AgentTraceRecorder {
     fun snapshot(): AgentTrace = AgentTrace(
         steps = _steps.toList(),
         reasoning = reasoning,
-        status = statusValue
+        status = statusValue,
+        budgetLabel = budgetValue
     )
+
+    fun setContextBudget(text: String) {
+        budgetValue = text
+    }
 
     fun beginBlock() {
         reasoningStepsInBlock = 0

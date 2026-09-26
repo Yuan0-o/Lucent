@@ -120,6 +120,8 @@ class AssistantControllerImpl(
 
     private val RECENT_CONVERSATIONS_MAX = 24
 
+    private val LOCAL_TOOL_RESULT = Regex("Result of ([^:]+): (.*)", RegexOption.DOT_MATCHES_ALL)
+
 
     val sending: Boolean get() = turns.isNotEmpty()
 
@@ -462,6 +464,8 @@ class AssistantControllerImpl(
         @Volatile var goalEligible = false
         var params: LastSend? = null
 
+        @Volatile var contextBudget: com.lucent.app.harness.ContextBudgetStats? = null
+
         var thinking by mutableStateOf(false)
         var loadingModel by mutableStateOf(false)
         var streamingText by mutableStateOf<String?>(null)
@@ -790,7 +794,9 @@ class AssistantControllerImpl(
                     turn.resetStream(reveal = false)
                     val roundEpoch = turn.streamEpoch
                     val result = llmClient.streamChat(
-                        url, spec, key, model, history, systemPrompt, tools,
+                        url, spec, key, model,
+                        budgetRemoteHistory(turn, history, systemPrompt + promptContext),
+                        systemPrompt, tools,
                         { delta -> turn.onDelta(roundEpoch, delta) },
                         { piece -> turn.recorder.appendReasoning(piece) },
                         { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) },
@@ -923,7 +929,9 @@ class AssistantControllerImpl(
                         turn.resetStream(reveal = false)
                         val forcedEpoch = turn.streamEpoch
                         val forced = llmClient.streamChat(
-                            url, spec, key, model, history, systemPrompt, emptyList(),
+                            url, spec, key, model,
+                            budgetRemoteHistory(turn, history, systemPrompt + promptContext),
+                            systemPrompt, emptyList(),
                             { delta -> turn.onDelta(forcedEpoch, delta) },
                             { piece -> turn.recorder.appendReasoning(piece) },
                             { attempt -> turn.recorder.addNote(com.lucent.app.i18n.S.agentTraceRetrying(attempt)) },
@@ -1139,6 +1147,7 @@ class AssistantControllerImpl(
             turn.resetStream(reveal = false)
             turn.thinking = true
             val roundEpoch = turn.streamEpoch
+            budgetLocalMessages(turn, messages)
             val rc = com.lucent.app.local.LocalLlm.generate(messages) { piece -> turn.onDelta(roundEpoch, piece) }
             val raw = turn.snapshotBuffer()
 
@@ -1243,6 +1252,7 @@ class AssistantControllerImpl(
             turn.thinking = true
             messages.add("system" to "Stop calling tools now and write your final answer to the user, in their language, as plain text. Do not output any JSON.")
             val finalEpoch = turn.streamEpoch
+            budgetLocalMessages(turn, messages)
             val rc = com.lucent.app.local.LocalLlm.generate(messages) { piece -> turn.onDelta(finalEpoch, piece) }
             if (rc == 1) return
             finalText = ReplyPolish.deRobotify(turn.snapshotBuffer()).trim()
@@ -1352,7 +1362,9 @@ class AssistantControllerImpl(
         turn.resetStream(reveal = true)
         var first = true
         val chatEpoch = turn.streamEpoch
-        val rc = com.lucent.app.local.LocalLlm.generate(messages, images = turnImages) { piece ->
+        val budgeted = messages.toMutableList()
+        budgetLocalMessages(turn, budgeted)
+        val rc = com.lucent.app.local.LocalLlm.generate(budgeted, images = turnImages) { piece ->
             if (first) { first = false; turn.thinking = false }
             turn.onDelta(chatEpoch, piece)
         }
@@ -1395,6 +1407,73 @@ class AssistantControllerImpl(
 
     private fun localTier(tier: MemoryTier): MemoryTier =
         if (tier == MemoryTier.HIGH) MemoryTier.MEDIUM else tier
+
+    private fun budgetRemoteHistory(
+        turn: Turn,
+        history: List<ChatTurn>,
+        fixedPrompt: String
+    ): List<ChatTurn> {
+        val limit = com.lucent.app.harness.HarnessRuntime.config().contextBudgetTokens
+        val result = com.lucent.app.harness.ContextBudget.apply(history, fixedPrompt, limit)
+        recordContextBudget(turn, result)
+        return result.turns
+    }
+
+    private fun budgetLocalMessages(turn: Turn, messages: MutableList<Pair<String, String>>) {
+        val system = messages.filter { it.first == "system" }.joinToString("\n\n") { it.second }
+        val history = messages.filter { it.first != "system" }.map { budgetTurn(it) }
+        val localLimit = com.lucent.app.local.LocalLlm.N_CTX -
+            com.lucent.app.local.LocalLlm.MAX_NEW_TOKENS -
+            com.lucent.app.local.LocalLlm.MAX_NEW_TOKENS / 2
+        val limit = minOf(com.lucent.app.harness.HarnessRuntime.config().contextBudgetTokens, localLimit)
+        val result = com.lucent.app.harness.ContextBudget.apply(history, system, limit)
+        recordContextBudget(turn, result)
+        val rebuilt = messages.filter { it.first == "system" } + result.turns.map { localMessage(it) }
+        messages.clear()
+        messages.addAll(rebuilt)
+    }
+
+    private fun budgetTurn(message: Pair<String, String>): ChatTurn {
+        val match = if (message.first == "user") LOCAL_TOOL_RESULT.matchEntire(message.second) else null
+        if (match != null) {
+            return ChatTurn(
+                role = "tool",
+                content = "",
+                toolResults = listOf(
+                    com.lucent.app.network.ToolResultTurn(
+                        id = "local",
+                        name = match.groupValues[1],
+                        content = match.groupValues[2]
+                    )
+                )
+            )
+        }
+        return ChatTurn(role = message.first, content = message.second)
+    }
+
+    private fun localMessage(turn: ChatTurn): Pair<String, String> {
+        val result = turn.toolResults.firstOrNull()
+        if (turn.role == "tool" && result != null) {
+            return "user" to ("Result of " + result.name + ": " + result.content)
+        }
+        return turn.role to turn.content
+    }
+
+    private fun recordContextBudget(turn: Turn, result: com.lucent.app.harness.ContextBudgetResult) {
+        turn.contextBudget = result.stats
+        turn.recorder.setContextBudget(contextBudgetLine(result.stats))
+    }
+
+    private fun contextBudgetLine(stats: com.lucent.app.harness.ContextBudgetStats): String {
+        val head = com.lucent.app.i18n.S.agentContextBudgetSent(TokenEstimator.label(stats.tokensAfter))
+        val dropped = if (stats.turnsDropped > 0) {
+            " \u00b7 " + com.lucent.app.i18n.S.agentContextBudgetDropped(stats.turnsDropped)
+        } else ""
+        val trimmed = if (stats.toolResultsTrimmed > 0) {
+            " \u00b7 " + com.lucent.app.i18n.S.agentContextBudgetTrimmed(stats.toolResultsTrimmed)
+        } else ""
+        return head + dropped + trimmed
+    }
 
     private suspend fun buildHistory(db: AppDatabase, conversationId: Long, tier: MemoryTier): List<ChatTurn> {
         val current = db.chatDao().getForConversationOnce(conversationId)

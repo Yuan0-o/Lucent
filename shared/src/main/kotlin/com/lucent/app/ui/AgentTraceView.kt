@@ -98,6 +98,17 @@ fun AgentTracePanel(
             )
         }
 
+        if (trace.budgetLabel.isNotBlank()) {
+            Text(
+                trace.budgetLabel,
+                color = mutedTint,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 20.dp, top = 1.dp)
+            )
+        }
+
         if (expanded) {
             if (trace.reasoning.isNotBlank()) {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {

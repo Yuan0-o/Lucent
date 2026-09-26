@@ -263,6 +263,16 @@ design debt repaid loudly is the least we can do:
 | [Logseq](https://github.com/logseq/logseq) | that a notes app should feel like a place, not a dashboard | AGPL-3.0 |
 | [MarkLeaf](https://github.com/jeiel85/markleaf-android) | that the editorial surface stays calm while the configuration waits its turn | Apache-2.0 |
 
+### And the harness we took after
+
+Lucent's assistant follows the tool vocabulary and the working habits of the **DeepSeek Harness**
+(dsh), and of **[DSHA](https://github.com/DSH-APP/DSHA)** — MIT licensed — the Android project that
+puts that harness on a phone without root and without Termux. Lucent bundles neither of them: the
+tools, the loop, the panels and the goals are its own Kotlin, written to behave the way those two
+established. Exit codes arrive as results rather than errors, a file is read before it is written,
+a goal keeps its own rounds, helpers can be talked to and stopped, and anything arguable is asked
+about first. The pattern is theirs and is credited here; the code is ours.
+
 Lucent's own licence governs everything you install; the projects above are honoured as sources of
 ideas and arrangements, not as included works. The structure is ours; the courtesy is theirs.
 

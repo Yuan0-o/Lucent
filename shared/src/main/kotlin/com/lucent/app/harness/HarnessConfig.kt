@@ -62,7 +62,8 @@ data class HarnessConfig(
     val connectors: List<ConnectorConfig> = emptyList(),
     val plugins: List<PluginState> = emptyList(),
     val mirrors: Map<String, String> = emptyMap(),
-    val fastMirror: Boolean = true
+    val fastMirror: Boolean = true,
+    val contextBudgetTokens: Int = ContextBudget.DEFAULT_BUDGET_TOKENS
 ) {
 
     fun approvalFor(permission: HarnessPermission): Approval =
@@ -178,6 +179,7 @@ data class HarnessConfig(
         })
         put("mirrors", JSONObject(mirrors as Map<*, *>))
         put("fastMirror", fastMirror)
+        put("contextBudgetTokens", contextBudgetTokens)
     }
 
     companion object {
@@ -217,7 +219,8 @@ data class HarnessConfig(
                 connectors = connectors(o.optJSONArray("connectors")),
                 plugins = plugins(o.optJSONArray("plugins")),
                 mirrors = map(o.optJSONObject("mirrors")),
-                fastMirror = o.optBoolean("fastMirror", defaults.fastMirror)
+                fastMirror = o.optBoolean("fastMirror", defaults.fastMirror),
+                contextBudgetTokens = o.optInt("contextBudgetTokens", defaults.contextBudgetTokens)
             )
         }
 

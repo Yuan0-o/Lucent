@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.data.TokenEstimator
 import com.lucent.app.harness.HarnessConfig
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.i18n.S
@@ -71,7 +72,31 @@ internal fun ExecutionSettingsPage(onRoute: (SettingsRoute) -> Unit) {
                     Text("+", color = onGradient)
                 }
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(S.agentContextBudget, color = onGradient, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    update(config.copy(contextBudgetTokens = stepBudget(config.contextBudgetTokens, -1)))
+                }) {
+                    Text("-", color = onGradient)
+                }
+                Text(TokenEstimator.label(config.contextBudgetTokens), color = onGradient, fontSize = 13.sp)
+                TextButton(onClick = {
+                    update(config.copy(contextBudgetTokens = stepBudget(config.contextBudgetTokens, 1)))
+                }) {
+                    Text("+", color = onGradient)
+                }
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
     }
+}
+
+private const val CONTEXT_BUDGET_STEP = 4000
+
+private fun stepBudget(current: Int, direction: Int): Int {
+    val next = current + direction * CONTEXT_BUDGET_STEP
+    return next.coerceIn(
+        com.lucent.app.harness.ContextBudget.MIN_BUDGET_TOKENS,
+        com.lucent.app.harness.ContextBudget.MAX_BUDGET_TOKENS
+    )
 }
