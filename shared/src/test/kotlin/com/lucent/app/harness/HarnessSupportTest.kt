@@ -33,7 +33,8 @@ class HarnessSupportTest {
         )
         val line = AuditTrail.format(entry)
         assertTrue(line.contains("plugin:ubuntu"), line)
-        assertTrue(line.contains("unpacked"), line)
+        assertTrue(line.contains("ok"), line)
+        assertTrue(line.contains("12ms"), line)
     }
 
     @Test

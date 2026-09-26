@@ -144,7 +144,7 @@ class PluginPipelineTest {
         assertFalse(outcome.ok)
         assertEquals(PluginFailure.DETECT, outcome.failure)
         assertTrue(outcome.detail.contains("still missing"), outcome.detail)
-        assertTrue(outcome.message.contains("test -d /tmp/installed"), outcome.message)
+        assertTrue(outcome.message.contains(scriptedPlugin().probeFor(false)), outcome.message)
     }
 
     @Test
