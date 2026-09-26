@@ -67,7 +67,8 @@ collapsible trace, one line per tool call.
 ## The workshop behind the assistant
 
 Notes and tasks are the front of house. Behind it, a switch away in Settings → Advanced → Toolkit, there
-is a workshop the assistant is allowed into. It has a workspace folder of your choosing, and inside
+is a workshop the assistant is allowed into. It has a workspace folder of your choosing — the picker
+browses the whole device, not merely shared storage — and inside
 it, real tools: read, write, search, edit with a diff, snapshot and roll back. It can run commands
 with a timeout and a working directory, keep long ones as background jobs, and show you the output.
 It can create and edit Word, Excel and PowerPoint files — the formats are written natively, by
@@ -78,11 +79,15 @@ shell, whichever this machine can offer.
 
 It remembers three ways: this conversation, this project, and you. It keeps a plan you can watch,
 writes down skills so it stops re-learning your conventions, and can call for sub-agents when a
-task is heavy enough to deserve them — a switch in Personalisation, off unless you want it.
+task is heavy enough to deserve them. Sub-agents, snapshots, device control and screen access share
+one page of their own: Toolkit, then Assistant abilities.
 
 Anything large stays out of the installer: a Linux userland, Python with its document libraries,
 LibreOffice, Node.js, a browser engine, OCR and media tools are listed as plugins, downloaded only
-if you ask, from the project's own servers or a fast mirror, whichever answers first. Permissions
+if you ask, from the project's own servers or a fast mirror, whichever answers first. Installing one
+needs a shell — Termux on a phone, winget on Windows — and when a download or an install fails,
+Lucent opens a dialog that names the reason, shows the shell's own output and lists what to fix.
+Permissions
 are a page of their own — read, write, delete, commands, network, Git, GitHub, browsing, the space
 beyond the workspace, and the device itself — each set to allow, ask or block, and every tool call
 written to an activity log you can read and clear.

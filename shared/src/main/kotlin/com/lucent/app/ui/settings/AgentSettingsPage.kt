@@ -29,11 +29,7 @@ import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
 
 @Composable
-internal fun AgentSettingsPage(
-    onRoute: (SettingsRoute) -> Unit,
-    onOpenAccessibility: () -> Unit = {},
-    accessibilityRunning: Boolean = true
-) {
+internal fun AgentSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     var config by remember { mutableStateOf(HarnessRuntime.config()) }
@@ -45,7 +41,7 @@ internal fun AgentSettingsPage(
 
     BackHeader(onBack = { onRoute(SettingsRoute.Advanced) })
     Column(modifier = Modifier.fillMaxWidth()) {
-        Section(onGradient, onGradientMuted, S.agentToolkitTitle, S.agentToolkitSub) {
+        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             ToolkitToggleRow(S.agentToolkitEnabled, S.agentToolkitEnabledSub, config.enabled, onGradient, onGradientMuted) {
                 update(config.copy(enabled = it))
             }
@@ -55,21 +51,6 @@ internal fun AgentSettingsPage(
             }
         }
         if (config.enabled) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-                ToolkitToggleRow(S.agentSubAgents, S.agentSubAgentsSub, config.subAgents, onGradient, onGradientMuted) {
-                    update(config.copy(subAgents = it))
-                }
-                ToolkitToggleRow(S.agentSnapshots, S.agentSnapshotsSub, config.snapshots, onGradient, onGradientMuted) {
-                    update(config.copy(snapshots = it))
-                }
-                ToolkitToggleRow(S.agentDeviceControl, S.agentDeviceControlSub, config.deviceEnabled, onGradient, onGradientMuted) {
-                    update(config.copy(deviceEnabled = it))
-                }
-                ToolkitToggleRow(S.agentScreenAccess, S.agentScreenAccessSub, accessibilityRunning, onGradient, onGradientMuted) { wanted ->
-                    if (wanted && !accessibilityRunning) onOpenAccessibility()
-                }
-            }
             Spacer(modifier = Modifier.height(12.dp))
             toolkitPages().forEach { page ->
                 NavCard(page.title, page.subtitle) { onRoute(page.route) }
@@ -81,8 +62,9 @@ internal fun AgentSettingsPage(
 
 internal data class ToolkitPage(val title: String, val subtitle: String, val route: SettingsRoute)
 
-private fun toolkitPages(): List<ToolkitPage> = listOf(
+internal fun toolkitPages(): List<ToolkitPage> = listOf(
     ToolkitPage(S.agentWorkspaceTitle, S.agentWorkspaceSub, SettingsRoute.Workspace),
+    ToolkitPage(S.agentCapabilitiesTitle, S.agentCapabilitiesSub, SettingsRoute.Capabilities),
     ToolkitPage(S.agentPermissionsTitle, S.agentPermissionsSub, SettingsRoute.Permissions),
     ToolkitPage(S.agentGroupsTitle, S.agentGroupsSub, SettingsRoute.Groups),
     ToolkitPage(S.agentSandboxTitle, S.agentSandboxSub, SettingsRoute.Execution),
@@ -98,14 +80,23 @@ internal fun Section(
     onGradientMuted: androidx.compose.ui.graphics.Color,
     title: String,
     subtitle: String,
+    notes: List<String> = emptyList(),
     content: @Composable () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Text(title, color = onGradient, fontSize = 15.sp)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(subtitle, color = onGradientMuted, fontSize = 11.sp)
-        Spacer(modifier = Modifier.height(10.dp))
-        content()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+            Text(title, color = onGradient, fontSize = 15.sp)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(subtitle, color = onGradientMuted, fontSize = 11.sp)
+            notes.forEach { note ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(note, color = onGradientMuted, fontSize = 11.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+            content()
+        }
     }
 }
 

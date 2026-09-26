@@ -160,7 +160,7 @@ internal object SettingsTrail {
         SettingsRoute.Licences -> SettingsRoute.About
         SettingsRoute.Personalization, SettingsRoute.CloudModel, SettingsRoute.LocalModel -> SettingsRoute.Assistant
         SettingsRoute.Agent, SettingsRoute.Shizuku -> SettingsRoute.Advanced
-        SettingsRoute.Workspace, SettingsRoute.Permissions, SettingsRoute.Groups,
+        SettingsRoute.Workspace, SettingsRoute.Capabilities, SettingsRoute.Permissions, SettingsRoute.Groups,
         SettingsRoute.Execution, SettingsRoute.Github, SettingsRoute.Plugins,
         SettingsRoute.Mcp, SettingsRoute.Audit -> SettingsRoute.Agent
         else -> SettingsRoute.Root
@@ -182,6 +182,7 @@ internal object SettingsTrail {
         SettingsRoute.Root -> S.tabSettings
         SettingsRoute.Agent -> S.settingsAgentTitle
         SettingsRoute.Workspace -> S.agentWorkspaceTitle
+        SettingsRoute.Capabilities -> S.agentCapabilitiesTitle
         SettingsRoute.Permissions -> S.agentPermissionsTitle
         SettingsRoute.Groups -> S.agentGroupsTitle
         SettingsRoute.Execution -> S.agentSandboxTitle

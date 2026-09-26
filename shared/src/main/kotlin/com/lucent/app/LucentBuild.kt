@@ -2,7 +2,7 @@ package com.lucent.app
 
 object LucentBuild {
 
-    const val VERSION = "3.0.1"
+    const val VERSION = "3.0.2"
 
     const val BUILD_NUMBER = "310"
 

@@ -53,7 +53,13 @@ internal fun GithubSettingsPage(onRoute: (SettingsRoute) -> Unit) {
 
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
     Column(modifier = Modifier.fillMaxWidth()) {
-        Section(onGradient, onGradientMuted, S.agentGithubTitle, S.agentGithubSub) {
+        Section(
+            onGradient,
+            onGradientMuted,
+            S.agentGithubTitle,
+            S.agentGithubSub,
+            notes = listOf(S.agentGithubTokensHint)
+        ) {
             config.githubTokens.forEachIndexed { index, entry ->
                 val active = entry.id == config.githubActiveId
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -118,7 +124,6 @@ internal fun GithubSettingsPage(onRoute: (SettingsRoute) -> Unit) {
                     }
                 }
             }
-            Text(S.agentGithubTokensHint, color = onGradientMuted, fontSize = 11.sp)
             if (config.githubTokens.isNotEmpty()) {
                 Text(S.agentGithubStored, color = onGradientMuted, fontSize = 11.sp)
             }

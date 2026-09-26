@@ -216,12 +216,12 @@ object TerminalTools : HarnessGroupTools {
             append("$ ")
             append(command.take(400))
             append('\n')
-            append("exit code ").append(outcome.exitCode)
-            if (outcome.timedOut) append(" (timed out after ${timeout}s)")
-            append("  [${shell?.id ?: "none"}]\n")
             append(text.ifBlank { "(no output)" })
+            append("\n[exit code: ").append(outcome.exitCode).append(']')
+            if (outcome.timedOut) append(" [timed out after ${timeout}s]")
+            append(" [").append(shell?.id ?: "none").append(']')
         }
-        return ToolExecResult(body, success = outcome.ok)
+        return ToolExecResult(body, success = shell != null)
     }
 
     private fun startJob(ctx: HarnessCtx, args: JSONObject): ToolExecResult {

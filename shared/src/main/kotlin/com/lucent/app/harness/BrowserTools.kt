@@ -138,8 +138,12 @@ object BrowserTools : HarnessGroupTools {
             name = "web_search",
             group = group,
             permission = HarnessPermission.NETWORK,
-            description = "Search the public web and get a short digest of results with links.",
-            params = listOf(HarnessSchema.text("query", "What to look up"))
+            description = "Search the public web and get a short digest of results with links. Pass one query, or " +
+                "up to four queries to search them together.",
+            params = listOf(
+                HarnessSchema.text("query", "What to look up", false),
+                HarnessSchema.list("queries", "Up to four things to look up at once", false)
+            )
         ),
         HarnessTool(
             name = "open_url",
@@ -248,13 +252,47 @@ object BrowserTools : HarnessGroupTools {
     }
 
     private suspend fun search(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val query = args.optString("query", "").trim()
-        if (query.isEmpty()) return ToolExecResult("What should I look up?", success = false)
+        val queries = searchQueries(args)
+        if (queries.isEmpty()) return ToolExecResult("What should I look up?", success = false)
         val engine = com.lucent.app.data.WebSearchEngine.AUTO.key
-        return com.lucent.app.network.WebSearchClient.search(query, engine).fold(
-            onSuccess = { ToolExecResult(ctx.limit(it)) },
-            onFailure = { ToolExecResult("Search failed: ${it.message ?: "network error"}", success = false) }
-        )
+        val results = queries.map { query ->
+            query to com.lucent.app.network.WebSearchClient.search(query, engine)
+        }
+        val answered = results.filter { it.second.isSuccess }
+        if (answered.isEmpty()) {
+            val why = results.firstNotNullOfOrNull { it.second.exceptionOrNull()?.message } ?: "network error"
+            return ToolExecResult("Search failed: $why", success = false)
+        }
+        if (answered.size == 1 && queries.size == 1) {
+            return ToolExecResult(ctx.limit(answered.first().second.getOrThrow()))
+        }
+        val body = buildString {
+            answered.forEachIndexed { index, (query, outcome) ->
+                if (index > 0) append("\n\n")
+                append("== ").append(query).append(" ==\n")
+                append(outcome.getOrThrow().trim())
+            }
+            val missed = queries.filterNot { query -> answered.any { it.first == query } }
+            if (missed.isNotEmpty()) {
+                append("\n\nNo answer for: ").append(missed.joinToString(", "))
+            }
+        }
+        return ToolExecResult(ctx.limit(body))
+    }
+
+    private fun searchQueries(args: JSONObject): List<String> {
+        val single = args.optString("query", "").trim()
+        val many = args.optJSONArray("queries")
+        val collected = buildList {
+            if (single.isNotEmpty()) add(single)
+            if (many != null) {
+                for (index in 0 until many.length()) {
+                    val value = many.optString(index, "").trim()
+                    if (value.isNotEmpty()) add(value)
+                }
+            }
+        }
+        return collected.distinct().take(4)
     }
 
     private fun openUrl(ctx: HarnessCtx, args: JSONObject): ToolExecResult {

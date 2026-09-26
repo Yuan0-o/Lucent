@@ -12,8 +12,10 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.lucent.app.ui.settings.AgentSettingsPage
 import com.lucent.app.ui.settings.AuditSettingsPage
+import com.lucent.app.ui.settings.CapabilitiesSettingsPage
 import com.lucent.app.ui.settings.McpSettingsPage
 import com.lucent.app.ui.settings.PluginSettingsPage
+import com.lucent.app.ui.settings.WorkspaceSettingsPage
 import kotlin.test.Test
 
 @OptIn(ExperimentalTestApi::class)
@@ -51,5 +53,15 @@ class SettingsPageLayoutTest {
     @Test
     fun theAuditPageLaysOutInsideTheScrollingSettingsHost() {
         renderInsideTheScrollingHost { AuditSettingsPage(onRoute = {}) }
+    }
+
+    @Test
+    fun theCapabilitiesPageLaysOutInsideTheScrollingSettingsHost() {
+        renderInsideTheScrollingHost { CapabilitiesSettingsPage(onRoute = {}) }
+    }
+
+    @Test
+    fun theWorkspacePageLaysOutInsideTheScrollingSettingsHost() {
+        renderInsideTheScrollingHost { WorkspaceSettingsPage(onRoute = {}) }
     }
 }

@@ -278,16 +278,6 @@ class DiffuseBackgroundTest {
     }
 
     @Test
-    fun theMotionHoldStopsAndRestartsTheDrift() {
-        BackgroundMotion.hold(false)
-        assertFalse(BackgroundMotion.resting)
-        BackgroundMotion.hold(true)
-        assertTrue(BackgroundMotion.resting)
-        BackgroundMotion.hold(false)
-        assertFalse(BackgroundMotion.resting)
-    }
-
-    @Test
     fun policyOnlyRendersWhenTheNextFrameIsDue() {
         val policy = BackgroundFramePolicy()
         assertTrue(policy.isDue(0L), "the first frame is always due")

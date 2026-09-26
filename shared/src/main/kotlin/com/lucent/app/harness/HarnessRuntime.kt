@@ -55,7 +55,15 @@ interface PluginHost {
     suspend fun runPluginCommand(plugin: PluginSpec, command: String, timeoutSeconds: Int): ShellOutcome
 }
 
-data class PluginOutcome(val ok: Boolean, val message: String, val installedPath: String = "")
+enum class PluginFailure { NONE, NO_SHELL, NO_SCRIPT, DOWNLOAD, VERIFY, STORAGE, INSTALL, DETECT, NO_PLATFORM }
+
+data class PluginOutcome(
+    val ok: Boolean,
+    val message: String,
+    val installedPath: String = "",
+    val failure: PluginFailure = PluginFailure.NONE,
+    val detail: String = ""
+)
 
 interface HarnessHost {
     val android: Boolean
@@ -194,6 +202,23 @@ object HarnessRuntime {
         val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
         if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
         return kotlinx.coroutines.runBlocking { sh.run(command, workdir, timeoutSeconds, env) }
+    }
+
+    suspend fun runShellAsync(
+        command: String,
+        workdir: File?,
+        timeoutSeconds: Int,
+        env: Map<String, String> = emptyMap()
+    ): ShellOutcome {
+        val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
+        if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
+        return sh.run(command, workdir, timeoutSeconds, env)
+    }
+
+    fun downloadsDir(): File {
+        val dir = File(workspace(), ".lucent/downloads")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
     }
 
     fun workspace(): File {

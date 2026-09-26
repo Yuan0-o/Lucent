@@ -34,16 +34,6 @@ data class BackgroundEnvironment(val active: Boolean = true, val motionEnabled: 
 
 val LocalBackgroundEnvironment = staticCompositionLocalOf { BackgroundEnvironment() }
 
-object BackgroundMotion {
-
-    var resting by mutableStateOf(false)
-        private set
-
-    fun hold(value: Boolean) {
-        resting = value
-    }
-}
-
 private const val STILL_COLOUR_TICK_MS = 1_000L
 
 private class PaletteArgbs {
@@ -73,13 +63,11 @@ fun FluidGlassBackground(
     val context = LocalContext.current
     val environment = LocalBackgroundEnvironment.current
     val inspection = LocalInspectionMode.current
-    val resting = BackgroundMotion.resting
-    val moving = animated && environment.motionEnabled && !resting && !inspection
+    val moving = animated && environment.motionEnabled && !inspection
     LaunchedEffect(animated, environment.active, moving) {
         val mode = when {
             !animated -> "flat"
             !environment.active -> "paused"
-            resting -> "held while scrolling"
             !moving -> "still waves, slow colour drift"
             else -> "animated gradient"
         }

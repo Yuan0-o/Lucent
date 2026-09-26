@@ -12,10 +12,13 @@ TESTS = [
     os.path.join(REPO, "app", "src", "test"),
 ]
 
-UI_FREE = {
+INDIRECTLY_COVERED = {
     "HarnessAsk.kt",
     "HarnessVault.kt",
     "SimplePdfText.kt",
+    "Ooxml.kt",
+    "McpClient.kt",
+    "HarnessSpec.kt",
 }
 
 TOOL_NAME = re.compile(r'name\s*=\s*"([a-z][a-z0-9_]*)"')
@@ -67,8 +70,8 @@ def main():
             modules[name] = (rel, names)
             for tool in names:
                 tool_names.setdefault(tool, []).append(name)
-        covered = base.replace(".kt", "") in tests or f"HarnessGate" in tests
-        if not covered and base not in UI_FREE:
+        covered = base.replace(".kt", "") in tests
+        if not covered and base not in INDIRECTLY_COVERED:
             problems.append(f"{rel} has no test file covering it")
 
     duplicates = {name: owners for name, owners in tool_names.items() if len(owners) > 1}

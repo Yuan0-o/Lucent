@@ -15,7 +15,6 @@ object FileTools : HarnessGroupTools {
 
     private const val MAX_LIST = 500
     private const val MAX_SEARCH = 120
-
     override val tools: List<HarnessTool> = listOf(
         HarnessTool(
             name = "workspace_info",
@@ -203,6 +202,7 @@ object FileTools : HarnessGroupTools {
     )
 
     override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = try {
+        FileObservations.track(HarnessRuntime.conversationId)
         when (name) {
             "workspace_info" -> workspaceInfo(ctx)
             "list_directory" -> listDirectory(ctx, args)
@@ -348,6 +348,7 @@ object FileTools : HarnessGroupTools {
         val file = Workspace.forRead(ctx, args.optString("path", ""))
         if (file.isDirectory) return listDirectory(ctx, JSONObject().put("path", args.optString("path", "")))
         val text = Workspace.readText(file)
+        FileObservations.note(file.path)
         val lines = text.split("\n")
         val start = args.optInt("start_line", 1).coerceAtLeast(1)
         val max = args.optInt("max_lines", 400).coerceIn(1, 5000)
@@ -362,6 +363,12 @@ object FileTools : HarnessGroupTools {
         val content = args.optString("content", "")
         val append = args.optBoolean("append", false)
         if (file.isDirectory) return ToolExecResult("${Workspace.display(ctx, file)} is a directory.", success = false)
+        if (!append && file.isFile && file.length() > 0 && !FileObservations.seen(file.path)) {
+            return ToolExecResult(
+                "${Workspace.display(ctx, file)} already exists and has not been read. Read it first, then write.",
+                success = false
+            )
+        }
         if (append) {
             if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
             file.parentFile?.mkdirs()
@@ -370,12 +377,19 @@ object FileTools : HarnessGroupTools {
             Workspace.writeText(ctx, file, content)
         }
         val verb = if (append) "Appended to" else "Wrote"
+        FileObservations.note(file.path)
         return ToolExecResult("$verb ${Workspace.display(ctx, file)} (${Workspace.humanSize(file.length())}, ${Workspace.countLines(file)} lines).")
     }
 
     private fun editFile(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val file = Workspace.forWrite(ctx, args.optString("path", ""))
         if (!file.exists()) return ToolExecResult("${Workspace.display(ctx, file)} does not exist.", success = false)
+        if (!FileObservations.seen(file.path)) {
+            return ToolExecResult(
+                "${Workspace.display(ctx, file)} has not been read. Read it first, then edit it.",
+                success = false
+            )
+        }
         val find = args.optString("find", "")
         if (find.isEmpty()) return ToolExecResult("Give me the exact text to find.", success = false)
         val replace = args.optString("replace", "")
@@ -391,6 +405,7 @@ object FileTools : HarnessGroupTools {
         }
         val after = if (all) before.replace(find, replace) else before.replaceFirst(find, replace)
         Workspace.writeText(ctx, file, after)
+        FileObservations.note(file.path)
         val diff = Diffs.unified(before, after)
         return ToolExecResult(
             "Edited ${Workspace.display(ctx, file)} ($occurrences replacement${if (occurrences == 1) "" else "s"}).\n" +
@@ -629,4 +644,24 @@ object FileTools : HarnessGroupTools {
         }
         return ToolExecResult("Unpacked $count file(s) into ${Workspace.display(ctx, root)}.")
     }
+}
+
+internal object FileObservations {
+
+    private val seen = LinkedHashSet<String>()
+    private var conversation: Long = -1L
+
+    fun track(conversationId: Long) {
+        if (conversationId == conversation) return
+        conversation = conversationId
+        seen.clear()
+    }
+
+    fun note(path: String) {
+        seen.add(key(path))
+    }
+
+    fun seen(path: String): Boolean = seen.contains(key(path))
+
+    private fun key(path: String): String = runCatching { File(path).canonicalPath }.getOrDefault(path)
 }

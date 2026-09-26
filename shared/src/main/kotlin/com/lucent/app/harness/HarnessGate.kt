@@ -135,6 +135,23 @@ object HarnessGate {
         val args = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
         val started = System.currentTimeMillis()
         val ctx = HarnessCtx(context.applicationContext, db, config, capabilities, android, HarnessRuntime.workspace())
+        if (config.auditEnabled && approval == Approval.CONFIRM) {
+            AuditTrail.record(
+                context.applicationContext,
+                AuditEntry(
+                    at = started,
+                    tool = name,
+                    group = tool.group.key,
+                    permission = tool.permission.key,
+                    approval = "asked",
+                    arguments = HarnessDescribe.digest(argumentsJson),
+                    outcome = "asked",
+                    detail = "waiting for the user to allow ${tool.name}",
+                    millis = 0L,
+                    files = HarnessDescribe.files(argumentsJson)
+                )
+            )
+        }
         val result = try {
             val module = groups.firstOrNull { module -> module.canHandle(name) }
             module?.execute(ctx, name, args)

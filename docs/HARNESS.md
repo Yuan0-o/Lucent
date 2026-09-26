@@ -44,13 +44,18 @@ audit log          tool, arguments (shortened), outcome, duration
 
 ## Where things live
 
-- **Workspace** — the one folder the assistant may read and write. Files outside it are refused; the
+- **Workspace** — the one folder the assistant may read and write. The picker browses the whole
+  device, so that folder can sit anywhere the shell can reach. Files outside it are refused; the
   "outside the workspace" permission decides whether reading further afield is even offered.
 - **Snapshots** — every file is copied aside before it is changed, so `restore_file` can undo a
   mistake. Snapshots are capped and encrypted at rest.
 - **Activity log** — the audit trail, readable and clearable from the same settings page.
 - **Plugins** — heavy tooling (a Linux userland, Python, LibreOffice, Node.js, browsers, OCR, media
   tools) is never bundled. It is downloaded on request from the project's own servers or a fast
-  mirror, whichever answers first, with size and checksum verification.
+  mirror, whichever answers first, staged inside the workspace so the shell can read it, and
+  verified by size and, where the source publishes one, checksum. Every download is attempted even
+  when no shell is ready, so a phone without Termux can still fetch the payload; installing and
+  running need a shell (Termux or Shizuku on Android, winget on Windows). A failure never hides
+  behind "unknown": the settings page reports which step failed and why.
 - **Secrets** — API keys, the GitHub token, MCP tokens and connector credentials are encrypted with
   the same local key as the rest of Lucent's data, and are included in `.lcb` backups.

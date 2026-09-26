@@ -4,6 +4,7 @@ import android.content.Context
 import com.lucent.app.harness.AuditEntry
 import com.lucent.app.harness.AuditTrail
 import com.lucent.app.harness.HarnessRuntime
+import com.lucent.app.harness.PluginFailure
 import com.lucent.app.harness.PluginHost
 import com.lucent.app.harness.PluginOutcome
 import com.lucent.app.harness.PluginState
@@ -23,15 +24,21 @@ class PluginManager private constructor(private val context: Context?, private v
 
     override suspend fun available(): List<String> = HarnessRuntime.config().installedPlugins().toList()
 
-    override suspend fun detect(plugin: PluginSpec): Boolean {
+    override suspend fun detect(plugin: PluginSpec): Boolean = probe(plugin).ok
+
+    suspend fun probe(plugin: PluginSpec): ShellOutcome {
         val stored = HarnessRuntime.config().pluginInstalled(plugin.id)
-        if (plugin.detectCommand.isBlank()) {
-            if (plugin.id == "termux") return HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
-            return stored
+        val command = plugin.probeFor(android)
+        if (command.isBlank()) {
+            val present = if (plugin.id == "termux") {
+                HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
+            } else {
+                stored
+            }
+            return ShellOutcome(present, "", "", if (present) 0 else 1)
         }
-        if (!isReady()) return stored
-        val outcome = HarnessRuntime.runShell(plugin.detectCommand, null, 60)
-        return outcome.ok
+        if (!isReady()) return ShellOutcome(false, "", "No shell is available to check this plugin", -1)
+        return HarnessRuntime.runShellAsync(wrap(plugin, command), HarnessRuntime.workspace(), 90)
     }
 
     override suspend fun install(
@@ -39,63 +46,121 @@ class PluginManager private constructor(private val context: Context?, private v
         source: PluginSource,
         onProgress: (Float, String) -> Unit
     ): PluginOutcome {
-        if (!isReady()) {
+        var script = plugin.installFor(android)
+        if (script.isBlank()) {
             return PluginOutcome(
                 false,
-                if (android) "Installing ${plugin.name} needs Termux. Install Termux from F-Droid, set " +
-                    "allow-external-apps=true in ~/.termux/termux.properties, run termux-setup-storage once, then try again."
-                else "No shell is available on this machine."
+                "${plugin.name} has nothing to install on this platform",
+                failure = PluginFailure.NO_PLATFORM
             )
         }
-        var chosen = source
-        if (plugin.sources.isNotEmpty() && plugin.sources.any { it.url.startsWith("http") }) {
-            if (chosen.id.isBlank() || chosen.url.isBlank()) {
+        var sourceId = source.id.ifBlank { "built-in" }
+        var staged: File? = null
+        if (script.contains("{file}")) {
+            val usable = plugin.sources.filter { it.url.startsWith("http") }
+            if (usable.isEmpty()) {
+                return PluginOutcome(
+                    false,
+                    "${plugin.name} has no downloadable source",
+                    failure = PluginFailure.DOWNLOAD
+                )
+            }
+            var chosen = source
+            if (chosen.id.isBlank() || chosen.url.isBlank() || usable.none { it.id == chosen.id }) {
                 onProgress(0.02f, "testing download sources")
-                chosen = PluginDownload.fastest(plugin.sources) ?: plugin.sources.first()
+                chosen = PluginDownload.fastest(usable) ?: usable.first()
             }
+            sourceId = chosen.id.ifBlank { "built-in" }
             onProgress(0.05f, "downloading from ${chosen.label}")
-        }
-        val target = File(HarnessRuntime.subDir("downloads"), fileNameOf(plugin, chosen))
-        var script = plugin.installScript
-        if (chosen.url.startsWith("http") && plugin.sources.isNotEmpty()) {
+            val target = File(HarnessRuntime.downloadsDir(), fileNameOf(plugin, chosen))
             val fetched = PluginDownload.fetch(chosen, target) { fraction, note ->
-                onProgress(0.05f + fraction * 0.6f, "${chosen.label}: $note")
+                onProgress(0.05f + fraction * 0.5f, "${chosen.label}: $note")
             }
-            if (!fetched.ok) return fetched
+            if (!fetched.ok) {
+                record(plugin, "download failed", fetched.message)
+                return fetched.copy(failure = PluginFailure.DOWNLOAD)
+            }
+            staged = target
             script = script.replace("{file}", target.path)
         }
-        onProgress(0.7f, "installing")
-        val outcome = run(plugin, script, 3600)
-        val ok = outcome.ok && detect(plugin)
-        if (ok) {
-            val state = PluginState(
-                id = plugin.id,
-                installed = true,
-                source = chosen.id.ifBlank { "built-in" },
-                version = System.currentTimeMillis().toString(),
-                sizeBytes = if (target.exists()) target.length() else plugin.bytes,
-                installedAt = System.currentTimeMillis()
+        if (!isReady()) {
+            val kept = staged?.path.orEmpty()
+            record(plugin, "downloaded only", kept)
+            return PluginOutcome(
+                false,
+                "${plugin.name} was downloaded but cannot be installed without a shell",
+                kept,
+                PluginFailure.NO_SHELL,
+                kept
             )
-            HarnessRuntime.update(HarnessRuntime.config().withPlugin(state).withMirror(plugin.id, state.source))
-            if (target.exists() && plugin.sources.isNotEmpty()) target.delete()
         }
-        onProgress(1f, if (ok) "installed" else "install failed")
-        record(plugin, if (ok) "installed" else "install failed", outcome.text.take(600))
-        return PluginOutcome(
-            ok,
-            if (ok) "${plugin.name} is installed" else "Installing ${plugin.name} failed:\n" + outcome.text.takeLast(1200),
-            target.path
+        onProgress(0.6f, "installing")
+        val outcome = run(plugin, script, 3600)
+        if (!outcome.ok) {
+            val detail = outcome.text.take(1200)
+            record(plugin, "install failed", detail)
+            return PluginOutcome(
+                false,
+                "${plugin.name}: the install command exited ${outcome.exitCode}" +
+                    if (outcome.timedOut) " after the time limit" else "",
+                staged?.path.orEmpty(),
+                PluginFailure.INSTALL,
+                detail
+            )
+        }
+        val checked = probe(plugin)
+        if (!checked.ok) {
+            val detail = (outcome.text.take(600) + "\n" + checked.text.take(400)).trim()
+            record(plugin, "install failed", detail)
+            return PluginOutcome(
+                false,
+                "${plugin.name} was installed but the check still fails: ${plugin.probeFor(android)}",
+                staged?.path.orEmpty(),
+                PluginFailure.DETECT,
+                detail
+            )
+        }
+        val kept = staged
+        val state = PluginState(
+            id = plugin.id,
+            installed = true,
+            source = sourceId,
+            version = System.currentTimeMillis().toString(),
+            sizeBytes = if (kept != null && kept.exists()) kept.length() else plugin.bytes,
+            installedAt = System.currentTimeMillis()
         )
+        HarnessRuntime.update(HarnessRuntime.config().withPlugin(state).withMirror(plugin.id, state.source))
+        kept?.delete()
+        onProgress(1f, "installed")
+        record(plugin, "installed", outcome.text.take(600))
+        return PluginOutcome(true, "${plugin.name} is installed")
     }
 
     override suspend fun remove(plugin: PluginSpec): PluginOutcome {
-        if (!isReady()) return PluginOutcome(false, "No shell is available, so nothing can be removed.")
-        val outcome = if (plugin.removeScript.isBlank()) ShellOutcome(true, "", "", 0)
-        else run(plugin, plugin.removeScript, 1800)
-        val state = PluginState(id = plugin.id, installed = false)
-        HarnessRuntime.update(HarnessRuntime.config().withPlugin(state))
+        if (!isReady()) {
+            return PluginOutcome(
+                false,
+                "No shell is available, so ${plugin.name} cannot be removed",
+                failure = PluginFailure.NO_SHELL
+            )
+        }
+        val script = plugin.removeFor(android)
+        val outcome = if (script.isBlank()) ShellOutcome(true, "", "", 0) else run(plugin, script, 1800)
+        if (!outcome.ok) {
+            record(plugin, "remove failed", outcome.text.take(400))
+            return PluginOutcome(
+                false,
+                "${plugin.name}: the remove command exited ${outcome.exitCode}",
+                failure = PluginFailure.INSTALL,
+                detail = outcome.text.take(400)
+            )
+        }
+        HarnessRuntime.update(HarnessRuntime.config().withPlugin(PluginState(id = plugin.id, installed = false)))
         record(plugin, "removed", outcome.text.take(400))
-        return PluginOutcome(true, "${plugin.name} removed." + if (outcome.text.isBlank()) "" else "\n" + outcome.text.take(400))
+        return PluginOutcome(
+            true,
+            "${plugin.name} removed." + if (outcome.text.isBlank()) "" else "\n" + outcome.text.take(400)
+        )
     }
 
     override suspend fun runPluginCommand(
@@ -106,16 +171,14 @@ class PluginManager private constructor(private val context: Context?, private v
 
     private suspend fun run(plugin: PluginSpec, script: String, timeoutSeconds: Int): ShellOutcome {
         if (script.isBlank()) return ShellOutcome(false, "", "This plugin has nothing to run.", -1)
-        val wrapped = if (android && needsUserland(plugin)) insideUserland(script) else script
-        return HarnessRuntime.runShell(wrapped, HarnessRuntime.workspace(), timeoutSeconds)
+        return HarnessRuntime.runShellAsync(wrap(plugin, script), HarnessRuntime.workspace(), timeoutSeconds)
     }
 
-    private fun needsUserland(plugin: PluginSpec): Boolean = when (plugin.id) {
-        "ubuntu", "termux" -> false
-        else -> HarnessRuntime.config().pluginInstalled("ubuntu")
-    }
+    private fun needsUserland(plugin: PluginSpec): Boolean =
+        plugin.id in USERLAND_PLUGINS && HarnessRuntime.config().pluginInstalled("ubuntu")
 
-    private fun insideUserland(script: String): String {
+    private fun wrap(plugin: PluginSpec, script: String): String {
+        if (!android || !needsUserland(plugin)) return script
         val rootfs = "~/lucent/ubuntu/rootfs"
         val escaped = script.replace("'", "'\\''")
         return "proot -0 -r $rootfs -w /root -b /dev -b /proc -b /sys " +
@@ -149,8 +212,11 @@ class PluginManager private constructor(private val context: Context?, private v
     }
 
     companion object {
+
+        private val USERLAND_PLUGINS = setOf("python-office", "libreoffice")
+
         fun android(context: Context): PluginManager = PluginManager(context.applicationContext, true)
 
-        fun desktop(): PluginManager = PluginManager(null, false)
+        fun desktop(context: Context): PluginManager = PluginManager(context.applicationContext, false)
     }
 }

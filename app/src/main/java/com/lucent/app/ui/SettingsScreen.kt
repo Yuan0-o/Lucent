@@ -95,6 +95,7 @@ import com.lucent.app.ui.settings.AboutSettingsPage
 import com.lucent.app.ui.settings.AdvancedSettingsPage
 import com.lucent.app.ui.settings.LicenceSettingsPage
 import com.lucent.app.ui.settings.AgentSettingsPage
+import com.lucent.app.ui.settings.CapabilitiesSettingsPage
 import com.lucent.app.ui.settings.PluginSettingsPage
 import com.lucent.app.ui.settings.McpSettingsPage
 import com.lucent.app.ui.settings.ExecutionSettingsPage
@@ -114,7 +115,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Workspace, Permissions, Groups, Execution, Github, Plugins, Mcp, Audit, Shizuku }
+internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Workspace, Capabilities, Permissions, Groups, Execution, Github, Plugins, Mcp, Audit, Shizuku }
 
 internal enum class ExportKind { NOTES, TASKS }
 
@@ -2204,10 +2205,6 @@ fun SettingsScreen(active: Boolean = true) {
     }
     var pendingExportBytes by remember { mutableStateOf<ByteArray?>(null) }
     var pendingExportName by remember { mutableStateOf("lucent-export.md") }
-    var pickedWorkspace by remember { mutableStateOf<String?>(null) }
-    val workspacePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
-        if (uri != null) pickedWorkspace = com.lucent.app.harness.AndroidWorkspacePicker.pathFromTree(uri)
-    }
 
     fun grantAllFiles() {
         if (android.os.Build.VERSION.SDK_INT >= 30) {
@@ -2260,14 +2257,6 @@ fun SettingsScreen(active: Boolean = true) {
     val rootScroll = routeScrolls.getOrPut(route) { ScrollState(SettingsScrollMemory.of(route)) }
     LaunchedEffect(rootScroll) {
         snapshotFlow { rootScroll.value }.collect { SettingsScrollMemory.write(route, it) }
-    }
-
-    val settingsScrolling = rootScroll.isScrollInProgress
-    LaunchedEffect(settingsScrolling) {
-        com.lucent.app.ui.BackgroundMotion.hold(settingsScrolling)
-    }
-    DisposableEffect(Unit) {
-        onDispose { com.lucent.app.ui.BackgroundMotion.hold(false) }
     }
 
     if (exportKind != null) {
@@ -2505,18 +2494,18 @@ fun SettingsScreen(active: Boolean = true) {
                 }
             )
 
-            SettingsRoute.Agent -> AgentSettingsPage(
-                onRoute = { navigate(it) },
-                onOpenAccessibility = { openAccessibilitySettings() },
-                accessibilityRunning = com.lucent.app.harness.LucentAccessibilityService.isRunning()
-            )
+            SettingsRoute.Agent -> AgentSettingsPage(onRoute = { navigate(it) })
 
             SettingsRoute.Workspace -> WorkspaceSettingsPage(
                 onRoute = { navigate(it) },
-                picked = pickedWorkspace,
-                onPick = { workspacePicker.launch(null) },
                 onGrantStorage = { grantAllFiles() },
                 storageGranted = com.lucent.app.harness.AndroidWorkspacePicker.storageGranted()
+            )
+
+            SettingsRoute.Capabilities -> CapabilitiesSettingsPage(
+                onRoute = { navigate(it) },
+                onOpenAccessibility = { openAccessibilitySettings() },
+                accessibilityRunning = com.lucent.app.harness.LucentAccessibilityService.isRunning()
             )
 
             SettingsRoute.Permissions -> PermissionsSettingsPage(onRoute = { navigate(it) })

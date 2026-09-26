@@ -116,7 +116,8 @@ object PluginTools : HarnessGroupTools {
             sb.append(describe(plugin, ctx)).append('\n')
             if (plugin.sources.isEmpty()) {
                 sb.append("    source: built in")
-                if (plugin.detectCommand.isNotBlank()) sb.append(" (detected with: ${plugin.detectCommand})")
+                val probe = plugin.probeFor(ctx.android)
+                if (probe.isNotBlank()) sb.append(" (detected with: $probe)")
                 sb.append('\n')
             } else {
                 plugin.sources.forEach { source ->

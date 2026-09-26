@@ -9,7 +9,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,9 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.harness.HarnessConfig
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
+import com.lucent.app.ui.DirectoryPickerDialog
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.LucentToast
@@ -29,8 +30,6 @@ import com.lucent.app.ui.SettingsRoute
 @Composable
 internal fun WorkspaceSettingsPage(
     onRoute: (SettingsRoute) -> Unit,
-    picked: String? = null,
-    onPick: (() -> Unit)? = null,
     onGrantStorage: () -> Unit = {},
     storageGranted: Boolean = true
 ) {
@@ -39,9 +38,11 @@ internal fun WorkspaceSettingsPage(
     val onGradientMuted = LocalOnGradientMuted.current
     var config by remember { mutableStateOf(HarnessRuntime.config()) }
     var draft by remember { mutableStateOf(config.workspace) }
+    var picking by remember { mutableStateOf(false) }
 
-    LaunchedEffect(picked) {
-        if (!picked.isNullOrBlank()) draft = picked
+    fun update(next: HarnessConfig) {
+        config = next
+        HarnessRuntime.update(next)
     }
 
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
@@ -58,12 +59,8 @@ internal fun WorkspaceSettingsPage(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Row {
-                if (onPick != null) {
-                    TextButton(onClick = { onPick() }) {
-                        Text(S.agentWorkspacePick, color = onGradient, fontSize = 13.sp)
-                    }
-                } else {
-                    Text(S.agentWorkspacePickUnavailable, color = onGradientMuted, fontSize = 11.sp)
+                TextButton(onClick = { picking = true }) {
+                    Text(S.agentWorkspacePick, color = onGradient, fontSize = 13.sp)
                 }
                 if (!storageGranted) {
                     TextButton(onClick = onGrantStorage) {
@@ -75,9 +72,7 @@ internal fun WorkspaceSettingsPage(
                 TextButton(
                     enabled = draft.isNotBlank(),
                     onClick = {
-                        val chosen = draft.trim()
-                        config = config.copy(workspace = chosen)
-                        HarnessRuntime.update(config)
+                        update(config.copy(workspace = draft.trim()))
                         LucentToast.show(context, S.settingsSaved)
                     }
                 ) {
@@ -85,5 +80,16 @@ internal fun WorkspaceSettingsPage(
                 }
             }
         }
+    }
+
+    if (picking) {
+        DirectoryPickerDialog(
+            initialPath = draft.trim().ifBlank { HarnessRuntime.workspace().path },
+            onDismiss = { picking = false },
+            onOpen = { picked ->
+                draft = picked
+                picking = false
+            }
+        )
     }
 }

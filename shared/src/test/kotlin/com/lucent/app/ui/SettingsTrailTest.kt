@@ -1,9 +1,19 @@
 package com.lucent.app.ui
 
+import com.lucent.app.ui.settings.toolkitPages
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SettingsTrailTest {
+
+    @Test
+    fun theCapabilitiesPageSitsBetweenWorkspaceAndPermissions() {
+        val routes = toolkitPages().map { it.route }
+        val workspace = routes.indexOf(SettingsRoute.Workspace)
+        val capabilities = routes.indexOf(SettingsRoute.Capabilities)
+        val permissions = routes.indexOf(SettingsRoute.Permissions)
+        assertEquals(true, workspace >= 0 && capabilities == workspace + 1 && permissions == capabilities + 1)
+    }
 
     @Test
     fun theToolkitAndShizukuHangOffAdvanced() {
@@ -15,6 +25,7 @@ class SettingsTrailTest {
     fun everyFineSettingIsAToolkitSubPage() {
         val pages = listOf(
             SettingsRoute.Workspace,
+            SettingsRoute.Capabilities,
             SettingsRoute.Permissions,
             SettingsRoute.Groups,
             SettingsRoute.Execution,
