@@ -177,6 +177,12 @@ private fun AgentStepRow(
                     withStyle(SpanStyle(color = if (step.status == AgentStepStatus.CANCELLED) mutedTint else tint)) {
                         append(step.label())
                     }
+                    if (step.millis > 0L) {
+                        withStyle(SpanStyle(color = mutedTint)) {
+                            append(" ")
+                            append(durationLabel(step.millis))
+                        }
+                    }
                     if (step.detail.isNotBlank()) {
                         withStyle(SpanStyle(color = mutedTint)) {
                             append(" \u00b7 ")
@@ -210,6 +216,9 @@ private fun statusLabel(status: AgentStepStatus): String = when (status) {
     AgentStepStatus.FAILED -> S.agentTraceFailed
     AgentStepStatus.CANCELLED -> S.agentTraceCancelled
 }
+
+private fun durationLabel(millis: Long): String =
+    if (millis < 1000L) "$millis ms" else "${millis / 1000}.${(millis % 1000) / 100} s"
 
 private fun statusIcon(status: AgentStepStatus): ImageVector = when (status) {
     AgentStepStatus.RUNNING -> Icons.Default.Refresh

@@ -20,7 +20,8 @@ data class AgentStep(
     val detail: String = "",
     val variant: String = "",
     val text: String = "",
-    val errorText: String = ""
+    val errorText: String = "",
+    val millis: Long = 0L
 ) {
     fun label(): String =
         if (kind == AgentStepKind.TOOL) AgentTraceLabels.labelFor(toolName, variant) else text
@@ -151,6 +152,7 @@ object AgentTraceCodec {
                     .put("v", step.variant)
                     .put("x", step.text)
                     .put("e", step.errorText)
+                    .put("m", step.millis)
             )
         }
         return JSONObject()
@@ -176,7 +178,8 @@ object AgentTraceCodec {
                     detail = o.optString("d"),
                     variant = o.optString("v"),
                     text = o.optString("x"),
-                    errorText = o.optString("e")
+                    errorText = o.optString("e"),
+                    millis = o.optLong("m", 0L)
                 )
             )
         }
@@ -200,6 +203,8 @@ class AgentTraceRecorder {
     private val _steps = mutableStateListOf<AgentStep>()
 
     private val lock = Any()
+
+    private val toolStarted = HashMap<Int, Long>()
 
     private val reasoningBuffer = StringBuilder()
 
@@ -301,25 +306,40 @@ class AgentTraceRecorder {
                 variant = AgentTraceLabels.variantFor(toolName, argumentsJson)
             )
         )
-        return _steps.lastIndex
+        val index = _steps.lastIndex
+        if (index >= 0) synchronized(lock) { toolStarted[index] = System.currentTimeMillis() }
+        return index
+    }
+
+    fun beginToolRun(index: Int) {
+        if (index < 0) return
+        synchronized(lock) { toolStarted[index] = System.currentTimeMillis() }
     }
 
     fun finishTool(index: Int, result: ToolExecResult) {
+        val millis = elapsedSince(index)
         update(index) {
             it.copy(
                 status = if (result.success) AgentStepStatus.DONE else AgentStepStatus.FAILED,
-                errorText = if (result.success) "" else AgentTraceLabels.summarize(result.summary, ERROR_MAX)
+                errorText = if (result.success) "" else AgentTraceLabels.summarize(result.summary, ERROR_MAX),
+                millis = millis
             )
         }
     }
 
     fun failTool(index: Int, error: String) {
+        val millis = elapsedSince(index)
         update(index) {
-            it.copy(status = AgentStepStatus.FAILED, errorText = AgentTraceLabels.summarize(error, ERROR_MAX))
+            it.copy(
+                status = AgentStepStatus.FAILED,
+                errorText = AgentTraceLabels.summarize(error, ERROR_MAX),
+                millis = millis
+            )
         }
     }
 
     fun cancelTool(index: Int, reason: String = "") {
+        synchronized(lock) { toolStarted.remove(index) }
         update(index) {
             it.copy(status = AgentStepStatus.CANCELLED, errorText = AgentTraceLabels.summarize(reason, ERROR_MAX))
         }
@@ -327,6 +347,11 @@ class AgentTraceRecorder {
 
     fun finish(status: AgentStepStatus) {
         statusValue = status
+    }
+
+    private fun elapsedSince(index: Int): Long = synchronized(lock) {
+        val started = toolStarted.remove(index) ?: return 0L
+        (System.currentTimeMillis() - started).coerceAtLeast(0L)
     }
 
     private fun update(index: Int, block: (AgentStep) -> AgentStep) {

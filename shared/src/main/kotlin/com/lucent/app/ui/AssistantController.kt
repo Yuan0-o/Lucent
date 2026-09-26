@@ -830,6 +830,7 @@ class AssistantControllerImpl(
                             break
                         }
 
+                        turn.recorder.beginToolRun(stepIndex)
                         turn.thinking = true
                         val r = try {
                             AppTools.execute(
@@ -1122,6 +1123,7 @@ class AssistantControllerImpl(
                     turn.completionBuzz()
                     return
                 } else {
+                    turn.recorder.beginToolRun(stepIndex)
                     turn.thinking = true
                     val r = try {
                         AppTools.execute(
