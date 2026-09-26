@@ -34,7 +34,7 @@ class HarnessEscalationTest {
         try {
             HarnessRuntime.workspace().mkdirs()
             val context = harnessTestContext()
-            val db = allocate(AppDatabase::class.java) as AppDatabase
+            val db = allocatedForTest(AppDatabase::class.java) as AppDatabase
             block(root, context, db)
         } finally {
             HarnessGate.clearEscalations()
@@ -151,14 +151,5 @@ class HarnessEscalationTest {
             Thread.sleep(25)
         }
         return false
-    }
-
-    private fun allocate(type: Class<*>): Any? = try {
-        val unsafe = Class.forName("sun.misc.Unsafe")
-        val field = unsafe.getDeclaredField("theUnsafe")
-        field.isAccessible = true
-        unsafe.getMethod("allocateInstance", Class::class.java).invoke(field.get(null), type)
-    } catch (t: Throwable) {
-        null
     }
 }
