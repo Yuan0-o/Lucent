@@ -598,10 +598,10 @@ fun AssistantChatBody(
                 }
             }
         } else
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             Box(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier
