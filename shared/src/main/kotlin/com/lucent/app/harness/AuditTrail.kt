@@ -38,7 +38,7 @@ object AuditTrail {
     }
 
     private fun baseDir(context: Context): File =
-        runCatching { context.applicationContext?.filesDir }.getOrNull()
+        runCatching { context.filesDir }.getOrNull()
             ?: File(System.getProperty("java.io.tmpdir"), "lucent-audit")
 
     fun record(context: Context?, entry: AuditEntry) {

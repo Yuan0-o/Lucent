@@ -215,7 +215,7 @@ object HarnessGate {
             if (problem != null) {
                 if (config.auditEnabled) {
                     AuditTrail.record(
-                        context.applicationContext,
+                        context,
                         audit(tool, argumentsJson, started, "escalation-refused", "escalation-refused", problem)
                     )
                 }
@@ -224,11 +224,11 @@ object HarnessGate {
         }
         if (config.auditEnabled && approval == Approval.CONFIRM) {
             AuditTrail.record(
-                context.applicationContext,
+                context,
                 audit(tool, argumentsJson, started, "asked", "asked", "waiting for the user to allow ${tool.name}")
             )
         }
-        var ctx = HarnessCtx(context.applicationContext, db, config, capabilities, android, HarnessRuntime.workspace())
+        var ctx = HarnessCtx(context, db, config, capabilities, android, HarnessRuntime.workspace())
         var attempt = run(name, ctx, args)
         var escalated = false
         if (attempt.blocked && escalation != null && !escalatedInThisConversation(name)) {
@@ -238,7 +238,7 @@ object HarnessGate {
                 synchronized(escalations) { escalations.add(name) }
                 if (config.auditEnabled) {
                     AuditTrail.record(
-                        context.applicationContext,
+                        context,
                         audit(
                             tool,
                             argumentsJson,
@@ -259,7 +259,7 @@ object HarnessGate {
         val summary = ctx.limit(result.summary)
         if (config.auditEnabled) {
             AuditTrail.record(
-                context.applicationContext,
+                context,
                 audit(
                     tool,
                     argumentsJson,
@@ -271,10 +271,12 @@ object HarnessGate {
                 )
             )
         }
-        StartupLog.event(
-            context.applicationContext,
-            "agent tool $name (${tool.group.key}) ${if (result.success) "ok" else "failed"} in ${elapsed}ms"
-        )
+        runCatching {
+            StartupLog.event(
+                context,
+                "agent tool $name (${tool.group.key}) ${if (result.success) "ok" else "failed"} in ${elapsed}ms"
+            )
+        }
         return if (summary == result.summary) result else result.copy(summary = summary)
     }
 }
