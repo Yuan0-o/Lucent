@@ -105,6 +105,81 @@ object HarnessGate {
 
     fun describe(name: String, argsJson: String): String = HarnessDescribe.describe(name, argsJson)
 
+    private val escalations = LinkedHashSet<String>()
+    private var escalationConversation = Long.MIN_VALUE
+
+    fun escalatedInThisConversation(name: String): Boolean = synchronized(escalations) {
+        val conversation = HarnessRuntime.conversationId
+        if (conversation != escalationConversation) {
+            escalations.clear()
+            escalationConversation = conversation
+        }
+        escalations.contains(name)
+    }
+
+    fun clearEscalations() {
+        synchronized(escalations) { escalations.clear() }
+    }
+
+    fun escalationProblem(tool: HarnessTool, escalation: HarnessEscalation): String? = when {
+        !tool.escalatable -> "${tool.name} is not a tool that can ask for a wider sandbox."
+        !HarnessEscalation.MODES.contains(escalation.sandboxPermissions) ->
+            "sandbox_permissions must be ${HarnessEscalation.MODES.joinToString(" or ")}."
+        escalation.justification.isBlank() -> "A retry with a wider sandbox needs a justification."
+        escalatedInThisConversation(tool.name) ->
+            "${tool.name} has already been retried once with a wider sandbox in this conversation."
+        else -> null
+    }
+
+    fun widenedConfig(config: HarnessConfig, argsJson: String, escalation: HarnessEscalation): HarnessConfig {
+        val args = try { JSONObject(argsJson) } catch (e: Exception) { JSONObject() }
+        val roots = mutableListOf<String>()
+        HarnessDescribe.files(args.toString()).forEach { raw ->
+            val file = runCatching { Workspace.resolve(raw) }.getOrNull() ?: return@forEach
+            val root = if (escalation.fullAccess) file.toPath().root?.toFile() ?: file else file.parentFile ?: file
+            if (!Workspace.blocked(root.path)) roots.add(root.path)
+        }
+        val extra = roots.distinct()
+        if (extra.isEmpty()) return config
+        return config.copy(writeRoots = (config.writeRoots + extra).distinct())
+    }
+
+    private suspend fun run(name: String, ctx: HarnessCtx, args: JSONObject): Attempt = try {
+        val module = groups.firstOrNull { module -> module.canHandle(name) }
+        val result = module?.execute(ctx, name, args)
+            ?: ToolExecResult("Nothing here can run $name.", success = false)
+        Attempt(result, false)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: HarnessError) {
+        Attempt(ToolExecResult(e.message ?: "${name} was refused", success = false), e.blocked)
+    } catch (t: Throwable) {
+        Attempt(ToolExecResult("$name failed: ${t.message ?: t::class.simpleName}", success = false), false)
+    }
+
+    private class Attempt(val result: ToolExecResult, val blocked: Boolean)
+
+    private fun audit(
+        tool: HarnessTool,
+        argumentsJson: String,
+        at: Long,
+        approval: String,
+        outcome: String,
+        detail: String,
+        millis: Long = 0L
+    ): AuditEntry = AuditEntry(
+        at = at,
+        tool = tool.name,
+        group = tool.group.key,
+        permission = tool.permission.key,
+        approval = approval,
+        arguments = HarnessDescribe.digest(argumentsJson),
+        outcome = outcome,
+        detail = detail,
+        millis = millis,
+        files = HarnessDescribe.files(argumentsJson)
+    )
+
     suspend fun execute(
         context: Context,
         db: AppDatabase,
@@ -133,50 +208,66 @@ object HarnessGate {
             )
         }
         val args = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
+        val escalation = HarnessEscalation.of(args)
         val started = System.currentTimeMillis()
-        val ctx = HarnessCtx(context.applicationContext, db, config, capabilities, android, HarnessRuntime.workspace())
+        if (escalation != null) {
+            val problem = escalationProblem(tool, escalation)
+            if (problem != null) {
+                if (config.auditEnabled) {
+                    AuditTrail.record(
+                        context.applicationContext,
+                        audit(tool, argumentsJson, started, "escalation-refused", "escalation-refused", problem)
+                    )
+                }
+                return ToolExecResult(problem, success = false)
+            }
+        }
         if (config.auditEnabled && approval == Approval.CONFIRM) {
             AuditTrail.record(
                 context.applicationContext,
-                AuditEntry(
-                    at = started,
-                    tool = name,
-                    group = tool.group.key,
-                    permission = tool.permission.key,
-                    approval = "asked",
-                    arguments = HarnessDescribe.digest(argumentsJson),
-                    outcome = "asked",
-                    detail = "waiting for the user to allow ${tool.name}",
-                    millis = 0L,
-                    files = HarnessDescribe.files(argumentsJson)
-                )
+                audit(tool, argumentsJson, started, "asked", "asked", "waiting for the user to allow ${tool.name}")
             )
         }
-        val result = try {
-            val module = groups.firstOrNull { module -> module.canHandle(name) }
-            module?.execute(ctx, name, args)
-                ?: ToolExecResult("Nothing here can run ${tool.name}.", success = false)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (t: Throwable) {
-            ToolExecResult("${tool.name} failed: ${t.message ?: t::class.simpleName}", success = false)
+        var ctx = HarnessCtx(context.applicationContext, db, config, capabilities, android, HarnessRuntime.workspace())
+        var attempt = run(name, ctx, args)
+        var escalated = false
+        if (attempt.blocked && escalation != null && !escalatedInThisConversation(name)) {
+            val wider = widenedConfig(config, argumentsJson, escalation)
+            if (wider != config) {
+                escalated = true
+                synchronized(escalations) { escalations.add(name) }
+                if (config.auditEnabled) {
+                    AuditTrail.record(
+                        context.applicationContext,
+                        audit(
+                            tool,
+                            argumentsJson,
+                            System.currentTimeMillis(),
+                            "escalated",
+                            "escalated",
+                            "retrying ${tool.name} once with ${escalation.sandboxPermissions}: " +
+                                escalation.justification.take(200)
+                        )
+                    )
+                }
+                ctx = ctx.copy(config = wider)
+                attempt = run(name, ctx, args)
+            }
         }
+        val result = attempt.result
         val elapsed = System.currentTimeMillis() - started
         val summary = ctx.limit(result.summary)
         if (config.auditEnabled) {
             AuditTrail.record(
                 context.applicationContext,
-                AuditEntry(
-                    at = started,
-                    tool = name,
-                    group = tool.group.key,
-                    permission = tool.permission.key,
-                    approval = approval.key,
-                    arguments = HarnessDescribe.digest(argumentsJson),
-                    outcome = if (result.success) "ok" else "failed",
-                    detail = summary.take(400),
-                    millis = elapsed,
-                    files = HarnessDescribe.files(argumentsJson)
+                audit(
+                    tool,
+                    argumentsJson,
+                    started,
+                    if (escalated) "escalated" else approval.key,
+                    if (result.success) "ok" else "failed",
+                    summary.take(400),
+                    elapsed
                 )
             )
         }

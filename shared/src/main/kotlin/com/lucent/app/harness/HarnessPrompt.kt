@@ -1,6 +1,18 @@
 package com.lucent.app.harness
 
+import android.content.Context
+import com.lucent.app.AppScope
+import org.json.JSONObject
+import java.io.File
+
 object HarnessPrompt {
+
+    private const val MEMORY_KEYS = 8
+    private const val MEMORY_VALUE = 60
+    private const val MEMORY_CHARS = 520
+    private const val SKILLS_SHOWN = 10
+    private const val SKILL_DESCRIPTION = 70
+    private const val SKILLS_CHARS = 460
 
     fun block(): String {
         val config = HarnessRuntime.config()
@@ -61,7 +73,78 @@ object HarnessPrompt {
             append("anything that reaches outside the workspace asks the person first, so explain briefly what you ")
             append("are about to do. Never claim a file exists, a command ran, or a change was made unless a tool ")
             append("told you so. ")
+
+            append(memoryAndSkills())
         }
+    }
+
+    private fun memoryAndSkills(): String {
+        val parts = mutableListOf<String>()
+        memoryLine()?.let { parts.add(it) }
+        skillsLine()?.let { parts.add(it) }
+        if (parts.isEmpty()) return ""
+        return "ALREADY KNOWN. " + parts.joinToString(" ") + " "
+    }
+
+    fun memoryLine(): String? {
+        val context = AppScope.appContext ?: return null
+        val dir = File(File(HarnessRuntime.filesDir(), "harness"), "memory")
+        val scopes = listOf(
+            "user" to File(dir, "user.json"),
+            "project" to File(dir, "project-${workspaceSlug()}.json")
+        )
+        val lines = mutableListOf<String>()
+        scopes.forEach { (scope, file) ->
+            if (!file.isFile) return@forEach
+            val facts = factsIn(context, file)
+            lines.add(if (facts.isEmpty()) "$scope: kept, nothing readable" else "$scope: " + facts.joinToString(", "))
+        }
+        if (lines.isEmpty()) return null
+        val text = "Remembered (${lines.joinToString("; ")}). "
+        return if (text.length <= MEMORY_CHARS) text else text.take(MEMORY_CHARS) + "… "
+    }
+
+    private fun factsIn(context: Context, file: File): List<String> {
+        val text = HarnessVault.read(context, file)
+        if (text.isBlank()) return emptyList()
+        val json = try { JSONObject(text) } catch (e: Exception) { return emptyList() }
+        val keys = json.keys()
+        val out = mutableListOf<String>()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key.startsWith("__")) continue
+            val value = json.optString(key, "").replace(Regex("\\s+"), " ").trim()
+            out.add("$key=" + if (value.length > MEMORY_VALUE) value.take(MEMORY_VALUE) + "…" else value)
+            if (out.size >= MEMORY_KEYS) break
+        }
+        return out.sorted()
+    }
+
+    private fun workspaceSlug(): String =
+        HarnessRuntime.workspace().name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+
+    fun skillsLine(): String? {
+        val dirs = mutableListOf(File(HarnessRuntime.workspace(), ".lucent/skills"))
+        HarnessRuntime.config().skillDirs.forEach { if (it.isNotBlank()) dirs.add(File(it)) }
+        val files = dirs.filter { it.isDirectory }
+            .flatMap { dir -> (dir.listFiles() ?: emptyArray()).filter { it.isFile && it.name.endsWith(".md") } }
+            .distinctBy { it.name.lowercase() }
+            .sortedBy { it.name.lowercase() }
+        if (files.isEmpty()) return null
+        val shown = files.take(SKILLS_SHOWN).map { file ->
+            val label = file.nameWithoutExtension
+            val description = try {
+                file.useLines { lines -> lines.firstOrNull { it.startsWith("description:") } }
+                    ?.removePrefix("description:")?.trim()?.take(SKILL_DESCRIPTION) ?: ""
+            } catch (e: Exception) {
+                ""
+            }
+            if (description.isEmpty()) label else "$label ($description)"
+        }
+        val rest = if (files.size > SKILLS_SHOWN) " and ${files.size - SKILLS_SHOWN} more" else ""
+        val text = "Skills on hand, read one with read_skill before a specialised job: " +
+            shown.joinToString("; ") + rest + ". "
+        return if (text.length <= SKILLS_CHARS) text else text.take(SKILLS_CHARS) + "… "
     }
 
     private fun shellLine(config: HarnessConfig, capabilities: Set<String>): String {

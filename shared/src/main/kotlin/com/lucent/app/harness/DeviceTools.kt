@@ -79,11 +79,6 @@ object DeviceTools : HarnessGroupTools {
         tool("location", "Report the current location. Requires the location permission and a fresh fix may take a " +
             "few seconds."),
         tool("sensors", "List the sensors on this phone and their latest values."),
-        tool("ask_user", "Ask the user a question and wait for the answer. Give up to three short options; the answer " +
-            "comes back as the chosen option or as free text.", listOf(
-            HarnessSchema.text("question", "Question to ask"),
-            HarnessSchema.list("options", "Up to three short options", false)
-        )),
         tool("export_file", "Copy a file from the workspace into the phone's Downloads folder so the user can open it " +
             "in another app.", listOf(
             HarnessSchema.text("path", "File to export")
@@ -126,7 +121,6 @@ object DeviceTools : HarnessGroupTools {
             "torch" -> flag(host.setTorch(args.optBoolean("on", true)), "The flashlight is not available.")
             "location" -> text(host.location(), "No location fix yet. Try again in a moment.")
             "sensors" -> text(host.sensors(), "No sensor readings came back.")
-            "ask_user" -> ask(host, args)
             "export_file" -> export(ctx, host, args)
             else -> null
         }

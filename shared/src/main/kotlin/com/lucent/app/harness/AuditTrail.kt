@@ -32,13 +32,16 @@ object AuditTrail {
     private val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
     fun file(context: Context): File {
-        val dir = File(context.applicationContext.filesDir, "harness")
+        val dir = File(baseDir(context), "harness")
         if (!dir.exists()) dir.mkdirs()
         return File(dir, FILE_NAME)
     }
 
-    fun record(context: Context, entry: AuditEntry) {
-        val app = context.applicationContext
+    private fun baseDir(context: Context): File =
+        context.applicationContext?.filesDir ?: File(System.getProperty("java.io.tmpdir"), "lucent-audit")
+
+    fun record(context: Context?, entry: AuditEntry) {
+        val app = context ?: return
         val line = JSONObject().apply {
             put("at", entry.at)
             put("tool", entry.tool)

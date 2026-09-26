@@ -1,6 +1,5 @@
 package com.lucent.app.harness
 
-import android.content.Context
 import com.lucent.app.harness.plugins.PluginCatalog
 import com.lucent.app.harness.plugins.PluginDownload
 import com.lucent.app.harness.plugins.PluginManager
@@ -20,11 +19,6 @@ private class PipelineHost(private val root: File) : HarnessHost {
     override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
     override fun filesDir(): File = File(root, "files").apply { mkdirs() }
     override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
-}
-
-private class PipelineContext(private val root: File) : Context() {
-    override val applicationContext: Context get() = this
-    override val filesDir: File get() = File(root, "files").apply { mkdirs() }
 }
 
 private class ScriptedShell(private val respond: (String) -> ShellOutcome) : HarnessShell {
@@ -139,7 +133,7 @@ class PluginPipelineTest {
             if (command.contains("unpack")) ShellOutcome(true, "unpacked everything", "", 0)
             else ShellOutcome(false, "", "the plugin is still missing", 1)
         }
-        val manager = PluginManager.desktop(PipelineContext(root))
+        val manager = PluginManager.desktop()
         val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", "")) { _, _ -> } }
         assertFalse(outcome.ok)
         assertEquals(PluginFailure.DETECT, outcome.failure)
@@ -150,7 +144,7 @@ class PluginPipelineTest {
     @Test
     fun aFailedInstallCommandKeepsItsExitCodeAndOutput() = sandbox { root ->
         HarnessRuntime.shell = ScriptedShell { ShellOutcome(false, "boom: no space left", "", 3) }
-        val manager = PluginManager.desktop(PipelineContext(root))
+        val manager = PluginManager.desktop()
         val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", "")) { _, _ -> } }
         assertFalse(outcome.ok)
         assertEquals(PluginFailure.INSTALL, outcome.failure)
@@ -164,7 +158,7 @@ class PluginPipelineTest {
         val (server, url) = serve(bytes)
         try {
             HarnessRuntime.shell = null
-            val manager = PluginManager.desktop(PipelineContext(root))
+            val manager = PluginManager.desktop()
             val outcome = runBlocking {
                 manager.install(payloadPlugin(url, bytes.size.toLong()), PluginSource("", "", "")) { _, _ -> }
             }
@@ -184,7 +178,7 @@ class PluginPipelineTest {
         val bytes = ByteArray(64) { 7 }
         val (server, url) = serve(bytes)
         try {
-            val manager = PluginManager.desktop(PipelineContext(root))
+            val manager = PluginManager.desktop()
             val outcome = runBlocking {
                 manager.install(payloadPlugin(url, bytes.size.toLong()), PluginSource("", "", "")) { _, _ -> }
             }
@@ -243,7 +237,7 @@ class PluginPipelineTest {
                 ShellOutcome(unpacked, "", "", if (unpacked) 0 else 1)
             }
         }
-        val manager = PluginManager.desktop(PipelineContext(root))
+        val manager = PluginManager.desktop()
         val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", "")) { _, _ -> } }
         assertTrue(outcome.ok, outcome.message)
         assertTrue(HarnessRuntime.config().pluginInstalled("scripted"))

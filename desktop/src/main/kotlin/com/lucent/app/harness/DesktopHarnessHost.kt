@@ -1,5 +1,6 @@
 package com.lucent.app.harness
 
+import com.lucent.app.ui.HarnessAskPrompt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
@@ -104,6 +105,9 @@ object DesktopHarnessHost : HarnessHost {
     }
 
     override fun capabilities(): Set<String> = setOf("sqlite", "pdf", "clipboard", "notify", "open_url", "share")
+
+    override suspend fun askUser(question: String, options: List<String>): String =
+        HarnessAskPrompt.ask(question, options)
 
     override fun workspaceCandidates(): List<String> {
         val home = File(System.getProperty("user.home") ?: ".")

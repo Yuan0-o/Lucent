@@ -164,6 +164,8 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
                 com.lucent.app.ui.AssistantConfirmationDialog()
 
+                com.lucent.app.ui.HarnessAskDialog()
+
                 com.lucent.app.ui.AutoUpdateDialog(
                     repo = repo,
                     onOpenUrl = { url -> com.lucent.app.data.DesktopShell.openUrl(url) }

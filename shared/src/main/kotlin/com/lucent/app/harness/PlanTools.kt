@@ -28,6 +28,17 @@ object PlanTools : HarnessGroupTools {
             description = "Read back the current plan and its progress."
         ),
         HarnessTool(
+            name = "ask_user",
+            group = group,
+            permission = HarnessPermission.READ,
+            description = "Ask the user a question and wait for the answer. Give up to three short options; the answer " +
+                "comes back as the chosen option or as free text. Use it when a choice genuinely needs the user.",
+            params = listOf(
+                HarnessSchema.text("question", "Question to ask"),
+                HarnessSchema.list("options", "Up to three short options", false)
+            )
+        ),
+        HarnessTool(
             name = "task_note",
             group = group,
             permission = HarnessPermission.WRITE,
@@ -41,7 +52,26 @@ object PlanTools : HarnessGroupTools {
         "update_plan" -> updatePlan(args)
         "plan_status" -> planStatus()
         "task_note" -> note(args)
+        "ask_user" -> ask(args)
         else -> null
+    }
+
+    private suspend fun ask(args: JSONObject): ToolExecResult {
+        val question = args.optString("question", "").trim()
+        if (question.isEmpty()) return ToolExecResult("What should I ask?", success = false)
+        val host = HarnessRuntime.host
+            ?: return ToolExecResult("This build cannot ask the user anything.", success = false)
+        val options = mutableListOf<String>()
+        val array = args.optJSONArray("options")
+        if (array != null) {
+            for (i in 0 until array.length()) {
+                val value = array.optString(i, "")
+                if (value.isNotBlank()) options.add(value)
+            }
+        }
+        val answer = host.askUser(question, options.take(3))
+        return if (answer.isBlank()) ToolExecResult("The user did not answer.", success = false)
+        else ToolExecResult(answer)
     }
 
     private fun updatePlan(args: JSONObject): ToolExecResult {

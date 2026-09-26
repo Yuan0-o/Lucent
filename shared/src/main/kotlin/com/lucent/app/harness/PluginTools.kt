@@ -154,11 +154,23 @@ object PluginTools : HarnessGroupTools {
                 HarnessRuntime.note("${plugin.name}: $note")
             }
         }
-        if (!outcome.ok) return ToolExecResult(outcome.message, success = false)
+        if (!outcome.ok) return ToolExecResult(outcome.message + repairHint(ctx, outcome), success = false)
         val refreshed = PluginCatalog.find(id)?.let { detectAndRecord(ctx, it) }
         return ToolExecResult(
             "${plugin.name} is ready. ${outcome.message}" + if (refreshed == null) "" else ""
         )
+    }
+
+    private fun repairHint(ctx: HarnessCtx, outcome: PluginOutcome): String = when (outcome.failure) {
+        PluginFailure.NO_SHELL -> if (ctx.android) {
+            " Nothing can be installed without a shell: install Termux from F-Droid, run termux-setup-storage once, " +
+                "and set allow-external-apps=true in ~/.termux/termux.properties."
+        } else {
+            " A shell is needed before this can be installed on this machine."
+        }
+        PluginFailure.DETECT -> " Everything installed, but the check still fails: read the output for the first error."
+        PluginFailure.DOWNLOAD -> " The download failed: try another source, or check the workspace folder is writable."
+        else -> ""
     }
 
     private suspend fun detectAndRecord(ctx: HarnessCtx, plugin: PluginSpec): Boolean {

@@ -69,6 +69,17 @@ object TermuxBridge {
             return@withContext ShellOutcome(false, "", "Termux is not installed", -1)
         }
         val jobDir = File(HarnessRuntime.workspace(), ".lucent/jobs").apply { mkdirs() }
+        val probe = File(jobDir, "probe-${System.currentTimeMillis()}.txt")
+        val writable = runCatching {
+            probe.writeText("ok")
+            probe.delete()
+            true
+        }.getOrDefault(false)
+        if (!writable) {
+            lastError = "The workspace folder ${HarnessRuntime.workspace().path} cannot be written, so Termux has " +
+                "nowhere to hand back its output. Choose a workspace on shared storage and grant all-files access."
+            return@withContext ShellOutcome(false, "", lastError, -1)
+        }
         val stamp = System.currentTimeMillis()
         val outFile = File(jobDir, "out-$stamp.txt")
         val codeFile = File(jobDir, "code-$stamp.txt")

@@ -1,6 +1,5 @@
 package com.lucent.app.harness
 
-import android.content.Context
 import com.lucent.app.harness.mcp.mcpCommandLine
 import com.lucent.app.harness.ooxml.documentText
 import com.lucent.app.harness.ooxml.escapeXml
@@ -9,11 +8,6 @@ import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-
-private class SupportContext(private val root: File) : Context() {
-    override val applicationContext: Context get() = this
-    override val filesDir: File get() = File(root, "files").apply { mkdirs() }
-}
 
 class HarnessSupportTest {
 

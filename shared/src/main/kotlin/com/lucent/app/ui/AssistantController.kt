@@ -40,6 +40,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class PendingConfirmation(
     val actionTitle: String,
@@ -64,6 +65,42 @@ data class AssistantUiState(
     val localTurnInFlight: Boolean = false,
     val variantSelection: Map<Long, Int> = emptyMap()
 )
+
+private object ActiveConversationStore {
+
+    private const val FILE_NAME = "assistant_active_conversation.dat"
+
+    @Volatile
+    private var cached: Long? = null
+
+    @Volatile
+    private var cachedFor: Context? = null
+
+    private fun file(context: Context): java.io.File =
+        java.io.File(context.applicationContext.filesDir, FILE_NAME)
+
+    fun load(context: Context): Long? {
+        val app = context.applicationContext
+        if (cachedFor === app) return cached
+        val stored = runCatching {
+            com.lucent.app.harness.HarnessVault.read(app, file(app)).trim().toLongOrNull()
+        }.getOrNull()
+        cached = stored
+        cachedFor = app
+        return stored
+    }
+
+    fun save(context: Context, id: Long?) {
+        val app = context.applicationContext
+        cached = id
+        cachedFor = app
+        AppScope.io.launch {
+            runCatching {
+                com.lucent.app.harness.HarnessVault.write(app, file(app), id?.toString().orEmpty())
+            }
+        }
+    }
+}
 
 class AssistantControllerImpl(
     private val appScope: CoroutineScope,
@@ -178,13 +215,31 @@ class AssistantControllerImpl(
                     db.chatConversationDao().delete(conv)
                 }
             }
+            val ctx = appContextRef
+            val stored = if (ctx != null && currentConversationId == null) {
+                withContext(Dispatchers.IO) { ActiveConversationStore.load(ctx) }
+            } else {
+                null
+            }
+            if (ctx != null && stored != null) {
+                if (db.chatConversationDao().getById(stored) != null) {
+                    currentConversationId = stored
+                } else {
+                    ActiveConversationStore.save(ctx, null)
+                }
+            }
             observeCurrentConversation(db)
         }
     }
 
+    private fun setActiveConversation(id: Long?) {
+        currentConversationId = id
+        appContextRef?.let { ActiveConversationStore.save(it, id) }
+    }
+
     fun onAllChatsCleared(appContext: Context) {
         stopAllGeneration(silent = true)
-        currentConversationId = null
+        setActiveConversation(null)
         clearError()
         networkErrorMessage = null
         lastSend = null
@@ -213,7 +268,7 @@ class AssistantControllerImpl(
 
     fun startNewConversation(appContext: Context) {
         localTurnOrNull()?.let { stopTurn(it, silent = true) }
-        currentConversationId = null
+        setActiveConversation(null)
         if (errorConversationId == null) clearError()
         observeCurrentConversation(db)
     }
@@ -224,7 +279,7 @@ class AssistantControllerImpl(
             if (localTurn.conversationId == id) return
             stopTurn(localTurn)
         }
-        currentConversationId = id
+        setActiveConversation(id)
         observeCurrentConversation(db)
     }
 
@@ -235,7 +290,7 @@ class AssistantControllerImpl(
             db.chatDao().clearConversation(id)
             db.chatConversationDao().getById(id)?.let { db.chatConversationDao().delete(it) }
             if (currentConversationId == id) {
-                currentConversationId = null
+                setActiveConversation(null)
                 observeCurrentConversation(db)
             }
         }
@@ -292,6 +347,19 @@ class AssistantControllerImpl(
         turns.toList().forEach { stopTurn(it, reason, silent) }
     }
 
+    private fun stopHarnessWork() {
+        runCatching {
+            com.lucent.app.harness.HarnessJobs.running().forEach { handle ->
+                com.lucent.app.harness.HarnessJobs.kill(handle.job.id)
+            }
+        }
+        runCatching {
+            com.lucent.app.harness.SubAgents.list()
+                .filter { it.status == "running" }
+                .forEach { agent -> com.lucent.app.harness.SubAgents.stop(agent.id) }
+        }
+    }
+
     private fun stopTurn(turn: Turn, reason: String? = null, silent: Boolean = false) {
         turn.confirmationDeferred?.complete(ConfirmationOutcome(approved = false))
         turn.confirmationDeferred = null
@@ -301,6 +369,7 @@ class AssistantControllerImpl(
         }
 
         if (turn.isLocal) com.lucent.app.local.LocalLlm.stop()
+        stopHarnessWork()
 
         val convId = turn.conversationId
         val ctx = appContextRef
@@ -602,7 +671,7 @@ class AssistantControllerImpl(
                 var convId = targetConversationId ?: currentConversationId
                 if (convId == null) {
                     convId = db.chatConversationDao().insert(ChatConversation())
-                    currentConversationId = convId
+                    setActiveConversation(convId)
                     turn.conversationId = convId
                     observeCurrentConversation(db)
                 }

@@ -21,7 +21,7 @@ class HarnessModulesTest {
         "DeviceTools" to listOf(
             "device_info", "read_screen", "tap", "input_text", "swipe", "press_key", "screenshot",
             "list_apps", "launch_app", "stop_app", "notifications", "clipboard", "share_text",
-            "open_link_on_device", "notify_user", "vibrate", "torch", "location", "sensors", "ask_user", "export_file"
+            "open_link_on_device", "notify_user", "vibrate", "torch", "location", "sensors", "export_file"
         ),
         "GitHubTools" to listOf(
             "github_repo", "github_contents", "github_issues", "github_pulls",
@@ -43,7 +43,7 @@ class HarnessModulesTest {
             "read_pdf", "pdf_info", "pdf_search", "render_pdf_page",
             "pdf_to_images", "merge_pdfs", "split_pdf"
         ),
-        "PlanTools" to listOf("update_plan", "plan_status", "task_note"),
+        "PlanTools" to listOf("update_plan", "plan_status", "task_note", "ask_user"),
         "PluginTools" to listOf(
             "plugin_status", "plugin_list_available", "install_plugin", "remove_plugin", "plugin_run", "plugin_mirror_test"
         ),
@@ -53,7 +53,7 @@ class HarnessModulesTest {
             "run_command", "start_job", "job_output", "job_kill", "jobs_list", "which_tool", "environment_info"
         ),
         "FileTools" to listOf(
-            "workspace_info", "list_directory", "search_files", "read_file", "write_file", "edit_file",
+            "workspace_info", "list_directory", "search_files", "read_file", "read_image", "write_file", "edit_file",
             "create_directory", "move_path", "copy_path", "delete_path", "file_info", "batch_files",
             "diff_files", "file_history", "restore_file", "zip_paths"
         ),
@@ -79,7 +79,7 @@ class HarnessModulesTest {
     @Test
     fun deviceToolsAreAndroidOnly() {
         val device = HarnessGate.allTools().filter { it.group == HarnessGroup.DEVICE }
-        assertEquals(21, device.size)
+        assertEquals(20, device.size)
         assertTrue(device.all { it.androidOnly })
         assertTrue(device.all { !it.available(android = false, capabilities = emptySet()) })
         assertTrue(device.all { it.available(android = true, capabilities = emptySet()) })

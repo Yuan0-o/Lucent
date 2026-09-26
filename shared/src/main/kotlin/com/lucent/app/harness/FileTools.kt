@@ -15,6 +15,15 @@ object FileTools : HarnessGroupTools {
 
     private const val MAX_LIST = 500
     private const val MAX_SEARCH = 120
+    private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
+    private const val MAX_IMAGE_CEILING = 32L * 1024 * 1024
+    private val IMAGE_TYPES = mapOf(
+        "png" to "image/png",
+        "jpg" to "image/jpeg",
+        "jpeg" to "image/jpeg",
+        "webp" to "image/webp",
+        "gif" to "image/gif"
+    )
     override val tools: List<HarnessTool> = listOf(
         HarnessTool(
             name = "workspace_info",
@@ -56,11 +65,24 @@ object FileTools : HarnessGroupTools {
             group = group,
             permission = HarnessPermission.READ,
             description = "Read a text file. Arguments: path, start_line (1-based, optional), max_lines (optional, " +
-                "default 400). Binary files are refused; use file_info first if you are unsure.",
+                "default 400). Binary files are refused; use file_info first if you are unsure, and read_image when " +
+                "the file is a picture.",
             params = listOf(
                 HarnessSchema.text("path", "File to read"),
                 HarnessSchema.number("start_line", "First line to return", false),
                 HarnessSchema.number("max_lines", "How many lines to return", false)
+            )
+        ),
+        HarnessTool(
+            name = "read_image",
+            group = group,
+            permission = HarnessPermission.READ,
+            description = "Look at a picture and see it: PNG, JPEG, WebP or GIF. Arguments: path, plus optional " +
+                "max_bytes to lower the size limit. The image comes back as an attachment you can look at, so " +
+                "describe what is actually in it rather than guessing from the name.",
+            params = listOf(
+                HarnessSchema.text("path", "Image file to look at"),
+                HarnessSchema.number("max_bytes", "Refuse images larger than this many bytes", false)
             )
         ),
         HarnessTool(
@@ -73,7 +95,7 @@ object FileTools : HarnessGroupTools {
                 HarnessSchema.text("path", "File to write"),
                 HarnessSchema.text("content", "Full text to write"),
                 HarnessSchema.flag("append", "Append instead of replacing", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "edit_file",
@@ -86,14 +108,14 @@ object FileTools : HarnessGroupTools {
                 HarnessSchema.text("find", "Exact text to find"),
                 HarnessSchema.text("replace", "Replacement text"),
                 HarnessSchema.flag("all", "Replace every occurrence", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "create_directory",
             group = group,
             permission = HarnessPermission.WRITE,
             description = "Create a directory, including any missing parents. Arguments: path.",
-            params = listOf(HarnessSchema.text("path", "Directory to create"))
+            params = listOf(HarnessSchema.text("path", "Directory to create")) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "move_path",
@@ -105,7 +127,7 @@ object FileTools : HarnessGroupTools {
                 HarnessSchema.text("from", "Existing path"),
                 HarnessSchema.text("to", "New path"),
                 HarnessSchema.flag("overwrite", "Replace the destination when it exists", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "copy_path",
@@ -116,7 +138,7 @@ object FileTools : HarnessGroupTools {
                 HarnessSchema.text("from", "Source path"),
                 HarnessSchema.text("to", "Destination path"),
                 HarnessSchema.flag("overwrite", "Replace the destination when it exists", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "delete_path",
@@ -127,7 +149,7 @@ object FileTools : HarnessGroupTools {
             params = listOf(
                 HarnessSchema.text("path", "Path to delete"),
                 HarnessSchema.flag("recursive", "Delete a directory and everything inside it", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "file_info",
@@ -151,7 +173,7 @@ object FileTools : HarnessGroupTools {
                 HarnessSchema.text("replace", "Replacement text when renaming", false),
                 HarnessSchema.flag("regex", "Treat find as a regular expression", false),
                 HarnessSchema.text("target_dir", "Destination directory for copy and move", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "diff_files",
@@ -185,7 +207,7 @@ object FileTools : HarnessGroupTools {
             params = listOf(
                 HarnessSchema.text("path", "Path to restore"),
                 HarnessSchema.text("snapshot_id", "Snapshot to restore", false)
-            )
+            ) + HarnessSchema.escalation()
         ),
         HarnessTool(
             name = "zip_paths",
@@ -197,7 +219,7 @@ object FileTools : HarnessGroupTools {
                 HarnessSchema.text("action", "zip or unzip"),
                 HarnessSchema.text("path", "Archive path"),
                 HarnessSchema.list("paths", "Paths to pack when zipping", false)
-            )
+            ) + HarnessSchema.escalation()
         )
     )
 
@@ -208,6 +230,7 @@ object FileTools : HarnessGroupTools {
             "list_directory" -> listDirectory(ctx, args)
             "search_files" -> searchFiles(ctx, args)
             "read_file" -> readFile(ctx, args)
+            "read_image" -> readImage(ctx, args)
             "write_file" -> writeFile(ctx, args)
             "edit_file" -> editFile(ctx, args)
             "create_directory" -> createDirectory(ctx, args)
@@ -223,6 +246,7 @@ object FileTools : HarnessGroupTools {
             else -> null
         }
     } catch (e: HarnessError) {
+        if (e.blocked) throw e
         ToolExecResult(e.message ?: "That path cannot be used", success = false)
     } catch (e: Exception) {
         ToolExecResult("$name failed: ${e.message ?: e::class.simpleName}", success = false)
@@ -356,6 +380,58 @@ object FileTools : HarnessGroupTools {
         val header = "${Workspace.display(ctx, file)} — ${lines.size} lines, ${Workspace.humanSize(file.length())}" +
             if (start > 1 || start - 1 + slice.size < lines.size) " (showing ${start}-${start + slice.size - 1})" else ""
         return ToolExecResult("$header\n" + slice.joinToString("\n"))
+    }
+
+    private fun readImage(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val shown = Workspace.display(ctx, file)
+        if (file.isDirectory) return ToolExecResult("$shown is a directory, not an image.", success = false)
+        val extension = file.extension.lowercase()
+        val claimed = IMAGE_TYPES[extension]
+            ?: return ToolExecResult(
+                "$shown is not an image. I can look at ${IMAGE_TYPES.keys.joinToString(", ")} files.",
+                success = false
+            )
+        val ceiling = args.optLong("max_bytes", MAX_IMAGE_BYTES).coerceIn(1024L, MAX_IMAGE_CEILING)
+        if (file.length() > ceiling) {
+            return ToolExecResult(
+                "$shown is ${Workspace.humanSize(file.length())}, above the ${Workspace.humanSize(ceiling)} limit.",
+                success = false
+            )
+        }
+        val head = ByteArray(16)
+        val read = try {
+            file.inputStream().use { it.read(head) }
+        } catch (e: Exception) {
+            return ToolExecResult("$shown could not be read: ${e.message ?: e::class.simpleName}", success = false)
+        }
+        val sniffed = imageMime(head, read.coerceAtLeast(0))
+            ?: return ToolExecResult("$shown is named .$extension but does not contain $claimed data.", success = false)
+        if (sniffed != claimed) {
+            return ToolExecResult("$shown is named .$extension but the bytes are $sniffed.", success = false)
+        }
+        val bytes = Workspace.readBytes(file, ceiling)
+        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        FileObservations.note(file.path)
+        return ToolExecResult(
+            "$shown ($sniffed, ${Workspace.humanSize(file.length())}).",
+            images = listOf(ToolImage(sniffed, encoded, file.name))
+        )
+    }
+
+    internal fun imageMime(bytes: ByteArray, length: Int = bytes.size): String? {
+        val size = length.coerceAtMost(bytes.size)
+        fun at(index: Int): Int = if (index < size) bytes[index].toInt() and 0xFF else -1
+        fun tag(offset: Int, text: String): Boolean =
+            text.indices.all { at(offset + it) == text[it].code }
+        return when {
+            size >= 8 && at(0) == 0x89 && tag(1, "PNG") && at(4) == 0x0D && at(5) == 0x0A && at(6) == 0x1A ->
+                "image/png"
+            size >= 3 && at(0) == 0xFF && at(1) == 0xD8 && at(2) == 0xFF -> "image/jpeg"
+            size >= 6 && (tag(0, "GIF87a") || tag(0, "GIF89a")) -> "image/gif"
+            size >= 12 && tag(0, "RIFF") && tag(8, "WEBP") -> "image/webp"
+            else -> null
+        }
     }
 
     private fun writeFile(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
@@ -536,6 +612,7 @@ object FileTools : HarnessGroupTools {
                     else -> return ToolExecResult("action must be rename, copy, move or delete.", success = false)
                 }
             } catch (e: HarnessError) {
+                if (e.blocked) throw e
                 done.add("$raw (${e.message})")
             }
         }

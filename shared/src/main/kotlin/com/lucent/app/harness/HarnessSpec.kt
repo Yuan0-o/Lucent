@@ -3,6 +3,7 @@ package com.lucent.app.harness
 import com.lucent.app.i18n.S
 import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolParam
+import org.json.JSONObject
 
 enum class HarnessGroup(val key: String) {
     FILES("files"),
@@ -126,6 +127,29 @@ enum class Approval(val key: String) {
     }
 }
 
+data class HarnessEscalation(val sandboxPermissions: String, val justification: String) {
+
+    val fullAccess: Boolean get() = sandboxPermissions == FULL_ACCESS
+
+    val usable: Boolean get() = MODES.contains(sandboxPermissions) && justification.isNotBlank()
+
+    companion object {
+
+        const val PARAM_PERMISSIONS = "sandbox_permissions"
+        const val PARAM_JUSTIFICATION = "justification"
+        const val WORKSPACE_WRITE = "workspace-write"
+        const val FULL_ACCESS = "danger-full-access"
+
+        val MODES = setOf(WORKSPACE_WRITE, FULL_ACCESS)
+
+        fun of(args: JSONObject): HarnessEscalation? {
+            val mode = args.optString(PARAM_PERMISSIONS, "").trim().lowercase()
+            if (mode.isEmpty()) return null
+            return HarnessEscalation(mode, args.optString(PARAM_JUSTIFICATION, "").trim())
+        }
+    }
+}
+
 data class HarnessTool(
     val name: String,
     val group: HarnessGroup,
@@ -137,6 +161,9 @@ data class HarnessTool(
     val androidOnly: Boolean = false,
     val desktopOnly: Boolean = false
 ) {
+    val escalatable: Boolean
+        get() = !readOnly && params.any { it.name == HarnessEscalation.PARAM_PERMISSIONS }
+
     fun definition(): ToolDefinition = ToolDefinition(name, description, params)
 
     fun available(android: Boolean, capabilities: Set<String>): Boolean {
@@ -163,4 +190,22 @@ object HarnessSchema {
 
     fun json(name: String, description: String, required: Boolean = true) =
         ToolParam(name, "object", description, required)
+
+    fun escalation(): List<ToolParam> = listOf(
+        ToolParam(
+            HarnessEscalation.PARAM_PERMISSIONS,
+            "string",
+            "Ask for a wider sandbox for one retry after this tool was refused: ${HarnessEscalation.WORKSPACE_WRITE} " +
+                "widens to the folders this call names, ${HarnessEscalation.FULL_ACCESS} to their filesystem roots. " +
+                "Needs justification, is never granted twice in one conversation, and never overrides a denied " +
+                "permission or a protected system path.",
+            false
+        ),
+        ToolParam(
+            HarnessEscalation.PARAM_JUSTIFICATION,
+            "string",
+            "One sentence saying why the retry needs the wider sandbox. Required when sandbox_permissions is set.",
+            false
+        )
+    )
 }

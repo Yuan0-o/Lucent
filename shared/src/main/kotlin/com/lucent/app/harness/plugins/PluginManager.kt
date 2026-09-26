@@ -217,6 +217,6 @@ class PluginManager private constructor(private val context: Context?, private v
 
         fun android(context: Context): PluginManager = PluginManager(context.applicationContext, true)
 
-        fun desktop(context: Context): PluginManager = PluginManager(context.applicationContext, false)
+        fun desktop(context: Context? = null): PluginManager = PluginManager(context?.applicationContext, false)
     }
 }
