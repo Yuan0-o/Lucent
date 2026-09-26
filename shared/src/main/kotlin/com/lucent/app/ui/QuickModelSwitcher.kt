@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -359,14 +360,22 @@ private fun modelsMenu(
     OutlinedTextField(
         value = query,
         onValueChange = onQuery,
-        placeholder = { Text(com.lucent.app.i18n.S.quickModelSearch, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        placeholder = {
+            Text(
+                com.lucent.app.i18n.S.quickModelSearch,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
         leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null, tint = mutedTint, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.Search, contentDescription = null, tint = mutedTint, modifier = Modifier.size(18.dp))
         },
         singleLine = true,
-        shape = RoundedCornerShape(50),
-        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(48.dp)
+        shape = RoundedCornerShape(28.dp),
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
     )
     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
 
@@ -470,15 +479,7 @@ private fun modelsMenu(
         }
     }
     if (!localModelEnabled) {
-        Text(
-            com.lucent.app.i18n.S.quickModelSameApiHint,
-            color = mutedTint,
-            fontSize = 10.sp,
-            lineHeight = 13.sp,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp)
-        )
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }
 

@@ -20,6 +20,25 @@ class SubAgent internal constructor(
     internal val transcript = mutableListOf<String>()
     internal var job: Job? = null
 
+    private val instructionQueue = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    val inbox: List<String> get() = instructionQueue.toList()
+
+    fun instruct(text: String) {
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        instructionQueue.add(clean)
+    }
+
+    internal fun drainInbox(): List<String> {
+        val out = mutableListOf<String>()
+        while (true) {
+            val next = instructionQueue.poll() ?: break
+            out.add(next)
+        }
+        return out
+    }
+
     fun transcriptLines(): List<String> = transcript.toList()
 
     fun render(withResult: Boolean): String {
@@ -64,6 +83,9 @@ object SubAgents {
             try {
                 val system = buildSystem(parent, toolNames)
                 while (agent.rounds < MAX_ROUNDS && agent.status == "running") {
+                    agent.drainInbox().forEach { text ->
+                        agent.transcript.add("parent: ${text.take(2000)}")
+                    }
                     agent.rounds++
                     val step = llm.step(system, task, agent.transcript.toList(), toolNames, model)
                     if (step.error.isNotEmpty()) {
@@ -110,6 +132,13 @@ object SubAgents {
         agent.job?.cancel()
         agent.status = "stopped"
         if (agent.result.isEmpty()) agent.result = "Stopped by the parent agent."
+        return true
+    }
+
+    fun instruct(id: String, text: String): Boolean {
+        val agent = agents[id] ?: return false
+        if (text.isBlank()) return false
+        agent.instruct(text)
         return true
     }
 
@@ -165,6 +194,34 @@ object AgentTools : HarnessGroupTools {
             permission = HarnessPermission.EXECUTE,
             description = "Stop a running sub-agent. Arguments: id.",
             params = listOf(HarnessSchema.text("id", "Sub-agent id"))
+        ),
+        HarnessTool(
+            name = "list_agents",
+            group = group,
+            permission = HarnessPermission.READ,
+            description = "List every sub-agent this session with its id, state, round count and the task it was " +
+                "given. Pass running_only to see just the ones still working.",
+            params = listOf(HarnessSchema.flag("running_only", "Only the sub-agents still working"))
+        ),
+        HarnessTool(
+            name = "send_message",
+            group = group,
+            permission = HarnessPermission.WRITE,
+            description = "Send one more instruction to a running sub-agent without restarting it. The message is " +
+                "delivered into the sub-agent's inbox and it reads the inbox at its next round boundary, so it " +
+                "steers work already in progress.",
+            params = listOf(
+                HarnessSchema.text("id", "Sub-agent id"),
+                HarnessSchema.text("message", "The extra instruction, in one or two sentences")
+            )
+        ),
+        HarnessTool(
+            name = "interrupt",
+            group = group,
+            permission = HarnessPermission.EXECUTE,
+            description = "Interrupt a sub-agent: it stops at once and keeps whatever it has already reported. " +
+                "Arguments: id.",
+            params = listOf(HarnessSchema.text("id", "Sub-agent id"))
         )
     )
 
@@ -173,6 +230,9 @@ object AgentTools : HarnessGroupTools {
         "agent_status" -> status(args)
         "agent_result" -> result(args)
         "agent_stop" -> stop(args)
+        "list_agents" -> listAgents(args)
+        "send_message" -> sendMessage(args)
+        "interrupt" -> interrupt(args)
         else -> null
     }
 
@@ -223,6 +283,39 @@ object AgentTools : HarnessGroupTools {
         val id = args.optString("id", "")
         if (id.isBlank()) return ToolExecResult("Which sub-agent?", success = false)
         return if (SubAgents.stop(id)) ToolExecResult("Asked $id to stop.")
+        else ToolExecResult("No sub-agent called $id.", success = false)
+    }
+
+    private fun listAgents(args: JSONObject): ToolExecResult {
+        val runningOnly = args.optBoolean("running_only", false)
+        val all = SubAgents.list().filter { !runningOnly || it.status == "running" }
+        if (all.isEmpty()) {
+            return ToolExecResult(if (runningOnly) "No sub-agent is running." else "No sub-agents have been started.")
+        }
+        return ToolExecResult(all.joinToString("\n\n") { it.render(withResult = false) })
+    }
+
+    private fun sendMessage(args: JSONObject): ToolExecResult {
+        val id = args.optString("id", "")
+        val message = args.optString("message", "").trim()
+        if (id.isBlank() || message.isEmpty()) {
+            return ToolExecResult("Give me both a sub-agent id and a message.", success = false)
+        }
+        val agent = SubAgents.get(id) ?: return ToolExecResult("No sub-agent called $id.", success = false)
+        if (agent.status != "running") {
+            return ToolExecResult("$id is ${agent.status}, so a new instruction would never be read.", success = false)
+        }
+        return if (SubAgents.instruct(id, message)) {
+            ToolExecResult("Queued for $id; it reads the inbox at its next round boundary.")
+        } else {
+            ToolExecResult("The message was empty.", success = false)
+        }
+    }
+
+    private fun interrupt(args: JSONObject): ToolExecResult {
+        val id = args.optString("id", "")
+        if (id.isBlank()) return ToolExecResult("Which sub-agent?", success = false)
+        return if (SubAgents.stop(id)) ToolExecResult("Interrupted $id; its work so far is kept.")
         else ToolExecResult("No sub-agent called $id.", success = false)
     }
 }

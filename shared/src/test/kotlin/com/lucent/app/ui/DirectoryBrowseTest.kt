@@ -68,6 +68,34 @@ class DirectoryBrowseTest {
     }
 
     @Test
+    fun ancestorsRunFromTheRootDownToTheFolder() {
+        val root = tree()
+        val nested = File(root, "alpha").path
+        val chain = DirectoryBrowse.ancestors(nested)
+        assertTrue(chain.size >= 2, chain.toString())
+        assertEquals("alpha", chain.last().name)
+        assertEquals(DirectoryBrowse.normalize(nested), DirectoryBrowse.normalize(chain.last().path))
+        chain.zipWithNext().forEach { (parentCrumb, childCrumb) ->
+            assertEquals(
+                DirectoryBrowse.normalize(parentCrumb.path),
+                DirectoryBrowse.normalize(DirectoryBrowse.parent(childCrumb.path).orEmpty())
+            )
+        }
+    }
+
+    @Test
+    fun aTypedPathIsResolvedAgainstTheFolderOnScreen() {
+        val root = tree()
+        val deep = File(root, "alpha").path
+        assertEquals(deep, DirectoryBrowse.resolve("alpha", root.path))
+        assertEquals(
+            DirectoryBrowse.normalize(root.path),
+            DirectoryBrowse.normalize(DirectoryBrowse.resolve("..", deep))
+        )
+        assertEquals(DirectoryBrowse.normalize(root.path), DirectoryBrowse.normalize(DirectoryBrowse.resolve("", root.path)))
+    }
+
+    @Test
     fun startingPointPrefersARealFolder() {
         val root = tree()
         assertEquals(root.path, DirectoryBrowse.startingPoint(root.path))

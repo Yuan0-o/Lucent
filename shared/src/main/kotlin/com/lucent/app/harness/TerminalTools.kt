@@ -73,6 +73,8 @@ object HarnessJobs {
 
     fun running(): List<HarnessJobHandle> = jobs.values.filter { !it.finished }
 
+    fun runningCount(): Int = jobs.values.count { !it.finished }
+
     fun kill(id: String): Boolean {
         val handle = jobs[id] ?: return false
         handle.task?.cancel()

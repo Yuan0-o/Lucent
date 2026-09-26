@@ -142,6 +142,10 @@ object PluginDownload {
                 }
                 PluginOutcome(true, "downloaded ${Workspace.humanSize(written)} from ${source.label}", target.path)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            try { target.delete() } catch (_: Throwable) {
+            }
+            throw e
         } catch (t: Throwable) {
             try { target.delete() } catch (_: Throwable) {
             }

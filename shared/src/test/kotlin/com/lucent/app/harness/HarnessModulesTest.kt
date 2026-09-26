@@ -9,7 +9,9 @@ import kotlin.test.assertTrue
 class HarnessModulesTest {
 
     private val expected = mapOf(
-        "AgentTools" to listOf("spawn_agent", "agent_status", "agent_result", "agent_stop"),
+        "AgentTools" to listOf(
+            "spawn_agent", "agent_status", "agent_result", "agent_stop", "list_agents", "send_message", "interrupt"
+        ),
         "BrowserTools" to listOf("fetch_url", "browse_page", "download_file", "web_search", "open_url"),
         "ConnectorTools" to listOf(
             "connector_status", "http_request", "notion_api", "slack_api",
@@ -44,6 +46,7 @@ class HarnessModulesTest {
             "pdf_to_images", "merge_pdfs", "split_pdf"
         ),
         "PlanTools" to listOf("update_plan", "plan_status", "task_note", "ask_user"),
+        "TodoTools" to listOf("todo_write", "todo_read"),
         "PluginTools" to listOf(
             "plugin_status", "plugin_list_available", "install_plugin", "remove_plugin", "plugin_run", "plugin_mirror_test"
         ),

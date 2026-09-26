@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +63,29 @@ internal object DirectoryBrowse {
         val up = file.parentFile ?: return null
         if (up.path == file.path) return null
         return up.path
+    }
+
+    fun resolve(path: String, base: String): String {
+        val clean = normalize(path)
+        if (clean.isEmpty()) return normalize(base)
+        val file = File(clean)
+        val absolute = if (file.isAbsolute) file else File(normalize(base), clean)
+        val walked = runCatching { absolute.absoluteFile.toPath().normalize().toString() }.getOrNull()
+        return normalize(walked ?: absolute.absoluteFile.path)
+    }
+
+    fun ancestors(path: String): List<DirectoryEntry> {
+        val clean = normalize(path)
+        if (clean.isEmpty()) return emptyList()
+        val chain = mutableListOf<DirectoryEntry>()
+        var cursor: String? = clean
+        var guard = 0
+        while (cursor != null && guard++ < 64) {
+            val name = File(cursor).name.ifEmpty { cursor }
+            chain.add(0, DirectoryEntry(name, cursor))
+            cursor = parent(cursor)
+        }
+        return chain
     }
 
     fun isRoot(path: String): Boolean = parent(path) == null
@@ -121,7 +146,7 @@ internal fun DirectoryPickerDialog(
     }
 
     fun goTo(path: String) {
-        current = DirectoryBrowse.normalize(path)
+        current = DirectoryBrowse.resolve(path, current)
         editing = false
     }
 
@@ -144,6 +169,7 @@ internal fun DirectoryPickerDialog(
                         draft = current
                         editing = !editing
                     },
+                    onGo = { goTo(it) },
                     onSubmit = { goTo(draft) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -240,6 +266,7 @@ private fun PathRow(
     draft: String,
     onDraftChange: (String) -> Unit,
     onToggleEditing: () -> Unit,
+    onGo: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -252,14 +279,7 @@ private fun PathRow(
             )
             TextButton(onClick = onSubmit) { Text(S.actionOpen, fontSize = 13.sp) }
         } else {
-            Text(
-                path,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Breadcrumbs(path = path, onGo = onGo, modifier = Modifier.weight(1f))
             IconButton(onClick = onToggleEditing) {
                 Icon(
                     Icons.Default.Edit,
@@ -268,6 +288,38 @@ private fun PathRow(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun Breadcrumbs(path: String, onGo: (String) -> Unit, modifier: Modifier = Modifier) {
+    val crumbs = remember(path) { DirectoryBrowse.ancestors(path) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(crumbs) { scroll.scrollTo(scroll.maxValue) }
+    Row(
+        modifier = modifier.horizontalScroll(scroll),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        crumbs.forEachIndexed { index, crumb ->
+            if (index > 0) {
+                Text(
+                    "\u203A",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+            }
+            val last = index == crumbs.lastIndex
+            Text(
+                crumb.name,
+                fontSize = 13.sp,
+                maxLines = 1,
+                color = if (last) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable(enabled = !last) { onGo(crumb.path) }
+                    .padding(horizontal = 2.dp, vertical = 6.dp)
+            )
         }
     }
 }

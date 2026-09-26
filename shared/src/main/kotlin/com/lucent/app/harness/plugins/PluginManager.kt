@@ -73,8 +73,20 @@ class PluginManager private constructor(private val context: Context?, private v
             sourceId = chosen.id.ifBlank { "built-in" }
             onProgress(0.05f, "downloading from ${chosen.label}")
             val target = File(HarnessRuntime.downloadsDir(), fileNameOf(plugin, chosen))
-            val fetched = PluginDownload.fetch(chosen, target) { fraction, note ->
-                onProgress(0.05f + fraction * 0.5f, "${chosen.label}: $note")
+            val fetched = try {
+                PluginDownload.fetch(chosen, target) { fraction, note ->
+                    onProgress(0.05f + fraction * 0.5f, "${chosen.label}: $note")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                target.delete()
+                record(plugin, "download cancelled", target.path)
+                return PluginOutcome(
+                    false,
+                    "${plugin.name}: the download was cancelled and the partial file was removed",
+                    "",
+                    PluginFailure.CANCELLED,
+                    ""
+                )
             }
             if (!fetched.ok) {
                 record(plugin, "download failed", fetched.message)
@@ -95,7 +107,19 @@ class PluginManager private constructor(private val context: Context?, private v
             )
         }
         onProgress(0.6f, "installing")
-        val outcome = run(plugin, script, 3600)
+        val outcome = try {
+            run(plugin, script, 3600)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            staged?.delete()
+            record(plugin, "install cancelled", staged?.path.orEmpty())
+            return PluginOutcome(
+                false,
+                "${plugin.name}: the install was cancelled and the downloaded file was removed",
+                "",
+                PluginFailure.CANCELLED,
+                ""
+            )
+        }
         if (!outcome.ok) {
             val detail = outcome.text.take(1200)
             record(plugin, "install failed", detail)

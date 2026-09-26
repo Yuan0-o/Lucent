@@ -55,7 +55,7 @@ interface PluginHost {
     suspend fun runPluginCommand(plugin: PluginSpec, command: String, timeoutSeconds: Int): ShellOutcome
 }
 
-enum class PluginFailure { NONE, NO_SHELL, NO_SCRIPT, DOWNLOAD, VERIFY, STORAGE, INSTALL, DETECT, NO_PLATFORM }
+enum class PluginFailure { NONE, NO_SHELL, NO_SCRIPT, DOWNLOAD, VERIFY, STORAGE, INSTALL, DETECT, NO_PLATFORM, CANCELLED }
 
 data class PluginOutcome(
     val ok: Boolean,

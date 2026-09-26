@@ -37,6 +37,7 @@ import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal data class PluginFailureReport(val plugin: PluginSpec, val outcome: PluginOutcome)
@@ -56,6 +57,7 @@ internal fun PluginSettingsPage(
     var progress by remember { mutableStateOf(0f) }
     var failure by remember { mutableStateOf<PluginFailureReport?>(null) }
     var retry by remember { mutableStateOf<PluginSpec?>(null) }
+    var running by remember { mutableStateOf<Job?>(null) }
 
     val android = HarnessRuntime.android
     val shellReady = HarnessRuntime.pluginHost?.isReady() == true
@@ -71,7 +73,7 @@ internal fun PluginSettingsPage(
         busy = plugin.id
         progress = 0f
         note = plugin.name
-        scope.launch {
+        running = scope.launch {
             val outcome = if (remove) {
                 target.remove(plugin)
             } else {
@@ -82,9 +84,18 @@ internal fun PluginSettingsPage(
             }
             config = HarnessRuntime.config()
             busy = ""
+            running = null
             note = if (outcome.ok) outcome.message else ""
             if (!outcome.ok) failure = PluginFailureReport(plugin, outcome)
         }
+    }
+
+    fun cancelRunning() {
+        running?.cancel()
+        running = null
+        busy = ""
+        note = ""
+        progress = 0f
     }
 
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
@@ -112,7 +123,8 @@ internal fun PluginSettingsPage(
                 note = if (busy == plugin.id) note else "",
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted,
-                onAction = { runAction(plugin, it) }
+                onAction = { runAction(plugin, it) },
+                onCancel = { cancelRunning() }
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -201,7 +213,8 @@ private fun PluginRow(
     note: String,
     onGradient: androidx.compose.ui.graphics.Color,
     onGradientMuted: androidx.compose.ui.graphics.Color,
-    onAction: (Boolean) -> Unit
+    onAction: (Boolean) -> Unit,
+    onCancel: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -210,12 +223,18 @@ private fun PluginRow(
                 Text(plugin.summary, color = onGradientMuted, fontSize = 11.sp)
                 Text(stateLine(plugin, installed, shellReady), color = onGradientMuted, fontSize = 11.sp)
             }
-            TextButton(enabled = !busy, onClick = { onAction(installed) }) {
-                Text(
-                    if (installed) S.agentPluginRemove else S.agentPluginInstall,
-                    color = onGradient,
-                    fontSize = 13.sp
-                )
+            if (busy) {
+                TextButton(onClick = onCancel) {
+                    Text(S.actionStop, color = onGradient, fontSize = 13.sp)
+                }
+            } else {
+                TextButton(onClick = { onAction(installed) }) {
+                    Text(
+                        if (installed) S.agentPluginRemove else S.agentPluginInstall,
+                        color = onGradient,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
         if (busy) {
@@ -307,6 +326,7 @@ private fun PluginFailureDialog(
 }
 
 private fun reasonText(failure: PluginFailure): String = when (failure) {
+    PluginFailure.CANCELLED -> S.pluginReasonCancelled
     PluginFailure.NO_SHELL -> S.pluginReasonNoShell
     PluginFailure.NO_PLATFORM -> S.pluginReasonUnsupported
     PluginFailure.INSTALL -> S.pluginReasonInstall
