@@ -21,9 +21,9 @@ internal object HarnessBackup {
         activeHome = null
     }
 
-    fun useHome(block: () -> Unit) {
+    fun <T> useHome(block: () -> T): T {
         begin()
-        try {
+        return try {
             block()
         } finally {
             end()

@@ -1,9 +1,11 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -23,7 +26,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +36,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -42,6 +46,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -356,26 +361,38 @@ private fun modelsMenu(
     onFetch: () -> Unit
 ) {
     MenuHeader(com.lucent.app.i18n.S.quickModelTitle, mutedTint, onBack)
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQuery,
-        placeholder = {
-            Text(
-                com.lucent.app.i18n.S.quickModelSearch,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp)
+            .height(30.dp)
+            .clip(RoundedCornerShape(50))
+            .border(1.dp, mutedTint.copy(alpha = 0.35f), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp)
+    ) {
+        Icon(Icons.Default.Search, contentDescription = null, tint = mutedTint, modifier = Modifier.size(14.dp))
+        Box(modifier = Modifier.weight(1f).padding(start = 6.dp)) {
+            if (query.isEmpty()) {
+                Text(
+                    com.lucent.app.i18n.S.quickModelSearch,
+                    fontSize = 12.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = mutedTint.copy(alpha = 0.75f)
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQuery,
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 12.sp, lineHeight = 14.sp, color = tint),
+                cursorBrush = SolidColor(tint),
+                modifier = Modifier.fillMaxWidth()
             )
-        },
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null, tint = mutedTint, modifier = Modifier.size(18.dp))
-        },
-        singleLine = true,
-        shape = RoundedCornerShape(28.dp),
-        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
-    )
+        }
+    }
     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
 
     val needle = query.trim()
@@ -476,6 +493,9 @@ private fun modelsMenu(
                 }
             }
         }
+    }
+    if (!localModelEnabled) {
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }
 
