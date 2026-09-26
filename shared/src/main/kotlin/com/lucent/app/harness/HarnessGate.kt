@@ -10,7 +10,7 @@ import java.io.File
 
 data class HarnessCtx(
     val context: Context,
-    val db: AppDatabase,
+    val db: AppDatabase?,
     val config: HarnessConfig,
     val capabilities: Set<String>,
     val android: Boolean,
@@ -182,7 +182,7 @@ object HarnessGate {
 
     suspend fun execute(
         context: Context,
-        db: AppDatabase,
+        db: AppDatabase?,
         name: String,
         argumentsJson: String
     ): ToolExecResult {

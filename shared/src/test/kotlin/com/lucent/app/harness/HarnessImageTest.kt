@@ -1,7 +1,6 @@
 package com.lucent.app.harness
 
 import android.content.Context
-import com.lucent.app.data.AppDatabase
 import com.lucent.app.network.ToolExecResult
 import java.io.File
 import kotlin.test.Test
@@ -48,8 +47,7 @@ class HarnessImageTest {
 
     private fun contextFactory(root: File): HarnessCtx {
         val context = harnessTestContext()
-        val db = allocate(AppDatabase::class.java) as AppDatabase
-        return HarnessCtx(context, db, HarnessRuntime.config(), emptySet(), false, HarnessRuntime.workspace())
+        return HarnessCtx(context, null, HarnessRuntime.config(), emptySet(), false, HarnessRuntime.workspace())
     }
 
     private fun read(ctx: HarnessCtx, path: String, maxBytes: Long? = null): ToolExecResult {
@@ -165,31 +163,5 @@ class HarnessImageTest {
         }
         assertTrue(refusal.blocked, refusal.message ?: "")
         assertTrue(refusal.message.orEmpty().contains("outside"), refusal.message ?: "")
-    }
-
-    private fun allocate(type: Class<*>): Any? = try {
-        val unsafe = Class.forName("sun.misc.Unsafe")
-        val field = unsafe.getDeclaredField("theUnsafe")
-        field.isAccessible = true
-        unsafe.getMethod("allocateInstance", Class::class.java).invoke(field.get(null), type)
-    } catch (t: Throwable) {
-        null
-    } ?: serializationAllocate(type)
-
-    private fun serializationAllocate(type: Class<*>): Any? = try {
-        val factoryType = Class.forName("sun.reflect.ReflectionFactory")
-        val factory = factoryType.getMethod("getReflectionFactory").invoke(null)
-        val marker = Any::class.java.getDeclaredConstructor()
-        val creator = factoryType
-            .getMethod(
-                "newConstructorForSerialization",
-                Class::class.java,
-                java.lang.reflect.Constructor::class.java
-            )
-            .invoke(factory, type, marker) as java.lang.reflect.Constructor<*>
-        creator.isAccessible = true
-        creator.newInstance()
-    } catch (t: Throwable) {
-        null
     }
 }

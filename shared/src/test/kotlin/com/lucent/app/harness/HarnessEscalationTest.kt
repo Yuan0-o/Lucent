@@ -21,7 +21,7 @@ private class EscalationHost(private val root: File) : HarnessHost {
 
 class HarnessEscalationTest {
 
-    private fun withEscalationSandbox(block: (File, Context, AppDatabase) -> Unit) {
+    private fun withEscalationSandbox(block: (File, Context, AppDatabase?) -> Unit) {
         val root = java.nio.file.Files.createTempDirectory("lucent-escalation").toFile()
         val previousHost = HarnessRuntime.host
         val previousConfig = HarnessRuntime.config()
@@ -34,7 +34,7 @@ class HarnessEscalationTest {
         try {
             HarnessRuntime.workspace().mkdirs()
             val context = harnessTestContext()
-            val db = allocatedForTest(AppDatabase::class.java) as AppDatabase
+            val db: AppDatabase? = null
             block(root, context, db)
         } finally {
             HarnessGate.clearEscalations()
