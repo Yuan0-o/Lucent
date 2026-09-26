@@ -20,7 +20,8 @@ object BackupManager {
         SETTINGS,
         API,
         LOCAL_ASSISTANT,
-        LOCAL_MODEL_FILES
+        LOCAL_MODEL_FILES,
+        HARNESS
     }
 
     val DEFAULT_MODULES: Set<BackupModule> =
@@ -133,7 +134,12 @@ object BackupManager {
                 }
             } else emptyList()
 
-        val blobs = modelFiles + fontFiles
+        val harnessFiles: List<Pair<String, java.io.File>> =
+            if (BackupModule.HARNESS in modules) {
+                HarnessBackup.useHome { HarnessBackup.listFiles() }
+            } else emptyList()
+
+        val blobs = modelFiles + fontFiles + harnessFiles
         BackupCrypto.encryptingStream(out, password).use { cipherOut ->
             if (blobs.isEmpty()) {
                 cipherOut.write(jsonBytes)
@@ -166,7 +172,7 @@ object BackupManager {
                 (selection.taskIds?.let { "; tasks=${it.size}" } ?: "") +
                 (selection.conversationIds?.let { "; chats=${it.size}" } ?: "") +
                 (selection.apiProfileNames?.let { "; apiProfiles=${it.size}" } ?: "") +
-                "; models=${modelFiles.size}; fonts=${fontFiles.size}" +
+                "; models=${modelFiles.size}; fonts=${fontFiles.size}; harness=${harnessFiles.size}" +
                 "; password=${if (password.isNullOrEmpty()) "no" else "yes"}"
         )
     }
@@ -198,6 +204,8 @@ object BackupManager {
         val modelBytes: Long = 0L,
         val fontFiles: Int = 0,
         val fontBytes: Long = 0L,
+        val harnessFiles: Int = 0,
+        val harnessBytes: Long = 0L,
         internal val hasBlobs: Boolean = false,
         internal val password: String? = null,
         val conversationList: List<Pair<Long, String>> = emptyList(),
@@ -205,7 +213,7 @@ object BackupManager {
     ) {
         val isEmpty: Boolean
             get() = notes == 0 && tasks == 0 && chatMessages == 0 && conversations == 0 &&
-                !hasSettings && modelFiles == 0 && fontFiles == 0
+                !hasSettings && modelFiles == 0 && fontFiles == 0 && harnessFiles == 0
     }
 
     suspend fun inspect(context: Context, source: BackupSource, password: String? = null): BackupPreview {
@@ -296,6 +304,8 @@ object BackupManager {
             modelBytes = scan.modelBytes,
             fontFiles = scan.fontCount,
             fontBytes = scan.fontBytes,
+            harnessFiles = scan.harnessCount,
+            harnessBytes = scan.harnessBytes,
             hasBlobs = scan.framed,
             password = password,
             conversationList = convList,
@@ -320,9 +330,12 @@ object BackupManager {
         val cancelled: () -> Boolean = { commitJob?.isActive == false }
         var restoredModels = 0
         var restoredFonts = 0
+        var restoredHarness = 0
+        var harnessProblems: List<String> = emptyList()
         if (preview.hasBlobs && source != null) {
             val wantModels = BackupModule.LOCAL_MODEL_FILES in modules
             val wantFonts = BackupModule.SETTINGS in modules
+            val wantHarness = BackupModule.HARNESS in modules
             if (wantModels || wantFonts) {
                 val scratch = ByteArray(1 shl 16)
                 var plain: java.io.InputStream? = null
@@ -341,6 +354,11 @@ object BackupManager {
                     try { plain?.close() } catch (_: Throwable) {}
                 }
             }
+            if (wantHarness) {
+                val harness = BackupImporter.restoreHarness(context, source, preview.password, cancelled)
+                restoredHarness = harness.restored
+                harnessProblems = harness.problems
+            }
         }
         BackupFrames.throwIfCancelled(cancelled)
         val summary = withContext(NonCancellable) {
@@ -353,11 +371,16 @@ object BackupManager {
             "Backup restored: modules=${modules.joinToString(",") { it.name }}" +
                 (conversationIds?.let { "; chats=${it.size}" } ?: "") +
                 (apiProfileNames?.let { "; apiProfiles=${it.size}" } ?: "") +
-                "; models=$restoredModels; fonts=$restoredFonts"
+                "; models=$restoredModels; fonts=$restoredFonts; harness=$restoredHarness" +
+                (if (harnessProblems.isEmpty()) "" else "; harnessProblems=${harnessProblems.joinToString("|")}")
         )
         var report = summary
         if (restoredModels > 0) report += com.lucent.app.i18n.S.backupModelFilesRestored(restoredModels)
         if (restoredFonts > 0) report += com.lucent.app.i18n.S.backupFontsRestored(restoredFonts)
+        if (restoredHarness > 0) report += com.lucent.app.i18n.S.backupHarnessFilesRestored(restoredHarness)
+        if (harnessProblems.isNotEmpty()) {
+            report += com.lucent.app.i18n.S.backupHarnessFilesFailed(harnessProblems.size)
+        }
         return report
     }
 

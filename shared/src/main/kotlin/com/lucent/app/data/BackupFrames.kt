@@ -26,9 +26,19 @@ internal object BackupFrames {
 
     const val FONT_BLOB_PREFIX = "font:"
 
+    const val HARNESS_BLOB_PREFIX = "harness:"
+
     const val MAX_BLOB_NAME_BYTES = 1024
 
     const val MAX_MANIFEST_BYTES = 1_200_000_000
+
+    enum class BlobKind { MODEL, FONT, HARNESS }
+
+    fun blobKind(name: String): BlobKind = when {
+        name.startsWith(FONT_BLOB_PREFIX) -> BlobKind.FONT
+        name.startsWith(HARNESS_BLOB_PREFIX) -> BlobKind.HARNESS
+        else -> BlobKind.MODEL
+    }
 
     data class PayloadScan(
         val manifestJson: String,
@@ -36,7 +46,9 @@ internal object BackupFrames {
         val modelCount: Int,
         val modelBytes: Long,
         val fontCount: Int,
-        val fontBytes: Long
+        val fontBytes: Long,
+        val harnessCount: Int = 0,
+        val harnessBytes: Long = 0L
     )
 
     fun readFully(input: java.io.InputStream, buffer: ByteArray, len: Int, cancelled: (() -> Boolean)? = null) {
@@ -143,6 +155,8 @@ internal object BackupFrames {
         var modelBytes = 0L
         var fontCount = 0
         var fontBytes = 0L
+        var harnessCount = 0
+        var harnessBytes = 0L
         while (true) {
             throwIfCancelled(cancelled)
             val nameLen = try {
@@ -162,12 +176,19 @@ internal object BackupFrames {
                 break
             }
             if (dataLen < 0) break
-            if (name.startsWith(FONT_BLOB_PREFIX)) {
-                fontCount++
-                fontBytes += dataLen
-            } else {
-                modelCount++
-                modelBytes += dataLen
+            when (blobKind(name)) {
+                BlobKind.FONT -> {
+                    fontCount++
+                    fontBytes += dataLen
+                }
+                BlobKind.HARNESS -> {
+                    harnessCount++
+                    harnessBytes += dataLen
+                }
+                BlobKind.MODEL -> {
+                    modelCount++
+                    modelBytes += dataLen
+                }
             }
             try {
                 if (onBlob != null) onBlob(name, dataLen, plain) else skipFully(plain, dataLen, scratch, cancelled)
@@ -175,7 +196,9 @@ internal object BackupFrames {
                 break
             }
         }
-        return PayloadScan(manifestJson, framed = true, modelCount, modelBytes, fontCount, fontBytes)
+        return PayloadScan(
+            manifestJson, framed = true, modelCount, modelBytes, fontCount, fontBytes, harnessCount, harnessBytes
+        )
     }
 
     fun restoreOneBlob(
@@ -188,7 +211,7 @@ internal object BackupFrames {
         scratch: ByteArray,
         cancelled: (() -> Boolean)? = null
     ): Pair<Int, Int> {
-        val isFont = name.startsWith(FONT_BLOB_PREFIX)
+        val isFont = blobKind(name) == BlobKind.FONT
         if ((isFont && !wantFonts) || (!isFont && !wantModels)) {
             skipFully(data, dataLen, scratch, cancelled)
             return 0 to 0

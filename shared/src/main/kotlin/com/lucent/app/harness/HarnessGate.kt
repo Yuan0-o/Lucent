@@ -54,6 +54,7 @@ object HarnessGate {
             MemoryTools,
             PlanTools,
             TodoTools,
+            GoalTools,
             AgentTools,
             SkillTools,
             McpTools,

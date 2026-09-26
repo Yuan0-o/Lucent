@@ -18,7 +18,9 @@ object Workspace {
     fun isInside(file: File, root: File): Boolean = try {
         val target = file.canonicalPath
         val base = root.canonicalPath
-        target == base || target.startsWith(base + File.separator)
+        if (target == base) return true
+        val prefix = if (base.endsWith(File.separator)) base else base + File.separator
+        target.startsWith(prefix)
     } catch (e: Exception) {
         false
     }

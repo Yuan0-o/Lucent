@@ -337,7 +337,7 @@ The desktop UI renders through Skiko, which embeds **Skia** — © Google LLC, l
 
 ## Optional components Lucent can fetch for you
 
-Lucent 3.0 bundles no heavy toolchains. From Settings → Agent → Plugins, or through the assistant's own `install_plugin` tool, Lucent can download the components below **at your instruction**, directly from the upstream project or from a public mirror, into storage you own. They are not part of the Lucent package, are not modified or relinked by Lucent, and stay under their own licences, which you accept by choosing to install them. None of them is required for Lucent to work.
+Lucent bundles no heavy toolchains. From Settings → Agent → Plugins, or through the assistant's own `install_plugin` tool, Lucent can download the components below **at your instruction**, directly from the upstream project or from a public mirror, into storage you own. They are not part of the Lucent package, are not modified or relinked by Lucent, and stay under their own licences, which you accept by choosing to install them. None of them is required for Lucent to work.
 
 | Component | Licence | Upstream |
 |---|---|---|

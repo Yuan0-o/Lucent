@@ -985,6 +985,23 @@ fun SettingsScreen(active: Boolean = true) {
                             modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
                         )
                     }
+                    val (harnessFileCount, harnessBytes) = remember(fontRefresh) {
+                        com.lucent.app.data.harnessBackupSummary()
+                    }
+                    BackupModuleRow(
+                        label = S.backupModHarness,
+                        module = BackupManager.BackupModule.HARNESS,
+                        selected = exportModules,
+                        subLabel = if (harnessFileCount > 0) S.backupHarnessFilesInFile(harnessFileCount) else null,
+                        onChange = { exportModules = it }
+                    )
+                    if (harnessBytes > 0L) {
+                        Text(
+                            S.backupModHarnessDesc(AttachmentLimits.formatBytes(harnessBytes)),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                        )
+                    }
                     if (BackupManager.BackupSelection(exportModules, exportNoteIds, exportTaskIds, exportConversationIds, exportApiProfileNames).isEmpty) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(S.backupSelectionEmpty, color = DANGER_RED, fontSize = 12.sp)
@@ -1272,6 +1289,13 @@ fun SettingsScreen(active: Boolean = true) {
                                 listOf(AttachmentLimits.formatBytes(preview.fontBytes))
                             )
                         }
+                        if (preview.harnessFiles > 0) {
+                            BackupContentLine(
+                                S.backupModHarness,
+                                preview.harnessFiles,
+                                listOf(AttachmentLimits.formatBytes(preview.harnessBytes))
+                            )
+                        }
 
                         val available = buildSet {
                             if (preview.notes > 0) add(BackupManager.BackupModule.NOTES)
@@ -1285,6 +1309,7 @@ fun SettingsScreen(active: Boolean = true) {
                                 add(BackupManager.BackupModule.LOCAL_ASSISTANT)
                             }
                             if (preview.modelFiles > 0) add(BackupManager.BackupModule.LOCAL_MODEL_FILES)
+                            if (preview.harnessFiles > 0) add(BackupManager.BackupModule.HARNESS)
                         }
                         LaunchedEffect(preview) {
                             restoreModules = available
@@ -1329,6 +1354,9 @@ fun SettingsScreen(active: Boolean = true) {
                         }
                         if (BackupManager.BackupModule.LOCAL_MODEL_FILES in available) {
                             BackupModuleRow(S.backupModLocalModelFiles, BackupManager.BackupModule.LOCAL_MODEL_FILES, restoreModules) { restoreModules = it }
+                        }
+                        if (BackupManager.BackupModule.HARNESS in available) {
+                            BackupModuleRow(S.backupModHarness, BackupManager.BackupModule.HARNESS, restoreModules) { restoreModules = it }
                         }
                         if (restoreModules.isEmpty()) {
                             Spacer(modifier = Modifier.height(4.dp))

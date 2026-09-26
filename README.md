@@ -61,8 +61,14 @@ intends — in your own language, in a dialog that is itself the editor, with ev
 editable before a single byte is written. Your answer is always the final word. Someone with an
 opinion and no hands is a chat; this is a butler who has been told to knock first.
 
-Conversations run as long as you like and travel with you; the model's reasoning can be shown as a
-collapsible trace, one line per tool call.
+Conversations run as long as you like and travel with you, and the conversation you were last in is
+the one that opens. Replies arrive as proper Markdown — headings, lists, code — with the model's
+reasoning folded away above them until you ask for it, and one line per tool call in the trace,
+each with the time it took. Four panels sit above the conversation: the todo list the assistant
+keeps as it works, the plan it is following, the background jobs it has started, and the sub-agents
+it has called on, each of which can be watched live, stopped, or sent an extra instruction. Give it
+a goal and it will keep working towards it, round after round, until the goal is done, paused, or
+honestly reported as blocked.
 
 ## The workshop behind the assistant
 
@@ -86,7 +92,8 @@ Anything large stays out of the installer: a Linux userland, Python with its doc
 LibreOffice, Node.js, a browser engine, OCR and media tools are listed as plugins, downloaded only
 if you ask, from the project's own servers or a fast mirror, whichever answers first. Installing one
 needs a shell — Termux on a phone, winget on Windows — and when a download or an install fails,
-Lucent opens a dialog that names the reason, shows the shell's own output and lists what to fix.
+Lucent opens a dialog that names the reason, shows the shell's own output and lists what to fix. A
+download in progress is a button press away from stopping, and stopping it leaves nothing behind.
 Permissions
 are a page of their own — read, write, delete, commands, network, Git, GitHub, browsing, the space
 beyond the workspace, and the device itself — each set to allow, ask or block, and every tool call
@@ -215,10 +222,30 @@ short version, with our gratitude, is this:
 | [OkHttp](https://github.com/square/okhttp) — © Square, Inc. | talking to the cloud | Apache-2.0 |
 | [Apache PDFBox](https://pdfbox.apache.org/) | PDFs on the desktop | Apache-2.0 |
 | [SQLite JDBC](https://github.com/xerial/sqlite-jdbc) — © Taro L. Saito et al. | the desktop's way into SQLite | Apache-2.0 |
+| [Skia](https://skia.org/) | the drawing underneath both halves of the interface | BSD-3-Clause |
 | [SQLite](https://www.sqlite.org/) | the database itself, quietly running the world | Public Domain |
 | [SQLCipher](https://www.zetetic.net/sqlcipher/) — © Zetetic LLC | the lock on that database, on Android | BSD-style |
 | [llama.cpp & GGML](https://github.com/ggml-org/llama.cpp) — © Georgi Gerganov & contributors | an entire language model, on your own silicon | MIT |
+| [Shizuku API](https://github.com/RikkaApps/Shizuku-API) — © Rikka and contributors | the privileged shell, when a phone can offer one | MIT |
 | [org.json](https://github.com/stleary/JSON-java) — © JSON.org | reading JSON on the desktop | JSON License |
+| [Great Vibes](https://github.com/googlefonts/great-vibes) — © The Great Vibes Pro Project Authors | the script face the pen draws with | OFL-1.1 |
+
+The Model Context Protocol is an open specification from Anthropic, licensed under the MIT Licence;
+Lucent's client is an original implementation, and any MCP server you point it at is third-party
+software under its own terms. The Word, Excel and PowerPoint readers and writers are original
+implementations of Office Open XML built on the platform's own zip and XML libraries — no office
+library, and no third-party PDF library, is bundled.
+
+### And the tools you may fetch, at your word
+
+Lucent ships no heavyweight toolchains and no office suite. From the plugins page, or by asking the
+assistant, it can fetch a Linux userland, a document converter or a media tool straight from upstream
+into storage you own. None of them is part of the package, none is linked against, and each stays
+under its own licence: **[the notices file](./docs/THIRD-PARTY-NOTICES.md)** carries the full list,
+which runs from Termux, PRoot and Ubuntu Base through LibreOffice, Python with its document
+libraries, Node.js and Playwright, to Git, Pandoc, FFmpeg, ripgrep, 7-Zip, Tesseract, ImageMagick,
+qpdf, Poppler and yt-dlp. Lucent's thanks go to every one of those authors, and the choice to
+install any of them — along with the licence that comes with it — is yours.
 
 ### And the notes apps we studied
 
@@ -242,8 +269,9 @@ ideas and arrangements, not as included works. The structure is ours; the courte
 A particular word for **SQLCipher**, whose BSD-style licence asks — not unreasonably, given it is
 the thing keeping your diary shut — that its copyright and notice be reproduced somewhere a user can
 actually find them. So they are, in the notices file above; if you ship a build of Lucent, keep them
-findable. Fonts, incidentally, no longer appear in that table at all: Lucent bundles none, and the
-ones you import stay your own files under whatever terms you hold them.
+findable. The one font Lucent carries itself is Great Vibes, the script face of the pen on the splash
+screen, bundled unmodified under the SIL Open Font License with its reserved name intact; every other
+font is yours, imported by you and kept under whatever terms you hold it.
 
 ## Licence, and the one small thing it asks in return
 

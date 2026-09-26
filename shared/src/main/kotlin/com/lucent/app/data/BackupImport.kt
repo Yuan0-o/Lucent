@@ -467,6 +467,46 @@ internal object BackupImporter {
             settingsNote + historyNote + dedupNote + replacedNote
     }
 
+    internal data class HarnessRestoreResult(
+        val restored: Int = 0,
+        val problems: List<String> = emptyList()
+    )
+
+    internal suspend fun restoreHarness(
+        context: Context,
+        source: BackupManager.BackupSource,
+        password: String?,
+        cancelled: () -> Boolean
+    ): HarnessRestoreResult {
+        val problems = mutableListOf<String>()
+        var restored = 0
+        var plain: java.io.InputStream? = null
+        try {
+            plain = BackupFrames.openDecrypted(source, password)
+            val scratch = ByteArray(1 shl 16)
+            HarnessBackup.useHome {
+                BackupFrames.scanPayload(plain, cancelled) { name, dataLen, data ->
+                    if (BackupFrames.blobKind(name) != BackupFrames.BlobKind.HARNESS) {
+                        BackupFrames.skipFully(data, dataLen, scratch, cancelled)
+                        return@scanPayload
+                    }
+                    if (HarnessBackup.writeEntry(context, name, dataLen, data, scratch, cancelled)) {
+                        restored++
+                    } else {
+                        problems += HarnessBackup.relativePath(name) ?: name
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
+            problems += t.message ?: t::class.simpleName ?: "error"
+        } finally {
+            try { plain?.close() } catch (_: Throwable) {
+            }
+        }
+        return HarnessRestoreResult(restored, problems)
+    }
+
     private fun migrateInlineAttachmentsIfNeeded(context: Context, attachmentsJson: String): String {
         val list = Attachments.parse(attachmentsJson)
         if (list.isEmpty()) return attachmentsJson

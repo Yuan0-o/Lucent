@@ -47,6 +47,7 @@ class HarnessModulesTest {
         ),
         "PlanTools" to listOf("update_plan", "plan_status", "task_note", "ask_user"),
         "TodoTools" to listOf("todo_write", "todo_read"),
+        "GoalTools" to listOf("create_goal", "get_goal", "update_goal"),
         "PluginTools" to listOf(
             "plugin_status", "plugin_list_available", "install_plugin", "remove_plugin", "plugin_run", "plugin_mirror_test"
         ),

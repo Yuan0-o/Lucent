@@ -768,6 +768,11 @@ fun AssistantChatBody(
                     tint = onGradient,
                     mutedTint = onGradientMuted
                 )
+                GoalChip(
+                    conversationId = AssistantController.currentConversationId,
+                    tint = onGradient,
+                    mutedTint = onGradientMuted
+                )
                 if (toolkit.enabled) {
                     JobsChip(tint = onGradient, mutedTint = onGradientMuted)
                 }

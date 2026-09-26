@@ -45,6 +45,14 @@ internal fun WorkspaceSettingsPage(
         HarnessRuntime.update(next)
     }
 
+    fun apply(path: String) {
+        val chosen = path.trim()
+        if (chosen.isEmpty()) return
+        draft = chosen
+        update(config.copy(workspace = chosen))
+        LucentToast.show(context, S.settingsSaved)
+    }
+
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
     Column(modifier = Modifier.fillMaxWidth()) {
         Section(onGradient, onGradientMuted, S.agentWorkspaceTitle, S.agentWorkspaceSub) {
@@ -71,10 +79,7 @@ internal fun WorkspaceSettingsPage(
             Row {
                 TextButton(
                     enabled = draft.isNotBlank(),
-                    onClick = {
-                        update(config.copy(workspace = draft.trim()))
-                        LucentToast.show(context, S.settingsSaved)
-                    }
+                    onClick = { apply(draft) }
                 ) {
                     Text(S.actionSave, color = onGradient, fontSize = 13.sp)
                 }
@@ -87,7 +92,7 @@ internal fun WorkspaceSettingsPage(
             initialPath = draft.trim().ifBlank { HarnessRuntime.workspace().path },
             onDismiss = { picking = false },
             onOpen = { picked ->
-                draft = picked
+                apply(picked)
                 picking = false
             }
         )

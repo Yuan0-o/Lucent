@@ -75,7 +75,14 @@ object HarnessPrompt {
             append("told you so. ")
 
             append(memoryAndSkills())
+            append(goalLine().orEmpty())
         }
+    }
+
+    fun goalLine(): String? {
+        val text = GoalStore.summary()
+        if (text.isBlank()) return null
+        return "Working towards: $text. "
     }
 
     private fun memoryAndSkills(): String {
@@ -168,7 +175,7 @@ object HarnessPrompt {
             ": read, write and edit them, create Word, Excel and PowerPoint documents, look things up on the web " +
             "when that is switched on, and run commands when a shell is available. Do the work with the tools " +
             "before you answer, keep a short plan with update_plan for anything long, and never claim something " +
-            "happened unless a tool said so.\n"
+            "happened unless a tool said so.\n" + goalLine().orEmpty()
     }
 
     fun capabilitySummary(): String {        val config = HarnessRuntime.config()

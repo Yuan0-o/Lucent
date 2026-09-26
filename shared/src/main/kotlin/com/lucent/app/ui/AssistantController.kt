@@ -147,6 +147,8 @@ class AssistantControllerImpl(
     private var refinementContext: String? = null
         private set
 
+    @Volatile private var goalRoundPrompt: String? = null
+
     private data class ConfirmationOutcome(
         val approved: Boolean,
         val edits: Map<String, String> = emptyMap(),
@@ -361,6 +363,7 @@ class AssistantControllerImpl(
     }
 
     private fun stopTurn(turn: Turn, reason: String? = null, silent: Boolean = false) {
+        turn.stopped = true
         turn.confirmationDeferred?.complete(ConfirmationOutcome(approved = false))
         turn.confirmationDeferred = null
         if (confirmingTurn === turn) {
@@ -455,6 +458,8 @@ class AssistantControllerImpl(
         var conversationId by mutableStateOf(initialConversationId)
         var job: Job? = null
         @Volatile var turnPersisted = false
+        @Volatile var stopped = false
+        @Volatile var goalEligible = false
         var params: LastSend? = null
 
         var thinking by mutableStateOf(false)
@@ -643,7 +648,10 @@ class AssistantControllerImpl(
         attachments: List<com.lucent.app.data.Attachment> = emptyList()
     ) {
         val targetKey = targetConversationId ?: currentConversationId
-        if (turnFor(targetKey) != null) return
+        if (turnFor(targetKey) != null) {
+            goalRoundPrompt = null
+            return
+        }
         appContextRef = appContext.applicationContext
         typingHapticsOn = typingHapticsEnabled
         val turn = Turn(initialConversationId = targetKey, isLocal = useLocalModel)
@@ -677,6 +685,9 @@ class AssistantControllerImpl(
                 }
                 val conversationId = convId
                 turn.conversationId = conversationId
+                com.lucent.app.harness.HarnessRuntime.conversationId = conversationId
+                com.lucent.app.harness.GoalStore.load(appContext.applicationContext, conversationId)
+                com.lucent.app.harness.GoalStore.takeRoundNote()?.let { note -> turn.recorder.addPlanning(note) }
 
                 var answeredId = answersMessageId
                 if (insertUserMessage) {
@@ -717,6 +728,8 @@ class AssistantControllerImpl(
                     else ""
                 val parkedRefine = refinementContext
                 refinementContext = null
+                val parkedGoal = goalRoundPrompt
+                goalRoundPrompt = null
                 val recentItems = recentItemsContext(db, conversationId)
                 val fastMode = !agentMode
                 val useReasoning = if (fastMode) com.lucent.app.data.ReasoningEffort.DEFAULT.key else reasoning
@@ -741,14 +754,16 @@ class AssistantControllerImpl(
                         "reply, as quickly as you can. If they asked for something that would need a tool, " +
                         "say briefly that agent mode is off in Settings and answer in words instead."
                 } else basePrompt
-                val systemPrompt = if (parkedRefine != null) {
-                    basePrompt +
+                val systemPrompt = when {
+                    parkedRefine != null -> basePrompt +
                         "\n\nIMPORTANT (the user is refining an earlier proposal of yours): you proposed this before, " +
                         "the user paused it to ask for changes, and it was NOT executed. Proposal: " + parkedRefine +
                         "\nThe user has now told you what to change. Re-propose the action with their adjustments by calling " +
                         "the matching tool again. The app will show them a confirmation dialog - only call the tool; never " +
                         "claim anything was done, because it only happens after they approve it."
-                } else directPrompt
+                    parkedGoal != null -> directPrompt + "\n\n" + parkedGoal
+                    else -> directPrompt
+                }
                 com.lucent.app.harness.HarnessRuntime.conversationId = conversationId
                 com.lucent.app.harness.HarnessRuntime.noteSink = { line -> turn.recorder.addPlanning(line) }
                 com.lucent.app.harness.HarnessRuntime.llm = SubAgentBridge(url, spec, key, model)
@@ -942,6 +957,7 @@ class AssistantControllerImpl(
                             reasoningText = reply.reasoningContent
                         )
                         turn.turnPersisted = true
+                        turn.goalEligible = true
                         turn.completionBuzz()
                     }
                 }
@@ -958,8 +974,81 @@ class AssistantControllerImpl(
                     pendingConfirmation = null
                 }
                 unregisterTurn(turn)
+                continueGoalRound(turn)
             }
         }
+    }
+
+    private fun continueGoalRound(turn: Turn) {
+        com.lucent.app.harness.GoalStore.endRound()
+        if (!turn.goalEligible || turn.stopped) return
+        val ctx = appContextRef ?: return
+        val conversationId = turn.conversationId ?: return
+        val params = turn.params ?: return
+        val toolsAvailable = if (params.useLocalModel) params.useLocalTools else params.agentMode
+        if (!toolsAvailable) return
+        com.lucent.app.harness.GoalStore.load(ctx, conversationId)
+        val progress = ReplyPolish.deRobotify(turn.snapshotBuffer()).trim()
+        if (progress.isNotBlank()) {
+            com.lucent.app.harness.GoalStore.logRound(ctx, conversationId, progress)
+        }
+        val goal = com.lucent.app.harness.GoalStore.beginRound(ctx, conversationId, automatic = true) ?: return
+        com.lucent.app.data.StartupLog.event(
+            ctx,
+            "goal ${goal.id} round ${goal.roundsStarted} of ${goal.maxRounds} started"
+        )
+        com.lucent.app.harness.GoalStore.setRoundNote(
+            com.lucent.app.i18n.S.goalRoundNote(goal.roundsStarted, goal.maxRounds)
+        )
+        goalRoundPrompt = goalContinuationPrompt(goal)
+        send(
+            appContext = ctx,
+            text = params.text,
+            attachmentMime = null,
+            attachmentData = null,
+            attachmentName = null,
+            url = params.url,
+            spec = params.spec,
+            key = params.key,
+            model = params.model,
+            name = params.name,
+            style = params.style,
+            memoryTier = params.memoryTier,
+            webSearchEnabled = params.webSearchEnabled,
+            typingHapticsEnabled = params.typingHaptics,
+            insertUserMessage = false,
+            useLocalModel = params.useLocalModel,
+            useLocalTools = params.useLocalTools,
+            useLocalGpu = params.useLocalGpu,
+            confirmTools = params.confirmTools,
+            smallModelMode = params.smallModelMode,
+            agentMode = params.agentMode,
+            localWebSearch = params.localWebSearch,
+            reasoning = params.reasoning,
+            targetConversationId = conversationId
+        )
+    }
+
+    private fun goalContinuationPrompt(goal: com.lucent.app.harness.GoalState): String = buildString {
+        append("[goal continuation] This is round ").append(goal.roundsStarted)
+        append(" of ").append(goal.maxRounds).append(" for the goal you set earlier, and the app started it so you ")
+        append("can carry the goal on without waiting for the person.\n")
+        append("Objective: ").append(goal.objective).append('\n')
+        val recent = goal.roundLog.takeLast(4)
+        if (recent.isNotEmpty()) {
+            append("What has happened since the goal was set:\n")
+            recent.forEach { line -> append("- ").append(line).append('\n') }
+        }
+        if (goal.blockerReason.isNotBlank() && goal.blockerStreak > 0) {
+            append("You have reported this blocker for ").append(goal.blockerStreak)
+            append(" round(s) running: ").append(goal.blockerReason).append('\n')
+        }
+        append("Continue the work now, with your tools rather than a description of what you would do. ")
+        append("When the objective is achieved, call update_goal with action \"complete\", the goal_id and the ")
+        append("current revision. If the same concrete blocker has stopped you for three consecutive rounds, call ")
+        append("update_goal with action \"blocked\", that same blocked_reason and the current revision. Otherwise ")
+        append("keep working and finish this round with a short note of what moved. Call get_goal first whenever you ")
+        append("need the goal_id or the current revision.")
     }
 
     private suspend fun runLocalTurn(
@@ -1180,6 +1269,7 @@ class AssistantControllerImpl(
             traceJson = AgentTraceCodec.encode(turn.recorder.snapshot())
         )
         turn.turnPersisted = true
+        turn.goalEligible = true
         turn.completionBuzz()
     }
 
@@ -1279,6 +1369,7 @@ class AssistantControllerImpl(
         val tokens = TokenEstimator.estimateAll(messages.map { it.second }) + TokenEstimator.estimate(content)
         insertAssistant(db, conversationId, content, null, null, tokens, answeredId)
         turn.turnPersisted = true
+        turn.goalEligible = true
         turn.completionBuzz()
     }
 
