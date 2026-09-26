@@ -27,7 +27,10 @@ class DirectoryBrowseTest {
 
     @Test
     fun parentWalksUpAndStopsAtTheRoot() {
-        assertEquals("/sdcard", DirectoryBrowse.parent("/sdcard/Documents"))
+        val root = tree()
+        val nested = File(root, "alpha").path
+        val up = DirectoryBrowse.parent(nested).orEmpty()
+        assertEquals(DirectoryBrowse.normalize(root.path), DirectoryBrowse.normalize(up))
         assertNull(DirectoryBrowse.parent("/"))
         assertTrue(DirectoryBrowse.isRoot("/"))
     }
