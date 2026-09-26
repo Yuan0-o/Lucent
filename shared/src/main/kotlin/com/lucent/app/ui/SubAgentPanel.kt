@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -114,6 +115,86 @@ private fun statusLabel(status: String): String = when (status) {
     else -> S.subAgentStatusRunning
 }
 
+private const val SUB_AGENT_HEADER_CHIPS = 2
+
+@Composable
+fun SubAgentHeaderChips(
+    tint: Color,
+    mutedTint: Color,
+    modifier: Modifier = Modifier
+) {
+    var tick by remember { mutableStateOf(0) }
+    var openId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1200)
+            tick++
+        }
+    }
+
+    val agents = remember(tick) { SubAgents.list() }
+    headerAgents(agents).forEach { agent ->
+        SubAgentNameChip(
+            agent = agent,
+            tint = tint,
+            mutedTint = mutedTint,
+            onClick = { openId = agent.id },
+            modifier = modifier
+        )
+    }
+
+    val opened = openId?.let { id -> SubAgents.get(id) }
+    if (opened != null) {
+        SubAgentDialog(
+            agent = opened,
+            tint = tint,
+            mutedTint = mutedTint,
+            onDismiss = { openId = null }
+        )
+    }
+}
+
+private fun headerAgents(agents: List<SubAgent>): List<SubAgent> {
+    val running = agents.filter { it.status == "running" }
+    val pool = if (running.isEmpty()) agents.take(1) else running
+    return pool.take(SUB_AGENT_HEADER_CHIPS)
+}
+
+@Composable
+fun SubAgentNameChip(
+    agent: SubAgent,
+    tint: Color,
+    mutedTint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val working = agent.status == "running"
+    Row(
+        modifier = modifier
+            .widthIn(max = 92.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(tint.copy(alpha = if (working) 0.18f else 0.10f))
+            .border(
+                1.dp,
+                tint.copy(alpha = if (working) 0.38f else 0.20f),
+                RoundedCornerShape(percent = 50)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            agent.id,
+            color = if (working) tint else mutedTint,
+            fontSize = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
 @Composable
 fun SubAgentChip(
     tint: Color,
@@ -136,21 +217,14 @@ fun SubAgentChip(
 
     if (total == 0) return
 
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(tint.copy(alpha = 0.12f))
-            .border(1.dp, tint.copy(alpha = 0.24f), RoundedCornerShape(percent = 50))
-            .clickable { open = true }
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Icon(Icons.Default.Groups, contentDescription = S.agentSubAgents, tint = tint, modifier = Modifier.size(16.dp))
-        if (running > 0) {
-            Text("$running", color = tint, fontSize = 11.sp)
-        }
-    }
+    HeaderPanelChip(
+        icon = Icons.Default.Groups,
+        contentDescription = S.agentSubAgents,
+        onClick = { open = true },
+        tint = tint,
+        modifier = modifier,
+        badge = if (running > 0) "$running" else "$total"
+    )
 
     if (open) {
         val focus = first
@@ -177,7 +251,7 @@ private fun EmptyAgentDialog(
 }
 
 @Composable
-private fun SubAgentDialog(
+fun SubAgentDialog(
     agent: SubAgent,
     tint: Color,
     mutedTint: Color,

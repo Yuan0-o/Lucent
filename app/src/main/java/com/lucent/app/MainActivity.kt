@@ -382,13 +382,13 @@ class MainActivity : FragmentActivity() {
                 backdropColor = themeChoice.backdrop(systemDark)
                 paletteColors = if (paletteName == com.lucent.app.ui.PALETTE_RANDOM) {
                     com.lucent.app.ui.rememberRandomPaletteColors(
-                        animated = appBackgroundAnimated,
+                        animated = backgroundAnimated,
                         environment = backgroundEnvironment
                     )
                 } else if (paletteName == PALETTE_CYCLE) {
                     rememberCyclingPaletteColors(
                         LucentPalette.pickerEntries.map { it.colors },
-                        animated = appBackgroundAnimated,
+                        animated = backgroundAnimated,
                         environment = backgroundEnvironment
                     )
                 } else {
@@ -436,7 +436,7 @@ class MainActivity : FragmentActivity() {
                                 paletteColors = paletteColors,
                                 backdropColor = backdropColor,
                                 onFinished = { splashDone = true },
-                                backgroundAnimated = appBackgroundAnimated,
+                                backgroundAnimated = backgroundAnimated,
                                 style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
                             )
                         }

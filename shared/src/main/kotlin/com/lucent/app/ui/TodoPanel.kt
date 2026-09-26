@@ -63,21 +63,14 @@ fun TodoChip(
         items = TodoBoard.todos()
     }
 
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(tint.copy(alpha = 0.12f))
-            .border(1.dp, tint.copy(alpha = 0.24f), RoundedCornerShape(percent = 50))
-            .clickable { open = true }
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Icon(Icons.Default.CheckCircle, contentDescription = S.todoPanelTitle, tint = tint, modifier = Modifier.size(16.dp))
-        if (items.isNotEmpty()) {
-            Text("${items.count { it.status == "done" }}/${items.size}", color = tint, fontSize = 11.sp)
-        }
-    }
+    HeaderPanelChip(
+        icon = Icons.Default.CheckCircle,
+        contentDescription = S.todoPanelTitle,
+        onClick = { open = true },
+        tint = tint,
+        modifier = modifier,
+        badge = if (items.isEmpty()) null else "${items.count { it.status == "done" }}/${items.size}"
+    )
 
     if (open) {
         TodoPanelDialog(

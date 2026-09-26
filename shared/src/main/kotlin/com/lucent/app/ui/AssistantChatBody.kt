@@ -778,6 +778,7 @@ fun AssistantChatBody(
                 }
                 if (toolkit.enabled && toolkit.subAgents) {
                     SubAgentChip(tint = onGradient, mutedTint = onGradientMuted)
+                    SubAgentHeaderChips(tint = onGradient, mutedTint = onGradientMuted)
                 }
                 if (toolkit.enabled) {
                     RunningCounterChip(tint = onGradient, mutedTint = onGradientMuted)
@@ -1251,8 +1252,8 @@ fun AssistantChatBody(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box {
-                GlassRoundButton(
+            Box(modifier = Modifier.align(Alignment.CenterVertically)) {
+                ComposerGlassButton(
                     icon = Icons.Default.AttachFile,
                     contentDescription = com.lucent.app.i18n.S.a11yAttachFile,
                     onClick = { attachMenuOpen = true },
@@ -1332,20 +1333,20 @@ fun AssistantChatBody(
                 modifier = Modifier.weight(1f).then(inputModifier(submitMessage, sending))
             )
             if (sending) {
-                GlassRoundButton(
+                ComposerGlassButton(
                     icon = Icons.Default.Stop,
                     contentDescription = com.lucent.app.i18n.S.a11yStopGenerating,
                     onClick = { AssistantController.stopGeneration() },
                     tint = onGradient,
-                    filled = true
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 )
             } else {
-                GlassRoundButton(
+                ComposerGlassButton(
                     icon = Icons.AutoMirrored.Filled.Send,
                     contentDescription = com.lucent.app.i18n.S.a11ySend,
                     onClick = submitMessage,
                     tint = onGradient,
-                    filled = true
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 )
             }
         }
