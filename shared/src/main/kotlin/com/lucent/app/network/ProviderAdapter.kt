@@ -250,7 +250,9 @@ private fun toolSchema(tools: List<ToolDefinition>): List<JSONObject> {
         val props = JSONObject()
         val required = JSONArray()
         for (p in t.params) {
-            props.put(p.name, JSONObject().put("type", p.type).put("description", p.description))
+            val schema = JSONObject().put("type", p.type).put("description", p.description)
+            if (p.type == "array") schema.put("items", JSONObject().put("type", p.itemType))
+            props.put(p.name, schema)
             if (p.required) required.put(p.name)
         }
         JSONObject()

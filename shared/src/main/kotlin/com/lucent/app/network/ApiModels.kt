@@ -15,7 +15,13 @@ data class ChatTurn(
 
 data class ToolResultTurn(val id: String, val name: String, val content: String)
 
-data class ToolParam(val name: String, val type: String, val description: String, val required: Boolean = true)
+data class ToolParam(
+    val name: String,
+    val type: String,
+    val description: String,
+    val required: Boolean = true,
+    val itemType: String = "string"
+)
 
 data class ToolDefinition(val name: String, val description: String, val params: List<ToolParam>)
 

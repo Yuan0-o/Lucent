@@ -41,7 +41,7 @@ object OfficeSheetTools : HarnessGroupTools {
             description = "Edit an existing .xlsx workbook in place, keeping everything else in the file. \"ops\" is an array of operations: {\"op\":\"set\",\"sheet\":\"Sheet1\",\"ref\":\"B2\",\"value\":5,\"formula\":null,\"style\":{...}}, {\"op\":\"append_rows\",\"sheet\":\"Sheet1\",\"rows\":[[1,2],[3,4]]}, {\"op\":\"add_sheet\",\"name\":\"Sheet2\"}, {\"op\":\"rename_sheet\",\"from\":\"Sheet1\",\"to\":\"Data\"}, {\"op\":\"delete_sheet\",\"name\":\"Sheet2\"}, {\"op\":\"set_column_width\",\"sheet\":\"Sheet1\",\"column\":\"B\",\"width\":24}, {\"op\":\"merge\",\"sheet\":\"Sheet1\",\"range\":\"A1:C1\"}, {\"op\":\"freeze\",\"sheet\":\"Sheet1\",\"cell\":\"A2\"} and {\"op\":\"autofilter\",\"sheet\":\"Sheet1\",\"range\":\"A1:D1\",\"on\":true}.",
             params = listOf(
                 HarnessSchema.text("path", "The .xlsx file to edit"),
-                HarnessSchema.list("ops", "Array of edit operations")
+                HarnessSchema.list("ops", "Array of edit operations", itemType = "object")
             )
         ),
         HarnessTool(

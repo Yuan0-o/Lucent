@@ -41,7 +41,7 @@ object OfficeDocTools : HarnessGroupTools {
             description = "Edit an existing Word .docx in place, keeping everything else in the file. \"ops\" is an array of operations: {\"op\":\"append\",\"content\":\"markdown\"}, {\"op\":\"append_blocks\",\"blocks\":[...]}, {\"op\":\"replace\",\"find\":\"old\",\"replace\":\"new\",\"all\":true}, {\"op\":\"set_header\",\"text\":\"...\"}, {\"op\":\"set_footer\",\"text\":\"...\",\"page_numbers\":true}, {\"op\":\"insert_image\",\"path\":\"pic.png\",\"width\":480,\"caption\":\"...\"}, {\"op\":\"delete_paragraph\",\"find\":\"exact text\"} and {\"op\":\"set_title\",\"text\":\"...\"}.",
             params = listOf(
                 HarnessSchema.text("path", "The .docx file to edit"),
-                HarnessSchema.list("ops", "Array of edit operations")
+                HarnessSchema.list("ops", "Array of edit operations", itemType = "object")
             )
         )
     )

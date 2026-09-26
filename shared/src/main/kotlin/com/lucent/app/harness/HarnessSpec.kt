@@ -185,8 +185,8 @@ object HarnessSchema {
     fun flag(name: String, description: String, required: Boolean = false) =
         ToolParam(name, "boolean", description, required)
 
-    fun list(name: String, description: String, required: Boolean = true) =
-        ToolParam(name, "array", description, required)
+    fun list(name: String, description: String, required: Boolean = true, itemType: String = "string") =
+        ToolParam(name, "array", description, required, itemType)
 
     fun json(name: String, description: String, required: Boolean = true) =
         ToolParam(name, "object", description, required)

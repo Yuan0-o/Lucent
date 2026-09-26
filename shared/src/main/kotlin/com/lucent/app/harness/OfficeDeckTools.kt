@@ -50,7 +50,7 @@ object OfficeDeckTools : HarnessGroupTools {
                 "insert_image (slide, path, x, y, w, h), delete_slide (slide) and set_theme_colour (name, value).",
             params = listOf(
                 HarnessSchema.text("path", "PowerPoint file to edit"),
-                HarnessSchema.list("ops", "Operations to apply, in order")
+                HarnessSchema.list("ops", "Operations to apply, in order", itemType = "object")
             )
         )
     )

@@ -369,7 +369,7 @@ object ConnectorTools : HarnessGroupTools {
                 HarnessSchema.text("page_id", "Parent page id for page_create", false),
                 HarnessSchema.text("title", "Title for page_create", false),
                 HarnessSchema.json("properties", "Notion properties object for page_create and page_update", false),
-                HarnessSchema.list("blocks", "Child blocks array for page_create", false)
+                HarnessSchema.list("blocks", "Child blocks array for page_create", false, itemType = "object")
             )
         ),
         HarnessTool(
