@@ -49,7 +49,7 @@ class HarnessModulesTest {
         "TodoTools" to listOf("todo_write", "todo_read"),
         "GoalTools" to listOf("create_goal", "get_goal", "update_goal"),
         "PluginTools" to listOf(
-            "plugin_status", "plugin_list_available", "install_plugin", "remove_plugin", "plugin_run", "plugin_mirror_test"
+            "plugin_status", "plugin_list_available", "install_plugin", "remove_plugin", "plugin_run", "plugin_inspect", "plugin_mirror_test"
         ),
         "SandboxTools" to listOf("sandbox_status", "sandbox_run", "sandbox_limits"),
         "SkillTools" to listOf("list_skills", "read_skill", "save_skill"),

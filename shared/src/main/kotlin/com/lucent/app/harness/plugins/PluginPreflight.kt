@@ -71,7 +71,7 @@ object PluginPreflight {
             } else {
                 val results = PluginDownload.speedTable(usable)
                 mirrorResults.addAll(results)
-                if (results.none { it.second > 0 }) {
+                if (results.none { it.second != 0L }) {
                     problems.add(
                         PreflightProblem(
                             "source_unreachable",
