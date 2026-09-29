@@ -186,6 +186,7 @@ object HarnessPrompt {
             append(" groups=").append(HarnessGroup.entries.count { config.groupEnabled(it) && tools.any { tool -> tool.group == it } })
             append(" shell=").append(capabilities.contains(HarnessRuntime.CAP_SHELL))
             append(" plugins=").append(config.installedPlugins().size)
+            append(" pluginShell=").append(pluginHost?.isReady() == true)
             append(" mcp=").append(config.mcpServers.count { it.enabled })
             append(" device=").append(config.deviceEnabled && HarnessRuntime.android)
         }

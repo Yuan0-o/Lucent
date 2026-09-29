@@ -49,9 +49,9 @@ object AuditTrail {
             put("group", entry.group)
             put("permission", entry.permission)
             put("approval", entry.approval)
-            put("arguments", entry.arguments)
+            put("arguments", redact(entry.arguments))
             put("outcome", entry.outcome)
-            put("detail", entry.detail)
+            put("detail", redact(entry.detail))
             put("millis", entry.millis)
             put("files", entry.files.joinToString(", "))
         }.toString()
@@ -89,6 +89,15 @@ object AuditTrail {
     fun format(entry: AuditEntry): String {
         val time = synchronized(lock) { stamp.format(Date(entry.at)) }
         return "$time  ${entry.tool}  ${entry.outcome}  ${entry.millis}ms"
+    }
+
+    private val secretValue = Regex("(?i)(token|secret|password|passwd|api[_-]?key|auth)\\s*[:=]\\s*[^\\s,}]+")
+    private val secretUrl = Regex("://[^\\s/:@]+:[^\\s/@]+@")
+
+    fun redact(text: String): String {
+        var out = secretValue.replace(text, "$1=***")
+        out = secretUrl.replace(out, "://***@")
+        return out
     }
 
     private fun parse(line: String): AuditEntry? {

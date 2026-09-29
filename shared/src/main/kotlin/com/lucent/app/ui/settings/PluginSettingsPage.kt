@@ -29,8 +29,10 @@ import com.lucent.app.harness.PluginFailure
 import com.lucent.app.harness.PluginOutcome
 import com.lucent.app.harness.Workspace
 import com.lucent.app.harness.plugins.PluginCatalog
+import com.lucent.app.harness.plugins.PluginPreflight
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
+import com.lucent.app.harness.plugins.PreflightReport
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.LocalOnGradient
@@ -57,6 +59,8 @@ internal fun PluginSettingsPage(
     var progress by remember { mutableStateOf(0f) }
     var failure by remember { mutableStateOf<PluginFailureReport?>(null) }
     var retry by remember { mutableStateOf<PluginSpec?>(null) }
+    var preflight by remember { mutableStateOf<PreflightReport?>(null) }
+    var pendingInstall by remember { mutableStateOf<PluginSpec?>(null) }
     var running by remember { mutableStateOf<Job?>(null) }
 
     val android = HarnessRuntime.android
@@ -64,7 +68,7 @@ internal fun PluginSettingsPage(
     val plugins = remember(android) { PluginCatalog.forPlatform(android).filterNot { it.id == "termux" } }
     val termux = remember { PluginCatalog.forPlatform(true).firstOrNull { it.id == "termux" } }
 
-    fun runAction(plugin: PluginSpec, remove: Boolean) {
+    fun startInstall(plugin: PluginSpec, remove: Boolean) {
         val target = HarnessRuntime.pluginHost
         if (target == null) {
             note = S.agentPluginsUnavailable
@@ -88,6 +92,33 @@ internal fun PluginSettingsPage(
             note = if (outcome.ok) outcome.message else ""
             if (!outcome.ok) failure = PluginFailureReport(plugin, outcome)
         }
+    }
+
+    fun runAction(plugin: PluginSpec, remove: Boolean) {
+        if (remove) {
+            startInstall(plugin, true)
+            return
+        }
+        busy = plugin.id
+        progress = 0f
+        note = S.pluginPreflightTitle
+        running = scope.launch {
+            val report = PluginPreflight.inspect(plugin, PluginSource("", "", ""), android)
+            busy = ""
+            running = null
+            note = ""
+            if (report.blocked) {
+                preflight = report
+            } else {
+                startInstall(plugin, false)
+            }
+        }
+    }
+
+    fun selectMirror(plugin: PluginSpec, source: PluginSource) {
+        HarnessRuntime.update(HarnessRuntime.config().withMirror(plugin.id, source.id))
+        config = HarnessRuntime.config()
+        note = S.pluginSourceRemembered(source.label)
     }
 
     fun cancelRunning() {
@@ -124,7 +155,8 @@ internal fun PluginSettingsPage(
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted,
                 onAction = { runAction(plugin, it) },
-                onCancel = { cancelRunning() }
+                onCancel = { cancelRunning() },
+                onSelectMirror = { source -> selectMirror(plugin, source) }
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -150,7 +182,26 @@ internal fun PluginSettingsPage(
     LaunchedEffect(pending) {
         if (pending == null) return@LaunchedEffect
         retry = null
-        runAction(pending, false)
+        startInstall(pending, false)
+    }
+
+    val forced = pendingInstall
+    LaunchedEffect(forced) {
+        if (forced == null) return@LaunchedEffect
+        pendingInstall = null
+        startInstall(forced, false)
+    }
+
+    val blocked = preflight
+    if (blocked != null) {
+        PluginPreflightDialog(
+            report = blocked,
+            onInstallAnyway = {
+                preflight = null
+                pendingInstall = blocked.plugin
+            },
+            onDismiss = { preflight = null }
+        )
     }
 }
 
@@ -214,7 +265,8 @@ private fun PluginRow(
     onGradient: androidx.compose.ui.graphics.Color,
     onGradientMuted: androidx.compose.ui.graphics.Color,
     onAction: (Boolean) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onSelectMirror: (PluginSource) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -248,12 +300,20 @@ private fun PluginRow(
         if (plugin.sources.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
             plugin.sources.forEach { source ->
-                Text(
-                    (if (source.id == mirror) "\u2022 " else "") + source.label +
-                        if (source.official) " (official)" else "",
-                    color = onGradientMuted,
-                    fontSize = 10.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        (if (source.id == mirror) "\u2022 " else "  ") + source.label +
+                            if (source.official) " (official)" else "",
+                        color = onGradientMuted,
+                        fontSize = 10.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (source.id != mirror && source.url.startsWith("http")) {
+                        TextButton(onClick = { onSelectMirror(source) }) {
+                            Text(S.pluginUseSource, color = onGradient, fontSize = 11.sp)
+                        }
+                    }
+                }
             }
         }
     }
@@ -325,6 +385,46 @@ private fun PluginFailureDialog(
     )
 }
 
+@Composable
+private fun PluginPreflightDialog(
+    report: PreflightReport,
+    onInstallAnyway: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(S.pluginPreflightTitle) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(report.plugin.name, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(S.pluginPreflightBlocked, fontSize = 13.sp)
+                report.problems.forEach { problem ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(problem.title, fontSize = 13.sp)
+                    problem.steps.forEach { step ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("\u2022 $step", fontSize = 12.sp)
+                    }
+                }
+                report.notes.forEach { note ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(note, fontSize = 11.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onInstallAnyway) { Text(S.pluginInstallAnyway) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(S.actionClose) } }
+    )
+}
+
 private fun reasonText(failure: PluginFailure): String = when (failure) {
     PluginFailure.CANCELLED -> S.pluginReasonCancelled
     PluginFailure.NO_SHELL -> S.pluginReasonNoShell
@@ -339,16 +439,19 @@ private fun repairSteps(failure: PluginFailure, android: Boolean): List<String> 
         PluginFailure.NO_SHELL -> {
             if (android) {
                 add(S.pluginRepairTermux)
+                add(S.pluginRepairPermission)
                 add(S.pluginRepairStorage)
             } else {
                 add(S.pluginRepairRetry)
             }
         }
         PluginFailure.DOWNLOAD -> {
+            add(S.pluginRepairMirrors)
             add(S.pluginRepairStorage)
             add(S.pluginRepairRetry)
         }
         PluginFailure.INSTALL -> {
+            if (android) add(S.pluginRepairPkgUpdate)
             add(S.pluginRepairUserland)
             add(S.pluginRepairRetry)
         }

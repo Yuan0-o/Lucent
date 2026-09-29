@@ -115,7 +115,9 @@ object TermuxBridge {
         }
         if (!codeFile.exists()) {
             lastError = "Termux did not answer within ${timeoutSeconds}s. Check that Termux is installed, that " +
-                "allow-external-apps=true is set in ~/.termux/termux.properties, and that it holds the run-command permission."
+                "allow-external-apps=true is set in ~/.termux/termux.properties, and that it holds the run-command " +
+                "permission. If you use a Termux fork with a different package name, install the official " +
+                "com.termux build instead, since only it can receive Lucent's commands."
             return@withContext ShellOutcome(false, outFile.takeIf { it.exists() }?.readText().orEmpty(), lastError, -1, true)
         }
         val code = codeFile.readText().trim().toIntOrNull() ?: -1

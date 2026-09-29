@@ -67,46 +67,85 @@ class PluginManager private constructor(private val context: Context?, private v
             }
             var chosen = source
             if (chosen.id.isBlank() || chosen.url.isBlank() || usable.none { it.id == chosen.id }) {
-                onProgress(0.02f, "testing download sources")
-                chosen = PluginDownload.fastest(usable) ?: usable.first()
+                val remembered = usable.firstOrNull { it.id == HarnessRuntime.config().mirrors[plugin.id] }
+                chosen = if (remembered != null) {
+                    onProgress(0.02f, "using the remembered source: ${remembered.label}")
+                    remembered
+                } else {
+                    onProgress(0.02f, "testing download sources")
+                    PluginDownload.fastest(usable) ?: usable.first()
+                }
             }
             sourceId = chosen.id.ifBlank { "built-in" }
-            onProgress(0.05f, "downloading from ${chosen.label}")
-            val target = File(HarnessRuntime.downloadsDir(), fileNameOf(plugin, chosen))
-            val fetched = try {
-                PluginDownload.fetch(chosen, target) { fraction, note ->
-                    onProgress(0.05f + fraction * 0.5f, "${chosen.label}: $note")
+            val reused = PluginPreflight.reusableStaged(plugin, chosen)
+            if (reused != null) {
+                staged = reused
+                script = script.replace("{file}", reused.path)
+                onProgress(0.55f, "reusing the download from last time")
+                PluginJournal.write(plugin.id, "download", "reused ${reused.name}", true)
+            } else {
+                onProgress(0.05f, "downloading from ${chosen.label}")
+                val target = PluginPreflight.targetFile(plugin, chosen)
+                PluginJournal.write(plugin.id, "download", chosen.label, false)
+                val fetched = try {
+                    PluginDownload.fetch(chosen, target) { fraction, note ->
+                        onProgress(0.05f + fraction * 0.5f, "${chosen.label}: $note")
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    target.delete()
+                    PluginJournal.write(plugin.id, "download", "cancelled", false)
+                    record(plugin, "download cancelled", target.path)
+                    return PluginOutcome(
+                        false,
+                        "${plugin.name}: the download was cancelled and the partial file was removed",
+                        "",
+                        PluginFailure.CANCELLED,
+                        ""
+                    )
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                target.delete()
-                record(plugin, "download cancelled", target.path)
-                return PluginOutcome(
-                    false,
-                    "${plugin.name}: the download was cancelled and the partial file was removed",
-                    "",
-                    PluginFailure.CANCELLED,
-                    ""
-                )
+                if (!fetched.ok) {
+                    val hint = if (fetched.message.contains("was expected")) {
+                        " The mirror may have refreshed the file since the catalogue was written; " +
+                            "try another source from the list."
+                    } else {
+                        ""
+                    }
+                    PluginJournal.write(plugin.id, "download", fetched.message, false)
+                    record(plugin, "download failed", fetched.message)
+                    return fetched.copy(failure = PluginFailure.DOWNLOAD, message = fetched.message + hint)
+                }
+                staged = target
+                PluginJournal.write(plugin.id, "download", "ok", true)
+                script = script.replace("{file}", target.path)
             }
-            if (!fetched.ok) {
-                record(plugin, "download failed", fetched.message)
-                return fetched.copy(failure = PluginFailure.DOWNLOAD)
-            }
-            staged = target
-            script = script.replace("{file}", target.path)
         }
         if (!isReady()) {
             val kept = staged?.path.orEmpty()
-            record(plugin, "downloaded only", kept)
+            val action = if (staged != null) "downloaded only" else "no shell"
+            record(plugin, action, kept.ifBlank { "nothing staged" })
+            val message = if (staged != null) {
+                "${plugin.name} was downloaded but cannot be installed without a shell"
+            } else {
+                "${plugin.name} cannot be installed: no shell is available on this device"
+            }
             return PluginOutcome(
                 false,
-                "${plugin.name} was downloaded but cannot be installed without a shell",
+                message,
                 kept,
                 PluginFailure.NO_SHELL,
                 kept
             )
         }
+        if (android && script.contains("pkg install") && !pkgListFresh) {
+            onProgress(0.58f, "refreshing the Termux package list")
+            val refreshed = run(plugin, "pkg update", 600)
+            pkgListFresh = refreshed.ok
+            if (!refreshed.ok) {
+                record(plugin, "pkg update failed", refreshed.text.take(400))
+            }
+        }
         onProgress(0.6f, "installing")
+        PluginJournal.write(plugin.id, "install", sourceId, false)
         val outcome = try {
             run(plugin, script, 3600)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -122,6 +161,7 @@ class PluginManager private constructor(private val context: Context?, private v
         }
         if (!outcome.ok) {
             val detail = outcome.text.take(1200)
+            PluginJournal.write(plugin.id, "install", detail.take(200), false)
             record(plugin, "install failed", detail)
             return PluginOutcome(
                 false,
@@ -135,6 +175,7 @@ class PluginManager private constructor(private val context: Context?, private v
         val checked = probe(plugin)
         if (!checked.ok) {
             val detail = (outcome.text.take(600) + "\n" + checked.text.take(400)).trim()
+            PluginJournal.write(plugin.id, "install", "check failed", false)
             record(plugin, "install failed", detail)
             return PluginOutcome(
                 false,
@@ -155,6 +196,7 @@ class PluginManager private constructor(private val context: Context?, private v
         )
         HarnessRuntime.update(HarnessRuntime.config().withPlugin(state).withMirror(plugin.id, state.source))
         kept?.delete()
+        PluginJournal.clear(plugin.id)
         onProgress(1f, "installed")
         record(plugin, "installed", outcome.text.take(600))
         return PluginOutcome(true, "${plugin.name} is installed")
@@ -210,12 +252,6 @@ class PluginManager private constructor(private val context: Context?, private v
             "TERM=xterm LANG=C.UTF-8 /bin/bash -lc '$escaped'"
     }
 
-    private fun fileNameOf(plugin: PluginSpec, source: PluginSource): String {
-        val fromUrl = source.url.substringAfterLast('/').substringBefore('?')
-        if (fromUrl.contains('.')) return fromUrl
-        return "${plugin.id}.download"
-    }
-
     private fun record(plugin: PluginSpec, action: String, detail: String) {
         val app = context ?: return
         AuditTrail.record(
@@ -239,8 +275,12 @@ class PluginManager private constructor(private val context: Context?, private v
 
         private val USERLAND_PLUGINS = setOf("python-office", "libreoffice")
 
+        private var pkgListFresh = false
+
         fun android(context: Context): PluginManager = PluginManager(context.applicationContext, true)
 
         fun desktop(context: Context? = null): PluginManager = PluginManager(context?.applicationContext, false)
+
+        internal fun testInstance(android: Boolean): PluginManager = PluginManager(null, android)
     }
 }

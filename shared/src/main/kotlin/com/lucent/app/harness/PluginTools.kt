@@ -2,6 +2,7 @@ package com.lucent.app.harness
 
 import com.lucent.app.harness.plugins.PluginCatalog
 import com.lucent.app.harness.plugins.PluginDownload
+import com.lucent.app.harness.plugins.PluginPreflight
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
 import com.lucent.app.network.ToolExecResult
@@ -61,6 +62,18 @@ object PluginTools : HarnessGroupTools {
             )
         ),
         HarnessTool(
+            name = "plugin_inspect",
+            group = group,
+            permission = HarnessPermission.READ,
+            description = "Check a plugin before installing it: reports every blocking problem (missing shell, " +
+                "unreachable sources, unwritable folders) with exact repair steps, plus mirror speeds. " +
+                "Call this when an install fails or before downloading anything large.",
+            params = listOf(
+                HarnessSchema.text("id", "Plugin id from plugin_status"),
+                HarnessSchema.text("source", "Preferred source id", false)
+            )
+        ),
+        HarnessTool(
             name = "plugin_mirror_test",
             group = group,
             permission = HarnessPermission.NETWORK,
@@ -75,6 +88,7 @@ object PluginTools : HarnessGroupTools {
         "install_plugin" -> install(ctx, args)
         "remove_plugin" -> remove(ctx, args)
         "plugin_run" -> run(ctx, args)
+        "plugin_inspect" -> inspect(ctx, args)
         "plugin_mirror_test" -> mirrorTest(ctx, args)
         else -> null
     }
@@ -146,10 +160,15 @@ object PluginTools : HarnessGroupTools {
         }
         val preferred = args.optString("source", "")
         val source = plugin.sources.firstOrNull { it.id == preferred } ?: PluginSource("", "", "")
+        val preflight = PluginPreflight.inspect(plugin, source, ctx.android)
+        if (preflight.blocked) {
+            val failure = PluginOutcome(false, "", failure = PluginPreflight.failureOf(preflight))
+            return ToolExecResult(PluginPreflight.render(preflight) + repairHint(ctx, failure), success = false)
+        }
         HarnessRuntime.note("installing ${plugin.name}")
         var lastNote = ""
-        val outcome = host.install(plugin, source) { fraction, note ->
-            if (note != lastNote && (fraction > 0.2f || note.contains("failed"))) {
+        val outcome = host.install(plugin, source) { _, note ->
+            if (note != lastNote) {
                 lastNote = note
                 HarnessRuntime.note("${plugin.name}: $note")
             }
@@ -161,15 +180,45 @@ object PluginTools : HarnessGroupTools {
         )
     }
 
+    private suspend fun inspect(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+        val plugin = PluginCatalog.find(args.optString("id", "").trim())
+            ?: return ToolExecResult("No plugin with that id. Use plugin_status for the list.", success = false)
+        val preferred = args.optString("source", "")
+        val source = plugin.sources.firstOrNull { it.id == preferred } ?: PluginSource("", "", "")
+        val report = PluginPreflight.inspect(plugin, source, ctx.android)
+        return ToolExecResult(PluginPreflight.render(report), success = !report.blocked)
+    }
+
     private fun repairHint(ctx: HarnessCtx, outcome: PluginOutcome): String = when (outcome.failure) {
         PluginFailure.NO_SHELL -> if (ctx.android) {
-            " Nothing can be installed without a shell: install Termux from F-Droid, run termux-setup-storage once, " +
-                "and set allow-external-apps=true in ~/.termux/termux.properties."
+            " Nothing can be installed without a working shell: install Termux from F-Droid, open it once, " +
+                "run termux-setup-storage, set allow-external-apps=true in ~/.termux/termux.properties, and " +
+                "allow Lucent the run-command permission when Android asks."
         } else {
             " A shell is needed before this can be installed on this machine."
         }
         PluginFailure.DETECT -> " Everything installed, but the check still fails: read the output for the first error."
-        PluginFailure.DOWNLOAD -> " The download failed: try another source, or check the workspace folder is writable."
+        PluginFailure.DOWNLOAD -> {
+            val detail = outcome.detail
+            when {
+                detail.contains("was expected") ->
+                    " The mirror sent a different-sized file, so it may have refreshed the image. Try another " +
+                        "source with plugin_mirror_test, or pick one in Settings under Agent, then Plugins."
+                else -> " The download failed: run plugin_mirror_test for ${outcome.message}, or pick another " +
+                    "source in Settings under Agent, then Plugins."
+            }
+        }
+        PluginFailure.INSTALL -> {
+            val detail = outcome.detail
+            if (detail.contains("Unable to locate package", ignoreCase = true) ||
+                detail.contains("E: Unable", ignoreCase = true)
+            ) {
+                " Termux could not find a package, which usually means its package list is stale. Install " +
+                    "again: Lucent refreshes the list first now."
+            } else {
+                ""
+            }
+        }
         else -> ""
     }
 
