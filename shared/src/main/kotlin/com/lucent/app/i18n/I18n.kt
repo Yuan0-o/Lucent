@@ -1696,7 +1696,7 @@ open class Tr {
     open val pluginRepairMirrors: String = "Install again: Lucent re-tests every download source and takes the fastest one."
     open val pluginProblemNoScript: String = "Nothing to install on this platform."
     open val pluginProblemNoScriptStep: String = "This plugin ships no install script for this platform."
-    open val pluginProblemNoTermux: String = "This plugin only installs inside Termux.",
+    open val pluginProblemNoTermux: String = "This plugin only installs inside Termux."
     open val pluginProblemNoTermuxStep: String = "Install Termux from F-Droid, open it once, and set allow-external-apps=true in ~/.termux/termux.properties. The privileged shell cannot install this one."
     open val pluginProblemNoSource: String = "No download source."
     open val pluginProblemNoSourceStep: String = "This plugin ships no direct download link."
@@ -3424,7 +3424,7 @@ object Zh : Tr() {
     override val pluginRepairMirrors: String = "重新安装一次：Lucent 会重新测试所有下载源并选择最快的一个。"
     override val pluginProblemNoScript: String = "这个平台上没有可安装的内容。"
     override val pluginProblemNoScriptStep: String = "该插件没有为这个平台提供安装脚本。"
-    override val pluginProblemNoTermux: String = "这个插件只能在 Termux 里面安装。",
+    override val pluginProblemNoTermux: String = "这个插件只能在 Termux 里面安装。"
     override val pluginProblemNoTermuxStep: String = "从 F-Droid 安装 Termux，打开一次，并在 ~/.termux/termux.properties 中设置 allow-external-apps=true。特权 shell 安装不了这个插件。"
     override val pluginProblemNoSource: String = "没有下载源。"
     override val pluginProblemNoSourceStep: String = "该插件没有提供直接下载链接。"
@@ -5149,7 +5149,7 @@ object Ja : Tr() {
     override val pluginRepairMirrors: String = "もう一度インストールしてください。Lucent がすべてのダウンロード元を再測定し、最速のものを選びます。"
     override val pluginProblemNoScript: String = "このプラットフォームにインストールするものがありません。"
     override val pluginProblemNoScriptStep: String = "このプラグインにはこのプラットフォーム用のインストールスクリプトがありません。"
-    override val pluginProblemNoTermux: String = "このプラグインは Termux の中でのみインストールできます。",
+    override val pluginProblemNoTermux: String = "このプラグインは Termux の中でのみインストールできます。"
     override val pluginProblemNoTermuxStep: String = "F-Droid から Termux をインストールして一度起動し、~/.termux/termux.properties で allow-external-apps=true を設定してください。特権シェルではこのプラグインはインストールできません。"
     override val pluginProblemNoSource: String = "ダウンロード元がありません。"
     override val pluginProblemNoSourceStep: String = "このプラグインには直接のダウンロードリンクがありません。"
@@ -6874,7 +6874,7 @@ object Ko : Tr() {
     override val pluginRepairMirrors: String = "다시 설치하세요. Lucent가 모든 내려받기 원본을 다시 측정하고 가장 빠른 것을 선택합니다."
     override val pluginProblemNoScript: String = "이 플랫폼에 설치할 내용이 없습니다."
     override val pluginProblemNoScriptStep: String = "이 플러그인에는 이 플랫폼용 설치 스크립트가 없습니다."
-    override val pluginProblemNoTermux: String = "이 플러그인은 Termux 안에서만 설치됩니다.",
+    override val pluginProblemNoTermux: String = "이 플러그인은 Termux 안에서만 설치됩니다."
     override val pluginProblemNoTermuxStep: String = "F-Droid에서 Termux를 설치하고 한 번 실행한 뒤 ~/.termux/termux.properties에 allow-external-apps=true를 설정하세요. 권한 셸로는 이 플러그인을 설치할 수 없습니다."
     override val pluginProblemNoSource: String = "내려받기 원본이 없습니다."
     override val pluginProblemNoSourceStep: String = "이 플러그인에는 직접 내려받기 링크가 없습니다."
