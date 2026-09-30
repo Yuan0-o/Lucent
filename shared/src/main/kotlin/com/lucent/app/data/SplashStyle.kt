@@ -2,7 +2,8 @@ package com.lucent.app.data
 
 enum class SplashStyle(val key: String) {
     CAT("cat"),
-    PEN("pen");
+    PEN("pen"),
+    AVATAR("avatar");
 
     companion object {
         val DEFAULT = CAT

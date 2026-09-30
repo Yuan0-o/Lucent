@@ -101,6 +101,19 @@ internal fun SplashSettingsPage(
                     StartupLog.event(context, "splash: animation set to ${SplashStyle.PEN.key}")
                 }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            SplashStyleRow(
+                selected = current == SplashStyle.AVATAR,
+                title = S.splashStyleAvatarTitle,
+                detail = S.splashStyleAvatarDesc,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = {
+                    SettingsCache.splashStyle = SplashStyle.AVATAR.key
+                    scope.launch { repo.setSplashStyle(SplashStyle.AVATAR.key) }
+                    StartupLog.event(context, "splash: animation set to ${SplashStyle.AVATAR.key}")
+                }
+            )
         }
     }
 }

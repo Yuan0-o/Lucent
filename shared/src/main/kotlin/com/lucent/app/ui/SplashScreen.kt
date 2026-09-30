@@ -106,6 +106,12 @@ fun LucentSplash(
 
         if (style == SplashStyle.PEN) {
             PenSplashArtwork(elapsed = elapsed, tint = paletteColors.firstOrNull() ?: onGradient)
+        } else if (style == SplashStyle.AVATAR) {
+            AvatarSplashArtwork(
+                elapsed = elapsed,
+                tint = paletteColors.firstOrNull() ?: Color.White,
+                onGradient = onGradient
+            )
         } else {
             CatSplashArtwork(
                 elapsed = elapsed,

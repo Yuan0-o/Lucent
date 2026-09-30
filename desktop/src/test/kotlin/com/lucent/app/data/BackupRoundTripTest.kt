@@ -74,6 +74,7 @@ class BackupRoundTripTest {
             settings.setThemeMode("dark")
             settings.setPalette("OCEAN")
             settings.setAppLanguage("zh")
+            settings.setSplashStyle("avatar")
 
             val notes = db.noteDao().getAllOnce()
             val tasks = db.taskDao().getAllOnce()
@@ -125,6 +126,7 @@ class BackupRoundTripTest {
                 assertEquals("dark", settings2.themeMode.first())
                 assertEquals("OCEAN", settings2.palette.first())
                 assertEquals("zh", settings2.appLanguage.first())
+                assertEquals("avatar", settings2.splashStyle.first())
             }
         }
     }
@@ -267,6 +269,7 @@ class BackupRoundTripTest {
     fun backupManifestCoversEverySettingsKey() {
         val backable = setOf(
             "themeMode", "palette", "dynamicColorEnabled", "font", "fontLibrary",
+            "splashEnabled", "splashStyle",
             "assistantName", "assistantStyle",
             "memoryTier", "memoryTierLocal", "webSearchEnabled", "typingHaptics", "markdownEnabled",
             "agentMode", "reasoning", "webSearchEngine",
