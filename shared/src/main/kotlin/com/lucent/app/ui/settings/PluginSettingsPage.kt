@@ -48,7 +48,9 @@ internal data class PluginFailureReport(val plugin: PluginSpec, val outcome: Plu
 internal fun PluginSettingsPage(
     onRoute: (SettingsRoute) -> Unit,
     onOpenUrl: (String) -> Unit = {},
-    termuxInstalled: Boolean = false
+    termuxInstalled: Boolean = false,
+    storageGranted: Boolean = true,
+    onGrantStorage: () -> Unit = {}
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -132,6 +134,14 @@ internal fun PluginSettingsPage(
                 termux = termux,
                 installed = termuxInstalled,
                 onOpenUrl = onOpenUrl,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            )
+        }
+        if (android && !storageGranted) {
+            Spacer(modifier = Modifier.height(12.dp))
+            StorageCard(
+                onGrant = onGrantStorage,
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted
             )
@@ -240,6 +250,25 @@ private fun TermuxCard(
                 }) {
                     Text(S.agentTermuxAction, color = onGradient, fontSize = 13.sp)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StorageCard(
+    onGrant: () -> Unit,
+    onGradient: androidx.compose.ui.graphics.Color,
+    onGradientMuted: androidx.compose.ui.graphics.Color
+) {
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(S.pluginStorageTitle, color = onGradient, fontSize = 14.sp)
+                Text(S.pluginStorageSub, color = onGradientMuted, fontSize = 11.sp)
+            }
+            TextButton(onClick = onGrant) {
+                Text(S.pluginStorageAction, color = onGradient, fontSize = 13.sp)
             }
         }
     }

@@ -21,25 +21,18 @@ object TermuxBridge {
     private const val EXTRA_SESSION_ACTION = "com.termux.RUN_COMMAND_SESSION_ACTION"
     private const val BASH = "/data/data/com.termux/files/usr/bin/bash"
 
-    @Volatile private var installedCache: Boolean? = null
-    @Volatile private var lastError: String = ""
-
     fun installed(context: Context): Boolean {
-        installedCache?.let { return it }
-        val found = try {
+        return try {
             context.packageManager.getPackageInfo(TERMUX_PACKAGE, 0)
             true
         } catch (e: Exception) {
             false
         }
-        installedCache = found
-        return found
     }
 
     fun error(): String = lastError
 
     fun refresh() {
-        installedCache = null
     }
 
     fun permissionDeclared(context: Context): Boolean = try {

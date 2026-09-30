@@ -2553,7 +2553,9 @@ fun SettingsScreen(active: Boolean = true) {
                         )
                     }
                 },
-                termuxInstalled = com.lucent.app.harness.AndroidWorkspacePicker.termuxInstalled(context)
+                termuxInstalled = com.lucent.app.harness.AndroidWorkspacePicker.termuxInstalled(context),
+                storageGranted = com.lucent.app.harness.AndroidWorkspacePicker.storageGranted(),
+                onGrantStorage = { grantAllFiles() }
             )
 
             SettingsRoute.Mcp -> McpSettingsPage(onRoute = { navigate(it) })
