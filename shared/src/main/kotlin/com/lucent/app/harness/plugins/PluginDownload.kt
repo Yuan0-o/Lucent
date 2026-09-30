@@ -1,6 +1,5 @@
 package com.lucent.app.harness.plugins
 
-import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.PluginOutcome
 import com.lucent.app.harness.Workspace
 import kotlinx.coroutines.Dispatchers
@@ -73,11 +72,9 @@ object PluginDownload {
         val scored = coroutineScope {
             sources.map { source -> async { source to probe(source) } }.map { it.await() }
         }
-        val usable = scored.filter { it.second > 0 }
-        if (usable.isEmpty()) return sources.firstOrNull { it.official } ?: sources.first()
-        val chosen = usable.maxByOrNull { it.second }!!
-        if (!HarnessRuntime.config().fastMirror) return sources.first()
-        return chosen.first
+        val reachable = scored.filter { it.second != 0L }
+        if (reachable.isEmpty()) return sources.firstOrNull { it.official } ?: sources.first()
+        return reachable.maxByOrNull { it.second }!!.first
     }
 
     suspend fun speedTable(sources: List<PluginSource>): List<Triple<String, Long, Boolean>> = coroutineScope {
