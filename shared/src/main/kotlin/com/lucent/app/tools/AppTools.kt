@@ -34,9 +34,10 @@ object AppTools {
     )
 
     fun definitions(includeWebSearch: Boolean = false): List<ToolDefinition> =
-        baseDefinitions() + NotebookTools.definitions() + FormattingTools.definitions() +
+        (baseDefinitions() + NotebookTools.definitions() + FormattingTools.definitions() +
             (if (includeWebSearch) listOf(webSearchDefinition()) else emptyList()) +
-            com.lucent.app.harness.HarnessGate.definitions(com.lucent.app.harness.HarnessRuntime.android)
+            com.lucent.app.harness.HarnessGate.definitions(com.lucent.app.harness.HarnessRuntime.android))
+            .distinctBy { it.name }
 
     private fun webSearchDefinition(): ToolDefinition = ToolDefinition(
         name = "web_search",

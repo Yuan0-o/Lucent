@@ -29,6 +29,14 @@ class AppToolsTest {
     }
 
     @Test
+    fun definitionsHaveNoDuplicateNames() {
+        listOf(false, true).forEach { enabled ->
+            val names = AppTools.definitions(includeWebSearch = enabled).map { it.name }
+            assertEquals(names.size, names.toSet().size, "duplicate tool names with webSearch=$enabled")
+        }
+    }
+
+    @Test
     fun definitionsCarryRequiredParams() {
         val createTask = AppTools.definitions().first { it.name == "create_task" }
         val title = createTask.params.first { it.name == "title" }
