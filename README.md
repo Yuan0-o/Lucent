@@ -10,10 +10,10 @@
 
 ### Modern · Minimalist · Quietly Overqualified
 
-**A notes-and-tasks app with an assistant that can actually touch your data — sealed in an
-encrypted database on your own device, fluent in four languages, and built from start to finish
-by pressing one button on GitHub. It comes in pocket and desk sizes alike — an Android APK and a
-Windows installer — with one shared heart, ready to travel further.**
+**A notes-and-tasks application whose assistant can genuinely touch your data — sealed inside an
+encrypted database on your own device, conversant in four languages, and assembled from first line
+to last by pressing a single button on GitHub. It arrives in pocket and desk editions alike — an
+Android APK and a Windows installer — sharing one heartbeat, ready to roam further.**
 
 ![Lucent — Platform, Build, Interface, Assistant, Privacy, License](badges/badges.svg)
 
@@ -23,17 +23,18 @@ Windows installer — with one shared heart, ready to travel further.**
 
 ## The general idea
 
-Most note-taking apps offer you a sporting choice of two from three: the pretty one, the private one,
-or the clever one. Choose your two and live with the disappointment. Lucent declines the arrangement.
-Everything you write is sealed in an encrypted database that never leaves your device. The assistant
-can be a cloud model you pay for, a model running on the machine in front of you, or nothing at all.
-And it is assembled without a line of local tooling: press a button on GitHub, wander off, and an APK
-or a Windows installer is waiting when you return.
+Most note-taking applications extend a generous invitation to choose any two of three virtues: the
+beautiful one, the private one, or the intelligent one. Pick your pair and resign yourself to the
+remainder. Lucent politely declines the bargain. Everything you write is sealed in an encrypted
+database that never departs your device. The assistant may be a cloud model you pay for, a model
+running on the very machine before you, or nothing whatsoever. And the whole affair is assembled
+without a single line of local tooling: press a button on GitHub, wander off, and an APK or a
+Windows installer will be waiting when you return.
 
 ## One app, wherever you put it
 
-Lucent is **one product with a single shared heart**: the house rule is that every feature lives on
-every platform it ships to. Your pocket and your desk speak the same language:
+Lucent is **one product with a single shared heart**: the house rule demands that every feature
+inhabit every platform it ships to. Your pocket and your desk speak precisely the same language:
 
 - **`:app`** — the Android application (Kotlin and Jetpack Compose, Room over SQLCipher, llama.cpp
   through the NDK). Built by `.github/workflows/build.yml` into a signed release APK.
@@ -44,56 +45,56 @@ every platform it ships to. Your pocket and your desk speak the same language:
   interface, one translation catalogue in four languages. Edit once; both machines change.
 
 Everything that can be shared lives in `shared/`; the few things that cannot — `SettingsRepository`,
-`Daos`/`Db`, `DocumentExport` and the largest screens — stay once per platform because their seams
-run deep. The native build stages are each optional, so a hiccup in one leaves you with a working app
-rather than a waiting room.
+`Daos`/`Db`, `DocumentExport` and the largest screens — remain once per platform because their seams
+run deep. The native build stages are each optional, so a stumble in one leaves you with a working
+app rather than a waiting room.
 
 ## The assistant with hands, not merely opinions
 
 This is the feature that defines Lucent. Bring your own model — OpenAI, Anthropic and Google request
 shapes are spoken fluently, several profiles kept and switched in one tap — or run the whole thing on
-the device. Say nothing at all and the assistant isn't there; the notes app loses nothing.
+the device. Say nothing at all and the assistant simply isn't there; the notes app loses nothing.
 
 What makes it worth having is that it can *act*: create, read, edit, colour, pin, archive and delete
 notes; create, complete, reopen, schedule and prioritise tasks; search with a real filter language;
-and attach, rename or remove files. Before it changes anything it shows you precisely what it
+and attach, rename or remove files. Before it alters anything it shows you precisely what it
 intends — in your own language, in a dialog that is itself the editor, with every arguable field
-editable before a single byte is written. Your answer is always the final word. Someone with an
-opinion and no hands is a chat; this is a butler who has been told to knock first.
+editable before a single byte is written. Your word is always the last one spoken. Someone with an
+opinion and no hands is a chat; this is a butler who has been instructed to knock first.
 
-Conversations run as long as you like and travel with you, and the conversation you were last in is
+Conversations run as long as you wish and travel with you, and the conversation you last inhabited is
 the one that opens. Replies arrive as proper Markdown — headings, lists, code — with the model's
 reasoning folded away above them until you ask for it, and one line per tool call in the trace,
 each with the time it took. Four panels sit above the conversation: the todo list the assistant
 keeps as it works, the plan it is following, the background jobs it has started, and the sub-agents
-it has called on, each of which can be watched live, stopped, or sent an extra instruction. Give it
-a goal and it will keep working towards it, round after round, until the goal is done, paused, or
+it has called upon, each of which can be watched live, stopped, or sent an extra instruction. Give it
+a goal and it will press toward it, round after round, until the goal is done, paused, or
 honestly reported as blocked.
 
 ## The workshop behind the assistant
 
-Notes and tasks are the front of house. Behind it, a switch away in Settings → Advanced → Toolkit, there
-is a workshop the assistant is allowed into. It has a workspace folder of your choosing — the picker
-browses the whole device, not merely shared storage — and inside
+Notes and tasks are the front of house. Behind them, a switch away in Settings → Advanced → Toolkit,
+lies a workshop the assistant is permitted to enter. It has a workspace folder of your choosing — the
+picker browses the whole device, not merely shared storage — and inside
 it, real tools: read, write, search, edit with a diff, snapshot and roll back. It can run commands
 with a timeout and a working directory, keep long ones as background jobs, and show you the output.
 It can create and edit Word, Excel and PowerPoint files — the formats are written natively, by
 Lucent, with no office library underneath — and read PDFs, render them to pictures, split and merge
 them. It can clone, diff, commit and push with Git, raise and read GitHub issues, pull requests and
 CI logs, fetch and read web pages, query SQLite, and run a job inside Docker, PRoot or a plain
-shell, whichever this machine can offer.
+shell, whichever the machine can offer.
 
 It remembers three ways: this conversation, this project, and you. It keeps a plan you can watch,
-writes down skills so it stops re-learning your conventions, and can call for sub-agents when a
-task is heavy enough to deserve them. Sub-agents, snapshots, device control and screen access share
+writes down skills so it ceases re-learning your conventions, and can summon sub-agents when a
+task is heavy enough to warrant them. Sub-agents, snapshots, device control and screen access share
 one page of their own: Toolkit, then Assistant abilities.
 
 Anything large stays out of the installer: a Linux userland, Python with its document libraries,
 LibreOffice, Node.js, a browser engine, OCR and media tools are listed as plugins, downloaded only
 if you ask, from the project's own servers or a fast mirror, whichever answers first. Installing one
-needs a shell — Termux on a phone, winget on Windows — and Lucent looks before it leaps: each plugin
-is inspected before anything is downloaded, so a missing shell, an unwritable download folder, or a
-silent mirror is named before it costs bandwidth, not after. When a
+requires a shell — Termux on a phone, winget on Windows — and Lucent looks before it leaps: each
+plugin is inspected before anything is downloaded, so a missing shell, an unwritable download folder,
+or a silent mirror is named before it costs bandwidth, not after. When a
 download or an install fails,
 Lucent opens a dialog that names the reason, shows the shell's own output and lists what to fix. A
 download in progress is a button press away from stopping, and stopping it leaves nothing behind.
@@ -109,14 +110,14 @@ part of the toolkit.
 
 ## Notes that remember what they used to be
 
-Every meaningful edit is snapshotted, so you can always see what a note used to say and restore it
-when a confident rewrite turns out to have been optimism. Type `[[Shopping list]]` and it becomes a
-tappable link; point at a title that doesn't exist yet and the link glows red until a tap politely
-brings the note into existence. Markdown renders when you want it and stays exactly as typed when you
-don't. Checklists are first-class citizens: reword items in place, open a roomy pop-out editor when a
-quick item develops ambitions. Tags, colours, pinning, individually encrypted attachments, rich text,
-a doodle canvas for thoughts words can't reach, and a private area with its own lock — with drafts
-beside the trash, so an unfinished thought is never an abandoned one.
+Every meaningful edit is snapshotted, so you can always see what a note once said and restore it
+when a confident rewrite turns out to have been mere optimism. Type `[[Shopping list]]` and it becomes a
+tappable link; point at a title that does not yet exist and the link glows red until a tap graciously
+brings the note into being. Markdown renders when you want it and stays precisely as typed when you
+do not. Checklists are first-class citizens: reword items in place, open a spacious pop-out editor
+when a quick item develops ambitions. Tags, colours, pinning, individually encrypted attachments,
+rich text, a doodle canvas for thoughts words cannot reach, and a private area with its own lock —
+with drafts beside the trash, so an unfinished thought is never an abandoned one.
 
 A blank note offers four one-tap starters — journal, meeting, project idea, checklist — and then the
 real trick: templates of your own. Save one and it greets you on every future blank page; long-press
@@ -124,19 +125,19 @@ to edit or retire any of them, built-ins included.
 
 ## Tasks with due dates that actually mean something
 
-Subtasks, priorities, repeat schedules, and reminders that survive a reboot. Due dates are parsed from
-ordinary language — *next Friday at 6* becomes a genuine timestamp with a genuine alarm — and repeat
-cadences are first-class rather than a clever sentence that eventually gives up. Completing a task
-ticks its whole checklist off with it, and completed tasks take themselves to a screen of their own.
+Subtasks, priorities, repeat schedules, and reminders that survive a reboot. Due dates are parsed
+from ordinary language — *next Friday at 6* becomes a genuine timestamp with a genuine alarm — and
+repeat cadences are first-class rather than a clever sentence that eventually surrenders. Completing
+a task ticks its whole checklist off with it, and completed tasks retire to a screen of their own.
 
 ## Or run the whole thing on the device itself
 
 Import a `.gguf` file (or a `.zip` with one inside) and the assistant answers using llama.cpp running
 directly on the device — no account, no API key, no network, and the model unloaded the moment you
-leave the app. Roughly 1–4 GB Q4 models hit the sweet spot on a phone; a desktop can afford more
-optimism. Tools are opt-in locally and GPU acceleration is a choice made after a plain warning: the
+leave the app. Roughly 1–4 GB Q4 models hit the sweet spot on a phone; a desktop can afford greater
+ambition. Tools are opt-in locally and GPU acceleration is a choice made after a plain warning: the
 CPU always works, and a GPU that disagrees falls back gracefully. Vision is optional too — import an
-mmproj file and the assistant will look at a photograph and discuss it like a mildly clairvoyant
+mmproj file and the assistant will study a photograph and discuss it like a mildly clairvoyant
 librarian.
 
 ## Four languages, switched without ceremony
@@ -148,18 +149,18 @@ interface reads: each word kept once, by construction rather than by care.
 ## The look of it: made, unashamedly, of glass
 
 A living gradient drifts behind frosted panels that blur whatever passes beneath them, never quite
-repeating itself, at a price the device agreed to in advance. A generous spread of palettes across
+repeating itself, at a cost the device agreed to in advance. A generous spread of palettes across
 eight style families, with an auto-cycle or random companion that ambles through them. Light, dark,
 system and a gallery of Monet-tinted themes — and on Android 12 or later the palette borrows your
-wallpaper's plan for the day. Widgets bring the same glassy surface to your launcher; on Windows the
-app slips into the tray and a sidebar takes over from the bottom tab bar, because a large monitor
+wallpaper's palette for the day. Widgets bring the same glassy surface to your launcher; on Windows
+the app slips into the tray and a sidebar takes over from the bottom tab bar, because a wide monitor
 deserves better than a phone layout stretched sideways.
 
 ## The lock that counts, and the backup that leaves with you
 
 The app lock is a real brute-force policy rather than a polite request: escalating cooldowns, a
-persisted counter that survives reboots, an optional security question, an optional self-destruct, and
-a fingerprint (Android) or Windows Hello (Windows) that is politely out of office for the whole
+persisted counter that survives reboots, an optional security question, an optional self-destruct,
+and a fingerprint (Android) or Windows Hello (Windows) that is politely out of office for the whole
 cooldown. The database is encrypted at rest, attachments individually, and backups are a single
 password-protectable `.lcb` file carrying notes, tasks, history, chats, attachments and settings
 across devices — previewed before a single item is changed, and armed to run automatically. A backup
@@ -169,24 +170,24 @@ the way in.
 ## Privacy that is structural, not merely promised
 
 Nothing leaves the device until you export it or give a model a reason to look. Share-sheet
-integration is off by default; diagnostics are off by default and kept locally; the assistant services
-you connect are entirely your choice; cloud mirroring is a module you configure yourself, over WebDAV.
-The one deliberate exception to encryption — exporting to Markdown, Word, PDF or
+integration is off by default; diagnostics are off by default and kept locally; the assistant
+services you connect are entirely your choice; cloud mirroring is a module you configure yourself,
+over WebDAV. The one deliberate exception to encryption — exporting to Markdown, Word, PDF or
 Excel — is a file you can open anywhere else, which is rather the point.
 
 ## Rust, but only where it earns its keep
 
-Two hot paths are written in Rust and reached through JNI — the PBKDF2 and AES-256-GCM routines behind
-backups and attachment encryption, and the mathematics behind the drifting background. Both fall back
-to identical Kotlin when the native library isn't present, so the app is never held hostage by a
-compiler.
+Two hot paths are written in Rust and reached through JNI — the PBKDF2 and AES-256-GCM routines
+behind backups and attachment encryption, and the mathematics behind the drifting background. Both
+fall back to identical Kotlin when the native library isn't present, so the app is never held
+hostage by a compiler.
 
 ## Building it (yes, from a phone, in your dressing gown)
 
 No Android Studio, no local SDK, no command line. Push to GitHub, open **Actions**, run the workflow
 you want, and download the result — a properly signed release or a double-click installer. The
-workflows live in the repository, so the recipe is in the box rather than in the author's head, and the
-build is as inspectable as the code.
+workflows live in the repository, so the recipe is in the box rather than in the author's head, and
+the build is as inspectable as the code.
 
 ## Project layout
 
@@ -203,17 +204,17 @@ rust/         The Rust accelerator (shared across platforms)
 
 ## Where it goes next
 
-Lucent is a great deal of application for a to-do list, and it has never once apologised for the fact.
-Notes with memory, tasks with teeth, an assistant with hands and manners, encryption that keeps its
-promises and a surface worth looking at. Take it for a week and see what you notice; take it for a
-month, and notice that you stopped noticing.
+Lucent is a great deal of application for a to-do list, and it has never once apologised for the
+fact. Notes with memory, tasks with teeth, an assistant with hands and manners, encryption that
+honours its promises and a surface worth contemplating. Take it for a week and observe what you
+notice; take it for a month, and notice that you stopped noticing.
 
 ## With thanks to the giants whose shoulders these are
 
 Underneath the glass, Lucent is a great deal of other people's excellent work. It would be poor
 manners — and, in one or two cases, an outright licence violation — not to say so out loud. The full
-texts and copyright notices live in **[`THIRD-PARTY-NOTICES.md`](./docs/THIRD-PARTY-NOTICES.md)**; the
-short version, with our gratitude, is this:
+texts and copyright notices live in **[`THIRD-PARTY-NOTICES.md`](./docs/THIRD-PARTY-NOTICES.md)**;
+the short version, with our gratitude, is this:
 
 | Borrowed brilliance | Doing the job of | Under |
 |---|---|---|
@@ -300,4 +301,7 @@ Privacy policy: **[`PRIVACY/PRIVACY.md`](https://github.com/Yuan0-o/Lucent/blob/
 
 ## Contributing
 
-Should you be seized by the urge to improve Lucent, we should be quietly delighted. Bug reports, thoughtful suggestions, and pull requests submitted with good grace are entirely welcome. We ask only that everyone remain strictly civil, keep the tea warm, and treat fellow contributors with the courtesy one expects in a respectable reading room.
+Should you be seized by the urge to improve Lucent, we should be quietly delighted. Bug reports,
+thoughtful suggestions, and pull requests submitted with good grace are entirely welcome. We ask
+only that everyone remain strictly civil, keep the tea warm, and treat fellow contributors with the
+courtesy one expects in a respectable reading room.
