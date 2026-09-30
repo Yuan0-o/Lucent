@@ -21,6 +21,8 @@ object TermuxBridge {
     private const val EXTRA_SESSION_ACTION = "com.termux.RUN_COMMAND_SESSION_ACTION"
     private const val BASH = "/data/data/com.termux/files/usr/bin/bash"
 
+    @Volatile private var lastError: String = ""
+
     fun installed(context: Context): Boolean {
         return try {
             context.packageManager.getPackageInfo(TERMUX_PACKAGE, 0)
