@@ -1,7 +1,6 @@
 package com.lucent.app.harness
 
 import com.lucent.app.harness.plugins.PluginCatalog
-import com.lucent.app.harness.plugins.PluginDownload
 import com.lucent.app.harness.plugins.PluginManager
 import com.lucent.app.harness.plugins.PluginPreflight
 import com.lucent.app.harness.plugins.PluginSource
@@ -22,6 +21,32 @@ private class PreflightHost(private val root: File) : HarnessHost {
     override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
     override fun filesDir(): File = File(root, "files").apply { mkdirs() }
     override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+}
+
+private class TermuxRoutingShell : HarnessShell {
+    override val id: String = "termux-routing"
+    override fun isReady(): Boolean = true
+    override fun describe(): String = "the termux routing test shell"
+    var viaTermux = 0
+    var viaRun = 0
+    override suspend fun run(
+        command: String,
+        workdir: File?,
+        timeoutSeconds: Int,
+        env: Map<String, String>
+    ): ShellOutcome {
+        viaRun++
+        return ShellOutcome(true, "", "", 0)
+    }
+    override suspend fun runInTermux(
+        command: String,
+        workdir: File?,
+        timeoutSeconds: Int,
+        env: Map<String, String>
+    ): ShellOutcome {
+        viaTermux++
+        return ShellOutcome(true, "", "", 0)
+    }
 }
 
 private class PreflightShell(private val respond: (String) -> ShellOutcome) : HarnessShell {
@@ -223,7 +248,7 @@ class PluginPreflightTest {
     }
 
     @Test
-    fun aRememberedMirrorIsUsedWithoutReprobing() = preflightSandbox { _ ->
+    fun theFastestMirrorIsPickedEveryTime() = preflightSandbox { _ ->
         val bytes = ByteArray(4096) { (it % 251).toByte() }
         val (server, url) = serveBytes(bytes)
         try {
@@ -246,18 +271,44 @@ class PluginPreflightTest {
                 windowsInstall = "unpack {file}"
             )
             HarnessRuntime.shell = PreflightShell { ShellOutcome(true, "", "", 0) }
-            HarnessRuntime.update(HarnessRuntime.config().withMirror("payload", "tuna"))
             val notes = mutableListOf<String>()
             val manager = PluginManager.desktop()
             val outcome = runBlocking {
                 manager.install(plugin, PluginSource("", "", "")) { _, note -> notes.add(note) }
             }
             assertTrue(outcome.ok, outcome.message)
-            assertTrue(notes.any { it.contains("remembered source") }, notes.joinToString())
-            assertEquals("tuna", HarnessRuntime.config().mirrors["payload"])
+            assertTrue(notes.any { it.contains("testing download sources") }, notes.joinToString())
+            assertTrue(notes.none { it.contains("remembered source") }, notes.joinToString())
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun termuxOnlyPluginsRunThroughTermux() = preflightSandbox(android = true) { _ ->
+        val shell = TermuxRoutingShell()
+        HarnessRuntime.shell = shell
+        val manager = PluginManager.testInstance(true)
+        runBlocking { manager.runPluginCommand(termuxStylePlugin().copy(id = "routed", termuxOnly = true), "true", 60) }
+        runBlocking { manager.runPluginCommand(termuxStylePlugin().copy(id = "plain"), "true", 60) }
+        assertEquals(1, shell.viaTermux)
+        assertEquals(1, shell.viaRun)
+    }
+
+    @Test
+    fun preflightBlocksATermuxOnlyPluginWhenTermuxIsMissing() = preflightSandbox(android = true) { _ ->
+        HarnessRuntime.shell = PreflightShell { ShellOutcome(true, "", "", 0) }
+        HarnessRuntime.pluginHost = PluginManager.testInstance(true)
+        val report = runBlocking {
+            PluginPreflight.inspect(
+                termuxStylePlugin().copy(id = "routed", termuxOnly = true),
+                PluginSource("", "", ""),
+                true
+            )
+        }
+        assertTrue(report.blocked)
+        assertTrue(report.problems.any { it.code == "termux_missing" })
+        assertEquals(PluginFailure.NO_SHELL, PluginPreflight.failureOf(report))
     }
 
     @Test

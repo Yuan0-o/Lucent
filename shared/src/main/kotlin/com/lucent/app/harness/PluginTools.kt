@@ -1,12 +1,10 @@
 package com.lucent.app.harness
 
 import com.lucent.app.harness.plugins.PluginCatalog
-import com.lucent.app.harness.plugins.PluginDownload
 import com.lucent.app.harness.plugins.PluginPreflight
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
 import com.lucent.app.network.ToolExecResult
-import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 object PluginTools : HarnessGroupTools {
@@ -72,13 +70,6 @@ object PluginTools : HarnessGroupTools {
                 HarnessSchema.text("id", "Plugin id from plugin_status"),
                 HarnessSchema.text("source", "Preferred source id", false)
             )
-        ),
-        HarnessTool(
-            name = "plugin_mirror_test",
-            group = group,
-            permission = HarnessPermission.NETWORK,
-            description = "Measure every download source for a plugin and remember the fastest one.",
-            params = listOf(HarnessSchema.text("id", "Plugin id"))
         )
     )
 
@@ -89,7 +80,6 @@ object PluginTools : HarnessGroupTools {
         "remove_plugin" -> remove(ctx, args)
         "plugin_run" -> run(ctx, args)
         "plugin_inspect" -> inspect(ctx, args)
-        "plugin_mirror_test" -> mirrorTest(ctx, args)
         else -> null
     }
 
@@ -102,8 +92,7 @@ object PluginTools : HarnessGroupTools {
             else -> "small"
         }
         val mark = if (installed) "[installed]" else "[not installed]"
-        val mirror = ctx.config.mirrors[plugin.id]?.let { " via $it" } ?: ""
-        return "$mark ${plugin.id} — ${plugin.name} ($size$mirror): ${plugin.summary}"
+        return "$mark ${plugin.id} — ${plugin.name} ($size): ${plugin.summary}"
     }
 
     private fun status(ctx: HarnessCtx): ToolExecResult {
@@ -202,10 +191,9 @@ object PluginTools : HarnessGroupTools {
             val detail = outcome.detail
             when {
                 detail.contains("was expected") ->
-                    " The mirror sent a different-sized file, so it may have refreshed the image. Try another " +
-                        "source with plugin_mirror_test, or pick one in Settings under Agent, then Plugins."
-                else -> " The download failed: run plugin_mirror_test for ${outcome.message}, or pick another " +
-                    "source in Settings under Agent, then Plugins."
+                    " The mirror sent a different-sized file, so it may have refreshed the image. " +
+                        "Installing again re-tests every source and takes the fastest."
+                else -> " The download failed: installing again re-tests every source and takes the fastest."
             }
         }
         PluginFailure.INSTALL -> {
@@ -253,29 +241,4 @@ object PluginTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun mirrorTest(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val plugin = PluginCatalog.find(args.optString("id", "").trim())
-            ?: return ToolExecResult("No plugin with that id.", success = false)
-        val sources = plugin.sources.filter { it.url.startsWith("http") }
-        if (sources.isEmpty()) return ToolExecResult("${plugin.name} has no download sources to test.", success = false)
-        val results = PluginDownload.speedTable(sources)
-        val sb = StringBuilder("${plugin.name}:\n")
-        results.forEach { (label, rate, official) ->
-            sb.append("  ").append(if (official) "official " else "mirror   ").append(label).append(": ")
-            if (rate > 0) sb.append(Workspace.humanSize(rate)).append("/s") else sb.append("no answer")
-            sb.append('\n')
-        }
-        val best = results.filter { it.second > 0 }.maxByOrNull { it.second }
-        if (best != null) {
-            val chosen = sources.firstOrNull { it.label == best.first }
-            if (chosen != null) {
-                HarnessRuntime.update(HarnessRuntime.config().withMirror(plugin.id, chosen.id))
-                sb.append("Fastest: ${chosen.label}, remembered for next time.")
-            }
-        } else {
-            sb.append("Nothing answered; the official source will be tried first.")
-        }
-        delay(1)
-        return ToolExecResult(sb.toString())
-    }
 }

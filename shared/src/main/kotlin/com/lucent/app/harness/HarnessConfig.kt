@@ -61,7 +61,6 @@ data class HarnessConfig(
     val mcpServers: List<McpServer> = emptyList(),
     val connectors: List<ConnectorConfig> = emptyList(),
     val plugins: List<PluginState> = emptyList(),
-    val mirrors: Map<String, String> = emptyMap(),
     val fastMirror: Boolean = true,
     val contextBudgetTokens: Int = ContextBudget.DEFAULT_BUDGET_TOKENS
 ) {
@@ -79,9 +78,6 @@ data class HarnessConfig(
 
     fun withPlugin(state: PluginState): HarnessConfig =
         copy(plugins = plugins.filterNot { it.id == state.id } + state)
-
-    fun withMirror(pluginId: String, sourceId: String): HarnessConfig =
-        copy(mirrors = mirrors + (pluginId to sourceId))
 
     fun withApproval(permission: HarnessPermission, approval: Approval): HarnessConfig =
         copy(approvals = approvals + (permission.key to approval.key))
@@ -177,7 +173,6 @@ data class HarnessConfig(
                 })
             }
         })
-        put("mirrors", JSONObject(mirrors as Map<*, *>))
         put("fastMirror", fastMirror)
         put("contextBudgetTokens", contextBudgetTokens)
     }
@@ -218,7 +213,6 @@ data class HarnessConfig(
                 mcpServers = servers(o.optJSONArray("mcpServers")),
                 connectors = connectors(o.optJSONArray("connectors")),
                 plugins = plugins(o.optJSONArray("plugins")),
-                mirrors = map(o.optJSONObject("mirrors")),
                 fastMirror = o.optBoolean("fastMirror", defaults.fastMirror),
                 contextBudgetTokens = o.optInt("contextBudgetTokens", defaults.contextBudgetTokens)
             )

@@ -126,6 +126,17 @@ object PluginPreflight {
             }
             problems.add(PreflightProblem("no_shell", S.pluginReasonNoShell, steps))
         }
+        if (android && plugin.termuxOnly &&
+            !HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
+        ) {
+            problems.add(
+                PreflightProblem(
+                    "termux_missing",
+                    S.pluginProblemNoTermux,
+                    listOf(S.pluginProblemNoTermuxStep)
+                )
+            )
+        }
         if (HarnessRuntime.config().pluginInstalled(plugin.id)) {
             notes.add(S.pluginAlreadyInstalled(plugin.name))
         }
@@ -166,7 +177,8 @@ object PluginPreflight {
             "no_script" in codes -> PluginFailure.NO_SCRIPT
             "no_source" in codes || "source_unreachable" in codes -> PluginFailure.DOWNLOAD
             "storage" in codes -> PluginFailure.STORAGE
-            "no_shell" in codes || "staged_unreadable" in codes -> PluginFailure.NO_SHELL
+            "no_shell" in codes || "staged_unreadable" in codes || "termux_missing" in codes ->
+                PluginFailure.NO_SHELL
             else -> PluginFailure.NONE
         }
     }

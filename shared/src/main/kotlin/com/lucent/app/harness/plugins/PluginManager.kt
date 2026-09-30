@@ -38,7 +38,7 @@ class PluginManager private constructor(private val context: Context?, private v
             return ShellOutcome(present, "", "", if (present) 0 else 1)
         }
         if (!isReady()) return ShellOutcome(false, "", "No shell is available to check this plugin", -1)
-        return HarnessRuntime.runShellAsync(wrap(plugin, command), HarnessRuntime.workspace(), 90)
+        return runScript(plugin, command, 90)
     }
 
     override suspend fun install(
@@ -67,14 +67,8 @@ class PluginManager private constructor(private val context: Context?, private v
             }
             var chosen = source
             if (chosen.id.isBlank() || chosen.url.isBlank() || usable.none { it.id == chosen.id }) {
-                val remembered = usable.firstOrNull { it.id == HarnessRuntime.config().mirrors[plugin.id] }
-                chosen = if (remembered != null) {
-                    onProgress(0.02f, "using the remembered source: ${remembered.label}")
-                    remembered
-                } else {
-                    onProgress(0.02f, "testing download sources")
-                    PluginDownload.fastest(usable) ?: usable.first()
-                }
+                onProgress(0.02f, "testing download sources")
+                chosen = PluginDownload.fastest(usable) ?: usable.first()
             }
             sourceId = chosen.id.ifBlank { "built-in" }
             val reused = PluginPreflight.reusableStaged(plugin, chosen)
@@ -106,7 +100,7 @@ class PluginManager private constructor(private val context: Context?, private v
                 if (!fetched.ok) {
                     val hint = if (fetched.message.contains("was expected")) {
                         " The mirror may have refreshed the file since the catalogue was written; " +
-                            "try another source from the list."
+                            "installing again re-tests every source automatically."
                     } else {
                         ""
                     }
@@ -194,7 +188,7 @@ class PluginManager private constructor(private val context: Context?, private v
             sizeBytes = if (kept != null && kept.exists()) kept.length() else plugin.bytes,
             installedAt = System.currentTimeMillis()
         )
-        HarnessRuntime.update(HarnessRuntime.config().withPlugin(state).withMirror(plugin.id, state.source))
+        HarnessRuntime.update(HarnessRuntime.config().withPlugin(state))
         kept?.delete()
         PluginJournal.clear(plugin.id)
         onProgress(1f, "installed")
@@ -237,7 +231,16 @@ class PluginManager private constructor(private val context: Context?, private v
 
     private suspend fun run(plugin: PluginSpec, script: String, timeoutSeconds: Int): ShellOutcome {
         if (script.isBlank()) return ShellOutcome(false, "", "This plugin has nothing to run.", -1)
-        return HarnessRuntime.runShellAsync(wrap(plugin, script), HarnessRuntime.workspace(), timeoutSeconds)
+        return runScript(plugin, script, timeoutSeconds)
+    }
+
+    private suspend fun runScript(plugin: PluginSpec, script: String, timeoutSeconds: Int): ShellOutcome {
+        val wrapped = wrap(plugin, script)
+        return if (android && plugin.termuxOnly) {
+            HarnessRuntime.runTermuxAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds)
+        } else {
+            HarnessRuntime.runShellAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds)
+        }
     }
 
     private fun needsUserland(plugin: PluginSpec): Boolean =

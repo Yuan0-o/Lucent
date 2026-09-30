@@ -125,7 +125,6 @@ class HarnessDataTest {
             mcpServers = listOf(McpServer(id = "weather", name = "Weather", url = "https://example.test/mcp", token = "t")),
             connectors = listOf(ConnectorConfig(id = "slack", token = "xoxb", account = "team")),
             plugins = listOf(PluginState(id = "ubuntu", installed = true, source = "tuna", sizeBytes = 42)),
-            mirrors = mapOf("ubuntu" to "tuna"),
             githubToken = "gh",
             githubTokens = listOf(GithubToken(id = "gh-1", name = "work", token = "gh")),
             shizukuForAssistant = true
@@ -139,7 +138,6 @@ class HarnessDataTest {
         assertEquals("weather", parsed.mcpServers.single().id)
         assertEquals("xoxb", parsed.connector("slack")?.token)
         assertTrue(parsed.pluginInstalled("ubuntu"))
-        assertEquals("tuna", parsed.mirrors["ubuntu"])
         assertEquals("gh", parsed.githubToken)
         assertEquals("work", parsed.githubTokens.single().name)
         assertTrue(parsed.shizukuForAssistant)

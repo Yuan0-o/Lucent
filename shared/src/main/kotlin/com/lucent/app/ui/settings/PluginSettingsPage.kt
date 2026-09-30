@@ -115,12 +115,6 @@ internal fun PluginSettingsPage(
         }
     }
 
-    fun selectMirror(plugin: PluginSpec, source: PluginSource) {
-        HarnessRuntime.update(HarnessRuntime.config().withMirror(plugin.id, source.id))
-        config = HarnessRuntime.config()
-        note = S.pluginSourceRemembered(source.label)
-    }
-
     fun cancelRunning() {
         running?.cancel()
         running = null
@@ -147,7 +141,6 @@ internal fun PluginSettingsPage(
             PluginRow(
                 plugin = plugin,
                 installed = config.pluginInstalled(plugin.id),
-                mirror = config.mirrors[plugin.id].orEmpty(),
                 shellReady = shellReady,
                 busy = busy == plugin.id,
                 progress = progress,
@@ -155,8 +148,7 @@ internal fun PluginSettingsPage(
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted,
                 onAction = { runAction(plugin, it) },
-                onCancel = { cancelRunning() },
-                onSelectMirror = { source -> selectMirror(plugin, source) }
+                onCancel = { cancelRunning() }
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -257,7 +249,6 @@ private fun TermuxCard(
 private fun PluginRow(
     plugin: PluginSpec,
     installed: Boolean,
-    mirror: String,
     shellReady: Boolean,
     busy: Boolean,
     progress: Float,
@@ -265,8 +256,7 @@ private fun PluginRow(
     onGradient: androidx.compose.ui.graphics.Color,
     onGradientMuted: androidx.compose.ui.graphics.Color,
     onAction: (Boolean) -> Unit,
-    onCancel: () -> Unit,
-    onSelectMirror: (PluginSource) -> Unit
+    onCancel: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -295,25 +285,6 @@ private fun PluginRow(
             if (note.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(note, color = onGradientMuted, fontSize = 11.sp)
-            }
-        }
-        if (plugin.sources.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            plugin.sources.forEach { source ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        (if (source.id == mirror) "\u2022 " else "  ") + source.label +
-                            if (source.official) " (official)" else "",
-                        color = onGradientMuted,
-                        fontSize = 10.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (source.id != mirror && source.url.startsWith("http")) {
-                        TextButton(onClick = { onSelectMirror(source) }) {
-                            Text(S.pluginUseSource, color = onGradient, fontSize = 11.sp)
-                        }
-                    }
-                }
             }
         }
     }

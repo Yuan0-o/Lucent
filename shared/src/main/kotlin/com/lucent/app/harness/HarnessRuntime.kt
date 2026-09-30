@@ -36,6 +36,13 @@ interface HarnessShell {
         env: Map<String, String>
     ): ShellOutcome
 
+    suspend fun runInTermux(
+        command: String,
+        workdir: File?,
+        timeoutSeconds: Int,
+        env: Map<String, String>
+    ): ShellOutcome = run(command, workdir, timeoutSeconds, env)
+
     fun capabilityNames(): Set<String> = setOf("shell")
 }
 
@@ -217,6 +224,18 @@ object HarnessRuntime {
         if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
         if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
         return sh.run(command, workdir, timeoutSeconds, env)
+    }
+
+    suspend fun runTermuxAsync(
+        command: String,
+        workdir: File?,
+        timeoutSeconds: Int,
+        env: Map<String, String> = emptyMap()
+    ): ShellOutcome {
+        val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
+        if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
+        if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
+        return sh.runInTermux(command, workdir, timeoutSeconds, env)
     }
 
     fun downloadsDir(): File {

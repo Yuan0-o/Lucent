@@ -84,6 +84,8 @@ object TermuxBridge {
         val outFile = File(jobDir, "out-$stamp.txt")
         val codeFile = File(jobDir, "code-$stamp.txt")
         val script = buildString {
+            append("if [ -z \"${'$'}HOME\" ] || [ \"${'$'}HOME\" = \"/\" ] || [ ! -d \"${'$'}HOME\" ]; ")
+            append("then export HOME=/data/data/com.termux/files/home; fi; ")
             append("cd '").append(workdir.path.replace("'", "'\\''")).append("' 2>/dev/null || cd \"\$HOME\"; ")
             if (env.isNotEmpty()) {
                 env.forEach { (key, value) ->

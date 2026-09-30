@@ -23,6 +23,7 @@ data class PluginSpec(
     val licence: String,
     val homepage: String,
     val needsShell: Boolean = true,
+    val termuxOnly: Boolean = false,
     val windowsDetect: String = "",
     val windowsInstall: String = "",
     val windowsRemove: String = ""
@@ -59,7 +60,8 @@ object PluginCatalog {
         installScript = "pkg install -y $pkg",
         removeScript = "pkg uninstall -y $pkg",
         licence = licence,
-        homepage = homepage
+        homepage = homepage,
+        termuxOnly = true
     )
 
     private fun desktopTool(
@@ -153,7 +155,8 @@ object PluginCatalog {
                 "rm -f ~/lucent/ubuntu/rootfs/etc/apt/sources.list",
             removeScript = "rm -rf ~/lucent/ubuntu",
             licence = "Ubuntu base image, mixed free licences",
-            homepage = "https://cdimage.ubuntu.com/ubuntu-base/"
+            homepage = "https://cdimage.ubuntu.com/ubuntu-base/",
+            termuxOnly = true
         ),
         PluginSpec(
             id = "python-office",
@@ -170,6 +173,7 @@ object PluginCatalog {
             removeScript = "pip3 uninstall -y python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
             licence = "Python PSF-2.0; libraries MIT/BSD; PyMuPDF AGPL-3.0",
             homepage = "https://www.python.org",
+            termuxOnly = true,
             windowsDetect = "py -c \"import docx, openpyxl, pptx\"",
             windowsInstall = "winget install --id Python.Python.3.12 -e --accept-package-agreements " +
                 "--accept-source-agreements && py -m pip install --no-warn-script-location " +
@@ -190,6 +194,7 @@ object PluginCatalog {
             removeScript = "apt-get remove -y 'libreoffice*'",
             licence = "MPL-2.0",
             homepage = "https://www.libreoffice.org",
+            termuxOnly = true,
             windowsDetect = "if exist \"%ProgramFiles%\\LibreOffice\\program\\soffice.exe\" (exit 0) else (exit 1)",
             windowsInstall = "winget install --id TheDocumentFoundation.LibreOffice -e " +
                 "--accept-package-agreements --accept-source-agreements",
@@ -208,6 +213,7 @@ object PluginCatalog {
             removeScript = "pkg uninstall -y nodejs-lts",
             licence = "MIT",
             homepage = "https://nodejs.org",
+            termuxOnly = true,
             windowsDetect = "where node",
             windowsInstall = "winget install --id OpenJS.NodeJS.LTS -e " +
                 "--accept-package-agreements --accept-source-agreements",

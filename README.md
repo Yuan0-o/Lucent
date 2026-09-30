@@ -91,7 +91,10 @@ one page of their own: Toolkit, then Assistant abilities.
 Anything large stays out of the installer: a Linux userland, Python with its document libraries,
 LibreOffice, Node.js, a browser engine, OCR and media tools are listed as plugins, downloaded only
 if you ask, from the project's own servers or a fast mirror, whichever answers first. Installing one
-needs a shell — Termux on a phone, winget on Windows — and when a download or an install fails,
+needs a shell — Termux on a phone, winget on Windows — and Lucent looks before it leaps: each plugin
+is inspected before anything is downloaded, so a missing shell, an unwritable download folder, or a
+silent mirror is named before it costs bandwidth, not after. When a
+download or an install fails,
 Lucent opens a dialog that names the reason, shows the shell's own output and lists what to fix. A
 download in progress is a button press away from stopping, and stopping it leaves nothing behind.
 Permissions

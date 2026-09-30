@@ -34,6 +34,26 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
         return out
     }
 
+    override suspend fun runInTermux(
+        command: String,
+        workdir: File?,
+        timeoutSeconds: Int,
+        env: Map<String, String>
+    ): ShellOutcome {
+        val dir = workdir ?: HarnessRuntime.workspace()
+        if (!TermuxBridge.installed(context)) {
+            return ShellOutcome(
+                false,
+                "",
+                "This plugin only installs inside Termux, which is not installed here. Install Termux " +
+                    "from F-Droid, open it once, and set allow-external-apps=true in " +
+                    "~/.termux/termux.properties.",
+                -1
+            )
+        }
+        return TermuxBridge.run(context, command, dir, timeoutSeconds, env)
+    }
+
     override suspend fun run(
         command: String,
         workdir: File?,
