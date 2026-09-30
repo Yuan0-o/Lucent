@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 object TermuxBridge {
 
@@ -21,7 +22,13 @@ object TermuxBridge {
     private const val EXTRA_SESSION_ACTION = "com.termux.RUN_COMMAND_SESSION_ACTION"
     private const val BASH = "/data/data/com.termux/files/usr/bin/bash"
 
-    @Volatile private var lastError: String = ""
+    private val lastErrorRef = AtomicReference("")
+
+    private var lastError: String
+        get() = lastErrorRef.get()
+        set(value) {
+            lastErrorRef.set(value)
+        }
 
     fun installed(context: Context): Boolean {
         return try {
@@ -111,10 +118,14 @@ object TermuxBridge {
             delay(300)
         }
         if (!codeFile.exists()) {
-            lastError = "Termux did not answer within ${timeoutSeconds}s. Check that Termux is installed, that " +
-                "allow-external-apps=true is set in ~/.termux/termux.properties, and that it holds the run-command " +
-                "permission. If you use a Termux fork with a different package name, install the official " +
-                "com.termux build instead, since only it can receive Lucent's commands."
+            if (!permissionDeclared(context)) {
+                lastError = "Termux did not answer within ${timeoutSeconds}s because the run-command permission is missing."
+            } else {
+                lastError = "Termux did not answer within ${timeoutSeconds}s. Check that Termux is installed, that " +
+                    "allow-external-apps=true is set in ~/.termux/termux.properties, and that it holds the run-command " +
+                    "permission. If you use a Termux fork with a different package name, install the official " +
+                    "com.termux build instead, since only it can receive Lucent's commands."
+            }
             return@withContext ShellOutcome(false, outFile.takeIf { it.exists() }?.readText().orEmpty(), lastError, -1, true)
         }
         val code = codeFile.readText().trim().toIntOrNull() ?: -1

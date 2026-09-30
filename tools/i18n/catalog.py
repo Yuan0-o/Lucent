@@ -1827,6 +1827,15 @@ ENTRIES = [
     ("actionRefresh", "Refresh", "刷新", "更新", "새로 고침"),
     ("actionClear", "Clear", "清除", "消去", "지우기"),
     ("licencesOptionalNote", "The components marked as optional downloads are not part of Lucent. They are fetched, at your request, straight from their authors or a public mirror into your own storage, and stay under their own licences.", "标记为“可选下载”的组件并不属于 Lucent。它们只在你主动请求时，从作者官方地址或公共镜像直接下载到你的存储中，并继续适用其各自的许可证。", "「任意ダウンロード」と記された構成要素は Lucent の一部ではありません。あなたの求めに応じて、作者の配布元または公共ミラーからあなたの保存領域へ直接取得されるもので、それぞれのライセンスのままです。", "'선택 다운로드'로 표시된 구성 요소는 Lucent의 일부가 아닙니다. 사용자가 요청할 때 작성자의 배포처나 공개 미러에서 사용자의 저장 공간으로 바로 받아지며, 각자의 라이선스를 그대로 따릅니다."),
+
+    ("pluginMirrorRegion", "Mirror region", "镜像地区", "ミラー地域", "미러 지역"),
+    ("pluginMirrorAuto", "Auto", "自动", "自動", "자동"),
+    ("pluginMirrorChina", "China", "中国", "中国", "중국"),
+    ("pluginMirrorGlobal", "Global", "全球", "グローバル", "글로벌"),
+    ("pluginProblemDiskSpace(free: String, needed: String)", "Not enough disk space ({free} available, {needed} needed)", "磁盘空间不足 (剩余 {free}，需要 {needed})", "ディスク容量不足 (空き {free}、必要 {needed})", "디스크 공간 부족 (남은 공간 {free}, 필요 공간 {needed})"),
+    ("pluginProblemDiskSpaceStep", "Free up some space before installing.", "请先清理一些空间再安装。", "インストールする前に容量を空けてください。", "설치하기 전에 공간을 확보하세요."),
+    ("pluginProblemWorkspaceNotShared", "Workspace is not on shared storage", "工作区不在共享存储上", "ワークスペースが共有ストレージにありません", "작업 공간이 공유 저장소에 없습니다"),
+    ("pluginProblemWorkspaceNotSharedStep", "Termux cannot access app-private directories. Please select a workspace folder in Documents or another shared location.", "Termux 无法访问应用私有目录。请在“文档”或其他共享位置选择一个工作区文件夹。", "Termux はアプリ専用のフォルダにアクセスできません。ドキュメントなど、共有の場所にあるワークスペースを選んでください。", "Termux는 앱 전용 폴더에 접근할 수 없습니다. 문서나 기타 공유 위치에서 작업 공간 폴더를 선택하세요."),
 ]
 
 CONDITIONAL_ENTRIES = {

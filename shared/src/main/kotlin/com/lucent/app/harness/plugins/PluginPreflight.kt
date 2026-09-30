@@ -57,6 +57,19 @@ object PluginPreflight {
             )
             return PreflightReport(plugin, problems, notes, mirrorResults)
         }
+        if (plugin.bytes > 0L) {
+            val space = HarnessRuntime.downloadsDir().usableSpace
+            val needed = plugin.bytes * 2L
+            if (space in 1L..<needed) {
+                problems.add(
+                    PreflightProblem(
+                        "disk_space",
+                        S.pluginProblemDiskSpace(Workspace.humanSize(space), Workspace.humanSize(needed)),
+                        listOf(S.pluginProblemDiskSpaceStep)
+                    )
+                )
+            }
+        }
         val needsDownload = script.contains("{file}")
         if (needsDownload) {
             val usable = plugin.sources.filter { it.url.startsWith("http") }
@@ -113,6 +126,15 @@ object PluginPreflight {
                     )
                 }
             }
+        }
+        if (android && plugin.needsShell && !sharedStorage(HarnessRuntime.workspace())) {
+            problems.add(
+                PreflightProblem(
+                    "workspace_not_shared",
+                    S.pluginProblemWorkspaceNotShared,
+                    listOf(S.pluginProblemWorkspaceNotSharedStep)
+                )
+            )
         }
         if (plugin.needsShell && HarnessRuntime.pluginHost?.isReady() != true) {
             val steps = if (android) {
@@ -176,8 +198,8 @@ object PluginPreflight {
         return when {
             "no_script" in codes -> PluginFailure.NO_SCRIPT
             "no_source" in codes || "source_unreachable" in codes -> PluginFailure.DOWNLOAD
-            "storage" in codes -> PluginFailure.STORAGE
-            "no_shell" in codes || "staged_unreadable" in codes || "termux_missing" in codes ->
+            "storage" in codes || "disk_space" in codes -> PluginFailure.STORAGE
+            "no_shell" in codes || "staged_unreadable" in codes || "termux_missing" in codes || "workspace_not_shared" in codes ->
                 PluginFailure.NO_SHELL
             else -> PluginFailure.NONE
         }

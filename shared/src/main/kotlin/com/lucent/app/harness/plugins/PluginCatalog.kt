@@ -39,6 +39,7 @@ object PluginCatalog {
 
     private const val UBUNTU_TARBALL = "ubuntu-base-24.04.5-base-arm64.tar.gz"
     private const val UBUNTU_SIZE = 29936675L
+    private const val UBUNTU_SHA256 = "a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2"
 
     private fun termux(
         id: String,
@@ -126,18 +127,21 @@ object PluginCatalog {
                     "Ubuntu official",
                     "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.5/release/$UBUNTU_TARBALL",
                     official = true,
+                    sha256 = UBUNTU_SHA256,
                     bytes = UBUNTU_SIZE
                 ),
                 PluginSource(
                     "tuna",
                     "Tsinghua TUNA",
                     "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04.5/release/$UBUNTU_TARBALL",
+                    sha256 = UBUNTU_SHA256,
                     bytes = UBUNTU_SIZE
                 ),
                 PluginSource(
                     "aliyun",
                     "Aliyun",
                     "https://mirrors.aliyun.com/ubuntu-cdimage/ubuntu-base/releases/24.04.5/release/$UBUNTU_TARBALL",
+                    sha256 = UBUNTU_SHA256,
                     bytes = UBUNTU_SIZE
                 )
             ),

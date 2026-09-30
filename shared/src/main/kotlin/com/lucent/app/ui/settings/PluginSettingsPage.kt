@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -147,6 +148,35 @@ internal fun PluginSettingsPage(
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
+        
+        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+            Text(S.pluginMirrorRegion, color = onGradient, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                listOf(
+                    "auto" to S.pluginMirrorAuto,
+                    "cn" to S.pluginMirrorChina,
+                    "global" to S.pluginMirrorGlobal
+                ).forEach { (value, label) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 12.dp).clickable {
+                            val next = config.copy(pluginMirrorRegion = value)
+                            HarnessRuntime.update(next)
+                            config = next
+                        }
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = config.pluginMirrorRegion == value,
+                            onClick = null
+                        )
+                        Text(label, color = onGradient, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        
         plugins.forEach { plugin ->
             PluginRow(
                 plugin = plugin,

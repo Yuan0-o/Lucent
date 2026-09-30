@@ -68,7 +68,7 @@ class PluginManager private constructor(private val context: Context?, private v
             var chosen = source
             if (chosen.id.isBlank() || chosen.url.isBlank() || usable.none { it.id == chosen.id }) {
                 onProgress(0.02f, "testing download sources")
-                chosen = PluginDownload.fastest(usable) ?: usable.first()
+                chosen = PluginDownload.fastest(usable, HarnessRuntime.config().pluginMirrorRegion) ?: usable.first()
             }
             sourceId = chosen.id.ifBlank { "built-in" }
             val reused = PluginPreflight.reusableStaged(plugin, chosen)
@@ -143,12 +143,11 @@ class PluginManager private constructor(private val context: Context?, private v
         val outcome = try {
             run(plugin, script, 3600)
         } catch (e: kotlinx.coroutines.CancellationException) {
-            staged?.delete()
             record(plugin, "install cancelled", staged?.path.orEmpty())
             return PluginOutcome(
                 false,
-                "${plugin.name}: the install was cancelled and the downloaded file was removed",
-                "",
+                "${plugin.name}: the install was cancelled, but any downloaded files were kept",
+                staged?.path.orEmpty(),
                 PluginFailure.CANCELLED,
                 ""
             )
@@ -189,6 +188,7 @@ class PluginManager private constructor(private val context: Context?, private v
             installedAt = System.currentTimeMillis()
         )
         HarnessRuntime.update(HarnessRuntime.config().withPlugin(state))
+        kotlinx.coroutines.delay(1000)
         kept?.delete()
         PluginJournal.clear(plugin.id)
         onProgress(1f, "installed")
