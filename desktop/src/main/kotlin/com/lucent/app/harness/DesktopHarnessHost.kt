@@ -2,6 +2,8 @@ package com.lucent.app.harness
 
 import com.lucent.app.ui.HarnessAskPrompt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.pdmodel.PDDocument
@@ -88,7 +90,20 @@ object DesktopHarnessShell : HarnessShell {
             }
             reader.start()
             errorReader.start()
-            val finished = process.waitFor(timeoutSeconds.coerceIn(1, 7200).toLong(), java.util.concurrent.TimeUnit.SECONDS)
+            val deadline = System.currentTimeMillis() + timeoutSeconds.coerceIn(1, 7200).toLong() * 1000L
+            var finished = false
+            try {
+                while (System.currentTimeMillis() < deadline) {
+                    currentCoroutineContext().ensureActive()
+                    if (process.waitFor(200, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                        finished = true
+                        break
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                process.destroyForcibly()
+                throw e
+            }
             if (!finished) {
                 process.destroyForcibly()
                 reader.join(1000)

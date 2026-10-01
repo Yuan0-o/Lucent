@@ -602,7 +602,7 @@ private fun repairSteps(failure: PluginFailure, android: Boolean): List<String> 
             add(S.pluginRepairRetry)
         }
         PluginFailure.INSTALL -> {
-            add(S.pluginRepairUserland)
+            if (android) add(S.pluginRepairUserland)
             add(S.pluginRepairRetry)
         }
         else -> add(S.pluginRepairRetry)

@@ -62,6 +62,23 @@ class PluginManager private constructor(private val context: Context?, private v
             record(plugin, "installed", "Ubuntu is provided by the built-in environment")
             return PluginOutcome(true, "Ubuntu is provided by the built-in environment")
         }
+
+        if (probe(plugin).ok) {
+            val state = PluginState(
+                id = plugin.id,
+                installed = true,
+                source = "already present",
+                version = System.currentTimeMillis().toString(),
+                sizeBytes = plugin.bytes,
+                installedAt = System.currentTimeMillis()
+            )
+            HarnessRuntime.update(HarnessRuntime.config().withPlugin(state))
+            PluginJournal.clear(plugin.id)
+            onProgress(1f, "installed")
+            record(plugin, "installed", "${plugin.name} was already available on this device")
+            return PluginOutcome(true, "${plugin.name} is already available on this device")
+        }
+
         var script = plugin.installFor(android)
         if (script.isBlank()) {
             return PluginOutcome(
