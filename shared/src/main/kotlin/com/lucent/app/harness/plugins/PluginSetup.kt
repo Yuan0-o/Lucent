@@ -70,7 +70,7 @@ object PluginSetup {
             }
         }
 
-        val largestDownload = PluginCatalog.all().maxOfOrNull { it.bytes } ?: 0L
+        val largestDownload = PluginCatalog.effective().maxOfOrNull { it.bytes } ?: 0L
         if (largestDownload > 0) {
             val space = HarnessRuntime.downloadsDir().usableSpace
             val needed = largestDownload * 2L
@@ -101,7 +101,7 @@ object PluginSetup {
         }
 
         val toolsPassed = coroutineScope {
-            val tools = PluginCatalog.forPlatform(android).filter { it.id != "ubuntu" && it.id != "playwright" }
+            val tools = PluginCatalog.forPlatformEffective(android).filter { it.id != "ubuntu" && it.id != "playwright" }
             val checks = tools.map { plugin ->
                 async {
                     if (config.pluginInstalled(plugin.id)) true

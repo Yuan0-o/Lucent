@@ -65,7 +65,11 @@ data class HarnessConfig(
     val contextBudgetTokens: Int = ContextBudget.DEFAULT_BUDGET_TOKENS,
     val pluginMirrorRegion: String = "auto",
     val setupComplete: Boolean = false,
-    val setupCompletedAt: Long = 0L
+    val setupCompletedAt: Long = 0L,
+    val pluginBackupScope: String = "state",
+    val pluginCatalogUrl: String = "",
+    val pluginCatalogCacheEpoch: Long = 0L,
+    val pluginPendingReinstall: List<String> = emptyList()
 ) {
 
     fun approvalFor(permission: HarnessPermission): Approval =
@@ -181,6 +185,10 @@ data class HarnessConfig(
         put("pluginMirrorRegion", pluginMirrorRegion)
         put("setupComplete", setupComplete)
         put("setupCompletedAt", setupCompletedAt)
+        put("pluginBackupScope", pluginBackupScope)
+        put("pluginCatalogUrl", pluginCatalogUrl)
+        put("pluginCatalogCacheEpoch", pluginCatalogCacheEpoch)
+        put("pluginPendingReinstall", JSONArray(pluginPendingReinstall))
     }
 
     companion object {
@@ -223,7 +231,11 @@ data class HarnessConfig(
                 contextBudgetTokens = o.optInt("contextBudgetTokens", defaults.contextBudgetTokens),
                 pluginMirrorRegion = o.optString("pluginMirrorRegion", defaults.pluginMirrorRegion),
                 setupComplete = o.optBoolean("setupComplete", defaults.setupComplete),
-                setupCompletedAt = o.optLong("setupCompletedAt", defaults.setupCompletedAt)
+                setupCompletedAt = o.optLong("setupCompletedAt", defaults.setupCompletedAt),
+                pluginBackupScope = o.optString("pluginBackupScope", defaults.pluginBackupScope),
+                pluginCatalogUrl = o.optString("pluginCatalogUrl", defaults.pluginCatalogUrl),
+                pluginCatalogCacheEpoch = o.optLong("pluginCatalogCacheEpoch", defaults.pluginCatalogCacheEpoch),
+                pluginPendingReinstall = strings(o.optJSONArray("pluginPendingReinstall"))
             )
         }
 

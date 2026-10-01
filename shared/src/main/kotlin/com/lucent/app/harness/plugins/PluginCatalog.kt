@@ -266,4 +266,10 @@ object PluginCatalog {
     fun find(id: String): PluginSpec? = ALL.firstOrNull { it.id == id }
 
     fun forPlatform(android: Boolean): List<PluginSpec> = ALL.filter { if (android) it.android else it.desktop }
+
+    suspend fun effective(): List<PluginSpec> = PluginCatalogRemote.fetchEffective(com.lucent.app.harness.HarnessRuntime.config())
+
+    suspend fun findEffective(id: String): PluginSpec? = effective().firstOrNull { it.id == id }
+
+    suspend fun forPlatformEffective(android: Boolean): List<PluginSpec> = effective().filter { if (android) it.android else it.desktop }
 }

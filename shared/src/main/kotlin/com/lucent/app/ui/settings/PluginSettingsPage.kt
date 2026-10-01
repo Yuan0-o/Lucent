@@ -8,8 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,6 +70,18 @@ internal fun PluginSettingsPage(
     var preflight by remember { mutableStateOf<PreflightReport?>(null) }
     var pendingInstall by remember { mutableStateOf<PluginSpec?>(null) }
     var running by remember { mutableStateOf<Job?>(null) }
+    var bannerRunning by remember { mutableStateOf(false) }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var effectivePlugins by remember { mutableStateOf<List<PluginSpec>>(emptyList()) }
+    var fetchingCatalog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(config.pluginCatalogUrl, config.pluginCatalogCacheEpoch) {
+        kotlinx.coroutines.delay(600)
+        fetchingCatalog = true
+        effectivePlugins = PluginCatalog.effective()
+        fetchingCatalog = false
+    }
 
     val android = HarnessRuntime.android
     val shellReady = HarnessRuntime.pluginHost?.isReady() == true
@@ -81,8 +96,23 @@ internal fun PluginSettingsPage(
             }
         }
     }
-    val plugins = remember(android) { PluginCatalog.forPlatform(android).filterNot { it.id == "termux" } }
-    val termux = remember { PluginCatalog.forPlatform(true).firstOrNull { it.id == "termux" } }
+    
+    val plugins = remember(android, effectivePlugins, searchQuery) { 
+        val base = if (effectivePlugins.isEmpty()) PluginCatalog.forPlatform(android) 
+                   else effectivePlugins.filter { if (android) it.android else it.desktop }
+        val filtered = base.filterNot { it.id == "termux" }
+        if (searchQuery.isBlank()) filtered
+        else filtered.filter { 
+            it.name.contains(searchQuery, true) || 
+            it.summary.contains(searchQuery, true) || 
+            it.id.contains(searchQuery, true) 
+        }
+    }
+    
+    val termux = remember(effectivePlugins) { 
+        (if (effectivePlugins.isEmpty()) PluginCatalog.all() else effectivePlugins)
+            .firstOrNull { it.id == "termux" } 
+    }
 
     fun startInstall(plugin: PluginSpec, remove: Boolean) {
         val target = HarnessRuntime.pluginHost
@@ -139,8 +169,53 @@ internal fun PluginSettingsPage(
         progress = 0f
     }
 
+    fun startPendingReinstall() {
+        val target = HarnessRuntime.pluginHost
+        if (target == null) return
+        bannerRunning = true
+        scope.launch {
+            val pendingList = config.pluginPendingReinstall.toList()
+            for (id in pendingList) {
+                val plugin = effectivePlugins.firstOrNull { it.id == id } ?: PluginCatalog.find(id) ?: continue
+                val outcome = target.install(plugin, PluginSource("", "", "")) { fraction, label ->
+                    progress = fraction
+                    note = "${plugin.name}: $label"
+                }
+                if (outcome.ok) {
+                    val next = HarnessRuntime.config().copy(
+                        pluginPendingReinstall = HarnessRuntime.config().pluginPendingReinstall - id
+                    )
+                    HarnessRuntime.update(next)
+                    config = HarnessRuntime.config()
+                } else {
+                    failure = PluginFailureReport(plugin, outcome)
+                    break
+                }
+            }
+            bannerRunning = false
+        }
+    }
+
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (config.pluginPendingReinstall.isNotEmpty()) {
+            PendingReinstallCard(
+                pendingCount = config.pluginPendingReinstall.size,
+                running = bannerRunning,
+                progress = progress,
+                note = note,
+                onReinstall = { startPendingReinstall() },
+                onDismiss = {
+                    val next = config.copy(pluginPendingReinstall = emptyList())
+                    HarnessRuntime.update(next)
+                    config = next
+                },
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
         if (!setupComplete) {
             SetupGateCard(onGradient = onGradient, onGradientMuted = onGradientMuted, onStart = { onRoute(SettingsRoute.PluginSetup) })
             Spacer(modifier = Modifier.height(12.dp))
@@ -191,7 +266,64 @@ internal fun PluginSettingsPage(
                     }
                 }
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(S.pluginBackupScope, color = onGradient, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                listOf(
+                    "all" to S.pluginBackupScopeAll,
+                    "state" to S.pluginBackupScopeState,
+                    "none" to S.pluginBackupScopeNone
+                ).forEach { (value, label) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 12.dp).clickable {
+                            val next = config.copy(pluginBackupScope = value)
+                            HarnessRuntime.update(next)
+                            config = next
+                        }
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = config.pluginBackupScope == value,
+                            onClick = null
+                        )
+                        Text(label, color = onGradient, fontSize = 13.sp)
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = config.pluginCatalogUrl,
+                onValueChange = { 
+                    val next = config.copy(pluginCatalogUrl = it)
+                    HarnessRuntime.update(next)
+                    config = next
+                },
+                label = { Text(S.pluginCatalogUrlLabel, fontSize = 13.sp) },
+                placeholder = { Text(S.pluginCatalogUrlHint, fontSize = 13.sp) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedTextColor = onGradient,
+                    focusedTextColor = onGradient
+                )
+            )
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text(S.pluginSearchHint, fontSize = 13.sp) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedTextColor = onGradient,
+                focusedTextColor = onGradient
+            )
+        )
         Spacer(modifier = Modifier.height(12.dp))
         
         plugins.forEach { plugin ->
@@ -520,6 +652,42 @@ private fun SetupGateCard(
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onStart) {
             Text(S.setupGateAction)
+        }
+    }
+}
+
+@Composable
+private fun PendingReinstallCard(
+    pendingCount: Int,
+    running: Boolean,
+    progress: Float,
+    note: String,
+    onReinstall: () -> Unit,
+    onDismiss: () -> Unit,
+    onGradient: androidx.compose.ui.graphics.Color,
+    onGradientMuted: androidx.compose.ui.graphics.Color
+) {
+    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Text(S.pluginPendingReinstallTitle, color = onGradient, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(S.pluginPendingReinstallBody(pendingCount), color = onGradientMuted, fontSize = 13.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        if (running) {
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+            if (note.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(note, color = onGradientMuted, fontSize = 11.sp)
+            }
+        } else {
+            Row {
+                Button(onClick = onReinstall) {
+                    Text(S.actionReinstall)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(onClick = onDismiss) {
+                    Text(S.actionDismiss)
+                }
+            }
         }
     }
 }

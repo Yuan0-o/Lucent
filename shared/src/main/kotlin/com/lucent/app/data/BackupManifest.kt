@@ -202,7 +202,15 @@ internal object BackupManifestBuilder {
             .put("systemIntegrationEnabled", settings.systemIntegrationEnabled.first())
             .put("startupLoggingEnabled", settings.startupLoggingEnabled.first())
             .put("savedSearches", settings.savedSearches.first())
-            .put("harnessConfig", settings.harnessConfig.first())
+            
+        if (wantSettings) {
+            val hcStr = settings.harnessConfig.first()
+            val hc = HarnessConfig.parse(hcStr)
+            val exportHc = if (hc.pluginBackupScope == "none") hc.copy(plugins = emptyList()) else hc
+            settingsObj.put("harnessConfig", exportHc.toJson())
+        }
+
+        if (wantSettings) settingsObj
             .put("customTemplates", settings.customTemplatesJson.first())
             .put("templateDraft", settings.templateDraftJson.first())
             .put("hiddenTemplates", settings.hiddenTemplatesJson.first())

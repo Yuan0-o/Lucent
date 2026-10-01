@@ -371,7 +371,22 @@ internal object BackupImporter {
                 if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))
                 if (s.has("notebooksSort")) settings.setNotebooksSort(s.optString("notebooksSort"))
                 if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
-                if (restoreGeneral && s.has("harnessConfig")) settings.setHarnessConfig(s.optString("harnessConfig"))
+                if (restoreGeneral && s.has("harnessConfig")) {
+                    val incomingHcStr = s.optString("harnessConfig")
+                    val incomingHc = com.lucent.app.harness.HarnessConfig.parse(incomingHcStr)
+                    val currentHcStr = settings.harnessConfig.first()
+                    val currentHc = com.lucent.app.harness.HarnessConfig.parse(currentHcStr)
+
+                    val backupPlugins = incomingHc.installedPlugins()
+                    val currentPlugins = currentHc.installedPlugins()
+                    val pending = (backupPlugins - currentPlugins).toList()
+
+                    val finalHc = incomingHc.copy(
+                        plugins = currentHc.plugins,
+                        pluginPendingReinstall = (currentHc.pluginPendingReinstall + pending).distinct()
+                    )
+                    settings.setHarnessConfig(finalHc.toJson())
+                }
                 if (restoreGeneral && s.has("customTemplates")) settings.setCustomTemplatesJson(s.optString("customTemplates"))
                 if (restoreGeneral && s.has("templateDraft")) settings.setTemplateDraftJson(s.optString("templateDraft"))
                 if (restoreGeneral && s.has("hiddenTemplates")) settings.setHiddenTemplatesJson(s.optString("hiddenTemplates"))

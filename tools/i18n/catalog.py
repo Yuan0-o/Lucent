@@ -1865,6 +1865,16 @@ ENTRIES = [
     ("setupGateTitle", "Environment Setup Required", "需要设置环境", "環境セットアップが必要です", "환경 설정 필요"),
     ("setupGateBody", "Complete the setup wizard to enable plugin features.", "完成设置向导以启用插件功能。", "セットアップウィザードを完了してプラグイン機能を有効にしてください。", "설정 마법사를 완료하여 플러그인 기능을 활성화하세요."),
     ("setupGateAction", "Start Setup", "开始设置", "セットアップを開始", "설정 시작"),
+    ("pluginPendingReinstallTitle", "Backup plugins pending", "待恢复的备份插件", "バックアップからの復元待ちプラグイン", "백업 플러그인 복원 대기 중"),
+    ("pluginPendingReinstallBody(count: Int)", "{count} plugins from your backup are waiting to be reinstalled.", "备份中的 {count} 个插件正在等待重新安装。", "バックアップの {count} 個のプラグインが再インストールを待っています。", "백업의 플러그인 {count}개가 재설치를 대기 중입니다."),
+    ("pluginBackupScope", "Backup scope", "备份范围", "バックアップ範囲", "백업 범위"),
+    ("pluginBackupScopeAll", "All", "全部", "すべて", "모두"),
+    ("pluginBackupScopeState", "State only", "仅状态", "状態のみ", "상태만"),
+    ("pluginBackupScopeNone", "None", "不备份", "なし", "없음"),
+    ("pluginCatalogUrlLabel", "Remote catalog URL", "远程目录 URL", "リモートカタログURL", "원격 카탈로그 URL"),
+    ("pluginCatalogUrlHint", "https://... (leave blank to disable)", "https://...（留空以禁用）", "https://... (空欄で無効)", "https://... (비워두면 비활성화)"),
+    ("pluginSearchHint", "Search plugins...", "搜索插件...", "プラグインを検索...", "플러그인 검색..."),
+    ("actionReinstall", "Reinstall", "重新安装", "再インストール", "재설치"),
 ]
 
 CONDITIONAL_ENTRIES = {
