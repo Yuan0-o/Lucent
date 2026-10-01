@@ -56,7 +56,7 @@ object BuiltinRuntimeInstaller {
                                 violations++
                                 continue
                             }
-                            if (entry.isBlockDevice || entry.isCharacterDevice || entry.isFifo) {
+                            if (entry.isBlockDevice || entry.isCharacterDevice || entry.isFIFO) {
                                 continue
                             }
                             if (entry.isDirectory) {
