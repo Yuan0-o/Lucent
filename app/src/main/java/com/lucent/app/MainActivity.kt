@@ -12,6 +12,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -174,7 +175,7 @@ class MainActivity : FragmentActivity() {
         } else {
             themeChoice.backdrop(systemDark)
         }
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(androidx.compose.ui.graphics.toArgb(initialBackdropColor)))
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(initialBackdropColor.toArgb()))
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
