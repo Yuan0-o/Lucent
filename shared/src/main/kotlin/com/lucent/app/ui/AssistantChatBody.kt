@@ -54,6 +54,8 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -816,7 +818,7 @@ fun AssistantChatBody(
                     diameter = 40.dp
                 )
                 GlassRoundButton(
-                    icon = androidx.compose.material.icons.Icons.Filled.Terminal,
+                    icon = androidx.compose.material.icons.Icons.Default.Keyboard,
                     contentDescription = com.lucent.app.i18n.S.tabTerminal,
                     onClick = { com.lucent.app.AppNavigation.requestTerminal() },
                     tint = onGradient,
@@ -922,13 +924,40 @@ fun AssistantChatBody(
                                 }
                                 .padding(12.dp)
                         ) {
-                            if (!isUser && assistantName.isNotBlank()) {
-                                Text(
-                                    assistantName,
-                                    color = onGradientMuted,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(bottom = 3.dp)
-                                )
+                            val savedTrace = if (!isUser) remember(msg.id, msg.agentTrace) {
+                                AgentTraceCodec.decode(msg.agentTrace)
+                            } else null
+                            val reasoning = if (!isUser) msg.reasoningText.orEmpty() else ""
+                            val hasProcessContent = savedTrace != null || reasoning.isNotBlank()
+                            var processVisible by remember(msg.id) { mutableStateOf(true) }
+
+                            if (!isUser && (assistantName.isNotBlank() || hasProcessContent)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (assistantName.isNotBlank()) {
+                                        Text(
+                                            assistantName,
+                                            color = onGradientMuted,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    if (hasProcessContent) {
+                                        IconButton(
+                                            onClick = { processVisible = !processVisible },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                if (processVisible) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = null,
+                                                tint = onGradientMuted,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                             val attachmentsAll = remember(msg.id, msg.attachmentData, msg.attachmentList) {
                                 com.lucent.app.data.ChatAttachments.all(
@@ -959,10 +988,7 @@ fun AssistantChatBody(
                                 }
                             }
 
-                            if (!isUser) {
-                                val savedTrace = remember(msg.id, msg.agentTrace) {
-                                    AgentTraceCodec.decode(msg.agentTrace)
-                                }
+                            if (!isUser && processVisible) {
                                 if (savedTrace != null) {
                                     AgentTracePanel(
                                         trace = savedTrace,
@@ -971,7 +997,6 @@ fun AssistantChatBody(
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                 }
-                                val reasoning = msg.reasoningText.orEmpty()
                                 if (reasoning.isNotBlank()) {
                                     AssistantReasoningBlock(
                                         reasoning = reasoning,
