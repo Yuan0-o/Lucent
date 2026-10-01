@@ -175,7 +175,7 @@ fun TerminalScreen(onBack: () -> Unit) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    mainAxisAlignment = Arrangement.Center
+                    verticalArrangement = Arrangement.Center
                 ) {
                     Text(
                         com.lucent.app.i18n.S.terminalSetupGuidance,

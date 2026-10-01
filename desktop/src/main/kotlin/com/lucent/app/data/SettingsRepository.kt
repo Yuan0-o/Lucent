@@ -98,9 +98,7 @@ class SettingsRepository(private val context: Context) {
 
     const val TERMINAL_FONT_SIZE_ENC = "terminal_font_size_enc"
     const val TERMINAL_KEY_BAR_VISIBLE_ENC = "terminal_key_bar_visible_enc"
-
     }
-
 
     private val file: File get() = File(context.applicationContext.filesDir, "lucent_settings.json")
 
@@ -338,6 +336,8 @@ class SettingsRepository(private val context: Context) {
             cloudUser = str(prefs, K.CLOUD_USER) ?: "",
             cloudFolder = str(prefs, K.CLOUD_FOLDER) ?: "Lucent",
             cloudAutoBackup = bool(prefs, K.CLOUD_AUTO_BACKUP) ?: false,
+            terminalFontSize = secret(prefs, K.TERMINAL_FONT_SIZE_ENC, "").toFloatOrNull(),
+            terminalKeyBarVisible = secret(prefs, K.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true,
             cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: "",
             autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false,
             privilegedEnabled = bool(prefs, K.PRIVILEGED_ENABLED) ?: false,
@@ -816,20 +816,20 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val terminalFontSize: Flow<Float?> = updates.map {
-        secret(it, SettingsKeys.TERMINAL_FONT_SIZE_ENC, "").toFloatOrNull()
+    val terminalFontSize: Flow<Float?> = state.map {
+        secret(it, K.TERMINAL_FONT_SIZE_ENC, "").toFloatOrNull()
     }
-    val terminalKeyBarVisible: Flow<Boolean> = updates.map {
-        secret(it, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true
+    val terminalKeyBarVisible: Flow<Boolean> = state.map {
+        secret(it, K.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true
     }
 
     suspend fun setTerminalFontSize(value: Float) {
         SettingsCache.terminalFontSize = value
-        putSecret(SettingsKeys.TERMINAL_FONT_SIZE_ENC, value.toString())
+        putSecret(K.TERMINAL_FONT_SIZE_ENC, value.toString())
     }
     suspend fun setTerminalKeyBarVisible(value: Boolean) {
         SettingsCache.terminalKeyBarVisible = value
-        putSecret(SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, value.toString())
+        putSecret(K.TERMINAL_KEY_BAR_VISIBLE_ENC, value.toString())
     }
 
     suspend fun setAssistantName(value: String) {
