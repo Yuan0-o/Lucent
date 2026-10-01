@@ -1,6 +1,6 @@
 <div align="center">
 
-[🇬🇧 English](./README.md) · [🇨🇳 简体中文](./docs/README.zh-CN.md) · [🇯🇵 日本語](./docs/README.ja.md) · [🇰🇷 한국어](./docs/README.ko.md)
+[🇨🇳 简体中文](./docs/README.zh-CN.md) · [🇯🇵 日本語](./docs/README.ja.md) · [🇰🇷 한국어](./docs/README.ko.md)
 
 </div>
 
@@ -284,8 +284,7 @@ A particular word for **SQLCipher**, whose BSD-style licence asks — not unreas
 the thing keeping your diary shut — that its copyright and notice be reproduced somewhere a user can
 actually find them. So they are, in the notices file above; if you ship a build of Lucent, keep them
 findable. The one font Lucent carries itself is Great Vibes, the script face of the pen on the splash
-screen, bundled unmodified under the SIL Open Font License with its reserved name intact; every other
-font is yours, imported by you and kept under whatever terms you hold it.
+screen, bundled unmodified under the SIL Open Font License with its reserved name intact.
 
 ## Licence, and the one small thing it asks in return
 
