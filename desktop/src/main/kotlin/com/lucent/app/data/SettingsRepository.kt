@@ -623,12 +623,12 @@ class SettingsRepository(private val context: Context) {
     val installedPreviewIdentity: Flow<String> = state.map { str(it, K.INSTALLED_PREVIEW_IDENTITY) ?: "" }
     suspend fun setInstalledPreviewIdentity(value: String) {
         SettingsCache.installedPreviewIdentity = value
-        update { it.put(K.INSTALLED_PREVIEW_IDENTITY, value) }
+        edit { it[K.INSTALLED_PREVIEW_IDENTITY] = value }
     }
 
     suspend fun setStagedUpdateIdentity(value: String) {
         SettingsCache.stagedUpdateIdentity = value
-        update { it.put(K.STAGED_UPDATE_IDENTITY, value) }
+        edit { it[K.STAGED_UPDATE_IDENTITY] = value }
     }
 
     val autoUpdateEnabled: Flow<Boolean> = state.map { bool(it, K.AUTO_UPDATE_ENABLED) ?: false }
