@@ -1982,7 +1982,8 @@ object AssistantController {
         answersMessageId: Long = 0,
         targetConversationId: Long? = null,
         attachmentListJson: String? = null,
-        attachments: List<com.lucent.app.data.Attachment> = emptyList()
+        attachments: List<com.lucent.app.data.Attachment> = emptyList(),
+        quoteTarget: ChatMessage? = null
     ) = impl(appContext).send(
         appContext = appContext, text = text, attachmentMime = attachmentMime,
         attachmentData = attachmentData, attachmentName = attachmentName, url = url, spec = spec,
@@ -1993,7 +1994,7 @@ object AssistantController {
         smallModelMode = smallModelMode, agentMode = agentMode, localWebSearch = localWebSearch,
         reasoning = reasoning, answersMessageId = answersMessageId,
         targetConversationId = targetConversationId, attachmentListJson = attachmentListJson,
-        attachments = attachments
+        attachments = attachments, quoteTarget = quoteTarget
     )
 
 

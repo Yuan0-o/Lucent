@@ -61,6 +61,7 @@ import com.lucent.app.data.Note
 import com.lucent.app.data.Notebook
 import com.lucent.app.data.NotebookItem
 import com.lucent.app.data.SettingsRepository
+import com.lucent.app.data.StartupLog
 import com.lucent.app.data.Task
 import com.lucent.app.data.pruneOrphans
 import dev.chrisbanes.haze.hazeSource
