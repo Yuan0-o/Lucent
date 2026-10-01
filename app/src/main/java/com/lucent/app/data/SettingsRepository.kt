@@ -46,6 +46,8 @@ private object SettingsKeys {
     val SESSION_SNAPSHOT = stringPreferencesKey("session_snapshot")
     val TASKS_SORT = stringPreferencesKey("tasks_sort")
     val NOTEBOOKS_SORT = stringPreferencesKey("notebooks_sort")
+    val NOTEBOOK_OPENS_ENC = stringPreferencesKey("notebook_opens_enc")
+    val NOTEBOOK_OPENS_LEGACY = stringPreferencesKey("notebook_opens")
 
     val AUTO_BACKUP = stringPreferencesKey("auto_backup_state")
 
@@ -930,6 +932,13 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNotebooksSort(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.NOTEBOOKS_SORT] = value }
         SettingsCache.notebooksSort = value
+    }
+    val notebookOpens: Flow<String> = context.settingsDataStore.data.map { prefs ->
+        prefs[SettingsKeys.NOTEBOOK_OPENS_ENC]?.let { LocalSecrets.decrypt(it) } ?: "{}"
+    }
+    suspend fun notebookOpensOnce(): String = notebookOpens.first()
+    suspend fun setNotebookOpens(value: String) {
+        putSecret(SettingsKeys.NOTEBOOK_OPENS_ENC, SettingsKeys.NOTEBOOK_OPENS_LEGACY, value)
     }
     suspend fun setMarkdownEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value }

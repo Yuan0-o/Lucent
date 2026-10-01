@@ -52,6 +52,8 @@ object AppNavigation {
 
     var requestedPanel by mutableStateOf<HomePanel?>(null)
         private set
+    var requestedNotebookId by mutableStateOf<Long?>(null)
+        private set
 
     var pendingEditNoteId by mutableStateOf<Long?>(null)
         private set
@@ -88,6 +90,13 @@ object AppNavigation {
     fun requestPanel(panel: HomePanel) {
         requestedPanel = panel
     }
+
+    fun openNotebook(id: Long) {
+        requestedNotebookId = id
+        requestedScreen = Screen.Notebooks
+    }
+
+    fun consumeNotebookId(): Long? = requestedNotebookId.also { requestedNotebookId = null }
 
     fun editNote(id: Long) {
         pendingEditNoteId = id

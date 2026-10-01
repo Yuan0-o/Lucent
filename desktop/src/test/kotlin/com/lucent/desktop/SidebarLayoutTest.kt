@@ -13,17 +13,20 @@ class SidebarLayoutTest {
     @Test
     fun libraryPagesSitBetweenTheListsAndTheTools() {
         val sections = sidebarSections(hiddenVisible = false)
-        assertEquals(3, sections.size)
-        assertEquals(listOf(Screen.Tasks, Screen.Notes), sections[0])
-        assertEquals(listOf(Screen.Notebooks, Screen.Drafts, Screen.Archive, Screen.Trash), sections[1])
-        assertEquals(listOf(Screen.Assistant, Screen.Search, Screen.Insights, Screen.Settings), sections[2])
+        assertEquals(6, sections.size)
+        assertEquals(listOf(Screen.Search), sections[0])
+        assertEquals(listOf(Screen.Tasks, Screen.Notes), sections[1])
+        assertEquals(listOf(Screen.Drafts, Screen.Archive, Screen.Trash), sections[2])
+        assertEquals(listOf(Screen.Notebooks), sections[3])
+        assertEquals(listOf(Screen.Insights), sections[4])
+        assertEquals(listOf(Screen.Assistant, Screen.Settings), sections[5])
     }
 
     @Test
     fun hiddenOnlyAppearsOnceTheHiddenAreaIsOpen() {
         assertFalse(Screen.Hidden in sidebarSections(hiddenVisible = false).flatten())
         val open = sidebarSections(hiddenVisible = true)
-        assertEquals(Screen.Hidden, open[1].last())
+        assertEquals(Screen.Hidden, open[2].last())
     }
 
     @Test

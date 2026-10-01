@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lucent.app.data.Notebook
+import com.lucent.app.LucentBuild
 import com.lucent.app.Screen
 import com.lucent.app.ui.Haptics
 import com.lucent.app.ui.LocalOnGradient
@@ -47,7 +49,7 @@ import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.frostedGlass
 
 @Composable
-fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
+fun Sidebar(current: Screen, recentNotebooks: List<Notebook> = emptyList(), onSelect: (Screen) -> Unit, onOpenNotebook: (Long) -> Unit = {}) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
@@ -88,6 +90,11 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
                         onClick = { Haptics.tick(android.content.DesktopContext); onSelect(screen) }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
+                    if (screen == Screen.Notebooks) recentNotebooks.take(3).forEach { notebook ->
+                        Text(notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle }, color = onGradientMuted, fontSize = 12.sp, maxLines = 1,
+                            modifier = Modifier.fillMaxWidth().padding(start = 52.dp, end = 12.dp, top = 3.dp, bottom = 7.dp)
+                                .clickable { Haptics.tick(android.content.DesktopContext); onOpenNotebook(notebook.id) })
+                    }
                 }
             }
         }
@@ -104,10 +111,12 @@ fun Sidebar(current: Screen, onSelect: (Screen) -> Unit) {
         ) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = onGradient)
             Spacer(modifier = Modifier.width(10.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text("Lucent", color = onGradient, fontSize = 14.sp)
-                Text("Windows", color = onGradientMuted, fontSize = 12.sp)
             }
+            Text("Windows", color = onGradientMuted, fontSize = 12.sp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(LucentBuild.VERSION, color = onGradientMuted, fontSize = 12.sp)
         }
     }
 }
@@ -139,9 +148,12 @@ private fun NavRow(
 }
 
 fun sidebarSections(hiddenVisible: Boolean): List<List<Screen>> = listOf(
+    listOf(Screen.Search),
     listOf(Screen.Tasks, Screen.Notes),
-    listOf(Screen.Notebooks, Screen.Drafts, Screen.Archive, Screen.Trash) + if (hiddenVisible) listOf(Screen.Hidden) else emptyList(),
-    listOf(Screen.Assistant, Screen.Search, Screen.Insights, Screen.Settings)
+    listOf(Screen.Drafts, Screen.Archive, Screen.Trash) + if (hiddenVisible) listOf(Screen.Hidden) else emptyList(),
+    listOf(Screen.Notebooks),
+    listOf(Screen.Insights),
+    listOf(Screen.Assistant, Screen.Settings)
 )
 
 private fun iconFor(screen: Screen): ImageVector = when (screen) {

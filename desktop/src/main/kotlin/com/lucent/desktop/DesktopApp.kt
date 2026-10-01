@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.AppNavigation
 import com.lucent.app.Screen
 import com.lucent.app.data.SettingsRepository
+import com.lucent.app.data.AppDatabase
 import com.lucent.app.ui.FluidGlassBackground
 import com.lucent.app.ui.LocalBackgroundEnvironment
 import com.lucent.app.ui.rememberBackgroundEnvironment
@@ -44,6 +47,7 @@ import com.lucent.app.ui.LucentThemeMode
 import com.lucent.app.ui.AssistantScreen
 import com.lucent.app.ui.HiddenArea
 import com.lucent.app.ui.HomePanelPage
+import com.lucent.app.ui.HomeMode
 import com.lucent.app.ui.InsightsScreen
 import com.lucent.app.ui.NotebooksScreen
 import com.lucent.app.ui.LastScreen
@@ -196,6 +200,19 @@ private fun DesktopShell(
     backgroundAnimated: Boolean
 ) {
     var current by remember { mutableStateOf(Screen.Tasks) }
+    var showTrashChooser by remember { mutableStateOf(false) }
+    var trashInitialMode by remember { mutableStateOf<HomeMode?>(null) }
+    val notebooks by remember { AppDatabase.getInstance(DesktopContext).notebookDao().getAll() }.collectAsState(initial = emptyList())
+    val notebookOpensJson by repo.notebookOpens.collectAsState(initial = "{}")
+    val recentNotebooks = remember(notebooks, notebookOpensJson) {
+        runCatching {
+            val records = org.json.JSONObject(notebookOpensJson)
+            notebooks.mapNotNull { notebook -> records.optJSONObject(notebook.id.toString())?.let { notebook to it } }
+                .sortedWith(compareByDescending<Pair<com.lucent.app.data.Notebook, org.json.JSONObject>> { it.second.optLong("last") }
+                    .thenByDescending { it.second.optInt("count") })
+                .take(3).map { it.first }
+        }.getOrDefault(emptyList())
+    }
     LaunchedEffect(AppNavigation.requestedScreen) {
         AppNavigation.consumeScreen()?.let { current = it }
     }
@@ -222,7 +239,9 @@ private fun DesktopShell(
             modifier = Modifier.fillMaxSize()
         )
         Row(modifier = Modifier.fillMaxSize()) {
-            Sidebar(current = current, onSelect = { current = it })
+            Sidebar(current = current, recentNotebooks = recentNotebooks,
+                onOpenNotebook = AppNavigation::openNotebook,
+                onSelect = { if (it == Screen.Trash) showTrashChooser = true else current = it })
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 when (current) {
                     Screen.Assistant -> AssistantScreen()
@@ -235,7 +254,7 @@ private fun DesktopShell(
                         showBack = false
                     )
                     Screen.Drafts, Screen.Archive, Screen.Trash, Screen.Hidden ->
-                        current.panel?.let { panel -> key(current) { HomePanelPage(panel = panel, from = current) } }
+                        current.panel?.let { panel -> key(current) { HomePanelPage(panel = panel, from = current, initialMode = if (panel == com.lucent.app.ui.HomePanel.Trash) trashInitialMode else null) } }
                     Screen.Insights -> InsightsScreen()
                     Screen.Search -> SearchScreen(
                         onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Search) },
@@ -246,6 +265,15 @@ private fun DesktopShell(
                 }
             }
         }
+        if (showTrashChooser) AlertDialog(
+            onDismissRequest = { showTrashChooser = false },
+            title = { Text(com.lucent.app.i18n.S.screenTrash) },
+            text = { androidx.compose.foundation.layout.Column {
+                TextButton(onClick = { trashInitialMode = HomeMode.Tasks; showTrashChooser = false; current = Screen.Trash }) { Text(com.lucent.app.i18n.S.tabTasks) }
+                TextButton(onClick = { trashInitialMode = HomeMode.Notes; showTrashChooser = false; current = Screen.Trash }) { Text(com.lucent.app.i18n.S.tabNotes) }
+            } },
+            confirmButton = {}
+        )
     }
 }
 

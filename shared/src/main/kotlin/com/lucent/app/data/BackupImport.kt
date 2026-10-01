@@ -475,6 +475,7 @@ internal object BackupImporter {
                 if (s.has("notesSort")) settings.setNotesSort(s.optString("notesSort"))
                 if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))
                 if (s.has("notebooksSort")) settings.setNotebooksSort(s.optString("notebooksSort"))
+                if (restoreGeneral && s.has("notebookOpens")) settings.setNotebookOpens(s.optString("notebookOpens", "{}"))
                 if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
                 if (restoreGeneral && s.has("harnessConfig")) {
                     val incomingHcStr = s.optString("harnessConfig")

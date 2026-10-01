@@ -5,6 +5,39 @@ import java.time.ZoneId
 
 object TaskInsights {
 
+    data class DayValue(val label: String, val value: Int)
+    data class DayPair(val label: String, val first: Int, val second: Int)
+    data class StatusDistribution(val done: Int, val active: Int, val overdue: Int) {
+        val total: Int get() = done + active + overdue
+    }
+
+    fun completedPerDay(tasks: List<Task>, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): List<DayValue> {
+        val today = now.atZone(zone).toLocalDate()
+        return (13 downTo 0).map { offset ->
+            val day = today.minusDays(offset.toLong())
+            DayValue(day.dayOfMonth.toString(), tasks.count {
+                it.trashedAt == null && it.completedAt?.let { time -> Instant.ofEpochMilli(time).atZone(zone).toLocalDate() == day } == true
+            })
+        }
+    }
+
+    fun createdAndCompletedPerDay(tasks: List<Task>, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): List<DayPair> {
+        val today = now.atZone(zone).toLocalDate()
+        return (6 downTo 0).map { offset ->
+            val day = today.minusDays(offset.toLong())
+            val label = day.dayOfMonth.toString()
+            DayPair(label,
+                tasks.count { it.trashedAt == null && Instant.ofEpochMilli(it.createdAt).atZone(zone).toLocalDate() == day },
+                tasks.count { it.trashedAt == null && it.completedAt?.let { time -> Instant.ofEpochMilli(time).atZone(zone).toLocalDate() == day } == true })
+        }
+    }
+
+    fun statusDistribution(tasks: List<Task>, now: Instant = Instant.now()): StatusDistribution {
+        val live = tasks.filter { it.trashedAt == null }
+        val overdue = live.count { !it.isDone && it.dueAt?.let { due -> due < now.toEpochMilli() } == true }
+        return StatusDistribution(live.count { it.isDone }, live.count { !it.isDone } - overdue, overdue)
+    }
+
     data class Summary(
         val active: Int,
         val overdue: Int,

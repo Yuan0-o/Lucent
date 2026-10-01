@@ -88,6 +88,7 @@ fun InsightsScreen() {
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
+        InsightsCharts(allTasks)
     }
 }
 

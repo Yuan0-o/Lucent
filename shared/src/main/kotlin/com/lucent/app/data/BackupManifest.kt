@@ -202,6 +202,7 @@ internal object BackupManifestBuilder {
             .put("notesSort", settings.notesSort.first())
             .put("tasksSort", settings.tasksSort.first())
             .put("notebooksSort", settings.notebooksSort.first())
+            .put("notebookOpens", settings.notebookOpens.first())
             .put("systemIntegrationEnabled", settings.systemIntegrationEnabled.first())
             .put("startupLoggingEnabled", settings.startupLoggingEnabled.first())
             .put("savedSearches", settings.savedSearches.first())

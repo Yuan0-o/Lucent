@@ -32,10 +32,10 @@ import com.lucent.app.tools.TaskActions
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomePanelPage(panel: HomePanel, from: Screen) {
+fun HomePanelPage(panel: HomePanel, from: Screen, initialMode: HomeMode? = null) {
     val context = LocalContext.current
     val db = remember { AppDatabase.getInstance(context) }
-    var mode by rememberSaveable(panel) { mutableStateOf(LastScreen.homeMode) }
+    var mode by rememberSaveable(panel, initialMode) { mutableStateOf(initialMode ?: LastScreen.homeMode) }
     var noteToTrash by remember { mutableStateOf<Note?>(null) }
     var taskToTrash by remember { mutableStateOf<Task?>(null) }
 

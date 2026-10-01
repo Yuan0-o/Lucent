@@ -87,7 +87,28 @@ fun NotebooksScreen(
     val sortKey by settingsRepo.notebooksSort.collectAsState(initial = com.lucent.app.data.SettingsCache.notebooksSort ?: "recent")
     val sortOption = NotebookSort.fromKey(sortKey)
 
+    fun recordNotebookOpen(id: Long) {
+        AppScope.io.launch {
+            runCatching {
+                val data = org.json.JSONObject(settingsRepo.notebookOpensOnce())
+                val previous = data.optJSONObject(id.toString()) ?: org.json.JSONObject()
+                data.put(id.toString(), org.json.JSONObject()
+                    .put("last", System.currentTimeMillis())
+                    .put("count", previous.optInt("count", 0) + 1))
+                settingsRepo.setNotebookOpens(data.toString())
+                StartupLog.event(context, "notebooks: opened notebook $id")
+            }.onFailure { StartupLog.event(context, "notebooks: open tracking failed: ${it.message}") }
+        }
+    }
+
     var openNotebookId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(AppNavigation.requestedNotebookId, active, notebooks) {
+        val requested = AppNavigation.requestedNotebookId ?: return@LaunchedEffect
+        if (!active || notebooks.none { it.id == requested }) return@LaunchedEffect
+        AppNavigation.consumeNotebookId()
+        openNotebookId = requested
+        recordNotebookOpen(requested)
+    }
     var creating by remember { mutableStateOf(false) }
     var coverForNew by remember { mutableStateOf(NotebookColor.DEFAULT) }
     var nameForNew by remember { mutableStateOf("") }
@@ -477,6 +498,7 @@ fun NotebooksScreen(
                             selectedIds = if (notebook.id in selectedIds) selectedIds - notebook.id else selectedIds + notebook.id
                         } else {
                             openNotebookId = notebook.id
+                            recordNotebookOpen(notebook.id)
                         }
                     },
                     onToggleSelect = {

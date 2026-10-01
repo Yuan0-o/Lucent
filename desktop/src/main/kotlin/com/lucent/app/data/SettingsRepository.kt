@@ -35,6 +35,7 @@ class SettingsRepository(private val context: Context) {
         const val TASK_HISTORY_ENABLED = "task_history_enabled"
         const val TASKS_SORT = "tasks_sort"
         const val NOTEBOOKS_SORT = "notebooks_sort"
+        const val NOTEBOOK_OPENS_ENC = "notebook_opens_enc"
         const val MEMORY_TIER = "memory_tier"
         const val WEB_SEARCH_ENABLED = "web_search_enabled"
         const val ASSISTANT_CONFIRM_TOOLS = "assistant_confirm_tools"
@@ -478,6 +479,10 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.notebooksSort = value
         edit { it[K.NOTEBOOKS_SORT] = value }
     }
+
+    val notebookOpens: Flow<String> = state.map { secret(it, K.NOTEBOOK_OPENS_ENC, "{}") }
+    suspend fun notebookOpensOnce(): String = notebookOpens.first()
+    suspend fun setNotebookOpens(value: String) = putSecret(K.NOTEBOOK_OPENS_ENC, value)
 
     val noteHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.NOTE_HISTORY_ENABLED) ?: true }
     val taskHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.TASK_HISTORY_ENABLED) ?: true }
