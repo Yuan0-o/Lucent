@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
@@ -426,11 +427,11 @@ class AssistantControllerTest {
 
             controller.sendFixture(context)
 
-            awaitState(controller, description = "pendingConfirmation to be set") {
-                it.pendingConfirmation != null
+            val observedState = withTimeout(5_000) {
+                controller.state.first { it.pendingConfirmation != null }
             }
 
-            val confirm = controller.state.value.pendingConfirmation!!
+            val confirm = observedState.pendingConfirmation!!
             assertEquals("create_task", confirm.toolName)
             val byKey = confirm.edits.associate { it.key to it.value }
             assertEquals("Buy milk", byKey["title"])

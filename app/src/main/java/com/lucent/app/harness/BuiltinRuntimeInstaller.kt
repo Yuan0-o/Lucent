@@ -30,6 +30,7 @@ object BuiltinRuntimeInstaller {
                 -1
             }
             if (File(rootfsDir, "bin/bash").exists() && currentVersion >= targetVersion) {
+                ensureHostIdentity(rootfsDir)
                 return@withContext ShellOutcome(true, "built-in environment is ready", "", 0)
             }
 
@@ -123,6 +124,8 @@ object BuiltinRuntimeInstaller {
                 return@withContext ShellOutcome(false, "", "Verification failed: required files missing from extracted rootfs", -1)
             }
 
+            ensureHostIdentity(tmp)
+
             File(tmp, ".lucent-rootfs-version").writeText(targetVersion.toString())
             if (rootfsDir.exists()) {
                 rootfsDir.deleteRecursively()
@@ -137,6 +140,25 @@ object BuiltinRuntimeInstaller {
         } catch (t: Throwable) {
             ShellOutcome(false, "", t.message ?: t.toString(), -1)
         }
+    }
+
+    private fun ensureHostIdentity(rootfs: File) {
+        val uid = Os.getuid()
+        val gid = Os.getgid()
+        val passwd = File(rootfs, "etc/passwd")
+        val groups = File(rootfs, "etc/group")
+        val passwdLines = passwd.readLines().toMutableList()
+        if (passwdLines.none { it.split(':').getOrNull(2)?.toIntOrNull() == uid }) {
+            passwdLines.add("android_$uid:x:$uid:$gid:Android app user:/root:/bin/bash")
+            passwd.writeText(passwdLines.joinToString("\n", postfix = "\n"))
+        }
+        val groupLines = groups.readLines().toMutableList()
+        (Os.getgroups().toSet() + gid).filter { it >= 0 }.forEach { groupId ->
+            if (groupLines.none { it.split(':').getOrNull(2)?.toIntOrNull() == groupId }) {
+                groupLines.add("android_$groupId:x:$groupId:")
+            }
+        }
+        groups.writeText(groupLines.joinToString("\n", postfix = "\n"))
     }
 
     private fun extractNativeLibs(context: Context) {

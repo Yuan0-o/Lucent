@@ -207,16 +207,14 @@ fun AssistantChatBody(
         scope.launch { repo.saveApiProfiles(updated, idx) }
     }
 
-    var terminalOpen by remember { mutableStateOf(false) }
-
     LaunchedEffect(com.lucent.app.AppNavigation.terminalRequested) {
         if (com.lucent.app.AppNavigation.consumeTerminal()) {
-            terminalOpen = true
+            com.lucent.app.AppNavigation.setTerminalOpen(true)
         }
     }
 
-    if (terminalOpen) {
-        TerminalScreen(onBack = { terminalOpen = false })
+    if (com.lucent.app.AppNavigation.terminalOpen) {
+        TerminalScreen(onBack = { com.lucent.app.AppNavigation.setTerminalOpen(false) })
     } else {
     var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
 

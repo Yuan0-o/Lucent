@@ -226,7 +226,7 @@ internal fun SettingsBreadcrumb(
     val crumbs = remember(route) { SettingsTrail.trail(route) }
     val scroll = rememberScrollState()
     Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(scroll),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).horizontalScroll(scroll),
         verticalAlignment = Alignment.CenterVertically
     ) {
         leading()

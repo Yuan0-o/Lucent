@@ -15,8 +15,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -25,30 +28,36 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
 import com.lucent.app.i18n.S
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun AssistantConfirmationDialog() {
-    val confirm = AssistantController.pendingConfirmation ?: return
+    val ctx = LocalContext.current
+    var confirm by remember { mutableStateOf<PendingConfirmation?>(null) }
+    LaunchedEffect(ctx) {
+        AssistantController.ensureMessagesLoaded(ctx.applicationContext)
+        AssistantController.state.collect { confirm = it.pendingConfirmation }
+    }
+    val pending = confirm ?: return
 
-    val draft = remember(confirm) {
+    val draft = remember(pending) {
         mutableStateMapOf<String, String>().apply {
-            confirm.edits.forEach { put(it.key, it.value) }
+            pending.edits.forEach { put(it.key, it.value) }
         }
     }
 
-    val ctx = LocalContext.current
     val draftSnapshot = draft.toMap()
     LaunchedEffect(confirm, draftSnapshot) {
-        if (!com.lucent.app.data.AssistantDraftBridge.shouldMirror(confirm.toolName)) return@LaunchedEffect
+        if (!com.lucent.app.data.AssistantDraftBridge.shouldMirror(pending.toolName)) return@LaunchedEffect
         kotlinx.coroutines.delay(700)
         runCatching {
             com.lucent.app.data.AssistantDraftBridge.mirror(
-                ctx.applicationContext, confirm.toolName, draftSnapshot
+                ctx.applicationContext, pending.toolName, draftSnapshot
             )
         }
     }
 
-    val hasForm = confirm.edits.isNotEmpty()
+    val hasForm = pending.edits.isNotEmpty()
 
     AlertDialog(
         onDismissRequest = { },
@@ -56,14 +65,14 @@ fun AssistantConfirmationDialog() {
             dismissOnBackPress = false,
             dismissOnClickOutside = false
         ),
-        title = { Text(confirm.actionTitle) },
+        title = { Text(pending.actionTitle) },
         text = {
             Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Text(confirm.details)
+                Text(pending.details)
                 if (hasForm) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(S.confirmReviewHint, fontSize = 12.sp)
-                    confirm.edits.forEach { field ->
+                    pending.edits.forEach { field ->
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
                             value = draft[field.key].orEmpty(),

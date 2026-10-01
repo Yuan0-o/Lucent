@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,7 @@ fun NotebookDetailScreen(
     onOpenNote: (Note) -> Unit,
     onOpenTask: (Task) -> Unit
 ) {
+    BackHandler { onBack() }
     val context = LocalContext.current
     val db = remember { AppDatabase.getInstance(context) }
     val scope = rememberCoroutineScope()

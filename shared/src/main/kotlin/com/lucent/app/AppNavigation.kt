@@ -37,12 +37,19 @@ object AppNavigation {
     var terminalRequested by mutableStateOf(false)
         private set
 
+    var terminalOpen by mutableStateOf(false)
+        private set
+
     fun requestTerminal() {
         terminalRequested = true
         requestedScreen = Screen.Assistant
     }
 
     fun consumeTerminal(): Boolean = terminalRequested.also { terminalRequested = false }
+
+    fun setTerminalOpen(open: Boolean) {
+        terminalOpen = open
+    }
 
     var composeNoteRequested by mutableStateOf(false)
         private set

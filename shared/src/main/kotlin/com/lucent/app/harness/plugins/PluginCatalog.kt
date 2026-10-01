@@ -72,7 +72,8 @@ object PluginCatalog {
             bytes = 0L,
             sources = emptyList(),
             detectCommand = "python3 -c \"import docx, openpyxl, pptx\"",
-            installScript = "apt-get update && apt-get install -y --no-install-recommends python3 python3-pip python3-venv && " +
+            installScript = "sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources && " +
+                "apt-get update -o Acquire::Retries=3 && apt-get install -y --no-install-recommends python3 python3-pip python3-venv && " +
                 "pip3 install --break-system-packages --index-url https://pypi.tuna.tsinghua.edu.cn/simple " +
                 "python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
             removeScript = "pip3 uninstall -y python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
