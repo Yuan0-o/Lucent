@@ -47,13 +47,13 @@ object PluginPreflight {
         val notes = mutableListOf<String>()
         val mirrorResults = mutableListOf<Triple<String, Long, Boolean>>()
 
-        val mode = HarnessRuntime.config().runtimeMode
-        val termuxReady = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
-        val builtinAvailable = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
-        val backend = selectBackend(mode, termuxReady, builtinAvailable)
-        val isBuiltin = backend == RuntimeBackend.BUILTIN || (android && builtinAvailable && mode != "termux")
+        val cfgMode = HarnessRuntime.config().runtimeMode
+        val capsTermux = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
+        val capsBuiltin = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
+        val chosenBackend = selectBackend(cfgMode, capsTermux, capsBuiltin)
+        val builtinActive = chosenBackend == RuntimeBackend.BUILTIN || (android && capsBuiltin && cfgMode != "termux")
 
-        if (android && isBuiltin && plugin.id == "ubuntu") {
+        if (android && builtinActive && plugin.id == "ubuntu") {
             val state = HarnessRuntime.host?.builtinRuntimeState() ?: "unavailable"
             if (state != "ready") {
                 problems.add(
