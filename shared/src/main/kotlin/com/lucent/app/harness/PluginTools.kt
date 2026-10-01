@@ -156,12 +156,12 @@ object PluginTools : HarnessGroupTools {
         }
         HarnessRuntime.note("installing ${plugin.name}")
         var lastNote = ""
-        val outcome = host.install(plugin, source) { _, note ->
+        val outcome = host.install(plugin, source, onProgress = { _, note ->
             if (note != lastNote) {
                 lastNote = note
                 HarnessRuntime.note("${plugin.name}: $note")
             }
-        }
+        })
         if (!outcome.ok) return ToolExecResult(outcome.message + repairHint(ctx, outcome), success = false)
         val refreshed = PluginCatalog.find(id)?.let { detectAndRecord(ctx, it) }
         return ToolExecResult(

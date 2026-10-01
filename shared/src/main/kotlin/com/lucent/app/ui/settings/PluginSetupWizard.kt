@@ -134,10 +134,10 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                                     if (spec != null) {
                                         busy = step.id
                                         scope.launch {
-                                            val outcome = HarnessRuntime.pluginHost?.install(spec, PluginSource("", "", "")) { p, t ->
+                                            val outcome = HarnessRuntime.pluginHost?.install(spec, PluginSource("", "", ""), onProgress = { p, t ->
                                                 progress = p
                                                 statusMsg = t
-                                            }
+                                            })
                                             if (outcome?.ok != true) {
                                                 errorMsg = outcome?.message.orEmpty().ifEmpty { S.setupFailed }
                                                 errorStep = step.id
@@ -156,10 +156,10 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                                         val tools = PluginCatalog.forPlatform(HarnessRuntime.android).filter { it.id != "ubuntu" && it.id != "playwright" }
                                         for (tool in tools) {
                                             if (!HarnessRuntime.config().pluginInstalled(tool.id) && HarnessRuntime.pluginHost?.detect(tool) != true) {
-                                                val outcome = HarnessRuntime.pluginHost?.install(tool, PluginSource("", "", "")) { p, t ->
+                                                val outcome = HarnessRuntime.pluginHost?.install(tool, PluginSource("", "", ""), onProgress = { p, t ->
                                                     progress = p
                                                     statusMsg = "${tool.name}: $t"
-                                                }
+                                                })
                                                 if (outcome?.ok != true && failureMessage.isEmpty()) {
                                                     failureMessage = outcome?.message.orEmpty()
                                                 }

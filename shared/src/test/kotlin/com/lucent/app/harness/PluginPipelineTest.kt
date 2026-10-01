@@ -135,7 +135,7 @@ class PluginPipelineTest {
             else ShellOutcome(false, "", "the plugin is still missing", 1)
         }
         val manager = PluginManager.desktop()
-        val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", "")) { _, _ -> } }
+        val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
         assertFalse(outcome.ok)
         assertEquals(PluginFailure.DETECT, outcome.failure)
         assertTrue(outcome.detail.contains("still missing"), outcome.detail)
@@ -146,7 +146,7 @@ class PluginPipelineTest {
     fun aFailedInstallCommandKeepsItsExitCodeAndOutput() = sandbox { root ->
         HarnessRuntime.shell = ScriptedShell { ShellOutcome(false, "boom: no space left", "", 3) }
         val manager = PluginManager.desktop()
-        val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", "")) { _, _ -> } }
+        val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
         assertFalse(outcome.ok)
         assertEquals(PluginFailure.INSTALL, outcome.failure)
         assertTrue(outcome.message.contains("exited 3"), outcome.message)
@@ -161,7 +161,7 @@ class PluginPipelineTest {
             HarnessRuntime.shell = null
             val manager = PluginManager.desktop()
             val outcome = runBlocking {
-                manager.install(payloadPlugin(url, bytes.size.toLong()), PluginSource("", "", "")) { _, _ -> }
+                manager.install(payloadPlugin(url, bytes.size.toLong()), PluginSource("", "", ""), onProgress = { _, _ -> })
             }
             assertFalse(outcome.ok)
             assertEquals(PluginFailure.NO_SHELL, outcome.failure)
@@ -181,7 +181,7 @@ class PluginPipelineTest {
         try {
             val manager = PluginManager.desktop()
             val outcome = runBlocking {
-                manager.install(payloadPlugin(url, bytes.size.toLong()), PluginSource("", "", "")) { _, _ -> }
+                manager.install(payloadPlugin(url, bytes.size.toLong()), PluginSource("", "", ""), onProgress = { _, _ -> })
             }
             assertFalse(outcome.ok)
             assertEquals(PluginFailure.DOWNLOAD, outcome.failure)
@@ -239,7 +239,7 @@ class PluginPipelineTest {
             }
         }
         val manager = PluginManager.desktop()
-        val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", "")) { _, _ -> } }
+        val outcome = runBlocking { manager.install(scriptedPlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
         assertTrue(outcome.ok, outcome.message)
         assertTrue(HarnessRuntime.config().pluginInstalled("scripted"))
         val probe = runBlocking { manager.probe(scriptedPlugin()) }

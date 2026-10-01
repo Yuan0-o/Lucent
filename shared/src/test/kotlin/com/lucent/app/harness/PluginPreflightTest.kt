@@ -244,8 +244,8 @@ class PluginPreflightTest {
         HarnessRuntime.shell = shell
         val manager = PluginManager.testInstance(true)
         HarnessRuntime.pluginHost = manager
-        runBlocking { manager.install(termuxStylePlugin(), PluginSource("", "", "")) { _, _ -> } }
-        runBlocking { manager.install(termuxStylePlugin(), PluginSource("", "", "")) { _, _ -> } }
+        runBlocking { manager.install(termuxStylePlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
+        runBlocking { manager.install(termuxStylePlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
         assertEquals(1, shell.seen.count { it == "pkg update" })
         assertEquals(2, shell.seen.count { it.contains("pkg install") })
     }
@@ -277,7 +277,7 @@ class PluginPreflightTest {
             val notes = mutableListOf<String>()
             val manager = PluginManager.desktop()
             val outcome = runBlocking {
-                manager.install(plugin, PluginSource("", "", "")) { _, note -> notes.add(note) }
+                manager.install(plugin, PluginSource("", "", ""), onProgress = { _, note -> notes.add(note) })
             }
             assertTrue(outcome.ok, outcome.message)
             assertTrue(notes.any { it.contains("testing download sources") }, notes.joinToString())
@@ -332,7 +332,7 @@ class PluginPreflightTest {
             homepage = "https://example.invalid",
             windowsInstall = "do the thing"
         )
-        val outcome = runBlocking { manager.install(scripted, PluginSource("", "", "")) { _, _ -> } }
+        val outcome = runBlocking { manager.install(scripted, PluginSource("", "", ""), onProgress = { _, _ -> }) }
         assertFalse(outcome.ok)
         assertEquals(PluginFailure.NO_SHELL, outcome.failure)
         assertFalse(outcome.message.contains("was downloaded"), outcome.message)
