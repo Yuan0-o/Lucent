@@ -5,6 +5,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import com.lucent.app.harness.terminal.TerminalSessions
+import com.lucent.app.harness.terminal.PtyStartRequest
+import com.lucent.app.harness.terminal.PtySessionState
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -98,6 +101,53 @@ object TerminalTools : HarnessGroupTools {
 
     override val tools: List<HarnessTool> = listOf(
         HarnessTool(
+            name = "terminal_open_session",
+            group = group,
+            permission = HarnessPermission.EXECUTE,
+            requires = HarnessRuntime.CAP_SHELL,
+            description = "Open a new interactive PTY terminal session (a tab). Returns the session id, state, and terminal backend description. Fails gracefully if the terminal backend is not available.",
+            params = listOf(HarnessSchema.text("workdir", "Optional starting directory", false))
+        ),
+        HarnessTool(
+            name = "terminal_write",
+            group = group,
+            permission = HarnessPermission.EXECUTE,
+            requires = HarnessRuntime.CAP_SHELL,
+            description = "Write input to an interactive terminal session's stdin. Optionally wait to capture output.",
+            params = listOf(
+                HarnessSchema.number("session_id", "The session id (tab id)"),
+                HarnessSchema.text("input", "Text to append to stdin"),
+                HarnessSchema.number("wait_ms", "How many milliseconds to wait for output before replying (default 0, max 120000)", false)
+            )
+        ),
+        HarnessTool(
+            name = "terminal_read",
+            group = group,
+            permission = HarnessPermission.READ,
+            requires = HarnessRuntime.CAP_SHELL,
+            description = "Read the transcript of an interactive terminal session. Optionally block until it exits or time expires.",
+            params = listOf(
+                HarnessSchema.number("session_id", "The session id (tab id)"),
+                HarnessSchema.number("wait_ms", "How many milliseconds to block (max 120000)", false),
+                HarnessSchema.number("tail_chars", "How many characters of the transcript tail to return (default 8000)", false)
+            )
+        ),
+        HarnessTool(
+            name = "terminal_close_session",
+            group = group,
+            permission = HarnessPermission.EXECUTE,
+            requires = HarnessRuntime.CAP_SHELL,
+            description = "Close an interactive terminal session.",
+            params = listOf(HarnessSchema.number("session_id", "The session id (tab id)"))
+        ),
+        HarnessTool(
+            name = "terminal_list_sessions",
+            group = group,
+            permission = HarnessPermission.READ,
+            requires = HarnessRuntime.CAP_SHELL,
+            description = "List all active interactive terminal sessions."
+        ),
+        HarnessTool(
             name = "run_command",
             group = group,
             permission = HarnessPermission.EXECUTE,
@@ -166,6 +216,11 @@ object TerminalTools : HarnessGroupTools {
     )
 
     override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+        "terminal_open_session" -> terminalOpenSession(ctx, args)
+        "terminal_write" -> terminalWrite(ctx, args)
+        "terminal_read" -> terminalRead(ctx, args)
+        "terminal_close_session" -> terminalCloseSession(ctx, args)
+        "terminal_list_sessions" -> terminalListSessions(ctx)
         "run_command" -> runCommand(ctx, args)
         "start_job" -> startJob(ctx, args)
         "job_output" -> jobOutput(ctx, args)
@@ -174,6 +229,98 @@ object TerminalTools : HarnessGroupTools {
         "which_tool" -> whichTool(ctx, args)
         "environment_info" -> environmentInfo(ctx)
         else -> null
+    }
+
+
+    private fun terminalOpenSession(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+        if (!TerminalSessions.manager.isAvailable()) {
+            return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
+        }
+        val workdir = workdirOf(ctx, args)
+        return try {
+            val request = PtyStartRequest(workdir = workdir)
+            val tab = TerminalSessions.manager.createSession(request)
+            ToolExecResult("Opened session ${tab.id}. State: ${tab.value.state}. Backend: ${TerminalSessions.manager.describe()}")
+        } catch (e: Exception) {
+            ToolExecResult("Failed to open session: ${e.message}", success = false)
+        }
+    }
+
+    private suspend fun terminalWrite(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+        if (!TerminalSessions.manager.isAvailable()) {
+            return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
+        }
+        val id = args.optLong("session_id", -1L)
+        val input = args.optString("input", "")
+        val waitMs = args.optInt("wait_ms", 0).coerceIn(0, 120000).toLong()
+
+        val tab = TerminalSessions.manager.find(id) ?: return ToolExecResult("No terminal session found with id $id", success = false)
+        if (tab.value.state != PtySessionState.RUNNING) {
+            return ToolExecResult("Session $id is not running (state: ${tab.value.state}).", success = false)
+        }
+
+        val ok = tab.value.write(input)
+        if (!ok) return ToolExecResult("Failed to write to session $id.", success = false)
+
+        if (waitMs > 0) {
+            val deadline = System.currentTimeMillis() + waitMs
+            while (System.currentTimeMillis() < deadline && tab.value.state == PtySessionState.RUNNING) {
+                kotlinx.coroutines.delay(100)
+            }
+        }
+
+        val state = tab.value.state
+        val text = tab.value.transcript()
+        val tail = if (text.length > 8000) text.takeLast(8000) else text
+        return ToolExecResult("Wrote to session $id. Current state: $state.\nTranscript tail:\n${ctx.limit(tail)}")
+    }
+
+    private suspend fun terminalRead(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+        if (!TerminalSessions.manager.isAvailable()) {
+            return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
+        }
+        val id = args.optLong("session_id", -1L)
+        val waitMs = args.optInt("wait_ms", 0).coerceIn(0, 120000).toLong()
+        val tailChars = args.optInt("tail_chars", 8000).coerceAtLeast(1)
+
+        val tab = TerminalSessions.manager.find(id) ?: return ToolExecResult("No terminal session found with id $id", success = false)
+
+        if (waitMs > 0) {
+            val deadline = System.currentTimeMillis() + waitMs
+            while (System.currentTimeMillis() < deadline && tab.value.state == PtySessionState.RUNNING) {
+                kotlinx.coroutines.delay(100)
+            }
+        }
+
+        val state = tab.value.state
+        val exitCode = tab.value.exitCode
+        val text = tab.value.transcript()
+        val tail = if (text.length > tailChars) text.takeLast(tailChars) else text
+
+        return ToolExecResult("Session $id state: $state (exit code: $exitCode)\nTranscript tail:\n${ctx.limit(tail)}")
+    }
+
+    private fun terminalCloseSession(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+        if (!TerminalSessions.manager.isAvailable()) {
+            return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
+        }
+        val id = args.optLong("session_id", -1L)
+        val ok = TerminalSessions.manager.closeSession(id)
+        return if (ok) ToolExecResult("Closed session $id.") else ToolExecResult("No terminal session found with id $id", success = false)
+    }
+
+    private fun terminalListSessions(ctx: HarnessCtx): ToolExecResult {
+        if (!TerminalSessions.manager.isAvailable()) {
+            return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
+        }
+        val sessions = TerminalSessions.manager.snapshot()
+        if (sessions.isEmpty()) return ToolExecResult("No active terminal sessions.")
+
+        val sb = java.lang.StringBuilder()
+        for (tab in sessions) {
+            sb.append("Session ${tab.id} (tab ${tab.number}): state=${tab.value.state}, exitCode=${tab.value.exitCode}\n")
+        }
+        return ToolExecResult(sb.toString().trimEnd())
     }
 
     private fun workdirOf(ctx: HarnessCtx, args: JSONObject): File {

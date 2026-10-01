@@ -51,10 +51,10 @@ class HarnessModulesTest {
         "PluginTools" to listOf(
             "plugin_status", "plugin_list_available", "install_plugin", "remove_plugin", "plugin_run", "plugin_inspect"
         ),
-        "SandboxTools" to listOf("sandbox_status", "sandbox_run", "sandbox_limits"),
+        "SandboxTools" to listOf("sandbox_status", "sandbox_run", "sandbox_limits", "environment_status", "environment_install"),
         "SkillTools" to listOf("list_skills", "read_skill", "save_skill"),
         "TerminalTools" to listOf(
-            "run_command", "start_job", "job_output", "job_kill", "jobs_list", "which_tool", "environment_info"
+            "run_command", "start_job", "job_output", "job_kill", "jobs_list", "which_tool", "environment_info", "terminal_open_session", "terminal_write", "terminal_read", "terminal_close_session", "terminal_list_sessions"
         ),
         "FileTools" to listOf(
             "workspace_info", "list_directory", "search_files", "read_file", "read_image", "write_file", "edit_file",

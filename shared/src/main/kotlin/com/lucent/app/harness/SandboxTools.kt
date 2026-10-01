@@ -3,6 +3,7 @@ package com.lucent.app.harness
 import com.lucent.app.network.ToolExecResult
 import org.json.JSONObject
 import java.io.File
+import com.lucent.app.harness.terminal.TerminalSessions
 
 object SandboxTools : HarnessGroupTools {
 
@@ -37,8 +38,19 @@ object SandboxTools : HarnessGroupTools {
             name = "sandbox_limits",
             group = group,
             permission = HarnessPermission.READ,
-            description = "Show the limits that apply to commands right now: timeout, output cap, the chosen route and " +
-                "which engines were found."
+            description = "Show the limits that apply to commands right now: timeout, output cap, the chosen route and which engines were found."
+        ),
+        HarnessTool(
+            name = "environment_status",
+            group = group,
+            permission = HarnessPermission.READ,
+            description = "Report the built-in runtime state, active sandbox route, proot/docker detection, and terminal backend availability."
+        ),
+        HarnessTool(
+            name = "environment_install",
+            group = group,
+            permission = HarnessPermission.EXECUTE,
+            description = "Trigger the installation/extraction of the built-in environment if it is not ready."
         )
     )
 
@@ -46,7 +58,40 @@ object SandboxTools : HarnessGroupTools {
         "sandbox_status" -> ToolExecResult(status(ctx))
         "sandbox_limits" -> ToolExecResult(limits(ctx))
         "sandbox_run" -> run(ctx, args)
+        "environment_status" -> ToolExecResult(environmentStatus(ctx))
+        "environment_install" -> environmentInstall(ctx)
         else -> null
+    }
+
+
+    private fun environmentStatus(ctx: HarnessCtx): String {
+        val docker = dockerVersion()
+        val proot = prootVersion()
+        val capabilities = HarnessRuntime.capabilities()
+        return buildString {
+            append("Built-in runtime state: ").append(HarnessRuntime.host?.builtinRuntimeState() ?: "unavailable").append('\n')
+            append("Active sandbox route: ").append(route(ctx, docker, proot)).append('\n')
+            append("Docker: ").append(if (docker.isNotEmpty()) "detected ($docker)" else "not found").append('\n')
+            append("Proot: ").append(if (proot.isNotEmpty()) "detected ($proot)" else "not found").append('\n')
+            append("Terminal backend: ").append(if (TerminalSessions.manager.isAvailable()) "available (${TerminalSessions.manager.describe()})" else "not available").append('\n')
+            append("Privileged shell: ").append(if (capabilities.contains(HarnessRuntime.CAP_PRIVILEGED)) "available" else "no").append('\n')
+            append("Ordinary shell: ").append(if (capabilities.contains(HarnessRuntime.CAP_SHELL)) "available" else "no").append('\n')
+        }
+    }
+
+    private suspend fun environmentInstall(ctx: HarnessCtx): ToolExecResult {
+        val host = HarnessRuntime.host ?: return ToolExecResult("No host available to install the environment.", success = false)
+        if (host.builtinRuntimeState() == "ready") {
+            return ToolExecResult("The built-in environment is already ready.")
+        }
+        val outcome = host.extractBuiltinRuntime { progress ->
+            HarnessRuntime.note("environment: $progress")
+        }
+        return if (outcome.ok) {
+            ToolExecResult(outcome.text.ifEmpty { "Built-in environment installed successfully." })
+        } else {
+            ToolExecResult("Failed to install built-in environment: ${outcome.stderr.ifEmpty { outcome.text }}", success = false)
+        }
     }
 
     private fun dockerVersion(): String {

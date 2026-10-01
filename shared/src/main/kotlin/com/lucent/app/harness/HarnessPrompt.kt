@@ -69,7 +69,7 @@ object HarnessPrompt {
             append("than rewriting a whole file. Run things you create: a script, a test, a conversion, a render. ")
             append("If you make a document or a deck, render it and look at the picture before calling it finished. ")
             append("When a command fails, read the error and fix it rather than repeating the same call. ")
-            append("Long jobs belong in start_job so you can carry on while they run. Deleting, installing and ")
+            append("Long jobs belong in start_job so you can carry on while they run. Open interactive terminal tabs with terminal_open_session. Check environment_status if the shell fails. Deleting, installing and ")
             append("anything that reaches outside the workspace asks the person first, so explain briefly what you ")
             append("are about to do. Never claim a file exists, a command ran, or a change was made unless a tool ")
             append("told you so. ")
