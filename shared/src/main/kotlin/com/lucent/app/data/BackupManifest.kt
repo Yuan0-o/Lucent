@@ -3,6 +3,7 @@ package com.lucent.app.data
 import android.content.Context
 import android.util.Base64
 import kotlinx.coroutines.flow.first
+import com.lucent.app.harness.HarnessConfig
 import org.json.JSONArray
 import org.json.JSONObject
 
