@@ -23,7 +23,6 @@ data class PluginSpec(
     val licence: String,
     val homepage: String,
     val needsShell: Boolean = true,
-    val termuxOnly: Boolean = false,
     val windowsDetect: String = "",
     val windowsInstall: String = "",
     val windowsRemove: String = ""
@@ -36,34 +35,6 @@ data class PluginSpec(
 }
 
 object PluginCatalog {
-
-    private const val UBUNTU_TARBALL = "ubuntu-base-24.04.5-base-arm64.tar.gz"
-    private const val UBUNTU_SIZE = 29936675L
-    private const val UBUNTU_SHA256 = "a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2"
-
-    private fun termux(
-        id: String,
-        name: String,
-        pkg: String,
-        binary: String,
-        summary: String,
-        licence: String,
-        homepage: String
-    ) = PluginSpec(
-        id = id,
-        name = name,
-        summary = "$summary (installed in Termux)",
-        android = true,
-        desktop = false,
-        bytes = 0L,
-        sources = emptyList(),
-        detectCommand = "command -v $binary",
-        installScript = "pkg install -y $pkg",
-        removeScript = "pkg uninstall -y $pkg",
-        licence = licence,
-        homepage = homepage,
-        termuxOnly = true
-    )
 
     private fun desktopTool(
         id: String,
@@ -93,76 +64,6 @@ object PluginCatalog {
 
     private val ALL: List<PluginSpec> = listOf(
         PluginSpec(
-            id = "termux",
-            name = "Termux bridge",
-            summary = "The only supported way to run real commands on Android",
-            android = true,
-            desktop = false,
-            bytes = 0L,
-            sources = listOf(
-                PluginSource(
-                    "fdroid",
-                    "F-Droid (official)",
-                    "https://f-droid.org/packages/com.termux/",
-                    official = true
-                ),
-                PluginSource("github", "GitHub releases", "https://github.com/termux/termux-app/releases")
-            ),
-            detectCommand = "",
-            installScript = "",
-            licence = "GPL-3.0",
-            homepage = "https://termux.dev",
-            needsShell = false
-        ),
-        PluginSpec(
-            id = "ubuntu",
-            name = "Linux userland (Ubuntu 24.04)",
-            summary = "A full Ubuntu userland in PRoot, for anything the phone cannot do natively",
-            android = true,
-            desktop = false,
-            bytes = UBUNTU_SIZE,
-            sources = listOf(
-                PluginSource(
-                    "cdimage",
-                    "Ubuntu official",
-                    "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.5/release/$UBUNTU_TARBALL",
-                    official = true,
-                    sha256 = UBUNTU_SHA256,
-                    bytes = UBUNTU_SIZE
-                ),
-                PluginSource(
-                    "tuna",
-                    "Tsinghua TUNA",
-                    "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/ubuntu-base/releases/24.04.5/release/$UBUNTU_TARBALL",
-                    sha256 = UBUNTU_SHA256,
-                    bytes = UBUNTU_SIZE
-                ),
-                PluginSource(
-                    "aliyun",
-                    "Aliyun",
-                    "https://mirrors.aliyun.com/ubuntu-cdimage/ubuntu-base/releases/24.04.5/release/$UBUNTU_TARBALL",
-                    sha256 = UBUNTU_SHA256,
-                    bytes = UBUNTU_SIZE
-                )
-            ),
-            detectCommand = "test -x ~/lucent/ubuntu/rootfs/bin/bash",
-            installScript = "set -e; " +
-                "mkdir -p ~/lucent/ubuntu/rootfs; " +
-                "pkg install -y proot tar xz-utils; " +
-                "tar -xzf {file} -C ~/lucent/ubuntu/rootfs; " +
-                "printf 'nameserver 223.5.5.5\\nnameserver 119.29.29.29\\n' > ~/lucent/ubuntu/rootfs/etc/resolv.conf; " +
-                "mkdir -p ~/lucent/ubuntu/rootfs/etc/apt/sources.list.d; " +
-                "printf 'Types: deb\\nURIs: https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/\\n" +
-                "Suites: noble noble-updates noble-backports\\nComponents: main universe restricted multiverse\\n" +
-                "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\\n' " +
-                "> ~/lucent/ubuntu/rootfs/etc/apt/sources.list.d/ubuntu.sources; " +
-                "rm -f ~/lucent/ubuntu/rootfs/etc/apt/sources.list",
-            removeScript = "rm -rf ~/lucent/ubuntu",
-            licence = "Ubuntu base image, mixed free licences",
-            homepage = "https://cdimage.ubuntu.com/ubuntu-base/",
-            termuxOnly = true
-        ),
-        PluginSpec(
             id = "python-office",
             name = "Python document libraries",
             summary = "Python with python-docx, openpyxl, XlsxWriter, python-pptx, pandas and PyMuPDF",
@@ -177,7 +78,6 @@ object PluginCatalog {
             removeScript = "pip3 uninstall -y python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
             licence = "Python PSF-2.0; libraries MIT/BSD; PyMuPDF AGPL-3.0",
             homepage = "https://www.python.org",
-            termuxOnly = true,
             windowsDetect = "py -c \"import docx, openpyxl, pptx\"",
             windowsInstall = "winget install --id Python.Python.3.12 -e --accept-package-agreements " +
                 "--accept-source-agreements && py -m pip install --no-warn-script-location " +
@@ -198,7 +98,6 @@ object PluginCatalog {
             removeScript = "apt-get remove -y 'libreoffice*'",
             licence = "MPL-2.0",
             homepage = "https://www.libreoffice.org",
-            termuxOnly = true,
             windowsDetect = "if exist \"%ProgramFiles%\\LibreOffice\\program\\soffice.exe\" (exit 0) else (exit 1)",
             windowsInstall = "winget install --id TheDocumentFoundation.LibreOffice -e " +
                 "--accept-package-agreements --accept-source-agreements",
@@ -213,11 +112,10 @@ object PluginCatalog {
             bytes = 0L,
             sources = emptyList(),
             detectCommand = "command -v node",
-            installScript = "pkg install -y nodejs-lts",
-            removeScript = "pkg uninstall -y nodejs-lts",
+            installScript = "apt-get update && apt-get install -y nodejs npm",
+            removeScript = "apt-get remove -y nodejs npm",
             licence = "MIT",
             homepage = "https://nodejs.org",
-            termuxOnly = true,
             windowsDetect = "where node",
             windowsInstall = "winget install --id OpenJS.NodeJS.LTS -e " +
                 "--accept-package-agreements --accept-source-agreements",
@@ -231,13 +129,6 @@ object PluginCatalog {
         desktopTool("tesseract", "Tesseract OCR", "tesseract", "UB-Mannheim.TesseractOCR", "Reads text out of images", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract"),
         desktopTool("magick", "ImageMagick", "magick", "ImageMagick.ImageMagick", "Image conversion and editing", "ImageMagick licence", "https://imagemagick.org"),
         desktopTool("qpdf", "qpdf", "qpdf", "QPDF.QPDF", "PDF splitting and merging", "Apache-2.0", "https://qpdf.readthedocs.io"),
-        termux("git-termux", "Git for Termux", "git", "git", "Version control inside Termux", "GPL-2.0", "https://git-scm.com"),
-        termux("pandoc-termux", "Pandoc for Termux", "pandoc", "pandoc", "Document conversion inside Termux", "GPL-2.0-or-later", "https://pandoc.org"),
-        termux("ffmpeg-termux", "FFmpeg for Termux", "ffmpeg", "ffmpeg", "Media conversion inside Termux", "LGPL-2.1/GPL-2.0", "https://ffmpeg.org"),
-        termux("ripgrep-termux", "ripgrep for Termux", "ripgrep", "rg", "Fast search inside Termux", "MIT/Unlicense", "https://github.com/BurntSushi/ripgrep"),
-        termux("tesseract-termux", "Tesseract for Termux", "tesseract", "tesseract", "OCR inside Termux", "Apache-2.0", "https://github.com/tesseract-ocr/tesseract"),
-        termux("poppler-termux", "Poppler for Termux", "poppler", "pdftotext", "PDF text and image tools", "GPL-2.0/3", "https://poppler.freedesktop.org"),
-        termux("ytdlp-termux", "yt-dlp for Termux", "yt-dlp", "yt-dlp", "Downloads media from the web", "Unlicense", "https://github.com/yt-dlp/yt-dlp"),
         PluginSpec(
             id = "playwright",
             name = "Playwright browser",

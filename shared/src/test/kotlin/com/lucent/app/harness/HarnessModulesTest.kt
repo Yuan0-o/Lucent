@@ -129,7 +129,7 @@ class PluginCatalogTest {
     @Test
     fun theCatalogueIsConsistent() {
         val all = PluginCatalog.all()
-        assertTrue(all.size >= 15, "the catalogue should offer a useful spread, found ${all.size}")
+        assertTrue(all.size >= 12, "the catalogue should offer a useful spread, found ${all.size}")
         val ids = all.map { it.id }
         assertEquals(ids.size, ids.toSet().size, "duplicate plugin ids: $ids")
         all.forEach { plugin ->
@@ -170,10 +170,12 @@ class PluginCatalogTest {
         val desktop = PluginCatalog.forPlatform(android = false)
         assertTrue(android.all { it.android })
         assertTrue(desktop.all { it.desktop })
-        assertTrue(android.any { it.id == "ubuntu" })
+        assertFalse(android.any { it.id == "ubuntu" })
+        assertFalse(android.any { it.id == "termux" })
         assertFalse(android.any { it.id == "playwright" })
         assertTrue(desktop.any { it.id == "libreoffice" })
-        assertTrue(PluginCatalog.find("ubuntu") != null)
+        assertTrue(PluginCatalog.find("ubuntu") == null)
+        assertTrue(PluginCatalog.find("termux") == null)
         assertTrue(PluginCatalog.find("no-such-plugin") == null)
     }
 

@@ -44,23 +44,11 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     override val android: Boolean = true
 
     override suspend fun probeShell(): ShellOutcome {
-        val termuxOut = TermuxBridge.run(context, "echo probe", HarnessRuntime.workspace(), 10, emptyMap())
-        val termuxOk = termuxOut.ok
         val builtin = BuiltinShell.builtinAvailable(context)
-        val mode = com.lucent.app.harness.plugins.selectBackend(
-            HarnessRuntime.config().runtimeMode,
-            termuxOk,
-            builtin
-        )
-        if (mode == com.lucent.app.harness.plugins.RuntimeBackend.BUILTIN) {
+        if (builtin) {
             return BuiltinShell.run(context, "echo probe", HarnessRuntime.workspace(), 10000L)
         }
-        if (mode == com.lucent.app.harness.plugins.RuntimeBackend.NONE &&
-            HarnessRuntime.config().runtimeMode == "builtin"
-        ) {
-            return ShellOutcome(false, "", "built-in runtime is not bundled in this build", -1)
-        }
-        return termuxOut
+        return ShellOutcome(false, "", "built-in runtime is not bundled in this build", -1)
     }
 
     override fun filesDir(): File = context.filesDir
@@ -207,8 +195,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
             append(" used by this process, ").append(Workspace.humanSize(runtime.maxMemory())).append(" limit\n")
             val battery = batteryLine()
             if (battery.isNotEmpty()) append(battery).append('\n')
-            append("Accessibility service: ").append(if (LucentAccessibilityService.isRunning()) "running" else "off").append('\n')
-            append("Termux: ").append(TermuxBridge.describe(context))
+            append("Accessibility service: ").append(if (LucentAccessibilityService.isRunning()) "running" else "off")
         }.trimEnd()
     }
 

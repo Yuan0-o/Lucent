@@ -60,7 +60,6 @@ object PluginCatalogRemote {
                         licence = obj.optString("licence", ""),
                         homepage = obj.optString("homepage", ""),
                         needsShell = obj.optBoolean("needsShell", true),
-                        termuxOnly = obj.optBoolean("termuxOnly", false),
                         windowsDetect = obj.optString("windowsDetect", ""),
                         windowsInstall = obj.optString("windowsInstall", ""),
                         windowsRemove = obj.optString("windowsRemove", "")

@@ -23,11 +23,10 @@ private class PreflightHost(private val root: File) : HarnessHost {
     override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
 }
 
-private class TermuxRoutingShell : HarnessShell {
-    override val id: String = "termux-routing"
+private class RoutingShell : HarnessShell {
+    override val id: String = "routing"
     override fun isReady(): Boolean = true
-    override fun describe(): String = "the termux routing test shell"
-    var viaTermux = 0
+    override fun describe(): String = "the routing test shell"
     var viaRun = 0
     override suspend fun run(
         command: String,
@@ -37,16 +36,6 @@ private class TermuxRoutingShell : HarnessShell {
         onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         viaRun++
-        return ShellOutcome(true, "", "", 0)
-    }
-    override suspend fun runInTermux(
-        command: String,
-        workdir: File?,
-        timeoutSeconds: Int,
-        env: Map<String, String>,
-        onOutput: ((String) -> Unit)?
-    ): ShellOutcome {
-        viaTermux++
         return ShellOutcome(true, "", "", 0)
     }
 }
@@ -148,10 +137,10 @@ private fun deadSourcePlugin() = PluginSpec(
     windowsInstall = "unpack {file}"
 )
 
-private fun termuxStylePlugin() = PluginSpec(
-    id = "git-termux-test",
-    name = "GitTermuxTest",
-    summary = "termux package install",
+private fun pkgStylePlugin() = PluginSpec(
+    id = "git-pkg-test",
+    name = "GitPkgTest",
+    summary = "package install inside the built-in environment",
     android = true,
     desktop = false,
     bytes = 0L,
@@ -233,7 +222,7 @@ class PluginPreflightTest {
     }
 
     @Test
-    fun thePackageListIsRefreshedOncePerProcess() = preflightSandbox(android = true) { _ ->
+    fun installRunsTheScriptAsWritten() = preflightSandbox(android = true) { _ ->
         val shell = PreflightShell { command ->
             when {
                 command == "pkg update" -> ShellOutcome(true, "updated", "", 0)
@@ -244,9 +233,9 @@ class PluginPreflightTest {
         HarnessRuntime.shell = shell
         val manager = PluginManager.testInstance(true)
         HarnessRuntime.pluginHost = manager
-        runBlocking { manager.install(termuxStylePlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
-        runBlocking { manager.install(termuxStylePlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
-        assertEquals(1, shell.seen.count { it == "pkg update" })
+        runBlocking { manager.install(pkgStylePlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
+        runBlocking { manager.install(pkgStylePlugin(), PluginSource("", "", ""), onProgress = { _, _ -> }) }
+        assertEquals(0, shell.seen.count { it == "pkg update" })
         assertEquals(2, shell.seen.count { it.contains("pkg install") })
     }
 
@@ -288,29 +277,28 @@ class PluginPreflightTest {
     }
 
     @Test
-    fun termuxOnlyPluginsRunThroughTermux() = preflightSandbox(android = true) { _ ->
-        val shell = TermuxRoutingShell()
+    fun pluginCommandsRunThroughTheShell() = preflightSandbox(android = true) { _ ->
+        val shell = RoutingShell()
         HarnessRuntime.shell = shell
         val manager = PluginManager.testInstance(true)
-        runBlocking { manager.runPluginCommand(termuxStylePlugin().copy(id = "routed", termuxOnly = true), "true", 60) }
-        runBlocking { manager.runPluginCommand(termuxStylePlugin().copy(id = "plain"), "true", 60) }
-        assertEquals(1, shell.viaTermux)
-        assertEquals(1, shell.viaRun)
+        runBlocking { manager.runPluginCommand(pkgStylePlugin().copy(id = "one"), "true", 60) }
+        runBlocking { manager.runPluginCommand(pkgStylePlugin().copy(id = "two"), "true", 60) }
+        assertEquals(2, shell.viaRun)
     }
 
     @Test
-    fun preflightBlocksATermuxOnlyPluginWhenTermuxIsMissing() = preflightSandbox(android = true) { _ ->
-        HarnessRuntime.shell = PreflightShell { ShellOutcome(true, "", "", 0) }
+    fun preflightBlocksAShellPluginWhenNoShellIsAvailable() = preflightSandbox(android = true) { _ ->
+        HarnessRuntime.shell = null
         HarnessRuntime.pluginHost = PluginManager.testInstance(true)
         val report = runBlocking {
             PluginPreflight.inspect(
-                termuxStylePlugin().copy(id = "routed", termuxOnly = true),
+                pkgStylePlugin(),
                 PluginSource("", "", ""),
                 true
             )
         }
         assertTrue(report.blocked)
-        assertTrue(report.problems.any { it.code == "termux_missing" })
+        assertTrue(report.problems.any { it.code == "no_shell" })
         assertEquals(PluginFailure.NO_SHELL, PluginPreflight.failureOf(report))
     }
 

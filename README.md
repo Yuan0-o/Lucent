@@ -92,7 +92,7 @@ one page of their own: Toolkit, then Assistant abilities.
 Anything large stays out of the installer: a Linux userland, Python with its document libraries,
 LibreOffice, Node.js, a browser engine, OCR and media tools are listed as plugins, downloaded only
 if you ask, from the project's own servers or a fast mirror, whichever answers first. Installing one
-requires a shell — Termux on a phone, winget on Windows — and Lucent looks before it leaps: each
+requires a shell — the Linux environment bundled inside Lucent on a phone, winget on Windows — and Lucent looks before it leaps: each
 plugin is inspected before anything is downloaded, so a missing shell, an unwritable download folder,
 or a silent mirror is named before it costs bandwidth, not after. When a
 download or an install fails,
@@ -105,7 +105,7 @@ written to an activity log you can read and clear.
 
 On a phone the same workshop reaches the device: read the screen, tap, type, swipe, take a
 screenshot, list and open apps, read notifications, use the clipboard and the flashlight, and run
-real command-line tools through Termux. It also speaks MCP, so any server you point it at becomes
+real command-line tools inside the bundled Linux environment. It also speaks MCP, so any server you point it at becomes
 part of the toolkit.
 
 ## Notes that remember what they used to be
@@ -246,7 +246,7 @@ Lucent ships no heavyweight toolchains and no office suite. From the plugins pag
 assistant, it can fetch a Linux userland, a document converter or a media tool straight from upstream
 into storage you own. None of them is part of the package, none is linked against, and each stays
 under its own licence: **[the notices file](./docs/THIRD-PARTY-NOTICES.md)** carries the full list,
-which runs from Termux, PRoot and Ubuntu Base through LibreOffice, Python with its document
+which runs from PRoot and Ubuntu Base through LibreOffice, Python with its document
 libraries, Node.js and Playwright, to Git, Pandoc, FFmpeg, ripgrep, 7-Zip, Tesseract, ImageMagick,
 qpdf, Poppler and yt-dlp. Lucent's thanks go to every one of those authors, and the choice to
 install any of them — along with the licence that comes with it — is yours.

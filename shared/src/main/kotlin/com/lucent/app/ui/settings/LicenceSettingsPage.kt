@@ -31,7 +31,6 @@ private const val GPL_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
 private const val LGPL_URL = "https://www.gnu.org/licenses/lgpl-3.0.html"
 private const val MPL_URL = "https://www.mozilla.org/MPL/2.0/"
 private const val AGPL_URL = "https://www.gnu.org/licenses/agpl-3.0.html"
-private const val TERMUX_URL = "https://termux.dev"
 private const val PRoot_URL = "https://proot-me.github.io"
 private const val LIBREOFFICE_URL = "https://www.libreoffice.org"
 private const val PYTHON_URL = "https://www.python.org"
@@ -71,7 +70,6 @@ private val ENTRIES = listOf(
     LicenceEntry("SQLite", "The SQLite authors", "Public domain", SQLITE_URL),
     LicenceEntry("org.json", "JSON.org", "JSON License", JSON_URL),
     LicenceEntry("Great Vibes", "The Great Vibes Pro Project Authors", "SIL OFL 1.1", OFL_URL),
-    LicenceEntry("Termux", "Termux contributors", "GPL-3.0 · optional download", TERMUX_URL),
     LicenceEntry("PRoot and proot-distro", "PRoot contributors", "GPL-2.0 · optional download", PRoot_URL),
     LicenceEntry("Ubuntu Base", "Canonical and contributors", "mixed free licences · optional download", LIBREOFFICE_URL),
     LicenceEntry("LibreOffice", "The Document Foundation", "MPL-2.0 · optional download", LIBREOFFICE_URL),

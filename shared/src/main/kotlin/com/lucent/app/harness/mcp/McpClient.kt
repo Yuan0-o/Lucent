@@ -95,8 +95,8 @@ private const val MAX_STDERR_LINES = 40
 
 private const val ANDROID_STDIO =
     "MCP servers that run a local command (stdio) are not available on Android, because the app cannot " +
-        "start arbitrary binaries. Use a server with a url instead, or install the termux plugin and expose " +
-        "the server over HTTP."
+        "start arbitrary binaries. Use a server with a url instead, or run the server inside the " +
+        "built-in environment and expose it over HTTP."
 
 private const val NO_LOCAL_PROCESS =
     "MCP servers that run a local command (stdio) are not available here, because this build could not " +

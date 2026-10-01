@@ -160,7 +160,7 @@ object HarnessPrompt {
             capabilities.contains(HarnessRuntime.CAP_SHELL) ->
                 "You can run shell commands (run_command, start_job) through ${shell?.id ?: "the shell"}. "
             HarnessRuntime.android ->
-                "You cannot run shell commands yet: no Termux bridge and no privileged shell are available. "
+                "You cannot run shell commands yet: the built-in environment is not set up and no privileged shell is available. "
             else ->
                 "You cannot run shell commands yet. "
         }

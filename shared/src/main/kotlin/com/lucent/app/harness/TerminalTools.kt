@@ -301,8 +301,8 @@ object TerminalTools : HarnessGroupTools {
     }
 
     private fun noShellMessage(ctx: HarnessCtx): String = if (ctx.android) {
-        "No shell is available. Install Termux and switch on its external command permission, or enable the privileged " +
-            "shell in Settings → Advanced, then try again."
+        "No shell is available. Set up the built-in environment from the toolbox setup guide, or enable the " +
+            "privileged shell in Settings → Advanced, then try again."
     } else {
         "No shell backend is available on this machine."
     }

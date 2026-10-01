@@ -110,19 +110,7 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                             errorStep = ""
                             statusMsg = ""
                             when (step.id) {
-                                "termux_installed" -> {
-                                    val termuxSpec = PluginCatalog.forPlatform(true).firstOrNull { it.id == "termux" }
-                                    val url = termuxSpec?.sources?.firstOrNull { it.official }?.url ?: termuxSpec?.homepage.orEmpty()
-                                    if (url.isNotBlank()) HarnessRuntime.host?.openUrl(url)
-                                    scope.launch { delay(1000); reload() }
-                                }
-                                "termux_configured" -> {
-                                    scope.launch {
-                                        HarnessRuntime.host?.launchApp("com.termux")
-                                        delay(1000)
-                                        reload()
-                                    }
-                                }
+
                                 "workspace_shared" -> {
                                     pickingWorkspace = true
                                 }
@@ -143,26 +131,6 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                                         }
                                         statusMsg = ""
                                         busy = ""
-                                    }
-                                }
-                                "ubuntu_userland" -> {
-                                    val spec = PluginCatalog.find("ubuntu")
-                                    if (spec != null) {
-                                        busy = step.id
-                                        scope.launch {
-                                            val outcome = HarnessRuntime.pluginHost?.install(spec, PluginSource("", "", ""), onProgress = { p, t ->
-                                                progress = p
-                                                statusMsg = t
-                                            })
-                                            if (outcome?.ok != true) {
-                                                errorMsg = outcome?.message.orEmpty().ifEmpty { S.setupFailed }
-                                                errorStep = step.id
-                                            } else {
-                                                reload()
-                                            }
-                                            statusMsg = ""
-                                            busy = ""
-                                        }
                                     }
                                 }
                                 "base_tools" -> {
@@ -239,13 +207,6 @@ private fun SetupStepCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(step.body, color = onGradientMuted, fontSize = 14.sp)
                 
-                if (step.id == "termux_configured" && step.state == SetupStepState.CURRENT) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    androidx.compose.foundation.text.selection.SelectionContainer {
-                        Text(S.setupTermuxConfigCommand, color = onGradient, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.background(androidx.compose.ui.graphics.Color(0x33000000)).padding(8.dp))
-                    }
-                }
-
                 if (errorMsg.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(errorMsg, color = androidx.compose.ui.graphics.Color.Red, fontSize = 12.sp)
@@ -265,7 +226,7 @@ private fun SetupStepCard(
                             Text(step.action)
                         }
                     }
-                    if (step.id == "termux_configured" || step.id == "disk_space") {
+                    if (step.id == "disk_space") {
                         Spacer(modifier = Modifier.height(4.dp))
                         TextButton(onClick = onReload) {
                             Text(S.setupActionCheck)

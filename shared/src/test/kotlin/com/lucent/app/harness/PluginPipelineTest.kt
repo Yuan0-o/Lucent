@@ -110,11 +110,11 @@ class PluginPipelineTest {
                 assertTrue(plugin.installFor(false).isNotBlank(), "${plugin.id} has no desktop install")
                 assertTrue(plugin.removeFor(false).isNotBlank(), "${plugin.id} has no desktop remove")
             }
-            if (plugin.android && plugin.id != "termux") {
+            if (plugin.android) {
                 assertTrue(plugin.detectCommand.isNotBlank(), "${plugin.id} has no android probe")
             }
         }
-        assertEquals("command -v yt-dlp", PluginCatalog.find("ytdlp-termux")?.detectCommand)
+        assertEquals("command -v node", PluginCatalog.find("nodejs")?.detectCommand)
         assertEquals("where git", PluginCatalog.find("git")?.probeFor(false))
     }
 

@@ -58,12 +58,12 @@ class PluginSetupTest {
     }
 
     @Test
-    fun testTermuxModeUnchangedIds() {
+    fun testStoredTermuxModeUsesBuiltinSteps() {
         val snapshot = WizardSnapshot(
             android = true,
             runtimeMode = "termux",
             builtinState = "ready",
-            capabilities = setOf(HarnessRuntime.CAP_BUILTIN_RUNTIME, HarnessRuntime.CAP_TERMUX),
+            capabilities = setOf(HarnessRuntime.CAP_BUILTIN_RUNTIME),
             diskSpaceBytes = 1000L,
             diskSpaceNeeded = 100L,
             workspaceShared = false,
@@ -71,11 +71,11 @@ class PluginSetupTest {
         )
         val steps = PluginSetup.evaluate(snapshot)
         val stepIds = steps.map { it.id }
-        assertEquals(listOf("termux_installed", "termux_configured", "workspace_shared", "disk_space", "ubuntu_userland", "base_tools"), stepIds)
+        assertEquals(listOf("disk_space", "bundled_env", "base_tools", "workspace_shared"), stepIds)
     }
 
     @Test
-    fun testAutoWithoutCapabilityUsesTermuxSteps() {
+    fun testUnavailableBuiltinStaysOnBundledSteps() {
         val snapshot = WizardSnapshot(
             android = true,
             runtimeMode = "auto",
@@ -88,7 +88,7 @@ class PluginSetupTest {
         )
         val steps = PluginSetup.evaluate(snapshot)
         val stepIds = steps.map { it.id }
-        assertEquals(listOf("termux_installed", "termux_configured", "workspace_shared", "disk_space", "ubuntu_userland", "base_tools"), stepIds)
+        assertEquals(listOf("disk_space", "bundled_env", "base_tools", "workspace_shared"), stepIds)
     }
 
     @Test

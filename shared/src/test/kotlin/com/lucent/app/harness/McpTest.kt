@@ -379,7 +379,7 @@ class McpTest {
         try {
             val reply = McpSessions.exchange(server, McpProtocol.TOOLS_LIST)
             assertFalse(reply.ok)
-            assertTrue(reply.error.contains("termux"))
+            assertTrue(reply.error.contains("built-in environment"))
             assertTrue(reply.error.contains("url"))
         } finally {
             HarnessRuntime.android = wasAndroid

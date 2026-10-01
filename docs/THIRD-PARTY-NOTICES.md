@@ -341,7 +341,6 @@ Lucent bundles no heavy toolchains. From Settings → Agent → Plugins, or thro
 
 | Component | Licence | Upstream |
 |---|---|---|
-| Termux | GPL-3.0 | https://termux.dev |
 | PRoot, proot-distro | GPL-2.0 | https://proot-me.github.io |
 | Ubuntu Base 24.04 | Mixed free licences (Ubuntu) | https://cdimage.ubuntu.com/ubuntu-base/ |
 | LibreOffice | MPL-2.0 | https://www.libreoffice.org |

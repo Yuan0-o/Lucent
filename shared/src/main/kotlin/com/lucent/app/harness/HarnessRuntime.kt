@@ -37,14 +37,6 @@ interface HarnessShell {
         onOutput: ((String) -> Unit)? = null
     ): ShellOutcome
 
-    suspend fun runInTermux(
-        command: String,
-        workdir: File?,
-        timeoutSeconds: Int,
-        env: Map<String, String>,
-        onOutput: ((String) -> Unit)? = null
-    ): ShellOutcome = run(command, workdir, timeoutSeconds, env, onOutput)
-
     fun capabilityNames(): Set<String> = setOf("shell")
 }
 
@@ -144,7 +136,6 @@ data class SubAgentCall(val name: String, val argumentsJson: String)
 object HarnessRuntime {
 
     const val CAP_SHELL = "shell"
-    const val CAP_TERMUX = "termux"
     const val CAP_BUILTIN_RUNTIME = "builtin_runtime"
     const val CAP_PRIVILEGED = "privileged"
     const val CAP_PLUGINS = "plugins"
@@ -237,19 +228,6 @@ object HarnessRuntime {
         if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
         if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
         return sh.run(command, workdir, timeoutSeconds, env, onOutput)
-    }
-
-    suspend fun runTermuxAsync(
-        command: String,
-        workdir: File?,
-        timeoutSeconds: Int,
-        env: Map<String, String> = emptyMap(),
-        onOutput: ((String) -> Unit)? = null
-    ): ShellOutcome {
-        val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
-        if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
-        if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
-        return sh.runInTermux(command, workdir, timeoutSeconds, env, onOutput)
     }
 
     fun downloadsDir(): File {

@@ -54,7 +54,6 @@ internal data class PluginFailureReport(val plugin: PluginSpec, val outcome: Plu
 internal fun PluginSettingsPage(
     onRoute: (SettingsRoute) -> Unit,
     onOpenUrl: (String) -> Unit = {},
-    termuxInstalled: Boolean = false,
     storageGranted: Boolean = true,
     onGrantStorage: () -> Unit = {}
 ) {
@@ -102,7 +101,7 @@ internal fun PluginSettingsPage(
     val plugins = remember(android, effectivePlugins, searchQuery) { 
         val base = if (effectivePlugins.isEmpty()) PluginCatalog.forPlatform(android) 
                    else effectivePlugins.filter { if (android) it.android else it.desktop }
-        val filtered = base.filterNot { it.id == "termux" }
+        val filtered = base
         if (searchQuery.isBlank()) filtered
         else filtered.filter { 
             it.name.contains(searchQuery, true) || 
@@ -111,11 +110,6 @@ internal fun PluginSettingsPage(
         }
     }
     
-    val termux = remember(effectivePlugins) { 
-        (if (effectivePlugins.isEmpty()) PluginCatalog.all() else effectivePlugins)
-            .firstOrNull { it.id == "termux" } 
-    }
-
     fun startInstall(plugin: PluginSpec, remove: Boolean) {
         val target = HarnessRuntime.pluginHost
         if (target == null) {
@@ -238,16 +232,7 @@ internal fun PluginSettingsPage(
             Spacer(modifier = Modifier.height(12.dp))
         }
         PluginIntroCard(shellReady = shellReady, onGradient = onGradient, onGradientMuted = onGradientMuted)
-        if (android && termux != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            TermuxCard(
-                termux = termux,
-                installed = termuxInstalled,
-                onOpenUrl = onOpenUrl,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted
-            )
-        }
+
         if (android && !storageGranted) {
             Spacer(modifier = Modifier.height(12.dp))
             StorageCard(
@@ -310,31 +295,7 @@ internal fun PluginSettingsPage(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(S.runtimeMode, color = onGradient, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                listOf(
-                    "auto" to S.runtimeModeAuto,
-                    "termux" to S.runtimeModeTermux,
-                    "builtin" to S.runtimeModeBuiltin
-                ).forEach { (value, label) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable {
-                            val next = config.copy(runtimeMode = value)
-                            HarnessRuntime.update(next)
-                            config = next
-                        }
-                    ) {
-                        androidx.compose.material3.RadioButton(
-                            selected = config.runtimeMode == value,
-                            onClick = null
-                        )
-                        Text(label, color = onGradient, fontSize = 13.sp)
-                    }
-                }
-            }
-            Text(S.runtimeModeHint, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+
             
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
@@ -393,9 +354,6 @@ internal fun PluginSettingsPage(
         PluginFailureDialog(
             report = report,
             android = android,
-            termuxInstalled = termuxInstalled,
-            fdroidUrl = termux?.sources?.firstOrNull { it.official }?.url ?: termux?.homepage.orEmpty(),
-            onOpenUrl = onOpenUrl,
             onRetry = {
                 failure = null
                 retry = report.plugin
@@ -447,35 +405,6 @@ private fun PluginIntroCard(
             color = onGradientMuted,
             fontSize = 11.sp
         )
-    }
-}
-
-@Composable
-private fun TermuxCard(
-    termux: PluginSpec,
-    installed: Boolean,
-    onOpenUrl: (String) -> Unit,
-    onGradient: androidx.compose.ui.graphics.Color,
-    onGradientMuted: androidx.compose.ui.graphics.Color
-) {
-    Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.agentTermuxTitle, color = onGradient, fontSize = 14.sp)
-                Text(S.agentTermuxSub, color = onGradientMuted, fontSize = 11.sp)
-                if (installed) {
-                    Text(S.agentTermuxInstalled, color = onGradientMuted, fontSize = 11.sp)
-                }
-            }
-            if (!installed) {
-                TextButton(onClick = {
-                    val url = termux.sources.firstOrNull { it.official }?.url ?: termux.homepage
-                    onOpenUrl(url)
-                }) {
-                    Text(S.agentTermuxAction, color = onGradient, fontSize = 13.sp)
-                }
-            }
-        }
     }
 }
 
@@ -567,9 +496,6 @@ private fun stateLine(plugin: PluginSpec, installed: Boolean, shellReady: Boolea
 private fun PluginFailureDialog(
     report: PluginFailureReport,
     android: Boolean,
-    termuxInstalled: Boolean,
-    fdroidUrl: String,
-    onOpenUrl: (String) -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -609,11 +535,6 @@ private fun PluginFailureDialog(
             }
         },
         confirmButton = {
-            if (android && !termuxInstalled && report.outcome.failure == PluginFailure.NO_SHELL &&
-                fdroidUrl.isNotBlank()
-            ) {
-                TextButton(onClick = { onOpenUrl(fdroidUrl) }) { Text(S.agentTermuxAction) }
-            }
             TextButton(onClick = onRetry) { Text(S.actionRetry) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(S.actionClose) } }
@@ -673,8 +594,7 @@ private fun repairSteps(failure: PluginFailure, android: Boolean): List<String> 
     when (failure) {
         PluginFailure.NO_SHELL -> {
             if (android) {
-                add(S.pluginRepairTermux)
-                add(S.pluginRepairPermission)
+                add(S.pluginRepairSetupGuide)
                 add(S.pluginRepairStorage)
             } else {
                 add(S.pluginRepairRetry)
@@ -686,14 +606,12 @@ private fun repairSteps(failure: PluginFailure, android: Boolean): List<String> 
             add(S.pluginRepairRetry)
         }
         PluginFailure.INSTALL -> {
-            if (android) add(S.pluginRepairPkgUpdate)
             add(S.pluginRepairUserland)
             add(S.pluginRepairRetry)
         }
         else -> add(S.pluginRepairRetry)
     }
 }
-
 
 @Composable
 private fun SetupGateCard(

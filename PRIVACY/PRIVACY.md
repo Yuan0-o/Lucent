@@ -295,7 +295,6 @@ section 8.
 | Shizuku service permission (Android `moe.shizuku.manager.permission.API_V23`) | The optional privileged integration described in section 7. Declared only so that Shizuku can be used at all; it has no effect unless you install Shizuku and grant it. |
 | All-files access (Android `MANAGE_EXTERNAL_STORAGE`) | Optional, off unless you grant it, and used only so that the workspace folder you choose can be read and written as ordinary files. Without it Lucent keeps the workspace inside its own storage. |
 | Location (Android `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`) | Only read when the assistant calls its location tool, which itself only happens when device control is enabled and you have granted the permission. Lucent never tracks you in the background. |
-| Termux commands (Android `com.termux.permission.RUN_COMMAND`) | Lets Lucent hand a command to Termux, which is the only supported way to run real command-line tools on Android. Termux must also be installed, configured to allow external apps, and started by you; otherwise the permission does nothing. |
 
 Lucent does not ask for broad access to your files or your storage unless you turn the agent
 toolkit on and point it at a workspace folder, in which case all-files access is what lets that one

@@ -14,14 +14,14 @@ object SandboxTools : HarnessGroupTools {
             group = group,
             permission = HarnessPermission.READ,
             description = "Report how commands can be run here: the privileged shell, the ordinary shell, Docker, a " +
-                "Linux userland from the plugins, and which route the settings select."
+                "the built-in Linux environment, and which route the settings select."
         ),
         HarnessTool(
             name = "sandbox_run",
             group = group,
             permission = HarnessPermission.EXECUTE,
             description = "Run a command inside the safest available sandbox. With Docker it runs in a container with " +
-                "the workspace mounted at /work; with a Linux userland plugin it runs inside that; otherwise it runs " +
+                "the workspace mounted at /work; with the built-in environment it runs inside that; otherwise it runs " +
                 "directly with a timeout. Arguments: command, workdir, timeout, image, memory, cpus, network.",
             params = listOf(
                 HarnessSchema.text("command", "Command to run"),
@@ -61,14 +61,16 @@ object SandboxTools : HarnessGroupTools {
         return if (outcome.ok && outcome.text.isNotBlank() && !outcome.text.contains("not found")) outcome.text.trim() else ""
     }
 
+    private fun builtinReady(): Boolean = HarnessRuntime.host?.builtinRuntimeState() == "ready"
+
     private fun route(ctx: HarnessCtx, docker: String, proot: String): String {
         val mode = ctx.config.sandboxMode.lowercase()
         return when {
             mode == "none" -> "none"
             mode == "docker" -> if (docker.isNotEmpty()) "docker" else "direct"
-            mode == "proot" -> if (proot.isNotEmpty() || ctx.config.pluginInstalled("ubuntu")) "proot" else "direct"
+            mode == "proot" -> if (proot.isNotEmpty() || builtinReady()) "proot" else "direct"
             docker.isNotEmpty() -> "docker"
-            proot.isNotEmpty() || ctx.config.pluginInstalled("ubuntu") -> "proot"
+            proot.isNotEmpty() || builtinReady() -> "proot"
             else -> "direct"
         }
     }
@@ -137,7 +139,7 @@ object SandboxTools : HarnessGroupTools {
                 HarnessRuntime.runShell(line, workdir, timeout)
             }
             "proot" -> {
-                val rootfs = File(HarnessRuntime.filesDir(), "plugins/ubuntu/rootfs")
+                val rootfs = File(HarnessRuntime.filesDir(), "home/lucent/ubuntu/rootfs")
                 val line = "proot -0 -r '" + rootfs.path.replace("'", "'\\''") + "' -w /work -b '" +
                     workdir.path.replace("'", "'\\''") + ":/work' " +
                     "/usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " +

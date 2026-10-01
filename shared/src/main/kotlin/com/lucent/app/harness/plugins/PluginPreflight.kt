@@ -47,11 +47,9 @@ object PluginPreflight {
         val notes = mutableListOf<String>()
         val mirrorResults = mutableListOf<Triple<String, Long, Boolean>>()
 
-        val cfgMode = HarnessRuntime.config().runtimeMode
-        val capsTermux = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
         val capsBuiltin = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
-        val chosenBackend = selectBackend(cfgMode, capsTermux, capsBuiltin)
-        val builtinActive = chosenBackend == RuntimeBackend.BUILTIN || (android && capsBuiltin && cfgMode != "termux")
+        val backend = selectBackend(capsBuiltin)
+        val builtinActive = backend == RuntimeBackend.BUILTIN
 
         if (android && builtinActive && plugin.id == "ubuntu") {
             val state = HarnessRuntime.host?.builtinRuntimeState() ?: "unavailable"
@@ -131,8 +129,7 @@ object PluginPreflight {
                         notes.add(S.pluginJournalNote(journal.stage, journal.message))
                     }
                 }
-                val dir = HarnessRuntime.downloadsDir()
-                if (!dir.canWrite()) {
+                if (!HarnessRuntime.downloadsDir().canWrite()) {
                     problems.add(
                         PreflightProblem(
                             "storage",
@@ -140,18 +137,10 @@ object PluginPreflight {
                             listOf(S.pluginProblemStorageStep)
                         )
                     )
-                } else if (android && !sharedStorage(dir)) {
-                    problems.add(
-                        PreflightProblem(
-                            "staged_unreadable",
-                            S.pluginProblemUnreadable,
-                            listOf(S.pluginProblemUnreadableStep)
-                        )
-                    )
                 }
             }
         }
-        if (android && plugin.needsShell && !sharedStorage(HarnessRuntime.workspace())) {
+        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(HarnessRuntime.workspace())) {
             problems.add(
                 PreflightProblem(
                     "workspace_not_shared",
@@ -160,11 +149,6 @@ object PluginPreflight {
                 )
             )
         }
-        val mode = HarnessRuntime.config().runtimeMode
-        val termuxReady = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
-        val builtinAvailable = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
-        val backend = selectBackend(mode, termuxReady, builtinAvailable)
-
         val shellReady = if (android) {
             backend != RuntimeBackend.NONE || HarnessRuntime.pluginHost?.isReady() == true
         } else {
@@ -174,23 +158,13 @@ object PluginPreflight {
         if (plugin.needsShell && !shellReady) {
             val steps = if (android) {
                 listOf(
-                    S.pluginRepairTermux,
-                    S.pluginRepairPermission,
+                    S.pluginRepairSetupGuide,
                     S.pluginRepairStorage
                 )
             } else {
                 listOf(S.pluginProblemShellDesktop)
             }
             problems.add(PreflightProblem("no_shell", S.pluginReasonNoShell, steps))
-        }
-        if (android && plugin.termuxOnly && !termuxReady) {
-            problems.add(
-                PreflightProblem(
-                    "termux_missing",
-                    S.pluginProblemNoTermux,
-                    listOf(S.pluginProblemNoTermuxStep)
-                )
-            )
         }
         if (HarnessRuntime.config().pluginInstalled(plugin.id)) {
             notes.add(S.pluginAlreadyInstalled(plugin.name))
@@ -232,7 +206,7 @@ object PluginPreflight {
             "no_script" in codes -> PluginFailure.NO_SCRIPT
             "no_source" in codes || "source_unreachable" in codes -> PluginFailure.DOWNLOAD
             "storage" in codes || "disk_space" in codes -> PluginFailure.STORAGE
-            "no_shell" in codes || "staged_unreadable" in codes || "termux_missing" in codes || "workspace_not_shared" in codes || "builtin_not_setup" in codes ->
+            "no_shell" in codes || "workspace_not_shared" in codes || "builtin_not_setup" in codes ->
                 PluginFailure.NO_SHELL
             else -> PluginFailure.NONE
         }

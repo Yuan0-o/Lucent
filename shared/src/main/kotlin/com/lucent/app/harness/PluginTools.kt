@@ -187,9 +187,9 @@ object PluginTools : HarnessGroupTools {
             ) {
                 " The built-in environment is not set up yet - open the toolbox setup guide and tap Set up environment."
             } else {
-                " Nothing can be installed without a working shell: install Termux from F-Droid, open it once, " +
-                    "run termux-setup-storage, set allow-external-apps=true in ~/.termux/termux.properties, and " +
-                    "allow Lucent the run-command permission when Android asks."
+                " Nothing can be installed without a working shell: open the toolbox setup guide and tap " +
+                    "Set up environment to prepare the built-in runtime, or enable the privileged shell " +
+                    "in Settings."
             }
         } else {
             " A shell is needed before this can be installed on this machine."
@@ -209,8 +209,8 @@ object PluginTools : HarnessGroupTools {
             if (detail.contains("Unable to locate package", ignoreCase = true) ||
                 detail.contains("E: Unable", ignoreCase = true)
             ) {
-                " Termux could not find a package, which usually means its package list is stale. Install " +
-                    "again: Lucent refreshes the list first now."
+                " The environment could not find a package, which usually means its package list is stale. " +
+                    "Install again: the install refreshes the list first."
             } else {
                 ""
             }

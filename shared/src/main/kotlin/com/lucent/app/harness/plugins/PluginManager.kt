@@ -18,7 +18,7 @@ class PluginManager private constructor(private val context: Context?, private v
     override fun isReady(): Boolean = HarnessRuntime.shell?.isReady() == true
 
     override fun describe(): String = when {
-        !isReady() -> if (android) "Termux is needed before anything can be installed" else "no shell available"
+        !isReady() -> if (android) "the built-in environment is needed before anything can be installed" else "no shell available"
         else -> "plugins install through ${HarnessRuntime.shell?.id ?: "the shell"}"
     }
 
@@ -35,12 +35,7 @@ class PluginManager private constructor(private val context: Context?, private v
         val stored = HarnessRuntime.config().pluginInstalled(plugin.id)
         val command = plugin.probeFor(android)
         if (command.isBlank()) {
-            val present = if (plugin.id == "termux") {
-                HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
-            } else {
-                stored
-            }
-            return ShellOutcome(present, "", "", if (present) 0 else 1)
+            return ShellOutcome(stored, "", "", if (stored) 0 else 1)
         }
         if (!isReady()) return ShellOutcome(false, "", "No shell is available to check this plugin", -1)
         return runScript(plugin, command, 90)
@@ -151,14 +146,6 @@ class PluginManager private constructor(private val context: Context?, private v
                 kept
             )
         }
-        if (android && script.contains("pkg install") && !pkgListFresh) {
-            onProgress(0.58f, "refreshing the Termux package list")
-            val refreshed = run(plugin, "pkg update", 600, onOutput)
-            pkgListFresh = refreshed.ok
-            if (!refreshed.ok) {
-                record(plugin, "pkg update failed", refreshed.text.take(400))
-            }
-        }
         onProgress(0.6f, "installing")
         PluginJournal.write(plugin.id, "install", sourceId, false)
         val outcome = try {
@@ -256,24 +243,7 @@ class PluginManager private constructor(private val context: Context?, private v
     }
 
     private suspend fun runScript(plugin: PluginSpec, script: String, timeoutSeconds: Int, onOutput: ((String) -> Unit)? = null): ShellOutcome {
-        val wrapped = wrap(plugin, script)
-        return if (android && plugin.termuxOnly) {
-            HarnessRuntime.runTermuxAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds, onOutput = onOutput)
-        } else {
-            HarnessRuntime.runShellAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds, onOutput = onOutput)
-        }
-    }
-
-    private fun needsUserland(plugin: PluginSpec): Boolean =
-        plugin.id in USERLAND_PLUGINS && HarnessRuntime.config().pluginInstalled("ubuntu")
-
-    private fun wrap(plugin: PluginSpec, script: String): String {
-        if (!android || !needsUserland(plugin)) return script
-        val rootfs = "~/lucent/ubuntu/rootfs"
-        val escaped = script.replace("'", "'\\''")
-        return "proot -0 -r $rootfs -w /root -b /dev -b /proc -b /sys " +
-            "/usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " +
-            "TERM=xterm LANG=C.UTF-8 /bin/bash -lc '$escaped'"
+        return HarnessRuntime.runShellAsync(script, HarnessRuntime.workspace(), timeoutSeconds, onOutput = onOutput)
     }
 
     private fun record(plugin: PluginSpec, action: String, detail: String) {
@@ -296,11 +266,6 @@ class PluginManager private constructor(private val context: Context?, private v
     }
 
     companion object {
-
-        private val USERLAND_PLUGINS = setOf("python-office", "libreoffice")
-
-        private var pkgListFresh = false
-
         fun android(context: Context): PluginManager = PluginManager(context.applicationContext, true)
 
         fun desktop(context: Context? = null): PluginManager = PluginManager(context?.applicationContext, false)
