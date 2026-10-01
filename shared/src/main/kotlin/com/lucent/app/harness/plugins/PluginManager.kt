@@ -70,6 +70,12 @@ class PluginManager private constructor(private val context: Context?, private v
                 failure = PluginFailure.NO_PLATFORM
             )
         }
+        if (script.contains("{aptMirror}")) {
+            val region = HarnessRuntime.config().pluginMirrorRegion
+            script = script.replace("{aptMirror}", PluginCatalog.aptMirror(region))
+                .replace("{aptFallback}", PluginCatalog.aptFallback(region))
+                .replace("{pipIndex}", PluginCatalog.pipIndex(region))
+        }
         var sourceId = source.id.ifBlank { "built-in" }
         var staged: File? = null
         if (script.contains("{file}")) {

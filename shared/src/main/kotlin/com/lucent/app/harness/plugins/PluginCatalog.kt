@@ -36,6 +36,22 @@ data class PluginSpec(
 
 object PluginCatalog {
 
+    private const val APT_SETUP = "sed -i 's|http://ports.ubuntu.com|{aptMirror}|g; " +
+        "s|http://mirrors.tuna.tsinghua.edu.cn|{aptMirror}|g; " +
+        "s|https://ports.ubuntu.com|{aptMirror}|g' /etc/apt/sources.list.d/ubuntu.sources && " +
+        "(apt-get update -o Acquire::Retries=3 || " +
+        "(sed -i 's|{aptMirror}|{aptFallback}|g' /etc/apt/sources.list.d/ubuntu.sources && " +
+        "apt-get update -o Acquire::Retries=3)) && "
+
+    fun aptMirror(region: String): String =
+        if (region == "cn") "http://mirrors.tuna.tsinghua.edu.cn" else "http://ports.ubuntu.com"
+
+    fun aptFallback(region: String): String =
+        if (region == "cn") "http://ports.ubuntu.com" else "http://mirrors.tuna.tsinghua.edu.cn"
+
+    fun pipIndex(region: String): String =
+        if (region == "cn") "https://pypi.tuna.tsinghua.edu.cn/simple" else "https://pypi.org/simple"
+
     private fun desktopTool(
         id: String,
         name: String,
@@ -72,9 +88,9 @@ object PluginCatalog {
             bytes = 0L,
             sources = emptyList(),
             detectCommand = "python3 -c \"import docx, openpyxl, pptx\"",
-            installScript = "sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources && " +
-                "apt-get update -o Acquire::Retries=3 && apt-get install -y --no-install-recommends python3 python3-pip python3-venv && " +
-                "pip3 install --break-system-packages --index-url https://pypi.tuna.tsinghua.edu.cn/simple " +
+            installScript = APT_SETUP +
+                "apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates && " +
+                "pip3 install --break-system-packages --index-url {pipIndex} " +
                 "python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
             removeScript = "pip3 uninstall -y python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
             licence = "Python PSF-2.0; libraries MIT/BSD; PyMuPDF AGPL-3.0",
@@ -94,7 +110,8 @@ object PluginCatalog {
             bytes = 0L,
             sources = emptyList(),
             detectCommand = "command -v soffice",
-            installScript = "apt-get update && apt-get install -y --no-install-recommends " +
+            installScript = APT_SETUP +
+                "apt-get install -y --no-install-recommends " +
                 "libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui",
             removeScript = "apt-get remove -y 'libreoffice*'",
             licence = "MPL-2.0",
@@ -113,7 +130,7 @@ object PluginCatalog {
             bytes = 0L,
             sources = emptyList(),
             detectCommand = "command -v node",
-            installScript = "apt-get update && apt-get install -y nodejs npm",
+            installScript = APT_SETUP + "apt-get install -y nodejs npm",
             removeScript = "apt-get remove -y nodejs npm",
             licence = "MIT",
             homepage = "https://nodejs.org",
