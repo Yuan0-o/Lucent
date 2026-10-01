@@ -483,4 +483,26 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     } catch (t: Throwable) {
         false
     }
+
+    override fun builtinRuntimeState(): String {
+        if (!BuiltinShell.builtinAvailable(context)) return "unavailable"
+        val bash = File(BuiltinShell.rootfsDir(context), "bin/bash")
+        val assetVer = BuiltinRuntimeInstaller.assetVersion(context)
+        val configVer = HarnessRuntime.config().builtinRootfsVersion
+        val markerVer = try {
+            File(BuiltinShell.rootfsDir(context), ".lucent-rootfs-version").takeIf { it.exists() }?.readText()?.trim()?.toInt() ?: 0
+        } catch (_: Throwable) {
+            0
+        }
+        return if (bash.exists() && (configVer >= assetVer || markerVer >= assetVer)) "ready" else "needs_setup"
+    }
+
+    override suspend fun extractBuiltinRuntime(onProgress: (String) -> Unit): ShellOutcome {
+        val outcome = BuiltinRuntimeInstaller.ensureInstalled(context, onProgress)
+        if (outcome.ok) {
+            val assetVer = BuiltinRuntimeInstaller.assetVersion(context)
+            HarnessRuntime.update(HarnessRuntime.config().copy(builtinRootfsVersion = assetVer))
+        }
+        return outcome
+    }
 }

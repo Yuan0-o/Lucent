@@ -117,6 +117,9 @@ interface HarnessHost {
     fun workspaceCandidates(): List<String> = emptyList()
     fun pluginRoot(): File = File(filesDir(), "plugins")
     fun permissionNote(): String = ""
+    fun builtinRuntimeState(): String = "unavailable"
+    suspend fun extractBuiltinRuntime(onProgress: (String) -> Unit): ShellOutcome =
+        ShellOutcome(false, "", "built-in runtime is unavailable on this platform", -1)
 }
 
 interface SubAgentLlm {

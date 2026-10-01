@@ -180,9 +180,17 @@ object PluginTools : HarnessGroupTools {
 
     private fun repairHint(ctx: HarnessCtx, outcome: PluginOutcome): String = when (outcome.failure) {
         PluginFailure.NO_SHELL -> if (ctx.android) {
-            " Nothing can be installed without a working shell: install Termux from F-Droid, open it once, " +
-                "run termux-setup-storage, set allow-external-apps=true in ~/.termux/termux.properties, and " +
-                "allow Lucent the run-command permission when Android asks."
+            if (outcome.message.contains("built-in environment is not set up") ||
+                outcome.detail.contains("built-in environment is not set up") ||
+                outcome.message.contains("setup guide") ||
+                outcome.detail.contains("setup guide")
+            ) {
+                " The built-in environment is not set up yet - open the toolbox setup guide and tap Set up environment."
+            } else {
+                " Nothing can be installed without a working shell: install Termux from F-Droid, open it once, " +
+                    "run termux-setup-storage, set allow-external-apps=true in ~/.termux/termux.properties, and " +
+                    "allow Lucent the run-command permission when Android asks."
+            }
         } else {
             " A shell is needed before this can be installed on this machine."
         }

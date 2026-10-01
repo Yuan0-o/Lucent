@@ -129,6 +129,22 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                                 "disk_space" -> {
                                     reload()
                                 }
+                                "bundled_env" -> {
+                                    busy = step.id
+                                    scope.launch {
+                                        val outcome = HarnessRuntime.host?.extractBuiltinRuntime { line ->
+                                            statusMsg = line
+                                        }
+                                        if (outcome?.ok == true) {
+                                            reload()
+                                        } else {
+                                            errorMsg = outcome?.stderr.orEmpty().ifEmpty { outcome?.text.orEmpty().ifEmpty { S.setupFailed } }
+                                            errorStep = step.id
+                                        }
+                                        statusMsg = ""
+                                        busy = ""
+                                    }
+                                }
                                 "ubuntu_userland" -> {
                                     val spec = PluginCatalog.find("ubuntu")
                                     if (spec != null) {
@@ -243,9 +259,11 @@ private fun SetupStepCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                 } else if (step.state == SetupStepState.CURRENT) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onAction) {
-                        Text(step.action)
+                    if (step.action.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = onAction) {
+                            Text(step.action)
+                        }
                     }
                     if (step.id == "termux_configured" || step.id == "disk_space") {
                         Spacer(modifier = Modifier.height(4.dp))

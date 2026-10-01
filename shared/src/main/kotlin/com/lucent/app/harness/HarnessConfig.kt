@@ -65,6 +65,7 @@ data class HarnessConfig(
     val contextBudgetTokens: Int = ContextBudget.DEFAULT_BUDGET_TOKENS,
     val pluginMirrorRegion: String = "auto",
     val runtimeMode: String = "auto",
+    val builtinRootfsVersion: Int = 0,
     val setupComplete: Boolean = false,
     val setupCompletedAt: Long = 0L,
     val pluginBackupScope: String = "state",
@@ -185,6 +186,7 @@ data class HarnessConfig(
         put("contextBudgetTokens", contextBudgetTokens)
         put("pluginMirrorRegion", pluginMirrorRegion)
         put("runtimeMode", runtimeMode)
+        put("builtinRootfsVersion", builtinRootfsVersion)
         put("setupComplete", setupComplete)
         put("setupCompletedAt", setupCompletedAt)
         put("pluginBackupScope", pluginBackupScope)
@@ -233,6 +235,7 @@ data class HarnessConfig(
                 contextBudgetTokens = o.optInt("contextBudgetTokens", defaults.contextBudgetTokens),
                 pluginMirrorRegion = o.optString("pluginMirrorRegion", defaults.pluginMirrorRegion),
                 runtimeMode = o.optString("runtimeMode", defaults.runtimeMode),
+                builtinRootfsVersion = o.optInt("builtinRootfsVersion", defaults.builtinRootfsVersion),
                 setupComplete = o.optBoolean("setupComplete", defaults.setupComplete),
                 setupCompletedAt = o.optLong("setupCompletedAt", defaults.setupCompletedAt),
                 pluginBackupScope = o.optString("pluginBackupScope", defaults.pluginBackupScope),

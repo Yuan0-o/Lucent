@@ -9,8 +9,8 @@ fun selectBackend(mode: String, termuxReady: Boolean, builtinAvailable: Boolean)
         "termux" -> if (termuxReady) RuntimeBackend.TERMUX else RuntimeBackend.NONE
         "builtin" -> if (builtinAvailable) RuntimeBackend.BUILTIN else RuntimeBackend.NONE
         else -> {
-            if (termuxReady) RuntimeBackend.TERMUX
-            else if (builtinAvailable) RuntimeBackend.BUILTIN
+            if (builtinAvailable) RuntimeBackend.BUILTIN
+            else if (termuxReady) RuntimeBackend.TERMUX
             else RuntimeBackend.NONE
         }
     }

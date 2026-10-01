@@ -127,7 +127,8 @@ class HarnessDataTest {
             plugins = listOf(PluginState(id = "ubuntu", installed = true, source = "tuna", sizeBytes = 42)),
             githubToken = "gh",
             githubTokens = listOf(GithubToken(id = "gh-1", name = "work", token = "gh")),
-            shizukuForAssistant = true
+            shizukuForAssistant = true,
+            builtinRootfsVersion = 1
         )
         val parsed = HarnessConfig.parse(config.toJson())
         assertEquals(config.workspace, parsed.workspace)
@@ -141,6 +142,7 @@ class HarnessDataTest {
         assertEquals("gh", parsed.githubToken)
         assertEquals("work", parsed.githubTokens.single().name)
         assertTrue(parsed.shizukuForAssistant)
+        assertEquals(1, parsed.builtinRootfsVersion)
     }
 
     @Test

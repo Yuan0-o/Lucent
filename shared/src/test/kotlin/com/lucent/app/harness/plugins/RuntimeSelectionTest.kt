@@ -30,8 +30,8 @@ class RuntimeSelectionTest {
     }
 
     @Test
-    fun `auto mode prioritizes TERMUX then BUILTIN then NONE`() {
-        assertEquals(RuntimeBackend.TERMUX, selectBackend("auto", true, true))
+    fun `auto mode prioritizes BUILTIN then TERMUX then NONE`() {
+        assertEquals(RuntimeBackend.BUILTIN, selectBackend("auto", true, true))
         assertEquals(RuntimeBackend.TERMUX, selectBackend("auto", true, false))
         assertEquals(RuntimeBackend.BUILTIN, selectBackend("auto", false, true))
         assertEquals(RuntimeBackend.NONE, selectBackend("auto", false, false))
@@ -39,7 +39,7 @@ class RuntimeSelectionTest {
     
     @Test
     fun `unknown mode defaults to auto logic`() {
-        assertEquals(RuntimeBackend.TERMUX, selectBackend("unknown", true, true))
+        assertEquals(RuntimeBackend.BUILTIN, selectBackend("unknown", true, true))
         assertEquals(RuntimeBackend.TERMUX, selectBackend("unknown", true, false))
         assertEquals(RuntimeBackend.BUILTIN, selectBackend("unknown", false, true))
         assertEquals(RuntimeBackend.NONE, selectBackend("unknown", false, false))

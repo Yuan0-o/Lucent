@@ -1880,7 +1880,14 @@ ENTRIES = [
     ("runtimeModeAuto", "Auto", "自动", "自動", "자동"),
     ("runtimeModeTermux", "Termux", "Termux", "Termux", "Termux"),
     ("runtimeModeBuiltin", "Built-in runtime", "内置运行时", "組み込みランタイム", "내장 런타임"),
-    ("runtimeModeHint", "Built-in runtime activates automatically when bundled.", "内置运行时在捆绑时自动激活。", "バンドルされている場合、組み込みランタイムが自動的に有効になります。", "번들로 제공될 때 내장 런타임이 자동으로 활성화됩니다."),
+    ("runtimeModeHint", "The Ubuntu environment is bundled with Lucent. Termux is not needed.", "Ubuntu 环境已内置在 Lucent 中，无需使用 Termux。", "Ubuntu環境はLucentに組み込まれており、Termuxは不要です。", "Ubuntu 환경은 Lucent에 번들로 포함되어 있어 Termux가 필요하지 않습니다."),
+    ("pluginRuntimeHintBuiltin", "The Ubuntu environment is bundled with Lucent. Termux is not needed.", "Ubuntu 环境已内置在 Lucent 中，无需使用 Termux。", "Ubuntu環境はLucentに組み込まれており、Termuxは不要です。", "Ubuntu 환경은 Lucent에 번들로 포함되어 있어 Termux가 필요하지 않습니다."),
+    ("setupBundledTitle", "Built-in environment", "内置环境", "組み込み環境", "내장 환경"),
+    ("setupBundledBody", "The Ubuntu environment is bundled inside Lucent and prepared locally without downloading.", "Ubuntu 环境已内置在 Lucent 中，将在本机直接准备，无需联网下载。", "Ubuntu環境はLucentに組み込まれており、ダウンロードなしでローカルに準備されます。", "Ubuntu 환경은 Lucent 내에 번들로 포함되어 있으며 다운로드 없이 로컬에서 준비됩니다."),
+    ("setupBundledAction", "Set up environment", "设置环境", "環境をセットアップ", "환경 설정"),
+    ("setupBundledReady", "Built-in environment is ready", "内置环境已就绪", "組み込み環境の準備が完了しました", "내장 환경이 준비되었습니다"),
+    ("setupBundledUnavailable", "The built-in environment is not available on this device. Termux mode remains available.", "此设备不支持内置环境。您仍可使用 Termux 模式。", "この端末では組み込み環境を利用できません。Termuxモードを引き続き利用できます。", "이 기기에서는 내장 환경을 사용할 수 없습니다. Termux 모드를 계속 사용할 수 있습니다."),
+    ("setupExtracting", "Preparing the built-in environment", "正在准备内置环境", "組み込み環境を準備中", "내장 환경 준비 중"),
 ]
 
 CONDITIONAL_ENTRIES = {

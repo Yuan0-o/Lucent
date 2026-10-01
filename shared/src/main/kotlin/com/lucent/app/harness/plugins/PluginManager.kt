@@ -24,7 +24,12 @@ class PluginManager private constructor(private val context: Context?, private v
 
     override suspend fun available(): List<String> = HarnessRuntime.config().installedPlugins().toList()
 
-    override suspend fun detect(plugin: PluginSpec): Boolean = probe(plugin).ok
+    override suspend fun detect(plugin: PluginSpec): Boolean {
+        if (plugin.id == "ubuntu" && android && HarnessRuntime.host?.builtinRuntimeState() == "ready") {
+            return true
+        }
+        return probe(plugin).ok
+    }
 
     suspend fun probe(plugin: PluginSpec): ShellOutcome {
         val stored = HarnessRuntime.config().pluginInstalled(plugin.id)
@@ -47,6 +52,21 @@ class PluginManager private constructor(private val context: Context?, private v
         onProgress: (Float, String) -> Unit,
         onOutput: ((String) -> Unit)?
     ): PluginOutcome {
+        if (plugin.id == "ubuntu" && android && HarnessRuntime.host?.builtinRuntimeState() == "ready") {
+            val state = PluginState(
+                id = plugin.id,
+                installed = true,
+                source = "built-in",
+                version = HarnessRuntime.config().builtinRootfsVersion.toString(),
+                sizeBytes = plugin.bytes,
+                installedAt = System.currentTimeMillis()
+            )
+            HarnessRuntime.update(HarnessRuntime.config().withPlugin(state))
+            PluginJournal.clear(plugin.id)
+            onProgress(1f, "installed")
+            record(plugin, "installed", "Ubuntu is provided by the built-in environment")
+            return PluginOutcome(true, "Ubuntu is provided by the built-in environment")
+        }
         var script = plugin.installFor(android)
         if (script.isBlank()) {
             return PluginOutcome(

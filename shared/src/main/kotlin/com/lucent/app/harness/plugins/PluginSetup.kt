@@ -3,7 +3,7 @@ package com.lucent.app.harness.plugins
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.Workspace
 import com.lucent.app.i18n.S
-import java.io.File
+import kotlin.math.max
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -20,90 +20,44 @@ data class SetupStep(
     val state: SetupStepState = SetupStepState.WAITING
 )
 
+data class WizardSnapshot(
+    val android: Boolean = false,
+    val runtimeMode: String = "auto",
+    val builtinState: String = "unavailable",
+    val capabilities: Set<String> = emptySet(),
+    val termuxInstalled: Boolean = false,
+    val probeOk: Boolean = false,
+    val workspaceShared: Boolean = false,
+    val diskSpaceBytes: Long = 0L,
+    val diskSpaceNeeded: Long = 0L,
+    val ubuntuInstalled: Boolean = false,
+    val toolsPassed: Boolean = false
+)
+
 object PluginSetup {
 
-    suspend fun computeSteps(): List<SetupStep> {
-        val steps = mutableListOf<SetupStep>()
+    const val BUILTIN_ENV_DISK_BYTES = 200_000_000L
+
+    suspend fun snapshot(): WizardSnapshot {
         val android = HarnessRuntime.android
         val host = HarnessRuntime.host
         val config = HarnessRuntime.config()
-        
-        if (android) {
-            val termuxRaw = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX) || 
-                                  HarnessRuntime.shell?.capabilityNames()?.contains("termux") == true ||
-                                  (host?.capabilities()?.contains("termux") ?: false)
-            val builtinAvailable = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
-            val useBuiltin = builtinAvailable && config.runtimeMode != "termux"
-            val termuxInstalled = termuxRaw || useBuiltin
-
-            steps.add(
-                SetupStep(
-                    id = "termux_installed",
-                    title = S.setupTermuxTitle,
-                    body = S.setupTermuxBody,
-                    action = S.setupTermuxAction,
-                    passed = termuxInstalled,
-                    blocks = true
-                )
-            )
-
-            val configured = if (termuxInstalled) host?.probeShell()?.ok == true else false
-            steps.add(
-                SetupStep(
-                    id = "termux_configured",
-                    title = S.setupTermuxConfigTitle,
-                    body = S.setupTermuxConfigBody,
-                    action = S.setupTermuxConfigAction,
-                    passed = configured,
-                    blocks = true
-                )
-            )
-
-            val dir = HarnessRuntime.workspace()
-            if (!PluginPreflight.sharedStorage(dir)) {
-                steps.add(
-                    SetupStep(
-                        id = "workspace_shared",
-                        title = S.setupWorkspaceTitle,
-                        body = S.setupWorkspaceBody,
-                        action = S.setupWorkspaceAction,
-                        passed = false,
-                        blocks = true
-                    )
-                )
-            }
-        }
-
+        val runtimeMode = config.runtimeMode
+        val builtinState = host?.builtinRuntimeState() ?: "unavailable"
+        val capabilities = HarnessRuntime.capabilities()
+        val termuxRaw = capabilities.contains(HarnessRuntime.CAP_TERMUX) || 
+            HarnessRuntime.shell?.capabilityNames()?.contains("termux") == true ||
+            (host?.capabilities()?.contains("termux") ?: false)
+        val probeOk = if (termuxRaw) host?.probeShell()?.ok == true else false
+        val dir = HarnessRuntime.workspace()
+        val workspaceShared = PluginPreflight.sharedStorage(dir)
         val largestDownload = PluginCatalog.effective().maxOfOrNull { it.bytes } ?: 0L
-        if (largestDownload > 0) {
-            val space = HarnessRuntime.downloadsDir().usableSpace
-            val needed = largestDownload * 2L
-            steps.add(
-                SetupStep(
-                    id = "disk_space",
-                    title = S.setupDiskSpaceTitle,
-                    body = S.setupDiskSpaceBody(Workspace.humanSize(space), Workspace.humanSize(needed)),
-                    action = S.setupDiskSpaceAction,
-                    passed = space >= needed,
-                    blocks = true
-                )
-            )
+        val diskSpaceBytes = HarnessRuntime.downloadsDir().usableSpace
+        var diskSpaceNeeded = largestDownload * 2L
+        if (android && (runtimeMode == "builtin" || (runtimeMode == "auto" && capabilities.contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)))) {
+            diskSpaceNeeded = max(diskSpaceNeeded, BUILTIN_ENV_DISK_BYTES)
         }
-
-        if (android) {
-            val ubuntuInstalled = config.pluginInstalled("ubuntu")
-            steps.add(
-                SetupStep(
-                    id = "ubuntu_userland",
-                    title = S.setupUbuntuTitle,
-                    body = S.setupUbuntuBody,
-                    action = S.setupUbuntuAction,
-                    passed = ubuntuInstalled,
-                    blocks = true
-                )
-            )
-        }
-
+        val ubuntuInstalled = config.pluginInstalled("ubuntu")
         val toolsPassed = coroutineScope {
             val tools = PluginCatalog.forPlatformEffective(android).filter { it.id != "ubuntu" && it.id != "playwright" }
             val checks = tools.map { plugin ->
@@ -114,17 +68,173 @@ object PluginSetup {
             }
             checks.awaitAll().all { it }
         }
-        
-        steps.add(
-            SetupStep(
-                id = "base_tools",
-                title = S.setupToolsTitle,
-                body = S.setupToolsBody,
-                action = S.setupToolsAction,
-                passed = toolsPassed,
-                blocks = true
-            )
+        return WizardSnapshot(
+            android = android,
+            runtimeMode = runtimeMode,
+            builtinState = builtinState,
+            capabilities = capabilities,
+            termuxInstalled = termuxRaw,
+            probeOk = probeOk,
+            workspaceShared = workspaceShared,
+            diskSpaceBytes = diskSpaceBytes,
+            diskSpaceNeeded = diskSpaceNeeded,
+            ubuntuInstalled = ubuntuInstalled,
+            toolsPassed = toolsPassed
         )
+    }
+
+    suspend fun computeSteps(): List<SetupStep> = evaluate(snapshot())
+
+    fun evaluate(snapshot: WizardSnapshot): List<SetupStep> {
+        val steps = mutableListOf<SetupStep>()
+        if (snapshot.android) {
+            val useBuiltin = snapshot.runtimeMode == "builtin" ||
+                (snapshot.runtimeMode == "auto" && snapshot.capabilities.contains(HarnessRuntime.CAP_BUILTIN_RUNTIME))
+
+            if (useBuiltin) {
+                val diskPassed = snapshot.diskSpaceNeeded <= 0L || snapshot.diskSpaceBytes >= snapshot.diskSpaceNeeded
+                steps.add(
+                    SetupStep(
+                        id = "disk_space",
+                        title = S.setupDiskSpaceTitle,
+                        body = S.setupDiskSpaceBody(Workspace.humanSize(snapshot.diskSpaceBytes), Workspace.humanSize(snapshot.diskSpaceNeeded)),
+                        action = S.setupDiskSpaceAction,
+                        passed = diskPassed,
+                        blocks = true
+                    )
+                )
+
+                val unavailable = snapshot.builtinState == "unavailable"
+                steps.add(
+                    SetupStep(
+                        id = "bundled_env",
+                        title = S.setupBundledTitle,
+                        body = if (unavailable) S.setupBundledUnavailable else S.setupBundledBody,
+                        action = if (unavailable) "" else S.setupBundledAction,
+                        passed = snapshot.builtinState == "ready",
+                        blocks = true
+                    )
+                )
+
+                steps.add(
+                    SetupStep(
+                        id = "base_tools",
+                        title = S.setupToolsTitle,
+                        body = S.setupToolsBody,
+                        action = S.setupToolsAction,
+                        passed = snapshot.toolsPassed,
+                        blocks = true
+                    )
+                )
+
+                if (!snapshot.workspaceShared) {
+                    steps.add(
+                        SetupStep(
+                            id = "workspace_shared",
+                            title = S.setupWorkspaceTitle,
+                            body = S.setupWorkspaceBody,
+                            action = S.setupWorkspaceAction,
+                            passed = false,
+                            blocks = true
+                        )
+                    )
+                }
+            } else {
+                steps.add(
+                    SetupStep(
+                        id = "termux_installed",
+                        title = S.setupTermuxTitle,
+                        body = S.setupTermuxBody,
+                        action = S.setupTermuxAction,
+                        passed = snapshot.termuxInstalled,
+                        blocks = true
+                    )
+                )
+
+                steps.add(
+                    SetupStep(
+                        id = "termux_configured",
+                        title = S.setupTermuxConfigTitle,
+                        body = S.setupTermuxConfigBody,
+                        action = S.setupTermuxConfigAction,
+                        passed = snapshot.probeOk,
+                        blocks = true
+                    )
+                )
+
+                if (!snapshot.workspaceShared) {
+                    steps.add(
+                        SetupStep(
+                            id = "workspace_shared",
+                            title = S.setupWorkspaceTitle,
+                            body = S.setupWorkspaceBody,
+                            action = S.setupWorkspaceAction,
+                            passed = false,
+                            blocks = true
+                        )
+                    )
+                }
+
+                if (snapshot.diskSpaceNeeded > 0) {
+                    steps.add(
+                        SetupStep(
+                            id = "disk_space",
+                            title = S.setupDiskSpaceTitle,
+                            body = S.setupDiskSpaceBody(Workspace.humanSize(snapshot.diskSpaceBytes), Workspace.humanSize(snapshot.diskSpaceNeeded)),
+                            action = S.setupDiskSpaceAction,
+                            passed = snapshot.diskSpaceBytes >= snapshot.diskSpaceNeeded,
+                            blocks = true
+                        )
+                    )
+                }
+
+                steps.add(
+                    SetupStep(
+                        id = "ubuntu_userland",
+                        title = S.setupUbuntuTitle,
+                        body = S.setupUbuntuBody,
+                        action = S.setupUbuntuAction,
+                        passed = snapshot.ubuntuInstalled,
+                        blocks = true
+                    )
+                )
+
+                steps.add(
+                    SetupStep(
+                        id = "base_tools",
+                        title = S.setupToolsTitle,
+                        body = S.setupToolsBody,
+                        action = S.setupToolsAction,
+                        passed = snapshot.toolsPassed,
+                        blocks = true
+                    )
+                )
+            }
+        } else {
+            if (snapshot.diskSpaceNeeded > 0) {
+                steps.add(
+                    SetupStep(
+                        id = "disk_space",
+                        title = S.setupDiskSpaceTitle,
+                        body = S.setupDiskSpaceBody(Workspace.humanSize(snapshot.diskSpaceBytes), Workspace.humanSize(snapshot.diskSpaceNeeded)),
+                        action = S.setupDiskSpaceAction,
+                        passed = snapshot.diskSpaceBytes >= snapshot.diskSpaceNeeded,
+                        blocks = true
+                    )
+                )
+            }
+
+            steps.add(
+                SetupStep(
+                    id = "base_tools",
+                    title = S.setupToolsTitle,
+                    body = S.setupToolsBody,
+                    action = S.setupToolsAction,
+                    passed = snapshot.toolsPassed,
+                    blocks = true
+                )
+            )
+        }
 
         var foundCurrent = false
         return steps.map { step ->

@@ -107,6 +107,12 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     lint {
         abortOnError = true
         baseline = file("lint-baseline.xml")
@@ -207,4 +213,7 @@ dependencies {
 
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":baselineprofile"))
+
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.tukaani:xz:1.10")
 }

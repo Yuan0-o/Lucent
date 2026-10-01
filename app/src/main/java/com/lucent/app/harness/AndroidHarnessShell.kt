@@ -43,7 +43,7 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
         }
         val b = backend()
         if (b == RuntimeBackend.TERMUX) out.add(HarnessRuntime.CAP_TERMUX)
-        if (b == RuntimeBackend.BUILTIN || BuiltinShell.builtinAvailable(context)) out.add(HarnessRuntime.CAP_BUILTIN_RUNTIME)
+        if (BuiltinShell.builtinAvailable(context)) out.add(HarnessRuntime.CAP_BUILTIN_RUNTIME)
         return out
     }
 
