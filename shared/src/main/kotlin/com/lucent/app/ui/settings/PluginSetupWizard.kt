@@ -1,6 +1,5 @@
 package com.lucent.app.ui.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -25,6 +24,7 @@ import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.DirectoryPickerDialog
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
+import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -74,25 +74,22 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
         BackHeader(onBack = onBack)
 
         if (setupComplete) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(S.setupWizardDone, color = onGradient, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.setupWizardDone, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(S.setupWizardDoneBody, color = onGradientMuted, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(S.setupWizardDoneBody, color = onGradientMuted, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = onBack) {
-                    Text(S.setupActionDone)
+                TextButton(onClick = onBack) {
+                    Text(S.setupActionDone, color = onGradient, fontSize = 13.sp)
                 }
             }
         } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text(S.setupWizardTitle, color = onGradient, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
+            Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+                Text(S.setupWizardTitle, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
 
-                steps.forEach { step ->
+            steps.forEach { step ->
                     SetupStepCard(
                         step = step,
                         busy = busy == step.id,
@@ -158,9 +155,8 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                             }
                         }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-            }
         }
     }
 
@@ -190,7 +186,7 @@ private fun SetupStepCard(
     onReload: () -> Unit
 ) {
     val alpha = if (step.state == SetupStepState.WAITING) 0.5f else 1f
-    Column(modifier = Modifier.fillMaxWidth().alpha(alpha).background(androidx.compose.ui.graphics.Color(0x1AFFFFFF), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().alpha(alpha).frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val icon = when (step.state) {
                 SetupStepState.DONE -> Icons.Default.CheckCircle
@@ -200,13 +196,13 @@ private fun SetupStepCard(
             Icon(icon, contentDescription = null, tint = onGradient, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(step.title, color = onGradient, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(step.title, color = onGradient, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(step.body, color = onGradientMuted, fontSize = 14.sp)
+                Text(step.body, color = onGradientMuted, fontSize = 13.sp)
                 
                 if (errorMsg.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(errorMsg, color = androidx.compose.ui.graphics.Color.Red, fontSize = 12.sp)
+                    Text(errorMsg, color = androidx.compose.ui.graphics.Color(0xFFFF8A80), fontSize = 12.sp)
                 }
 
                 if (busy) {
@@ -219,14 +215,14 @@ private fun SetupStepCard(
                 } else if (step.state == SetupStepState.CURRENT) {
                     if (step.action.isNotBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = onAction) {
-                            Text(step.action)
+                        TextButton(onClick = onAction) {
+                            Text(step.action, color = onGradient, fontSize = 13.sp)
                         }
                     }
                     if (step.id == "disk_space") {
                         Spacer(modifier = Modifier.height(4.dp))
                         TextButton(onClick = onReload) {
-                            Text(S.setupActionCheck)
+                            Text(S.setupActionCheck, color = onGradientMuted, fontSize = 13.sp)
                         }
                     }
                 }

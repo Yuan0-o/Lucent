@@ -14,7 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -295,9 +294,6 @@ internal fun PluginSettingsPage(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-
-            
-            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = config.pluginCatalogUrl,
                 onValueChange = { 
@@ -322,7 +318,7 @@ internal fun PluginSettingsPage(
             onValueChange = { searchQuery = it },
             placeholder = { Text(S.pluginSearchHint, fontSize = 13.sp) },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedTextColor = onGradient,
                 focusedTextColor = onGradient
@@ -624,8 +620,8 @@ private fun SetupGateCard(
         Spacer(modifier = Modifier.height(4.dp))
         Text(S.setupGateBody, color = onGradientMuted, fontSize = 13.sp)
         Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = onStart) {
-            Text(S.setupGateAction)
+        TextButton(onClick = onStart) {
+            Text(S.setupGateAction, color = onGradient, fontSize = 13.sp)
         }
     }
 }
@@ -656,8 +652,8 @@ private fun PendingReinstallCard(
             }
         } else {
             Row {
-                Button(onClick = onReinstall) {
-                    Text(S.actionReinstall)
+                TextButton(onClick = onReinstall) {
+                    Text(S.actionReinstall, color = onGradient, fontSize = 13.sp)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 TextButton(onClick = onDismiss) {
