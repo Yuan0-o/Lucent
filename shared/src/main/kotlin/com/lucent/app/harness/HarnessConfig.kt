@@ -64,6 +64,7 @@ data class HarnessConfig(
     val fastMirror: Boolean = true,
     val contextBudgetTokens: Int = ContextBudget.DEFAULT_BUDGET_TOKENS,
     val pluginMirrorRegion: String = "auto",
+    val runtimeMode: String = "auto",
     val setupComplete: Boolean = false,
     val setupCompletedAt: Long = 0L,
     val pluginBackupScope: String = "state",
@@ -183,6 +184,7 @@ data class HarnessConfig(
         put("fastMirror", fastMirror)
         put("contextBudgetTokens", contextBudgetTokens)
         put("pluginMirrorRegion", pluginMirrorRegion)
+        put("runtimeMode", runtimeMode)
         put("setupComplete", setupComplete)
         put("setupCompletedAt", setupCompletedAt)
         put("pluginBackupScope", pluginBackupScope)
@@ -230,6 +232,7 @@ data class HarnessConfig(
                 fastMirror = o.optBoolean("fastMirror", defaults.fastMirror),
                 contextBudgetTokens = o.optInt("contextBudgetTokens", defaults.contextBudgetTokens),
                 pluginMirrorRegion = o.optString("pluginMirrorRegion", defaults.pluginMirrorRegion),
+                runtimeMode = o.optString("runtimeMode", defaults.runtimeMode),
                 setupComplete = o.optBoolean("setupComplete", defaults.setupComplete),
                 setupCompletedAt = o.optLong("setupCompletedAt", defaults.setupCompletedAt),
                 pluginBackupScope = o.optString("pluginBackupScope", defaults.pluginBackupScope),

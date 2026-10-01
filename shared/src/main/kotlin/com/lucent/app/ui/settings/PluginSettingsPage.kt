@@ -292,6 +292,32 @@ internal fun PluginSettingsPage(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(S.runtimeMode, color = onGradient, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                listOf(
+                    "auto" to S.runtimeModeAuto,
+                    "termux" to S.runtimeModeTermux,
+                    "builtin" to S.runtimeModeBuiltin
+                ).forEach { (value, label) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 12.dp).clickable {
+                            val next = config.copy(runtimeMode = value)
+                            HarnessRuntime.update(next)
+                            config = next
+                        }
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = config.runtimeMode == value,
+                            onClick = null
+                        )
+                        Text(label, color = onGradient, fontSize = 13.sp)
+                    }
+                }
+            }
+            Text(S.runtimeModeHint, color = onGradient.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(

@@ -43,8 +43,25 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
 
     override val android: Boolean = true
 
-    override suspend fun probeShell(): ShellOutcome =
-        TermuxBridge.run(context, "echo probe", HarnessRuntime.workspace(), 10, emptyMap())
+    override suspend fun probeShell(): ShellOutcome {
+        val termuxOut = TermuxBridge.run(context, "echo probe", HarnessRuntime.workspace(), 10, emptyMap())
+        val termuxOk = termuxOut.ok
+        val builtin = BuiltinShell.builtinAvailable(context)
+        val mode = com.lucent.app.harness.plugins.selectBackend(
+            HarnessRuntime.config().runtimeMode,
+            termuxOk,
+            builtin
+        )
+        if (mode == com.lucent.app.harness.plugins.RuntimeBackend.BUILTIN) {
+            return BuiltinShell.run(context, "echo probe", HarnessRuntime.workspace(), 10000L)
+        }
+        if (mode == com.lucent.app.harness.plugins.RuntimeBackend.NONE &&
+            HarnessRuntime.config().runtimeMode == "builtin"
+        ) {
+            return ShellOutcome(false, "", "built-in runtime is not bundled in this build", -1)
+        }
+        return termuxOut
+    }
 
     override fun filesDir(): File = context.filesDir
 

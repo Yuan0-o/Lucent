@@ -29,9 +29,13 @@ object PluginSetup {
         val config = HarnessRuntime.config()
         
         if (android) {
-            val termuxInstalled = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX) || 
+            val termuxRaw = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX) || 
                                   HarnessRuntime.shell?.capabilityNames()?.contains("termux") == true ||
                                   (host?.capabilities()?.contains("termux") ?: false)
+            val builtinAvailable = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
+            val useBuiltin = builtinAvailable && config.runtimeMode != "termux"
+            val termuxInstalled = termuxRaw || useBuiltin
+
             steps.add(
                 SetupStep(
                     id = "termux_installed",

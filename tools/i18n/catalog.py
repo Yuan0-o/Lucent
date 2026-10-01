@@ -1875,6 +1875,11 @@ ENTRIES = [
     ("pluginCatalogUrlHint", "https://... (leave blank to disable)", "https://...（留空以禁用）", "https://... (空欄で無効)", "https://... (비워두면 비활성화)"),
     ("pluginSearchHint", "Search plugins...", "搜索插件...", "プラグインを検索...", "플러그인 검색..."),
     ("actionReinstall", "Reinstall", "重新安装", "再インストール", "재설치"),
+    ("runtimeMode", "Runtime mode", "运行模式", "ランタイムモード", "런타임 모드"),
+    ("runtimeModeAuto", "Auto", "自动", "自動", "자동"),
+    ("runtimeModeTermux", "Termux", "Termux", "Termux", "Termux"),
+    ("runtimeModeBuiltin", "Built-in runtime", "内置运行时", "組み込みランタイム", "내장 런타임"),
+    ("runtimeModeHint", "Built-in runtime activates automatically when bundled.", "内置运行时在捆绑时自动激活。", "バンドルされている場合、組み込みランタイムが自動的に有効になります。", "번들로 제공될 때 내장 런타임이 자동으로 활성화됩니다."),
 ]
 
 CONDITIONAL_ENTRIES = {

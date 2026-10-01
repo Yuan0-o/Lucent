@@ -139,6 +139,7 @@ object HarnessRuntime {
 
     const val CAP_SHELL = "shell"
     const val CAP_TERMUX = "termux"
+    const val CAP_BUILTIN_RUNTIME = "builtin_runtime"
     const val CAP_PRIVILEGED = "privileged"
     const val CAP_PLUGINS = "plugins"
     const val CAP_DEVICE = "device"

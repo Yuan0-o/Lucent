@@ -136,7 +136,18 @@ object PluginPreflight {
                 )
             )
         }
-        if (plugin.needsShell && HarnessRuntime.pluginHost?.isReady() != true) {
+        val mode = HarnessRuntime.config().runtimeMode
+        val termuxReady = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
+        val builtinAvailable = HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_BUILTIN_RUNTIME)
+        val backend = selectBackend(mode, termuxReady, builtinAvailable)
+
+        val shellReady = if (android) {
+            backend != RuntimeBackend.NONE || HarnessRuntime.pluginHost?.isReady() == true
+        } else {
+            HarnessRuntime.pluginHost?.isReady() == true
+        }
+
+        if (plugin.needsShell && !shellReady) {
             val steps = if (android) {
                 listOf(
                     S.pluginRepairTermux,
@@ -148,9 +159,7 @@ object PluginPreflight {
             }
             problems.add(PreflightProblem("no_shell", S.pluginReasonNoShell, steps))
         }
-        if (android && plugin.termuxOnly &&
-            !HarnessRuntime.capabilities().contains(HarnessRuntime.CAP_TERMUX)
-        ) {
+        if (android && plugin.termuxOnly && !termuxReady) {
             problems.add(
                 PreflightProblem(
                     "termux_missing",
