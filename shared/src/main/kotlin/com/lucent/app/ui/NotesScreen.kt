@@ -2021,7 +2021,10 @@ fun NotesScreen(active: Boolean = true) {
                                         if (note.id !in selectedNoteIds) selectedNoteIds = selectedNoteIds + note.id
                                     },
                                     onDrop = { beforeId, afterId -> dropSelection(beforeId, afterId) }
-                                ),
+                                ).onSecondaryClick {
+                                    selectionMode = true
+                                    if (note.id !in selectedNoteIds) selectedNoteIds = selectedNoteIds + note.id
+                                },
                                 onToggleSelect = {
                                     selectedNoteIds = if (note.id in selectedNoteIds) selectedNoteIds - note.id else selectedNoteIds + note.id
                                 },
@@ -2124,6 +2127,9 @@ private fun NoteCard(
                 onClick = { if (selectionMode) onToggleSelect() else onOpen() },
                 onLongClick = if (reorderEnabled) null else { { if (!selectionMode) onLongPress() } }
             )
+            .onSecondaryClick {
+                if (!reorderEnabled && !selectionMode) onLongPress()
+            }
             .then(reorderModifier)
             .then(
                 if (selected) Modifier.border(2.dp, onGradient, selShape) else Modifier
@@ -2243,7 +2249,7 @@ private fun TemplateChipWithMenu(
                     currentLong()
                 }
             }
-        }
+        }.onSecondaryClick { currentLong() }
     ) {
         FilterChip(
             selected = false,

@@ -1536,7 +1536,10 @@ fun TasksScreen(active: Boolean = true) {
                                         if (task.id !in selectedTaskIds) selectedTaskIds = selectedTaskIds + task.id
                                     },
                                     onDrop = { beforeId, afterId -> dropSelection(beforeId, afterId) }
-                                ),
+                                ).onSecondaryClick {
+                                    selectionMode = true
+                                    if (task.id !in selectedTaskIds) selectedTaskIds = selectedTaskIds + task.id
+                                },
                                 onToggleSelect = {
                                     selectedTaskIds = if (task.id in selectedTaskIds) selectedTaskIds - task.id else selectedTaskIds + task.id
                                 },
@@ -1627,6 +1630,9 @@ private fun TaskCard(
                 onClick = { if (selectionMode) onToggleSelect() else onOpen() },
                 onLongClick = if (reorderEnabled) null else { { if (!selectionMode) onLongPress() } }
             )
+            .onSecondaryClick {
+                if (!reorderEnabled && !selectionMode) onLongPress()
+            }
             .then(reorderModifier)
             .then(if (selected) Modifier.border(2.dp, onGradient, selShape) else Modifier)
             .padding(12.dp)

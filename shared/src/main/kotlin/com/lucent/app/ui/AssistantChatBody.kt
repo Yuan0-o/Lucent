@@ -908,6 +908,12 @@ fun AssistantChatBody(
                                         }
                                     )
                                 }
+                                .onSecondaryClick {
+                                    if (!selectionMode) {
+                                        Haptics.tick(context)
+                                        contextMenuMessage = msg
+                                    }
+                                }
                                 .padding(12.dp)
                         ) {
                             val savedTrace = if (!isUser) remember(msg.id, msg.agentTrace) {

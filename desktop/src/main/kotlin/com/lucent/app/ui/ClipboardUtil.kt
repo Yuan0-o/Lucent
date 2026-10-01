@@ -21,4 +21,6 @@ fun copyToClipboard(context: Context, text: String) {
 fun Modifier.longPressCopy(context: Context, text: String): Modifier =
     pointerInput(text) {
         detectTapGestures(onLongPress = { copyToClipboard(context, text) })
+    }.onSecondaryClick {
+        copyToClipboard(context, text)
     }

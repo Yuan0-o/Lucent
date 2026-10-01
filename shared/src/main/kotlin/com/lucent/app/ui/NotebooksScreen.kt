@@ -493,7 +493,11 @@ fun NotebooksScreen(
                             if (notebook.id !in selectedIds) selectedIds = selectedIds + notebook.id
                         },
                         onDrop = { beforeId, afterId -> drop(beforeId, afterId) }
-                    ),
+                    ).onSecondaryClick {
+                        draggingNotebookId = notebook.id
+                        selectionMode = true
+                        if (notebook.id !in selectedIds) selectedIds = selectedIds + notebook.id
+                    },
                     onOpen = {
                         if (selectionMode) {
                             selectedIds = if (notebook.id in selectedIds) selectedIds - notebook.id else selectedIds + notebook.id
