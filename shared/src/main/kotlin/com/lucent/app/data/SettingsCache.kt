@@ -183,6 +183,15 @@ object SettingsCache {
     var cloudAutoBackup: Boolean = false
 
     @Volatile
+    var updateChannel: String = "stable"
+
+    @Volatile
+    var installedPreviewIdentity: String = ""
+
+    @Volatile
+    var stagedUpdateIdentity: String = ""
+
+    @Volatile
     var autoUpdateEnabled: Boolean = false
 
     @Volatile
@@ -270,6 +279,10 @@ object SettingsCache {
         terminalKeyBarVisible = prefs.terminalKeyBarVisible
         globalTextSelectionEnabled = prefs.globalTextSelectionEnabled
         cloudPasswordEnc = prefs.cloudPasswordEnc
+
+        updateChannel = prefs.updateChannel
+        installedPreviewIdentity = prefs.installedPreviewIdentity
+        stagedUpdateIdentity = prefs.stagedUpdateIdentity
         autoUpdateEnabled = prefs.autoUpdateEnabled
         privilegedEnabled = prefs.privilegedEnabled
     }

@@ -243,3 +243,33 @@ jobs:
           name: lucent-windows-exe
           path: desktop/build/compose/binaries/main/exe/*.exe
           if-no-files-found: error
+  publish-preview:
+    needs: build-exe
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: lucent-windows-exe
+          path: exe
+      - name: Publish preview release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          EXE=$(find exe -name '*.exe' | head -n 1)
+          [ -n "$EXE" ] || { echo "::error::No EXE found."; exit 1; }
+          if ! gh release view preview --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create preview --prerelease --title "Preview Build" --notes "Initial preview" --repo "${{ github.repository }}"
+          fi
+          EXISTING=$(gh release view preview --repo "${{ github.repository }}" --json body -q .body 2>/dev/null || true)
+          KEPT=$(printf '%s\n' "$EXISTING" | grep -v -e '^EXE-' -e '^Commit:' -e '^Version:' -e '^Run:' || true)
+          NOTES="$KEPT
+          EXE-Commit: ${{ github.sha }}
+          EXE-Version: ${{ needs.build-exe.outputs.version }}
+          EXE-Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh release upload preview "$EXE" --clobber --repo "${{ github.repository }}"
+          gh release edit preview --notes "$NOTES" --repo "${{ github.repository }}"

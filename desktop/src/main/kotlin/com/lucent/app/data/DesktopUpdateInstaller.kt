@@ -24,6 +24,12 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
 
     private var job: Job? = null
 
+    override fun identityOf(info: ReleaseInfo): String = info.exeSha ?: info.identity
+
+    override fun versionOf(info: ReleaseInfo): String = info.exeVersion ?: info.version
+
+    override fun hasAsset(info: ReleaseInfo): Boolean = info.installer != null
+
     override fun hasDownloadFolder(): Boolean = SettingsCache.autoBackup.folderUri.isNotBlank()
 
     override fun startDownload(info: ReleaseInfo) {

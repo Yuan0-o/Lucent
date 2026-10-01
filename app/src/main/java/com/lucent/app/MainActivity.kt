@@ -208,6 +208,12 @@ class MainActivity : FragmentActivity() {
         AutoUpdate.onStagedChange = { tag, files ->
             AppScope.io.launch { settingsRepo.setStagedUpdate(tag.orEmpty(), files) }
         }
+        AutoUpdate.onPreviewInstalled = { identity ->
+            AppScope.io.launch { settingsRepo.setInstalledPreviewIdentity(identity) }
+        }
+        AutoUpdate.onStagedIdentityChange = { identity ->
+            AppScope.io.launch { settingsRepo.setStagedUpdateIdentity(identity) }
+        }
         AppScope.io.launch {
             val keepTag = AutoUpdate.stagedTagFor(runningVersion) ?: AutoUpdate.pendingVersion
             updateInstaller.purgeStale(runningVersion, keepTag)

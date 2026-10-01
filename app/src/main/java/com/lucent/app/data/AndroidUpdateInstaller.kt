@@ -8,6 +8,12 @@ import java.io.File
 
 class AndroidUpdateInstaller(private val context: Context) : AutoUpdate.Installer {
 
+    override fun identityOf(info: ReleaseInfo): String = info.apkSha ?: info.identity
+
+    override fun versionOf(info: ReleaseInfo): String = info.apkVersion ?: info.version
+
+    override fun hasAsset(info: ReleaseInfo): Boolean = info.apk != null
+
     override fun hasDownloadFolder(): Boolean = SettingsCache.autoBackup.folderUri.isNotBlank()
 
     override fun startDownload(info: ReleaseInfo) {

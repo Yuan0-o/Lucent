@@ -1411,6 +1411,11 @@ ENTRIES = [
     ("formatMarkdown", "Markdown", "Markdown", "Markdown", "Markdown"),
 
     ("aboutAutoUpdate", "Auto-update", "自动更新", "自動更新", "자동 업데이트"),
+
+    ("updateChannelTitle", "Update channel", "更新通道", "アップデートチャンネル", "업데이트 채널"),
+    ("updateChannelStable", "Stable", "稳定版", "安定版", "안정판"),
+    ("updateChannelPreview", "Preview", "预览版", "プレビュー版", "미리보기"),
+    ("previewBuildLabel", "Preview build", "预览版", "プレビュー版", "미리보기"),
     ("aboutAutoUpdateDesc", "Fetch & install latest release on app start", "启动时自动获取并安装最新版本", "起動時に最新リリースを取得・インストール", "앱 시작 시 최신 릴리스 자동 확인 및 설치"),
     ("aboutBuild", "Build", "构建", "ビルド", "빌드"),
     ("aboutCheckError", "Error:", "错误：", "エラー：", "오류:"),

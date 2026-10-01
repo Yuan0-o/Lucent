@@ -16,6 +16,9 @@ object AutoUpdate {
         fun discard(info: ReleaseInfo)
         fun cancelDownload(info: ReleaseInfo)
         fun purgeStaged(files: List<String>): Int
+        fun identityOf(info: ReleaseInfo): String = info.identity
+        fun versionOf(info: ReleaseInfo): String = info.version
+        fun hasAsset(info: ReleaseInfo): Boolean = info.apk != null || info.installer != null
     }
 
     var installer: Installer? = null
@@ -56,6 +59,8 @@ object AutoUpdate {
     var onPendingChange: ((String?) -> Unit)? = null
 
     var onStagedChange: ((String?, List<String>) -> Unit)? = null
+    var onPreviewInstalled: ((String) -> Unit)? = null
+    var onStagedIdentityChange: ((String) -> Unit)? = null
 
     fun restorePending(version: String?) {
         pendingVersion = version?.takeIf { it.isNotBlank() }
@@ -77,6 +82,8 @@ object AutoUpdate {
         stagedVersion = null
         stagedFiles = emptyList()
         onStagedChange?.invoke(null, emptyList())
+        SettingsCache.stagedUpdateIdentity = ""
+        onStagedIdentityChange?.invoke("")
     }
 
     fun stagedTagFor(runningVersion: String): String? {
@@ -86,6 +93,9 @@ object AutoUpdate {
 
     fun cleanUpAfterUpdate(runningVersion: String): Int {
         val staged = stagedTagFor(runningVersion) ?: return 0
+        if (SettingsCache.stagedUpdateIdentity.isNotBlank()) {
+            onPreviewInstalled?.invoke(SettingsCache.stagedUpdateIdentity)
+        }
         val removed = installer?.purgeStaged(stagedFiles) ?: 0
         clearStaged()
         return removed
@@ -122,7 +132,12 @@ object AutoUpdate {
         readyForInstall = true
         hidden = false
         offered?.let { info ->
-            if (files.isNotEmpty()) recordStaged(info.tag, files)
+            if (files.isNotEmpty()) {
+                val identity = installer?.identityOf(info) ?: info.identity
+                SettingsCache.stagedUpdateIdentity = identity
+                onStagedIdentityChange?.invoke(identity)
+                recordStaged(info.tag, files)
+            }
         }
     }
 
@@ -193,8 +208,13 @@ object AutoUpdate {
         val info = offered ?: return false
         val engine = installer ?: return false
         if (engine.isDownloaded(info)) {
-            readyForInstall = true
-            return true
+            val stagedIdentity = SettingsCache.stagedUpdateIdentity
+            if (stagedIdentity.isNotBlank() && stagedIdentity != engine.identityOf(info)) {
+                engine.discard(info)
+            } else {
+                readyForInstall = true
+                return true
+            }
         }
         if (!engine.hasDownloadFolder()) {
             awaitingFolder = true

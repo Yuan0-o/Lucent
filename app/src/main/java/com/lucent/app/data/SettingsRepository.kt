@@ -127,6 +127,10 @@ private object SettingsKeys {
 
     val MEMORY_TIER_PRELOCAL = stringPreferencesKey("memory_tier_prelocal")
     val WEB_SEARCH_PRELOCAL = booleanPreferencesKey("web_search_prelocal")
+    val UPDATE_CHANNEL_ENC = stringPreferencesKey("update_channel_enc")
+    val LEGACY_UPDATE_CHANNEL = stringPreferencesKey("update_channel")
+    val INSTALLED_PREVIEW_IDENTITY = stringPreferencesKey("installed_preview_identity")
+    val STAGED_UPDATE_IDENTITY = stringPreferencesKey("staged_update_identity")
     val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
     val PENDING_UPDATE_VERSION = stringPreferencesKey("pending_update_version")
     val STAGED_UPDATE_TAG = stringPreferencesKey("staged_update_tag")
@@ -258,6 +262,9 @@ class SettingsRepository(private val context: Context) {
         val terminalKeyBarVisible: Boolean = true,
         val globalTextSelectionEnabled: Boolean = false,
         val cloudPasswordEnc: String = "",
+        val updateChannel: String = "stable",
+        val installedPreviewIdentity: String = "",
+        val stagedUpdateIdentity: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
         val pendingUpdateVersion: String = "",
@@ -340,6 +347,9 @@ class SettingsRepository(private val context: Context) {
             terminalKeyBarVisible = secret(prefs, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true,
             globalTextSelectionEnabled = secret(prefs, SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, "false").toBooleanStrictOrNull() ?: false,
             cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
+            updateChannel = secret(prefs, SettingsKeys.UPDATE_CHANNEL_ENC, SettingsKeys.LEGACY_UPDATE_CHANNEL, "stable"),
+            installedPreviewIdentity = prefs[SettingsKeys.INSTALLED_PREVIEW_IDENTITY] ?: "",
+            stagedUpdateIdentity = prefs[SettingsKeys.STAGED_UPDATE_IDENTITY] ?: "",
             autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false,
             privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false,
             pendingUpdateVersion = prefs[SettingsKeys.PENDING_UPDATE_VERSION] ?: "",
@@ -586,6 +596,25 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAssistantConfirmTools(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] = value }
         SettingsCache.assistantConfirmToolsEnabled = value
+    }
+
+    val updateChannel: Flow<String> = context.settingsDataStore.data.map {
+        secret(it, SettingsKeys.UPDATE_CHANNEL_ENC, SettingsKeys.LEGACY_UPDATE_CHANNEL, "stable")
+    }
+    suspend fun setUpdateChannel(value: String) {
+        SettingsCache.updateChannel = value
+        putSecret(SettingsKeys.UPDATE_CHANNEL_ENC, SettingsKeys.LEGACY_UPDATE_CHANNEL, value)
+    }
+
+    val installedPreviewIdentity: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.INSTALLED_PREVIEW_IDENTITY] ?: "" }
+    suspend fun setInstalledPreviewIdentity(value: String) {
+        SettingsCache.installedPreviewIdentity = value
+        context.settingsDataStore.edit { it[SettingsKeys.INSTALLED_PREVIEW_IDENTITY] = value }
+    }
+
+    suspend fun setStagedUpdateIdentity(value: String) {
+        SettingsCache.stagedUpdateIdentity = value
+        context.settingsDataStore.edit { it[SettingsKeys.STAGED_UPDATE_IDENTITY] = value }
     }
 
     val autoUpdateEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false }

@@ -89,6 +89,9 @@ class SettingsRepository(private val context: Context) {
         const val WEB_SEARCH_ENGINE = "web_search_engine"
         const val MEMORY_TIER_PRELOCAL = "memory_tier_prelocal"
         const val WEB_SEARCH_PRELOCAL = "web_search_prelocal"
+        const val UPDATE_CHANNEL_ENC = "update_channel_enc"
+        const val INSTALLED_PREVIEW_IDENTITY = "installed_preview_identity"
+        const val STAGED_UPDATE_IDENTITY = "staged_update_identity"
         const val AUTO_UPDATE_ENABLED = "auto_update_enabled"
         const val PENDING_UPDATE_VERSION = "pending_update_version"
         const val STAGED_UPDATE_TAG = "staged_update_tag"
@@ -263,6 +266,9 @@ class SettingsRepository(private val context: Context) {
         val terminalKeyBarVisible: Boolean = true,
         val globalTextSelectionEnabled: Boolean = false,
         val cloudPasswordEnc: String = "",
+        val updateChannel: String = "stable",
+        val installedPreviewIdentity: String = "",
+        val stagedUpdateIdentity: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
         val pendingUpdateVersion: String = "",
@@ -342,6 +348,9 @@ class SettingsRepository(private val context: Context) {
             terminalKeyBarVisible = secret(prefs, K.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true,
             globalTextSelectionEnabled = secret(prefs, K.GLOBAL_TEXT_SELECTION_ENABLED_ENC, "false").toBooleanStrictOrNull() ?: false,
             cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: "",
+            updateChannel = secret(prefs, K.UPDATE_CHANNEL_ENC, "stable"),
+            installedPreviewIdentity = str(prefs, K.INSTALLED_PREVIEW_IDENTITY) ?: "",
+            stagedUpdateIdentity = str(prefs, K.STAGED_UPDATE_IDENTITY) ?: "",
             autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false,
             privilegedEnabled = bool(prefs, K.PRIVILEGED_ENABLED) ?: false,
             pendingUpdateVersion = str(prefs, K.PENDING_UPDATE_VERSION) ?: "",
@@ -602,6 +611,25 @@ class SettingsRepository(private val context: Context) {
         edit { it[K.OPEN_LINKS_EXTERNALLY] = value }
     }
 
+
+    val updateChannel: Flow<String> = state.map {
+        secret(it, K.UPDATE_CHANNEL_ENC, "stable")
+    }
+    suspend fun setUpdateChannel(value: String) {
+        SettingsCache.updateChannel = value
+        putSecret(K.UPDATE_CHANNEL_ENC, value)
+    }
+
+    val installedPreviewIdentity: Flow<String> = state.map { str(it, K.INSTALLED_PREVIEW_IDENTITY) ?: "" }
+    suspend fun setInstalledPreviewIdentity(value: String) {
+        SettingsCache.installedPreviewIdentity = value
+        update { it.put(K.INSTALLED_PREVIEW_IDENTITY, value) }
+    }
+
+    suspend fun setStagedUpdateIdentity(value: String) {
+        SettingsCache.stagedUpdateIdentity = value
+        update { it.put(K.STAGED_UPDATE_IDENTITY, value) }
+    }
 
     val autoUpdateEnabled: Flow<Boolean> = state.map { bool(it, K.AUTO_UPDATE_ENABLED) ?: false }
     suspend fun setAutoUpdateEnabled(value: Boolean) {

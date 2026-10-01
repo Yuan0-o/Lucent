@@ -20,6 +20,8 @@ object LucentBuild {
 
     const val RELEASES_API = "https://api.github.com/repos/Yuan0-o/Lucent/releases/latest"
 
+    const val REPO_API = "https://api.github.com/repos/Yuan0-o/Lucent"
+
     private const val PRIVACY_PAGE = "https://github.com/Yuan0-o/Lucent/blob/main/PRIVACY/PRIVACY"
 
     fun privacyPage(languageKey: String): String = when (languageKey) {

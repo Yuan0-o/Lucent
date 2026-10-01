@@ -237,6 +237,7 @@ internal object BackupManifestBuilder {
             .put("smallModelModeEnabled", settings.smallModelModeEnabled.first())
             .put("crashShieldEnabled", settings.crashShieldEnabled.first())
             .put("blackoutEnabled", settings.blackoutEnabled.first())
+            .put("updateChannel", settings.updateChannel.first())
             .put("autoUpdateEnabled", settings.autoUpdateEnabled.first())
             .put("privilegedEnabled", settings.privilegedEnabled.first())
 

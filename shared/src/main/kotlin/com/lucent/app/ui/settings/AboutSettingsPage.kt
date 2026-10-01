@@ -46,6 +46,7 @@ internal fun AboutSettingsPage(
 ) {
     val scope = rememberCoroutineScope()
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = SettingsCache.autoUpdateEnabled)
+    val updateChannel by repo.updateChannel.collectAsState(initial = SettingsCache.updateChannel)
 
     LaunchedEffect(AutoUpdate.message, AutoUpdate.offered) {
         if (AutoUpdate.message != null && AutoUpdate.offered == null) {
@@ -59,6 +60,7 @@ internal fun AboutSettingsPage(
     Spacer(modifier = Modifier.height(12.dp))
     AboutUpdateCard(
         autoUpdateOn = autoUpdateOn,
+        updateChannel = updateChannel,
         busy = AutoUpdate.phase != AutoUpdate.Phase.IDLE,
         status = AutoUpdate.message,
         offered = AutoUpdate.offered,
@@ -67,6 +69,11 @@ internal fun AboutSettingsPage(
             scope.launch { repo.setAutoUpdateEnabled(checked) }
         },
         onCheck = { scope.launch { AutoUpdate.check(versionName, notifyWhenCurrent = true) } },
+        onChannelToggle = {
+            val next = if (updateChannel == "stable") "preview" else "stable"
+            SettingsCache.updateChannel = next
+            scope.launch { repo.setUpdateChannel(next) }
+        },
         onOpenUrl = onOpenUrl
     )
     Spacer(modifier = Modifier.height(12.dp))
@@ -96,16 +103,26 @@ private fun AboutIdentityCard(versionName: String, buildNumber: String) {
 @Composable
 private fun AboutUpdateCard(
     autoUpdateOn: Boolean,
+    updateChannel: String,
     busy: Boolean,
     status: String?,
     offered: com.lucent.app.data.ReleaseInfo?,
     onToggle: (Boolean) -> Unit,
     onCheck: () -> Unit,
+    onChannelToggle: () -> Unit,
     onOpenUrl: ((String) -> Unit)?
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onChannelToggle() }.padding(vertical = 4.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(S.updateChannelTitle, color = onGradient, fontSize = 15.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(if (updateChannel == "preview") S.updateChannelPreview else S.updateChannelStable, color = onGradientMuted, fontSize = 14.sp)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.aboutAutoUpdate, color = onGradient, fontSize = 15.sp)

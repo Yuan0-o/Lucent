@@ -75,6 +75,12 @@ fun main() {
     com.lucent.app.data.AutoUpdate.onStagedChange = { tag, files ->
         AppScope.io.launch { SettingsRepository(context).setStagedUpdate(tag.orEmpty(), files) }
     }
+    com.lucent.app.data.AutoUpdate.onPreviewInstalled = { identity ->
+        AppScope.io.launch { SettingsRepository(context).setInstalledPreviewIdentity(identity) }
+    }
+    com.lucent.app.data.AutoUpdate.onStagedIdentityChange = { identity ->
+        AppScope.io.launch { SettingsRepository(context).setStagedUpdateIdentity(identity) }
+    }
     AppScope.io.launch {
         val running = com.lucent.app.LucentBuild.VERSION
         val keepTag = com.lucent.app.data.AutoUpdate.stagedTagFor(running) ?: com.lucent.app.data.AutoUpdate.pendingVersion

@@ -20,15 +20,23 @@ data class ReleaseInfo(
     val title: String,
     val apk: ReleaseAsset?,
     val installer: ReleaseAsset?,
-    val notesUrl: String = ""
+    val notesUrl: String = "",
+    val channel: String = "stable",
+    val apkSha: String? = null,
+    val exeSha: String? = null,
+    val apkVersion: String? = null,
+    val exeVersion: String? = null
 ) {
+    val identity: String
+        get() = version
+
     val releaseUrl: String
         get() = notesUrl.ifBlank { LucentBuild.HOMEPAGE + "/releases/tag/" + tag }
 }
 
 object UpdateChecker {
 
-    private val client: OkHttpClient by lazy {
+    internal val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -57,47 +65,111 @@ object UpdateChecker {
         return false
     }
 
-    suspend fun latest(currentVersion: String): ReleaseInfo? = withContext(Dispatchers.IO) {
+    private suspend fun fetchJson(url: String): JSONObject? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url(LucentBuild.RELEASES_API)
+            .url(url)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "Lucent")
             .build()
-        val body = client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@withContext null
-            response.body?.string().orEmpty()
-        }
+        val body = runCatching {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) null else response.body?.string()
+            }
+        }.getOrNull() ?: return@withContext null
         if (body.isBlank()) return@withContext null
-        val root = runCatching { JSONObject(body) }.getOrNull() ?: return@withContext null
-        val tag = root.optString("tag_name")
-        if (tag.isBlank()) return@withContext null
-        if (root.optBoolean("draft") || root.optBoolean("prerelease")) return@withContext null
-        if (!isNewer(tag, currentVersion)) return@withContext null
+        runCatching { JSONObject(body) }.getOrNull()
+    }
 
+    private suspend fun fetchTagCommit(tag: String): String? {
+        val ref = fetchJson(LucentBuild.REPO_API + "/git/ref/tags/" + tag) ?: return null
+        val obj = ref.optJSONObject("object") ?: return null
+        val sha = obj.optString("sha")
+        if (sha.isBlank()) return null
+        if (obj.optString("type") == "tag") {
+            val tagObject = fetchJson(LucentBuild.REPO_API + "/git/tags/" + sha) ?: return null
+            return tagObject.optJSONObject("object")?.optString("sha")?.ifBlank { null }
+        }
+        return sha
+    }
+
+    private fun parseAssets(root: JSONObject): Pair<ReleaseAsset?, ReleaseAsset?> {
         var apk: ReleaseAsset? = null
         var installer: ReleaseAsset? = null
-        val assets = root.optJSONArray("assets")
-        if (assets != null) {
-            for (i in 0 until assets.length()) {
-                val item = assets.optJSONObject(i) ?: continue
-                val name = item.optString("name")
-                val url = item.optString("browser_download_url")
-                if (name.isBlank() || url.isBlank()) continue
-                val asset = ReleaseAsset(name, url, item.optLong("size"))
-                when {
-                    name.endsWith(".apk", ignoreCase = true) && apk == null -> apk = asset
-                    name.endsWith(".exe", ignoreCase = true) && installer == null -> installer = asset
+        val assets = root.optJSONArray("assets") ?: return null to null
+        for (i in 0 until assets.length()) {
+            val item = assets.optJSONObject(i) ?: continue
+            val name = item.optString("name")
+            val url = item.optString("browser_download_url")
+            if (name.isBlank() || url.isBlank()) continue
+            val asset = ReleaseAsset(name, url, item.optLong("size"))
+            when {
+                name.endsWith(".apk", ignoreCase = true) && apk == null -> apk = asset
+                name.endsWith(".exe", ignoreCase = true) && installer == null -> installer = asset
+            }
+        }
+        return apk to installer
+    }
+
+    suspend fun latest(currentVersion: String): ReleaseInfo? = withContext(Dispatchers.IO) {
+        var stable: ReleaseInfo? = null
+        var stableTag = ""
+        val root = fetchJson(LucentBuild.RELEASES_API)
+        if (root != null) {
+            val tag = root.optString("tag_name")
+            val isDraftOrPrerelease = root.optBoolean("draft") || root.optBoolean("prerelease")
+            if (tag.isNotBlank() && !isDraftOrPrerelease) {
+                stableTag = tag
+                if (isNewer(tag, currentVersion)) {
+                    val (apk, installer) = parseAssets(root)
+                    stable = ReleaseInfo(
+                        tag = tag,
+                        version = tag.trimStart('v', 'V'),
+                        title = root.optString("name").ifBlank { tag },
+                        apk = apk,
+                        installer = installer,
+                        notesUrl = root.optString("html_url"),
+                        channel = "stable"
+                    )
                 }
             }
         }
 
-        ReleaseInfo(
-            tag = tag,
-            version = tag.trimStart('v', 'V'),
-            title = root.optString("name").ifBlank { tag },
-            apk = apk,
-            installer = installer,
-            notesUrl = root.optString("html_url")
-        )
+        var candidate = stable
+        if (SettingsCache.updateChannel == "preview") {
+            val preview = PreviewChecker.getPreviewCandidate(client)
+            if (preview != null) {
+                val stableNow = stable
+                candidate = when {
+                    stableNow == null -> preview
+                    isNewer(AutoUpdate.installer?.versionOf(preview) ?: preview.version, AutoUpdate.installer?.versionOf(stableNow) ?: stableNow.version) -> preview
+                    else -> stableNow
+                }
+            }
+        }
+
+        var result = candidate ?: return@withContext null
+        val engine = AutoUpdate.installer
+        if (engine != null && !engine.hasAsset(result)) {
+            val fallback = stable
+            if (result.channel == "preview" && fallback != null && engine.hasAsset(fallback)) {
+                result = fallback
+            } else {
+                return@withContext null
+            }
+        }
+        val candidateVersion = engine?.versionOf(result) ?: result.version
+        val candidateIdentity = engine?.identityOf(result) ?: result.identity
+        val installedIdentity = SettingsCache.installedPreviewIdentity
+        if (installedIdentity.isNotBlank() && candidateIdentity == installedIdentity) return@withContext null
+        if (candidateIdentity == currentVersion) return@withContext null
+        if (result.channel == "preview") {
+            if (parseVersion(candidateVersion) == null) return@withContext null
+            if (isNewer(currentVersion, candidateVersion)) return@withContext null
+            if (candidateVersion == currentVersion && stableTag.isNotBlank()) {
+                val tagCommit = fetchTagCommit(stableTag)
+                if (tagCommit != null && candidateIdentity == tagCommit) return@withContext null
+            }
+        }
+        result
     }
 }
