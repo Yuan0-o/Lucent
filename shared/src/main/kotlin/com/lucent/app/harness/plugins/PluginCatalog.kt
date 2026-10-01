@@ -52,6 +52,31 @@ object PluginCatalog {
     fun pipIndex(region: String): String =
         if (region == "cn") "https://pypi.tuna.tsinghua.edu.cn/simple" else "https://pypi.org/simple"
 
+    fun pipFallbackIndex(region: String): String =
+        if (region == "cn") "https://pypi.org/simple" else "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+    fun effectiveRegion(region: String): String {
+        if (region != "auto") return region
+        val country = try {
+            java.util.Locale.getDefault().country
+        } catch (_: Throwable) {
+            ""
+        }
+        if (country.equals("CN", ignoreCase = true)) return "cn"
+        val zone = try {
+            java.util.TimeZone.getDefault().id
+        } catch (_: Throwable) {
+            ""
+        }
+        return if (zone == "Asia/Shanghai" || zone == "Asia/Chongqing" || zone == "Asia/Chungking" ||
+            zone == "Asia/Harbin" || zone == "Asia/Urumqi" || zone == "Asia/Kashgar"
+        ) {
+            "cn"
+        } else {
+            "global"
+        }
+    }
+
     private fun desktopTool(
         id: String,
         name: String,
@@ -90,8 +115,10 @@ object PluginCatalog {
             detectCommand = "python3 -c \"import docx, openpyxl, pptx\"",
             installScript = APT_SETUP +
                 "apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates && " +
-                "pip3 install --break-system-packages --index-url {pipIndex} " +
-                "python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
+                "(pip3 install --break-system-packages --index-url {pipIndex} " +
+                "python-docx openpyxl XlsxWriter python-pptx pymupdf pandas || " +
+                "pip3 install --break-system-packages --index-url {pipFallback} " +
+                "python-docx openpyxl XlsxWriter python-pptx pymupdf pandas)",
             removeScript = "pip3 uninstall -y python-docx openpyxl XlsxWriter python-pptx pymupdf pandas",
             licence = "Python PSF-2.0; libraries MIT/BSD; PyMuPDF AGPL-3.0",
             homepage = "https://www.python.org",

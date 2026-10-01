@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -225,33 +226,49 @@ internal fun SettingsBreadcrumb(
     val context = androidx.compose.ui.platform.LocalContext.current
     val crumbs = remember(route) { SettingsTrail.trail(route) }
     val scroll = rememberScrollState()
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).horizontalScroll(scroll),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        leading()
-        crumbs.forEachIndexed { index, crumb ->
-            if (index > 0) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val titles = crumbs.map { SettingsTrail.title(it) }
+        val rootValue = rootSize.value.toDouble()
+        val glyphEm = titles.sumOf { title ->
+            title.sumOf { ch -> if (ch.code > 0x2E7F) 1.0 else 0.52 }
+        }
+        val textWidth = glyphEm * rootValue +
+            (crumbs.size - 1).coerceAtLeast(0) * (0.3 * rootValue + 8.0)
+        val available = (maxWidth.value - 28f).coerceAtLeast(1f).toDouble()
+        val scale = if (textWidth > 0.0) {
+            (available / textWidth).toFloat().coerceIn(0.7f, 1f)
+        } else {
+            1f
+        }
+        val textSize = (rootSize.value * scale).sp
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).horizontalScroll(scroll),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            leading()
+            crumbs.forEachIndexed { index, crumb ->
+                if (index > 0) {
+                    Text(
+                        "\u2013",
+                        color = onGradientMuted,
+                        fontSize = textSize / 2,
+                        modifier = Modifier.padding(horizontal = 4.dp).alignByBaseline()
+                    )
+                }
+                val isLast = index == crumbs.lastIndex
                 Text(
-                    "\u2013",
-                    color = onGradientMuted,
-                    fontSize = rootSize / 2,
-                    modifier = Modifier.padding(horizontal = 4.dp).alignByBaseline()
+                    text = titles[index],
+                    color = if (isLast) onGradient else onGradientMuted,
+                    fontSize = textSize,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .alignByBaseline()
+                        .clickable(enabled = !isLast) {
+                            Haptics.tick(context)
+                            onNavigate(crumb)
+                        }
                 )
             }
-            val isLast = index == crumbs.lastIndex
-            Text(
-                text = SettingsTrail.title(crumb),
-                color = if (isLast) onGradient else onGradientMuted,
-                fontSize = rootSize,
-                maxLines = 1,
-                modifier = Modifier
-                    .alignByBaseline()
-                    .clickable(enabled = !isLast) {
-                        Haptics.tick(context)
-                        onNavigate(crumb)
-                    }
-            )
         }
     }
 }

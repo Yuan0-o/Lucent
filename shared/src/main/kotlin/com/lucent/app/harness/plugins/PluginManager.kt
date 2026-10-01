@@ -87,11 +87,12 @@ class PluginManager private constructor(private val context: Context?, private v
                 failure = PluginFailure.NO_PLATFORM
             )
         }
-        if (script.contains("{aptMirror}")) {
-            val region = HarnessRuntime.config().pluginMirrorRegion
+        if (script.contains("{aptMirror}") || script.contains("{pipIndex}") || script.contains("{pipFallback}")) {
+            val region = PluginCatalog.effectiveRegion(HarnessRuntime.config().pluginMirrorRegion)
             script = script.replace("{aptMirror}", PluginCatalog.aptMirror(region))
                 .replace("{aptFallback}", PluginCatalog.aptFallback(region))
                 .replace("{pipIndex}", PluginCatalog.pipIndex(region))
+                .replace("{pipFallback}", PluginCatalog.pipFallbackIndex(region))
         }
         var sourceId = source.id.ifBlank { "built-in" }
         var staged: File? = null
@@ -107,7 +108,7 @@ class PluginManager private constructor(private val context: Context?, private v
             var chosen = source
             if (chosen.id.isBlank() || chosen.url.isBlank() || usable.none { it.id == chosen.id }) {
                 onProgress(0.02f, "testing download sources")
-                chosen = PluginDownload.fastest(usable, HarnessRuntime.config().pluginMirrorRegion) ?: usable.first()
+                chosen = PluginDownload.fastest(usable, PluginCatalog.effectiveRegion(HarnessRuntime.config().pluginMirrorRegion)) ?: usable.first()
             }
             sourceId = chosen.id.ifBlank { "built-in" }
             val reused = PluginPreflight.reusableStaged(plugin, chosen)
@@ -184,7 +185,7 @@ class PluginManager private constructor(private val context: Context?, private v
             )
         }
         if (!outcome.ok) {
-            val detail = outcome.text.take(1200)
+            val detail = outcome.text.takeLast(1200)
             PluginJournal.write(plugin.id, "install", detail.take(200), false)
             record(plugin, "install failed", detail)
             return PluginOutcome(

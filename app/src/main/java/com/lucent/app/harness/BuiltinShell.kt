@@ -33,6 +33,8 @@ object BuiltinShell {
             return@withContext ShellOutcome(false, "", "built-in environment is not set up yet - open the setup guide to prepare it", -1, false)
         }
 
+        ensureResolvConf(context, rootfs)
+
         val libDir = File(context.applicationInfo.nativeLibraryDir)
         val proot = File(libDir, "libproot.so")
         val tmpDir = File(context.filesDir, "proot-tmp").apply { mkdirs() }
@@ -102,5 +104,31 @@ object BuiltinShell {
         }
         val (code, stdout) = result
         ShellOutcome(code == 0, stdout, if (code == 0) "" else stdout, code, false)
+    }
+
+    private fun deviceDnsServers(context: Context): List<String> = try {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val network = manager?.activeNetwork
+        val properties = if (network != null) manager.getLinkProperties(network) else null
+        properties?.dnsServers?.mapNotNull { it.hostAddress } ?: emptyList()
+    } catch (_: Throwable) {
+        emptyList()
+    }
+
+    private fun ensureResolvConf(context: Context, rootfs: File) {
+        runCatching {
+            val resolv = File(rootfs, "etc/resolv.conf")
+            if (java.nio.file.Files.isSymbolicLink(resolv.toPath())) {
+                resolv.delete()
+            }
+            val current = if (resolv.isFile) resolv.readText() else ""
+            if (!current.contains("nameserver")) {
+                val servers = (deviceDnsServers(context) + listOf("223.5.5.5", "119.29.29.29", "8.8.8.8", "1.1.1.1"))
+                    .distinct()
+                    .take(4)
+                resolv.parentFile?.mkdirs()
+                resolv.writeText(servers.joinToString("\n") { "nameserver $it" } + "\n")
+            }
+        }
     }
 }

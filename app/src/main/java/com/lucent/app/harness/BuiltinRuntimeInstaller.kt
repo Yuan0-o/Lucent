@@ -116,6 +116,13 @@ object BuiltinRuntimeInstaller {
                 }
             }
 
+            val resolvDest = File(tmp, "etc/resolv.conf")
+            if (java.nio.file.Files.isSymbolicLink(resolvDest.toPath())) {
+                resolvDest.delete()
+            }
+            resolvDest.parentFile?.mkdirs()
+            resolvDest.writeText("nameserver 223.5.5.5\nnameserver 119.29.29.29\nnameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+
             val bash = File(tmp, "bin/bash")
             val ld = File(tmp, "lib/ld-linux-aarch64.so.1")
             val osRel = File(tmp, "etc/os-release")

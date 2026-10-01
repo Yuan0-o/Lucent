@@ -138,8 +138,11 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                                                     progress = p
                                                     statusMsg = "${tool.name}: $t"
                                                 })
-                                                if (outcome?.ok != true && failureMessage.isEmpty()) {
-                                                    failureMessage = outcome?.message.orEmpty()
+                                                if (outcome?.ok != true) {
+                                                    val detail = outcome?.detail.orEmpty().trim().takeLast(400)
+                                                    failureMessage = outcome?.message.orEmpty() +
+                                                        if (detail.isNotEmpty()) "\n$detail" else ""
+                                                    break
                                                 }
                                             }
                                         }

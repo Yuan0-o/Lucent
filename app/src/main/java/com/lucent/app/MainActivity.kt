@@ -730,7 +730,8 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                 com.lucent.app.ui.SettingsBreadcrumb(
                                     route = AppNavigation.settingsRoute,
                                     onNavigate = { SettingsNav.go(it) },
-                                    rootSize = 30.sp
+                                    rootSize = 30.sp,
+                                    modifier = Modifier.padding(end = 16.dp)
                                 )
                             } else {
                                 Text(currentScreen.label, color = onGradient, fontSize = 30.sp)
