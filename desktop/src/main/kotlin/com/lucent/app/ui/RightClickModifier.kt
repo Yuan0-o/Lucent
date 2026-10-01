@@ -1,11 +1,13 @@
 package com.lucent.app.ui
 
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 
+@OptIn(ExperimentalComposeUiApi::class)
 fun Modifier.onSecondaryClick(onClick: () -> Unit): Modifier = this.pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) {
