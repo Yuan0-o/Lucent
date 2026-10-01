@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lucent.app.i18n.S
+import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.NavCard
 import com.lucent.app.ui.SettingsRoute
@@ -16,7 +17,10 @@ import com.lucent.app.ui.SettingsRoute
 internal fun AdvancedSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth()) {
-        NavCard(S.shizukuTitle, S.shizukuEnableDesc) { onRoute(SettingsRoute.Shizuku) }
+        NavCard(
+            if (HarnessRuntime.android) S.shizukuTitle else S.advancedElevateTitle,
+            if (HarnessRuntime.android) S.shizukuEnableDesc else S.advancedElevateDesc
+        ) { onRoute(SettingsRoute.Shizuku) }
         Spacer(modifier = Modifier.height(12.dp))
         NavCard(S.settingsAgentTitle, S.settingsAgentSub) { onRoute(SettingsRoute.Agent) }
     }

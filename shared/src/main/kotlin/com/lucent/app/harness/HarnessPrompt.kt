@@ -39,6 +39,10 @@ object HarnessPrompt {
                 append("Shizuku is granted to you, so shell commands can run with its privileges on this device; ")
                 append("use that reach only for the job in front of you. ")
             }
+            if (!HarnessRuntime.android && config.shizukuForAssistant && capabilities.contains(HarnessRuntime.CAP_PRIVILEGED)) {
+                append("Your terminal commands run with administrator privileges on this computer; ")
+                append("use that reach only for the job in front of you. ")
+            }
 
             val plugins = config.installedPlugins()
             if (plugins.isEmpty()) {

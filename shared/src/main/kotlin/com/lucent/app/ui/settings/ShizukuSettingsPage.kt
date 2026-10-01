@@ -72,8 +72,8 @@ internal fun ShizukuSettingsPage(
         Spacer(modifier = Modifier.height(12.dp))
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
             ToolkitToggleRow(
-                title = S.shizukuForAssistant,
-                subtitle = S.shizukuForAssistantSub,
+                title = if (HarnessRuntime.android) S.shizukuForAssistant else S.assistantTerminalPrivilegeTitle,
+                subtitle = if (HarnessRuntime.android) S.shizukuForAssistantSub else S.assistantTerminalPrivilegeDesc,
                 checked = config.shizukuForAssistant,
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted,

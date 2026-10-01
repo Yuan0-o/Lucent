@@ -32,7 +32,13 @@ object DesktopHarnessShell : HarnessShell {
 
     fun isWindows(): Boolean = System.getProperty("os.name", "").lowercase().contains("win")
 
-    override fun capabilityNames(): Set<String> = setOf("shell", "process")
+    override fun capabilityNames(): Set<String> = buildSet {
+        add("shell")
+        add("process")
+        if (HarnessRuntime.config().shizukuForAssistant &&
+            com.lucent.app.data.SettingsCache.privilegedEnabled && com.lucent.app.data.DesktopShell.isElevated()
+        ) add(HarnessRuntime.CAP_PRIVILEGED)
+    }
 
     override suspend fun run(
         command: String,
@@ -42,10 +48,20 @@ object DesktopHarnessShell : HarnessShell {
         onOutput: ((String) -> Unit)?
     ): ShellOutcome = withContext(Dispatchers.IO) {
         try {
+            val assistantElevated = HarnessRuntime.config().shizukuForAssistant &&
+                com.lucent.app.data.SettingsCache.privilegedEnabled && com.lucent.app.data.DesktopShell.isElevated()
             val builder = if (isWindows()) {
                 ProcessBuilder("cmd", "/c", command)
             } else {
                 ProcessBuilder("/bin/sh", "-lc", command)
+            }
+            if (isWindows() && com.lucent.app.data.DesktopShell.isElevated() && !assistantElevated) {
+                return@withContext ShellOutcome(
+                    false,
+                    "",
+                    "Assistant commands require Terminal for the assistant to be enabled. Restart Lucent without administrator privileges to run standard-user commands.",
+                    -1
+                )
             }
             if (workdir != null && workdir.isDirectory) builder.directory(workdir)
             if (env.isNotEmpty()) builder.environment().putAll(env)

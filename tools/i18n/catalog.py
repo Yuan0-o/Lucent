@@ -1472,6 +1472,8 @@ ENTRIES = [
     ("advancedStandardStatus", "Lucent is running with standard privileges", "Lucent 正以普通权限运行", "Lucent は標準権限で実行中です", "Lucent가 일반 권한으로 실행 중입니다"),
     ("advancedElevateAction", "Restart as administrator", "以管理员身份重启", "管理者として再起動", "관리자로 다시 시작"),
     ("advancedElevateFailed", "Elevation was declined or is unavailable on this system.", "提权被拒绝，或此系统不支持。", "昇格が拒否されたか、このシステムでは利用できません。", "권한 상승이 거부되었거나 이 시스템에서 사용할 수 없습니다."),
+    ("assistantTerminalPrivilegeTitle", "Terminal for the assistant", "给予助手终端权限", "assistant にターミナルを許可", "어시스턴트에 터미널 권한 부여"),
+    ("assistantTerminalPrivilegeDesc", "Let the assistant run commands in Lucent's built-in terminal. Commands use administrator privileges when privileged mode is on.", "允许助手在 Lucent 内置终端中运行命令。启用特权模式时，命令将使用管理员权限。", "assistant が Lucent 内蔵ターミナルでコマンドを実行できるようにします。特権モードがオンの場合、管理者権限で実行します。", "어시스턴트가 Lucent 내장 터미널에서 명령을 실행하도록 허용합니다. 특권 모드가 켜져 있으면 관리자 권한으로 실행합니다."),
     ("updateAvailableTitle", "Update available", "有可用更新", "更新があります", "업데이트 있음"),
     ("updateAvailableBody(version: String)", "Lucent {version} is ready. Download it now and Lucent will install it for you.", "Lucent {version} 已就绪。现在下载，Lucent 会为你完成安装。", "Lucent {version} の準備ができました。今すぐダウンロードすれば Lucent がインストールします。", "Lucent {version} 준비 완료. 지금 내려받으면 Lucent가 설치합니다."),
     ("updateInstallNow", "Update now", "立即更新", "今すぐ更新", "지금 업데이트"),
@@ -1889,4 +1891,3 @@ CONDITIONAL_ENTRIES = {
     "notebooksTotal(count: Int)": ["if (count == 1) \"1 notebook\" else \"$count notebooks\"", "\"$count 个笔记本\"", "\"ノートブック ${count} 冊\"", "\"노트북 ${count}개\""],
     "notebookItemsCount(count: Int)": ["if (count == 1) \"1 item\" else \"$count items\"", "if (count == 1) \"1 个项目\" else \"$count 个项目\"", "if (count == 1) \"1 項目\" else \"$count 項目\"", "if (count == 1) \"항목 1개\" else \"항목 ${count}개\""],
 }
-

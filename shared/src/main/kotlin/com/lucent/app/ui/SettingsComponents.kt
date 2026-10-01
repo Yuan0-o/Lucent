@@ -187,7 +187,7 @@ internal object SettingsTrail {
         SettingsRoute.Groups -> S.agentGroupsTitle
         SettingsRoute.Execution -> S.agentSandboxTitle
         SettingsRoute.Github -> S.agentGithubTitle
-        SettingsRoute.Shizuku -> S.shizukuTitle
+        SettingsRoute.Shizuku -> if (com.lucent.app.harness.HarnessRuntime.android) S.shizukuTitle else S.advancedElevateTitle
         SettingsRoute.Plugins -> S.agentPluginsTitle
         SettingsRoute.PluginSetup -> S.setupWizardTitle
         SettingsRoute.Mcp -> S.agentMcpTitle

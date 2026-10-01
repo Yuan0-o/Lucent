@@ -13,6 +13,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.LucentBuild
+import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.LocalOnGradient
@@ -103,7 +104,7 @@ internal fun LicenceSettingsPage(onRoute: (SettingsRoute) -> Unit, onOpenUrl: ((
         Spacer(modifier = Modifier.height(6.dp))
         Text(S.licencesOptionalNote, color = onGradientMuted, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(12.dp))
-        ENTRIES.forEach { entry ->
+        ENTRIES.filter { HarnessRuntime.android || it.name != "Shizuku API" }.forEach { entry ->
             Text(entry.name, color = onGradient, fontSize = 13.sp)
             Text("${entry.holder} · ${entry.licence}", color = onGradientMuted, fontSize = 11.sp)
             Text(
