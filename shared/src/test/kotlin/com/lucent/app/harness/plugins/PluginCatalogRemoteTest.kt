@@ -9,7 +9,7 @@ class PluginCatalogRemoteTest {
     @Test
     fun testMergeAddNew() {
         val static = listOf(
-            PluginSpec("base", "Base", "", true, true, 0L, emptyList(), "", "", "", "", "", false, false, "", "", "")
+            PluginSpec("base", "Base", "", true, true, 0L, emptyList(), "", "", "", "", "", false, "", "", "")
         )
         val u1 = "https:" + "//example.com/1"
         val json = """
@@ -36,7 +36,7 @@ class PluginCatalogRemoteTest {
     fun testMergeSources() {
         val staticSource = PluginSource("s0", "S0", "https:" + "//existing.com")
         val static = listOf(
-            PluginSpec("base", "Base", "", true, true, 0L, listOf(staticSource), "", "", "", "", "", false, false, "", "", "")
+            PluginSpec("base", "Base", "", true, true, 0L, listOf(staticSource), "", "", "", "", "", false, "", "", "")
         )
         val u0 = "https:" + "//existing.com"
         val u1 = "https:" + "//new.com"
@@ -64,7 +64,7 @@ class PluginCatalogRemoteTest {
     @Test
     fun testNeverRemoveStaticAndSkipMalformed() {
         val static = listOf(
-            PluginSpec("base", "Base", "", true, true, 0L, emptyList(), "", "", "", "", "", false, false, "", "", "")
+            PluginSpec("base", "Base", "", true, true, 0L, emptyList(), "", "", "", "", "", false, "", "", "")
         )
         val json = """
         [
