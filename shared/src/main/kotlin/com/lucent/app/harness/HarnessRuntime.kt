@@ -3,6 +3,7 @@ package com.lucent.app.harness
 import com.lucent.app.AppScope
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
+import com.lucent.app.harness.terminal.PtyBackend
 import java.io.File
 
 data class ShellOutcome(
@@ -146,6 +147,7 @@ object HarnessRuntime {
     @Volatile var host: HarnessHost? = null
     @Volatile var shell: HarnessShell? = null
     @Volatile var pluginHost: PluginHost? = null
+    @Volatile var terminalBackend: PtyBackend? = null
     @Volatile var llm: SubAgentLlm? = null
     @Volatile var conversationId: Long = 0L
     @Volatile var noteSink: ((String) -> Unit)? = null

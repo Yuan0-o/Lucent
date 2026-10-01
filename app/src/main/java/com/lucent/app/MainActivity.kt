@@ -222,6 +222,7 @@ class MainActivity : FragmentActivity() {
         com.lucent.app.harness.HarnessRuntime.shell = com.lucent.app.harness.AndroidHarnessShell(applicationContext)
         com.lucent.app.harness.HarnessRuntime.pluginHost =
             com.lucent.app.harness.plugins.PluginManager.android(applicationContext)
+        com.lucent.app.harness.HarnessRuntime.terminalBackend = com.lucent.app.harness.AndroidPtyBackend(applicationContext)
         AppScope.io.launch {
             val raw = runCatching { settingsRepo.harnessConfigOnce() }.getOrDefault("")
             val config = com.lucent.app.harness.HarnessConfig.parse(raw)

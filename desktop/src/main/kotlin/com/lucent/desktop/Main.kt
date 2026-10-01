@@ -86,6 +86,7 @@ fun main() {
     com.lucent.app.harness.HarnessRuntime.host = com.lucent.app.harness.DesktopHarnessHost
     com.lucent.app.harness.HarnessRuntime.shell = com.lucent.app.harness.DesktopHarnessShell
     com.lucent.app.harness.HarnessRuntime.pluginHost = com.lucent.app.harness.plugins.PluginManager.desktop(android.content.DesktopContext)
+    com.lucent.app.harness.HarnessRuntime.terminalBackend = com.lucent.app.harness.DesktopPtyBackend
     AppScope.io.launch {
         val raw = runCatching { SettingsRepository(context).harnessConfigOnce() }.getOrDefault("")
         val config = com.lucent.app.harness.HarnessConfig.parse(raw)
