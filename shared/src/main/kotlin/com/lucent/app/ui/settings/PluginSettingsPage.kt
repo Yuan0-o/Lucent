@@ -62,6 +62,8 @@ internal fun PluginSettingsPage(
     val onGradientMuted = LocalOnGradientMuted.current
     val scope = rememberCoroutineScope()
     var config by remember { mutableStateOf(HarnessRuntime.config()) }
+    var logLines by remember { mutableStateOf<List<String>>(emptyList()) }
+    var activeLogOwner by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf(0f) }
@@ -123,14 +125,19 @@ internal fun PluginSettingsPage(
         busy = plugin.id
         progress = 0f
         note = plugin.name
+        logLines = emptyList()
+        activeLogOwner = plugin.id
+        val onOutput: (String) -> Unit = { line ->
+            logLines = (logLines + line).takeLast(300)
+        }
         running = scope.launch {
             val outcome = if (remove) {
-                target.remove(plugin)
+                target.remove(plugin, onOutput)
             } else {
-                target.install(plugin, PluginSource("", "", "")) { fraction, label ->
+                target.install(plugin, PluginSource("", "", ""), onProgress = { fraction, label ->
                     progress = fraction
                     note = "${plugin.name}: $label"
-                }
+                }, onOutput = onOutput)
             }
             config = HarnessRuntime.config()
             busy = ""
@@ -173,14 +180,19 @@ internal fun PluginSettingsPage(
         val target = HarnessRuntime.pluginHost
         if (target == null) return
         bannerRunning = true
+        logLines = emptyList()
+        activeLogOwner = "banner"
+        val onOutput: (String) -> Unit = { line ->
+            logLines = (logLines + line).takeLast(300)
+        }
         scope.launch {
             val pendingList = config.pluginPendingReinstall.toList()
             for (id in pendingList) {
                 val plugin = effectivePlugins.firstOrNull { it.id == id } ?: PluginCatalog.find(id) ?: continue
-                val outcome = target.install(plugin, PluginSource("", "", "")) { fraction, label ->
+                val outcome = target.install(plugin, PluginSource("", "", ""), onProgress = { fraction, label ->
                     progress = fraction
                     note = "${plugin.name}: $label"
-                }
+                }, onOutput = onOutput)
                 if (outcome.ok) {
                     val next = HarnessRuntime.config().copy(
                         pluginPendingReinstall = HarnessRuntime.config().pluginPendingReinstall - id
@@ -204,11 +216,16 @@ internal fun PluginSettingsPage(
                 running = bannerRunning,
                 progress = progress,
                 note = note,
+                logLines = if (activeLogOwner == "banner") logLines else emptyList(),
                 onReinstall = { startPendingReinstall() },
                 onDismiss = {
                     val next = config.copy(pluginPendingReinstall = emptyList())
                     HarnessRuntime.update(next)
                     config = next
+                },
+                onClearLog = {
+                    logLines = emptyList()
+                    activeLogOwner = ""
                 },
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted
@@ -360,10 +377,12 @@ internal fun PluginSettingsPage(
                 busy = busy == plugin.id,
                 progress = progress,
                 note = if (busy == plugin.id) note else "",
+                logLines = if (activeLogOwner == plugin.id) logLines else emptyList(),
                 onGradient = onGradient,
                 onGradientMuted = onGradientMuted,
                 onAction = { runAction(plugin, it) },
-                onCancel = { cancelRunning() }
+                onCancel = { cancelRunning() },
+                onClearLog = { logLines = emptyList() }
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -487,10 +506,12 @@ private fun PluginRow(
     busy: Boolean,
     progress: Float,
     note: String,
+    logLines: List<String>,
     onGradient: androidx.compose.ui.graphics.Color,
     onGradientMuted: androidx.compose.ui.graphics.Color,
     onAction: (Boolean) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onClearLog: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -520,6 +541,15 @@ private fun PluginRow(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(note, color = onGradientMuted, fontSize = 11.sp)
             }
+        }
+        if (busy || logLines.isNotEmpty()) {
+            PluginOutputLog(
+                lines = logLines,
+                running = busy,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClear = onClearLog
+            )
         }
     }
 }
@@ -688,8 +718,10 @@ private fun PendingReinstallCard(
     running: Boolean,
     progress: Float,
     note: String,
+    logLines: List<String>,
     onReinstall: () -> Unit,
     onDismiss: () -> Unit,
+    onClearLog: () -> Unit,
     onGradient: androidx.compose.ui.graphics.Color,
     onGradientMuted: androidx.compose.ui.graphics.Color
 ) {
@@ -714,6 +746,55 @@ private fun PendingReinstallCard(
                     Text(S.actionDismiss)
                 }
             }
+        }
+        if (running || logLines.isNotEmpty()) {
+            PluginOutputLog(
+                lines = logLines,
+                running = running,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClear = onClearLog
+            )
+        }
+    }
+}
+
+@Composable
+private fun PluginOutputLog(
+    lines: List<String>,
+    running: Boolean,
+    onGradient: androidx.compose.ui.graphics.Color,
+    onGradientMuted: androidx.compose.ui.graphics.Color,
+    onClear: () -> Unit
+) {
+    if (lines.isEmpty()) return
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(S.pluginOutputTitle, color = onGradient, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, modifier = Modifier.weight(1f))
+            if (!running) {
+                TextButton(onClick = onClear) {
+                    Text(S.actionClear, color = onGradientMuted, fontSize = 11.sp)
+                }
+            }
+        }
+        val scroll = rememberScrollState()
+        LaunchedEffect(lines.size) {
+            scroll.animateScrollTo(scroll.maxValue)
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 180.dp)
+                .verticalScroll(scroll)
+        ) {
+            val text = lines.joinToString("\n")
+            Text(
+                text = text,
+                color = onGradientMuted,
+                fontSize = 11.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                lineHeight = 16.sp
+            )
         }
     }
 }

@@ -1730,6 +1730,7 @@ ENTRIES = [
     ("pluginDownloaded", "Downloaded, not installed", "已下载，未安装", "ダウンロード済み・未インストール", "내려받음, 설치 안 됨"),
     ("agentPluginsUnavailable", "This build cannot install plugins.", "此版本无法安装插件。", "このビルドではプラグインをインストールできません。", "이 빌드에서는 플러그인을 설치할 수 없습니다."),
     ("pluginDetailTitle", "Shell output", "shell 输出", "シェル出力", "셸 출력"),
+    ("pluginOutputTitle", "Live output", "实时输出", "ライブ出力", "실시간 출력"),
     ("pluginReasonCancelled", "The download was cancelled and the part that had arrived was deleted.", "已取消下载，未完成的部分已删除。", "ダウンロードを中止し、途中まで取得した部分は削除しました。", "내려받기를 취소했고 받던 부분은 삭제했습니다."),
     ("pluginPreflightTitle", "Preflight check", "安装前检查", "事前チェック", "설치 전 검사"),
     ("pluginPreflightBlocked", "Lucent checked first and found a problem:", "Lucent 先检查了一遍，发现了一个问题：", "Lucent が事前に確認し、問題を見つけました：", "Lucent가 먼저 확인해 문제를 찾았습니다:"),

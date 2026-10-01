@@ -33,7 +33,8 @@ private class TermuxRoutingShell : HarnessShell {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         viaRun++
         return ShellOutcome(true, "", "", 0)
@@ -42,7 +43,8 @@ private class TermuxRoutingShell : HarnessShell {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         viaTermux++
         return ShellOutcome(true, "", "", 0)
@@ -58,7 +60,8 @@ private class PreflightShell(private val respond: (String) -> ShellOutcome) : Ha
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         seen.add(command)
         return respond(command)

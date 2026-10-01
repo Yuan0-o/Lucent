@@ -51,15 +51,16 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         val dir = workdir ?: HarnessRuntime.workspace()
         val b = backend()
         if (b == RuntimeBackend.BUILTIN) {
-            return BuiltinShell.run(context, command, dir, timeoutSeconds.coerceIn(1, 7200) * 1000L, env)
+            return BuiltinShell.run(context, command, dir, timeoutSeconds.coerceIn(1, 7200) * 1000L, env, onOutput)
         }
         if (b == RuntimeBackend.TERMUX) {
-            return TermuxBridge.run(context, command, dir, timeoutSeconds, env)
+            return TermuxBridge.run(context, command, dir, timeoutSeconds, env, onOutput)
         }
         return ShellOutcome(
             false,
@@ -75,7 +76,8 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         val dir = workdir ?: HarnessRuntime.workspace()
         if (privilegedReady()) {
@@ -100,10 +102,10 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
         
         val b = backend()
         if (b == RuntimeBackend.BUILTIN) {
-            return BuiltinShell.run(context, command, dir, timeoutSeconds.coerceIn(1, 7200) * 1000L, env)
+            return BuiltinShell.run(context, command, dir, timeoutSeconds.coerceIn(1, 7200) * 1000L, env, onOutput)
         }
         if (b == RuntimeBackend.TERMUX) {
-            return TermuxBridge.run(context, command, dir, timeoutSeconds, env)
+            return TermuxBridge.run(context, command, dir, timeoutSeconds, env, onOutput)
         }
         return ShellOutcome(
             false,

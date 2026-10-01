@@ -26,7 +26,8 @@ object BuiltinShell {
         command: String,
         workspace: File,
         timeoutMs: Long,
-        env: Map<String, String> = emptyMap()
+        env: Map<String, String> = emptyMap(),
+        onOutput: ((String) -> Unit)? = null
     ): ShellOutcome = withContext(Dispatchers.IO) {
         val binary = prootBinary(context)
             ?: return@withContext ShellOutcome(false, "", "built-in runtime is not bundled in this build", -1, false)
@@ -75,10 +76,26 @@ object BuiltinShell {
 
         pb.redirectErrorStream(true)
         val process = pb.start()
+        val fullOutput = StringBuilder()
+        val tailer = StreamTailer()
+        
         val result = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
-            val out = process.inputStream.bufferedReader().use { it.readText() }
+            process.inputStream.use { stream ->
+                val buffer = ByteArray(4096)
+                var read: Int
+                while (stream.read(buffer).also { read = it } != -1) {
+                    val chunk = buffer.copyOfRange(0, read)
+                    fullOutput.append(String(chunk))
+                    if (onOutput != null) {
+                        tailer.processNewBytes(chunk, onOutput)
+                    }
+                }
+            }
+            if (onOutput != null) {
+                tailer.flush(onOutput)
+            }
             process.waitFor()
-            Pair(process.exitValue(), out)
+            Pair(process.exitValue(), fullOutput.toString())
         }
         if (result == null) {
             process.destroy()

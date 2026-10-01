@@ -65,7 +65,8 @@ object TermuxBridge {
         command: String,
         workdir: File,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)? = null
     ): ShellOutcome = withContext(Dispatchers.IO) {
         if (!installed(context)) {
             return@withContext ShellOutcome(false, "", "Termux is not installed", -1)
@@ -113,9 +114,33 @@ object TermuxBridge {
             return@withContext ShellOutcome(false, "", lastError, -1)
         }
         val deadline = System.currentTimeMillis() + timeoutSeconds.coerceIn(1, 7200) * 1000L
+        val tailer = StreamTailer()
         while (System.currentTimeMillis() < deadline) {
+            if (onOutput != null && outFile.exists()) {
+                val len = outFile.length()
+                if (len > tailer.offset) {
+                    java.io.RandomAccessFile(outFile, "r").use { raf ->
+                        raf.seek(tailer.offset)
+                        val chunk = ByteArray((len - tailer.offset).toInt())
+                        raf.readFully(chunk)
+                        tailer.processNewBytes(chunk, onOutput)
+                    }
+                }
+            }
             if (codeFile.exists()) break
             delay(300)
+        }
+        if (onOutput != null && outFile.exists()) {
+            val len = outFile.length()
+            if (len > tailer.offset) {
+                java.io.RandomAccessFile(outFile, "r").use { raf ->
+                    raf.seek(tailer.offset)
+                    val chunk = ByteArray((len - tailer.offset).toInt())
+                    raf.readFully(chunk)
+                    tailer.processNewBytes(chunk, onOutput)
+                }
+            }
+            tailer.flush(onOutput)
         }
         if (!codeFile.exists()) {
             if (!permissionDeclared(context)) {

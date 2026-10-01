@@ -30,7 +30,8 @@ private class ScriptedShell(private val respond: (String) -> ShellOutcome) : Har
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         seen.add(command)
         return respond(command)

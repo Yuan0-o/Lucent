@@ -44,7 +44,8 @@ class PluginManager private constructor(private val context: Context?, private v
     override suspend fun install(
         plugin: PluginSpec,
         source: PluginSource,
-        onProgress: (Float, String) -> Unit
+        onProgress: (Float, String) -> Unit,
+        onOutput: ((String) -> Unit)?
     ): PluginOutcome {
         var script = plugin.installFor(android)
         if (script.isBlank()) {
@@ -132,7 +133,7 @@ class PluginManager private constructor(private val context: Context?, private v
         }
         if (android && script.contains("pkg install") && !pkgListFresh) {
             onProgress(0.58f, "refreshing the Termux package list")
-            val refreshed = run(plugin, "pkg update", 600)
+            val refreshed = run(plugin, "pkg update", 600, onOutput)
             pkgListFresh = refreshed.ok
             if (!refreshed.ok) {
                 record(plugin, "pkg update failed", refreshed.text.take(400))
@@ -141,7 +142,7 @@ class PluginManager private constructor(private val context: Context?, private v
         onProgress(0.6f, "installing")
         PluginJournal.write(plugin.id, "install", sourceId, false)
         val outcome = try {
-            run(plugin, script, 3600)
+            run(plugin, script, 3600, onOutput)
         } catch (e: kotlinx.coroutines.CancellationException) {
             record(plugin, "install cancelled", staged?.path.orEmpty())
             return PluginOutcome(
@@ -196,7 +197,7 @@ class PluginManager private constructor(private val context: Context?, private v
         return PluginOutcome(true, "${plugin.name} is installed")
     }
 
-    override suspend fun remove(plugin: PluginSpec): PluginOutcome {
+    override suspend fun remove(plugin: PluginSpec, onOutput: ((String) -> Unit)?): PluginOutcome {
         if (!isReady()) {
             return PluginOutcome(
                 false,
@@ -205,7 +206,7 @@ class PluginManager private constructor(private val context: Context?, private v
             )
         }
         val script = plugin.removeFor(android)
-        val outcome = if (script.isBlank()) ShellOutcome(true, "", "", 0) else run(plugin, script, 1800)
+        val outcome = if (script.isBlank()) ShellOutcome(true, "", "", 0) else run(plugin, script, 1800, onOutput)
         if (!outcome.ok) {
             record(plugin, "remove failed", outcome.text.take(400))
             return PluginOutcome(
@@ -229,17 +230,17 @@ class PluginManager private constructor(private val context: Context?, private v
         timeoutSeconds: Int
     ): ShellOutcome = run(plugin, command, timeoutSeconds)
 
-    private suspend fun run(plugin: PluginSpec, script: String, timeoutSeconds: Int): ShellOutcome {
+    private suspend fun run(plugin: PluginSpec, script: String, timeoutSeconds: Int, onOutput: ((String) -> Unit)? = null): ShellOutcome {
         if (script.isBlank()) return ShellOutcome(false, "", "This plugin has nothing to run.", -1)
-        return runScript(plugin, script, timeoutSeconds)
+        return runScript(plugin, script, timeoutSeconds, onOutput)
     }
 
-    private suspend fun runScript(plugin: PluginSpec, script: String, timeoutSeconds: Int): ShellOutcome {
+    private suspend fun runScript(plugin: PluginSpec, script: String, timeoutSeconds: Int, onOutput: ((String) -> Unit)? = null): ShellOutcome {
         val wrapped = wrap(plugin, script)
         return if (android && plugin.termuxOnly) {
-            HarnessRuntime.runTermuxAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds)
+            HarnessRuntime.runTermuxAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds, onOutput = onOutput)
         } else {
-            HarnessRuntime.runShellAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds)
+            HarnessRuntime.runShellAsync(wrapped, HarnessRuntime.workspace(), timeoutSeconds, onOutput = onOutput)
         }
     }
 

@@ -38,7 +38,8 @@ object DesktopHarnessShell : HarnessShell {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)?
     ): ShellOutcome = withContext(Dispatchers.IO) {
         try {
             val builder = if (isWindows()) {
@@ -53,13 +54,19 @@ object DesktopHarnessShell : HarnessShell {
             val stderr = StringBuilder()
             val reader = Thread {
                 try {
-                    process.inputStream.bufferedReader().forEachLine { synchronized(stdout) { stdout.append(it).append('\n') } }
+                    process.inputStream.bufferedReader().forEachLine {
+                        synchronized(stdout) { stdout.append(it).append('\n') }
+                        onOutput?.invoke(it)
+                    }
                 } catch (_: Throwable) {
                 }
             }
             val errorReader = Thread {
                 try {
-                    process.errorStream.bufferedReader().forEachLine { synchronized(stderr) { stderr.append(it).append('\n') } }
+                    process.errorStream.bufferedReader().forEachLine {
+                        synchronized(stderr) { stderr.append(it).append('\n') }
+                        onOutput?.invoke(it)
+                    }
                 } catch (_: Throwable) {
                 }
             }

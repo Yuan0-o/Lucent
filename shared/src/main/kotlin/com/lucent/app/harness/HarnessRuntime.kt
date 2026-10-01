@@ -33,15 +33,17 @@ interface HarnessShell {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)? = null
     ): ShellOutcome
 
     suspend fun runInTermux(
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String>
-    ): ShellOutcome = run(command, workdir, timeoutSeconds, env)
+        env: Map<String, String>,
+        onOutput: ((String) -> Unit)? = null
+    ): ShellOutcome = run(command, workdir, timeoutSeconds, env, onOutput)
 
     fun capabilityNames(): Set<String> = setOf("shell")
 }
@@ -54,10 +56,11 @@ interface PluginHost {
     suspend fun install(
         plugin: PluginSpec,
         source: PluginSource,
-        onProgress: (Float, String) -> Unit
+        onProgress: (Float, String) -> Unit,
+        onOutput: ((String) -> Unit)? = null
     ): PluginOutcome
 
-    suspend fun remove(plugin: PluginSpec): PluginOutcome
+    suspend fun remove(plugin: PluginSpec, onOutput: ((String) -> Unit)? = null): PluginOutcome
     suspend fun detect(plugin: PluginSpec): Boolean
     suspend fun runPluginCommand(plugin: PluginSpec, command: String, timeoutSeconds: Int): ShellOutcome
 }
@@ -224,24 +227,26 @@ object HarnessRuntime {
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String> = emptyMap()
+        env: Map<String, String> = emptyMap(),
+        onOutput: ((String) -> Unit)? = null
     ): ShellOutcome {
         val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
         if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
         if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
-        return sh.run(command, workdir, timeoutSeconds, env)
+        return sh.run(command, workdir, timeoutSeconds, env, onOutput)
     }
 
     suspend fun runTermuxAsync(
         command: String,
         workdir: File?,
         timeoutSeconds: Int,
-        env: Map<String, String> = emptyMap()
+        env: Map<String, String> = emptyMap(),
+        onOutput: ((String) -> Unit)? = null
     ): ShellOutcome {
         val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
         if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
         if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
-        return sh.runInTermux(command, workdir, timeoutSeconds, env)
+        return sh.runInTermux(command, workdir, timeoutSeconds, env, onOutput)
     }
 
     fun downloadsDir(): File {
