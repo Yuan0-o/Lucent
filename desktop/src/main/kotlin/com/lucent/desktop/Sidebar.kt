@@ -112,7 +112,7 @@ fun Sidebar(current: Screen, recentNotebooks: List<Notebook> = emptyList(), onSe
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = onGradient)
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("Lucent", color = onGradient, fontSize = 14.sp)
+                Text("Lucent", color = onGradient, fontSize = 13.sp)
             }
             Text("Windows", color = onGradientMuted, fontSize = 12.sp)
             Spacer(modifier = Modifier.width(12.dp))
