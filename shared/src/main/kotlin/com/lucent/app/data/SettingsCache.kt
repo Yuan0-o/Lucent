@@ -188,6 +188,13 @@ object SettingsCache {
     @Volatile
     var privilegedEnabled: Boolean = false
 
+
+    @Volatile
+    var terminalFontSize: Float? = null
+
+    @Volatile
+    var terminalKeyBarVisible: Boolean = true
+
     @Volatile
     var cloudPasswordEnc: String = ""
 
@@ -255,6 +262,9 @@ object SettingsCache {
         cloudUser = prefs.cloudUser
         cloudFolder = prefs.cloudFolder
         cloudAutoBackup = prefs.cloudAutoBackup
+
+        terminalFontSize = prefs.terminalFontSize
+        terminalKeyBarVisible = prefs.terminalKeyBarVisible
         cloudPasswordEnc = prefs.cloudPasswordEnc
         autoUpdateEnabled = prefs.autoUpdateEnabled
         privilegedEnabled = prefs.privilegedEnabled

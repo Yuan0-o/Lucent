@@ -205,6 +205,17 @@ fun AssistantChatBody(
         scope.launch { repo.saveApiProfiles(updated, idx) }
     }
 
+    var terminalOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(com.lucent.app.AppNavigation.terminalRequested) {
+        if (com.lucent.app.AppNavigation.consumeTerminal()) {
+            terminalOpen = true
+        }
+    }
+
+    if (terminalOpen) {
+        TerminalScreen(onBack = { terminalOpen = false })
+    } else {
     var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
 
     var attachMenuOpen by remember { mutableStateOf(false) }
@@ -805,6 +816,13 @@ fun AssistantChatBody(
                     diameter = 40.dp
                 )
                 GlassRoundButton(
+                    icon = androidx.compose.material.icons.Icons.Default.Terminal,
+                    contentDescription = com.lucent.app.i18n.S.tabTerminal,
+                    onClick = { com.lucent.app.AppNavigation.requestTerminal() },
+                    tint = onGradient,
+                    diameter = 40.dp
+                )
+                GlassRoundButton(
                     icon = Icons.Default.Add,
                     contentDescription = com.lucent.app.i18n.S.newConversation,
                     onClick = {
@@ -1351,6 +1369,7 @@ fun AssistantChatBody(
             }
         }
     }
+}
 }
 
 @Composable

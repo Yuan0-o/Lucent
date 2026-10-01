@@ -145,6 +145,10 @@ ENTRIES = [
     ("encryptionCheckPassed", "Check passed — values are sealed and open correctly.", "自检通过——数据可正确加密并解密。", "チェックに合格しました——値は正しく封印され、復号できます。", "검사 통과 — 값이 정상적으로 봉인되고 복호화됩니다."),
     ("encryptionCheckFailed(reason: String)", "Check failed: {reason}", "自检失败：{reason}", "チェックに失敗しました：{reason}", "검사 실패: {reason}"),
 
+
+    ("tabTerminal", "Terminal", "终端", "ターミナル", "터미널"),
+    ("terminalSetupGuidance", "The terminal environment is not ready. Please follow the setup guide first.", "终端环境未就绪，请先完成配置流程。", "ターミナル環境の準備ができていません。先にセットアップを完了してください。", "터미널 환경이 준비되지 않았습니다. 먼저 설정 과정을 완료해 주세요."),
+    ("terminalToggleKeyBar", "Toggle key bar", "切换快捷键栏", "キーバーの切り替え", "키 바 전환"),
     ("tabTasks", "Tasks", "任务", "タスク", "할 일"),
     ("tabNotes", "Notes", "笔记", "メモ", "노트"),
     ("tabAssistant", "Assistant", "助手", "アシスタント", "어시스턴트"),

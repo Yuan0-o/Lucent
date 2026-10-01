@@ -33,6 +33,17 @@ object AppNavigation {
     internal var settingsRoute by mutableStateOf(SettingsRoute.Root)
         private set
 
+
+    var terminalRequested by mutableStateOf(false)
+        private set
+
+    fun requestTerminal() {
+        terminalRequested = true
+        requestedScreen = Screen.Assistant
+    }
+
+    fun consumeTerminal(): Boolean = terminalRequested.also { terminalRequested = false }
+
     var composeNoteRequested by mutableStateOf(false)
         private set
 

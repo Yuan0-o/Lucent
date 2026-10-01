@@ -220,6 +220,8 @@ internal object BackupManifestBuilder {
             .put("cloudUrl", settings.cloudUrl.first())
             .put("cloudUser", settings.cloudUser.first())
             .put("cloudPasswordEnc", settings.cloudPasswordEnc.first())
+            .put("terminalFontSize", settings.terminalFontSize.first()?.toDouble() ?: 14.0)
+            .put("terminalKeyBarVisible", settings.terminalKeyBarVisible.first())
             .put("cloudFolder", settings.cloudFolder.first())
             .put("cloudAutoBackup", settings.cloudAutoBackup.first())
             .put("noteHistoryEnabled", settings.noteHistoryEnabled.first())

@@ -395,6 +395,8 @@ internal object BackupImporter {
                 if (restoreGeneral && s.has("cloudUrl")) settings.setCloudUrl(s.optString("cloudUrl"))
                 if (restoreGeneral && s.has("cloudUser")) settings.setCloudUser(s.optString("cloudUser"))
                 if (restoreGeneral && s.has("cloudPasswordEnc")) settings.setCloudPasswordEnc(s.optString("cloudPasswordEnc"))
+                if (restoreGeneral && s.has("terminalFontSize")) settings.setTerminalFontSize(s.optDouble("terminalFontSize", 14.0).toFloat())
+                if (restoreGeneral && s.has("terminalKeyBarVisible")) settings.setTerminalKeyBarVisible(s.optBoolean("terminalKeyBarVisible", true))
                 if (restoreGeneral && s.has("cloudFolder")) settings.setCloudFolder(s.optString("cloudFolder"))
                 if (restoreGeneral && s.has("cloudAutoBackup")) settings.setCloudAutoBackup(s.optBoolean("cloudAutoBackup"))
                 if (s.has("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s.optBoolean("noteHistoryEnabled", true))

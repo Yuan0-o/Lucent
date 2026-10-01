@@ -135,6 +135,12 @@ private object SettingsKeys {
     val PRIVILEGED_ENABLED = booleanPreferencesKey("privileged_enabled")
 
     val HARNESS_CONFIG_ENC = stringPreferencesKey("harness_config_enc")
+
+    val TERMINAL_FONT_SIZE_ENC = stringPreferencesKey("terminal_font_size_enc")
+    val LEGACY_TERMINAL_FONT_SIZE = stringPreferencesKey("terminal_font_size")
+    val TERMINAL_KEY_BAR_VISIBLE_ENC = stringPreferencesKey("terminal_key_bar_visible_enc")
+    val LEGACY_TERMINAL_KEY_BAR_VISIBLE = stringPreferencesKey("terminal_key_bar_visible")
+
 }
 
 const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
@@ -244,6 +250,9 @@ class SettingsRepository(private val context: Context) {
         val cloudUser: String = "",
         val cloudFolder: String = "Lucent",
         val cloudAutoBackup: Boolean = false,
+
+        val terminalFontSize: Float? = null,
+        val terminalKeyBarVisible: Boolean = true,
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
@@ -322,6 +331,9 @@ class SettingsRepository(private val context: Context) {
             cloudUser = prefs[SettingsKeys.CLOUD_USER] ?: "",
             cloudFolder = prefs[SettingsKeys.CLOUD_FOLDER] ?: "Lucent",
             cloudAutoBackup = prefs[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false,
+
+            terminalFontSize = secret(prefs, SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, "").toFloatOrNull(),
+            terminalKeyBarVisible = secret(prefs, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true,
             cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
             autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false,
             privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false,
@@ -809,6 +821,23 @@ class SettingsRepository(private val context: Context) {
         }
         SettingsCache.model = model
     }
+
+    val terminalFontSize: Flow<Float?> = context.settingsDataStore.data.map {
+        secret(it, SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, "").toFloatOrNull()
+    }
+    val terminalKeyBarVisible: Flow<Boolean> = context.settingsDataStore.data.map {
+        secret(it, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true
+    }
+
+    suspend fun setTerminalFontSize(value: Float) {
+        SettingsCache.terminalFontSize = value
+        putSecret(SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, value.toString())
+    }
+    suspend fun setTerminalKeyBarVisible(value: Boolean) {
+        SettingsCache.terminalKeyBarVisible = value
+        putSecret(SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, value.toString())
+    }
+
     suspend fun setAssistantName(value: String) {
         SettingsCache.assistantName = value
         putSecret(SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, value)

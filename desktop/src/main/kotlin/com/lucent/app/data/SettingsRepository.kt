@@ -95,6 +95,10 @@ class SettingsRepository(private val context: Context) {
         const val STAGED_UPDATE_FILES = "staged_update_files"
         const val PRIVILEGED_ENABLED = "privileged_enabled"
         const val HARNESS_CONFIG_ENC = "harness_config_enc"
+
+    const val TERMINAL_FONT_SIZE_ENC = "terminal_font_size_enc"
+    const val TERMINAL_KEY_BAR_VISIBLE_ENC = "terminal_key_bar_visible_enc"
+
     }
 
 
@@ -255,6 +259,9 @@ class SettingsRepository(private val context: Context) {
         val cloudUser: String = "",
         val cloudFolder: String = "Lucent",
         val cloudAutoBackup: Boolean = false,
+
+        val terminalFontSize: Float? = null,
+        val terminalKeyBarVisible: Boolean = true,
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
@@ -808,6 +815,23 @@ class SettingsRepository(private val context: Context) {
             it[K.MODEL_RECENTS] = recents
         }
     }
+
+    val terminalFontSize: Flow<Float?> = updates.map {
+        secret(it, SettingsKeys.TERMINAL_FONT_SIZE_ENC, "").toFloatOrNull()
+    }
+    val terminalKeyBarVisible: Flow<Boolean> = updates.map {
+        secret(it, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true
+    }
+
+    suspend fun setTerminalFontSize(value: Float) {
+        SettingsCache.terminalFontSize = value
+        putSecret(SettingsKeys.TERMINAL_FONT_SIZE_ENC, value.toString())
+    }
+    suspend fun setTerminalKeyBarVisible(value: Boolean) {
+        SettingsCache.terminalKeyBarVisible = value
+        putSecret(SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, value.toString())
+    }
+
     suspend fun setAssistantName(value: String) {
         SettingsCache.assistantName = value
         putSecret(K.ASSISTANT_NAME_ENC, value)
