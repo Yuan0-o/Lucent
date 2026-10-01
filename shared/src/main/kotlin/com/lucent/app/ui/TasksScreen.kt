@@ -1188,9 +1188,9 @@ fun TasksScreen(active: Boolean = true) {
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = com.lucent.app.i18n.S.copyAll, tint = onGradient)
                         }
-                        if (!task.isDone && !task.pinned) {
+                        if (!task.isDone || task.pinned) {
                             PinIconButton(
-                                pinned = false,
+                                pinned = task.pinned,
                                 onToggle = { taskToTogglePin = task }
                             )
                         }

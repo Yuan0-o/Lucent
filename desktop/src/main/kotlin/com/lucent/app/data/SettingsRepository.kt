@@ -98,6 +98,7 @@ class SettingsRepository(private val context: Context) {
 
     const val TERMINAL_FONT_SIZE_ENC = "terminal_font_size_enc"
     const val TERMINAL_KEY_BAR_VISIBLE_ENC = "terminal_key_bar_visible_enc"
+    const val GLOBAL_TEXT_SELECTION_ENABLED_ENC = "global_text_selection_enabled_enc"
     }
 
     private val file: File get() = File(context.applicationContext.filesDir, "lucent_settings.json")
@@ -260,6 +261,7 @@ class SettingsRepository(private val context: Context) {
 
         val terminalFontSize: Float? = null,
         val terminalKeyBarVisible: Boolean = true,
+        val globalTextSelectionEnabled: Boolean = false,
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
@@ -338,6 +340,7 @@ class SettingsRepository(private val context: Context) {
             cloudAutoBackup = bool(prefs, K.CLOUD_AUTO_BACKUP) ?: false,
             terminalFontSize = secret(prefs, K.TERMINAL_FONT_SIZE_ENC, "").toFloatOrNull(),
             terminalKeyBarVisible = secret(prefs, K.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true,
+            globalTextSelectionEnabled = secret(prefs, K.GLOBAL_TEXT_SELECTION_ENABLED_ENC, "false").toBooleanStrictOrNull() ?: false,
             cloudPasswordEnc = str(prefs, K.CLOUD_PASSWORD_ENC) ?: "",
             autoUpdateEnabled = bool(prefs, K.AUTO_UPDATE_ENABLED) ?: false,
             privilegedEnabled = bool(prefs, K.PRIVILEGED_ENABLED) ?: false,
@@ -822,6 +825,9 @@ class SettingsRepository(private val context: Context) {
     val terminalKeyBarVisible: Flow<Boolean> = state.map {
         secret(it, K.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true
     }
+    val globalTextSelectionEnabled: Flow<Boolean> = state.map {
+        secret(it, K.GLOBAL_TEXT_SELECTION_ENABLED_ENC, "false").toBooleanStrictOrNull() ?: false
+    }
 
     suspend fun setTerminalFontSize(value: Float) {
         SettingsCache.terminalFontSize = value
@@ -830,6 +836,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTerminalKeyBarVisible(value: Boolean) {
         SettingsCache.terminalKeyBarVisible = value
         putSecret(K.TERMINAL_KEY_BAR_VISIBLE_ENC, value.toString())
+    }
+    suspend fun setGlobalTextSelectionEnabled(value: Boolean) {
+        SettingsCache.globalTextSelectionEnabled = value
+        putSecret(K.GLOBAL_TEXT_SELECTION_ENABLED_ENC, value.toString())
     }
 
     suspend fun setAssistantName(value: String) {

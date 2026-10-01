@@ -42,6 +42,7 @@ internal fun EditorSettingsPage(
     val linksEnabled by repo.linksEnabled.collectAsState(initial = SettingsCache.linksEnabled)
     val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
     val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = SettingsCache.openLinksExternally)
+    val globalTextSelectionEnabled by repo.globalTextSelectionEnabled.collectAsState(initial = SettingsCache.globalTextSelectionEnabled)
 
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
@@ -84,6 +85,20 @@ internal fun EditorSettingsPage(
                 onCheckedChange = { checked ->
                     scope.launch { repo.setLinksEnabled(checked) }
                     SettingsCache.linksEnabled = checked
+                }
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(S.globalTextSelectionTitle, color = onGradient)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = globalTextSelectionEnabled,
+                onCheckedChange = { checked ->
+                    scope.launch { repo.setGlobalTextSelectionEnabled(checked) }
+                    SettingsCache.globalTextSelectionEnabled = checked
                 }
             )
         }

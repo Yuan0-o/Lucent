@@ -1665,12 +1665,10 @@ fun NotesScreen(active: Boolean = true) {
                         }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = com.lucent.app.i18n.S.copyAll, tint = onGradient)
                         }
-                        if (!note.pinned) {
-                            PinIconButton(
-                                pinned = false,
-                                onToggle = { noteToTogglePin = note }
-                            )
-                        }
+                        PinIconButton(
+                            pinned = note.pinned,
+                            onToggle = { noteToTogglePin = note }
+                        )
                         IconButton(onClick = { startEdit(note) }) {
                             Icon(Icons.Default.Edit, contentDescription = com.lucent.app.i18n.S.actionEdit, tint = onGradient)
                         }

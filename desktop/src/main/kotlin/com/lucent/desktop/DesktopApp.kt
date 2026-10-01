@@ -66,6 +66,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val systemDark = isSystemInDarkTheme()
 
     val themeMode by repo.themeMode.collectAsState(initial = startup.display.themeMode)
+    val globalTextSelectionEnabled by repo.globalTextSelectionEnabled.collectAsState(initial = startup.globalTextSelectionEnabled)
     val paletteName by repo.palette.collectAsState(initial = startup.display.palette)
     val fontKey by repo.font.collectAsState(initial = startup.display.font)
     val backgroundAnimated by repo.backgroundAnimationEnabled.collectAsState(
@@ -144,41 +145,43 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
             LocalOnGradientMuted provides onGradientMuted,
             LocalBackgroundEnvironment provides backgroundEnvironment
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (com.lucent.app.ui.AppLockController.locked) {
-                    LockScreen(
-                        paletteColors = paletteColors,
-                        backdropColor = backdropColor,
-                        backgroundAnimated = appBackgroundAnimated
-                    )
-                } else {
-                    DesktopShell(
+            com.lucent.app.ui.GlobalTextSelectionContainer(enabled = globalTextSelectionEnabled) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (com.lucent.app.ui.AppLockController.locked) {
+                        LockScreen(
+                            paletteColors = paletteColors,
+                            backdropColor = backdropColor,
+                            backgroundAnimated = appBackgroundAnimated
+                        )
+                    } else {
+                        DesktopShell(
+                            repo = repo,
+                            paletteColors = paletteColors,
+                            backdropColor = backdropColor,
+                            backgroundAnimated = appBackgroundAnimated
+                        )
+                    }
+
+                    ToastOverlay()
+
+                    com.lucent.app.ui.AssistantConfirmationDialog()
+
+                    com.lucent.app.ui.HarnessAskDialog()
+
+                    com.lucent.app.ui.AutoUpdateDialog(
                         repo = repo,
-                        paletteColors = paletteColors,
-                        backdropColor = backdropColor,
-                        backgroundAnimated = appBackgroundAnimated
+                        onOpenUrl = { url -> com.lucent.app.data.DesktopShell.openUrl(url) }
                     )
-                }
 
-                ToastOverlay()
-
-                com.lucent.app.ui.AssistantConfirmationDialog()
-
-                com.lucent.app.ui.HarnessAskDialog()
-
-                com.lucent.app.ui.AutoUpdateDialog(
-                    repo = repo,
-                    onOpenUrl = { url -> com.lucent.app.data.DesktopShell.openUrl(url) }
-                )
-
-                if (splashEnabled && !splashDone) {
-                    LucentSplash(
-                        paletteColors = paletteColors,
-                        backdropColor = backdropColor,
-                        onFinished = { splashDone = true },
-                        backgroundAnimated = backgroundAnimated,
-                        style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
-                    )
+                    if (splashEnabled && !splashDone) {
+                        LucentSplash(
+                            paletteColors = paletteColors,
+                            backdropColor = backdropColor,
+                            onFinished = { splashDone = true },
+                            backgroundAnimated = backgroundAnimated,
+                            style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
+                        )
+                    }
                 }
             }
         }

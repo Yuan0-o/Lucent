@@ -268,7 +268,7 @@ fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Mo
         Icon(
             if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPinOutlined,
             contentDescription = if (pinned) S.unpin else S.pinToTop,
-            tint = if (pinned) onGradient else onGradientMuted
+            tint = if (pinned) onGradientMuted else onGradient
         )
     }
 }

@@ -5,6 +5,19 @@ import com.lucent.app.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 
+private class ImportState {
+    var importedNotes = 0
+    var importedTasks = 0
+    var importedChats = 0
+    var skipped = 0
+    var replacedNotes = 0
+    var replacedTasks = 0
+    var importedVersions = 0
+    val noteIdByKey = HashMap<String, Long>()
+    val taskIdByKey = HashMap<String, Long>()
+    val convIdRemap = HashMap<Long, Long>()
+}
+
 internal object BackupImporter {
 
     suspend fun import(
@@ -18,25 +31,55 @@ internal object BackupImporter {
         mode: ImportMode = ImportMode.DEFAULT
     ): String {
         val root = JSONObject(json)
-        var importedNotes = 0
-        var importedTasks = 0
-        var importedChats = 0
-        var skipped = 0
-        var replacedNotes = 0
-        var replacedTasks = 0
-
+        val state = ImportState()
         val existingNotes = db.noteDao().getAllOnce()
         val existingTasks = db.taskDao().getAllOnce()
         val existingChats = db.chatDao().getAll().first()
-
-        val noteIdByKey = HashMap<String, Long>()
-        val taskIdByKey = HashMap<String, Long>()
-        var importedVersions = 0
-
-        val convIdRemap = HashMap<Long, Long>()
         val wantNotes = BackupManager.BackupModule.NOTES in modules
         val wantTasks = BackupManager.BackupModule.TASKS in modules
         val wantChats = BackupManager.BackupModule.CHATS in modules
+        importConversations(db, root, wantChats, conversationIds, state)
+        importNotes(context, db, root, wantNotes, mode, existingNotes, state)
+        importTasks(context, db, root, wantTasks, mode, existingTasks, state)
+        importTaskVersions(db, root, wantTasks, state)
+        importNoteVersions(db, root, wantNotes, state)
+        importChats(db, root, wantChats, conversationIds, existingChats, state)
+        importNotebooks(db, root, wantNotes, wantTasks)
+        val settingsRestored = importSettings(context, settings, root, modules, apiProfileNames)
+
+        AttachmentMigration.pruneOrphans(context)
+        db.noteVersionDao().pruneOrphaned()
+
+        if (state.importedTasks > 0) {
+            ReminderScheduler.rescheduleAll(context)
+        }
+
+        val settingsNote = if (settingsRestored) com.lucent.app.i18n.S.importSettingsRestored else ""
+        val historyNote = if (state.importedVersions > 0) com.lucent.app.i18n.S.importVersionsRestored(state.importedVersions) else ""
+        val dedupNote = if (state.skipped > 0) com.lucent.app.i18n.S.importDuplicatesSkipped(state.skipped) else ""
+        val replacedNote =
+            if (state.replacedNotes > 0 || state.replacedTasks > 0)
+                "\n" + com.lucent.app.i18n.S.importReplacedSummary(state.replacedNotes, state.replacedTasks)
+            else ""
+
+        if (state.importedNotes > 0 || state.replacedNotes > 0) {
+            try { db.noteDao().rebuildFts() } catch (_: Exception) {  }
+        }
+        if (state.importedTasks > 0 || state.replacedTasks > 0) {
+            try { db.taskDao().rebuildFts() } catch (_: Exception) {  }
+        }
+
+        return com.lucent.app.i18n.S.importSummary(state.importedNotes, state.importedTasks, state.importedChats) +
+            settingsNote + historyNote + dedupNote + replacedNote
+    }
+
+    private suspend fun importConversations(
+        db: AppDatabase,
+        root: JSONObject,
+        wantChats: Boolean,
+        conversationIds: Set<Long>?,
+        state: ImportState
+    ) {
         (if (wantChats) root.optJSONArray("conversations") else null)?.let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
@@ -48,10 +91,20 @@ internal object BackupImporter {
                 val newId = db.chatConversationDao().insert(
                     ChatConversation(title = title, createdAt = createdAt, updatedAt = updatedAt)
                 )
-                if (oldId != 0L) convIdRemap[oldId] = newId
+                if (oldId != 0L) state.convIdRemap[oldId] = newId
             }
         }
+    }
 
+    private suspend fun importNotes(
+        context: Context,
+        db: AppDatabase,
+        root: JSONObject,
+        wantNotes: Boolean,
+        mode: ImportMode,
+        existingNotes: List<Note>,
+        state: ImportState
+    ) {
         (if (wantNotes) root.optJSONArray("notes") else null)?.let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
@@ -82,7 +135,7 @@ internal object BackupImporter {
                     it.title == title && it.body == body && it.updatedAt == updatedAt
                 }
                 val action = ImportDecision.forNote(mode, local?.updatedAt, updatedAt, isDuplicate)
-                if (action == ImportAction.SKIP) { skipped++; continue }
+                if (action == ImportAction.SKIP) { state.skipped++; continue }
                 val incoming = Note(
                     title = title, body = body, updatedAt = updatedAt, tags = tags,
                     attachments = attachments, archived = archived, archivedAt = archivedAt,
@@ -95,15 +148,26 @@ internal object BackupImporter {
                 )
                 val newNoteId = if (action == ImportAction.REPLACE && local != null) {
                     db.noteDao().update(incoming.copy(id = local.id))
-                    replacedNotes++
+                    state.replacedNotes++
                     local.id
                 } else {
                     db.noteDao().insert(incoming)
                 }
-                noteIdByKey["$title\u0000$updatedAt"] = newNoteId
-                if (action == ImportAction.INSERT) importedNotes++
+                state.noteIdByKey["$title\u0000$updatedAt"] = newNoteId
+                if (action == ImportAction.INSERT) state.importedNotes++
             }
         }
+    }
+
+    private suspend fun importTasks(
+        context: Context,
+        db: AppDatabase,
+        root: JSONObject,
+        wantTasks: Boolean,
+        mode: ImportMode,
+        existingTasks: List<Task>,
+        state: ImportState
+    ) {
         (if (wantTasks) root.optJSONArray("tasks") else null)?.let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
@@ -136,7 +200,7 @@ internal object BackupImporter {
                     localTask.dueAt == dueAt && localTask.priority == priority &&
                     localTask.subtasks == subtasks && localTask.trashedAt == taskTrashedAt
                 val taskAction = ImportDecision.forTask(mode, localTask != null, isDuplicate)
-                if (taskAction == ImportAction.SKIP) { skipped++; continue }
+                if (taskAction == ImportAction.SKIP) { state.skipped++; continue }
                 val incomingTask = Task(
                     title = title, isDone = isDone, createdAt = createdAt,
                     attachments = attachments, dueAt = dueAt, notes = taskNotes,
@@ -150,22 +214,30 @@ internal object BackupImporter {
                 )
                 val newTaskId = if (taskAction == ImportAction.REPLACE && localTask != null) {
                     db.taskDao().update(incomingTask.copy(id = localTask.id))
-                    replacedTasks++
+                    state.replacedTasks++
                     localTask.id
                 } else {
                     val inserted = db.taskDao().insert(incomingTask)
-                    importedTasks++
+                    state.importedTasks++
                     inserted
                 }
-                taskIdByKey["$title\u0000$createdAt"] = newTaskId
+                state.taskIdByKey["$title\u0000$createdAt"] = newTaskId
             }
         }
+    }
+
+    private suspend fun importTaskVersions(
+        db: AppDatabase,
+        root: JSONObject,
+        wantTasks: Boolean,
+        state: ImportState
+    ) {
         (if (wantTasks) root.optJSONArray("taskVersions") else null)?.let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val ownerTitle = o.optString("taskTitle", "")
                 val ownerCreatedAt = o.optLong("taskCreatedAt", -1L)
-                val taskId = taskIdByKey["$ownerTitle\u0000$ownerCreatedAt"] ?: continue
+                val taskId = state.taskIdByKey["$ownerTitle\u0000$ownerCreatedAt"] ?: continue
                 db.taskVersionDao().insert(
                     TaskVersion(
                         taskId = taskId,
@@ -177,19 +249,26 @@ internal object BackupImporter {
                         savedAt = o.optLong("savedAt", System.currentTimeMillis())
                     )
                 )
-                importedVersions++
+                state.importedVersions++
             }
-            taskIdByKey.values.distinct().forEach { id ->
+            state.taskIdByKey.values.distinct().forEach { id ->
                 db.taskVersionDao().trimTo(id, TaskHistory.MAX_VERSIONS_PER_TASK)
             }
         }
+    }
 
+    private suspend fun importNoteVersions(
+        db: AppDatabase,
+        root: JSONObject,
+        wantNotes: Boolean,
+        state: ImportState
+    ) {
         (if (wantNotes) root.optJSONArray("noteVersions") else null)?.let { arr ->
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val ownerTitle = o.optString("noteTitle", "")
                 val ownerUpdatedAt = o.optLong("noteUpdatedAt", -1L)
-                val noteId = noteIdByKey["$ownerTitle\u0000$ownerUpdatedAt"] ?: continue
+                val noteId = state.noteIdByKey["$ownerTitle\u0000$ownerUpdatedAt"] ?: continue
                 db.noteVersionDao().insert(
                     NoteVersion(
                         noteId = noteId,
@@ -201,13 +280,22 @@ internal object BackupImporter {
                         savedAt = o.optLong("savedAt", System.currentTimeMillis())
                     )
                 )
-                importedVersions++
+                state.importedVersions++
             }
-            noteIdByKey.values.distinct().forEach { id ->
+            state.noteIdByKey.values.distinct().forEach { id ->
                 db.noteVersionDao().trimTo(id, NoteHistory.MAX_VERSIONS_PER_NOTE)
             }
         }
+    }
 
+    private suspend fun importChats(
+        db: AppDatabase,
+        root: JSONObject,
+        wantChats: Boolean,
+        conversationIds: Set<Long>?,
+        existingChats: List<ChatMessage>,
+        state: ImportState
+    ) {
         (if (wantChats) root.optJSONArray("chats") else null)?.let { arr ->
             var fallbackConvId: Long? = null
             suspend fun fallbackConversation(): Long {
@@ -223,9 +311,9 @@ internal object BackupImporter {
                 val timestamp = o.optLong("timestamp", System.currentTimeMillis())
                 val oldConvId = if (o.has("conversationId")) o.optLong("conversationId", 1) else 1L
                 if (conversationIds != null && oldConvId !in conversationIds) continue
-                val newConvId = convIdRemap[oldConvId] ?: fallbackConversation()
+                val newConvId = state.convIdRemap[oldConvId] ?: fallbackConversation()
                 val isDuplicate = existingChats.any { it.role == role && it.content == content && it.timestamp == timestamp }
-                if (isDuplicate) { skipped++; continue }
+                if (isDuplicate) { state.skipped++; continue }
                 db.chatDao().insert(
                     ChatMessage(
                         role = role,
@@ -242,10 +330,17 @@ internal object BackupImporter {
                         reasoningText = if (o.isNull("reasoningText")) null else o.optString("reasoningText")
                     )
                 )
-                importedChats++
+                state.importedChats++
             }
         }
+    }
 
+    private suspend fun importNotebooks(
+        db: AppDatabase,
+        root: JSONObject,
+        wantNotes: Boolean,
+        wantTasks: Boolean
+    ) {
         if (wantNotes || wantTasks) {
             val restoredNotebooks = root.optJSONArray("notebooks")
             val restoredItems = root.optJSONArray("notebookItems")
@@ -296,7 +391,15 @@ internal object BackupImporter {
                 }
             }
         }
+    }
 
+    private suspend fun importSettings(
+        context: Context,
+        settings: SettingsRepository,
+        root: JSONObject,
+        modules: Set<BackupManager.BackupModule>,
+        apiProfileNames: Set<String>?
+    ): Boolean {
         var settingsRestored = false
         root.optJSONObject("settings")?.let { s ->
             val restoreApi = BackupManager.BackupModule.API in modules
@@ -397,6 +500,7 @@ internal object BackupImporter {
                 if (restoreGeneral && s.has("cloudPasswordEnc")) settings.setCloudPasswordEnc(s.optString("cloudPasswordEnc"))
                 if (restoreGeneral && s.has("terminalFontSize")) settings.setTerminalFontSize(s.optDouble("terminalFontSize", 14.0).toFloat())
                 if (restoreGeneral && s.has("terminalKeyBarVisible")) settings.setTerminalKeyBarVisible(s.optBoolean("terminalKeyBarVisible", true))
+                if (restoreGeneral && s.has("globalTextSelectionEnabled")) settings.setGlobalTextSelectionEnabled(s.optBoolean("globalTextSelectionEnabled", false))
                 if (restoreGeneral && s.has("cloudFolder")) settings.setCloudFolder(s.optString("cloudFolder"))
                 if (restoreGeneral && s.has("cloudAutoBackup")) settings.setCloudAutoBackup(s.optBoolean("cloudAutoBackup"))
                 if (s.has("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s.optBoolean("noteHistoryEnabled", true))
@@ -457,31 +561,7 @@ internal object BackupImporter {
                 }
             }
         }
-
-        AttachmentMigration.pruneOrphans(context)
-        db.noteVersionDao().pruneOrphaned()
-
-        if (importedTasks > 0) {
-            ReminderScheduler.rescheduleAll(context)
-        }
-
-        val settingsNote = if (settingsRestored) com.lucent.app.i18n.S.importSettingsRestored else ""
-        val historyNote = if (importedVersions > 0) com.lucent.app.i18n.S.importVersionsRestored(importedVersions) else ""
-        val dedupNote = if (skipped > 0) com.lucent.app.i18n.S.importDuplicatesSkipped(skipped) else ""
-        val replacedNote =
-            if (replacedNotes > 0 || replacedTasks > 0)
-                "\n" + com.lucent.app.i18n.S.importReplacedSummary(replacedNotes, replacedTasks)
-            else ""
-
-        if (importedNotes > 0 || replacedNotes > 0) {
-            try { db.noteDao().rebuildFts() } catch (_: Exception) {  }
-        }
-        if (importedTasks > 0 || replacedTasks > 0) {
-            try { db.taskDao().rebuildFts() } catch (_: Exception) {  }
-        }
-
-        return com.lucent.app.i18n.S.importSummary(importedNotes, importedTasks, importedChats) +
-            settingsNote + historyNote + dedupNote + replacedNote
+        return settingsRestored
     }
 
     internal data class HarnessRestoreResult(

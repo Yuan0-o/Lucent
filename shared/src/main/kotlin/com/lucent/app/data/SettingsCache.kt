@@ -196,6 +196,9 @@ object SettingsCache {
     var terminalKeyBarVisible: Boolean = true
 
     @Volatile
+    var globalTextSelectionEnabled: Boolean = false
+
+    @Volatile
     var cloudPasswordEnc: String = ""
 
     @Volatile
@@ -265,6 +268,7 @@ object SettingsCache {
 
         terminalFontSize = prefs.terminalFontSize
         terminalKeyBarVisible = prefs.terminalKeyBarVisible
+        globalTextSelectionEnabled = prefs.globalTextSelectionEnabled
         cloudPasswordEnc = prefs.cloudPasswordEnc
         autoUpdateEnabled = prefs.autoUpdateEnabled
         privilegedEnabled = prefs.privilegedEnabled

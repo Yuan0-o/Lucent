@@ -141,6 +141,9 @@ private object SettingsKeys {
     val TERMINAL_KEY_BAR_VISIBLE_ENC = stringPreferencesKey("terminal_key_bar_visible_enc")
     val LEGACY_TERMINAL_KEY_BAR_VISIBLE = stringPreferencesKey("terminal_key_bar_visible")
 
+    val GLOBAL_TEXT_SELECTION_ENABLED_ENC = stringPreferencesKey("global_text_selection_enabled_enc")
+    val LEGACY_GLOBAL_TEXT_SELECTION_ENABLED = stringPreferencesKey("global_text_selection_enabled")
+
 }
 
 const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
@@ -253,6 +256,7 @@ class SettingsRepository(private val context: Context) {
 
         val terminalFontSize: Float? = null,
         val terminalKeyBarVisible: Boolean = true,
+        val globalTextSelectionEnabled: Boolean = false,
         val cloudPasswordEnc: String = "",
         val autoUpdateEnabled: Boolean = false,
         val privilegedEnabled: Boolean = false,
@@ -334,6 +338,7 @@ class SettingsRepository(private val context: Context) {
 
             terminalFontSize = secret(prefs, SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, "").toFloatOrNull(),
             terminalKeyBarVisible = secret(prefs, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true,
+            globalTextSelectionEnabled = secret(prefs, SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, "false").toBooleanStrictOrNull() ?: false,
             cloudPasswordEnc = prefs[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "",
             autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false,
             privilegedEnabled = prefs[SettingsKeys.PRIVILEGED_ENABLED] ?: false,
@@ -828,6 +833,9 @@ class SettingsRepository(private val context: Context) {
     val terminalKeyBarVisible: Flow<Boolean> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true
     }
+    val globalTextSelectionEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+        secret(it, SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, "false").toBooleanStrictOrNull() ?: false
+    }
 
     suspend fun setTerminalFontSize(value: Float) {
         SettingsCache.terminalFontSize = value
@@ -836,6 +844,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTerminalKeyBarVisible(value: Boolean) {
         SettingsCache.terminalKeyBarVisible = value
         putSecret(SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, value.toString())
+    }
+    suspend fun setGlobalTextSelectionEnabled(value: Boolean) {
+        SettingsCache.globalTextSelectionEnabled = value
+        putSecret(SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, value.toString())
     }
 
     suspend fun setAssistantName(value: String) {

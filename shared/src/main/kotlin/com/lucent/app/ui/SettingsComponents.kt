@@ -495,3 +495,12 @@ internal fun BackupContentLine(label: String, count: Int, details: List<String>)
         }
     }
 }
+
+@androidx.compose.runtime.Composable
+fun GlobalTextSelectionContainer(enabled: Boolean, content: @androidx.compose.runtime.Composable () -> Unit) {
+    if (enabled) {
+        androidx.compose.foundation.text.selection.SelectionContainer { content() }
+    } else {
+        content()
+    }
+}

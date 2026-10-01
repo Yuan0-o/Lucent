@@ -222,6 +222,7 @@ internal object BackupManifestBuilder {
             .put("cloudPasswordEnc", settings.cloudPasswordEnc.first())
             .put("terminalFontSize", settings.terminalFontSize.first()?.toDouble() ?: 14.0)
             .put("terminalKeyBarVisible", settings.terminalKeyBarVisible.first())
+            .put("globalTextSelectionEnabled", settings.globalTextSelectionEnabled.first())
             .put("cloudFolder", settings.cloudFolder.first())
             .put("cloudAutoBackup", settings.cloudAutoBackup.first())
             .put("noteHistoryEnabled", settings.noteHistoryEnabled.first())

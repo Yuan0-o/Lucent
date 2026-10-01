@@ -38,7 +38,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -65,7 +64,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -226,7 +224,6 @@ fun AssistantChatBody(
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<Long>() }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
-    var selectingTextIn by remember { mutableStateOf<Long?>(null) }
 
     fun exitSelection() {
         selectionMode = false
@@ -258,7 +255,6 @@ fun AssistantChatBody(
             showClearConfirm = false
             selectionMode = false
             selectedIds.clear()
-            selectingTextIn = null
         }
     }
 
@@ -577,16 +573,6 @@ fun AssistantChatBody(
                             Icon(
                                 Icons.Default.ContentCopy,
                                 contentDescription = com.lucent.app.i18n.S.msgCopyWhole,
-                                tint = onGradient
-                            )
-                        }
-                        IconButton(onClick = {
-                            selectingTextIn = only.id
-                            exitSelection()
-                        }) {
-                            Icon(
-                                Icons.Default.TextFields,
-                                contentDescription = com.lucent.app.i18n.S.msgSelectText,
                                 tint = onGradient
                             )
                         }
@@ -913,7 +899,6 @@ fun AssistantChatBody(
                                                 selectionMode = true
                                                 selectedIds.clear()
                                                 selectedIds.add(msg.id)
-                                                selectingTextIn = null
                                             }
                                         },
                                         onTap = {
@@ -1008,7 +993,6 @@ fun AssistantChatBody(
                                 }
                             }
                             val plainContent = isUser ||
-                                selectingTextIn == msg.id ||
                                 (isHighlighted && highlightLen > 0)
                             if (!plainContent) {
                                 MarkdownText(msg.content.withLineStartPunctuationAllowed())
@@ -1026,13 +1010,7 @@ fun AssistantChatBody(
                                 } else {
                                     buildAnnotatedString { append(msg.content.withLineStartPunctuationAllowed()) }
                                 }
-                                if (selectingTextIn == msg.id) {
-                                    SelectionContainer {
-                                        Text(contentText, color = onGradient)
-                                    }
-                                } else {
-                                    Text(contentText, color = onGradient)
-                                }
+                                Text(contentText, color = onGradient)
                             }
                             if (!isUser) {
                                 val siblings = variantGroups[msg.replyToId]

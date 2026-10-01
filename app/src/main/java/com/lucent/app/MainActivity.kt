@@ -276,6 +276,7 @@ class MainActivity : FragmentActivity() {
         StartupLog.event(applicationContext, "Startup tasks dispatched; composing UI")
 
         setContent {
+            val globalTextSelectionEnabled by settingsRepo.globalTextSelectionEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.globalTextSelectionEnabled)
             val themeMode by settingsRepo.themeMode.collectAsState(initial = initialThemeMode)
             val paletteName by settingsRepo.palette.collectAsState(initial = initialPalette)
             val fontKey by settingsRepo.font.collectAsState(initial = initialFont)
@@ -408,38 +409,40 @@ class MainActivity : FragmentActivity() {
                     val appLockOn by settingsRepo.appLockEnabled.collectAsState(initial = lockEnabled)
                     LaunchedEffect(appLockOn) { AppLockController.enabled = appLockOn }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        if (AppReady.databaseReady || splashDone) {
-                            if (AppLockController.locked) {
-                                LockScreen(
-                                    paletteColors = paletteColors,
+                    com.lucent.app.ui.GlobalTextSelectionContainer(enabled = globalTextSelectionEnabled) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (AppReady.databaseReady || splashDone) {
+                                if (AppLockController.locked) {
+                                    LockScreen(
+                                        paletteColors = paletteColors,
+                                        backdropColor = backdropColor,
+                                        backgroundAnimated = appBackgroundAnimated
+                                    )
+                                } else {
+                                    LucentApp(
+                                        paletteColors = paletteColors,
+                                        backdropColor = backdropColor,
+                                        backgroundAnimated = appBackgroundAnimated
+                                    )
+                                }
+                            } else if (!splashEnabled) {
+                                FluidGlassBackground(
+                                    palette = paletteColors,
                                     backdropColor = backdropColor,
-                                    backgroundAnimated = appBackgroundAnimated
-                                )
-                            } else {
-                                LucentApp(
-                                    paletteColors = paletteColors,
-                                    backdropColor = backdropColor,
-                                    backgroundAnimated = appBackgroundAnimated
+                                    animated = appBackgroundAnimated,
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
-                        } else if (!splashEnabled) {
-                            FluidGlassBackground(
-                                palette = paletteColors,
-                                backdropColor = backdropColor,
-                                animated = appBackgroundAnimated,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
 
-                        if (splashEnabled && !splashDone) {
-                            LucentSplash(
-                                paletteColors = paletteColors,
-                                backdropColor = backdropColor,
-                                onFinished = { splashDone = true },
-                                backgroundAnimated = backgroundAnimated,
-                                style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
-                            )
+                            if (splashEnabled && !splashDone) {
+                                LucentSplash(
+                                    paletteColors = paletteColors,
+                                    backdropColor = backdropColor,
+                                    onFinished = { splashDone = true },
+                                    backgroundAnimated = backgroundAnimated,
+                                    style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
+                                )
+                            }
                         }
                     }
                 }
