@@ -153,12 +153,27 @@ object BuiltinRuntimeInstaller {
             passwd.writeText(passwdLines.joinToString("\n", postfix = "\n"))
         }
         val groupLines = groups.readLines().toMutableList()
-        (Os.getgroups().toSet() + gid).filter { it >= 0 }.forEach { groupId ->
+        (supplementaryGroups().toSet() + gid).filter { it >= 0 }.forEach { groupId ->
             if (groupLines.none { it.split(':').getOrNull(2)?.toIntOrNull() == groupId }) {
                 groupLines.add("android_$groupId:x:$groupId:")
             }
         }
         groups.writeText(groupLines.joinToString("\n", postfix = "\n"))
+    }
+
+    private fun supplementaryGroups(): List<Int> {
+        val groupsLine = try {
+            File("/proc/self/status").bufferedReader().useLines { lines ->
+                lines.firstOrNull { it.startsWith("Groups:") }
+            }
+        } catch (_: Throwable) {
+            null
+        }
+        if (groupsLine == null) return emptyList()
+        return groupsLine.substringAfter("Groups:")
+            .trim()
+            .split(Regex("\\s+"))
+            .mapNotNull { it.toIntOrNull() }
     }
 
     private fun extractNativeLibs(context: Context) {

@@ -38,7 +38,6 @@ object AppNavigation {
         private set
 
     var terminalOpen by mutableStateOf(false)
-        private set
 
     fun requestTerminal() {
         terminalRequested = true
@@ -46,10 +45,6 @@ object AppNavigation {
     }
 
     fun consumeTerminal(): Boolean = terminalRequested.also { terminalRequested = false }
-
-    fun setTerminalOpen(open: Boolean) {
-        terminalOpen = open
-    }
 
     var composeNoteRequested by mutableStateOf(false)
         private set

@@ -209,12 +209,12 @@ fun AssistantChatBody(
 
     LaunchedEffect(com.lucent.app.AppNavigation.terminalRequested) {
         if (com.lucent.app.AppNavigation.consumeTerminal()) {
-            com.lucent.app.AppNavigation.setTerminalOpen(true)
+            com.lucent.app.AppNavigation.terminalOpen = true
         }
     }
 
     if (com.lucent.app.AppNavigation.terminalOpen) {
-        TerminalScreen(onBack = { com.lucent.app.AppNavigation.setTerminalOpen(false) })
+        TerminalScreen(onBack = { com.lucent.app.AppNavigation.terminalOpen = false })
     } else {
     var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
 
