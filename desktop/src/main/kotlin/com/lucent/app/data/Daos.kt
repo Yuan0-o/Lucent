@@ -84,7 +84,9 @@ private fun messageOf(rs: ResultSet) = ChatMessage(
     replyToId = rs.getLong("replyToId"),
     agentTrace = rs.stringOrNull("agentTrace"),
     reasoningBlocks = rs.stringOrNull("reasoningBlocks"),
-    reasoningText = rs.stringOrNull("reasoningText")
+    reasoningText = rs.stringOrNull("reasoningText"),
+    quotedRole = rs.stringOrNull("quotedRole"),
+    quotedText = rs.stringOrNull("quotedText")
 )
 
 private fun conversationOf(rs: ResultSet) = ChatConversation(
@@ -697,8 +699,8 @@ class ChatDao internal constructor(private val db: Db) {
         val ps = c.prepareStatement(
             "INSERT INTO chat_messages (role, content, timestamp, attachmentMime, attachmentData, " +
                 "attachmentName, attachmentList, conversationId, tokens, replyToId, agentTrace, " +
-                "reasoningBlocks, reasoningText) " +
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "reasoningBlocks, reasoningText, quotedRole, quotedText) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             java.sql.Statement.RETURN_GENERATED_KEYS
         )
         ps.setString(1, message.role); ps.setString(2, message.content); ps.setLong(3, message.timestamp)
@@ -707,6 +709,7 @@ class ChatDao internal constructor(private val db: Db) {
         ps.setLong(8, message.conversationId); ps.setInt(9, message.tokens); ps.setLong(10, message.replyToId)
         ps.bindStringOrNull(11, message.agentTrace)
         ps.bindStringOrNull(12, message.reasoningBlocks); ps.bindStringOrNull(13, message.reasoningText)
+        ps.bindStringOrNull(14, message.quotedRole); ps.bindStringOrNull(15, message.quotedText)
         ps.executeUpdate()
         ps.generatedKeys.use { keys -> if (keys.next()) keys.getLong(1) else 0L }
     }

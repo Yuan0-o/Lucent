@@ -327,7 +327,9 @@ internal object BackupImporter {
                         tokens = o.optInt("tokens", 0),
                         agentTrace = if (o.isNull("agentTrace")) null else o.optString("agentTrace"),
                         reasoningBlocks = if (o.isNull("reasoningBlocks")) null else o.optString("reasoningBlocks"),
-                        reasoningText = if (o.isNull("reasoningText")) null else o.optString("reasoningText")
+                        reasoningText = if (o.isNull("reasoningText")) null else o.optString("reasoningText"),
+                        quotedRole = if (o.isNull("quotedRole")) null else o.optString("quotedRole"),
+                        quotedText = if (o.isNull("quotedText")) null else o.optString("quotedText")
                     )
                 )
                 state.importedChats++

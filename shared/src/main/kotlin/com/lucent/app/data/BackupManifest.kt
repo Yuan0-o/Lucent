@@ -129,6 +129,8 @@ internal object BackupManifestBuilder {
                     .put("agentTrace", it.agentTrace ?: JSONObject.NULL)
                     .put("reasoningBlocks", it.reasoningBlocks ?: JSONObject.NULL)
                     .put("reasoningText", it.reasoningText ?: JSONObject.NULL)
+                    .put("quotedRole", it.quotedRole ?: JSONObject.NULL)
+                    .put("quotedText", it.quotedText ?: JSONObject.NULL)
             )
         }
 

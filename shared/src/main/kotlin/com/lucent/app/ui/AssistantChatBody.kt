@@ -126,6 +126,7 @@ class AssistantChatDraft {
     var input by mutableStateOf("")
     var error by mutableStateOf("")
     var attachments by mutableStateOf<List<AssistantAttachmentDraft>>(emptyList())
+    var quoteTarget by mutableStateOf<ChatMessage?>(null)
 }
 
 private suspend fun LazyListState.scrollToLatest() {
@@ -222,6 +223,7 @@ fun AssistantChatBody(
     var attachMenuOpen by remember { mutableStateOf(false) }
 
     var selectionMode by remember { mutableStateOf(false) }
+    var contextMenuMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val selectedIds = remember { mutableStateListOf<Long>() }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -896,9 +898,7 @@ fun AssistantChatBody(
                                         onLongPress = {
                                             if (!selectionMode) {
                                                 Haptics.tick(context)
-                                                selectionMode = true
-                                                selectedIds.clear()
-                                                selectedIds.add(msg.id)
+                                                contextMenuMessage = msg
                                             }
                                         },
                                         onTap = {
@@ -943,6 +943,21 @@ fun AssistantChatBody(
                                             )
                                         }
                                     }
+                                }
+                            }
+                            if (msg.quotedText != null) {
+                                val quotedAuthor = if (msg.quotedRole == "user") com.lucent.app.i18n.S.exportYou
+                                    else assistantName.ifBlank { "Assistant" }
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 6.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(onGradient.copy(alpha = 0.08f))
+                                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                                ) {
+                                    Text(quotedAuthor, color = onGradientMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    Text(msg.quotedText.replace('\n', ' '), color = onGradientMuted.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             val attachmentsAll = remember(msg.id, msg.attachmentData, msg.attachmentList) {
@@ -1053,6 +1068,54 @@ fun AssistantChatBody(
                                     )
                                 }
                             }
+                        }
+                        DropdownMenu(
+                            expanded = contextMenuMessage?.id == msg.id,
+                            onDismissRequest = { contextMenuMessage = null }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(com.lucent.app.i18n.S.actionReply) },
+                                onClick = {
+                                    contextMenuMessage = null
+                                    draft.quoteTarget = msg
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(com.lucent.app.i18n.S.msgCopyWhole) },
+                                onClick = {
+                                    contextMenuMessage = null
+                                    copyToClipboard(context, msg.content)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(com.lucent.app.i18n.S.a11yExportChat) },
+                                onClick = {
+                                    contextMenuMessage = null
+                                    onSaveZip(
+                                        "lucent-message.zip",
+                                        buildChatExportEntries(listOf(msg), assistantName.ifBlank { "Lucent" }, exportLocale)
+                                    )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(com.lucent.app.i18n.S.actionSelect) },
+                                onClick = {
+                                    contextMenuMessage = null
+                                    selectionMode = true
+                                    selectedIds.clear()
+                                    selectedIds.add(msg.id)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(com.lucent.app.i18n.S.actionDelete) },
+                                onClick = {
+                                    contextMenuMessage = null
+                                    selectionMode = true
+                                    selectedIds.clear()
+                                    selectedIds.add(msg.id)
+                                    showBatchDeleteConfirm = true
+                                }
+                            )
                         }
                         }
                     }
@@ -1184,6 +1247,33 @@ fun AssistantChatBody(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             )
         }
+        if (draft.quoteTarget != null) {
+            val q = draft.quoteTarget!!
+            val author = if (q.role == "user") com.lucent.app.i18n.S.exportYou else assistantName.ifBlank { "Lucent" }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.1f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(author, color = onGradient, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        q.content.replace('\n', ' '),
+                        color = onGradientMuted,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = { draft.quoteTarget = null }, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = com.lucent.app.i18n.S.actionCancel, tint = onGradientMuted, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
         if (draft.attachments.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -1230,6 +1320,7 @@ fun AssistantChatBody(
             val attachments = draft.attachments.map {
                 com.lucent.app.data.Attachment(it.mime, it.data, it.name)
             }
+            val quoteTarget = draft.quoteTarget
             if (text.isBlank() && attachments.isEmpty()) return@submit
             val useLocal = localModelEnabled
             if (!useLocal && (savedUrl.isBlank() || savedModel.isBlank())) {
@@ -1239,6 +1330,7 @@ fun AssistantChatBody(
             draft.input = ""
             draft.attachments = emptyList()
             draft.error = ""
+            draft.quoteTarget = null
             autoScroll = true
             val spec = when (savedSpecStr) {
                 "anthropic" -> ApiSpec.ANTHROPIC
@@ -1264,7 +1356,8 @@ fun AssistantChatBody(
                 smallModelMode = smallModelMode,
                 agentMode = agentModeOn,
                 localWebSearch = webSearchEnabled,
-                reasoning = reasoningKey
+                reasoning = reasoningKey,
+                quoteTarget = quoteTarget
             )
             onSubmitted()
         }

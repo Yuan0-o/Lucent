@@ -424,7 +424,9 @@ class AssistantControllerImpl(
         val agentMode: Boolean = true,
         val localWebSearch: Boolean = false,
         val reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
-        val answersMessageId: Long = 0
+        val answersMessageId: Long = 0,
+        val quoteRole: String? = null,
+        val quoteText: String? = null
     )
     private var lastSend: LastSend? = null
     private var lastSendConversationId: Long? = null
@@ -449,7 +451,11 @@ class AssistantControllerImpl(
             localWebSearch = p.localWebSearch,
             reasoning = p.reasoning,
             answersMessageId = p.answersMessageId,
-            targetConversationId = target
+            targetConversationId = target,
+            quoteTarget = if (p.quoteText != null && p.quoteRole != null) ChatMessage(
+                role = p.quoteRole,
+                content = p.quoteText
+            ) else null
         )
     }
 
@@ -649,7 +655,8 @@ class AssistantControllerImpl(
         answersMessageId: Long = 0,
         targetConversationId: Long? = null,
         attachmentListJson: String? = null,
-        attachments: List<com.lucent.app.data.Attachment> = emptyList()
+        attachments: List<com.lucent.app.data.Attachment> = emptyList(),
+        quoteTarget: ChatMessage? = null
     ) {
         val targetKey = targetConversationId ?: currentConversationId
         if (turnFor(targetKey) != null) {
@@ -666,7 +673,7 @@ class AssistantControllerImpl(
             url, spec, key, model,
             name, style, memoryTier, webSearchEnabled, typingHapticsEnabled, useLocalModel,
             useLocalTools, useLocalGpu, confirmTools, smallModelMode, agentMode, localWebSearch,
-            reasoning, answersMessageId
+            reasoning, answersMessageId, quoteTarget?.role, quoteTarget?.content?.take(200)
         )
         turn.thinking = true
         if (errorConversationId == targetKey) {
@@ -704,7 +711,9 @@ class AssistantControllerImpl(
                             attachmentList =
                                 if (attachments.size > 1) com.lucent.app.data.Attachments.serialize(attachments)
                                 else attachmentListJson,
-                            conversationId = conversationId
+                            conversationId = conversationId,
+                            quotedRole = quoteTarget?.role,
+                            quotedText = quoteTarget?.content?.take(200)
                         )
                     )
                     db.chatConversationDao().getById(conversationId)?.let { conv ->
@@ -726,6 +735,23 @@ class AssistantControllerImpl(
                 }
 
                 var history = buildHistory(db, conversationId, memoryTier)
+                if (answeredId > 0) {
+                    val sentMessage = db.chatDao().getForConversationOnce(conversationId)
+                        .firstOrNull { it.id == answeredId }
+                    val quotedText = sentMessage?.quotedText
+                    if (!quotedText.isNullOrBlank()) {
+                        val author = if (sentMessage.quotedRole == "user") "You" else name.ifBlank { "Assistant" }
+                        val lastUserIndex = history.indexOfLast { it.role == "user" }
+                        if (lastUserIndex >= 0) {
+                            val quotedHistory = history.toMutableList()
+                            val message = quotedHistory[lastUserIndex]
+                            quotedHistory[lastUserIndex] = message.copy(
+                                content = "[Quoting $author: \"$quotedText\"]\n\n${message.content}"
+                            )
+                            history = quotedHistory
+                        }
+                    }
+                }
                 val crossMemory = crossConversationMemory(db, conversationId, memoryTier)
                 val compactCrossMemory =
                     if (smallModelMode) crossConversationMemory(db, conversationId, memoryTier, cap = SMALL_MODEL_CROSS_BUDGET)
