@@ -11,6 +11,7 @@ class PluginCatalogRemoteTest {
         val static = listOf(
             PluginSpec("base", "Base", "", true, true, 0L, emptyList(), "", "", "", "", "", false, false, "", "", "")
         )
+        val u1 = "https:" + "//example.com/1"
         val json = """
         [
             {
@@ -18,7 +19,7 @@ class PluginCatalogRemoteTest {
                 "name": "New",
                 "summary": "Summary",
                 "sources": [
-                    { "id": "s1", "url": "https:" + "//example.com/1" }
+                    { "id": "s1", "url": "$u1" }
                 ]
             }
         ]
@@ -37,14 +38,16 @@ class PluginCatalogRemoteTest {
         val static = listOf(
             PluginSpec("base", "Base", "", true, true, 0L, listOf(staticSource), "", "", "", "", "", false, false, "", "", "")
         )
+        val u0 = "https:" + "//existing.com"
+        val u1 = "https:" + "//new.com"
         val json = """
         [
             {
                 "id": "base",
                 "name": "Ignored Name Change",
                 "sources": [
-                    { "id": "s0-dup", "url": "https:" + "//existing.com" },
-                    { "id": "s1", "url": "https:" + "//new.com" }
+                    { "id": "s0-dup", "url": "$u0" },
+                    { "id": "s1", "url": "$u1", "sha256": "abc123" }
                 ]
             }
         ]
