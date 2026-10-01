@@ -816,7 +816,7 @@ fun AssistantChatBody(
                     diameter = 40.dp
                 )
                 GlassRoundButton(
-                    icon = androidx.compose.material.icons.Icons.Default.Code,
+                    icon = androidx.compose.material.icons.Icons.Filled.Terminal,
                     contentDescription = com.lucent.app.i18n.S.tabTerminal,
                     onClick = { com.lucent.app.AppNavigation.requestTerminal() },
                     tint = onGradient,
