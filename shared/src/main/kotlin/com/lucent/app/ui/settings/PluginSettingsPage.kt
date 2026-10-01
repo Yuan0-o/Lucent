@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +32,7 @@ import com.lucent.app.harness.PluginOutcome
 import com.lucent.app.harness.Workspace
 import com.lucent.app.harness.plugins.PluginCatalog
 import com.lucent.app.harness.plugins.PluginPreflight
+import com.lucent.app.harness.plugins.PluginSetup
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
 import com.lucent.app.harness.plugins.PreflightReport
@@ -512,7 +514,6 @@ private fun SetupGateCard(
     onStart: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-        val S = com.lucent.app.i18n.LocalStrings.current
         Text(S.setupGateTitle, color = onGradient, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
         Spacer(modifier = Modifier.height(4.dp))
         Text(S.setupGateBody, color = onGradientMuted, fontSize = 13.sp)

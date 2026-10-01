@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,7 +22,7 @@ import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSetup
 import com.lucent.app.harness.plugins.SetupStep
 import com.lucent.app.harness.plugins.SetupStepState
-import com.lucent.app.i18n.LocalStrings
+import com.lucent.app.i18n.S
 import com.lucent.app.ui.BackHeader
 import com.lucent.app.ui.DirectoryPickerDialog
 import com.lucent.app.ui.LocalOnGradient
@@ -28,7 +32,6 @@ import kotlinx.coroutines.delay
 
 @Composable
 internal fun PluginSetupWizard(onBack: () -> Unit) {
-    val S = LocalStrings.current
     val scope = rememberCoroutineScope()
     var steps by remember { mutableStateOf<List<SetupStep>>(emptyList()) }
     var busy by remember { mutableStateOf("") }
@@ -61,7 +64,7 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
     LaunchedEffect(Unit) { reload() }
 
     DisposableEffect(Unit) {
-        val listener = { _: com.lucent.app.harness.HarnessConfig -> reload() }
+        val listener: (com.lucent.app.harness.HarnessConfig) -> Unit = { reload() }
         HarnessRuntime.observe(listener)
         onDispose { HarnessRuntime.unobserve(listener) }
     }
@@ -209,9 +212,9 @@ private fun SetupStepCard(
     Column(modifier = Modifier.fillMaxWidth().alpha(alpha).background(androidx.compose.ui.graphics.Color(0x1AFFFFFF), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val icon = when (step.state) {
-                SetupStepState.DONE -> androidx.compose.material.icons.Icons.Default.CheckCircle
-                SetupStepState.CURRENT -> androidx.compose.material.icons.Icons.Default.PlayCircle
-                SetupStepState.WAITING -> androidx.compose.material.icons.Icons.Default.RadioButtonUnchecked
+                SetupStepState.DONE -> Icons.Default.CheckCircle
+                SetupStepState.CURRENT -> Icons.Default.PlayArrow
+                SetupStepState.WAITING -> Icons.Default.RadioButtonUnchecked
             }
             Icon(icon, contentDescription = null, tint = onGradient, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
@@ -221,7 +224,6 @@ private fun SetupStepCard(
                 Text(step.body, color = onGradientMuted, fontSize = 14.sp)
                 
                 if (step.id == "termux_configured" && step.state == SetupStepState.CURRENT) {
-                    val S = LocalStrings.current
                     Spacer(modifier = Modifier.height(8.dp))
                     androidx.compose.foundation.text.selection.SelectionContainer {
                         Text(S.setupTermuxConfigCommand, color = onGradient, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, modifier = Modifier.background(androidx.compose.ui.graphics.Color(0x33000000)).padding(8.dp))
@@ -248,7 +250,6 @@ private fun SetupStepCard(
                     if (step.id == "termux_configured" || step.id == "disk_space") {
                         Spacer(modifier = Modifier.height(4.dp))
                         TextButton(onClick = onReload) {
-                            val S = LocalStrings.current
                             Text(S.setupActionCheck)
                         }
                     }
