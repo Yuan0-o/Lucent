@@ -148,28 +148,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT
-            ),
-            navigationBarStyle = SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT
-            )
-        )
 
-        PrivilegedShell.install(ShizukuShell)
-        val updateInstaller = AndroidUpdateInstaller(applicationContext)
-        AutoUpdate.installer = updateInstaller
         val settingsRepo = SettingsRepository(applicationContext)
-        val crashShieldWanted = try {
-            runBlocking { settingsRepo.crashShieldEnabledOnce() }
-        } catch (t: Throwable) {
-            StartupLog.event(applicationContext, "crash shield: preference read failed at startup (${t::class.simpleName}) - shield not installed this launch")
-            false
-        }
-        if (crashShieldWanted) com.lucent.app.data.CrashShield.install(applicationContext)
         val startup = try {
             runBlocking { settingsRepo.startupPrefsOnce() }
                 .also { com.lucent.app.data.SettingsCache.seed(it) }
@@ -184,6 +164,40 @@ class MainActivity : FragmentActivity() {
         }
         val display = startup.display
         val initialThemeMode = display.themeMode
+        val systemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val themeChoice = com.lucent.app.ui.LucentThemeMode.fromKey(initialThemeMode)
+        val isDarkTheme = themeChoice.isDark(systemDark)
+        val dynamicActive = startup.dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        val initialBackdropColor = if (dynamicActive) {
+            val scheme = if (isDarkTheme) androidx.compose.material3.dynamicDarkColorScheme(applicationContext) else androidx.compose.material3.dynamicLightColorScheme(applicationContext)
+            scheme.background
+        } else {
+            themeChoice.backdrop(systemDark)
+        }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(androidx.compose.ui.graphics.toArgb(initialBackdropColor)))
+
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            )
+        )
+
+        PrivilegedShell.install(ShizukuShell)
+        val updateInstaller = AndroidUpdateInstaller(applicationContext)
+        AutoUpdate.installer = updateInstaller
+        val crashShieldWanted = try {
+            runBlocking { settingsRepo.crashShieldEnabledOnce() }
+        } catch (t: Throwable) {
+            StartupLog.event(applicationContext, "crash shield: preference read failed at startup (${t::class.simpleName}) - shield not installed this launch")
+            false
+        }
+        if (crashShieldWanted) com.lucent.app.data.CrashShield.install(applicationContext)
+
         val initialPalette = display.palette
         val initialFont = display.font
 
@@ -272,6 +286,7 @@ class MainActivity : FragmentActivity() {
                 AssistantController.ensureMessagesLoaded(applicationContext)
                 com.lucent.app.ui.AppReady.databaseReady = true
             } catch (t: Throwable) {
+                com.lucent.app.ui.AppReady.databaseReady = true
                 android.util.Log.e("LucentStartup", "database init failed at startup", t)
                 StartupLog.event(
                     applicationContext,
@@ -321,14 +336,10 @@ class MainActivity : FragmentActivity() {
                     }
                 )
             }
-            var splashDone by rememberSaveable { mutableStateOf(false) }
-            LaunchedEffect(splashEnabled) {
-                if (!splashEnabled) {
-                    delay(2500)
-                    splashDone = true
-                }
-            }
-            val appBackgroundAnimated = backgroundAnimated && (splashDone || !splashEnabled)
+            var splashAnimationFinished by rememberSaveable { mutableStateOf(false) }
+            val appReady = AppReady.databaseReady
+            val removeSplash = !splashEnabled || (splashAnimationFinished && appReady)
+            val appBackgroundAnimated = backgroundAnimated
 
             val dynamicColorOn by settingsRepo.dynamicColorEnabled.collectAsState(
                 initial = startup.dynamicColor
@@ -417,7 +428,7 @@ class MainActivity : FragmentActivity() {
 
                     com.lucent.app.ui.GlobalTextSelectionContainer(enabled = globalTextSelectionEnabled) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            if (AppReady.databaseReady || splashDone) {
+                            if (appReady) {
                                 if (AppLockController.locked) {
                                     LockScreen(
                                         paletteColors = paletteColors,
@@ -440,11 +451,11 @@ class MainActivity : FragmentActivity() {
                                 )
                             }
 
-                            if (splashEnabled && !splashDone) {
+                            if (splashEnabled && !removeSplash) {
                                 LucentSplash(
                                     paletteColors = paletteColors,
                                     backdropColor = backdropColor,
-                                    onFinished = { splashDone = true },
+                                    onFinished = { splashAnimationFinished = true },
                                     backgroundAnimated = backgroundAnimated,
                                     style = com.lucent.app.data.SplashStyle.fromKey(splashStyle)
                                 )
