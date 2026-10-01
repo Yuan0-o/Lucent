@@ -2,8 +2,6 @@ package com.lucent.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
@@ -90,7 +88,6 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
-                    .verticalScroll(rememberScrollState())
             ) {
                 Text(S.setupWizardTitle, color = onGradient, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
