@@ -225,7 +225,7 @@ class PluginPreflightTest {
     fun installRunsTheScriptAsWritten() = preflightSandbox(android = true) { _ ->
         val shell = PreflightShell { command ->
             when {
-                command == "pkg update" -> ShellOutcome(true, "updated", "", 0)
+                command == "command -v git" -> ShellOutcome(false, "", "not found", 1)
                 command.contains("pkg install") -> ShellOutcome(true, "installed", "", 0)
                 else -> ShellOutcome(true, "", "", 0)
             }
@@ -262,7 +262,17 @@ class PluginPreflightTest {
                 needsShell = false,
                 windowsInstall = "unpack {file}"
             )
-            HarnessRuntime.shell = PreflightShell { ShellOutcome(true, "", "", 0) }
+            var unpacked = false
+            HarnessRuntime.shell = PreflightShell { command ->
+                when {
+                    command == "command -v payload" -> ShellOutcome(unpacked, "", "", if (unpacked) 0 else 1)
+                    command.startsWith("unpack") -> {
+                        unpacked = true
+                        ShellOutcome(true, "", "", 0)
+                    }
+                    else -> ShellOutcome(true, "", "", 0)
+                }
+            }
             val notes = mutableListOf<String>()
             val manager = PluginManager.desktop()
             val outcome = runBlocking {
@@ -274,6 +284,32 @@ class PluginPreflightTest {
         } finally {
             server.stop(0)
         }
+    }
+
+    @Test
+    fun installSkipsTheScriptWhenTheToolIsAlreadyThere() = preflightSandbox { _ ->
+        val shell = PreflightShell { ShellOutcome(true, "", "", 0) }
+        HarnessRuntime.shell = shell
+        val manager = PluginManager.desktop()
+        val plugin = PluginSpec(
+            id = "payload",
+            name = "Payload",
+            summary = "downloads something",
+            android = false,
+            desktop = true,
+            bytes = 0L,
+            sources = emptyList(),
+            detectCommand = "command -v payload",
+            installScript = "unpack {file}",
+            licence = "MIT",
+            homepage = "https://example.invalid",
+            needsShell = false,
+            windowsInstall = "unpack {file}"
+        )
+        val outcome = runBlocking { manager.install(plugin, PluginSource("", "", ""), onProgress = { _, _ -> }) }
+        assertTrue(outcome.ok, outcome.message)
+        assertTrue(shell.seen.none { it.contains("unpack") }, shell.seen.joinToString())
+        assertTrue(HarnessRuntime.config().pluginInstalled("payload"))
     }
 
     @Test
