@@ -149,7 +149,7 @@ class TerminalCoreTest {
 
         assertTrue(tabs.select(first.id))
         tabs.remove(first.id)
-        assertEquals(fifth.id, tabs.current()?.id)
+        assertEquals(third.id, tabs.current()?.id)
         assertFalse(tabs.select(999999L))
         assertNull(tabs.find(424242L))
     }
