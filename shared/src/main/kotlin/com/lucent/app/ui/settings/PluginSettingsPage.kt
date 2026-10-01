@@ -66,7 +66,7 @@ internal fun PluginSettingsPage(
     var note by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf(0f) }
     var failure by remember { mutableStateOf<PluginFailureReport?>(null) }
-    var retry by remember { mutableStateOf<PluginSpec?>(null) }
+    var retry by remember { mutableStateOf<Pair<PluginSpec, Boolean>?>(null) }
     var preflight by remember { mutableStateOf<PreflightReport?>(null) }
     var pendingInstall by remember { mutableStateOf<PluginSpec?>(null) }
     var running by remember { mutableStateOf<Job?>(null) }
@@ -352,7 +352,7 @@ internal fun PluginSettingsPage(
             android = android,
             onRetry = {
                 failure = null
-                retry = report.plugin
+                retry = report.plugin to (report.outcome.failure == PluginFailure.REMOVE)
             },
             onDismiss = { failure = null }
         )
@@ -362,7 +362,7 @@ internal fun PluginSettingsPage(
     LaunchedEffect(pending) {
         if (pending == null) return@LaunchedEffect
         retry = null
-        startInstall(pending, false)
+        startInstall(pending.first, pending.second)
     }
 
     val forced = pendingInstall
@@ -498,7 +498,7 @@ private fun PluginFailureDialog(
     val steps = repairSteps(report.outcome.failure, android)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(S.pluginInstallFailed) },
+        title = { Text(if (report.outcome.failure == PluginFailure.REMOVE) S.pluginRemoveFailed else S.pluginInstallFailed) },
         text = {
             Column(
                 modifier = Modifier
@@ -582,6 +582,7 @@ private fun reasonText(failure: PluginFailure): String = when (failure) {
     PluginFailure.NO_SHELL -> S.pluginReasonNoShell
     PluginFailure.NO_PLATFORM -> S.pluginReasonUnsupported
     PluginFailure.INSTALL -> S.pluginReasonInstall
+    PluginFailure.REMOVE -> S.pluginReasonRemove
     PluginFailure.DETECT -> S.pluginReasonDetect
     else -> S.pluginReasonDownload
 }

@@ -242,7 +242,7 @@ class PluginManager private constructor(private val context: Context?, private v
             return PluginOutcome(
                 false,
                 "${plugin.name}: the remove command exited ${outcome.exitCode}",
-                failure = PluginFailure.INSTALL,
+                failure = PluginFailure.REMOVE,
                 detail = outcome.text.take(400)
             )
         }
