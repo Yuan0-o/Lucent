@@ -7,7 +7,7 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -250,9 +250,9 @@ fun AssistantScreen(active: Boolean = true) {
                 onClick = { close(); cloudPickerLauncher.launch(arrayOf("*/*")) }
             )
         },
-        inputModifier = { _, _ -> Modifier.height(56.dp) },
-        inputSingleLine = true,
-        inputMaxLines = 1,
+        inputModifier = { _, _ -> Modifier.heightIn(min = 56.dp) },
+        inputSingleLine = false,
+        inputMaxLines = 6,
         onSubmitted = {},
         onSaveText = { fileName, text ->
             pendingSaveText = text
