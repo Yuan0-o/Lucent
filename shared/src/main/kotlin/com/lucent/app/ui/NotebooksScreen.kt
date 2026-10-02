@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -600,7 +599,7 @@ private fun NotebookShelfItem(
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(30.dp)) {
                         Icon(
-                            MoreVert,
+                            Icons.Default.MoreVert,
                             contentDescription = com.lucent.app.i18n.S.a11yMoreOptions,
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(16.dp)

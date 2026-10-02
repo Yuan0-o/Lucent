@@ -125,19 +125,19 @@ internal fun KeepAliveTabs(pagerState: PagerState, modifier: Modifier = Modifier
     val sharedHaze = LocalHazeState.current
     val context = LocalContext.current
     val swipeChain = remember { listOf(Screen.Settings, Screen.Assistant, Screen.Notebooks, Screen.Notes, Screen.Tasks) }
-    var pendingPhotoCallback by remember { androidx.compose.runtime.mutableStateOf<((String?) -> Unit)?>(null) }
+    val pendingPhotoCallback: androidx.compose.runtime.MutableState<((String?) -> Unit)?> = remember { androidx.compose.runtime.mutableStateOf<((String?) -> Unit)?>(null) }
     val photoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
              val id = com.lucent.app.data.AttachmentStore.importUri(context, uri)
              if (id != null) {
-                 pendingPhotoCallback?.let { it("photo:$id") }
+                 pendingPhotoCallback.value?.invoke("photo:$id")
                  com.lucent.app.data.StartupLog.event(context, "notebooks: imported cover photo $id")
              } else {
                  com.lucent.app.data.StartupLog.event(context, "notebooks: cover photo import failed")
-                 pendingPhotoCallback?.invoke(null)
+                 pendingPhotoCallback.value?.invoke(null)
              }
-        } else pendingPhotoCallback?.invoke(null)
-        pendingPhotoCallback = null
+        } else pendingPhotoCallback.value?.invoke(null)
+        pendingPhotoCallback.value = null
     }
 
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
@@ -170,7 +170,7 @@ internal fun KeepAliveTabs(pagerState: PagerState, modifier: Modifier = Modifier
                             onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Notebooks) },
                             showBack = false,
                             onPickPhoto = { callback ->
-                                pendingPhotoCallback = callback
+                                pendingPhotoCallback.value = callback
                                 photoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
                             active = isActive
