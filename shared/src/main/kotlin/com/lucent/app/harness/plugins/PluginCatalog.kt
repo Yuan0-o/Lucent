@@ -37,6 +37,13 @@ data class PluginSpec(
 object PluginCatalog {
 
     private const val APT_SETUP = "F=/etc/apt/sources.list.d/ubuntu.sources; " +
+        "echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/unsafe-io 2>/dev/null; " +
+        "chmod -R u+rwX /var/lib/dpkg 2>/dev/null || true; " +
+        "rm -f /var/lib/dpkg/status-old 2>/dev/null; " +
+        "echo \"[Diagnostics] id=\$(id -u):\$(id -g), free=\$(df -k /var/lib/dpkg | awk 'NR==2{print \$4}')KB\"; " +
+        "echo \"[Diagnostics] dpkg dir:\"; ls -ld /var/lib/dpkg 2>/dev/null; ls -la /var/lib/dpkg 2>/dev/null | head -n 5; " +
+        "touch /var/lib/dpkg/probe 2>/dev/null && echo \"[Diagnostics] probe=ok\" || echo \"[Diagnostics] probe=fail\"; " +
+        "rm -f /var/lib/dpkg/probe 2>/dev/null; " +
         "if [ ! -s \"\$F\" ]; then mkdir -p /etc/apt/sources.list.d && " +
         "printf '%s\\n' 'Types: deb' 'URIs: {aptMirror}/ubuntu-ports/' 'Suites: noble noble-updates noble-backports' " +
         "'Components: main universe restricted multiverse' 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' '' " +
