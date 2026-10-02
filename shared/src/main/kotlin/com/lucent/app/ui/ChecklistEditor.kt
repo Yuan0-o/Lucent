@@ -90,7 +90,7 @@ fun ChecklistEditorSection(
                 val itemColor = if (item.done) onGradientMuted else onGradient
                 OutlinedTextField(
                     value = item.text,
-                    onValueChange = { onEditText(item, it) },
+                    onValueChange = { onEditText(item, com.lucent.app.collapseExcessBlankLines(it)) },
                     singleLine = false,
                     maxLines = 6,
                     placeholder = { Text(com.lucent.app.i18n.S.checklistEmptyItem, color = onGradientMuted) },
@@ -146,7 +146,7 @@ fun ChecklistEditorSection(
         Row(verticalAlignment = Alignment.Top, modifier = addRowModifier) {
             OutlinedTextField(
                 value = newItemText,
-                onValueChange = onNewItemTextChange,
+                onValueChange = { onNewItemTextChange(com.lucent.app.collapseExcessBlankLines(it)) },
                 label = { Text(addLabel) },
                 singleLine = false,
                 maxLines = 4,
@@ -262,7 +262,7 @@ private fun ChecklistItemEditorDialog(
                 Spacer(modifier = Modifier.size(8.dp))
                 OutlinedTextField(
                     value = text,
-                    onValueChange = onTextChange,
+                    onValueChange = { onTextChange(com.lucent.app.collapseExcessBlankLines(it)) },
                     placeholder = { Text(com.lucent.app.i18n.S.checklistEmptyItem, color = onGradientMuted) },
                     textStyle = LocalTextStyle.current.copy(color = onGradient),
                     colors = OutlinedTextFieldDefaults.colors(

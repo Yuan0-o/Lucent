@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -60,15 +62,16 @@ internal fun coverBrush(color: NotebookColor): Brush = Brush.horizontalGradient(
 
 @Composable
 fun NotebookCoverPicker(
-    selected: NotebookColor,
-    onSelect: (NotebookColor) -> Unit,
+    selectedKey: String,
+    onSelect: (String) -> Unit,
+    onPickPhoto: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val onGradientMuted = LocalOnGradientMuted.current
     val context = LocalContext.current
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         NotebookColor.entries.forEach { option ->
-            val isSelected = option == selected
+            val isSelected = option.key == selectedKey
             val shape = RoundedCornerShape(6.dp)
             Box(
                 modifier = Modifier
@@ -78,7 +81,7 @@ fun NotebookCoverPicker(
                     .then(if (isSelected) Modifier.border(2.dp, onGradientMuted, shape) else Modifier)
                     .clickable {
                         Haptics.tick(context)
-                        onSelect(option)
+                        onSelect(option.key)
                     }
                     .semantics {
                         contentDescription = com.lucent.app.i18n.S.notebookCoverA11y(option.label)
@@ -96,6 +99,31 @@ fun NotebookCoverPicker(
                 }
             }
         }
+        if (com.lucent.app.harness.HarnessRuntime.android && onPickPhoto != null) {
+            val isPhoto = selectedKey.startsWith("photo:")
+            val shape = RoundedCornerShape(6.dp)
+            Box(
+                modifier = Modifier
+                    .size(width = 34.dp, height = 46.dp)
+                    .clip(shape)
+                    .border(2.dp, if (isPhoto) onGradientMuted else onGradientMuted.copy(alpha = 0.5f), shape)
+                    .clickable {
+                        Haptics.tick(context)
+                        onPickPhoto()
+                    }
+                    .semantics {
+                        contentDescription = com.lucent.app.i18n.S.notebookCoverTitle
+                        this.selected = isPhoto
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isPhoto) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = onGradientMuted, modifier = Modifier.size(16.dp))
+                } else {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = onGradientMuted, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
     }
 }
 
@@ -105,6 +133,37 @@ fun NotebookCover(
     label: String?,
     modifier: Modifier = Modifier
 ) {
+    if (colorKey.startsWith("photo:")) {
+        val shape = RoundedCornerShape(10.dp)
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(Color.Black.copy(alpha=0.3f))
+                .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
+                .semantics {
+                    contentDescription = com.lucent.app.i18n.S.notebookCoverA11y(label ?: "Photo")
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            PlatformPhotoCover(colorKey = colorKey, modifier = Modifier.fillMaxSize())
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(6.dp)
+                    .background(Color.Black.copy(alpha = 0.10f))
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 10.dp)
+                    .size(width = 16.dp, height = 3.dp)
+                    .background(Color.White.copy(alpha = 0.35f))
+            )
+        }
+        return
+    }
+
     val color = NotebookColor.fromKey(colorKey)
     val shape = RoundedCornerShape(10.dp)
     Box(

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -24,19 +25,18 @@ fun rememberCyclingPaletteColors(
 
     val inspection = LocalInspectionMode.current
     val running = animated && environment.active && environment.motionEnabled && !inspection
-    if (!running) return palettes.first()
-
     val n = palettes.size
     val totalMs = (n.toLong() * secondsPerPalette * 1000L).toFloat()
 
     var phase by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(n, secondsPerPalette) {
-        var startNanos = -1L
+    var startedAtNanos by remember(n, secondsPerPalette) { mutableLongStateOf(0L) }
+    LaunchedEffect(n, secondsPerPalette, running) {
+        if (!running) return@LaunchedEffect
         var lastEmitted = -1
         while (true) {
             androidx.compose.animation.core.withInfiniteAnimationFrameNanos { frameNanos ->
-                if (startNanos < 0L) startNanos = frameNanos
-                val elapsed = (frameNanos - startNanos) / 1_000_000f
+                if (startedAtNanos == 0L) startedAtNanos = frameNanos
+                val elapsed = (frameNanos - startedAtNanos) / 1_000_000f
                 val raw = (elapsed / totalMs * n) % n
                 val step = (raw * CYCLE_STEPS_PER_PALETTE).toInt()
                 if (step != lastEmitted) {

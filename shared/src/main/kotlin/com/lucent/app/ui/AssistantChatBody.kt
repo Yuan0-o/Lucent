@@ -94,8 +94,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -103,6 +106,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.ChatMessage
@@ -215,6 +219,13 @@ fun AssistantChatBody(
 
     if (com.lucent.app.AppNavigation.terminalOpen) {
         TerminalScreen(onBack = { com.lucent.app.AppNavigation.terminalOpen = false })
+    } else if (com.lucent.app.AppNavigation.subAgentPageId != null) {
+        SubAgentChatPage(
+            agentId = com.lucent.app.AppNavigation.subAgentPageId.orEmpty(),
+            tint = onGradient,
+            mutedTint = onGradientMuted,
+            onBack = { com.lucent.app.AppNavigation.backFromSubAgent() }
+        )
     } else {
     var viewingAttachment by remember { mutableStateOf<com.lucent.app.data.Attachment?>(null) }
 
@@ -222,6 +233,7 @@ fun AssistantChatBody(
 
     var selectionMode by remember { mutableStateOf(false) }
     var contextMenuMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var contextMenuOffset by remember { mutableStateOf(Offset.Zero) }
     val selectedIds = remember { mutableStateListOf<Long>() }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -463,7 +475,7 @@ fun AssistantChatBody(
             text = {
                 OutlinedTextField(
                     value = renameText,
-                    onValueChange = { renameText = it },
+                    onValueChange = { renameText  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(com.lucent.app.i18n.S.labelName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -633,7 +645,7 @@ fun AssistantChatBody(
                     Column(modifier = Modifier.width(210.dp)) {
                         OutlinedTextField(
                             value = conversationSearch,
-                            onValueChange = { conversationSearch = it },
+                            onValueChange = { conversationSearch  = com.lucent.app.collapseExcessBlankLines(it) },
                             leadingIcon = {
                                 Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                             },
@@ -869,6 +881,7 @@ fun AssistantChatBody(
                         }
                     }
                     val isSelected = msg.id in selectedIds
+                    var messageSize by remember(msg.id) { mutableStateOf(IntSize.Zero) }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -891,11 +904,13 @@ fun AssistantChatBody(
                                     if (isSelected) Modifier.background(Color.White.copy(alpha = 0.10f))
                                     else Modifier
                                 )
+                                .onSizeChanged { messageSize = it }
                                 .pointerInput(msg.id, selectionMode) {
                                     detectTapGestures(
-                                        onLongPress = {
+                                        onLongPress = { pressOffset ->
                                             if (!selectionMode) {
                                                 Haptics.tick(context)
+                                                contextMenuOffset = pressOffset
                                                 contextMenuMessage = msg
                                             }
                                         },
@@ -909,6 +924,7 @@ fun AssistantChatBody(
                                 .onSecondaryClick {
                                     if (!selectionMode) {
                                         Haptics.tick(context)
+                                        contextMenuOffset = Offset.Zero
                                         contextMenuMessage = msg
                                     }
                                 }
@@ -1072,10 +1088,15 @@ fun AssistantChatBody(
                                     )
                                 }
                             }
-                        }
                         DropdownMenu(
                             expanded = contextMenuMessage?.id == msg.id,
-                            onDismissRequest = { contextMenuMessage = null }
+                            onDismissRequest = { contextMenuMessage = null },
+                            offset = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                DpOffset(
+                                    contextMenuOffset.x.toDp(),
+                                    (contextMenuOffset.y - messageSize.height - 64.dp.toPx()).toDp()
+                                )
+                            }
                         ) {
                             DropdownMenuItem(
                                 text = { Text(com.lucent.app.i18n.S.actionReply) },
@@ -1120,6 +1141,7 @@ fun AssistantChatBody(
                                     showBatchDeleteConfirm = true
                                 }
                             )
+                        }
                         }
                         }
                     }
@@ -1384,7 +1406,7 @@ fun AssistantChatBody(
             }
             OutlinedTextField(
                 value = draft.input,
-                onValueChange = { draft.input = it },
+                onValueChange = { draft.input  = com.lucent.app.collapseExcessBlankLines(it) },
                 trailingIcon = {
                     var inputExpanded by androidx.compose.runtime.remember {
                         androidx.compose.runtime.mutableStateOf(false)
@@ -1418,8 +1440,10 @@ fun AssistantChatBody(
                         )
                         DictationButton(
                             onText = { spoken ->
-                                draft.input = if (draft.input.isBlank()) spoken
-                                else draft.input + (if (draft.input.endsWith(" ")) "" else " ") + spoken
+                                draft.input = com.lucent.app.collapseExcessBlankLines(
+                                    if (draft.input.isBlank()) spoken
+                                    else draft.input + (if (draft.input.endsWith(" ")) "" else " ") + spoken
+                                )
                             },
                             modifier = Modifier.size(34.dp)
                         )
@@ -1438,7 +1462,7 @@ fun AssistantChatBody(
                     if (inputExpanded) {
                         LucentExpandedInput(
                             value = draft.input,
-                            onValueChange = { draft.input = it },
+                            onValueChange = { draft.input  = com.lucent.app.collapseExcessBlankLines(it) },
                             placeholder = com.lucent.app.i18n.S.messagePlaceholder,
                             title = com.lucent.app.i18n.S.messagePlaceholder,
                             onCollapse = { inputExpanded = false }

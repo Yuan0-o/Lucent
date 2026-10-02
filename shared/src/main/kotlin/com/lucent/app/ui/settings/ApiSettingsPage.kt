@@ -170,7 +170,7 @@ internal fun CloudModelSettingsPage(
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = editingProfileName,
-            onValueChange = onEditingProfileNameChange,
+            onValueChange = { onEditingProfileNameChange(com.lucent.app.collapseExcessBlankLines(it)) },
             label = { Text(S.fieldName) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -179,7 +179,7 @@ internal fun CloudModelSettingsPage(
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = key,
-            onValueChange = onKeyChange,
+            onValueChange = { onKeyChange(com.lucent.app.collapseExcessBlankLines(it)) },
             label = { Text(S.fieldApiKey) },
             visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
@@ -228,7 +228,7 @@ internal fun CloudModelSettingsPage(
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = url,
-                onValueChange = onUrlChange,
+                onValueChange = { onUrlChange(com.lucent.app.collapseExcessBlankLines(it)) },
                 label = { Text(S.fieldBaseUrl) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -295,7 +295,7 @@ internal fun CloudModelSettingsPage(
                 Column(modifier = Modifier.width(280.dp)) {
                     OutlinedTextField(
                         value = query,
-                        onValueChange = { query = it },
+                        onValueChange = { query  = com.lucent.app.collapseExcessBlankLines(it) },
                         placeholder = { Text(S.actionSearch) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)

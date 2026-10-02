@@ -51,7 +51,7 @@ fun HarnessAskDialog() {
                 }
                 OutlinedTextField(
                     value = typed,
-                    onValueChange = { typed = it },
+                    onValueChange = { typed  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(S.fieldAnswerOptional) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()

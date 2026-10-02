@@ -149,7 +149,7 @@ object BuiltinRuntimeInstaller {
         }
     }
 
-    private fun ensureHostIdentity(rootfs: File) {
+    internal fun ensureHostIdentity(rootfs: File) {
         val uid = Os.getuid()
         val gid = Os.getgid()
         val passwd = File(rootfs, "etc/passwd")
@@ -160,12 +160,14 @@ object BuiltinRuntimeInstaller {
             passwd.writeText(passwdLines.joinToString("\n", postfix = "\n"))
         }
         val groupLines = groups.readLines().toMutableList()
-        (supplementaryGroups().toSet() + gid).filter { it >= 0 }.forEach { groupId ->
+        var groupsChanged = false
+        (supplementaryGroups().toSet() + setOf(uid, gid)).filter { it >= 0 }.forEach { groupId ->
             if (groupLines.none { it.split(':').getOrNull(2)?.toIntOrNull() == groupId }) {
                 groupLines.add("android_$groupId:x:$groupId:")
+                groupsChanged = true
             }
         }
-        groups.writeText(groupLines.joinToString("\n", postfix = "\n"))
+        if (groupsChanged) groups.writeText(groupLines.joinToString("\n", postfix = "\n"))
     }
 
     private fun supplementaryGroups(): List<Int> {

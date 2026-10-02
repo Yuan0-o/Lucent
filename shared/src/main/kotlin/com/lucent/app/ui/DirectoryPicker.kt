@@ -116,7 +116,11 @@ internal object DirectoryBrowse {
         .orEmpty()
         .map { DirectoryEntry(it.path, it.path) }
 
-    fun home(): String = runCatching { HarnessRuntime.defaultWorkspace().path }.getOrDefault("")
+    fun home(): String = if (HarnessRuntime.android) {
+        "/storage/emulated/0"
+    } else {
+        runCatching { HarnessRuntime.defaultWorkspace().path }.getOrDefault("")
+    }
 
     fun startingPoint(wanted: String): String {
         val clean = normalize(wanted)
@@ -242,7 +246,7 @@ private fun NewFolderDialog(parent: String, onDismiss: () -> Unit, onCreate: (St
         text = {
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = { name  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(S.agentWorkspaceLabel) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -273,7 +277,7 @@ private fun PathRow(
         if (editing) {
             OutlinedTextField(
                 value = draft,
-                onValueChange = onDraftChange,
+                onValueChange = { onDraftChange(com.lucent.app.collapseExcessBlankLines(it)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )

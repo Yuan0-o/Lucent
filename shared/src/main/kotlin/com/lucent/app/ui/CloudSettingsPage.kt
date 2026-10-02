@@ -173,10 +173,10 @@ fun CloudSettingsPage(
                 OutlinedTextField(
                     value = urlDraft,
                     onValueChange = {
-                        urlDraft = it
+                        urlDraft = com.lucent.app.collapseExcessBlankLines(it)
                         scope.launch {
-                            SettingsCache.cloudUrl = it
-                            repo.setCloudUrl(it)
+                            SettingsCache.cloudUrl = urlDraft
+                            repo.setCloudUrl(urlDraft)
                         }
                     },
                     label = { Text(S.cloudUrlLabel) },
@@ -187,10 +187,10 @@ fun CloudSettingsPage(
                 OutlinedTextField(
                     value = userDraft,
                     onValueChange = {
-                        userDraft = it
+                        userDraft = com.lucent.app.collapseExcessBlankLines(it)
                         scope.launch {
-                            SettingsCache.cloudUser = it
-                            repo.setCloudUser(it)
+                            SettingsCache.cloudUser = userDraft
+                            repo.setCloudUser(userDraft)
                         }
                     },
                     label = { Text(S.cloudUserLabel) },
@@ -201,10 +201,10 @@ fun CloudSettingsPage(
                 OutlinedTextField(
                     value = pwDraft,
                     onValueChange = {
-                        pwDraft = it
+                        pwDraft = com.lucent.app.collapseExcessBlankLines(it)
                         scope.launch {
-                            SettingsCache.cloudPasswordEnc = CryptoUtil.encrypt(it)
-                            repo.setCloudPasswordEnc(CryptoUtil.encrypt(it))
+                            SettingsCache.cloudPasswordEnc = CryptoUtil.encrypt(pwDraft)
+                            repo.setCloudPasswordEnc(CryptoUtil.encrypt(pwDraft))
                         }
                     },
                     label = { Text(S.cloudPasswordLabel) },
@@ -216,10 +216,10 @@ fun CloudSettingsPage(
                 OutlinedTextField(
                     value = folderDraft,
                     onValueChange = {
-                        folderDraft = it
+                        folderDraft = com.lucent.app.collapseExcessBlankLines(it)
                         scope.launch {
-                            SettingsCache.cloudFolder = it
-                            repo.setCloudFolder(it)
+                            SettingsCache.cloudFolder = folderDraft
+                            repo.setCloudFolder(folderDraft)
                         }
                     },
                     label = { Text(S.cloudFolderLabel) },

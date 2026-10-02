@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
@@ -148,6 +149,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         val settingsRepo = SettingsRepository(applicationContext)
@@ -298,7 +300,6 @@ class MainActivity : FragmentActivity() {
         StartupLog.event(applicationContext, "Startup tasks dispatched; composing UI")
 
         setContent {
-            val globalTextSelectionEnabled by settingsRepo.globalTextSelectionEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.globalTextSelectionEnabled)
             val themeMode by settingsRepo.themeMode.collectAsState(initial = initialThemeMode)
             val paletteName by settingsRepo.palette.collectAsState(initial = initialPalette)
             val fontKey by settingsRepo.font.collectAsState(initial = initialFont)
@@ -427,7 +428,7 @@ class MainActivity : FragmentActivity() {
                     val appLockOn by settingsRepo.appLockEnabled.collectAsState(initial = lockEnabled)
                     LaunchedEffect(appLockOn) { AppLockController.enabled = appLockOn }
 
-                    com.lucent.app.ui.GlobalTextSelectionContainer(enabled = globalTextSelectionEnabled) {
+                    com.lucent.app.ui.GlobalTextSelectionContainer(enabledFlow = settingsRepo.globalTextSelectionEnabled) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (appReady) {
                                 if (AppLockController.locked) {
@@ -542,11 +543,18 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     var currentScreen by rememberSaveable { mutableStateOf(LastScreen.current) }
     val tabs = HomeTab.entries
     val currentTab = HomeTab.of(currentScreen)
+    val swipeChain = remember { listOf(Screen.Settings, Screen.Assistant, Screen.Notebooks, Screen.Notes, Screen.Tasks) }
     val pagerState = rememberPagerState(
-        initialPage = tabs.indexOf(currentTab),
-        pageCount = { tabs.size }
+        initialPage = swipeChain.indexOf(currentScreen).takeIf { it >= 0 } ?: 0,
+        pageCount = { swipeChain.size }
     )
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    LaunchedEffect(currentScreen) {
+        val target = swipeChain.indexOf(currentScreen)
+        if (target >= 0 && pagerState.currentPage != target) {
+            pagerState.scrollToPage(target)
+        }
+    }
     val tabScope = rememberCoroutineScope()
     val lastScreenContext = LocalContext.current
     val lastScreenRepo = remember(lastScreenContext) {
@@ -721,7 +729,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
             Scaffold(
                 containerColor = Color.Transparent,
                 topBar = {
-                    TopAppBar(
+                    if (!AppNavigation.terminalOpen) TopAppBar(
                         title = {
                             val homeMode = HomeMode.of(currentScreen)
                             if (homeMode != null) {
@@ -825,7 +833,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                                         selected = currentTab == tab,
                                         onClick = {
                                             currentScreen = tab.screen(LastScreen.homeMode)
-                                            tabScope.launch { pagerState.scrollToPage(tabs.indexOf(tab)) }
+                                            tabScope.launch { pagerState.scrollToPage(swipeChain.indexOf(currentScreen)) }
                                         },
                                         modifier = Modifier.weight(1f)
                                     )
@@ -844,7 +852,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     Modifier.padding(top = topPad).fillMaxSize()
                 }
                 CompositionLocalProvider(LocalBottomBarInset provides bottomInset) {
-                    KeepAliveTabs(active = currentScreen, pagerState = pagerState, modifier = contentModifier)
+                    KeepAliveTabs(pagerState = pagerState, modifier = contentModifier)
                 }
             }
             }

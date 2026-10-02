@@ -385,7 +385,7 @@ private fun modelsMenu(
             }
             BasicTextField(
                 value = query,
-                onValueChange = onQuery,
+                onValueChange = { onQuery(com.lucent.app.collapseExcessBlankLines(it)) },
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 12.sp, lineHeight = 14.sp, color = tint),
                 cursorBrush = SolidColor(tint),

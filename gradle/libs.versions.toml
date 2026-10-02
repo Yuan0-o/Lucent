@@ -24,6 +24,7 @@ profileInstaller = "1.4.1"
 composeMaterialIconsExtended = "1.7.3"
 
 benchmarkMacroJunit4 = "1.5.0"
+coreSplashscreen = "1.0.1"
 
 [libraries]
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
@@ -61,3 +62,4 @@ androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstall
 compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "composeMaterialIconsExtended" }
 
 benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "benchmarkMacroJunit4" }
+core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }

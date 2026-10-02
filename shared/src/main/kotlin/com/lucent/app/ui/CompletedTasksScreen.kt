@@ -124,7 +124,7 @@ fun CompletedTasksScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
+                onValueChange = { searchQuery  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(com.lucent.app.i18n.S.searchCompleted) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 modifier = Modifier.weight(1f)

@@ -1325,7 +1325,7 @@ fun NotesScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = newTitle,
-                        onValueChange = { newTitle = it },
+                        onValueChange = { newTitle  = com.lucent.app.collapseExcessBlankLines(it) },
                         placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1335,7 +1335,7 @@ fun NotesScreen(active: Boolean = true) {
                     val detailsIsAside = isChecklistMode || isDoodleMode
                     ExpandableGlassTextField(
                         value = newBody,
-                        onValueChange = { newBody = it },
+                        onValueChange = { newBody  = com.lucent.app.collapseExcessBlankLines(it) },
                         extraAction = { DictationButton(onText = { spoken ->
                             newBody = if (newBody.isBlank()) spoken
                             else newBody + (if (newBody.endsWith(" ") || newBody.endsWith("\n")) "" else " ") + spoken
@@ -1364,7 +1364,7 @@ fun NotesScreen(active: Boolean = true) {
                         ChecklistEditorSection(
                             items = checklistItems,
                             newItemText = newChecklistItemText,
-                            onNewItemTextChange = { newChecklistItemText = it },
+                            onNewItemTextChange = { newChecklistItemText = com.lucent.app.collapseExcessBlankLines(it) },
                             onAdd = {
                                 checklistItems = checklistItems + Checklist.newItem(newChecklistItemText)
                                 newChecklistItemText = ""
@@ -1387,7 +1387,7 @@ fun NotesScreen(active: Boolean = true) {
                     }
                     if (isDoodleMode) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData = it })
+                        ExpandableDoodleEditor(value = doodleData, onValueChange = { doodleData  = com.lucent.app.collapseExcessBlankLines(it) })
                     }
                     Spacer(modifier = Modifier.height(12.dp).bringIntoViewRequester(bodyEndRequester))
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1478,7 +1478,7 @@ fun NotesScreen(active: Boolean = true) {
                             ) {
                                 androidx.compose.foundation.text.BasicTextField(
                                     value = newCustomTag,
-                                    onValueChange = { newCustomTag = it },
+                                    onValueChange = { newCustomTag  = com.lucent.app.collapseExcessBlankLines(it) },
                                     textStyle = androidx.compose.ui.text.TextStyle(color = onGradient, fontSize = 14.sp),
                                     singleLine = true,
                                     cursorBrush = androidx.compose.ui.graphics.SolidColor(onGradient),
@@ -1946,7 +1946,7 @@ fun NotesScreen(active: Boolean = true) {
                         search = {
                             OutlinedTextField(
                                 value = searchText,
-                                onValueChange = { searchText = it },
+                                onValueChange = { searchText  = com.lucent.app.collapseExcessBlankLines(it) },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotes) },
                                 trailingIcon = { SearchHelpButton() },
                                 singleLine = true,

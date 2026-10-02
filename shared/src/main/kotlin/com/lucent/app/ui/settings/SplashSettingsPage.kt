@@ -90,19 +90,6 @@ internal fun SplashSettingsPage(
             )
             Spacer(modifier = Modifier.height(8.dp))
             SplashStyleRow(
-                selected = current == SplashStyle.PEN,
-                title = S.splashStylePenTitle,
-                detail = S.splashStylePenDesc,
-                onGradient = onGradient,
-                onGradientMuted = onGradientMuted,
-                onClick = {
-                    SettingsCache.splashStyle = SplashStyle.PEN.key
-                    scope.launch { repo.setSplashStyle(SplashStyle.PEN.key) }
-                    StartupLog.event(context, "splash: animation set to ${SplashStyle.PEN.key}")
-                }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SplashStyleRow(
                 selected = current == SplashStyle.AVATAR,
                 title = S.splashStyleAvatarTitle,
                 detail = S.splashStyleAvatarDesc,
@@ -112,6 +99,19 @@ internal fun SplashSettingsPage(
                     SettingsCache.splashStyle = SplashStyle.AVATAR.key
                     scope.launch { repo.setSplashStyle(SplashStyle.AVATAR.key) }
                     StartupLog.event(context, "splash: animation set to ${SplashStyle.AVATAR.key}")
+                }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SplashStyleRow(
+                selected = current == SplashStyle.PEN,
+                title = S.splashStylePenTitle,
+                detail = S.splashStylePenDesc,
+                onGradient = onGradient,
+                onGradientMuted = onGradientMuted,
+                onClick = {
+                    SettingsCache.splashStyle = SplashStyle.PEN.key
+                    scope.launch { repo.setSplashStyle(SplashStyle.PEN.key) }
+                    StartupLog.event(context, "splash: animation set to ${SplashStyle.PEN.key}")
                 }
             )
         }

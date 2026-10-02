@@ -33,6 +33,7 @@ object BuiltinShell {
             return@withContext ShellOutcome(false, "", "built-in environment is not set up yet - open the setup guide to prepare it", -1, false)
         }
 
+        BuiltinRuntimeInstaller.ensureHostIdentity(rootfs)
         ensureResolvConf(context, rootfs)
 
         val libDir = File(context.applicationInfo.nativeLibraryDir)

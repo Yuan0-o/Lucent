@@ -164,7 +164,7 @@ fun SearchScreen(
 
         OutlinedTextField(
             value = raw,
-            onValueChange = { raw = it },
+            onValueChange = { raw  = com.lucent.app.collapseExcessBlankLines(it) },
             placeholder = { Text(com.lucent.app.i18n.S.searchPlaceholder) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = onGradientMuted) },
             singleLine = true,
@@ -282,7 +282,7 @@ fun SearchScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = saveName,
-                        onValueChange = { saveName = it },
+                        onValueChange = { saveName  = com.lucent.app.collapseExcessBlankLines(it) },
                         placeholder = { Text(com.lucent.app.i18n.S.saveSearchNamePlaceholder) },
                         singleLine = true
                     )

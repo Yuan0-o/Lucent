@@ -65,7 +65,7 @@ class TerminalSessionManager(
         return backend.describe()
     }
 
-    fun createSession(request: PtyStartRequest = PtyStartRequest()): TerminalTab<PtySession> {
+    fun createSession(request: PtyStartRequest = PtyStartRequest(), label: String? = null): TerminalTab<PtySession> {
         val backend = backendProvider()
             ?: throw TerminalBackendUnavailable("No terminal backend is registered on this platform")
         if (!backend.isReady()) throw TerminalBackendUnavailable(backend.describe())
@@ -78,7 +78,7 @@ class TerminalSessionManager(
         }
         val session = PtySession(process, request.cols, request.rows)
         session.listener = sessionForwarder
-        val tab = tabs.add(session)
+        val tab = tabs.add(session, label)
         HarnessRuntime.note("terminal: session ${tab.number} opened")
         notifyTabsChanged()
         return tab

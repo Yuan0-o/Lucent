@@ -74,6 +74,8 @@ object AttachmentMigration {
         val referenced = buildSet {
             db.noteDao().getAllOnce().forEach { addAll(Attachments.idsFromJson(it.attachments)) }
             db.taskDao().getAllOnce().forEach { addAll(Attachments.idsFromJson(it.attachments)) }
+            db.notebookDao().getAllIncludingTrashedOnce().mapNotNull { notebook -> notebook.color.takeIf { it.startsWith("photo:") } }
+                .forEach { add(it.removePrefix("photo:")) }
         }
         referenced.forEach { id ->
             try {
@@ -90,6 +92,8 @@ object AttachmentMigration {
         val referenced = buildSet {
             notes.forEach { addAll(Attachments.idsFromJson(it.attachments)) }
             tasks.forEach { addAll(Attachments.idsFromJson(it.attachments)) }
+            db.notebookDao().getAllIncludingTrashedOnce().mapNotNull { notebook -> notebook.color.takeIf { it.startsWith("photo:") } }
+                .forEach { add(it.removePrefix("photo:")) }
         }
         AttachmentStore.pruneOrphans(context, referenced)
     }

@@ -164,7 +164,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                     LockStage.ENTER_PASSWORD -> {
                         OutlinedTextField(
                             value = password,
-                            onValueChange = { password = it; error = "" },
+                            onValueChange = { password  = com.lucent.app.collapseExcessBlankLines(it); error = ""  },
                             label = { Text(com.lucent.app.i18n.S.lockPassword) },
                             singleLine = true,
                             isError = error.isNotEmpty(),
@@ -288,7 +288,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = answer,
-                            onValueChange = { answer = it; error = "" },
+                            onValueChange = { answer  = com.lucent.app.collapseExcessBlankLines(it); error = ""  },
                             label = { Text(com.lucent.app.i18n.S.lockAnswer) },
                             singleLine = true,
                             isError = error.isNotEmpty(),
@@ -324,7 +324,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         Spacer(modifier = Modifier.height(10.dp))
                         OutlinedTextField(
                             value = newPassword,
-                            onValueChange = { newPassword = it; error = "" },
+                            onValueChange = { newPassword  = com.lucent.app.collapseExcessBlankLines(it); error = ""  },
                             label = { Text(com.lucent.app.i18n.S.lockNewPassword) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
@@ -333,7 +333,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = confirmPassword,
-                            onValueChange = { confirmPassword = it; error = "" },
+                            onValueChange = { confirmPassword  = com.lucent.app.collapseExcessBlankLines(it); error = ""  },
                             label = { Text(com.lucent.app.i18n.S.lockConfirmNewPassword) },
                             singleLine = true,
                             isError = error.isNotEmpty(),

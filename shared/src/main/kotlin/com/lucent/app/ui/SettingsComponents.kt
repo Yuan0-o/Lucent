@@ -514,10 +514,21 @@ internal fun BackupContentLine(label: String, count: Int, details: List<String>)
 }
 
 @androidx.compose.runtime.Composable
-fun GlobalTextSelectionContainer(enabled: Boolean, content: @androidx.compose.runtime.Composable () -> Unit) {
-    if (enabled) {
-        androidx.compose.foundation.text.selection.SelectionContainer { content() }
-    } else {
+fun GlobalTextSelectionContainer(
+    enabledFlow: kotlinx.coroutines.flow.Flow<Boolean>,
+    content: @androidx.compose.runtime.Composable () -> Unit
+) {
+    val enabled by enabledFlow.collectAsState(initial = false)
+    var selection by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<androidx.compose.foundation.text.selection.Selection?>(null)
+    }
+    androidx.compose.runtime.LaunchedEffect(enabled) {
+        if (!enabled) selection = null
+    }
+    androidx.compose.foundation.text.selection.SelectionContainer(
+        selection = selection,
+        onSelectionChange = { next -> if (enabled) selection = next }
+    ) {
         content()
     }
 }

@@ -39,6 +39,18 @@ object AppNavigation {
 
     var terminalOpen by mutableStateOf(false)
 
+    var subAgentPageId by mutableStateOf<String?>(null)
+    private val subAgentBackStack = mutableListOf<String>()
+
+    fun openSubAgent(id: String) {
+        subAgentPageId?.let { subAgentBackStack.add(it) }
+        subAgentPageId = id
+    }
+
+    fun backFromSubAgent() {
+        subAgentPageId = if (subAgentBackStack.isEmpty()) null else subAgentBackStack.removeAt(subAgentBackStack.lastIndex)
+    }
+
     fun requestTerminal() {
         terminalRequested = true
         requestedScreen = Screen.Assistant

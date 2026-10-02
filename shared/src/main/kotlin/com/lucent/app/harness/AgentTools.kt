@@ -12,7 +12,8 @@ class SubAgent internal constructor(
     val id: String,
     val task: String,
     val tools: Set<String>,
-    val startedAt: Long
+    val startedAt: Long,
+    val parentId: String? = null
 ) {
     @Volatile var status: String = "running"
     @Volatile var result: String = ""
@@ -70,7 +71,7 @@ object SubAgents {
 
     fun start(parent: HarnessCtx, task: String, toolNames: Set<String>, model: String): SubAgent {
         val id = "sub-${counter.getAndIncrement()}"
-        val agent = SubAgent(id, task, toolNames, System.currentTimeMillis())
+        val agent = SubAgent(id, task, toolNames, System.currentTimeMillis(), parent.subAgentId)
         agents[id] = agent
         prune()
         val llm = HarnessRuntime.llm
@@ -104,7 +105,7 @@ object SubAgents {
                         val outcome = if (!allowed) {
                             ToolExecResult("${call.name} is not available to a sub-agent.", success = false)
                         } else {
-                            HarnessGate.execute(parent.context, parent.db, call.name, call.argumentsJson)
+                            HarnessGate.execute(parent.context, parent.db, call.name, call.argumentsJson, agent.id)
                         }
                         agent.transcript.add(
                             "tool ${call.name} -> ${if (outcome.success) "ok" else "failed"}: ${outcome.summary.take(1200)}"

@@ -801,7 +801,7 @@ private fun notebookItemOf(rs: ResultSet) = NotebookItem(
     addedAt = rs.getLong("addedAt")
 )
 
-data class NotebookCount(val notebookId: Long, val count: Int)
+data class NotebookCount(val notebookId: Long, val tasks: Int, val notes: Int)
 
 class NotebookDao internal constructor(private val db: Db) {
 
@@ -833,8 +833,8 @@ class NotebookDao internal constructor(private val db: Db) {
     fun itemCounts(): Flow<List<NotebookCount>> = db.watch("notebook_items") {
         db.use { c ->
             c.createStatement().executeQuery(
-                "SELECT notebookId AS notebookId, COUNT(*) AS count FROM notebook_items GROUP BY notebookId"
-            ).mapAll { rs -> NotebookCount(rs.getLong("notebookId"), rs.getInt("count")) }
+                "SELECT notebookId AS notebookId, SUM(CASE WHEN itemKind = 'TASK' THEN 1 ELSE 0 END) AS tasks, SUM(CASE WHEN itemKind = 'NOTE' THEN 1 ELSE 0 END) AS notes FROM notebook_items GROUP BY notebookId"
+            ).mapAll { rs -> NotebookCount(rs.getLong("notebookId"), rs.getInt("tasks"), rs.getInt("notes")) }
         }
     }
 

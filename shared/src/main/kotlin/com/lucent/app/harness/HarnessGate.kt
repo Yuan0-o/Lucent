@@ -14,7 +14,8 @@ data class HarnessCtx(
     val config: HarnessConfig,
     val capabilities: Set<String>,
     val android: Boolean,
-    val workspace: File
+    val workspace: File,
+    val subAgentId: String? = null
 ) {
     fun cap(name: String): Boolean = capabilities.contains(name)
 
@@ -186,7 +187,8 @@ object HarnessGate {
         context: Context,
         db: AppDatabase?,
         name: String,
-        argumentsJson: String
+        argumentsJson: String,
+        subAgentId: String? = null
     ): ToolExecResult {
         val tool = find(name) ?: return ToolExecResult("Unknown tool: $name", success = false)
         val config = HarnessRuntime.config()
@@ -230,7 +232,7 @@ object HarnessGate {
                 audit(tool, argumentsJson, started, "asked", "asked", "waiting for the user to allow ${tool.name}")
             )
         }
-        var ctx = HarnessCtx(context, db, config, capabilities, android, HarnessRuntime.workspace())
+        var ctx = HarnessCtx(context, db, config, capabilities, android, HarnessRuntime.workspace(), subAgentId)
         var attempt = run(name, ctx, args)
         var escalated = false
         if (attempt.blocked && escalation != null && !escalatedInThisConversation(name)) {

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -97,7 +96,7 @@ internal fun PluginSettingsPage(
         }
     }
     
-    val plugins = remember(android, effectivePlugins, searchQuery) { 
+    val plugins = remember(android, effectivePlugins, searchQuery) {
         val base = if (effectivePlugins.isEmpty()) PluginCatalog.forPlatform(android) 
                    else effectivePlugins.filter { if (android) it.android else it.desktop }
         val filtered = base
@@ -242,67 +241,15 @@ internal fun PluginSettingsPage(
         }
         Spacer(modifier = Modifier.height(12.dp))
         
-        Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            Text(S.pluginMirrorRegion, color = onGradient, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                listOf(
-                    "auto" to S.pluginMirrorAuto,
-                    "cn" to S.pluginMirrorChina,
-                    "global" to S.pluginMirrorGlobal
-                ).forEach { (value, label) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable {
-                            val next = config.copy(pluginMirrorRegion = value)
-                            HarnessRuntime.update(next)
-                            config = next
-                        }
-                    ) {
-                        androidx.compose.material3.RadioButton(
-                            selected = config.pluginMirrorRegion == value,
-                            onClick = null
-                        )
-                        Text(label, color = onGradient, fontSize = 13.sp)
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(S.pluginBackupScope, color = onGradient, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                listOf(
-                    "all" to S.pluginBackupScopeAll,
-                    "state" to S.pluginBackupScopeState,
-                    "none" to S.pluginBackupScopeNone
-                ).forEach { (value, label) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable {
-                            val next = config.copy(pluginBackupScope = value)
-                            HarnessRuntime.update(next)
-                            config = next
-                        }
-                    ) {
-                        androidx.compose.material3.RadioButton(
-                            selected = config.pluginBackupScope == value,
-                            onClick = null
-                        )
-                        Text(label, color = onGradient, fontSize = 13.sp)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+        if (setupComplete) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(S.pluginInstalledTitle, color = onGradient, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
-                value = config.pluginCatalogUrl,
-                onValueChange = { 
-                    val next = config.copy(pluginCatalogUrl = it)
-                    HarnessRuntime.update(next)
-                    config = next
-                },
-                label = { Text(S.pluginCatalogUrlLabel, fontSize = 13.sp) },
-                placeholder = { Text(S.pluginCatalogUrlHint, fontSize = 13.sp) },
+                value = searchQuery,
+                onValueChange = { searchQuery = com.lucent.app.collapseExcessBlankLines(it) },
+                placeholder = { Text(S.pluginSearchHint, fontSize = 13.sp) },
+                supportingText = { Text(S.pluginSearchRemoteHint, fontSize = 12.sp) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -310,23 +257,10 @@ internal fun PluginSettingsPage(
                     focusedTextColor = onGradient
                 )
             )
+            Spacer(modifier = Modifier.height(12.dp))
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text(S.pluginSearchHint, fontSize = 13.sp) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedTextColor = onGradient,
-                focusedTextColor = onGradient
-            )
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        plugins.forEach { plugin ->
+
+        if (setupComplete) plugins.forEach { plugin ->
             PluginRow(
                 plugin = plugin,
                 installed = config.pluginInstalled(plugin.id),

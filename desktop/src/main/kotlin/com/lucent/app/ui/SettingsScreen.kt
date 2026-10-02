@@ -972,7 +972,7 @@ fun SettingsScreen(active: Boolean = true) {
 
                     OutlinedTextField(
                         value = exportPasswordDraft,
-                        onValueChange = { exportPasswordDraft = it },
+                        onValueChange = { exportPasswordDraft  = com.lucent.app.collapseExcessBlankLines(it) },
                         label = { Text(S.fieldPasswordOptional) },
                         singleLine = true,
                         visualTransformation = if (exportPasswordVisible) VisualTransformation.None
@@ -1125,7 +1125,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = importPasswordDraft,
-                        onValueChange = { importPasswordDraft = it; importPasswordError = false },
+                        onValueChange = { importPasswordDraft  = com.lucent.app.collapseExcessBlankLines(it); importPasswordError = false  },
                         singleLine = true,
                         isError = importPasswordError,
                         enabled = !gateLockedOut && !gateWiping,
@@ -1479,7 +1479,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = lockPw,
-                        onValueChange = { lockPw = it; lockSetupError = "" },
+                        onValueChange = { lockPw  = com.lucent.app.collapseExcessBlankLines(it); lockSetupError = ""  },
                         label = { Text(S.lockPassword) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
@@ -1488,7 +1488,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = lockPwConfirm,
-                        onValueChange = { lockPwConfirm = it; lockSetupError = "" },
+                        onValueChange = { lockPwConfirm  = com.lucent.app.collapseExcessBlankLines(it); lockSetupError = ""  },
                         label = { Text(S.fieldConfirmPassword) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
@@ -1497,7 +1497,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = lockQuestion,
-                        onValueChange = { lockQuestion = it; lockSetupError = "" },
+                        onValueChange = { lockQuestion  = com.lucent.app.collapseExcessBlankLines(it); lockSetupError = ""  },
                         label = { Text(S.fieldSecurityQuestionOptional) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1505,7 +1505,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = lockAnswer,
-                        onValueChange = { lockAnswer = it; lockSetupError = "" },
+                        onValueChange = { lockAnswer  = com.lucent.app.collapseExcessBlankLines(it); lockSetupError = ""  },
                         label = { Text(S.fieldAnswerOptional) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1552,7 +1552,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = disablePw,
-                        onValueChange = { disablePw = it; disableError = "" },
+                        onValueChange = { disablePw  = com.lucent.app.collapseExcessBlankLines(it); disableError = ""  },
                         label = { Text(S.lockPassword) },
                         singleLine = true,
                         isError = disableError.isNotEmpty(),
@@ -1750,7 +1750,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedTextField(
                         value = selfDestructTyped,
-                        onValueChange = { selfDestructTyped = it },
+                        onValueChange = { selfDestructTyped  = com.lucent.app.collapseExcessBlankLines(it) },
                         singleLine = true,
                         label = { Text(S.selfDestructConfirmHint(phrase)) }
                     )
@@ -1806,7 +1806,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = dangerAuthPw,
-                        onValueChange = { dangerAuthPw = it; dangerAuthError = "" },
+                        onValueChange = { dangerAuthPw  = com.lucent.app.collapseExcessBlankLines(it); dangerAuthError = ""  },
                         label = { Text(S.lockPassword) },
                         singleLine = true,
                         isError = dangerAuthError.isNotEmpty(),
@@ -2000,7 +2000,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = lmImportName,
-                        onValueChange = { lmImportName = it.take(60) },
+                        onValueChange = { lmImportName  = com.lucent.app.collapseExcessBlankLines(it).take(60) },
                         label = { Text(S.lmModelNameField) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -2027,7 +2027,7 @@ fun SettingsScreen(active: Boolean = true) {
             text = {
                 OutlinedTextField(
                     value = lmRenameText,
-                    onValueChange = { lmRenameText = it.take(60) },
+                    onValueChange = { lmRenameText  = com.lucent.app.collapseExcessBlankLines(it).take(60) },
                     label = { Text(S.lmModelNameField) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -2079,7 +2079,7 @@ fun SettingsScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = fontImportName,
-                        onValueChange = { fontImportName = it.take(60) },
+                        onValueChange = { fontImportName  = com.lucent.app.collapseExcessBlankLines(it).take(60) },
                         label = { Text(S.fontNameField) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()

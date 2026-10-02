@@ -411,7 +411,7 @@ private fun AttachmentRenameDialog(
             Column {
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { text = it },
+                    onValueChange = { text  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(com.lucent.app.i18n.S.attachmentNameLabel) },
                     singleLine = true,
                     isError = clash,

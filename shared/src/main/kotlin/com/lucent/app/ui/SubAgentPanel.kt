@@ -5,10 +5,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -27,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.Composable
@@ -43,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import com.lucent.app.harness.SubAgent
 import com.lucent.app.harness.SubAgentReports
 import com.lucent.app.harness.SubAgents
@@ -59,7 +65,7 @@ fun SubAgentStrip(
     if (!visible) return
     var tick by remember { mutableStateOf(0) }
     val agents = remember(tick) { SubAgents.list() }
-    var open by remember { mutableStateOf<SubAgent?>(null) }
+    var expandedTreeId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -78,12 +84,13 @@ fun SubAgentStrip(
     ) {
         Text(S.agentSubAgents, color = mutedTint, fontSize = 11.sp)
         agents.forEach { agent ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(percent = 50))
                     .background(tint.copy(alpha = 0.12f))
                     .border(1.dp, tint.copy(alpha = 0.24f), RoundedCornerShape(percent = 50))
-                    .clickable { open = agent }
+                    .clickable { com.lucent.app.AppNavigation.openSubAgent(agent.id) }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -100,13 +107,24 @@ fun SubAgentStrip(
                     modifier = Modifier.width(120.dp)
                 )
             }
+            val children = agents.filter { it.parentId == agent.id }
+            if (children.isNotEmpty()) {
+                Box {
+                    Text("⌄", color = tint, modifier = Modifier.clickable { expandedTreeId = agent.id }.padding(horizontal = 5.dp, vertical = 4.dp))
+                    DropdownMenu(expanded = expandedTreeId == agent.id, onDismissRequest = { expandedTreeId = null }) {
+                        children.forEach { child ->
+                            DropdownMenuItem(
+                                text = { Text(child.id + " · " + child.task, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                onClick = { expandedTreeId = null; com.lucent.app.AppNavigation.openSubAgent(child.id) }
+                            )
+                        }
+                    }
+                }
+            }
+            }
         }
     }
 
-    val current = open
-    if (current != null) {
-        SubAgentDialog(agent = SubAgents.get(current.id) ?: current, tint = tint, mutedTint = mutedTint, onDismiss = { open = null })
-    }
 }
 
 private fun statusLabel(status: String): String = when (status) {
@@ -124,7 +142,6 @@ fun SubAgentHeaderChips(
     modifier: Modifier = Modifier
 ) {
     var tick by remember { mutableStateOf(0) }
-    var openId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -139,20 +156,11 @@ fun SubAgentHeaderChips(
             agent = agent,
             tint = tint,
             mutedTint = mutedTint,
-            onClick = { openId = agent.id },
+            onClick = { com.lucent.app.AppNavigation.openSubAgent(agent.id) },
             modifier = modifier
         )
     }
 
-    val opened = openId?.let { id -> SubAgents.get(id) }
-    if (opened != null) {
-        SubAgentDialog(
-            agent = opened,
-            tint = tint,
-            mutedTint = mutedTint,
-            onDismiss = { openId = null }
-        )
-    }
 }
 
 private fun headerAgents(agents: List<SubAgent>): List<SubAgent> {
@@ -201,7 +209,6 @@ fun SubAgentChip(
     mutedTint: Color,
     modifier: Modifier = Modifier
 ) {
-    var open by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(SubAgents.running()) }
     var total by remember { mutableStateOf(SubAgents.list().size) }
     var first by remember { mutableStateOf<SubAgent?>(null) }
@@ -220,20 +227,12 @@ fun SubAgentChip(
     HeaderPanelChip(
         icon = Icons.Default.Groups,
         contentDescription = S.agentSubAgents,
-        onClick = { open = true },
+        onClick = { first?.let { com.lucent.app.AppNavigation.openSubAgent(it.id) } },
         tint = tint,
         modifier = modifier,
         badge = if (running > 0) "$running" else "$total"
     )
 
-    if (open) {
-        val focus = first
-        if (focus != null) {
-            SubAgentDialog(agent = focus, tint = tint, mutedTint = mutedTint, onDismiss = { open = false })
-        } else {
-            EmptyAgentDialog(tint = tint, mutedTint = mutedTint, onDismiss = { open = false })
-        }
-    }
 }
 
 @Composable
@@ -302,7 +301,7 @@ fun SubAgentDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = instruction,
-                            onValueChange = { instruction = it },
+                            onValueChange = { instruction  = com.lucent.app.collapseExcessBlankLines(it) },
                             placeholder = { Text(S.subAgentInstructHint, color = mutedTint, fontSize = 11.sp) },
                             maxLines = 2,
                             textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
@@ -354,4 +353,55 @@ fun SubAgentDialog(
             TextButton(onClick = onDismiss) { Text(S.actionClose, color = mutedTint) }
         }
     )
+}
+
+@Composable
+fun SubAgentChatPage(agentId: String, tint: Color, mutedTint: Color, onBack: () -> Unit) {
+    var tick by remember { mutableStateOf(0) }
+    var instruction by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    val current = remember(agentId, tick) { SubAgents.get(agentId) }
+    BackHandler(onBack = onBack)
+    LaunchedEffect(agentId) {
+        while (true) {
+            delay(800)
+            tick++
+        }
+    }
+    if (current == null) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = S.actionBack, tint = tint) }
+            Text(S.subAgentEmpty, color = mutedTint)
+        }
+        return
+    }
+    Column(Modifier.fillMaxSize().padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = S.actionBack, tint = tint) }
+            Column {
+                Text(current.id + " · " + statusLabel(current.status), color = tint, fontSize = 16.sp)
+                Text(current.task, color = mutedTint, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        val children = SubAgents.list().filter { it.parentId == current.id }
+        if (children.isNotEmpty()) {
+            Text(S.agentSubAgents, color = tint, fontSize = 13.sp, modifier = Modifier.clickable { expanded = !expanded }.padding(8.dp))
+            if (expanded) children.forEach { child ->
+                Text(child.id + " · " + child.task, color = mutedTint, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().clickable {
+                    com.lucent.app.AppNavigation.openSubAgent(child.id)
+                }.padding(start = 18.dp, top = 5.dp, bottom = 5.dp))
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(8.dp)) {
+            Text(current.task, color = tint, fontSize = 14.sp)
+            current.transcriptLines().forEach { Text(it, color = mutedTint, fontSize = 12.sp, modifier = Modifier.padding(vertical = 3.dp)) }
+            if (current.result.isNotBlank()) Text(current.result, color = tint, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+        }
+        if (current.status == "running") Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(value = instruction, onValueChange = { instruction = it }, placeholder = { Text(S.subAgentInstructHint) }, modifier = Modifier.weight(1f))
+            IconButton(enabled = instruction.isNotBlank(), onClick = { SubAgents.instruct(current.id, instruction); instruction = "" }) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = S.subAgentSend, tint = tint)
+            }
+        }
+    }
 }

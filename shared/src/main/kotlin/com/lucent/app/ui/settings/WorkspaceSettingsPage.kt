@@ -60,7 +60,7 @@ internal fun WorkspaceSettingsPage(
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = draft,
-                onValueChange = { draft = it },
+                onValueChange = { draft  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(S.agentWorkspaceLabel) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()

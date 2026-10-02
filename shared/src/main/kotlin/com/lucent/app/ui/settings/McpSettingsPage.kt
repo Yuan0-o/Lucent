@@ -87,7 +87,7 @@ internal fun McpSettingsPage(onRoute: (SettingsRoute) -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = { name  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(S.agentMcpName) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -95,7 +95,7 @@ internal fun McpSettingsPage(onRoute: (SettingsRoute) -> Unit) {
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = url,
-                onValueChange = { url = it },
+                onValueChange = { url  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(S.agentMcpUrl) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -103,7 +103,7 @@ internal fun McpSettingsPage(onRoute: (SettingsRoute) -> Unit) {
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = command,
-                onValueChange = { command = it },
+                onValueChange = { command  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(S.agentMcpCommand) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -111,7 +111,7 @@ internal fun McpSettingsPage(onRoute: (SettingsRoute) -> Unit) {
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = token,
-                onValueChange = { token = it },
+                onValueChange = { token  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(S.agentMcpToken) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -195,7 +195,7 @@ private fun ConnectorEditor(
             if (open == id) {
                 OutlinedTextField(
                     value = token,
-                    onValueChange = { token = it },
+                    onValueChange = { token  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(S.agentConnectorToken) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -203,7 +203,7 @@ private fun ConnectorEditor(
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(
                     value = account,
-                    onValueChange = { account = it },
+                    onValueChange = { account  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(S.agentConnectorAccount) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -211,7 +211,7 @@ private fun ConnectorEditor(
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(
                     value = base,
-                    onValueChange = { base = it },
+                    onValueChange = { base  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(S.agentConnectorBase) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()

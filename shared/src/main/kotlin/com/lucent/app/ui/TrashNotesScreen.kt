@@ -134,7 +134,7 @@ fun TrashNotesScreen(onBack: () -> Unit) {
 
         OutlinedTextField(
             value = searchQuery,
-            onValueChange = { searchQuery = it },
+            onValueChange = { searchQuery  = com.lucent.app.collapseExcessBlankLines(it) },
             label = { Text(com.lucent.app.i18n.S.searchTrash) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,

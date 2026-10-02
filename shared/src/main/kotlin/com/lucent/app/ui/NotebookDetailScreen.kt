@@ -244,7 +244,7 @@ fun NotebookDetailScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, color = onGradient, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    com.lucent.app.i18n.S.notebookItemsCount(items.size),
+                    com.lucent.app.i18n.S.notebookItemsCount(items.count { it.itemKind == "TASK" }, items.count { it.itemKind == "NOTE" }),
                     color = onGradientMuted,
                     fontSize = 12.sp
                 )
@@ -265,12 +265,8 @@ fun NotebookDetailScreen(
                     )
                     DropdownMenuItem(
                         text = { Text(com.lucent.app.i18n.S.newTask) },
-                        leadingIcon = { Icon(Icons.Default.CheckCircle, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
                         onClick = { addMenuOpen = false; composingTask = true }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(com.lucent.app.i18n.S.actionDelete) },
-                        onClick = { addMenuOpen = false; deleting = true }
                     )
                 }
             }
@@ -280,7 +276,7 @@ fun NotebookDetailScreen(
 
         OutlinedTextField(
             value = searchText,
-            onValueChange = { searchText = it },
+            onValueChange = { searchText  = com.lucent.app.collapseExcessBlankLines(it) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotebooks) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -472,7 +468,7 @@ private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCre
             Column {
                 OutlinedTextField(
                     value = title,
-                    onValueChange = { title = it },
+                    onValueChange = { title  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(com.lucent.app.i18n.S.confirmEditTitleLabel) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -480,7 +476,7 @@ private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCre
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = body,
-                    onValueChange = { body = it },
+                    onValueChange = { body  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(com.lucent.app.i18n.S.confirmEditBodyLabel) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -519,7 +515,7 @@ private fun NotebookNewTaskDialog(notebookId: Long, onDismiss: () -> Unit, onCre
         text = {
             OutlinedTextField(
                 value = title,
-                onValueChange = { title = it },
+                onValueChange = { title  = com.lucent.app.collapseExcessBlankLines(it) },
                 label = { Text(com.lucent.app.i18n.S.confirmEditTitleLabel) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()

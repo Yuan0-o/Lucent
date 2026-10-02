@@ -125,7 +125,7 @@ fun <T> ExportSelectionScreen(
 
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = { query  = com.lucent.app.collapseExcessBlankLines(it) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()

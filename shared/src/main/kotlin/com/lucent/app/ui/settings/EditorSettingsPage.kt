@@ -12,6 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +45,7 @@ internal fun EditorSettingsPage(
     val linksEnabled by repo.linksEnabled.collectAsState(initial = SettingsCache.linksEnabled)
     val blackoutOn by repo.blackoutEnabled.collectAsState(initial = SettingsCache.blackoutEnabled)
     val openLinksExternallyOn by repo.openLinksExternally.collectAsState(initial = SettingsCache.openLinksExternally)
-    val globalTextSelectionEnabled by repo.globalTextSelectionEnabled.collectAsState(initial = SettingsCache.globalTextSelectionEnabled)
+    var globalTextSelectionEnabled by remember { mutableStateOf(SettingsCache.globalTextSelectionEnabled) }
 
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
@@ -97,8 +100,9 @@ internal fun EditorSettingsPage(
             Switch(
                 checked = globalTextSelectionEnabled,
                 onCheckedChange = { checked ->
-                    scope.launch { repo.setGlobalTextSelectionEnabled(checked) }
+                    globalTextSelectionEnabled = checked
                     SettingsCache.globalTextSelectionEnabled = checked
+                    scope.launch { repo.setGlobalTextSelectionEnabled(checked) }
                 }
             )
         }

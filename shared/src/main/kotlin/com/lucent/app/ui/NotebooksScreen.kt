@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
@@ -72,6 +71,7 @@ fun NotebooksScreen(
     onBack: () -> Unit,
     onOpenNote: (Note) -> Unit,
     onOpenTask: (Task) -> Unit,
+    onPickPhoto: (((String?) -> Unit) -> Unit)? = null,
     showBack: Boolean = true,
     active: Boolean = true
 ) {
@@ -81,7 +81,7 @@ fun NotebooksScreen(
     val settingsRepo = remember { SettingsRepository(context) }
     val notebooks by db.notebookDao().getAll().collectAsState(initial = emptyList())
     val counts by db.notebookDao().itemCounts().collectAsState(initial = emptyList())
-    val countById = remember(counts) { counts.associate { it.notebookId to it.count } }
+    val statsById = remember(counts) { counts.associateBy { it.notebookId } }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
@@ -111,7 +111,7 @@ fun NotebooksScreen(
         recordNotebookOpen(requested)
     }
     var creating by remember { mutableStateOf(false) }
-    var coverForNew by remember { mutableStateOf(NotebookColor.DEFAULT) }
+    var coverForNew by remember { mutableStateOf(NotebookColor.DEFAULT.key) }
     var nameForNew by remember { mutableStateOf("") }
     var renaming by remember { mutableStateOf<Notebook?>(null) }
     var recolouring by remember { mutableStateOf<Notebook?>(null) }
@@ -194,6 +194,7 @@ fun NotebooksScreen(
                     deleting = null
                     AppScope.io.launch {
                         db.notebookDao().update(target.copy(trashedAt = System.currentTimeMillis()))
+                        StartupLog.event(context, "notebooks: trashed notebook ${target.id}")
                         LucentToast.show(context, com.lucent.app.i18n.S.notebookDeletedToast)
                     }
                 }) { Text(com.lucent.app.i18n.S.actionDelete) }
@@ -220,6 +221,7 @@ fun NotebooksScreen(
                         notebooks.filter { it.id in ids }.forEach { notebook ->
                             db.notebookDao().update(notebook.copy(trashedAt = System.currentTimeMillis()))
                         }
+                        StartupLog.event(context, "notebooks: trashed ${ids.size} notebooks")
                     }
                 }) { Text(com.lucent.app.i18n.S.actionDelete) }
             },
@@ -234,12 +236,14 @@ fun NotebooksScreen(
             title = com.lucent.app.i18n.S.notebookNew,
             confirmLabel = com.lucent.app.i18n.S.notebookCreate,
             initialName = nameForNew,
-            initialColor = coverForNew,
-            onConfirm = { name, color ->
+            initialColorKey = coverForNew,
+            onPickPhoto = onPickPhoto,
+            onConfirm = { name, colorKey ->
                 nameForNew = ""
-                coverForNew = NotebookColor.DEFAULT
+                coverForNew = NotebookColor.DEFAULT.key
                 scope.launch {
-                    db.notebookDao().insert(Notebook(title = name.trim(), color = color.key))
+                    db.notebookDao().insert(Notebook(title = name.trim(), color = colorKey))
+                    StartupLog.event(context, "notebooks: created notebook with cover ${if (colorKey.startsWith("photo:")) "photo" else colorKey}")
                 }
             },
             onDismiss = { creating = false }
@@ -251,13 +255,14 @@ fun NotebooksScreen(
             title = com.lucent.app.i18n.S.notebookRename,
             confirmLabel = com.lucent.app.i18n.S.notebookRenameAction,
             initialName = notebook.title,
-            initialColor = NotebookColor.fromKey(notebook.color),
+            initialColorKey = notebook.color,
             showColorPicker = false,
             onConfirm = { name, _ ->
                 scope.launch {
                     db.notebookDao().update(
                         notebook.copy(title = name.trim(), updatedAt = System.currentTimeMillis())
                     )
+                    StartupLog.event(context, "notebooks: renamed notebook ${notebook.id}")
                     LucentToast.show(context, com.lucent.app.i18n.S.notebookRenamedToast)
                 }
             },
@@ -270,13 +275,15 @@ fun NotebooksScreen(
             title = com.lucent.app.i18n.S.notebookCoverTitle,
             confirmLabel = com.lucent.app.i18n.S.actionSave,
             initialName = notebook.title,
-            initialColor = NotebookColor.fromKey(notebook.color),
+            initialColorKey = notebook.color,
             showNameField = false,
+            onPickPhoto = onPickPhoto,
             onConfirm = { _, color ->
                 scope.launch {
                     db.notebookDao().update(
-                        notebook.copy(color = color.key, updatedAt = System.currentTimeMillis())
+                        notebook.copy(color = color, updatedAt = System.currentTimeMillis())
                     )
+                    StartupLog.event(context, "notebooks: changed cover for notebook ${notebook.id}")
                 }
             },
             onDismiss = { recolouring = null }
@@ -408,7 +415,7 @@ fun NotebooksScreen(
                 search = {
                     OutlinedTextField(
                         value = searchText,
-                        onValueChange = { searchText = it },
+                        onValueChange = { searchText  = com.lucent.app.collapseExcessBlankLines(it) },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchNotebooks) },
                         trailingIcon = { SearchHelpButton() },
                         singleLine = true,
@@ -476,7 +483,7 @@ fun NotebooksScreen(
             items(visible, key = { it.id }) { notebook ->
                 NotebookShelfItem(
                     notebook = notebook,
-                    count = countById[notebook.id] ?: 0,
+                    tasks = statsById[notebook.id]?.tasks ?: 0, notes = statsById[notebook.id]?.notes ?: 0,
                     selectionMode = selectionMode,
                     selected = notebook.id in selectedIds,
                     itemModifier = Modifier
@@ -524,7 +531,8 @@ private const val DAY_MS = 24L * 60 * 60 * 1000
 @Composable
 private fun NotebookShelfItem(
     notebook: Notebook,
-    count: Int,
+    tasks: Int,
+    notes: Int,
     selectionMode: Boolean,
     selected: Boolean,
     itemModifier: Modifier,
@@ -590,7 +598,7 @@ private fun NotebookShelfItem(
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(30.dp)) {
                         Icon(
-                            Icons.Default.MoreVert,
+                            Icons.Default.Edit,
                             contentDescription = com.lucent.app.i18n.S.a11yMoreOptions,
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(16.dp)
@@ -601,30 +609,12 @@ private fun NotebookShelfItem(
                         onDismissRequest = { menuOpen = false }
                     ) {
                         androidx.compose.material3.DropdownMenuItem(
-                            text = {
-                                Text(
-                                    if (notebook.pinned) com.lucent.app.i18n.S.actionUnpin
-                                    else com.lucent.app.i18n.S.actionPin
-                                )
-                            },
-                            leadingIcon = { Icon(Icons.Default.PushPin, contentDescription = null) },
-                            onClick = { menuOpen = false; onTogglePin() }
-                        )
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(com.lucent.app.i18n.S.actionSelect) },
-                            leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                            onClick = { menuOpen = false; onToggleSelect() }
-                        )
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(com.lucent.app.i18n.S.notebookRename) },
+                            text = { Text(com.lucent.app.i18n.S.actionRename) },
                             onClick = { menuOpen = false; onRename() }
                         )
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(com.lucent.app.i18n.S.notebookCoverTitle) },
-                            onClick = { menuOpen = false; onRecolour() }
-                        )
-                        androidx.compose.material3.DropdownMenuItem(
                             text = { Text(com.lucent.app.i18n.S.actionDelete) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                             onClick = { menuOpen = false; onDelete() }
                         )
                     }
@@ -641,7 +631,7 @@ private fun NotebookShelfItem(
             textAlign = TextAlign.Center
         )
         Text(
-            com.lucent.app.i18n.S.notebookItemsCount(count),
+            com.lucent.app.i18n.S.notebookItemsCount(tasks, notes),
             color = onGradientMuted,
             fontSize = 11.sp,
             textAlign = TextAlign.Center
@@ -654,15 +644,16 @@ internal fun NotebookEditorDialog(
     title: String,
     confirmLabel: String,
     initialName: String,
-    initialColor: NotebookColor,
+    initialColorKey: String,
     showNameField: Boolean = true,
     showColorPicker: Boolean = true,
-    onConfirm: (String, NotebookColor) -> Unit,
+    onConfirm: (String, String) -> Unit,
+    onPickPhoto: (((String?) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initialName) }
-    var color by remember { mutableStateOf(initialColor) }
+    var colorKey by remember { mutableStateOf(initialColorKey) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -671,7 +662,7 @@ internal fun NotebookEditorDialog(
                 if (showNameField) {
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
+                        onValueChange = { name  = com.lucent.app.collapseExcessBlankLines(it) },
                         label = { Text(com.lucent.app.i18n.S.notebookName) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -685,7 +676,11 @@ internal fun NotebookEditorDialog(
                         fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    NotebookCoverPicker(selected = color, onSelect = { color = it })
+                    NotebookCoverPicker(
+                        selectedKey = colorKey,
+                        onSelect = { colorKey = it },
+                        onPickPhoto = onPickPhoto?.let { picker -> { picker { result -> if (result != null) colorKey = result } } }
+                    )
                 }
             }
         },
@@ -694,7 +689,7 @@ internal fun NotebookEditorDialog(
                 if (showNameField && name.isBlank()) {
                     LucentToast.show(context, com.lucent.app.i18n.S.notebookNameRequired)
                 } else {
-                    onConfirm(name, color)
+                    onConfirm(name, colorKey)
                     onDismiss()
                 }
             }) { Text(confirmLabel) }
@@ -886,7 +881,7 @@ fun AddToNotebookDialog(
                     Spacer(modifier = Modifier.height(6.dp))
                     OutlinedTextField(
                         value = newName,
-                        onValueChange = { newName = it },
+                        onValueChange = { newName  = com.lucent.app.collapseExcessBlankLines(it) },
                         label = { Text(com.lucent.app.i18n.S.notebookName) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()

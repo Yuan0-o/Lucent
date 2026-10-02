@@ -44,7 +44,7 @@ internal object BackupImporter {
         importTaskVersions(db, root, wantTasks, state)
         importNoteVersions(db, root, wantNotes, state)
         importChats(db, root, wantChats, conversationIds, existingChats, state)
-        importNotebooks(db, root, wantNotes, wantTasks)
+        importNotebooks(context, db, root, wantNotes, wantTasks)
         val settingsRestored = importSettings(context, settings, root, modules, apiProfileNames)
 
         AttachmentMigration.pruneOrphans(context)
@@ -338,6 +338,7 @@ internal object BackupImporter {
     }
 
     private suspend fun importNotebooks(
+        context: Context,
         db: AppDatabase,
         root: JSONObject,
         wantNotes: Boolean,
@@ -355,12 +356,20 @@ internal object BackupImporter {
                     val title = o.optString("title", "")
                     val createdAt = o.optLong("createdAt", System.currentTimeMillis())
                     val updatedAt = o.optLong("updatedAt", createdAt)
+                    val storedColor = o.optString("color", "")
+                    val coverData = o.optString("coverData", "")
+                    val restoredColor = if (storedColor.startsWith("photo:") && coverData.isNotEmpty()) {
+                        runCatching {
+                            val bytes = android.util.Base64.decode(coverData, android.util.Base64.DEFAULT)
+                            AttachmentStore.importBytes(context, bytes)?.let { "photo:$it" }
+                        }.getOrNull() ?: storedColor
+                    } else storedColor
                     val newId = db.notebookDao().insert(
                         Notebook(
                             title = title,
                             createdAt = createdAt,
                             updatedAt = updatedAt,
-                            color = o.optString("color", ""),
+                            color = restoredColor,
                             manualOrder = o.optInt("manualOrder", 0),
                             pinned = o.optBoolean("pinned", false)
                         )

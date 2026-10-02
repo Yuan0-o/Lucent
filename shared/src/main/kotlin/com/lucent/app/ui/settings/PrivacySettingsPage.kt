@@ -255,7 +255,7 @@ internal fun PrivacySettingsPage(
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = hiddenPw,
-                onValueChange = { hiddenPw = it; hiddenPwError = false },
+                onValueChange = { hiddenPw  = com.lucent.app.collapseExcessBlankLines(it); hiddenPwError = false  },
                 singleLine = true,
                 isError = hiddenPwError,
                 enabled = !gateLockedOut && !gateWiping,

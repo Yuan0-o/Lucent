@@ -343,7 +343,7 @@ interface ChatConversationDao {
     suspend fun clearAll()
 }
 
-data class NotebookCount(val notebookId: Long, val count: Int)
+data class NotebookCount(val notebookId: Long, val tasks: Int, val notes: Int)
 
 @Dao
 interface NotebookDao {
@@ -365,7 +365,7 @@ interface NotebookDao {
     @Query("SELECT * FROM notebooks WHERE id = :id")
     suspend fun getByIdOnce(id: Long): Notebook?
 
-    @Query("SELECT notebookId AS notebookId, COUNT(*) AS count FROM notebook_items GROUP BY notebookId")
+    @Query("SELECT notebookId AS notebookId, SUM(CASE WHEN itemKind = 'TASK' THEN 1 ELSE 0 END) AS tasks, SUM(CASE WHEN itemKind = 'NOTE' THEN 1 ELSE 0 END) AS notes FROM notebook_items GROUP BY notebookId")
     fun itemCounts(): Flow<List<NotebookCount>>
 
     @Query("SELECT * FROM notebook_items WHERE notebookId = :notebookId ORDER BY addedAt DESC")

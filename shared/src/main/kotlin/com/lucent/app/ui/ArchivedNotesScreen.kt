@@ -103,7 +103,7 @@ fun ArchivedNotesScreen(
 
         OutlinedTextField(
             value = searchQuery,
-            onValueChange = { searchQuery = it },
+            onValueChange = { searchQuery  = com.lucent.app.collapseExcessBlankLines(it) },
             label = { Text(com.lucent.app.i18n.S.searchArchive) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             modifier = Modifier.fillMaxWidth()

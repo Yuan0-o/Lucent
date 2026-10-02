@@ -1,19 +1,18 @@
 package com.lucent.app.ui
 
 internal class BackgroundTimeline {
-    private var previousNanos: Long? = null
+    private var previousNanos = System.nanoTime()
     private var elapsedNanos = 0L
     val seconds: Double get() = elapsedNanos / 1_000_000_000.0
 
-    fun advance(frameNanos: Long): Double {
-        previousNanos?.let { previous ->
-            elapsedNanos += (frameNanos - previous).coerceIn(0L, 100_000_000L)
-        }
-        previousNanos = frameNanos
+    fun advance(): Double {
+        val now = System.nanoTime()
+        elapsedNanos += (now - previousNanos).coerceAtLeast(0L)
+        previousNanos = now
         return seconds
     }
 
-    fun pause() { previousNanos = null }
+    fun pause() = Unit
 }
 
 internal class BackgroundFramePolicy {

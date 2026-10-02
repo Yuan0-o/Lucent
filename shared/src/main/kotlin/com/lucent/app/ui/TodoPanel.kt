@@ -91,8 +91,8 @@ fun TodoPanelDialog(
 ) {
     var plan by remember { mutableStateOf(PlanBoard.current()) }
     var todos by remember { mutableStateOf(items) }
-    var todosExpanded by remember { mutableStateOf(true) }
-    var planExpanded by remember { mutableStateOf(true) }
+    var todosExpanded by remember { mutableStateOf(items.isNotEmpty()) }
+    var planExpanded by remember { mutableStateOf(PlanBoard.current().isNotEmpty()) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -108,21 +108,6 @@ fun TodoPanelDialog(
         text = {
             Column(modifier = Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
                 PanelSection(
-                    title = todoSectionTitle(todos),
-                    expanded = todosExpanded,
-                    tint = tint,
-                    mutedTint = mutedTint,
-                    onToggle = { todosExpanded = !todosExpanded }
-                )
-                if (todosExpanded) {
-                    if (todos.isEmpty()) {
-                        Text(S.todoEmpty, color = mutedTint, fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
-                    } else {
-                        todos.forEach { item -> TodoRow(item = item, tint = tint, mutedTint = mutedTint) }
-                    }
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                PanelSection(
                     title = planSectionTitle(plan),
                     expanded = planExpanded,
                     tint = tint,
@@ -134,6 +119,21 @@ fun TodoPanelDialog(
                         Text(S.todoPlanEmpty, color = mutedTint, fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
                     } else {
                         plan.forEach { step -> PlanRow(step = step, tint = tint, mutedTint = mutedTint) }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                PanelSection(
+                    title = todoSectionTitle(todos),
+                    expanded = todosExpanded,
+                    tint = tint,
+                    mutedTint = mutedTint,
+                    onToggle = { todosExpanded = !todosExpanded }
+                )
+                if (todosExpanded) {
+                    if (todos.isEmpty()) {
+                        Text(S.todoEmpty, color = mutedTint, fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
+                    } else {
+                        todos.forEach { item -> TodoRow(item = item, tint = tint, mutedTint = mutedTint) }
                     }
                 }
             }

@@ -75,14 +75,14 @@ fun PersonalizationSettingsPage(
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
         OutlinedTextField(
             value = assistantName,
-            onValueChange = onAssistantNameChange,
+            onValueChange = { onAssistantNameChange(com.lucent.app.collapseExcessBlankLines(it)) },
             label = { Text(S.fieldAssistantName) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = assistantStyle,
-            onValueChange = onAssistantStyleChange,
+            onValueChange = { onAssistantStyleChange(com.lucent.app.collapseExcessBlankLines(it)) },
             label = { Text(S.fieldChatStyle) },
             modifier = Modifier.fillMaxWidth()
         )

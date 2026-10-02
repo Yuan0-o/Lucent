@@ -117,90 +117,67 @@ private fun inertOwnerOf(real: OnBackPressedDispatcherOwner?): OnBackPressedDisp
         override val onBackPressedDispatcher = OnBackPressedDispatcher()
     }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-internal fun KeepAliveTabs(active: Screen, pagerState: PagerState, modifier: Modifier = Modifier) {
+internal fun KeepAliveTabs(pagerState: PagerState, modifier: Modifier = Modifier) {
     val realBackOwner = LocalOnBackPressedDispatcherOwner.current
     val inertBackOwner = remember(realBackOwner) { inertOwnerOf(realBackOwner) }
     val sharedHaze = LocalHazeState.current
-    val tabs = HomeTab.entries
-    val activeTab = HomeTab.of(active)
-
-    LaunchedEffect(activeTab) {
-        val targetPage = tabs.indexOf(activeTab)
-        if (pagerState.currentPage != targetPage) pagerState.scrollToPage(targetPage)
+    val context = LocalContext.current
+    val swipeChain = remember { listOf(Screen.Settings, Screen.Assistant, Screen.Notebooks, Screen.Notes, Screen.Tasks) }
+    var pendingPhotoCallback by remember { androidx.compose.runtime.mutableStateOf<((String?) -> Unit)?>(null) }
+    val photoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+             val id = com.lucent.app.data.AttachmentStore.importUri(context, uri)
+             if (id != null) {
+                 pendingPhotoCallback?.invoke("photo:$id")
+                 com.lucent.app.data.StartupLog.event(context, "notebooks: imported cover photo $id")
+             } else {
+                 com.lucent.app.data.StartupLog.event(context, "notebooks: cover photo import failed")
+                 pendingPhotoCallback?.invoke(null)
+             }
+        } else pendingPhotoCallback?.invoke(null)
+        pendingPhotoCallback = null
     }
 
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-        if (!pagerState.isScrollInProgress && pagerState.currentPage != tabs.indexOf(activeTab)) {
-            AppNavigation.requestScreen(tabs[pagerState.currentPage].screen(LastScreen.homeMode))
+        if (!pagerState.isScrollInProgress) {
+            AppNavigation.requestScreen(swipeChain[pagerState.currentPage])
         }
     }
 
     HorizontalPager(
         state = pagerState,
-        beyondViewportPageCount = tabs.lastIndex,
+        beyondViewportPageCount = swipeChain.lastIndex,
         userScrollEnabled = !AppNavigation.innerBackActive,
         modifier = modifier
     ) { page ->
-        val tab = tabs[page]
-        val isActive = tab == activeTab
-        key(tab) {
+        val screen = swipeChain[page]
+        val isActive = pagerState.currentPage == page
+        key(screen) {
             val dummyHaze = rememberHazeState()
             Box(modifier = Modifier.fillMaxSize()) {
                 CompositionLocalProvider(
                     LocalHazeState provides (if (isActive) sharedHaze else dummyHaze),
                     LocalOnBackPressedDispatcherOwner provides (if (isActive) realBackOwner!! else inertBackOwner)
                 ) {
-                    when (tab) {
-                        HomeTab.Home -> HomePages(mode = HomeMode.of(active) ?: LastScreen.homeMode, active = isActive)
-                        HomeTab.Notebooks -> NotebooksScreen(
+                    when (screen) {
+                        Screen.Tasks -> TasksScreen(active = isActive)
+                        Screen.Notes -> NotesScreen(active = isActive)
+                        Screen.Notebooks -> NotebooksScreen(
                             onBack = { AppNavigation.requestScreen(LastScreen.homeMode.screen) },
                             onOpenNote = { note -> AppNavigation.openNote(note.id, from = Screen.Notebooks) },
                             onOpenTask = { task -> AppNavigation.openTask(task.id, from = Screen.Notebooks) },
                             showBack = false,
+                            onPickPhoto = { callback ->
+                                pendingPhotoCallback = callback
+                                photoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
                             active = isActive
                         )
-                        HomeTab.Assistant -> AssistantScreen(active = isActive)
-                        HomeTab.Settings -> SettingsScreen(active = isActive)
+                        Screen.Assistant -> AssistantScreen(active = isActive)
+                        Screen.Settings -> SettingsScreen(active = isActive)
                     }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun HomePages(mode: HomeMode, active: Boolean) {
-    val realBackOwner = LocalOnBackPressedDispatcherOwner.current
-    val inertBackOwner = remember(realBackOwner) { inertOwnerOf(realBackOwner) }
-    val sharedHaze = LocalHazeState.current
-    val modes = HomeMode.entries
-    val pagerState = rememberPagerState(initialPage = modes.indexOf(mode), pageCount = { modes.size })
-
-    LaunchedEffect(mode) {
-        val target = modes.indexOf(mode)
-        if (pagerState.currentPage != target) pagerState.scrollToPage(target)
-    }
-
-    HorizontalPager(
-        state = pagerState,
-        beyondViewportPageCount = 1,
-        userScrollEnabled = false,
-        modifier = Modifier.fillMaxSize()
-    ) { page ->
-        val entry = modes[page]
-        val isActive = active && entry == mode
-        key(entry) {
-            val dummyHaze = rememberHazeState()
-            CompositionLocalProvider(
-                LocalHazeState provides (if (isActive) sharedHaze else dummyHaze),
-                LocalOnBackPressedDispatcherOwner provides (if (isActive) realBackOwner!! else inertBackOwner)
-            ) {
-                when (entry) {
-                    HomeMode.Tasks -> TasksScreen(active = isActive)
-                    HomeMode.Notes -> NotesScreen(active = isActive)
                 }
             }
         }

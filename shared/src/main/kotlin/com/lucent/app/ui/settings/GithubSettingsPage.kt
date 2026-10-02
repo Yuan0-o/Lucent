@@ -100,7 +100,7 @@ internal fun GithubSettingsPage(onRoute: (SettingsRoute) -> Unit) {
             if (config.githubTokens.size < HarnessConfig.MAX_GITHUB_TOKENS) {
                 OutlinedTextField(
                     value = typed,
-                    onValueChange = { typed = it },
+                    onValueChange = { typed  = com.lucent.app.collapseExcessBlankLines(it) },
                     label = { Text(S.agentGithubToken) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
@@ -139,7 +139,7 @@ internal fun GithubSettingsPage(onRoute: (SettingsRoute) -> Unit) {
             text = {
                 OutlinedTextField(
                     value = renameText,
-                    onValueChange = { renameText = it },
+                    onValueChange = { renameText  = com.lucent.app.collapseExcessBlankLines(it) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

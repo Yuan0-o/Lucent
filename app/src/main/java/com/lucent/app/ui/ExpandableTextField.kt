@@ -113,7 +113,7 @@ fun ExpandableGlassTextField(
             onValueChange = { updated ->
                 fieldValue = updated
                 onSelectionChange(updated.selection.min, updated.selection.max)
-                if (updated.text != value) onValueChange(updated.text)
+                if (updated.text != value) onValueChange(com.lucent.app.collapseExcessBlankLines(updated.text))
             },
             visualTransformation = transformation,
             placeholder = { Text(placeholder) },
@@ -241,7 +241,7 @@ private fun ExpandedEditor(
                     onValueChange = { updated ->
                         expandedField = updated
                         onSelectionChange(updated.selection.min, updated.selection.max)
-                        if (updated.text != value) onValueChange(updated.text)
+                        if (updated.text != value) onValueChange(com.lucent.app.collapseExcessBlankLines(updated.text))
                     },
                     visualTransformation = expandedTransformation,
                     placeholder = { Text(placeholder, color = onGradientMuted) },

@@ -127,7 +127,7 @@ fun TerminalScreen(onBack: () -> Unit) {
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Terminal ${tab.number}", color = Color.White, fontSize = 14.sp)
+                            Text(tab.label ?: "Terminal ${tab.number}", color = Color.White, fontSize = 14.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
                                 Icons.Default.Close,
@@ -250,7 +250,7 @@ fun TerminalScreen(onBack: () -> Unit) {
                         altActive = false
                         input = ""
                     } else {
-                        input = newValue
+                        input = com.lucent.app.collapseExcessBlankLines(newValue)
                     }
                 },
                 modifier = Modifier
@@ -276,7 +276,6 @@ fun TerminalScreen(onBack: () -> Unit) {
                         }
                     },
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                maxLines = 20,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
                     if (TerminalSessions.manager.current() == null) {

@@ -923,7 +923,7 @@ fun TasksScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = newTitle,
-                        onValueChange = { newTitle = it },
+                        onValueChange = { newTitle  = com.lucent.app.collapseExcessBlankLines(it) },
                         placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -931,7 +931,7 @@ fun TasksScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     ExpandableGlassTextField(
                         value = newNotes,
-                        onValueChange = { newNotes = it },
+                        onValueChange = { newNotes  = com.lucent.app.collapseExcessBlankLines(it) },
                         extraAction = { DictationButton(onText = { spoken ->
                             newNotes = if (newNotes.isBlank()) spoken
                             else newNotes + (if (newNotes.endsWith(" ") || newNotes.endsWith("\n")) "" else " ") + spoken
@@ -951,7 +951,7 @@ fun TasksScreen(active: Boolean = true) {
                         ChecklistEditorSection(
                             items = subtasks,
                             newItemText = newSubtaskText,
-                            onNewItemTextChange = { newSubtaskText = it },
+                            onNewItemTextChange = { newSubtaskText = com.lucent.app.collapseExcessBlankLines(it) },
                             onAdd = {
                                 subtasks = subtasks + Checklist.newItem(newSubtaskText)
                                 newSubtaskText = ""
@@ -1461,7 +1461,7 @@ fun TasksScreen(active: Boolean = true) {
                         search = {
                             OutlinedTextField(
                                 value = searchText,
-                                onValueChange = { searchText = it },
+                                onValueChange = { searchText  = com.lucent.app.collapseExcessBlankLines(it) },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = com.lucent.app.i18n.S.a11ySearchTasks) },
                                 trailingIcon = { SearchHelpButton() },
                                 singleLine = true,

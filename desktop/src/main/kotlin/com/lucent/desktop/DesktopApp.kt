@@ -70,7 +70,6 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val systemDark = isSystemInDarkTheme()
 
     val themeMode by repo.themeMode.collectAsState(initial = startup.display.themeMode)
-    val globalTextSelectionEnabled by repo.globalTextSelectionEnabled.collectAsState(initial = startup.globalTextSelectionEnabled)
     val paletteName by repo.palette.collectAsState(initial = startup.display.palette)
     val fontKey by repo.font.collectAsState(initial = startup.display.font)
     val backgroundAnimated by repo.backgroundAnimationEnabled.collectAsState(
@@ -149,7 +148,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
             LocalOnGradientMuted provides onGradientMuted,
             LocalBackgroundEnvironment provides backgroundEnvironment
         ) {
-            com.lucent.app.ui.GlobalTextSelectionContainer(enabled = globalTextSelectionEnabled) {
+            com.lucent.app.ui.GlobalTextSelectionContainer(enabledFlow = repo.globalTextSelectionEnabled) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (com.lucent.app.ui.AppLockController.locked) {
                         LockScreen(

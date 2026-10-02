@@ -624,7 +624,7 @@ fun LucentExpandedInput(
             Spacer(modifier = Modifier.height(8.dp))
             androidx.compose.material3.OutlinedTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = { onValueChange(com.lucent.app.collapseExcessBlankLines(it)) },
                 placeholder = { Text(placeholder, color = onGradientMuted) },
                 textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = onGradient),
                 modifier = Modifier.fillMaxWidth().weight(1f)

@@ -120,7 +120,7 @@ fun FluidGlassBackground(
                 else -> while (isActive) {
                     val frameNanos = withFrameNanos { it }
                     if (!policy.isDue(frameNanos)) continue
-                    val seconds = timeline.advance(frameNanos)
+                    val seconds = timeline.advance()
                     val started = System.nanoTime()
                     val next = paint(seconds, seconds)
                     val renderNanos = System.nanoTime() - started

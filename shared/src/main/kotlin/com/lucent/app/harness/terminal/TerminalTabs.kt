@@ -1,6 +1,6 @@
 package com.lucent.app.harness.terminal
 
-class TerminalTab<T>(val id: Long, val number: Int, val value: T) {
+class TerminalTab<T>(val id: Long, val number: Int, val value: T, val label: String? = null) {
     @Volatile var closing: Boolean = false
         internal set
 }
@@ -13,12 +13,12 @@ class TerminalTabs<T> {
     private var initialized = false
 
     @Synchronized
-    fun add(value: T): TerminalTab<T> {
+    fun add(value: T, label: String? = null): TerminalTab<T> {
         val occupied = HashSet<Int>()
         for (tab in tabs) occupied.add(tab.number)
         var number = 1
         while (occupied.contains(number)) number++
-        val tab = TerminalTab(nextId++, number, value)
+        val tab = TerminalTab(nextId++, number, value, label)
         tabs.add(tab)
         selectedId = tab.id
         initialized = true

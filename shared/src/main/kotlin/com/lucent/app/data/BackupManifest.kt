@@ -253,15 +253,18 @@ internal object BackupManifestBuilder {
 
         val notebooksArray = JSONArray()
         notebooks.forEach { nb ->
-            notebooksArray.put(
-                JSONObject()
+            val notebookObject = JSONObject()
                     .put("title", nb.title)
                     .put("createdAt", nb.createdAt)
                     .put("updatedAt", nb.updatedAt)
                     .put("color", nb.color)
                     .put("manualOrder", nb.manualOrder)
                     .put("pinned", nb.pinned)
-            )
+            if (nb.color.startsWith("photo:")) {
+                val photoBytes = AttachmentStore.readBytes(context, nb.color.removePrefix("photo:"), Long.MAX_VALUE)
+                if (photoBytes != null) notebookObject.put("coverData", Base64.encodeToString(photoBytes, Base64.NO_WRAP))
+            }
+            notebooksArray.put(notebookObject)
         }
         val notebookItemsArray = JSONArray()
         notebookItems.forEach { item ->

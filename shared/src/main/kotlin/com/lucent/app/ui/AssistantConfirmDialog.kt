@@ -76,7 +76,7 @@ fun AssistantConfirmationDialog() {
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
                             value = draft[field.key].orEmpty(),
-                            onValueChange = { draft[field.key] = it },
+                            onValueChange = { draft[field.key]  = com.lucent.app.collapseExcessBlankLines(it) },
                             label = { Text(field.label) },
                             singleLine = false,
                             maxLines = if (field.multiline) 8 else 3,
