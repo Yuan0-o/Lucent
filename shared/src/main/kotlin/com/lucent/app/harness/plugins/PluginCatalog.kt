@@ -45,7 +45,10 @@ object PluginCatalog {
         "while [ \$_t -lt 40 ]; do \"\$@\" 2>&1 | tee \"\$_l\"; _r=\${PIPESTATUS[0]}; " +
         "if [ \$_r -eq 0 ]; then rm -f \"\$_l\"; return 0; fi; " +
         "if grep -qE \"Unable to acquire the dpkg frontend lock|Could not get lock|dpkg frontend lock was locked\" \"\$_l\"; then " +
-        "_t=\$((_t+1)); echo \"[lucent_apt] lock busy, waiting \$_t/40\"; sleep 15; " +
+        "_t=\$((_t+1)); echo \"[lucent_apt] lock busy, waiting \$_t/40\"; " +
+        "if [ \$_t -eq 1 ]; then for _d in /proc/[0-9]*/cmdline; do _c0=\$(tr '\\0' '\\n' <\"\$_d\" 2>/dev/null | head -1); _c0=\${_c0##*/}; " +
+        "case \"\$_c0\" in apt-get|apt|dpkg) _p=\${_d#/proc/}; _c=\$(tr '\\0' ' ' <\"\$_d\" 2>/dev/null); " +
+        "echo \"[lucent_apt] holder \${_p%/cmdline}: \$_c\";; esac; done; fi; sleep 15; " +
         "else rm -f \"\$_l\"; return \$_r; fi; done; rm -f \"\$_l\"; return \$_r; }; " +
         "lucent_apt dpkg --configure -a 2>&1 | tee /tmp/lucent-dca.log; echo \${PIPESTATUS[0]} > /tmp/lucent-dcarc; " +
         "trap 'echo \"[FIX-M] configure exit:\"; cat /tmp/lucent-dcarc 2>/dev/null; echo \"[FIX-M] dca tail:\"; tail -8 /tmp/lucent-dca.log 2>/dev/null; echo \"[FIX-M] pending:\"; ls /var/lib/dpkg/updates/ 2>/dev/null | head -5' EXIT; " +

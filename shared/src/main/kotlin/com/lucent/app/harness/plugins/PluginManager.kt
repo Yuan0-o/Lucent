@@ -172,8 +172,13 @@ class PluginManager private constructor(private val context: Context?, private v
         }
         onProgress(0.6f, "installing")
         PluginJournal.write(plugin.id, "install", sourceId, false)
+        val tracker = AptProgressTracker(onProgress)
+        val trackingOutput: (String) -> Unit = { line ->
+            onOutput?.invoke(line)
+            tracker.onLine(line)
+        }
         val outcome = try {
-            run(plugin, script, 3600, onOutput)
+            run(plugin, script, 3600, trackingOutput)
         } catch (e: kotlinx.coroutines.CancellationException) {
             record(plugin, "install cancelled", staged?.path.orEmpty())
             return PluginOutcome(
