@@ -923,7 +923,7 @@ fun TasksScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = newTitle,
-                        onValueChange = { newTitle  = com.lucent.app.collapseExcessBlankLines(it) },
+                        onValueChange = { newTitle = it.copy(text = com.lucent.app.collapseExcessBlankLines(it.text)) },
                         placeholder = { Text(com.lucent.app.i18n.S.fieldTitle) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()

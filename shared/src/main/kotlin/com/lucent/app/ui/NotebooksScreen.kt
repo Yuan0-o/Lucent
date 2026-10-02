@@ -173,7 +173,8 @@ fun NotebooksScreen(
             notebookId = open,
             onBack = { openNotebookId = null },
             onOpenNote = onOpenNote,
-            onOpenTask = onOpenTask
+            onOpenTask = onOpenTask,
+            onPickPhoto = onPickPhoto
         )
         return
     }
@@ -598,7 +599,7 @@ private fun NotebookShelfItem(
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(30.dp)) {
                         Icon(
-                            Icons.Default.Edit,
+                            androidx.compose.material.icons.filled.MoreVert,
                             contentDescription = com.lucent.app.i18n.S.a11yMoreOptions,
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(16.dp)
@@ -610,6 +611,7 @@ private fun NotebookShelfItem(
                     ) {
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text(com.lucent.app.i18n.S.actionRename) },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                             onClick = { menuOpen = false; onRename() }
                         )
                         androidx.compose.material3.DropdownMenuItem(
@@ -819,7 +821,7 @@ fun AddToNotebookDialog(
 
     var creatingNew by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
-    var newColor by remember { mutableStateOf(NotebookColor.DEFAULT) }
+    var newColor by remember { mutableStateOf(NotebookColor.DEFAULT.key) }
 
     fun fileInto(notebookId: Long) {
         scope.launch {
@@ -887,7 +889,7 @@ fun AddToNotebookDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    NotebookCoverPicker(selected = newColor, onSelect = { newColor = it })
+                    NotebookCoverPicker(selectedKey = newColor, onSelect = { newColor = it })
                 } else {
                     Row(
                         modifier = Modifier
@@ -915,7 +917,7 @@ fun AddToNotebookDialog(
                         LucentToast.show(context, com.lucent.app.i18n.S.notebookNameRequired)
                     } else {
                         val name = newName.trim()
-                        val colorKey = newColor.key
+                        val colorKey = newColor
                         scope.launch {
                             val id = db.notebookDao().insert(Notebook(title = name, color = colorKey))
                             noteIds.forEach { nid ->

@@ -1272,7 +1272,7 @@ ENTRIES = [
     ("notebookEmptyTitle", "Untitled", "未命名", "無題", "제목 없음"),
     ("notebookItemNote", "Note", "笔记", "ノート", "노트"),
     ("notebookItemTask", "Task", "任务", "タスク", "할 일"),
-    ("notebookItemsCount(count: Int)", None, None, None, None),
+    ("notebookItemsCount(tasks: Int, notes: Int)", None, None, None, None),
     ("notebookName", "Notebook name", "笔记本名称", "ノートブック名", "노트북 이름"),
     ("notebookNameRequired", "Give the notebook a name.", "请给笔记本起个名字。", "ノートブックの名前を入力してください。", "노트북 이름을 입력하세요."),
     ("notebookNew", "New notebook", "新建笔记本", "新しいノートブック", "새 노트북"),
@@ -1506,7 +1506,7 @@ ENTRIES = [
     ("splashStyleCatDesc", "A cat waves, blinks, and turns to glass.", "小猫招手、眨眼，随后化作玻璃。", "ねこが手を振り、まばたきし、ガラスになります。", "고양이가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."),
     ("splashStylePenTitle", "The pen", "钢笔", "ペン", "펜"),
     ("splashStylePenDesc", "A pen writes the name in script, then the ink fades away.", "一支钢笔居中写出花体字，随后墨迹慢慢淡去。", "ペンが中央に筆記体で名前を書き、インクがゆっくり消えていきます。", "펜이 가운데에 필기체로 이름을 쓰고, 잉크가 천천히 사라집니다."),
-    ("splashStyleAvatarTitle", "Jolly", "Jolly", "Jolly", "Jolly"),
+    ("splashStyleAvatarTitle", "Jolly", "乔利（Jolly）", "ジョリー（Jolly）", "졸리 (Jolly)"),
     ("splashStyleAvatarDesc", "Jolly waves hello, blinks, and turns to glass.", "Jolly 招手、眨眼，随后化作玻璃。", "Jollyが手を振り、まばたきし、ガラスになります。", "Jolly가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."),
 
     ("shizukuInstallTitle", "Install Shizuku", "安装 Shizuku", "Shizuku をインストール", "Shizuku 설치"),
@@ -1877,6 +1877,8 @@ ENTRIES = [
     ("pluginCatalogUrlLabel", "Remote catalog URL", "远程目录 URL", "リモートカタログURL", "원격 카탈로그 URL"),
     ("pluginCatalogUrlHint", "https://... (leave blank to disable)", "https://...（留空以禁用）", "https://... (空欄で無効)", "https://... (비워두면 비활성화)"),
     ("pluginSearchHint", "Search plugins...", "搜索插件...", "プラグインを検索...", "플러그인 검색..."),
+    ("pluginSearchRemoteHint", "Search remote plugin sources such as GitHub.", "搜索 GitHub 等远程插件来源。", "GitHub などのリモートプラグインソースを検索します。", "GitHub 등 원격 플러그인 소스를 검색합니다."),
+    ("pluginInstalledTitle", "Installed", "已安装", "インストール済み", "설치됨"),
     ("actionReinstall", "Reinstall", "重新安装", "再インストール", "재설치"),
     ("runtimeMode", "Runtime mode", "运行模式", "ランタイムモード", "런타임 모드"),
     ("runtimeModeAuto", "Auto", "自动", "自動", "자동"),
@@ -1891,5 +1893,5 @@ ENTRIES = [
 
 CONDITIONAL_ENTRIES = {
     "notebooksTotal(count: Int)": ["if (count == 1) \"1 notebook\" else \"$count notebooks\"", "\"$count 个笔记本\"", "\"ノートブック ${count} 冊\"", "\"노트북 ${count}개\""],
-    "notebookItemsCount(count: Int)": ["if (count == 1) \"1 item\" else \"$count items\"", "if (count == 1) \"1 个项目\" else \"$count 个项目\"", "if (count == 1) \"1 項目\" else \"$count 項目\"", "if (count == 1) \"항목 1개\" else \"항목 ${count}개\""],
+    "notebookItemsCount(tasks: Int, notes: Int)": ["run { val t = tasks + notes; \"$t item\" + (if (t == 1) \"\" else \"s\") + \", $tasks task\" + (if (tasks == 1) \"\" else \"s\") + \", $notes note\" + (if (notes == 1) \"\" else \"s\") }", "\"${tasks + notes}项目，${tasks}任务，${notes}笔记\"", "\"${tasks + notes} 項目, $tasks タスク, $notes ノート\"", "\"항목 ${tasks + notes}개, 작업 ${tasks}개, 노트 ${notes}개\""],
 }

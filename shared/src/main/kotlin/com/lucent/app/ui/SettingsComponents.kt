@@ -518,17 +518,15 @@ fun GlobalTextSelectionContainer(
     enabledFlow: kotlinx.coroutines.flow.Flow<Boolean>,
     content: @androidx.compose.runtime.Composable () -> Unit
 ) {
-    val enabled by enabledFlow.collectAsState(initial = false)
-    var selection by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<androidx.compose.foundation.text.selection.Selection?>(null)
+    var enabled by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(enabledFlow) {
+        enabledFlow.collect { enabled = it }
     }
-    androidx.compose.runtime.LaunchedEffect(enabled) {
-        if (!enabled) selection = null
-    }
-    androidx.compose.foundation.text.selection.SelectionContainer(
-        selection = selection,
-        onSelectionChange = { next -> if (enabled) selection = next }
-    ) {
+    if (enabled) {
+        androidx.compose.foundation.text.selection.SelectionContainer {
+            content()
+        }
+    } else {
         content()
     }
 }

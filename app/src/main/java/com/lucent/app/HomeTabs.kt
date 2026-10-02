@@ -130,13 +130,13 @@ internal fun KeepAliveTabs(pagerState: PagerState, modifier: Modifier = Modifier
         if (uri != null) {
              val id = com.lucent.app.data.AttachmentStore.importUri(context, uri)
              if (id != null) {
-                 pendingPhotoCallback?.invoke("photo:$id")
+                 pendingPhotoCallback?.let { it("photo:$id") }
                  com.lucent.app.data.StartupLog.event(context, "notebooks: imported cover photo $id")
              } else {
                  com.lucent.app.data.StartupLog.event(context, "notebooks: cover photo import failed")
-                 pendingPhotoCallback?.invoke(null)
+                 pendingPhotoCallback?.let { it(null) }
              }
-        } else pendingPhotoCallback?.invoke(null)
+        } else pendingPhotoCallback?.let { it(null) }
         pendingPhotoCallback = null
     }
 

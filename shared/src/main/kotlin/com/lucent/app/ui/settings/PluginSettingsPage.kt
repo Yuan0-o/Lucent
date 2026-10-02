@@ -277,6 +277,35 @@ internal fun PluginSettingsPage(
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
+
+        if (setupComplete) {
+            var advancedExpanded by remember { mutableStateOf(false) }
+            Spacer(modifier = Modifier.height(16.dp))
+            com.lucent.app.ui.MoreOptionsFold(
+                expanded = advancedExpanded,
+                onToggle = { advancedExpanded = !advancedExpanded },
+                label = S.settingsAdvancedTitle
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = config.pluginCatalogUrl,
+                    onValueChange = {
+                        val next = config.copy(pluginCatalogUrl = com.lucent.app.collapseExcessBlankLines(it))
+                        HarnessRuntime.update(next)
+                        config = next
+                    },
+                    label = { Text(S.pluginCatalogUrlLabel, fontSize = 13.sp) },
+                    placeholder = { Text(S.pluginCatalogUrlHint, fontSize = 13.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedTextColor = onGradient,
+                        focusedTextColor = onGradient
+                    )
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
     }
 
     val report = failure

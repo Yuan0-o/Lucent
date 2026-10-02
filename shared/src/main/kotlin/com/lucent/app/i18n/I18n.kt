@@ -1237,10 +1237,7 @@ open class Tr {
     open val notebookEmptyTitle: String = "Untitled"
     open val notebookItemNote: String = "Note"
     open val notebookItemTask: String = "Task"
-    open fun notebookItemsCount(tasks: Int, notes: Int): String {
-        val t = tasks + notes
-        return "$t item" + (if (t == 1) "" else "s") + ", $tasks task" + (if (tasks == 1) "" else "s") + ", $notes note" + (if (notes == 1) "" else "s")
-    }
+    open fun notebookItemsCount(tasks: Int, notes: Int): String = run { val t = tasks + notes; "$t item" + (if (t == 1) "" else "s") + ", $tasks task" + (if (tasks == 1) "" else "s") + ", $notes note" + (if (notes == 1) "" else "s") }
     open val notebookName: String = "Notebook name"
     open val notebookNameRequired: String = "Give the notebook a name."
     open val notebookNew: String = "New notebook"

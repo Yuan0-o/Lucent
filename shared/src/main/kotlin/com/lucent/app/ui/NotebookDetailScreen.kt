@@ -60,7 +60,8 @@ fun NotebookDetailScreen(
     notebookId: Long,
     onBack: () -> Unit,
     onOpenNote: (Note) -> Unit,
-    onOpenTask: (Task) -> Unit
+    onOpenTask: (Task) -> Unit,
+    onPickPhoto: (((String?) -> Unit) -> Unit)? = null
 ) {
     BackHandler { onBack() }
     val context = LocalContext.current
@@ -91,6 +92,7 @@ fun NotebookDetailScreen(
     }
 
     var renaming by remember { mutableStateOf(false) }
+    var recolouring by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     var addMenuOpen by remember { mutableStateOf(false) }
@@ -200,7 +202,7 @@ fun NotebookDetailScreen(
             title = com.lucent.app.i18n.S.notebookRename,
             confirmLabel = com.lucent.app.i18n.S.notebookRenameAction,
             initialName = notebook?.title ?: "",
-            initialColor = NotebookColor.fromKey(notebook?.color),
+            initialColorKey = notebook?.color.orEmpty(),
             showColorPicker = false,
             onConfirm = { name, _ ->
                 val row = notebook
@@ -215,6 +217,29 @@ fun NotebookDetailScreen(
                 }
             },
             onDismiss = { renaming = false }
+        )
+    }
+
+    if (recolouring) {
+        NotebookEditorDialog(
+            title = com.lucent.app.i18n.S.notebookCoverTitle,
+            confirmLabel = com.lucent.app.i18n.S.actionSave,
+            initialName = notebook?.title ?: "",
+            initialColorKey = notebook?.color.orEmpty(),
+            showNameField = false,
+            onPickPhoto = onPickPhoto,
+            onConfirm = { _, color ->
+                val row = notebook
+                if (row != null) {
+                    scope.launch {
+                        db.notebookDao().update(
+                            row.copy(color = color, updatedAt = System.currentTimeMillis())
+                        )
+                        notebook = row.copy(color = color, updatedAt = System.currentTimeMillis())
+                    }
+                }
+            },
+            onDismiss = { recolouring = false }
         )
     }
 
@@ -238,7 +263,7 @@ fun NotebookDetailScreen(
             NotebookCover(
                 colorKey = notebook?.color.orEmpty(),
                 label = title,
-                modifier = Modifier.width(30.dp).height(42.dp)
+                modifier = Modifier.width(30.dp).height(42.dp).clickable { recolouring = true }
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
