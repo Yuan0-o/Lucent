@@ -41,7 +41,13 @@ object PluginCatalog {
         "chmod -R u+rwX /var/lib/dpkg 2>/dev/null || true; " +
         "rm -f /var/lib/dpkg/status-old 2>/dev/null; " +
         "echo \"[FIX-M] marker\"; " +
-        "dpkg --configure -a > /tmp/lucent-dca.log 2>&1; echo $? > /tmp/lucent-dcarc; " +
+        "lucent_apt() { _t=0; _l=/tmp/lucent-apt-\$\$.log; " +
+        "while [ \$_t -lt 40 ]; do \"\$@\" 2>&1 | tee \"\$_l\"; _r=\${PIPESTATUS[0]}; " +
+        "if [ \$_r -eq 0 ]; then rm -f \"\$_l\"; return 0; fi; " +
+        "if grep -qE \"Unable to acquire the dpkg frontend lock|Could not get lock|dpkg frontend lock was locked\" \"\$_l\"; then " +
+        "_t=\$((_t+1)); echo \"[lucent_apt] lock busy, waiting \$_t/40\"; sleep 15; " +
+        "else rm -f \"\$_l\"; return \$_r; fi; done; rm -f \"\$_l\"; return \$_r; }; " +
+        "lucent_apt dpkg --configure -a 2>&1 | tee /tmp/lucent-dca.log; echo \${PIPESTATUS[0]} > /tmp/lucent-dcarc; " +
         "trap 'echo \"[FIX-M] configure exit:\"; cat /tmp/lucent-dcarc 2>/dev/null; echo \"[FIX-M] dca tail:\"; tail -8 /tmp/lucent-dca.log 2>/dev/null; echo \"[FIX-M] pending:\"; ls /var/lib/dpkg/updates/ 2>/dev/null | head -5' EXIT; " +
         "echo \"[Diagnostics] id=\$(id -u):\$(id -g), free=\$(df -k /var/lib/dpkg | awk 'NR==2{print \$4}')KB\"; " +
         "echo \"[Diagnostics] dpkg dir:\"; ls -ld /var/lib/dpkg 2>/dev/null; ls -la /var/lib/dpkg 2>/dev/null | head -n 5; " +
@@ -55,9 +61,9 @@ object PluginCatalog {
         "sed -i 's|http://ports.ubuntu.com|{aptMirror}|g; " +
         "s|http://mirrors.tuna.tsinghua.edu.cn|{aptMirror}|g; " +
         "s|https://ports.ubuntu.com|{aptMirror}|g' \"\$F\" && " +
-        "(apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1 || " +
+        "(lucent_apt apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1 || " +
         "(sed -i 's|{aptMirror}|{aptFallback}|g' \"\$F\" && " +
-        "apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1)) && "
+        "lucent_apt apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1)) && "
 
     fun aptMirror(region: String): String =
         if (region == "cn") "http://mirrors.tuna.tsinghua.edu.cn" else "http://ports.ubuntu.com"
@@ -130,7 +136,7 @@ object PluginCatalog {
             sources = emptyList(),
             detectCommand = "python3 -c \"import docx, openpyxl, pptx\"",
             installScript = APT_SETUP +
-                "apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates && " +
+                "lucent_apt apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates && " +
                 "(pip3 install --break-system-packages --index-url {pipIndex} " +
                 "python-docx openpyxl XlsxWriter python-pptx pymupdf pandas || " +
                 "pip3 install --break-system-packages --index-url {pipFallback} " +
@@ -154,7 +160,7 @@ object PluginCatalog {
             sources = emptyList(),
             detectCommand = "command -v soffice",
             installScript = APT_SETUP +
-                "apt-get install -y --no-install-recommends " +
+                "lucent_apt apt-get install -y --no-install-recommends " +
                 "libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui",
             removeScript = "apt-get remove -y 'libreoffice*'",
             licence = "MPL-2.0",
@@ -173,7 +179,7 @@ object PluginCatalog {
             bytes = 0L,
             sources = emptyList(),
             detectCommand = "command -v node",
-            installScript = APT_SETUP + "apt-get install -y nodejs npm",
+            installScript = APT_SETUP + "lucent_apt apt-get install -y nodejs npm",
             removeScript = "apt-get remove -y nodejs npm",
             licence = "MIT",
             homepage = "https://nodejs.org",
