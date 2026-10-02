@@ -134,9 +134,9 @@ internal fun KeepAliveTabs(pagerState: PagerState, modifier: Modifier = Modifier
                  com.lucent.app.data.StartupLog.event(context, "notebooks: imported cover photo $id")
              } else {
                  com.lucent.app.data.StartupLog.event(context, "notebooks: cover photo import failed")
-                 pendingPhotoCallback?.let { it(null) }
+                 pendingPhotoCallback?.invoke(null)
              }
-        } else pendingPhotoCallback?.let { it(null) }
+        } else pendingPhotoCallback?.invoke(null)
         pendingPhotoCallback = null
     }
 
