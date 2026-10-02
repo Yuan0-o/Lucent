@@ -45,9 +45,9 @@ object PluginCatalog {
         "sed -i 's|http://ports.ubuntu.com|{aptMirror}|g; " +
         "s|http://mirrors.tuna.tsinghua.edu.cn|{aptMirror}|g; " +
         "s|https://ports.ubuntu.com|{aptMirror}|g' \"\$F\" && " +
-        "((apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1 || " +
+        "(apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1 || " +
         "(sed -i 's|{aptMirror}|{aptFallback}|g' \"\$F\" && " +
-        "apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1))) && "
+        "apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1)) && "
 
     fun aptMirror(region: String): String =
         if (region == "cn") "http://mirrors.tuna.tsinghua.edu.cn" else "http://ports.ubuntu.com"
