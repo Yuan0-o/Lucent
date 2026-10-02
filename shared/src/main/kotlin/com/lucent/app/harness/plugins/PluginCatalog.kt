@@ -40,7 +40,9 @@ object PluginCatalog {
         "echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/unsafe-io 2>/dev/null; " +
         "chmod -R u+rwX /var/lib/dpkg 2>/dev/null || true; " +
         "rm -f /var/lib/dpkg/status-old 2>/dev/null; " +
-        "dpkg --configure -a 2>/dev/null || true; " +
+        "echo \"[FIX-L] marker dpkg-recovery\"; " +
+        "dpkg --configure -a > /tmp/lucent-dca.log 2>&1; echo \"[FIX-L] configure exit=$?\"; tail -4 /tmp/lucent-dca.log 2>/dev/null; " +
+        "trap 'echo \"[FIX-L] end pending:\"; ls /var/lib/dpkg/updates/ 2>/dev/null | head -3' EXIT; " +
         "echo \"[Diagnostics] id=\$(id -u):\$(id -g), free=\$(df -k /var/lib/dpkg | awk 'NR==2{print \$4}')KB\"; " +
         "echo \"[Diagnostics] dpkg dir:\"; ls -ld /var/lib/dpkg 2>/dev/null; ls -la /var/lib/dpkg 2>/dev/null | head -n 5; " +
         "touch /var/lib/dpkg/probe 2>/dev/null && echo \"[Diagnostics] probe=ok\" || echo \"[Diagnostics] probe=fail\"; " +
