@@ -36,12 +36,18 @@ data class PluginSpec(
 
 object PluginCatalog {
 
-    private const val APT_SETUP = "sed -i 's|http://ports.ubuntu.com|{aptMirror}|g; " +
+    private const val APT_SETUP = "F=/etc/apt/sources.list.d/ubuntu.sources; " +
+        "if [ ! -s \"\$F\" ]; then mkdir -p /etc/apt/sources.list.d && " +
+        "printf '%s\\n' 'Types: deb' 'URIs: {aptMirror}/ubuntu-ports/' 'Suites: noble noble-updates noble-backports' " +
+        "'Components: main universe restricted multiverse' 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' '' " +
+        "'Types: deb' 'URIs: {aptMirror}/ubuntu-ports/' 'Suites: noble-security' " +
+        "'Components: main universe restricted multiverse' 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' > \"\$F\"; fi && " +
+        "sed -i 's|http://ports.ubuntu.com|{aptMirror}|g; " +
         "s|http://mirrors.tuna.tsinghua.edu.cn|{aptMirror}|g; " +
-        "s|https://ports.ubuntu.com|{aptMirror}|g' /etc/apt/sources.list.d/ubuntu.sources && " +
-        "(apt-get update -o Acquire::Retries=3 || " +
-        "(sed -i 's|{aptMirror}|{aptFallback}|g' /etc/apt/sources.list.d/ubuntu.sources && " +
-        "apt-get update -o Acquire::Retries=3)) && "
+        "s|https://ports.ubuntu.com|{aptMirror}|g' \"\$F\" && " +
+        "((apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1 || " +
+        "(sed -i 's|{aptMirror}|{aptFallback}|g' \"\$F\" && " +
+        "apt-get update -o Acquire::Retries=3 && ls /var/lib/apt/lists/*_Packages > /dev/null 2>&1))) && "
 
     fun aptMirror(region: String): String =
         if (region == "cn") "http://mirrors.tuna.tsinghua.edu.cn" else "http://ports.ubuntu.com"

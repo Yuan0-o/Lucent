@@ -42,7 +42,7 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
         onOutput: ((String) -> Unit)?
     ): ShellOutcome {
         val dir = workdir ?: HarnessRuntime.workspace()
-        if (privilegedReady()) {
+        if (privilegedReady() && env[HarnessRuntime.ENV_BUILTIN_ONLY] != "1") {
             val prefix = buildString {
                 append("cd '").append(dir.path.replace("'", "'\\''")).append("' 2>/dev/null; ")
                 env.forEach { (key, value) ->

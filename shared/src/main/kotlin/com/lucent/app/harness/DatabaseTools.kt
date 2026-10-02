@@ -169,7 +169,8 @@ object DatabaseTools : HarnessGroupTools {
         val outcome = HarnessRuntime.runShell(
             "sqlite3 -readonly -header -csv " + Csv.quote(file.path) + " " + Csv.quote(sql),
             null,
-            120
+            120,
+            HarnessRuntime.builtinOnlyEnv()
         )
         return ToolExecResult(ctx.limit(outcome.text.ifBlank { "(no rows)" }), success = outcome.ok)
     }
@@ -184,7 +185,7 @@ object DatabaseTools : HarnessGroupTools {
         val answer = if (host != null && host.availableSqlite()) {
             host.sqliteExec(file.path, sql)
         } else if (HarnessRuntime.shellReady()) {
-            HarnessRuntime.runShell("sqlite3 " + Csv.quote(file.path) + " " + Csv.quote(sql), null, 120).text
+            HarnessRuntime.runShell("sqlite3 " + Csv.quote(file.path) + " " + Csv.quote(sql), null, 120, HarnessRuntime.builtinOnlyEnv()).text
         } else {
             return ToolExecResult("No SQLite engine is available on this build.", success = false)
         }

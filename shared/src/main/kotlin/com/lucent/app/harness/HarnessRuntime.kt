@@ -205,6 +205,10 @@ object HarnessRuntime {
 
     const val SHELL_SWITCHED_OFF = "The shell is switched off in Settings"
 
+    const val ENV_BUILTIN_ONLY = "LUCENT_BUILTIN_ONLY"
+
+    fun builtinOnlyEnv(): Map<String, String> = mapOf(ENV_BUILTIN_ONLY to "1")
+
     fun shellReady(): Boolean = shell?.isReady() == true && current.shellEnabled
 
     fun runShell(

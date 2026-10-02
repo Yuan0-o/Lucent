@@ -409,7 +409,7 @@ object GitTools : HarnessGroupTools {
         }
         val command = "git -C ${quote(directory.path)} $arguments"
         val outcome = try {
-            HarnessRuntime.runShell(command, directory, timeoutSeconds, emptyMap())
+            HarnessRuntime.runShell(command, directory, timeoutSeconds, HarnessRuntime.builtinOnlyEnv())
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (t: Throwable) {

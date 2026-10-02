@@ -74,7 +74,7 @@ object OfficeConvertTools : HarnessGroupTools {
             append(" '").append(input.path.replace("'", "'\\''")).append("'")
             append(" 2>&1")
         }
-        return HarnessRuntime.runShell(command, outDir, 600)
+        return HarnessRuntime.runShell(command, outDir, 600, HarnessRuntime.builtinOnlyEnv())
     }
 
     private fun convert(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
