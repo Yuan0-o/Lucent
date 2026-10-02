@@ -43,6 +43,7 @@ object BuiltinShell {
         cmdArgs.add(proot.absolutePath)
         cmdArgs.add("--kill-on-exit")
         cmdArgs.add("-0")
+        cmdArgs.add("--link2symlink")
         cmdArgs.add("-r")
         cmdArgs.add(rootfs.absolutePath)
 
