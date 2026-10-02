@@ -46,6 +46,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -56,6 +62,7 @@ import com.lucent.app.AppNavigation
 import com.lucent.app.BackClaim
 import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
+import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.terminal.PtyKeys
 import com.lucent.app.harness.terminal.PtySession
 import com.lucent.app.harness.terminal.TerminalSessionListener
@@ -246,8 +253,30 @@ fun TerminalScreen(onBack: () -> Unit) {
                         input = newValue
                     }
                 },
-                modifier = Modifier.weight(1f).background(Color(0xFF333333), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .background(Color(0xFF333333), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .onPreviewKeyEvent { event ->
+                        if (HarnessRuntime.android) return@onPreviewKeyEvent false
+                        val isEnter = event.key == Key.Enter || event.key == Key.NumPadEnter
+                        when {
+                            !isEnter || event.type != KeyEventType.KeyDown -> false
+                            event.isShiftPressed -> false
+                            else -> {
+                                if (TerminalSessions.manager.current() == null) {
+                                    try {
+                                        TerminalSessions.manager.createSession()
+                                    } catch (_: Throwable) { }
+                                }
+                                TerminalSessions.manager.writeToCurrent(input + PtyKeys.ENTER)
+                                input = ""
+                                true
+                            }
+                        }
+                    },
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                maxLines = 20,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
                     if (TerminalSessions.manager.current() == null) {
