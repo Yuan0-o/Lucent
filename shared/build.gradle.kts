@@ -24,7 +24,6 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(libs.org.json)
-                implementation(compose.runtime)
             }
         }
         val androidMain by getting {

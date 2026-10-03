@@ -1,8 +1,5 @@
 package com.lucent.app.i18n
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 
 enum class AppLanguage(val key: String, val label: String) {
     SYSTEM("system", "System"),
@@ -27,7 +24,7 @@ enum class AppLanguage(val key: String, val label: String) {
 }
 
 object L {
-    var current: Tr by mutableStateOf(resolve(AppLanguage.SYSTEM))
+    @Volatile var current: Tr = resolve(AppLanguage.SYSTEM)
         private set
 
     var language: AppLanguage = AppLanguage.SYSTEM

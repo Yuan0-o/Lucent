@@ -25,4 +25,4 @@ open class Context {
     open val packageName: String get() = "com.lucent.desktop"
 }
 
-object DesktopContext : Context()
+object DesktopContext : com.lucent.app.platform.PlatformContext()
