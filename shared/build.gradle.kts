@@ -1,12 +1,15 @@
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
-    id("com.android.library")
+    id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 kotlin {
-    androidTarget {
+    android {
+        namespace = "com.lucent.shared"
+        compileSdk = 36
+        minSdk = 28
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
@@ -62,17 +65,5 @@ kotlin {
                 implementation(libs.jna.platform)
             }
         }
-    }
-}
-
-android {
-    namespace = "com.lucent.shared"
-    compileSdk = 36
-    defaultConfig {
-        minSdk = 28
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
     }
 }
