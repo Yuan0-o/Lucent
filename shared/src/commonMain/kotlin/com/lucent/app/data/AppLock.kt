@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.util.Base64
+import java.util.Base64
 import org.json.JSONObject
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
@@ -87,9 +87,9 @@ object AppLock {
     private fun parse(json: String): JSONObject? =
         if (json.isBlank()) null else try { JSONObject(json) } catch (t: Throwable) { null }
 
-    private fun b64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
+    private fun b64(bytes: ByteArray): String = Base64.getEncoder().withoutPadding().encodeToString(bytes)
     private fun b64ToBytes(s: String): ByteArray? =
-        if (s.isEmpty()) null else try { Base64.decode(s, Base64.NO_WRAP) } catch (t: Throwable) { null }
+        if (s.isEmpty()) null else try { Base64.getDecoder().decode(s) } catch (t: Throwable) { null }
 
     private fun constantTimeEquals(a: ByteArray, b: ByteArray): Boolean {
         if (a.size != b.size) return false

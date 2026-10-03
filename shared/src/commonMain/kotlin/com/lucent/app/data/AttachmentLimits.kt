@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 
 object AttachmentLimits {
 
@@ -14,7 +14,7 @@ object AttachmentLimits {
         else String.format("%.1f MB", mb)
     }
 
-    fun sizeOf(context: Context, att: Attachment): Long {
+    fun sizeOf(context: PlatformContext, att: Attachment): Long {
         return if (AttachmentStore.looksLikeId(att.data)) {
             AttachmentStore.sizeOf(context, att.data)
         } else {
@@ -22,10 +22,10 @@ object AttachmentLimits {
         }
     }
 
-    fun sizeOfList(context: Context, list: List<Attachment>): Long =
+    fun sizeOfList(context: PlatformContext, list: List<Attachment>): Long =
         list.sumOf { sizeOf(context, it) }
 
-    fun totalStored(context: Context, notes: List<Note>, tasks: List<Task>): Long {
+    fun totalStored(context: PlatformContext, notes: List<Note>, tasks: List<Task>): Long {
         var total = AttachmentStore.totalBytes(context)
         val addLegacy: (String) -> Unit = { json ->
             Attachments.parse(json).forEach { att ->
