@@ -14,39 +14,39 @@ import com.lucent.desktop.platform.DesktopFiles
 import com.lucent.desktop.platform.DesktopShare
 import com.lucent.desktop.platform.LucentDateTimePickerFlow
 
-actual typealias PlatformPickedFile = java.io.File
+typealias PlatformPickedFile = java.io.File
 
 @Composable
-actual fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit = {
+fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit = {
     val files = DesktopFiles.openFiles()
     if (files.isNotEmpty()) onPicked(files)
 }
 
-internal actual fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long = source.length()
+fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long = source.length()
 
-internal actual fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
+fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
     fileToAttachment(context, source)
 
-internal actual fun templateToastContext(context: PlatformContext): PlatformContext = context.applicationContext
+fun templateToastContext(context: PlatformContext): PlatformContext = context.applicationContext
 
 @Composable
-actual fun OnAppHidden(action: () -> Unit) {
+fun OnAppHidden(action: () -> Unit) {
     val isWindowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(isWindowFocused) {
         if (!isWindowFocused) action()
     }
 }
 
-actual fun shareText(context: PlatformContext, subject: String?, text: String, chooserTitle: String) =
+fun shareText(context: PlatformContext, subject: String?, text: String, chooserTitle: String) =
     DesktopShare.shareText(context, subject = subject, text = text)
 
-internal actual val notesGridColumns: Int = 4
+val notesGridColumns: Int = 4
 
 @Composable
-actual fun rememberNotificationPermissionRequester(): () -> Unit = {}
+fun rememberNotificationPermissionRequester(): () -> Unit = {}
 
 @Composable
-actual fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
+fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
     var showPicker by remember { mutableStateOf(false) }
     if (showPicker) {
         LucentDateTimePickerFlow(

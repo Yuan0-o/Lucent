@@ -35,7 +35,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/LucentFonts.kt | unified shared/src/main + expect/actual PlatformFontCompat.fontFamily(fontKey, path) |
 | ui/PlatformExport.kt | unified shared/src/main + expect/actual exportPdfFontHintEnabled flag |
 | ui/PlatformNotebookCover.kt | unified shared/src/main + expect/actual decodeCoverBitmap(bytes) |
-| ui/PlatformNotes.kt | expect/actual (all members platform-divergent; PlatformPickedFile as expect class + actual typealias) |
+| ui/PlatformNotes.kt | parallel androidMain/desktopMain declarations (Uri/File typealias cannot be expect/actual: modality mismatch) |
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
 
