@@ -492,7 +492,7 @@ fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
                     val dir = dialog.directory
                     val name = dialog.file
                     if (dir != null && name != null) {
-                        val ok = AttachmentAccess.writeTo(context, att, File(dir, name).outputStream())
+                        val ok = AttachmentAccess.writeTo(context, att, com.lucent.app.PlatformOutputStream(File(dir, name).outputStream()))
                         LucentToast.show(context, if (ok) com.lucent.app.i18n.S.savedToast else com.lucent.app.i18n.S.cantSaveFile)
                     }
                 } catch (t: Throwable) {

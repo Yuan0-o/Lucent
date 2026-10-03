@@ -49,7 +49,7 @@ fun PdfViewer(att: Attachment) {
             var descriptor: ParcelFileDescriptor? = null
             var renderer: PdfRenderer? = null
             try {
-                descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                descriptor = ParcelFileDescriptor.open(java.io.File(file.absolutePath), ParcelFileDescriptor.MODE_READ_ONLY)
                 renderer = PdfRenderer(descriptor)
                 val out = ArrayList<Bitmap>(renderer.pageCount)
                 val pageLimit = minOf(renderer.pageCount, MAX_PAGES)

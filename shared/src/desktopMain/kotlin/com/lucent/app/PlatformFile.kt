@@ -36,4 +36,6 @@ actual class PlatformFile {
 
     actual val parentFile: PlatformFile?
         get() = file.parentFile?.let { PlatformFile(it.absolutePath) }
+
+    actual val absolutePath: String get() = file.absolutePath
 }

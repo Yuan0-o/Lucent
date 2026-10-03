@@ -191,7 +191,7 @@ fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
         AppScope.io.launch {
             val ok = try {
                 context.contentResolver.openOutputStream(uri)?.let { out ->
-                    AttachmentAccess.writeTo(context, att, out)
+                    AttachmentAccess.writeTo(context, att, com.lucent.app.PlatformOutputStream(out))
                 } ?: false
             } catch (t: Throwable) {
                 false

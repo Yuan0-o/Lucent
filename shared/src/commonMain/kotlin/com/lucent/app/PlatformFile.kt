@@ -16,4 +16,5 @@ expect class PlatformFile {
     fun outputStream(): PlatformOutputStream
     val name: String
     val parentFile: PlatformFile?
+    val absolutePath: String
 }
