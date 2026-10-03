@@ -30,8 +30,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.ceil
 
-data class BackgroundEnvironment(val active: Boolean = true, val motionEnabled: Boolean = true)
-
 val LocalBackgroundEnvironment = staticCompositionLocalOf { BackgroundEnvironment() }
 
 private const val STILL_COLOUR_TICK_MS = 1_000L
