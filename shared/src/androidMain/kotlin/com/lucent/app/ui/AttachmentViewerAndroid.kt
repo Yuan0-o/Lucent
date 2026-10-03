@@ -1197,7 +1197,7 @@ private object DocumentText {
     fun extensionOf(name: String): String = name.substringAfterLast('.', "").lowercase()
 }
 
-private enum class EditTool { DOODLE, MOSAIC, CROP }
+private enum class AttachmentViewerEditTool { DOODLE, MOSAIC, CROP }
 
 @Composable
 private fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Unit) {
@@ -1206,7 +1206,7 @@ private fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: (
     var failed by remember(att.data) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var version by remember { mutableIntStateOf(0) }
-    var tool by remember { mutableStateOf(EditTool.DOODLE) }
+    var tool by remember { mutableStateOf(AttachmentViewerEditTool.DOODLE) }
 
     val undoStack = remember(att.data) { mutableStateListOf<Bitmap>() }
     val canUndo = undoStack.isNotEmpty()
@@ -1283,28 +1283,28 @@ private fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: (
                                             detectDragGestures(
                                                 onDragStart = { pos ->
                                                     livePath = listOf(pos)
-                                                    if (tool == EditTool.CROP) cropRect = Rect(pos, pos)
+                                                    if (tool == AttachmentViewerEditTool.CROP) cropRect = Rect(pos, pos)
                                                 },
                                                 onDrag = { change, _ ->
                                                     change.consume()
                                                     livePath = livePath + change.position
-                                                    if (tool == EditTool.CROP && livePath.isNotEmpty()) {
+                                                    if (tool == AttachmentViewerEditTool.CROP && livePath.isNotEmpty()) {
                                                         cropRect = Rect(livePath.first(), change.position)
                                                     }
                                                 },
                                                 onDragEnd = {
                                                     when (tool) {
-                                                        EditTool.DOODLE -> {
+                                                        AttachmentViewerEditTool.DOODLE -> {
                                                             if (livePath.size > 1) pushUndo(bmp)
                                                             drawDoodle(bmp, livePath.map { toBitmap(it) })
                                                             version++
                                                         }
-                                                        EditTool.MOSAIC -> {
+                                                        AttachmentViewerEditTool.MOSAIC -> {
                                                             if (livePath.isNotEmpty()) pushUndo(bmp)
                                                             drawMosaic(bmp, livePath.map { toBitmap(it) })
                                                             version++
                                                         }
-                                                        EditTool.CROP -> {  }
+                                                        AttachmentViewerEditTool.CROP -> {  }
                                                     }
                                                     livePath = emptyList()
                                                 }
@@ -1312,9 +1312,9 @@ private fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: (
                                         }
                                         .onSizeChangedCompat { canvasSize = it }
                                 ) {
-                                    if (livePath.size > 1 && tool != EditTool.CROP) {
-                                        val color = if (tool == EditTool.DOODLE) Color(0xFFFF3B30) else Color.White.copy(alpha = 0.5f)
-                                        val width = if (tool == EditTool.DOODLE) DOODLE_STROKE else MOSAIC_BLOCK.toFloat()
+                                    if (livePath.size > 1 && tool != AttachmentViewerEditTool.CROP) {
+                                        val color = if (tool == AttachmentViewerEditTool.DOODLE) Color(0xFFFF3B30) else Color.White.copy(alpha = 0.5f)
+                                        val width = if (tool == AttachmentViewerEditTool.DOODLE) DOODLE_STROKE else MOSAIC_BLOCK.toFloat()
                                         val sx = if (canvasSize.width == 0) 1f else canvasSize.width.toFloat() / bmp.width
                                         for (i in 1 until livePath.size) {
                                             drawLine(
@@ -1342,10 +1342,10 @@ private fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: (
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            ToolChip(com.lucent.app.i18n.S.toolDraw, Icons.Default.Brush, tool == EditTool.DOODLE) { tool = EditTool.DOODLE }
-                            ToolChip(com.lucent.app.i18n.S.toolMosaic, Icons.Default.GridOn, tool == EditTool.MOSAIC) { tool = EditTool.MOSAIC }
-                            ToolChip(com.lucent.app.i18n.S.toolCrop, Icons.Default.Crop, tool == EditTool.CROP) { tool = EditTool.CROP }
-                            if (tool == EditTool.CROP) {
+                            ToolChip(com.lucent.app.i18n.S.toolDraw, Icons.Default.Brush, tool == AttachmentViewerEditTool.DOODLE) { tool = AttachmentViewerEditTool.DOODLE }
+                            ToolChip(com.lucent.app.i18n.S.toolMosaic, Icons.Default.GridOn, tool == AttachmentViewerEditTool.MOSAIC) { tool = AttachmentViewerEditTool.MOSAIC }
+                            ToolChip(com.lucent.app.i18n.S.toolCrop, Icons.Default.Crop, tool == AttachmentViewerEditTool.CROP) { tool = AttachmentViewerEditTool.CROP }
+                            if (tool == AttachmentViewerEditTool.CROP) {
                                 Text(
                                     com.lucent.app.i18n.S.applyCrop,
                                     color = Color.Black,
