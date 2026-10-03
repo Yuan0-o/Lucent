@@ -91,7 +91,7 @@ actual object DataKeys {
         return fresh
     }
 
-    private fun writeRecoveryCopy(context: Context, recoveryFile: File, keyBytes: ByteArray) {
+    private fun writeRecoveryCopy(context: PlatformContext, recoveryFile: File, keyBytes: ByteArray) {
         val base64 = android.util.Base64.encodeToString(keyBytes, android.util.Base64.NO_WRAP)
         val wrapped = RecoverableSecret.encrypt(context, base64)
         if (wrapped.isNotEmpty()) atomicWrite(recoveryFile, wrapped)
