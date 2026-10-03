@@ -49,6 +49,8 @@ kotlin {
                 implementation("dev.rikka.shizuku:aidl:13.1.5")
                 implementation(libs.biometric)
                 implementation(libs.fragment.ktx)
+                implementation("androidx.compose.material3:material3:1.4.0")
+                implementation("androidx.compose.material:material-icons-extended:1.7.8")
             }
         }
         val desktopMain by getting {
@@ -57,6 +59,7 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation("org.jetbrains.compose.material3:material3:${ComposeBuildConfig.composeMaterial3Version}")
+                implementation(libs.compose.material.icons.extended)
                 implementation(libs.haze)
                 implementation(libs.haze.materials)
                 implementation(libs.okhttp)
