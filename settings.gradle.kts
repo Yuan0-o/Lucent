@@ -16,3 +16,4 @@ rootProject.name = "Lucent"
 include(":app")
 include(":desktop")
 include(":baselineprofile")
+include(":shared")
