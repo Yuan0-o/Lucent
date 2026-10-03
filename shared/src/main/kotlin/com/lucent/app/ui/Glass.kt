@@ -19,8 +19,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 val LocalHazeState = compositionLocalOf { HazeState() }
-val LocalOnGradient = compositionLocalOf { Color.White }
-val LocalOnGradientMuted = compositionLocalOf { Color.White.copy(alpha = 0.65f) }
 
 val LocalBottomBarInset = compositionLocalOf { 0.dp }
 

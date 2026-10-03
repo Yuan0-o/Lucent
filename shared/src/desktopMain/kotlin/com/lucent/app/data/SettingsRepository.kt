@@ -724,6 +724,7 @@ class DesktopSettingsRepository(private val context: Context) : SettingsReposito
 
     override suspend fun setAppLockHelloEnabled(value: Boolean) {
         edit { it[K.APP_LOCK_HELLO_ENABLED] = value }
+        SettingsCache.appLockHelloEnabled = value
     }
 
     override suspend fun appLockEnabledOnce(): Boolean =
