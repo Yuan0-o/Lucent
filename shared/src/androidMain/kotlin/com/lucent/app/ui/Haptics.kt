@@ -11,8 +11,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.PlatformContext
 
-object Haptics {
+actual object Haptics {
 
     private const val TICK_MS = 18L
     private const val TICK_AMPLITUDE = 90
@@ -54,9 +55,9 @@ object Haptics {
         }
     }
 
-    fun tick(context: Context) = oneShot(context, TICK_MS, TICK_AMPLITUDE)
+    actual fun tick(context: PlatformContext) = oneShot(context, TICK_MS, TICK_AMPLITUDE)
 
-    fun typingTick(context: Context) {
+    actual fun typingTick(context: PlatformContext) {
         val now = android.os.SystemClock.uptimeMillis()
         if (now - lastTypingTickAt < TYPING_MIN_GAP_MS) return
         lastTypingTickAt = now
@@ -80,7 +81,7 @@ object Haptics {
         }
     }
 
-    fun finishBuzz(context: Context) {
+    actual fun finishBuzz(context: PlatformContext) {
         val vib = vibrator(context.applicationContext) ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -99,7 +100,7 @@ object Haptics {
     }
 }
 
-fun Modifier.hapticClickable(onClick: () -> Unit): Modifier = composed {
+actual fun Modifier.hapticClickable(onClick: () -> Unit): Modifier = composed {
     val context = LocalContext.current
     clickable {
         Haptics.tick(context)
