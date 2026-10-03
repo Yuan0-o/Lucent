@@ -1,9 +1,6 @@
 package com.lucent.app.ui
 
 import android.content.Context
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import com.lucent.app.platform.PlatformContext
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -18,10 +15,3 @@ actual fun copyToClipboard(context: PlatformContext, text: String) {
     Haptics.tick(context)
     LucentToast.show(context, com.lucent.app.i18n.S.copiedToast)
 }
-
-actual fun Modifier.longPressCopy(context: PlatformContext, text: String): Modifier =
-    pointerInput(text) {
-        detectTapGestures(onLongPress = { copyToClipboard(context, text) })
-    }.onSecondaryClick {
-        copyToClipboard(context, text)
-    }

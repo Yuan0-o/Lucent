@@ -9,5 +9,3 @@ actual object Haptics {
     actual fun typingTick(context: PlatformContext) { }
     actual fun finishBuzz(context: PlatformContext) { }
 }
-
-actual fun Modifier.hapticClickable(onClick: () -> Unit): Modifier = this

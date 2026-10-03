@@ -7,10 +7,6 @@ import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.platform.LocalContext
 import com.lucent.app.platform.PlatformContext
 
 actual object Haptics {
@@ -97,13 +93,5 @@ actual object Haptics {
             }
         } catch (_: Throwable) {
         }
-    }
-}
-
-actual fun Modifier.hapticClickable(onClick: () -> Unit): Modifier = composed {
-    val context = LocalContext.current
-    clickable {
-        Haptics.tick(context)
-        onClick()
     }
 }

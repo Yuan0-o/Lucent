@@ -1,6 +1,5 @@
 package com.lucent.app.ui
 
-import androidx.compose.ui.Modifier
 import com.lucent.app.platform.PlatformContext
 
 expect object Haptics {
@@ -8,5 +7,3 @@ expect object Haptics {
     fun typingTick(context: PlatformContext)
     fun finishBuzz(context: PlatformContext)
 }
-
-expect fun Modifier.hapticClickable(onClick: () -> Unit): Modifier
