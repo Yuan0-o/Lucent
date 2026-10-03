@@ -5,7 +5,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, ".."))
 
-CACHE_FILE = "shared/src/main/kotlin/com/lucent/app/data/SettingsCache.kt"
+CACHE_FILE = "shared/src/commonMain/kotlin/com/lucent/app/data/SettingsCache.kt"
 
 MODULES = {
     "app": ["app/src", "shared/src"],

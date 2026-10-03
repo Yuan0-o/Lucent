@@ -12,7 +12,7 @@ object AttachmentMigration {
 
     suspend fun runIfNeeded(context: Context) {
         val appContext = context.applicationContext
-        val settings = createcreateSettingsRepository(appContext)
+        val settings = createSettingsRepository(appContext)
         if (settings.attachmentsMigrated.first()) {
             pruneOrphans(appContext)
             return

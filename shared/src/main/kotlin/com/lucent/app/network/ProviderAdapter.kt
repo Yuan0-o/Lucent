@@ -561,10 +561,11 @@ object AnthropicAdapter : ProviderAdapter {
             .put("model", model)
             .put("system", systemBlocks)
             .put("messages", messages)
+        val budgetTokens = plan.claudeBudgetTokens
         when {
-            plan.claudeBudgetTokens != null -> {
-                root.put("max_tokens", plan.claudeBudgetTokens + 4096)
-                root.put("thinking", JSONObject().put("type", "enabled").put("budget_tokens", plan.claudeBudgetTokens))
+            budgetTokens != null -> {
+                root.put("max_tokens", budgetTokens + 4096)
+                root.put("thinking", JSONObject().put("type", "enabled").put("budget_tokens", budgetTokens))
             }
             plan.claudeAdaptive -> {
                 root.put("max_tokens", MAX_TOKENS)
