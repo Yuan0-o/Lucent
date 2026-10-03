@@ -4,10 +4,10 @@ import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.PlatformInputStream
 import java.io.File
 
-actual typealias PlatformModelSource = File
+typealias PlatformModelSource = File
 
-actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream? =
+fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream? =
     source.inputStream()
 
-actual fun modelSourceDisplayName(context: PlatformContext, source: PlatformModelSource): String? =
+fun modelSourceDisplayName(context: PlatformContext, source: PlatformModelSource): String? =
     source.name.ifBlank { "model.gguf" }

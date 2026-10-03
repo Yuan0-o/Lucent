@@ -2,18 +2,20 @@ package com.lucent.app.reminders
 
 import android.app.AlarmManager
 import android.app.PendingIntent
-import com.lucent.app.platform.PlatformContext
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Task
 import com.lucent.app.data.createAppDatabase
 
-actual object ReminderScheduler {
+object ReminderScheduler {
 
+    const val EXTRA_TASK_ID = "task_id"
+    const val EXTRA_TASK_TITLE = "task_title"
     private const val ACTION_TASK_REMINDER = "com.lucent.app.action.TASK_REMINDER"
 
-    private fun pendingIntentFor(context: PlatformContext, taskId: Long, title: String, allowCreate: Boolean): PendingIntent? {
+    private fun pendingIntentFor(context: Context, taskId: Long, title: String, allowCreate: Boolean): PendingIntent? {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
             action = ACTION_TASK_REMINDER
             putExtra(EXTRA_TASK_ID, taskId)
@@ -32,7 +34,7 @@ actual object ReminderScheduler {
             due > System.currentTimeMillis()
     }
 
-    actual fun sync(context: PlatformContext, task: Task) {
+    fun sync(context: Context, task: Task) {
         val appContext = context.applicationContext
         if (!shouldFire(task)) {
             cancel(appContext, task.id)
@@ -59,7 +61,7 @@ actual object ReminderScheduler {
         }
     }
 
-    actual fun cancel(context: PlatformContext, taskId: Long) {
+    fun cancel(context: Context, taskId: Long) {
         val appContext = context.applicationContext
         val alarmManager = appContext.getSystemService(AlarmManager::class.java) ?: return
         val existing = pendingIntentFor(appContext, taskId, "", allowCreate = false) ?: return
@@ -67,7 +69,7 @@ actual object ReminderScheduler {
         existing.cancel()
     }
 
-    actual suspend fun rescheduleAll(context: PlatformContext) {
+    suspend fun rescheduleAll(context: Context) {
         val appContext = context.applicationContext
         val db = createAppDatabase(appContext)
         db.taskDao.getAllOnce().forEach { sync(appContext, it) }
