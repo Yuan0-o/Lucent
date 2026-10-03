@@ -1,6 +1,6 @@
 package com.lucent.app.reminders
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Task
@@ -10,7 +10,10 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import com.lucent.app.data.createAppDatabase
 
-object ReminderScheduler {
+actual object ReminderScheduler {
+
+    actual val EXTRA_TASK_ID = "task_id"
+    actual val EXTRA_TASK_TITLE = "task_title"
 
     @Volatile var notifier: ((title: String, message: String) -> Unit)? = null
 
@@ -24,7 +27,7 @@ object ReminderScheduler {
             due > System.currentTimeMillis()
     }
 
-    fun sync(context: Context, task: Task) {
+    actual fun sync(context: PlatformContext, task: Task) {
         cancel(context, task.id)
         if (!shouldFire(task)) return
         val due = task.dueAt ?: return
@@ -39,11 +42,11 @@ object ReminderScheduler {
         pending[id] = job
     }
 
-    fun cancel(context: Context, taskId: Long) {
+    actual fun cancel(context: PlatformContext, taskId: Long) {
         pending.remove(taskId)?.cancel()
     }
 
-    suspend fun rescheduleAll(context: Context) {
+    actual suspend fun rescheduleAll(context: PlatformContext) {
         val tasks = try {
             createAppDatabase(context.applicationContext).taskDao.getAllOnce()
         } catch (t: Throwable) {
