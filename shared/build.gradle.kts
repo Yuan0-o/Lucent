@@ -22,6 +22,9 @@ kotlin {
 
     sourceSets {
         val commonMain by getting {
+            dependencies {
+                implementation(libs.org.json)
+            }
         }
         val androidMain by getting {
             kotlin.srcDir("src/platformMain/kotlin")

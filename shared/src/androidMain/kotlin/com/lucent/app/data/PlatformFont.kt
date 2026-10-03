@@ -7,7 +7,7 @@ import java.io.InputStream
 
 actual typealias PlatformFontSource = Uri
 
-actual fun openFontSource(context: PlatformContext, source: PlatformFontSource): InputStream? =
+actual fun openFontSource(context: PlatformContext, source: PlatformFontSource): PlatformInputStream? =
     context.contentResolver.openInputStream(source)
 
 actual fun fontSourceDisplayName(context: PlatformContext, source: PlatformFontSource): String? = try {

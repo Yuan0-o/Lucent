@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 
 object EncryptionStatus {
 
@@ -67,7 +67,7 @@ object EncryptionStatus {
         attachmentsReason?.let { append(" (").append(it).append(")") }
     }
 
-    fun logSummary(context: Context) {
+    fun logSummary(context: PlatformContext) {
         StartupLog.event(context, summaryLine())
     }
 

@@ -949,4 +949,4 @@ class AndroidSettingsRepository(private val context: Context) : SettingsReposito
 }
 
 actual fun createSettingsRepository(context: PlatformContext): SettingsRepository =
-    AndroidSettingsRepository(context.androidContext)
+    AndroidSettingsRepository(context)

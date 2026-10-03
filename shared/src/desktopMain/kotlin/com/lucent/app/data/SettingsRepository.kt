@@ -878,4 +878,4 @@ class DesktopSettingsRepository(private val context: Context) : SettingsReposito
 }
 
 actual fun createSettingsRepository(context: PlatformContext): SettingsRepository =
-    DesktopSettingsRepository(context.desktopContext)
+    DesktopSettingsRepository(context)

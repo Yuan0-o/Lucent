@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.os.SystemClock
+import com.lucent.app.platform.platformElapsedRealtime
 import org.json.JSONObject
 
 object PasswordAttempts {
@@ -63,7 +63,7 @@ object PasswordAttempts {
 
         internal fun lockedNow(): State {
             val wall = System.currentTimeMillis()
-            val elapsed = SystemClock.elapsedRealtime()
+            val elapsed = platformElapsedRealtime()
             val step = LADDER_MS[(round - 1).coerceIn(0, LADDER_MS.size - 1)]
             return copy(
                 untilWall = wall + step,
@@ -79,7 +79,7 @@ object PasswordAttempts {
     fun remainingLockoutMs(state: State): Long {
         if (state.untilWall == 0L && state.untilElapsed == 0L) return 0L
         val wall = System.currentTimeMillis()
-        val elapsed = SystemClock.elapsedRealtime()
+        val elapsed = platformElapsedRealtime()
         val sameBoot = kotlin.math.abs((wall - elapsed) - state.bootStamp) < BOOT_STAMP_TOLERANCE_MS
         if (sameBoot) return (state.untilElapsed - elapsed).coerceAtLeast(0L)
         if (wall < state.startedWall) return (state.untilWall - state.startedWall).coerceAtLeast(0L)

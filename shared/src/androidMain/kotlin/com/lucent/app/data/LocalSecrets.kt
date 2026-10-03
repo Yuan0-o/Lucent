@@ -38,17 +38,17 @@ actual object LocalSecrets {
         null
     }
 
-    actual fun encrypt(plainText: String): String {
-        if (plainText.isEmpty()) return ""
-        val key = secretKey() ?: return PREFIX_PORTABLE + CryptoUtil.encrypt(plainText)
+    actual fun encrypt(value: String): String {
+        if (value.isEmpty()) return ""
+        val key = secretKey() ?: return PREFIX_PORTABLE + CryptoUtil.encrypt(value)
         return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, key)
             val iv = cipher.iv
-            val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+            val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
             PREFIX_KEYSTORE + Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
         } catch (t: Throwable) {
-            PREFIX_PORTABLE + CryptoUtil.encrypt(plainText)
+            PREFIX_PORTABLE + CryptoUtil.encrypt(value)
         }
     }
 

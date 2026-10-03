@@ -7,7 +7,7 @@ import java.io.InputStream
 
 actual typealias PlatformModelSource = Uri
 
-actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): InputStream? =
+actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream? =
     context.contentResolver.openInputStream(source)
 
 actual fun modelSourceDisplayName(context: PlatformContext, source: PlatformModelSource): String? = try {
