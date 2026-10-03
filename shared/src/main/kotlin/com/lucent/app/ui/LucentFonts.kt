@@ -5,7 +5,6 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import com.lucent.app.data.FontStore
 
@@ -23,7 +22,7 @@ object LucentFontResolver {
             try {
                 val file = FontStore.fontFile(context.applicationContext, fontKey)
                     ?: return@getOrPut Holder(null)
-                Holder(FontFamily(Font(file)))
+                Holder(PlatformFontCompat.fontFamily(fontKey, file.absolutePath))
             } catch (_: Throwable) {
                 Holder(null)
             }

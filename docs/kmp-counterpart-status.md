@@ -7,7 +7,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 - **blocked** — cannot convert cleanly; reason verified, do not force
 - **pending** — still duplicated in `app/src/main/java` and `desktop/src/main/kotlin`
 
-## Converted (24)
+## Converted (25)
 
 | Pair | Mechanism |
 |---|---|
@@ -32,6 +32,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/AppLockScreen.kt | unified platformMain (copies still present in app/desktop, shadowed) |
 | ui/ClipboardUtil.kt | expect/actual |
 | ui/Haptics.kt | expect/actual (PlatformContext params) |
+| ui/LucentFonts.kt | unified shared/src/main + expect/actual PlatformFontCompat.fontFamily(fontKey, path) |
 | ui/PlatformNotebookCover.kt | unified shared/src/main + expect/actual decodeCoverBitmap(bytes) |
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
@@ -46,7 +47,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | data/DocumentExport.kt | 477-line diff between copies; doodle export path (`DoodleExport.canvasesOf`, doodle bitmap embedding into docx/pdf) is platform-specific canvas rendering. Needs DoodleCanvas multiplatform work first. |
 | ui/PlatformSplash.kt | :shared androidMain has neither `androidx.compose.foundation:foundation-layout` (for `statusBarsPadding()`) nor the app module's `R` (for the font resource). `platform(libs.compose.bom)` is unresolvable inside KMP source-set dependency blocks (KotlinDependencyHandler has no `platform()`), and pinning foundation-layout to the BOM version string (2026.04.01) fails — the BOM manages it to 1.11.0. Two fix attempts failed 2026-10-03; reverted. Candidate for a future retry: `implementation(project.dependencies.platform(...))` workaround or a BOM-free status-bar inset in androidMain, plus moving great_vibes.ttf into :shared androidMain res. |
 
-## Pending (14)
+## Pending (13)
 
 | Pair | Notes |
 |---|---|
@@ -62,7 +63,6 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/PlatformNotes.kt | 63 lines; divergent pickers/share — medium |
 | ui/PlatformSettings.kt | 117 lines |
 | ui/PlatformExport.kt | 14 lines; app returns null, desktop uses FontStore+i18n — needs care |
-| ui/LucentFonts.kt | pending — spec ready: unify in shared/src/main, extract `PlatformFontCompat.fontFamily(fontKey, path)` to :shared expect/actual |
 
 ## Rules for converters
 

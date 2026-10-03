@@ -31,6 +31,7 @@ kotlin {
             dependencies {
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
+                implementation("androidx.compose.ui:ui-text-android:1.11.0")
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.room.runtime)
                 implementation(libs.sqlcipher.android)
