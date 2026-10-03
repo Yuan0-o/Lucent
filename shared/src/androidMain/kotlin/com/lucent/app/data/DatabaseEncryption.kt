@@ -1,12 +1,12 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import android.util.Log
 import net.zetetic.database.DatabaseErrorHandler
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import java.io.File
 
-object DatabaseEncryption {
+actual object DatabaseEncryption {
 
     private const val TAG = "LucentDbCrypto"
     const val DB_NAME = "lucent.db"
@@ -17,12 +17,12 @@ object DatabaseEncryption {
 
     @Volatile private var librariesLoaded = false
 
-    fun lockedNotice(context: Context): String? {
+    actual fun lockedNotice(context: PlatformContext): String? {
         val marker = File(context.applicationContext.filesDir, LOCKED_MARKER)
         return if (marker.exists()) marker.readText().ifBlank { null } else null
     }
 
-    fun purgeSetAsideDatabases(context: Context) {
+    actual fun purgeSetAsideDatabases(context: PlatformContext) {
         val appContext = context.applicationContext
         val dbDir = appContext.getDatabasePath(DB_NAME).parentFile ?: return
         dbDir.listFiles()?.forEach { f ->
@@ -32,7 +32,7 @@ object DatabaseEncryption {
         }
     }
 
-    fun clearLockedNotice(context: Context) {
+    actual fun clearLockedNotice(context: PlatformContext) {
         File(context.applicationContext.filesDir, LOCKED_MARKER).delete()
     }
 
