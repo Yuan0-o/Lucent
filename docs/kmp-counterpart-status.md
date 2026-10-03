@@ -60,9 +60,9 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 |---|---|
 | ui/AssistantScreen.kt | TANGLED CLUSTER — circular deps AppNavigation ↔ SettingsScreen ↔ AssistantController ↔ LocalLlm/AIDL. Leave for last. |
 | ui/SettingsScreen.kt | TANGLED CLUSTER (2549 lines). Leave for last. |
-| ui/AttachmentUi.kt | 442/461-line app/desktop UI files; after leaves (shared helpers stay parallel — uriToAttachment/fileToAttachment cannot be expect/actual; pure mimeForFileName hoisted to commonMain) |
-| ui/ImageEditor.kt | 461 lines; after leaves |
-| ui/UiComponents.kt | 628 lines; after leaves |
+| ui/AttachmentUi.kt | BLOCKED — depends on legacy shared/src/main Attachments.readBytes (not in KMP shared); needs Attachments migration first |
+| ui/ImageEditor.kt | BLOCKED — depends on legacy shared/src/main Attachments.readBytes; needs Attachments migration first |
+| ui/UiComponents.kt | BLOCKED — depends on legacy Glass.kt/TaskStyling.kt (shared/src/main) and AttachmentUi; attempted 2026-10-04, reverted (compile fails in shared/) |
 
 ## Rules for converters
 
