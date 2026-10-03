@@ -20,7 +20,7 @@ import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 
-fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap {
+actual fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap {
     require(edge > 0 && edge.toLong() * edge <= pixels.size.toLong())
     val pixelCount = edge * edge
     val bytes = ByteArray(pixelCount * 4)

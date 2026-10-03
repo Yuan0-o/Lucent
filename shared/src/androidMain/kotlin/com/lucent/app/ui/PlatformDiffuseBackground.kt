@@ -19,7 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap =
+actual fun diffuseImageBitmap(pixels: IntArray, edge: Int): ImageBitmap =
     Bitmap.createBitmap(pixels, edge, edge, Bitmap.Config.ARGB_8888).asImageBitmap()
 
 @Composable
