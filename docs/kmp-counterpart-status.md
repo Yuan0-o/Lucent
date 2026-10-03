@@ -61,8 +61,8 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/PlatformNotes.kt | 63 lines; divergent pickers/share — medium |
 | ui/PlatformSettings.kt | 117 lines |
 | ui/PlatformExport.kt | 14 lines; app returns null, desktop uses FontStore+i18n — needs care |
-| ui/LucentFonts.kt | IN PROGRESS — batch 2026-10-03: unify in shared/src/main, extract `PlatformFontCompat.fontFamily(fontKey, path)` to :shared expect/actual |
-| ui/PlatformNotebookCover.kt | IN PROGRESS — batch 2026-10-03: unify composable in shared/src/main, extract `decodeCoverBitmap(bytes)` to :shared expect/actual |
+| ui/LucentFonts.kt | pending — spec ready: unify in shared/src/main, extract `PlatformFontCompat.fontFamily(fontKey, path)` to :shared expect/actual |
+| ui/PlatformNotebookCover.kt | pending — spec ready: unify composable in shared/src/main, extract `decodeCoverBitmap(bytes)` to :shared expect/actual |
 
 ## Rules for converters
 
