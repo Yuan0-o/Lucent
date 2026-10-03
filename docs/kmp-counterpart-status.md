@@ -34,7 +34,6 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/Haptics.kt | expect/actual (PlatformContext params) |
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
-| ui/PlatformSplash.kt | expect/actual (splashTopInset + splashScriptFont; SplashBackground unified in shared/src/main) |
 
 ## Blocked (4) — verified, do not force
 
@@ -44,6 +43,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | local/LocalLlm.kt | Delegates to `LocalLlmProxy`, which exists only in `app` (Android AIDL client of the GenerationService interface). The pair cannot convert without the Android-only IPC stack. |
 | data/AutoBackupRunner.kt | Backup destination logic is Android SAF (`DocumentsContract`, `ContentResolver`) vs `java.io.File`; calls `BackupManager.exportEncrypted`, and `BackupManager` itself still carries Android imports — converting this pair requires converting `BackupManager` first (cascade). |
 | data/DocumentExport.kt | 477-line diff between copies; doodle export path (`DoodleExport.canvasesOf`, doodle bitmap embedding into docx/pdf) is platform-specific canvas rendering. Needs DoodleCanvas multiplatform work first. |
+| ui/PlatformSplash.kt | :shared androidMain has neither `androidx.compose.foundation:foundation-layout` (for `statusBarsPadding()`) nor the app module's `R` (for the font resource). `platform(libs.compose.bom)` is unresolvable inside KMP source-set dependency blocks (KotlinDependencyHandler has no `platform()`), and pinning foundation-layout to the BOM version string (2026.04.01) fails — the BOM manages it to 1.11.0. Two fix attempts failed 2026-10-03; reverted. Candidate for a future retry: `implementation(project.dependencies.platform(...))` workaround or a BOM-free status-bar inset in androidMain, plus moving great_vibes.ttf into :shared androidMain res. |
 
 ## Pending (15)
 
