@@ -847,7 +847,8 @@ class AssistantControllerImpl(
                         break
                     }
 
-                    if (!reply.text.isNullOrBlank()) turn.recorder.addPlanning(reply.text)
+                    val replyText = reply.text
+                    if (!replyText.isNullOrBlank()) turn.recorder.addPlanning(replyText)
 
                     val results = mutableListOf<ToolExecResult>()
                     for (call in reply.toolCalls) {
@@ -1555,14 +1556,18 @@ class AssistantControllerImpl(
 
     private val touchedByConversation = LinkedHashMap<Long, MutableList<TouchedItem>>()
 
-    private fun toolItemKind(toolName: String, result: ToolExecResult): String? = when {
-        result.openNoteId != null && result.openNoteId > 0L -> "note"
-        result.openTaskId != null && result.openTaskId > 0L -> "task"
-        toolName.contains("notebook") -> null
-        toolName.endsWith("_note") || toolName.startsWith("note_") || toolName.contains("_note_") -> "note"
-        toolName.endsWith("_task") || toolName.startsWith("task_") || toolName.contains("_task_") -> "task"
-        toolName.contains("subtask") -> "task"
-        else -> null
+    private fun toolItemKind(toolName: String, result: ToolExecResult): String? {
+        val openNoteId = result.openNoteId
+        val openTaskId = result.openTaskId
+        return when {
+            openNoteId != null && openNoteId > 0L -> "note"
+            openTaskId != null && openTaskId > 0L -> "task"
+            toolName.contains("notebook") -> null
+            toolName.endsWith("_note") || toolName.startsWith("note_") || toolName.contains("_note_") -> "note"
+            toolName.endsWith("_task") || toolName.startsWith("task_") || toolName.contains("_task_") -> "task"
+            toolName.contains("subtask") -> "task"
+            else -> null
+        }
     }
 
     private fun titleQueryOf(argsJson: String): String = try {
