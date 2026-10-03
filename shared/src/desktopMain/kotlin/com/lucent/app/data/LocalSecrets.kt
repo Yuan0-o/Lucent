@@ -24,7 +24,7 @@ actual object LocalSecrets {
     @Volatile private var keyBytesValue: ByteArray? = null
     private val keyLock = Any()
 
-    internal interface MasterKeyWrapper {
+    interface MasterKeyWrapper {
         fun wrap(bytes: ByteArray): ByteArray?
 
         fun unwrap(bytes: ByteArray): ByteArray?

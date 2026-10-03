@@ -50,7 +50,7 @@ class Db private constructor(private val connection: Connection) {
 
     companion object {
 
-        internal const val SCHEMA_VERSION = 25
+        const val SCHEMA_VERSION = 25
 
         fun open(context: Context): Db {
             val file = File(context.filesDir, "lucent.db")
@@ -157,7 +157,7 @@ class Db private constructor(private val connection: Connection) {
             runSchemaMigrations(conn) { StartupLog.event(context, it) }
         }
 
-        internal fun runSchemaMigrations(conn: Connection, eventLog: (String) -> Unit = {}) {
+        fun runSchemaMigrations(conn: Connection, eventLog: (String) -> Unit = {}) {
             val current = try {
                 conn.createStatement().use { st ->
                     st.executeQuery("PRAGMA user_version").use { rs -> if (rs.next()) rs.getInt(1) else 0 }

@@ -2,6 +2,7 @@ package com.lucent.app.ui
 
 import android.content.Context
 import com.lucent.app.data.AppDatabase
+import com.lucent.app.data.DesktopAppDatabase
 import com.lucent.app.data.ChatConversation
 import com.lucent.app.data.ChatMessage
 import com.lucent.app.data.DataKeys
@@ -189,7 +190,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             installTestModel(context, dir)
             val engine = ScriptedLocalEngine(
                 listOf(
@@ -237,7 +238,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             installTestModel(context, dir)
             val engine = ScriptedLocalEngine(
                 listOf(
@@ -275,7 +276,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             installTestModel(context, dir)
             val engine = ScriptedLocalEngine(
                 listOf(
@@ -308,7 +309,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             installTestModel(context, dir)
             val engine = ScriptedLocalEngine(
                 listOf(
@@ -341,7 +342,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             installTestModel(context, dir)
             val engine = ScriptedLocalEngine(
                 List(6) { """{"tool": "delete_everything", "arguments": {"title": "x"}}""" }
@@ -376,7 +377,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             installTestModel(context, dir)
             val conversationId = db.chatConversationDao.insert(ChatConversation())
             val filler = "x".repeat(1200)
@@ -421,7 +422,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val llm = ScriptedLlmClient(listOf(createTaskReply(title = "Buy milk", notes = "2%")))
             val controller = newController(context, db, llm)
 
@@ -446,7 +447,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val llm = ScriptedLlmClient(listOf(createTaskReply()))
             val controller = newController(context, db, llm)
 
@@ -465,7 +466,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val llm = ScriptedLlmClient(listOf(createTaskReply(), finalTextReply()))
             val controller = newController(context, db, llm)
 
@@ -488,7 +489,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val llm = ScriptedLlmClient(listOf(createTaskReply(title = "Buy milk"), finalTextReply("Added it.")))
             val controller = newController(context, db, llm)
 
@@ -521,7 +522,7 @@ class AssistantControllerTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val llm = ScriptedLlmClient(listOf(createTaskReply()))
             val controller = newController(context, db, llm)
 

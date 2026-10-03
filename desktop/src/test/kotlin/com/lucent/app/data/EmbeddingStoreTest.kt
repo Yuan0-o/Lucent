@@ -53,7 +53,7 @@ class EmbeddingStoreTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val noteA = db.noteDao.insert(Note(title = "A", body = "far from the query"))
             val noteB = db.noteDao.insert(Note(title = "B", body = "close to the query"))
             val noteC = db.noteDao.insert(Note(title = "C", body = "identical to the query"))
@@ -77,7 +77,7 @@ class EmbeddingStoreTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             repeat(5) { i ->
                 val id = db.noteDao.insert(Note(title = "N$i", body = "note $i"))
                 EmbeddingStore.store(context, id, "test-model", floatArrayOf(i.toFloat(), 1f, 0f))
@@ -92,7 +92,7 @@ class EmbeddingStoreTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val noteId = db.noteDao.insert(Note(title = "N", body = "body"))
 
             EmbeddingStore.store(context, noteId, "local-model", floatArrayOf(1f, 0f))
@@ -111,7 +111,7 @@ class EmbeddingStoreTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val noteId = db.noteDao.insert(Note(title = "N", body = "body"))
             EmbeddingStore.store(context, noteId, "test-model", floatArrayOf(1f, 0f))
 
@@ -129,7 +129,7 @@ class EmbeddingStoreTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             val noteId = db.noteDao.insert(Note(title = "N", body = "body"))
             EmbeddingStore.store(context, noteId, "local-model", floatArrayOf(1f, 0f))
             EmbeddingStore.store(context, noteId, "cloud-model", floatArrayOf(0f, 1f))

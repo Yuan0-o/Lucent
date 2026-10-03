@@ -68,7 +68,7 @@ class BackupRoundTripTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             seedDb(db)
             val settings = createSettingsRepository(context)
             settings.setThemeMode("dark")
@@ -97,7 +97,7 @@ class BackupRoundTripTest {
             val dir2 = freshDir()
             use(dir2) {
                 val context2 = TestContext(dir2)
-                val db2 = AppDatabase.createForTesting(context2)
+                val db2 = DesktopAppDatabase.createForTesting(context2)
                 val settings2 = createSettingsRepository(context2)
                 BackupImporter.import(context2, db2, settings2, manifest)
 
@@ -136,7 +136,7 @@ class BackupRoundTripTest {
         val dir = freshDir()
         use(dir) {
             val context = TestContext(dir)
-            val db = AppDatabase.createForTesting(context)
+            val db = DesktopAppDatabase.createForTesting(context)
             seedDb(db)
 
             val truncated = """{"version":1,"notes":["""
@@ -158,7 +158,7 @@ class BackupRoundTripTest {
             val previousHost = com.lucent.app.harness.HarnessRuntime.host
             com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir)
             try {
-                val db = AppDatabase.createForTesting(context)
+                val db = DesktopAppDatabase.createForTesting(context)
                 val settings = createSettingsRepository(context)
                 val harnessHome = com.lucent.app.harness.HarnessRuntime.home()
                 File(harnessHome, "todos").mkdirs()
@@ -184,7 +184,7 @@ class BackupRoundTripTest {
                 use(dir2) {
                     val context2 = TestContext(dir2)
                     com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir2)
-                    val db2 = AppDatabase.createForTesting(context2)
+                    val db2 = DesktopAppDatabase.createForTesting(context2)
                     val settings2 = createSettingsRepository(context2)
                     val bytes = payload.toByteArray()
 
@@ -227,7 +227,7 @@ class BackupRoundTripTest {
             val previousHost = com.lucent.app.harness.HarnessRuntime.host
             com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir)
             try {
-                val db = AppDatabase.createForTesting(context)
+                val db = DesktopAppDatabase.createForTesting(context)
                 val settings = createSettingsRepository(context)
                 val harnessHome = com.lucent.app.harness.HarnessRuntime.home()
                 File(harnessHome, "todos").mkdirs()
@@ -245,7 +245,7 @@ class BackupRoundTripTest {
                 use(dir2) {
                     val context2 = TestContext(dir2)
                     com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir2)
-                    val db2 = AppDatabase.createForTesting(context2)
+                    val db2 = DesktopAppDatabase.createForTesting(context2)
                     val settings2 = createSettingsRepository(context2)
                     val bytes = payload.toByteArray()
                     val preview = BackupManager.inspect(context2, bytes, null)

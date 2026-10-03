@@ -2,6 +2,7 @@ package com.lucent.app.tools
 
 import android.content.Context
 import com.lucent.app.data.AppDatabase
+import com.lucent.app.data.DesktopAppDatabase
 import com.lucent.app.data.DataKeys
 import com.lucent.app.data.LocalSecrets
 import com.lucent.app.data.Note
@@ -89,7 +90,7 @@ class NotebookToolsTest {
     fun createNotebookPersistsAndIsListed() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val created = exec(db, "create_notebook", """{"title":"Trips"}""")
             assertTrue(created.success)
             assertTrue(created.summary.contains("Trips"))
@@ -108,7 +109,7 @@ class NotebookToolsTest {
     fun blankNotebookNameIsRejected() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val created = exec(db, "create_notebook", """{"title":"   "}""")
             assertFalse(created.success)
             assertTrue(db.notebookDao.getAllOnce().isEmpty())
@@ -119,7 +120,7 @@ class NotebookToolsTest {
     fun unknownNotebookReportsTheRealNames() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.notebookDao.insert(Notebook(title = "Work"))
             val listed = exec(db, "list_notebook_items", """{"notebook":"Holiday"}""")
             assertFalse(listed.success)
@@ -131,7 +132,7 @@ class NotebookToolsTest {
     fun addListRemoveAndMoveAMemberNote() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
             val workId = db.notebookDao.insert(Notebook(title = "Work"))
             val noteId = db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
@@ -176,7 +177,7 @@ class NotebookToolsTest {
     fun ambiguousNoteAndTaskNeedItemType() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val workId = db.notebookDao.insert(Notebook(title = "Work"))
             val noteId = db.noteDao.insert(Note(title = "Invoice", body = ""))
             val taskId = db.taskDao.insert(Task(title = "Invoice"))
@@ -200,7 +201,7 @@ class NotebookToolsTest {
     fun moveWithoutSourceNeedsAFiledItem() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.notebookDao.insert(Notebook(title = "Trips"))
             db.notebookDao.insert(Notebook(title = "Work"))
             db.noteDao.insert(Note(title = "Packing list", body = "socks"))
@@ -218,7 +219,7 @@ class NotebookToolsTest {
     fun searchNotebookOnlyReturnsMembers() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
             db.notebookDao.insert(Notebook(title = "Work"))
             val insideId = db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
@@ -243,7 +244,7 @@ class NotebookToolsTest {
     fun deleteNotebookKeepsItsNotes() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
             val noteId = db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
             db.notebookDao.insertItem(
@@ -271,7 +272,7 @@ class NotebookToolsTest {
     fun renameNotebookUpdatesTheStoredName() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
 
             val renamed = exec(db, "rename_notebook", """{"notebook":"Trip","new_title":"Travel"}""")

@@ -34,7 +34,7 @@ class DesktopAppDatabase private constructor(private val db: Db) : AppDatabase {
             }
         }
 
-        internal fun createForTesting(context: PlatformContext): DesktopAppDatabase =
+        fun createForTesting(context: PlatformContext): DesktopAppDatabase =
             DesktopAppDatabase(Db.open(context.applicationContext))
     }
 }

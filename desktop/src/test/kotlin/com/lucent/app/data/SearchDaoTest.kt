@@ -34,7 +34,7 @@ class SearchDaoTest {
     fun searchNotesFindsCjkSubstringBuriedInLongerRun() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.noteDao.insert(Note(title = "礼物清单", body = "今天买了两个字的礼物送给朋友"))
 
             val results = db.noteDao.searchNotes(
@@ -52,7 +52,7 @@ class SearchDaoTest {
     fun searchTasksFindsCjkSubstringBuriedInLongerRun() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.taskDao.insert(Task(title = "旅行安排", notes = "记得提前两天预订新干线车票"))
 
             val results = db.taskDao.searchTasks(
@@ -72,7 +72,7 @@ class SearchDaoTest {
     fun searchNotesFindsMatchInTagsWhenTitleAndBodyDoNotContainIt() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.noteDao.insert(Note(title = "Reading list", body = "Some books to read", tags = "urgent-followup"))
 
             val results = db.noteDao.searchNotes(
@@ -90,7 +90,7 @@ class SearchDaoTest {
     fun searchNotesFindsMatchInChecklistWhenTitleAndBodyDoNotContainIt() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.noteDao.insert(
                 Note(
                     title = "Errands",
@@ -115,7 +115,7 @@ class SearchDaoTest {
     fun searchTasksFindsMatchInSubtasksWhenTitleAndNotesDoNotContainIt() = runBlocking {
         val dir = freshDir()
         use(dir) {
-            val db = AppDatabase.createForTesting(TestContext(dir))
+            val db = DesktopAppDatabase.createForTesting(TestContext(dir))
             db.taskDao.insert(
                 Task(
                     title = "Grocery run",
