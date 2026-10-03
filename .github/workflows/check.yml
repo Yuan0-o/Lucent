@@ -142,7 +142,7 @@ jobs:
           set -eu
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+          "$SDKMANAGER" "platforms;android-36" "platforms;android-37" "build-tools;36.0.0"
 
       - name: Run Android JVM unit tests (shared and Android logic)
         run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain

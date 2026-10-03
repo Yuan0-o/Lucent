@@ -8,7 +8,7 @@ plugins {
 kotlin {
     android {
         namespace = "com.lucent.shared"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 28
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -31,7 +31,6 @@ kotlin {
             }
         }
         val androidMain by getting {
-            kotlin.srcDir("src/main/kotlin")
             dependencies {
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
@@ -52,7 +51,6 @@ kotlin {
             }
         }
         val desktopMain by getting {
-            kotlin.srcDir("src/main/kotlin")
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.swing)

@@ -19,7 +19,7 @@ val ciVersionName = (project.findProperty("versionName") as String?)
 
 android {
     namespace = "com.lucent.app"
-    compileSdk = 36
+    compileSdk = 37
 
     ndkVersion = "28.2.13676358"
 
@@ -60,6 +60,7 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.directories += layout.buildDirectory.dir("rustJniLibs").get().asFile.path
+            kotlin.directories += rootProject.file("shared/src/main/kotlin").path
         }
         getByName("test") {
             kotlin.directories += rootProject.file("shared/src/test/kotlin").path
@@ -172,19 +173,16 @@ if (cargoNdkReady) {
 }
 
 dependencies {
-    implementation(platform(libs.compose.bom))
     implementation(project(":shared"))
     implementation(compose.ui)
     implementation(compose.material3)
     implementation(compose.materialIconsExtended)
-    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.core.splashscreen)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
 
     implementation(libs.biometric)
     implementation(libs.fragment.ktx)
-    debugImplementation(libs.androidx.ui.tooling)
 
     implementation(libs.kotlinx.coroutines.android)
 
