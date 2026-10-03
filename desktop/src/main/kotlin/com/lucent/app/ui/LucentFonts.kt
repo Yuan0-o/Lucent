@@ -1,44 +1,46 @@
 package com.lucent.app.ui
 
-import com.lucent.app.platform.PlatformContext
+import android.content.Context
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.platform.Font
 import com.lucent.app.data.FontStore
 
-actual object LucentFontResolver {
+const val SYSTEM_FONT_KEY = "system"
+
+object LucentFontResolver {
 
     private class Holder(val family: FontFamily?)
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Holder>()
 
-    actual fun resolve(context: PlatformContext, fontKey: String?): FontFamily? {
+    fun resolve(context: Context, fontKey: String?): FontFamily? {
         if (fontKey.isNullOrBlank() || fontKey == SYSTEM_FONT_KEY) return null
         return cache.getOrPut(fontKey) {
             try {
                 val file = FontStore.fontFile(context.applicationContext, fontKey)
                     ?: return@getOrPut Holder(null)
-                Holder(FontFamily(Font(file)))
+                Holder(FontFamily(Font(identity = fontKey, data = file.readBytes())))
             } catch (_: Throwable) {
                 Holder(null)
             }
         }.family
     }
 
-    actual fun evict(fontKey: String) {
+    fun evict(fontKey: String) {
         cache.remove(fontKey)
     }
 
-    actual fun evictAll() {
+    fun evictAll() {
         cache.clear()
     }
 }
 
 @Composable
-actual fun lucentTypography(fontKey: String): Typography {
+fun lucentTypography(fontKey: String): Typography {
     val context = LocalContext.current
     val base = Typography()
     val family = remember(fontKey) { LucentFontResolver.resolve(context, fontKey) } ?: return base
