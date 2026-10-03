@@ -55,7 +55,7 @@ actual object ReminderScheduler {
         tasks.forEach { sync(context, it) }
     }
 
-    private suspend fun fire(context: Context, taskId: Long, scheduledTitle: String) {
+    private suspend fun fire(context: PlatformContext, taskId: Long, scheduledTitle: String) {
         val task = try {
             createAppDatabase(context.applicationContext).taskDao.getByIdOnce(taskId)
         } catch (t: Throwable) {
