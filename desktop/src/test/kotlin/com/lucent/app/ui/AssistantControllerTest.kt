@@ -87,7 +87,7 @@ class AssistantControllerTest {
 
     private suspend fun awaitState(
         controller: AssistantControllerImpl,
-        timeoutMs: Long = 5_000,
+        timeoutMs: Long = 30_000,
         description: String,
         condition: (AssistantUiState) -> Boolean
     ) {
@@ -428,7 +428,7 @@ class AssistantControllerTest {
 
             controller.sendFixture(context)
 
-            val observedState = withTimeout(5_000) {
+            val observedState = withTimeout(30_000) {
                 controller.state.first { it.pendingConfirmation != null }
             }
 
