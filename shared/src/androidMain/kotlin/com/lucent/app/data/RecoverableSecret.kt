@@ -36,7 +36,7 @@ object RecoverableSecret {
         return material(id)
     }
 
-    internal fun material(deviceId: String): CharArray = (PEPPER + '|' + deviceId).toCharArray()
+    fun material(deviceId: String): CharArray = (PEPPER + '|' + deviceId).toCharArray()
 
     private fun deriveKey(passwordMaterial: CharArray, salt: ByteArray): SecretKey {
         com.lucent.app.nativebridge.LucentNative
@@ -47,7 +47,7 @@ object RecoverableSecret {
         return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
     }
 
-    internal fun seal(passwordMaterial: CharArray, plain: ByteArray): ByteArray? {
+    fun seal(passwordMaterial: CharArray, plain: ByteArray): ByteArray? {
         return try {
             val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
             val iv = ByteArray(IV_LEN).also { random.nextBytes(it) }
@@ -60,7 +60,7 @@ object RecoverableSecret {
         }
     }
 
-    internal fun open(passwordMaterial: CharArray, blob: ByteArray): ByteArray? {
+    fun open(passwordMaterial: CharArray, blob: ByteArray): ByteArray? {
         if (blob.size <= SALT_LEN + IV_LEN) return null
         return try {
             val salt = blob.copyOfRange(0, SALT_LEN)
