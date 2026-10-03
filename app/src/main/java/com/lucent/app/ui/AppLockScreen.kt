@@ -1,6 +1,5 @@
 package com.lucent.app.ui
 
-import android.os.SystemClock
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -41,40 +40,6 @@ import com.lucent.app.data.SettingsRepository
 import kotlinx.coroutines.launch
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
-
-object AppLockController {
-
-    private const val GRACE_MS = 30_000L
-
-    var enabled by mutableStateOf(false)
-    var locked by mutableStateOf(false)
-
-    private var processStarted = false
-    private var backgroundedAt = 0L
-
-    fun markProcessStarted(lockEnabled: Boolean) {
-        enabled = lockEnabled
-        if (!processStarted) {
-            processStarted = true
-            locked = lockEnabled
-        }
-    }
-
-    fun onStop() {
-        backgroundedAt = SystemClock.elapsedRealtime()
-    }
-
-    fun onStart() {
-        if (enabled && backgroundedAt != 0L &&
-            SystemClock.elapsedRealtime() - backgroundedAt > GRACE_MS
-        ) {
-            locked = true
-        }
-        backgroundedAt = 0L
-    }
-
-    fun unlock() { locked = false }
-}
 
 private enum class LockStage { ENTER_PASSWORD, ANSWER_QUESTION, SET_NEW_PASSWORD }
 
