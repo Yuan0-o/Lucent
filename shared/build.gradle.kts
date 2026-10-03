@@ -1,3 +1,5 @@
+import org.jetbrains.compose.ComposeBuildConfig
+
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("com.android.kotlin.multiplatform.library")
@@ -31,6 +33,7 @@ kotlin {
             dependencies {
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
+                implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
                 implementation("androidx.compose.ui:ui-text-android:1.11.0")
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.room.runtime)
@@ -53,6 +56,7 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.swing)
+                implementation("org.jetbrains.compose.material3:material3:${ComposeBuildConfig.composeMaterial3Version}")
                 implementation(libs.haze)
                 implementation(libs.haze.materials)
                 implementation(libs.okhttp)

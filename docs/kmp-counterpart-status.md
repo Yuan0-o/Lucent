@@ -7,7 +7,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 - **blocked** — cannot convert cleanly; reason verified, do not force
 - **pending** — still duplicated in `app/src/main/java` and `desktop/src/main/kotlin`
 
-## Converted (26)
+## Converted (27)
 
 | Pair | Mechanism |
 |---|---|
@@ -35,10 +35,11 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/LucentFonts.kt | unified shared/src/main + expect/actual PlatformFontCompat.fontFamily(fontKey, path) |
 | ui/PlatformExport.kt | unified shared/src/main + expect/actual exportPdfFontHintEnabled flag |
 | ui/PlatformNotebookCover.kt | unified shared/src/main + expect/actual decodeCoverBitmap(bytes) |
+| ui/PlatformNotes.kt | expect/actual (all members platform-divergent; PlatformPickedFile as expect class + actual typealias) |
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
 
-## Blocked (4) — verified, do not force
+## Blocked (5) — verified, do not force
 
 | Pair | Reason |
 |---|---|
@@ -48,7 +49,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | data/DocumentExport.kt | 477-line diff between copies; doodle export path (`DoodleExport.canvasesOf`, doodle bitmap embedding into docx/pdf) is platform-specific canvas rendering. Needs DoodleCanvas multiplatform work first. |
 | ui/PlatformSplash.kt | :shared androidMain has neither `androidx.compose.foundation:foundation-layout` (for `statusBarsPadding()`) nor the app module's `R` (for the font resource). `platform(libs.compose.bom)` is unresolvable inside KMP source-set dependency blocks (KotlinDependencyHandler has no `platform()`), and pinning foundation-layout to the BOM version string (2026.04.01) fails — the BOM manages it to 1.11.0. Two fix attempts failed 2026-10-03; reverted. Candidate for a future retry: `implementation(project.dependencies.platform(...))` workaround or a BOM-free status-bar inset in androidMain, plus moving great_vibes.ttf into :shared androidMain res. |
 
-## Pending (12)
+## Pending (11)
 
 | Pair | Notes |
 |---|---|
@@ -61,7 +62,6 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/UiComponents.kt | 628 lines; after leaves |
 | ui/Dictation.kt | 156 lines |
 | ui/PlatformDiffuseBackground.kt | 81 lines; Android ValueAnimator/ContentObserver/Lifecycle vs desktop |
-| ui/PlatformNotes.kt | 63 lines; divergent pickers/share — medium |
 | ui/PlatformSettings.kt | 117 lines |
 
 ## Rules for converters

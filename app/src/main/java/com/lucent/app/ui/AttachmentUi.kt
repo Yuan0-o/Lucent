@@ -121,14 +121,6 @@ private fun downscaleImageFileInPlace(file: File, mime: String, maxDim: Int = MA
     }
 }
 
-fun uriToAttachment(context: Context, uri: Uri): Attachment? {
-    val resolver = context.contentResolver
-    val mime = resolver.getType(uri) ?: "application/octet-stream"
-    val name = AttachmentStore.queryDisplayName(context, uri) ?: "file"
-    val id = AttachmentStore.importUri(context, uri) ?: return null
-    return Attachment(mime = mime, data = id, name = name)
-}
-
 fun uriToChatImage(context: Context, uri: Uri): Triple<String, String, String>? {
     val resolver = context.contentResolver
     val mime = resolver.getType(uri) ?: return null
