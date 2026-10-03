@@ -8,7 +8,7 @@ plugins {
 kotlin {
     android {
         namespace = "com.lucent.shared"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 28
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -22,13 +22,6 @@ kotlin {
 
     sourceSets {
         val commonMain by getting {
-            dependencies {
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
-                implementation(compose.ui)
-                implementation(compose.materialIconsExtended)
-            }
         }
         val androidMain by getting {
             dependencies {

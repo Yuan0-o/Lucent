@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.compose")
     id("com.google.devtools.ksp")
     id("androidx.baselineprofile")
 }
@@ -19,7 +18,7 @@ val ciVersionName = (project.findProperty("versionName") as String?)
 
 android {
     namespace = "com.lucent.app"
-    compileSdk = 37
+    compileSdk = 36
 
     ndkVersion = "28.2.13676358"
 
@@ -174,15 +173,18 @@ if (cargoNdkReady) {
 
 dependencies {
     implementation(project(":shared"))
-    implementation(compose.ui)
-    implementation(compose.material3)
-    implementation(compose.materialIconsExtended)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
     implementation(libs.core.splashscreen)
+    implementation(libs.androidx.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
 
     implementation(libs.biometric)
     implementation(libs.fragment.ktx)
+    debugImplementation(libs.androidx.ui.tooling)
 
     implementation(libs.kotlinx.coroutines.android)
 
