@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import com.lucent.app.platform.PlatformContext
+import android.content.Context
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationAttributes
@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalContext
 
-actual object Haptics {
+object Haptics {
 
     private const val TICK_MS = 18L
     private const val TICK_AMPLITUDE = 90
@@ -29,7 +29,7 @@ actual object Haptics {
 
     @Volatile private var lastTypingTickAt = 0L
 
-    private fun vibrator(context: PlatformContext): Vibrator? {
+    private fun vibrator(context: Context): Vibrator? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val mgr = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
             mgr?.defaultVibrator
@@ -39,7 +39,7 @@ actual object Haptics {
         }
     }
 
-    private fun oneShot(context: PlatformContext, ms: Long, amplitude: Int) {
+    private fun oneShot(context: Context, ms: Long, amplitude: Int) {
         val vib = vibrator(context.applicationContext) ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -54,9 +54,9 @@ actual object Haptics {
         }
     }
 
-    actual fun tick(context: PlatformContext) = oneShot(context, TICK_MS, TICK_AMPLITUDE)
+    fun tick(context: Context) = oneShot(context, TICK_MS, TICK_AMPLITUDE)
 
-    actual fun typingTick(context: PlatformContext) {
+    fun typingTick(context: Context) {
         val now = android.os.SystemClock.uptimeMillis()
         if (now - lastTypingTickAt < TYPING_MIN_GAP_MS) return
         lastTypingTickAt = now
@@ -80,7 +80,7 @@ actual object Haptics {
         }
     }
 
-    actual fun finishBuzz(context: PlatformContext) {
+    fun finishBuzz(context: Context) {
         val vib = vibrator(context.applicationContext) ?: return
         if (!vib.hasVibrator()) return
         try {
@@ -99,7 +99,7 @@ actual object Haptics {
     }
 }
 
-actual fun Modifier.hapticClickable(onClick: () -> Unit): Modifier = composed {
+fun Modifier.hapticClickable(onClick: () -> Unit): Modifier = composed {
     val context = LocalContext.current
     clickable {
         Haptics.tick(context)

@@ -114,9 +114,9 @@ actual data class NotebookItem(
     actual val itemId: Long,
     actual val addedAt: Long = System.currentTimeMillis()
 ) {
-    companion object {
-        actual const val KIND_NOTE = "NOTE"
-        actual const val KIND_TASK = "TASK"
+    actual companion object {
+        actual val KIND_NOTE = "NOTE"
+        actual val KIND_TASK = "TASK"
     }
 }
 

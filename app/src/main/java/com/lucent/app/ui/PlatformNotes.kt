@@ -2,7 +2,7 @@ package com.lucent.app.ui
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import com.lucent.app.platform.PlatformContext
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -21,26 +21,26 @@ import com.lucent.app.reminders.Notifications
 import java.util.Calendar
 
 
-actual typealias PlatformPickedFile = Uri
+typealias PlatformPickedFile = Uri
 
 @Composable
-actual fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit {
+fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         if (uris.isNotEmpty()) onPicked(uris)
     }
     return { launcher.launch("*/*") }
 }
 
-internal actual fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long =
+internal fun attachmentSizeHint(context: Context, source: PlatformPickedFile): Long =
     AttachmentStore.sizeHint(context, source)
 
-internal actual fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
+internal fun pickedFileToAttachment(context: Context, source: PlatformPickedFile): Attachment? =
     uriToAttachment(context, source)
 
-internal actual fun templateToastContext(context: PlatformContext): PlatformContext = context
+internal fun templateToastContext(context: Context): Context = context
 
 @Composable
-actual fun OnAppHidden(action: () -> Unit) {
+fun OnAppHidden(action: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -51,7 +51,7 @@ actual fun OnAppHidden(action: () -> Unit) {
     }
 }
 
-actual fun shareText(context: PlatformContext, subject: String? = null, text: String, chooserTitle: String) {
+fun shareText(context: Context, subject: String? = null, text: String, chooserTitle: String) {
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         subject?.let { putExtra(Intent.EXTRA_SUBJECT, it) }
@@ -60,10 +60,10 @@ actual fun shareText(context: PlatformContext, subject: String? = null, text: St
     context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
 }
 
-internal actual val notesGridColumns: Int = 2
+internal val notesGridColumns: Int = 2
 
 @Composable
-actual fun rememberNotificationPermissionRequester(): () -> Unit {
+fun rememberNotificationPermissionRequester(): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) {
@@ -78,7 +78,7 @@ actual fun rememberNotificationPermissionRequester(): () -> Unit {
 }
 
 @Composable
-actual fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
+fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
     val context = LocalContext.current
     return {
         val base = Calendar.getInstance().apply { timeInMillis = initialMillis }

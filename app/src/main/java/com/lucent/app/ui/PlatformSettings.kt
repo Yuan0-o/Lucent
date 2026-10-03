@@ -30,13 +30,13 @@ import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.launch
 
-actual val crashShieldLocksStartupLogging: Boolean = true
+const val crashShieldLocksStartupLogging: Boolean = true
 
 
 private val dynamicColorSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 @Composable
-actual fun DynamicColorRow(repo: SettingsRepository) {
+fun DynamicColorRow(repo: SettingsRepository) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(
@@ -73,7 +73,7 @@ actual fun DynamicColorRow(repo: SettingsRepository) {
 }
 
 @Composable
-actual fun rememberDynamicColorActive(repo: SettingsRepository): Boolean {
+fun rememberDynamicColorActive(repo: SettingsRepository): Boolean {
     val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(
         initial = SettingsCache.dynamicColor && dynamicColorSupported
     )
@@ -81,11 +81,11 @@ actual fun rememberDynamicColorActive(repo: SettingsRepository): Boolean {
 }
 
 @Composable
-actual fun DesktopIntegrationRows(repo: SettingsRepository) {
+fun DesktopIntegrationRows(repo: SettingsRepository) {
 }
 
 @Composable
-actual fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
+fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     val context = LocalContext.current
     val biometricAvailable = remember { BiometricAuth.isAvailable(context) }
     if (!appLockOn || !biometricAvailable) return
@@ -114,7 +114,7 @@ actual fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
 }
 
 @Composable
-actual fun rememberBackupFolderPicker(onFolderPicked: (String) -> Unit): () -> Unit {
+fun rememberBackupFolderPicker(onFolderPicked: (String) -> Unit): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()

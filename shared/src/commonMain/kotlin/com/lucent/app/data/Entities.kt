@@ -95,8 +95,8 @@ expect class NotebookItem {
     val itemId: Long
     val addedAt: Long
     companion object {
-        const val KIND_NOTE: String
-        const val KIND_TASK: String
+        val KIND_NOTE: String
+        val KIND_TASK: String
     }
 }
 

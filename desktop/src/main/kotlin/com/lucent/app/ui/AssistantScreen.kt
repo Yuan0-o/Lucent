@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
-actual fun AssistantScreen(active: Boolean = true) {
+fun AssistantScreen(active: Boolean = true) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val draft = remember { AssistantChatDraft() }
