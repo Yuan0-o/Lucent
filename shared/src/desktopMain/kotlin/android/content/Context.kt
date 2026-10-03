@@ -2,7 +2,7 @@ package android.content
 
 import java.io.File
 
-abstract class Context {
+open class Context {
 
     open val applicationContext: Context get() = this
 
