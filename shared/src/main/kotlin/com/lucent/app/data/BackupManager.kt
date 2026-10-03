@@ -13,19 +13,9 @@ import java.io.OutputStream
 
 object BackupManager {
 
-    enum class BackupModule {
-        NOTES,
-        TASKS,
-        CHATS,
-        SETTINGS,
-        API,
-        LOCAL_ASSISTANT,
-        LOCAL_MODEL_FILES,
-        HARNESS
-    }
+    typealias BackupModule = com.lucent.app.data.BackupModule
 
-    val DEFAULT_MODULES: Set<BackupModule> =
-        BackupModule.entries.toSet() - BackupModule.LOCAL_MODEL_FILES
+    val DEFAULT_MODULES: Set<BackupModule> = com.lucent.app.data.DEFAULT_BACKUP_MODULES
 
     fun interface BackupSource {
         fun open(): java.io.InputStream

@@ -16,8 +16,8 @@ object AutoBackup {
     const val FILE_PREFIX = "lucent-auto-"
     const val FILE_SUFFIX = ".lcb"
 
-    val MODULES: Set<BackupManager.BackupModule>
-        get() = BackupManager.DEFAULT_MODULES
+    val MODULES: Set<BackupModule>
+        get() = DEFAULT_BACKUP_MODULES
 
     data class State(
         val enabled: Boolean = false,

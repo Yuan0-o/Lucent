@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -41,13 +41,13 @@ object CryptoUtil {
                 cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
                 cipher.doFinal(plain)
             }
-        return Base64.encodeToString(salt + iv + encrypted, Base64.NO_WRAP)
+        return Base64.encode(salt + iv + encrypted)
     }
 
     fun decrypt(cipherText: String): String {
         if (cipherText.isEmpty()) return ""
         return try {
-            val combined = Base64.decode(cipherText, Base64.NO_WRAP)
+            val combined = Base64.decode(cipherText)
             if (combined.size <= SALT_LENGTH + IV_LENGTH) return ""
             val salt = combined.copyOfRange(0, SALT_LENGTH)
             val iv = combined.copyOfRange(SALT_LENGTH, SALT_LENGTH + IV_LENGTH)

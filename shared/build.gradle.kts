@@ -24,6 +24,10 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(libs.org.json)
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material3)
+                implementation(compose.ui)
             }
         }
         val androidMain by getting {

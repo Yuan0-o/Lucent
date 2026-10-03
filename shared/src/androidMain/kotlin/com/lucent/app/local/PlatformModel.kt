@@ -3,6 +3,7 @@ package com.lucent.app.local
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.PlatformInputStream
 import java.io.InputStream
 
 actual typealias PlatformModelSource = Uri

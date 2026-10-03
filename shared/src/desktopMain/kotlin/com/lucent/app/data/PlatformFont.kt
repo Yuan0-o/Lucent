@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.PlatformInputStream
 import java.io.File
 import java.io.InputStream
 
