@@ -1,11 +1,11 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 
-object CrashShield {
+actual object CrashShield {
 
     private const val TAG = "LucentCrashShield"
 
@@ -18,7 +18,7 @@ object CrashShield {
     @Volatile var lastCaught: String? = null
         private set
 
-    fun install(context: Context) {
+    fun install(context: PlatformContext) {
         if (installed) return
         synchronized(this) {
             if (installed) return

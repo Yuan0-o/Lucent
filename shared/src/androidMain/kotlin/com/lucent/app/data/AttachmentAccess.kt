@@ -1,20 +1,20 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.OutputStream
 
-object AttachmentAccess {
+actual object AttachmentAccess {
 
     private const val PREVIEW_DIR = "attachment-preview"
     private const val COPY_BUFFER = 64 * 1024
 
-    private fun previewDir(context: Context): File =
+    private fun previewDir(context: PlatformContext): File =
         File(context.applicationContext.cacheDir, PREVIEW_DIR).apply { if (!exists()) mkdirs() }
 
-    private fun authority(context: Context): String =
+    private fun authority(context: PlatformContext): String =
         "${context.applicationContext.packageName}.fileprovider"
 
     fun contentUri(context: Context, att: Attachment): Uri? {
@@ -75,7 +75,7 @@ object AttachmentAccess {
         }
     }
 
-    fun clearPreviewCache(context: Context) {
+    fun clearPreviewCache(context: PlatformContext) {
         try {
             previewDir(context).listFiles()?.forEach { it.deleteRecursively() }
         } catch (_: Throwable) {

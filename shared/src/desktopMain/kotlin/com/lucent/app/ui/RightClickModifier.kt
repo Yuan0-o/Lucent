@@ -8,7 +8,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 
 @OptIn(ExperimentalComposeUiApi::class)
-fun Modifier.onSecondaryClick(onClick: () -> Unit): Modifier = this.pointerInput(Unit) {
+actual fun Modifier.onSecondaryClick(onClick: () -> Unit): Modifier = this.pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Main)

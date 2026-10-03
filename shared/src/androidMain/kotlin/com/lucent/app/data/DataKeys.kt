@@ -1,12 +1,12 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.File
 import java.security.SecureRandom
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
-object DataKeys {
+actual object DataKeys {
 
     private const val KEY_DIR = "keys"
     private const val ATTACHMENT_KEY_FILE = "attachments.key"
@@ -18,7 +18,7 @@ object DataKeys {
     @Volatile private var attachmentKey: SecretKey? = null
     @Volatile private var databaseKeyHex: String? = null
 
-    private fun keyDir(context: Context): File =
+    private fun keyDir(context: PlatformContext): File =
         File(context.applicationContext.filesDir, KEY_DIR).apply { if (!exists()) mkdirs() }
 
     private fun decodeKey(base64: String): ByteArray? {
@@ -97,7 +97,7 @@ object DataKeys {
         if (wrapped.isNotEmpty()) atomicWrite(recoveryFile, wrapped)
     }
 
-    fun attachmentKey(context: Context): SecretKey {
+    fun attachmentKey(context: PlatformContext): SecretKey {
         attachmentKey?.let { return it }
         synchronized(lock) {
             attachmentKey?.let { return it }
@@ -107,7 +107,7 @@ object DataKeys {
         }
     }
 
-    fun databasePassphrase(context: Context): String {
+    fun databasePassphrase(context: PlatformContext): String {
         databaseKeyHex?.let { return it }
         synchronized(lock) {
             databaseKeyHex?.let { return it }
@@ -119,7 +119,7 @@ object DataKeys {
         }
     }
 
-    fun hasDatabaseKey(context: Context): Boolean =
+    fun hasDatabaseKey(context: PlatformContext): Boolean =
         File(keyDir(context.applicationContext), DATABASE_KEY_FILE).exists()
 
     fun resetCacheForTesting() {

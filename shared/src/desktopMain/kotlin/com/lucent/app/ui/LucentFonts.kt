@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -11,7 +11,7 @@ import com.lucent.app.data.FontStore
 
 const val SYSTEM_FONT_KEY = "system"
 
-object LucentFontResolver {
+actual object LucentFontResolver {
 
     private class Holder(val family: FontFamily?)
 
@@ -40,7 +40,7 @@ object LucentFontResolver {
 }
 
 @Composable
-fun lucentTypography(fontKey: String): Typography {
+actual fun lucentTypography(fontKey: String): Typography {
     val context = LocalContext.current
     val base = Typography()
     val family = remember(fontKey) { LucentFontResolver.resolve(context, fontKey) } ?: return base
