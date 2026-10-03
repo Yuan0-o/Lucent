@@ -163,7 +163,7 @@ fun NotesScreen(active: Boolean = true) {
     val linksEnabled by settingsRepo.linksEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.linksEnabled)
     val linksActive = linksEnabled
 
-    val noteUsage by remember { com.lucent.app.data.UsageTracker.scores(context, com.lucent.app.data.UsageTracker.Kind.NOTE) }
+    val noteUsage by remember { com.lucent.app.data.UsageTracker.scores(context, com.lucent.app.data.UsageKind.NOTE) }
         .collectAsState(initial = null)
 
     var composing by remember { mutableStateOf(false) }
@@ -469,7 +469,7 @@ fun NotesScreen(active: Boolean = true) {
         viewingId = note.id
         returnToOnClose = null
         AppScope.io.launch {
-            com.lucent.app.data.UsageTracker.recordOpen(context, com.lucent.app.data.UsageTracker.Kind.NOTE, note.id)
+            com.lucent.app.data.UsageTracker.recordOpen(context, com.lucent.app.data.UsageKind.NOTE, note.id)
         }
     }
 

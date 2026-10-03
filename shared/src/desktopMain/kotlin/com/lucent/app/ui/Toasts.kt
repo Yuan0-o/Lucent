@@ -1,10 +1,10 @@
 package com.lucent.app.ui
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-object LucentToast {
+actual object LucentToast {
 
     const val SHORT_MS = 2200L
     const val LONG_MS = 4200L
@@ -15,7 +15,7 @@ object LucentToast {
     private val _messages = MutableStateFlow<Entry?>(null)
     val messages: StateFlow<Entry?> = _messages
 
-    fun show(context: Context, message: String, longDuration: Boolean = false) {
+    actual fun show(context: PlatformContext, message: String, longDuration: Boolean) {
         _messages.value = Entry(counter.incrementAndGet(), message, longDuration)
     }
 

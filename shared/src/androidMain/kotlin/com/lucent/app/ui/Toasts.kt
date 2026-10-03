@@ -1,14 +1,14 @@
 package com.lucent.app.ui
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import android.widget.Toast
 
-object LucentToast {
+actual object LucentToast {
 
     private val lock = Any()
     private var current: Toast? = null
 
-    fun show(context: Context, message: String, longDuration: Boolean = false) {
+    actual fun show(context: PlatformContext, message: String, longDuration: Boolean) {
         val appContext = context.applicationContext
         synchronized(lock) {
             current?.cancel()

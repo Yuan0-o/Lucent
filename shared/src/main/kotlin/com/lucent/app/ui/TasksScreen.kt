@@ -146,7 +146,7 @@ fun TasksScreen(active: Boolean = true) {
         .collectAsState(initial = com.lucent.app.data.SettingsCache.tasksSort ?: "recent")
     val sortOption = TaskSort.fromKey(sortKey)
 
-    val taskUsage by remember { com.lucent.app.data.UsageTracker.scores(context, com.lucent.app.data.UsageTracker.Kind.TASK) }
+    val taskUsage by remember { com.lucent.app.data.UsageTracker.scores(context, com.lucent.app.data.UsageKind.TASK) }
         .collectAsState(initial = null)
 
     var composing by remember { mutableStateOf(false) }
@@ -293,7 +293,7 @@ fun TasksScreen(active: Boolean = true) {
         viewingId = task.id
         returnToOnClose = null
         AppScope.io.launch {
-            com.lucent.app.data.UsageTracker.recordOpen(context, com.lucent.app.data.UsageTracker.Kind.TASK, task.id)
+            com.lucent.app.data.UsageTracker.recordOpen(context, com.lucent.app.data.UsageKind.TASK, task.id)
         }
     }
 

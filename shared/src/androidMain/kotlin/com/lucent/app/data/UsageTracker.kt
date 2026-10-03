@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -9,13 +9,11 @@ import kotlinx.coroutines.flow.map
 import org.json.JSONObject
 import kotlin.math.pow
 
-private val Context.usageDataStore by preferencesDataStore(name = "lucent_usage")
+private val PlatformContext.usageDataStore by preferencesDataStore(name = "lucent_usage")
 
-object UsageTracker {
+actual object UsageTracker {
 
-    enum class Kind(val storeKey: String) { NOTE("notes_usage"), TASK("tasks_usage") }
-
-    private fun keyFor(kind: Kind) = stringPreferencesKey(kind.storeKey)
+    private fun keyFor(kind: UsageKind) = stringPreferencesKey(kind.storeKey)
 
     private const val RECENCY_HALF_LIFE_DAYS = 5.0
     private const val DAY_MILLIS = 24.0 * 60 * 60 * 1000
@@ -46,11 +44,11 @@ object UsageTracker {
         return obj.toString()
     }
 
-    suspend fun clearAll(context: Context) {
+    actual suspend fun clearAll(context: PlatformContext) {
         context.usageDataStore.edit { it.clear() }
     }
 
-    suspend fun recordOpen(context: Context, kind: Kind, id: Long) {
+    actual suspend fun recordOpen(context: PlatformContext, kind: UsageKind, id: Long) {
         val now = System.currentTimeMillis()
         context.usageDataStore.edit { prefs ->
             val map = parse(prefs[keyFor(kind)]).toMutableMap()
@@ -60,7 +58,7 @@ object UsageTracker {
         }
     }
 
-    fun scores(context: Context, kind: Kind): Flow<Map<Long, Double>> =
+    actual fun scores(context: PlatformContext, kind: UsageKind): Flow<Map<Long, Double>> =
         context.usageDataStore.data.map { prefs ->
             val now = System.currentTimeMillis()
             parse(prefs[keyFor(kind)]).mapValues { (_, e) -> openScore(e.count, e.lastOpened, now) }
@@ -73,7 +71,7 @@ object UsageTracker {
         return (1.0 + count).pow(0.6) * recency
     }
 
-    fun score(openActivity: Double, updatedAt: Long, now: Long): Double {
+    actual fun score(openActivity: Double, updatedAt: Long, now: Long): Double {
         val ageDays = ((now - updatedAt).coerceAtLeast(0)).toDouble() / DAY_MILLIS
         val editRecency = 0.5.pow(ageDays / RECENCY_HALF_LIFE_DAYS)
         return openActivity + editRecency
