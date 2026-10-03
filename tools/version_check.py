@@ -19,7 +19,7 @@ def first(pattern, text):
 def main():
     app = first(r'^val MARKETING_VERSION = "([^"]+)"', read("app/build.gradle.kts"))
     desktop = first(r'packageVersion = "([^"]+)"', read("desktop/build.gradle.kts"))
-    shared = first(r'const val VERSION = "([^"]+)"', read("shared/src/main/kotlin/com/lucent/app/LucentBuild.kt"))
+    shared = first(r'const val VERSION = "([^"]+)"', read("shared/src/commonMain/kotlin/com/lucent/app/LucentBuild.kt"))
 
     found = {
         "app/build.gradle.kts MARKETING_VERSION": app,
