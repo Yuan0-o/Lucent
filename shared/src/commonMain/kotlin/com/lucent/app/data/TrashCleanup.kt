@@ -34,7 +34,7 @@ object TrashCleanup {
     }
 
     suspend fun purgeNote(context: PlatformContext, db: AppDatabase, note: Note) {
-                Attachments.parse(note.attachments).forEach { att ->
+                Attachment.parse(note.attachments).forEach { att ->
             if (AttachmentStore.looksLikeId(att.data)) AttachmentStore.delete(context, att.data)
         }
         NoteHistory.deleteAllFor(db, note.id)
@@ -42,7 +42,7 @@ object TrashCleanup {
     }
 
     suspend fun purgeTask(context: PlatformContext, db: AppDatabase, task: Task) {
-                Attachments.parse(task.attachments).forEach { att ->
+                Attachment.parse(task.attachments).forEach { att ->
             if (AttachmentStore.looksLikeId(att.data)) AttachmentStore.delete(context, att.data)
         }
         ReminderScheduler.cancel(context, task.id)

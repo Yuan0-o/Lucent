@@ -18,7 +18,7 @@ object AttachmentLimits {
         return if (AttachmentStore.looksLikeId(att.data)) {
             AttachmentStore.sizeOf(context, att.data)
         } else {
-            Attachments.estimateDecodedBase64Size(att.data)
+            Attachment.estimateDecodedBase64Size(att.data)
         }
     }
 
@@ -28,9 +28,9 @@ object AttachmentLimits {
     fun totalStored(context: PlatformContext, notes: List<Note>, tasks: List<Task>): Long {
         var total = AttachmentStore.totalBytes(context)
         val addLegacy: (String) -> Unit = { json ->
-            Attachments.parse(json).forEach { att ->
+            Attachment.parse(json).forEach { att ->
                 if (!AttachmentStore.looksLikeId(att.data)) {
-                    total += Attachments.estimateDecodedBase64Size(att.data)
+                    total += Attachment.estimateDecodedBase64Size(att.data)
                 }
             }
         }
