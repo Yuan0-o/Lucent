@@ -1,20 +1,18 @@
 package com.lucent.app.data
 
-import com.lucent.app.platform.PlatformContext
-
 import com.lucent.app.AppScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
-actual object AutoBackupRunner {
+object AutoBackupRunner {
 
     private const val CHECK_INTERVAL_MS = 15L * 60L * 1000L
 
     private var loop: Job? = null
 
-    actual fun ensureStarted(context: PlatformContext) {
+    fun ensureStarted(context: PlatformContext) {
         if (loop?.isActive == true) return
         val appContext = appContextOf(context)
         loop = AppScope.io.launch {
@@ -30,7 +28,7 @@ actual object AutoBackupRunner {
         }
     }
 
-    actual suspend fun runNow(context: PlatformContext): String? {
+    suspend fun runNow(context: PlatformContext): String? {
         val appContext = appContextOf(context)
         val settings = createSettingsRepository(appContext)
         val state = settings.autoBackupOnce()
@@ -60,6 +58,8 @@ actual object AutoBackupRunner {
         }
     }
 }
+
+private typealias PlatformContext = android.content.Context
 
 private fun appContextOf(context: PlatformContext): PlatformContext = context.applicationContext
 
