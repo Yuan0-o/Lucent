@@ -3,7 +3,7 @@ package com.lucent.app.local
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.PlatformInputStream
 
-expect abstract class PlatformModelSource
+expect class PlatformModelSource
 
 expect fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream?
 

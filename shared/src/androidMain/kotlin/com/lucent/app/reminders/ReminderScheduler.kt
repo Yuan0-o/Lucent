@@ -11,8 +11,6 @@ import com.lucent.app.data.createAppDatabase
 
 actual object ReminderScheduler {
 
-    const val EXTRA_TASK_ID = "task_id"
-    const val EXTRA_TASK_TITLE = "task_title"
     private const val ACTION_TASK_REMINDER = "com.lucent.app.action.TASK_REMINDER"
 
     private fun pendingIntentFor(context: PlatformContext, taskId: Long, title: String, allowCreate: Boolean): PendingIntent? {
@@ -34,7 +32,7 @@ actual object ReminderScheduler {
             due > System.currentTimeMillis()
     }
 
-    fun sync(context: PlatformContext, task: Task) {
+    actual fun sync(context: PlatformContext, task: Task) {
         val appContext = context.applicationContext
         if (!shouldFire(task)) {
             cancel(appContext, task.id)
@@ -61,7 +59,7 @@ actual object ReminderScheduler {
         }
     }
 
-    fun cancel(context: PlatformContext, taskId: Long) {
+    actual fun cancel(context: PlatformContext, taskId: Long) {
         val appContext = context.applicationContext
         val alarmManager = appContext.getSystemService(AlarmManager::class.java) ?: return
         val existing = pendingIntentFor(appContext, taskId, "", allowCreate = false) ?: return
@@ -69,7 +67,7 @@ actual object ReminderScheduler {
         existing.cancel()
     }
 
-    suspend fun rescheduleAll(context: PlatformContext) {
+    actual suspend fun rescheduleAll(context: PlatformContext) {
         val appContext = context.applicationContext
         val db = createAppDatabase(appContext)
         db.taskDao.getAllOnce().forEach { sync(appContext, it) }
