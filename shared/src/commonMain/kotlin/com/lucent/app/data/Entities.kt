@@ -94,7 +94,6 @@ expect class NotebookItem {
     val itemKind: String
     val itemId: Long
     val addedAt: Long
-} {
     companion object {
         const val KIND_NOTE: String
         const val KIND_TASK: String

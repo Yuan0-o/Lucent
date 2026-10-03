@@ -24,6 +24,7 @@ kotlin {
         val commonMain by getting {
         }
         val androidMain by getting {
+            kotlin.srcDir("src/platformMain/kotlin")
             dependencies {
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
@@ -44,6 +45,7 @@ kotlin {
             }
         }
         val desktopMain by getting {
+            kotlin.srcDir("src/platformMain/kotlin")
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.swing)
