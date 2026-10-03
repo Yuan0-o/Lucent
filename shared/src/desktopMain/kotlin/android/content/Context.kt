@@ -2,7 +2,7 @@ package android.content
 
 import java.io.File
 
-open class Context {
+abstract class Context {
 
     open val applicationContext: Context get() = this
 
@@ -25,4 +25,4 @@ open class Context {
     open val packageName: String get() = "com.lucent.desktop"
 }
 
-object DesktopContext : com.lucent.app.platform.PlatformContext()
+object DesktopContext : Context()

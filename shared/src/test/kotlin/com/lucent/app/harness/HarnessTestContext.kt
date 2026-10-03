@@ -3,9 +3,16 @@ package com.lucent.app.harness
 import android.content.Context
 
 internal fun harnessTestContext(): Context {
+    objectInstanceForTest("android.content.DesktopContext")?.let { return it as Context }
     allocatedForTest(Context::class.java)?.let { return it as Context }
     reflectiveForTest("android.app.Application")?.let { return it as Context }
     throw IllegalStateException("This platform gives tests no way to make a Context")
+}
+
+private fun objectInstanceForTest(name: String): Any? = try {
+    Class.forName(name).getDeclaredField("INSTANCE").get(null)
+} catch (t: Throwable) {
+    null
 }
 
 internal fun allocatedForTest(type: Class<*>): Any? =

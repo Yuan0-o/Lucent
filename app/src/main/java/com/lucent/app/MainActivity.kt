@@ -560,7 +560,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     val tabScope = rememberCoroutineScope()
     val lastScreenContext = LocalContext.current
     val lastScreenRepo = remember(lastScreenContext) {
-        com.lucent.app.data.SettingsRepository(lastScreenContext.applicationContext)
+        com.lucent.app.data.createSettingsRepository(lastScreenContext.applicationContext)
     }
     LaunchedEffect(currentScreen) {
         LastScreen.remember(currentScreen)
@@ -574,7 +574,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     val onGradient = LocalOnGradient.current
     val context = LocalContext.current
     val updateRepo = remember {
-        com.lucent.app.data.SettingsRepository(context.applicationContext)
+        com.lucent.app.data.createSettingsRepository(context.applicationContext)
     }
     val requestNotificationPermission = rememberNotificationPermissionRequester()
     LaunchedEffect(AutoUpdate.phase) {
