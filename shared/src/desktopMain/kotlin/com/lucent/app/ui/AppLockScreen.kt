@@ -40,44 +40,9 @@ import com.lucent.app.data.AppLock
 import com.lucent.app.data.SettingsRepository
 import kotlinx.coroutines.launch
 
-object AppLockController {
-
-    private const val GRACE_MS = 30_000L
-
-    var enabled by mutableStateOf(false)
-    var locked by mutableStateOf(false)
-
-    private var processStarted = false
-    private var backgroundedAt = 0L
-
-    fun markProcessStarted(lockEnabled: Boolean) {
-        enabled = lockEnabled
-        if (!processStarted) {
-            processStarted = true
-            locked = lockEnabled
-        }
-    }
-
-    fun onStop() {
-        backgroundedAt = SystemClock.elapsedRealtime()
-    }
-
-    fun onStart() {
-        if (enabled && backgroundedAt != 0L &&
-            SystemClock.elapsedRealtime() - backgroundedAt > GRACE_MS
-        ) {
-            locked = true
-        }
-        backgroundedAt = 0L
-    }
-
-    fun unlock() { locked = false }
-}
-
-private enum class LockStage { ENTER_PASSWORD, ANSWER_QUESTION, SET_NEW_PASSWORD }
 
 @Composable
-fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
+actual fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
     val context = LocalContext.current
     val repo = remember { SettingsRepository(context) }
     val scope = rememberCoroutineScope()

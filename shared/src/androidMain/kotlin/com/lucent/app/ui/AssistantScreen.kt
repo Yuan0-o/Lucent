@@ -60,7 +60,7 @@ private fun queryFileName(context: Context, uri: Uri): String? {
 }
 
 @Composable
-fun AssistantScreen(active: Boolean = true) {
+actual fun AssistantScreen(active: Boolean = true) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val draft = remember { AssistantChatDraft() }

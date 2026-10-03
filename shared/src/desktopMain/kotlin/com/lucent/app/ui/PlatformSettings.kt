@@ -26,18 +26,18 @@ import com.lucent.app.i18n.S
 import com.lucent.app.security.WindowsHello
 import kotlinx.coroutines.launch
 
-const val crashShieldLocksStartupLogging: Boolean = false
+actual val crashShieldLocksStartupLogging: Boolean = false
 
 
 @Composable
-fun DynamicColorRow(repo: SettingsRepository) {
+actual fun DynamicColorRow(repo: SettingsRepository) {
 }
 
 @Composable
-fun rememberDynamicColorActive(repo: SettingsRepository): Boolean = false
+actual fun rememberDynamicColorActive(repo: SettingsRepository): Boolean = false
 
 @Composable
-fun DesktopIntegrationRows(repo: SettingsRepository) {
+actual fun DesktopIntegrationRows(repo: SettingsRepository) {
     val onGradient = LocalOnGradient.current
     val scope = rememberCoroutineScope()
     val closeToTray by repo.closeToTray.collectAsState(initial = SettingsCache.closeToTray)
@@ -78,7 +78,7 @@ fun DesktopIntegrationRows(repo: SettingsRepository) {
 }
 
 @Composable
-fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
+actual fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
     var helloAvailable by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         helloAvailable = WindowsHello.availability() == WindowsHello.Availability.AVAILABLE
@@ -109,7 +109,7 @@ fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
 }
 
 @Composable
-fun rememberBackupFolderPicker(onFolderPicked: (String) -> Unit): () -> Unit {
+actual fun rememberBackupFolderPicker(onFolderPicked: (String) -> Unit): () -> Unit {
     return {
         val dir = com.lucent.desktop.platform.DesktopFiles.chooseFolder(S.autoBackupChooseFolder)
         if (dir != null) onFolderPicked(dir.absolutePath)
