@@ -4,14 +4,15 @@ import com.lucent.app.data.Attachment
 import com.lucent.app.data.AttachmentLimits
 import com.lucent.app.data.AttachmentStore
 import com.lucent.app.platform.PlatformContext
+import java.io.File
 
-actual fun platformFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? {
-    if (!source.exists() || !source.isFile) return null
-    if (source.length() > AttachmentLimits.MAX_SINGLE_BYTES) return null
-    val id = AttachmentStore.importFile(context, source) ?: return null
+fun fileToAttachment(context: PlatformContext, file: File): Attachment? {
+    if (!file.exists() || !file.isFile) return null
+    if (file.length() > AttachmentLimits.MAX_SINGLE_BYTES) return null
+    val id = AttachmentStore.importFile(context, file) ?: return null
     return Attachment(
-        mime = mimeForFileName(source.name),
+        mime = mimeForFileName(file.name),
         data = id,
-        name = source.name.ifBlank { "file" }
+        name = file.name.ifBlank { "file" }
     )
 }

@@ -1,10 +1,5 @@
 package com.lucent.app.ui
 
-import com.lucent.app.data.Attachment
-import com.lucent.app.platform.PlatformContext
-
-expect fun platformFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment?
-
 fun mimeForFileName(name: String): String {
     val ext = name.substringAfterLast('.', "").lowercase()
     return when (ext) {
