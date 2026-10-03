@@ -22,7 +22,7 @@ kotlin {
             kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
         }
         test {
-            kotlin.srcDir(rootProject.file("shared/src/test/kotlin"))
+            kotlin.srcDir(rootProject.file("shared/src/commonTest/kotlin"))
         }
     }
 }

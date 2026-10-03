@@ -62,7 +62,7 @@ android {
             kotlin.directories += rootProject.file("shared/src/main/kotlin").path
         }
         getByName("test") {
-            kotlin.directories += rootProject.file("shared/src/test/kotlin").path
+            kotlin.directories += rootProject.file("shared/src/commonTest/kotlin").path
         }
         getByName("androidTest") {
             assets.directories += "$projectDir/schemas"

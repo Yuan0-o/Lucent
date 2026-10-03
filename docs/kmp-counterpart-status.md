@@ -20,12 +20,12 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | data/DatabaseEncryption.kt | expect/actual (PlatformContext params) |
 | data/Entities.kt | expect/actual |
 | data/LocalSecrets.kt | expect/actual |
-| data/PlatformFont.kt | actuals in androidMain/desktopMain |
+| data/PlatformFont.kt | expect/actual (expect typealias PlatformFontSource: Uri on Android, File on desktop) |
 | data/SettingsRepository.kt | expect/actual |
 | data/ShareIntegration.kt | expect/actual |
 | data/StartupLog.kt | expect/actual |
 | data/UsageTracker.kt | expect/actual |
-| local/PlatformModel.kt | actuals in androidMain/desktopMain |
+| local/PlatformModel.kt | expect/actual (expect typealias PlatformModelSource: Uri on Android, File on desktop) |
 | nativebridge/LucentNative.kt | expect/actual |
 | reminders/Notifications.kt | expect/actual |
 | reminders/ReminderScheduler.kt | expect/actual (PlatformContext in fire()) |
@@ -38,7 +38,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/LucentFonts.kt | unified shared/src/main + expect/actual PlatformFontCompat.fontFamily(fontKey, path) |
 | ui/PlatformExport.kt | unified shared/src/main + expect/actual exportPdfFontHintEnabled flag |
 | ui/PlatformNotebookCover.kt | unified shared/src/main + expect/actual decodeCoverBitmap(bytes) |
-| ui/PlatformNotes.kt | parallel androidMain/desktopMain declarations (Uri/File typealias cannot be expect/actual: modality mismatch) |
+| ui/PlatformNotes.kt | expect/actual (expect typealias PlatformPickedFile: Uri on Android, File on desktop; all 9 members + notesGridColumns) |
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
 
@@ -52,13 +52,13 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | data/DocumentExport.kt | 477-line diff between copies; doodle export path (`DoodleExport.canvasesOf`, doodle bitmap embedding into docx/pdf) is platform-specific canvas rendering. Needs DoodleCanvas multiplatform work first. |
 | ui/PlatformSplash.kt | :shared androidMain has neither `androidx.compose.foundation:foundation-layout` (for `statusBarsPadding()`) nor the app module's `R` (for the font resource). `platform(libs.compose.bom)` is unresolvable inside KMP source-set dependency blocks (KotlinDependencyHandler has no `platform()`), and pinning foundation-layout to the BOM version string (2026.04.01) fails — the BOM manages it to 1.11.0. Two fix attempts failed 2026-10-03; reverted. Candidate for a future retry: `implementation(project.dependencies.platform(...))` workaround or a BOM-free status-bar inset in androidMain, plus moving great_vibes.ttf into :shared androidMain res. |
 
-## Pending (8)
+## Pending (7)
 
 | Pair | Notes |
 |---|---|
 | ui/AssistantScreen.kt | TANGLED CLUSTER — circular deps AppNavigation ↔ SettingsScreen ↔ AssistantController ↔ LocalLlm/AIDL. Leave for last. |
 | ui/SettingsScreen.kt | TANGLED CLUSTER (2549 lines). Leave for last. |
-| ui/AttachmentUi.kt | 504 lines; after leaves |
+| ui/AttachmentUi.kt | 442/461-line app/desktop UI files; after leaves (shared uri/file helpers already expect/actual as platformFileToAttachment) |
 | ui/AttachmentViewer.kt | 349 lines; after leaves |
 | ui/ExpandableTextField.kt | 285 lines; after leaves |
 | ui/ImageEditor.kt | 461 lines; after leaves |
