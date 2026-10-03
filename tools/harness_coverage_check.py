@@ -7,7 +7,7 @@ REPO = os.path.abspath(os.path.join(HERE, ".."))
 
 HARNESS = os.path.join(REPO, "shared", "src", "main", "kotlin", "com", "lucent", "app", "harness")
 TESTS = [
-    os.path.join(REPO, "shared", "src", "test", "kotlin"),
+    os.path.join(REPO, "shared", "src", "commonTest", "kotlin"),
     os.path.join(REPO, "desktop", "src", "test", "kotlin"),
     os.path.join(REPO, "app", "src", "test"),
 ]
