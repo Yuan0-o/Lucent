@@ -1,5 +1,7 @@
 package com.lucent.app.data
 
+import com.lucent.app.data.createAppDatabase
+
 import android.content.Context
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

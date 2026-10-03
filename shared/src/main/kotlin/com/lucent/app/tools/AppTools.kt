@@ -1,5 +1,7 @@
 package com.lucent.app.tools
 
+import com.lucent.app.data.createSettingsRepository
+
 import android.content.Context
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Attachment

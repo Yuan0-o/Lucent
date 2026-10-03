@@ -1,5 +1,9 @@
 package com.lucent.app.ui
 
+import com.lucent.app.data.createSettingsRepository
+
+import com.lucent.app.data.createAppDatabase
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background

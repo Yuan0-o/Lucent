@@ -1,5 +1,7 @@
 package com.lucent.app.data
 
+import com.lucent.app.data.createSettingsRepository
+
 import android.content.Context
 import com.lucent.app.network.ApiSpec
 import com.lucent.app.network.LlmClient

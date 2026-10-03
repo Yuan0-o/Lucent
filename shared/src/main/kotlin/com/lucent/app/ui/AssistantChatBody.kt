@@ -1,5 +1,9 @@
 package com.lucent.app.ui
 
+import com.lucent.app.data.createSettingsRepository
+
+import com.lucent.app.data.createAppDatabase
+
 import android.util.Base64
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable

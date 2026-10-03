@@ -1,5 +1,7 @@
 package com.lucent.app.ui
 
+import com.lucent.app.data.createAppDatabase
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

@@ -1,5 +1,7 @@
 package com.lucent.app.data
 
+import com.lucent.app.data.createSettingsRepository
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
