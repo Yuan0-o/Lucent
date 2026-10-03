@@ -1,5 +1,7 @@
 package com.lucent.app.data
 
+@file:JvmName("DesktopSettingsRepositoryKt")
+
 import android.content.Context
 import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.flow.Flow
