@@ -34,6 +34,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/Haptics.kt | expect/actual (PlatformContext params) |
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
+| ui/PlatformSplash.kt | expect/actual (splashTopInset + splashScriptFont; SplashBackground unified in shared/src/main) |
 
 ## Blocked (4) — verified, do not force
 
@@ -62,7 +63,6 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/PlatformExport.kt | 14 lines; app returns null, desktop uses FontStore+i18n — needs care |
 | ui/LucentFonts.kt | IN PROGRESS — batch 2026-10-03: unify in shared/src/main, extract `PlatformFontCompat.fontFamily(fontKey, path)` to :shared expect/actual |
 | ui/PlatformNotebookCover.kt | IN PROGRESS — batch 2026-10-03: unify composable in shared/src/main, extract `decodeCoverBitmap(bytes)` to :shared expect/actual |
-| ui/PlatformSplash.kt | IN PROGRESS — batch 2026-10-03: `splashTopInset()` + `splashScriptFont()` to :shared expect/actual, keep `SplashBackground` in shared/src/main (calls FluidGlassBackground) |
 
 ## Rules for converters
 
