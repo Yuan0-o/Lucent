@@ -109,10 +109,11 @@ class SubAgentInboxTest {
             String::class.java,
             String::class.java,
             Set::class.java,
-            Long::class.javaPrimitiveType
+            Long::class.javaPrimitiveType,
+            String::class.java
         )
         constructor.isAccessible = true
-        return constructor.newInstance(id, "read the spec", emptySet<String>(), 1L) as SubAgent
+        return constructor.newInstance(id, "read the spec", emptySet<String>(), 1L, null) as SubAgent
     }
 
     @Test
