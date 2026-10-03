@@ -1,6 +1,5 @@
-package com.lucent.app.data
-
 @file:JvmName("AndroidSettingsRepositoryKt")
+package com.lucent.app.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey

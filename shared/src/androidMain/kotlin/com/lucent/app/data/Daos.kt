@@ -1,6 +1,5 @@
-package com.lucent.app.data
-
 @file:JvmName("AndroidDaosKt")
+package com.lucent.app.data
 
 import androidx.room.Dao
 import androidx.room.Delete

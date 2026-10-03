@@ -1,6 +1,5 @@
-package com.lucent.app.data
-
 @file:JvmName("DesktopSettingsRepositoryKt")
+package com.lucent.app.data
 
 import android.content.Context
 import com.lucent.app.platform.PlatformContext

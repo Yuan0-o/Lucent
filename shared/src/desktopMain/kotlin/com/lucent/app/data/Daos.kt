@@ -1,6 +1,5 @@
-package com.lucent.app.data
-
 @file:JvmName("DesktopDaosKt")
+package com.lucent.app.data
 
 import kotlinx.coroutines.flow.Flow
 import java.sql.ResultSet
