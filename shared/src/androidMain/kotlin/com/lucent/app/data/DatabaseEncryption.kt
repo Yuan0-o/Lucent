@@ -60,7 +60,7 @@ actual object DatabaseEncryption {
         }
     }
 
-    fun ensureReady(context: Context): String? {
+    fun ensureReady(context: PlatformContext): String? {
         val appContext = context.applicationContext
         val dbFile = appContext.getDatabasePath(DB_NAME)
 
@@ -120,7 +120,7 @@ actual object DatabaseEncryption {
         false
     }
 
-    private fun setAside(context: Context, dbFile: File) {
+    private fun setAside(context: PlatformContext, dbFile: File) {
         val stamp = System.currentTimeMillis()
         val aside = File(dbFile.parentFile, "$DB_NAME.locked-$stamp")
         dbFile.renameTo(aside)
@@ -137,7 +137,7 @@ actual object DatabaseEncryption {
         Log.e(TAG, "Database set aside as ${aside.name}")
     }
 
-    private fun migrateToEncrypted(context: Context, dbFile: File, passphrase: String): Boolean {
+    private fun migrateToEncrypted(context: PlatformContext, dbFile: File, passphrase: String): Boolean {
         val encrypted = File(dbFile.parentFile, "$DB_NAME.encrypting")
         val original = File(dbFile.parentFile, "$DB_NAME.pre-encrypt")
         encrypted.delete()
