@@ -7,7 +7,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 - **blocked** — cannot convert cleanly; reason verified, do not force
 - **pending** — still duplicated in `app/src/main/java` and `desktop/src/main/kotlin`
 
-## Converted (31)
+## Converted (32)
 
 | Pair | Mechanism |
 |---|---|
@@ -42,6 +42,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/RightClickModifier.kt | expect/actual |
 | ui/Toasts.kt | expect/actual |
 | ui/AttachmentViewer.kt | parallel androidMain/desktopMain declarations (AttachmentViewerAndroid.kt / AttachmentViewerDesktop.kt; private local copies of not-yet-shared helpers DocumentText, PdfViewer, ImageEditorDialog pending their own pair conversions) |
+| ui/ExpandableTextField.kt | parallel androidMain/desktopMain declarations (ExpandableTextFieldAndroid.kt / ExpandableTextFieldDesktop.kt; byte-identical to originals) |
 
 ## Blocked (5) — verified, do not force
 
@@ -53,14 +54,13 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | data/DocumentExport.kt | 477-line diff between copies; doodle export path (`DoodleExport.canvasesOf`, doodle bitmap embedding into docx/pdf) is platform-specific canvas rendering. Needs DoodleCanvas multiplatform work first. |
 | ui/PlatformSplash.kt | :shared androidMain has neither `androidx.compose.foundation:foundation-layout` (for `statusBarsPadding()`) nor the app module's `R` (for the font resource). `platform(libs.compose.bom)` is unresolvable inside KMP source-set dependency blocks (KotlinDependencyHandler has no `platform()`), and pinning foundation-layout to the BOM version string (2026.04.01) fails — the BOM manages it to 1.11.0. Two fix attempts failed 2026-10-03; reverted. Candidate for a future retry: `implementation(project.dependencies.platform(...))` workaround or a BOM-free status-bar inset in androidMain, plus moving great_vibes.ttf into :shared androidMain res. |
 
-## Pending (6)
+## Pending (5)
 
 | Pair | Notes |
 |---|---|
 | ui/AssistantScreen.kt | TANGLED CLUSTER — circular deps AppNavigation ↔ SettingsScreen ↔ AssistantController ↔ LocalLlm/AIDL. Leave for last. |
 | ui/SettingsScreen.kt | TANGLED CLUSTER (2549 lines). Leave for last. |
 | ui/AttachmentUi.kt | 442/461-line app/desktop UI files; after leaves (shared helpers stay parallel — uriToAttachment/fileToAttachment cannot be expect/actual; pure mimeForFileName hoisted to commonMain) |
-| ui/ExpandableTextField.kt | 285 lines; after leaves |
 | ui/ImageEditor.kt | 461 lines; after leaves |
 | ui/UiComponents.kt | 628 lines; after leaves |
 
