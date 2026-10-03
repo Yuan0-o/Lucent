@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.lucent.app.data.SettingsRepository
+import com.lucent.app.data.createSettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,10 +37,9 @@ import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.DataLine
 import javax.sound.sampled.TargetDataLine
-import com.lucent.app.data.createSettingsRepository
 
 @Composable
-fun DictationButton(onText: (String) -> Unit, modifier: Modifier = Modifier) {
+actual fun DictationButton(onText: (String) -> Unit, modifier: Modifier) {
     val context = DesktopContext
     val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()

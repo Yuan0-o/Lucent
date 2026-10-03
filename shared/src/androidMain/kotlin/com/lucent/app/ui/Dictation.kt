@@ -16,7 +16,7 @@ import com.lucent.app.i18n.S
 import com.lucent.app.i18n.lucentLocale
 
 @Composable
-fun DictationButton(onText: (String) -> Unit, modifier: Modifier = Modifier) {
+actual fun DictationButton(onText: (String) -> Unit, modifier: Modifier) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
