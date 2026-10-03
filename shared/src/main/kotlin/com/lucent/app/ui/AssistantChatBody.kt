@@ -965,7 +965,8 @@ fun AssistantChatBody(
                                     }
                                 }
                             }
-                            if (msg.quotedText != null) {
+                            val quotedText = msg.quotedText
+                            if (quotedText != null) {
                                 val quotedAuthor = if (msg.quotedRole == "user") com.lucent.app.i18n.S.exportYou
                                     else assistantName.ifBlank { "Assistant" }
                                 Column(
@@ -977,7 +978,7 @@ fun AssistantChatBody(
                                         .padding(horizontal = 8.dp, vertical = 5.dp)
                                 ) {
                                     Text(quotedAuthor, color = onGradientMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Text(msg.quotedText.replace('\n', ' '), color = onGradientMuted.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(quotedText.replace('\n', ' '), color = onGradientMuted.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             val attachmentsAll = remember(msg.id, msg.attachmentData, msg.attachmentList) {
