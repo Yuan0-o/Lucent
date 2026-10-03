@@ -30,10 +30,10 @@ actual class PlatformFile {
 
     actual fun inputStream(): PlatformInputStream = file.inputStream()
 
-    actual fun outputStream(): PlatformOutputStream = file.outputStream()
+    actual fun outputStream(): PlatformOutputStream = PlatformOutputStream(file.outputStream())
 
     actual val name: String get() = file.name
 
     actual val parentFile: PlatformFile?
-        get() = file.parentFile?.let { PlatformFile(it) }
+        get() = file.parentFile?.let { PlatformFile(it.absolutePath) }
 }
