@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-internal object AtomicFiles {
+object AtomicFiles {
 
     fun replace(temp: File, target: File): Boolean {
         val atomic = runCatching {

@@ -54,11 +54,11 @@ actual object LocalSecrets {
     }
 
 
-    internal var filesDirOverride: File? = null
+    var filesDirOverride: File? = null
 
-    internal var wrapperOverride: MasterKeyWrapper? = null
+    var wrapperOverride: MasterKeyWrapper? = null
 
-    internal fun resetForTesting() {
+    fun resetForTesting() {
         synchronized(keyLock) {
             keyBytesValue = null
             reported = false
