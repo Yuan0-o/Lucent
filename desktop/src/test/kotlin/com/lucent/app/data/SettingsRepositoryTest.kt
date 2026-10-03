@@ -27,7 +27,7 @@ class SettingsRepositoryTest {
     @Test
     fun plainKeysRoundTripThroughDisk() = runBlocking {
         val dir = freshDir()
-        val repo = SettingsRepository(TestContext(dir))
+        val repo = createSettingsRepository(TestContext(dir))
         repo.setThemeMode("dark")
         repo.setPalette("OCEAN")
         repo.setFont("serif")
@@ -43,7 +43,7 @@ class SettingsRepositoryTest {
         assertEquals(true, json.getBoolean("markdown_enabled"))
         assertEquals(MemoryTier.LOW.key, json.getString("memory_tier"))
 
-        val repo2 = SettingsRepository(TestContext(dir))
+        val repo2 = createSettingsRepository(TestContext(dir))
         assertEquals("dark", repo2.themeMode.first())
         assertEquals("OCEAN", repo2.palette.first())
         assertEquals("zh", repo2.appLanguage.first())
@@ -53,7 +53,7 @@ class SettingsRepositoryTest {
     @Test
     fun secretKeysAreEncryptedAtRest() = runBlocking {
         val dir = freshDir()
-        val repo = SettingsRepository(TestContext(dir))
+        val repo = createSettingsRepository(TestContext(dir))
         repo.setApiKey("sk-super-secret-abc123")
         repo.setAssistantName("Jeeves")
         repo.setAssistantStyle("witty but brief")
@@ -74,7 +74,7 @@ class SettingsRepositoryTest {
     @Test
     fun cloudSecretsAreEncryptedAtRest() = runBlocking {
         val dir = freshDir()
-        val repo = SettingsRepository(TestContext(dir))
+        val repo = createSettingsRepository(TestContext(dir))
         repo.setCloudEnabled(true)
         repo.setCloudProvider("nutstore")
         repo.setCloudUrl("https://dav.example.com")
@@ -91,7 +91,7 @@ class SettingsRepositoryTest {
     fun corruptFileDegradesToDefaults() {
         val dir = freshDir()
         settingsFile(dir).writeText("{not valid json!!")
-        val repo = SettingsRepository(TestContext(dir))
+        val repo = createSettingsRepository(TestContext(dir))
         assertEquals("system", runBlocking { repo.themeMode.first() })
         assertEquals("CYCLE", runBlocking { repo.palette.first() })
         assertEquals("Lucent", runBlocking { repo.assistantName.first() })
@@ -100,7 +100,7 @@ class SettingsRepositoryTest {
     @Test
     fun localModelToggleLeavesTheCloudSettingsAlone() = runBlocking {
         val dir = freshDir()
-        val repo = SettingsRepository(TestContext(dir))
+        val repo = createSettingsRepository(TestContext(dir))
         repo.setMemoryTier(MemoryTier.MEDIUM.key)
         repo.setWebSearchEnabled(true)
         repo.setMemoryTierLocal(MemoryTier.LOW.key)

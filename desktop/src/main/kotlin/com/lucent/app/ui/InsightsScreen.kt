@@ -25,12 +25,13 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.TaskInsights
 import com.lucent.app.i18n.S
+import com.lucent.app.data.createAppDatabase
 
 @Composable
 fun InsightsScreen() {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val allTasks by remember { db.taskDao().getAll() }.collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val allTasks by remember { db.taskDao.getAll() }.collectAsState(initial = emptyList())
 
     val summary = remember(allTasks) { TaskInsights.summarize(allTasks) }
     val headline = remember(summary) { TaskInsights.headline(summary) }

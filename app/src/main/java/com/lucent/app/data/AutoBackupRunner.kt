@@ -18,7 +18,7 @@ object AutoBackupRunner {
         loop = AppScope.io.launch {
             while (true) {
                 try {
-                    val settings = SettingsRepository(appContext)
+                    val settings = createSettingsRepository(appContext)
                     val state = settings.autoBackupOnce()
                     if (AutoBackup.isDue(state)) runOnce(appContext, settings, state)
                 } catch (_: Throwable) {
@@ -30,7 +30,7 @@ object AutoBackupRunner {
 
     suspend fun runNow(context: PlatformContext): String? {
         val appContext = appContextOf(context)
-        val settings = SettingsRepository(appContext)
+        val settings = createSettingsRepository(appContext)
         val state = settings.autoBackupOnce()
         if (state.folderUri.isBlank()) return "no folder"
         return runOnce(appContext, settings, state)
@@ -72,8 +72,8 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
     val file = android.provider.DocumentsContract.createDocument(
         resolver, parent, "application/octet-stream", name
     ) ?: throw java.io.IOException("could not create $name")
-    val db = AppDatabase.getInstance(context)
-    val settings = SettingsRepository(context)
+    val db = createAppDatabase(context)
+    val settings = createSettingsRepository(context)
     resolver.openOutputStream(file)?.use { out ->
         val tee = java.io.ByteArrayOutputStream()
         val mirrored = object : java.io.OutputStream() {
@@ -84,13 +84,13 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
         }
         BackupManager.exportEncrypted(context, db, settings, mirrored, null)
         val cloudOn = runCatching {
-            val repo = SettingsRepository(context)
+            val repo = createSettingsRepository(context)
             repo.cloudEnabled.first() && repo.cloudAutoBackup.first() &&
                 repo.cloudUrl.first().isNotBlank() && repo.cloudUser.first().isNotBlank()
         }.getOrDefault(false)
         if (cloudOn) {
             runCatching {
-                val repo = SettingsRepository(context)
+                val repo = createSettingsRepository(context)
                 val cfg = com.lucent.app.data.CloudSync.Config(
                     url = repo.cloudUrl.first(),
                     user = repo.cloudUser.first(),

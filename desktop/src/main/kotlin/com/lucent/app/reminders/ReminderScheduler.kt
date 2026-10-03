@@ -8,6 +8,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import com.lucent.app.data.createAppDatabase
 
 object ReminderScheduler {
 
@@ -44,7 +45,7 @@ object ReminderScheduler {
 
     suspend fun rescheduleAll(context: Context) {
         val tasks = try {
-            AppDatabase.getInstance(context.applicationContext).taskDao().getAllOnce()
+            createAppDatabase(context.applicationContext).taskDao.getAllOnce()
         } catch (t: Throwable) {
             return
         }
@@ -53,7 +54,7 @@ object ReminderScheduler {
 
     private suspend fun fire(context: Context, taskId: Long, scheduledTitle: String) {
         val task = try {
-            AppDatabase.getInstance(context.applicationContext).taskDao().getByIdOnce(taskId)
+            createAppDatabase(context.applicationContext).taskDao.getByIdOnce(taskId)
         } catch (t: Throwable) {
             null
         }

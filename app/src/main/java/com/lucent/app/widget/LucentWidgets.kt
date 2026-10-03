@@ -17,6 +17,7 @@ import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Checklist
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import com.lucent.app.data.createAppDatabase
 
 
 
@@ -104,7 +105,7 @@ class TaskSummaryWidget : AppWidgetProvider() {
         val appContext = context.applicationContext
         AppScope.io.launch {
             val progress = try {
-                val tasks = AppDatabase.getInstance(appContext).taskDao().getAllOnce()
+                val tasks = createAppDatabase(appContext).taskDao.getAllOnce()
                     .filter { it.trashedAt == null }
                 val done = tasks.count { it.isDone }
                 val open = tasks.filter { !it.isDone }
@@ -193,7 +194,7 @@ private class TodayTasksFactory(private val context: Context) : RemoteViewsServi
     override fun onDataSetChanged() {
         rows = try {
             runBlocking {
-                AppDatabase.getInstance(context).taskDao().getAllOnce()
+                createAppDatabase(context).taskDao.getAllOnce()
                     .filter { it.trashedAt == null }
                     .sortedWith(compareBy({ it.isDone }, { it.dueAt ?: Long.MAX_VALUE }, { -it.createdAt }))
                     .take(MAX_ROWS)
@@ -269,7 +270,7 @@ class PinnedNoteWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val note = try {
             runBlocking {
-                AppDatabase.getInstance(context).noteDao().getAllOnce()
+                createAppDatabase(context).noteDao.getAllOnce()
                     .filter { it.pinned && !it.archived && it.trashedAt == null }
                     .maxByOrNull { it.updatedAt }
             }

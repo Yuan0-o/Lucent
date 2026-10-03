@@ -42,17 +42,17 @@ class BackupRoundTripTest {
     }
 
     private fun seedDb(db: AppDatabase) = runBlocking {
-        db.noteDao().insert(
+        db.noteDao.insert(
             Note(title = "Osaka trip", body = "Takoyaki and a very determined pigeon", updatedAt = 1700000000000)
         )
-        db.taskDao().insert(
+        db.taskDao.insert(
             Task(title = "Book shinkansen", isDone = false, createdAt = 1700000001000, notes = "window seat")
         )
-        db.chatConversationDao().insert(ChatConversation(title = "Trip chat", createdAt = 1700000002000))
-        db.chatDao().insert(
+        db.chatConversationDao.insert(ChatConversation(title = "Trip chat", createdAt = 1700000002000))
+        db.chatDao.insert(
             ChatMessage(role = "user", content = "where is the best okonomiyaki?", timestamp = 1700000003000)
         )
-        db.chatDao().insert(
+        db.chatDao.insert(
             ChatMessage(
                 role = "assistant",
                 content = "Osaka, obviously.",
@@ -70,16 +70,16 @@ class BackupRoundTripTest {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
             seedDb(db)
-            val settings = SettingsRepository(context)
+            val settings = createSettingsRepository(context)
             settings.setThemeMode("dark")
             settings.setPalette("OCEAN")
             settings.setAppLanguage("zh")
             settings.setSplashStyle("avatar")
 
-            val notes = db.noteDao().getAllOnce()
-            val tasks = db.taskDao().getAllOnce()
-            val chats = db.chatDao().getAllOnce()
-            val conversations = db.chatConversationDao().getAllOnce()
+            val notes = db.noteDao.getAllOnce()
+            val tasks = db.taskDao.getAllOnce()
+            val chats = db.chatDao.getAllOnce()
+            val conversations = db.chatConversationDao.getAllOnce()
 
             val manifest = BackupManifestBuilder.build(
                 context = context,
@@ -98,20 +98,20 @@ class BackupRoundTripTest {
             use(dir2) {
                 val context2 = TestContext(dir2)
                 val db2 = AppDatabase.createForTesting(context2)
-                val settings2 = SettingsRepository(context2)
+                val settings2 = createSettingsRepository(context2)
                 BackupImporter.import(context2, db2, settings2, manifest)
 
-                val restoredNotes = db2.noteDao().getAllOnce()
+                val restoredNotes = db2.noteDao.getAllOnce()
                 assertEquals(1, restoredNotes.size)
                 assertEquals("Osaka trip", restoredNotes[0].title)
                 assertEquals("Takoyaki and a very determined pigeon", restoredNotes[0].body)
 
-                val restoredTasks = db2.taskDao().getAllOnce()
+                val restoredTasks = db2.taskDao.getAllOnce()
                 assertEquals(1, restoredTasks.size)
                 assertEquals("Book shinkansen", restoredTasks[0].title)
                 assertEquals("window seat", restoredTasks[0].notes)
 
-                val restoredChats = db2.chatDao().getAllOnce()
+                val restoredChats = db2.chatDao.getAllOnce()
                 assertEquals(2, restoredChats.size)
                 assertEquals(
                     "the person wants a city",
@@ -121,7 +121,7 @@ class BackupRoundTripTest {
                     restoredChats.first { it.role == "assistant" }
                         .reasoningBlocks.orEmpty().contains("keep it short")
                 )
-                assertEquals(1, db2.chatConversationDao().getAllOnce().size)
+                assertEquals(1, db2.chatConversationDao.getAllOnce().size)
 
                 assertEquals("dark", settings2.themeMode.first())
                 assertEquals("OCEAN", settings2.palette.first())
@@ -141,12 +141,12 @@ class BackupRoundTripTest {
 
             val truncated = """{"version":1,"notes":["""
             assertFailsWith<JSONException> {
-                BackupImporter.import(context, db, SettingsRepository(context), truncated)
+                BackupImporter.import(context, db, createSettingsRepository(context), truncated)
             }
 
-            assertEquals(1, db.noteDao().getAllOnce().size)
-            assertEquals(1, db.taskDao().getAllOnce().size)
-            assertEquals(2, db.chatDao().getAllOnce().size)
+            assertEquals(1, db.noteDao.getAllOnce().size)
+            assertEquals(1, db.taskDao.getAllOnce().size)
+            assertEquals(2, db.chatDao.getAllOnce().size)
         }
     }
 
@@ -159,7 +159,7 @@ class BackupRoundTripTest {
             com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir)
             try {
                 val db = AppDatabase.createForTesting(context)
-                val settings = SettingsRepository(context)
+                val settings = createSettingsRepository(context)
                 val harnessHome = com.lucent.app.harness.HarnessRuntime.home()
                 File(harnessHome, "todos").mkdirs()
                 File(harnessHome, "todos").resolve("today.json").writeText("""{"items":["buy milk"]}""")
@@ -185,7 +185,7 @@ class BackupRoundTripTest {
                     val context2 = TestContext(dir2)
                     com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir2)
                     val db2 = AppDatabase.createForTesting(context2)
-                    val settings2 = SettingsRepository(context2)
+                    val settings2 = createSettingsRepository(context2)
                     val bytes = payload.toByteArray()
 
                     val preview = BackupManager.inspect(context2, bytes, null)
@@ -228,7 +228,7 @@ class BackupRoundTripTest {
             com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir)
             try {
                 val db = AppDatabase.createForTesting(context)
-                val settings = SettingsRepository(context)
+                val settings = createSettingsRepository(context)
                 val harnessHome = com.lucent.app.harness.HarnessRuntime.home()
                 File(harnessHome, "todos").mkdirs()
                 File(harnessHome, "todos").resolve("today.json").writeText("original")
@@ -246,7 +246,7 @@ class BackupRoundTripTest {
                     val context2 = TestContext(dir2)
                     com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir2)
                     val db2 = AppDatabase.createForTesting(context2)
-                    val settings2 = SettingsRepository(context2)
+                    val settings2 = createSettingsRepository(context2)
                     val bytes = payload.toByteArray()
                     val preview = BackupManager.inspect(context2, bytes, null)
 

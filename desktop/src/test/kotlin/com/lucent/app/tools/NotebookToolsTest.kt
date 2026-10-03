@@ -93,9 +93,9 @@ class NotebookToolsTest {
             val created = exec(db, "create_notebook", """{"title":"Trips"}""")
             assertTrue(created.success)
             assertTrue(created.summary.contains("Trips"))
-            assertEquals(1, db.notebookDao().getAllOnce().size)
+            assertEquals(1, db.notebookDao.getAllOnce().size)
 
-            db.noteDao().insert(Note(title = "Osaka hotel", body = "booked"))
+            db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
             val added = exec(db, "add_to_notebook", """{"notebook":"Trips","title":"Osaka hotel"}""")
             assertTrue(added.success, "got ${added.summary}")
             val listed = exec(db, "list_notebooks", "{}")
@@ -111,7 +111,7 @@ class NotebookToolsTest {
             val db = AppDatabase.createForTesting(TestContext(dir))
             val created = exec(db, "create_notebook", """{"title":"   "}""")
             assertFalse(created.success)
-            assertTrue(db.notebookDao().getAllOnce().isEmpty())
+            assertTrue(db.notebookDao.getAllOnce().isEmpty())
         }
     }
 
@@ -120,7 +120,7 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            db.notebookDao().insert(Notebook(title = "Work"))
+            db.notebookDao.insert(Notebook(title = "Work"))
             val listed = exec(db, "list_notebook_items", """{"notebook":"Holiday"}""")
             assertFalse(listed.success)
             assertTrue(listed.summary.contains("Work"), "got ${listed.summary}")
@@ -132,16 +132,16 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            val tripsId = db.notebookDao().insert(Notebook(title = "Trips"))
-            val workId = db.notebookDao().insert(Notebook(title = "Work"))
-            val noteId = db.noteDao().insert(Note(title = "Osaka hotel", body = "booked"))
+            val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
+            val workId = db.notebookDao.insert(Notebook(title = "Work"))
+            val noteId = db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
 
             val added = exec(
                 db, "add_to_notebook",
                 """{"notebook":"Trips","title":"Osaka hotel","item_type":"note"}"""
             )
             assertTrue(added.success, added.summary)
-            assertEquals(1, db.notebookDao().membershipExistsOnce(tripsId, NotebookItem.KIND_NOTE, noteId))
+            assertEquals(1, db.notebookDao.membershipExistsOnce(tripsId, NotebookItem.KIND_NOTE, noteId))
 
             val again = exec(
                 db, "add_to_notebook",
@@ -149,7 +149,7 @@ class NotebookToolsTest {
             )
             assertTrue(again.success)
             assertTrue(again.summary.contains("already"), "got ${again.summary}")
-            assertEquals(1, db.notebookDao().getItemsOnce(tripsId).size)
+            assertEquals(1, db.notebookDao.getItemsOnce(tripsId).size)
 
             val listed = exec(db, "list_notebook_items", """{"notebook":"Trips"}""")
             assertTrue(listed.summary.contains("Osaka hotel"), "got ${listed.summary}")
@@ -159,16 +159,16 @@ class NotebookToolsTest {
                 """{"title":"Osaka hotel","to_notebook":"Work","item_type":"note"}"""
             )
             assertTrue(moved.success, moved.summary)
-            assertEquals(0, db.notebookDao().membershipExistsOnce(tripsId, NotebookItem.KIND_NOTE, noteId))
-            assertEquals(1, db.notebookDao().membershipExistsOnce(workId, NotebookItem.KIND_NOTE, noteId))
+            assertEquals(0, db.notebookDao.membershipExistsOnce(tripsId, NotebookItem.KIND_NOTE, noteId))
+            assertEquals(1, db.notebookDao.membershipExistsOnce(workId, NotebookItem.KIND_NOTE, noteId))
 
             val removed = exec(
                 db, "remove_from_notebook",
                 """{"notebook":"Work","title":"Osaka hotel","item_type":"note"}"""
             )
             assertTrue(removed.success, removed.summary)
-            assertEquals(0, db.notebookDao().membershipExistsOnce(workId, NotebookItem.KIND_NOTE, noteId))
-            assertNotNull(db.noteDao().getByIdOnce(noteId))
+            assertEquals(0, db.notebookDao.membershipExistsOnce(workId, NotebookItem.KIND_NOTE, noteId))
+            assertNotNull(db.noteDao.getByIdOnce(noteId))
         }
     }
 
@@ -177,22 +177,22 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            val workId = db.notebookDao().insert(Notebook(title = "Work"))
-            val noteId = db.noteDao().insert(Note(title = "Invoice", body = ""))
-            val taskId = db.taskDao().insert(Task(title = "Invoice"))
+            val workId = db.notebookDao.insert(Notebook(title = "Work"))
+            val noteId = db.noteDao.insert(Note(title = "Invoice", body = ""))
+            val taskId = db.taskDao.insert(Task(title = "Invoice"))
 
             val ambiguous = exec(db, "add_to_notebook", """{"notebook":"Work","title":"Invoice"}""")
             assertFalse(ambiguous.success)
             assertTrue(ambiguous.summary.contains("item_type"), "got ${ambiguous.summary}")
-            assertEquals(0, db.notebookDao().getItemsOnce(workId).size)
+            assertEquals(0, db.notebookDao.getItemsOnce(workId).size)
 
             val resolved = exec(
                 db, "add_to_notebook",
                 """{"notebook":"Work","title":"Invoice","item_type":"task"}"""
             )
             assertTrue(resolved.success, resolved.summary)
-            assertEquals(1, db.notebookDao().membershipExistsOnce(workId, NotebookItem.KIND_TASK, taskId))
-            assertEquals(0, db.notebookDao().membershipExistsOnce(workId, NotebookItem.KIND_NOTE, noteId))
+            assertEquals(1, db.notebookDao.membershipExistsOnce(workId, NotebookItem.KIND_TASK, taskId))
+            assertEquals(0, db.notebookDao.membershipExistsOnce(workId, NotebookItem.KIND_NOTE, noteId))
         }
     }
 
@@ -201,9 +201,9 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            db.notebookDao().insert(Notebook(title = "Trips"))
-            db.notebookDao().insert(Notebook(title = "Work"))
-            db.noteDao().insert(Note(title = "Packing list", body = "socks"))
+            db.notebookDao.insert(Notebook(title = "Trips"))
+            db.notebookDao.insert(Notebook(title = "Work"))
+            db.noteDao.insert(Note(title = "Packing list", body = "socks"))
 
             val moved = exec(
                 db, "move_to_notebook",
@@ -219,12 +219,12 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            val tripsId = db.notebookDao().insert(Notebook(title = "Trips"))
-            db.notebookDao().insert(Notebook(title = "Work"))
-            val insideId = db.noteDao().insert(Note(title = "Osaka hotel", body = "booked"))
-            db.noteDao().insert(Note(title = "Hotel budget", body = "too much"))
+            val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
+            db.notebookDao.insert(Notebook(title = "Work"))
+            val insideId = db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
+            db.noteDao.insert(Note(title = "Hotel budget", body = "too much"))
 
-            db.notebookDao().insertItem(
+            db.notebookDao.insertItem(
                 NotebookItem(notebookId = tripsId, itemKind = NotebookItem.KIND_NOTE, itemId = insideId)
             )
 
@@ -244,26 +244,26 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            val tripsId = db.notebookDao().insert(Notebook(title = "Trips"))
-            val noteId = db.noteDao().insert(Note(title = "Osaka hotel", body = "booked"))
-            db.notebookDao().insertItem(
+            val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
+            val noteId = db.noteDao.insert(Note(title = "Osaka hotel", body = "booked"))
+            db.notebookDao.insertItem(
                 NotebookItem(notebookId = tripsId, itemKind = NotebookItem.KIND_NOTE, itemId = noteId)
             )
 
             val deleted = exec(db, "delete_notebook", """{"notebook":"Trips"}""")
             assertTrue(deleted.success, deleted.summary)
             assertTrue(deleted.summary.contains("not deleted"), "got ${deleted.summary}")
-            assertTrue(db.notebookDao().getAllOnce().isEmpty())
-            assertEquals(1, db.notebookDao().getTrashedOnce().size)
-            assertEquals(1, db.notebookDao().getItemsOnce(tripsId).size)
-            assertNotNull(db.noteDao().getByIdOnce(noteId))
+            assertTrue(db.notebookDao.getAllOnce().isEmpty())
+            assertEquals(1, db.notebookDao.getTrashedOnce().size)
+            assertEquals(1, db.notebookDao.getItemsOnce(tripsId).size)
+            assertNotNull(db.noteDao.getByIdOnce(noteId))
 
             val trash = exec(db, "list_notebook_trash", "{}")
             assertTrue(trash.summary.contains("Trips"), trash.summary)
 
             val restored = exec(db, "restore_notebook_from_trash", """{"notebook":"Trips"}""")
             assertTrue(restored.success, restored.summary)
-            assertEquals(1, db.notebookDao().getAllOnce().size)
+            assertEquals(1, db.notebookDao.getAllOnce().size)
         }
     }
 
@@ -272,11 +272,11 @@ class NotebookToolsTest {
         val dir = freshDir()
         use(dir) {
             val db = AppDatabase.createForTesting(TestContext(dir))
-            val tripsId = db.notebookDao().insert(Notebook(title = "Trips"))
+            val tripsId = db.notebookDao.insert(Notebook(title = "Trips"))
 
             val renamed = exec(db, "rename_notebook", """{"notebook":"Trip","new_title":"Travel"}""")
             assertTrue(renamed.success, renamed.summary)
-            assertEquals("Travel", db.notebookDao().getByIdOnce(tripsId)?.title)
+            assertEquals("Travel", db.notebookDao.getByIdOnce(tripsId)?.title)
 
             val blank = exec(db, "rename_notebook", """{"notebook":"Travel","new_title":" "}""")
             assertFalse(blank.success)

@@ -10,6 +10,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.lucent.app.MainActivity
 import com.lucent.app.R
 import com.lucent.app.data.SettingsRepository
+import com.lucent.app.data.createSettingsRepository
 
 class ReminderReceiver : BroadcastReceiver() {
 
@@ -24,7 +25,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
         try {
             com.lucent.app.i18n.L.apply(
-                kotlinx.coroutines.runBlocking { SettingsRepository(context).appLanguageOnce() }
+                kotlinx.coroutines.runBlocking { createSettingsRepository(context).appLanguageOnce() }
             )
         } catch (_: Throwable) { }
 

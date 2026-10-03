@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -10,9 +11,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.File
 
-const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
-
-class SettingsRepository(private val context: Context) {
+class DesktopSettingsRepository(private val context: Context) : SettingsRepository {
 
     private object K {
         const val THEME_MODE = "theme_mode"
@@ -100,9 +99,9 @@ class SettingsRepository(private val context: Context) {
         const val PRIVILEGED_ENABLED = "privileged_enabled"
         const val HARNESS_CONFIG_ENC = "harness_config_enc"
 
-    const val TERMINAL_FONT_SIZE_ENC = "terminal_font_size_enc"
-    const val TERMINAL_KEY_BAR_VISIBLE_ENC = "terminal_key_bar_visible_enc"
-    const val GLOBAL_TEXT_SELECTION_ENABLED_ENC = "global_text_selection_enabled_enc"
+        const val TERMINAL_FONT_SIZE_ENC = "terminal_font_size_enc"
+        const val TERMINAL_KEY_BAR_VISIBLE_ENC = "terminal_key_bar_visible_enc"
+        const val GLOBAL_TEXT_SELECTION_ENABLED_ENC = "global_text_selection_enabled_enc"
     }
 
     private val file: File get() = File(context.applicationContext.filesDir, "lucent_settings.json")
@@ -120,7 +119,7 @@ class SettingsRepository(private val context: Context) {
     private fun ensureLoaded() {
         val path = file.absolutePath
         if (loadedFrom == path) return
-        synchronized(SettingsRepository::class.java) {
+        synchronized(DesktopSettingsRepository::class.java) {
             if (loadedFrom == path) return
             state.value = readFile()
             loadedFrom = path
@@ -178,109 +177,33 @@ class SettingsRepository(private val context: Context) {
     }
 
 
-    val baseUrl: Flow<String> = state.map { secret(it, K.BASE_URL_ENC, "") }
-    val apiSpec: Flow<String> = state.map { secret(it, K.API_SPEC_ENC, "openai") }
-    val model: Flow<String> = state.map { secret(it, K.MODEL_ENC, "") }
-    val assistantName: Flow<String> = state.map { secret(it, K.ASSISTANT_NAME_ENC, "Lucent") }
-    val assistantStyle: Flow<String> = state.map { secret(it, K.ASSISTANT_STYLE_ENC, "") }
+    override val baseUrl: Flow<String> = state.map { secret(it, K.BASE_URL_ENC, "") }
+    override val apiSpec: Flow<String> = state.map { secret(it, K.API_SPEC_ENC, "openai") }
+    override val model: Flow<String> = state.map { secret(it, K.MODEL_ENC, "") }
+    override val assistantName: Flow<String> = state.map { secret(it, K.ASSISTANT_NAME_ENC, "Lucent") }
+    override val assistantStyle: Flow<String> = state.map { secret(it, K.ASSISTANT_STYLE_ENC, "") }
 
 
-    val themeMode: Flow<String> = state.map { str(it, K.THEME_MODE) ?: "system" }
-    val palette: Flow<String> = state.map { str(it, K.PALETTE) ?: "CYCLE" }
-    val font: Flow<String> = state.map { str(it, K.FONT) ?: "system" }
+    override val themeMode: Flow<String> = state.map { str(it, K.THEME_MODE) ?: "system" }
+    override val palette: Flow<String> = state.map { str(it, K.PALETTE) ?: "CYCLE" }
+    override val font: Flow<String> = state.map { str(it, K.FONT) ?: "system" }
 
-    val dynamicColorEnabled: Flow<Boolean> =
+    override val dynamicColorEnabled: Flow<Boolean> =
         state.map { bool(it, K.DYNAMIC_COLOR_ENABLED) ?: false }
 
-    data class DisplayPrefs(val themeMode: String, val palette: String, val font: String)
-
-    suspend fun displayPrefsOnce(): DisplayPrefs {
+    override suspend fun displayPrefsOnce(): SettingsRepository.DisplayPrefs {
         val prefs = state.first()
-        return DisplayPrefs(
+        return SettingsRepository.DisplayPrefs(
             themeMode = str(prefs, K.THEME_MODE) ?: "system",
             palette = str(prefs, K.PALETTE) ?: "CYCLE",
             font = str(prefs, K.FONT) ?: "system"
         )
     }
 
-    data class StartupPrefs(
-        val display: DisplayPrefs,
-        val appLockEnabled: Boolean,
-        val startupLoggingEnabled: Boolean,
-        val systemIntegrationEnabled: Boolean,
-        val appLanguage: String = "system",
-        val assistantName: String = "Lucent",
-        val backgroundAnimationEnabled: Boolean = false,
-        val splashEnabled: Boolean = true,
-        val splashStyle: String = SplashStyle.DEFAULT.key,
-        val autoBackup: AutoBackup.State = AutoBackup.State.EMPTY,
-        val dynamicColor: Boolean = false,
-        val notesSort: String = "recent",
-        val tasksSort: String = "recent",
-        val notebooksSort: String = "recent",
-        val sessionSnapshot: String = "",
-        val assistantStyle: String = "",
-        val baseUrl: String = "",
-        val apiSpec: String = "openai",
-        val apiKey: String = "",
-        val model: String = "",
-        val apiProfilesJson: String = "",
-        val apiProfileSelected: Int = 0,
-        val noteHistoryEnabled: Boolean = true,
-        val taskHistoryEnabled: Boolean = true,
-        val crashShieldEnabled: Boolean = false,
-        val blackoutEnabled: Boolean = false,
-        val pwSelfDestructEnabled: Boolean = false,
-        val pwFirstRoundLimit: Int = PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT,
-        val pwLaterRoundLimit: Int = PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT,
-        val pwSelfDestructThreshold: Int = PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD,
-        val passwordAttemptState: String = "",
-        val appLockBiometricEnabled: Boolean = false,
-        val appLockHelloEnabled: Boolean = false,
-        val closeToTray: Boolean = true,
-        val openLinksExternally: Boolean = false,
-        val markdownEnabled: Boolean = false,
-        val richTextEnabled: Boolean = false,
-        val linksEnabled: Boolean = false,
-        val typingHapticsEnabled: Boolean = true,
-        val assistantConfirmToolsEnabled: Boolean = true,
-        val localModelEnabled: Boolean = false,
-        val localToolsEnabled: Boolean = false,
-        val localGpuEnabled: Boolean = false,
-        val localBackgroundReplyEnabled: Boolean = false,
-        val agentMode: Boolean = true,
-        val reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
-        val webSearchEngine: String = com.lucent.app.data.WebSearchEngine.DEFAULT.key,
-        val smallModelModeEnabled: Boolean = false,
-        val webSearchEnabled: Boolean = false,
-        val memoryTier: String = MemoryTier.DEFAULT.key,
-        val memoryTierLocal: String = MemoryTier.LOW.key,
-        val embeddingProvider: String = "local",
-        val cloudEnabled: Boolean = false,
-        val cloudProvider: String = "Nutstore",
-        val cloudUrl: String = "",
-        val cloudUser: String = "",
-        val cloudFolder: String = "Lucent",
-        val cloudAutoBackup: Boolean = false,
-
-        val terminalFontSize: Float? = null,
-        val terminalKeyBarVisible: Boolean = true,
-        val globalTextSelectionEnabled: Boolean = false,
-        val cloudPasswordEnc: String = "",
-        val updateChannel: String = "stable",
-        val installedPreviewIdentity: String = "",
-        val stagedUpdateIdentity: String = "",
-        val autoUpdateEnabled: Boolean = false,
-        val privilegedEnabled: Boolean = false,
-        val pendingUpdateVersion: String = "",
-        val stagedUpdateTag: String = "",
-        val stagedUpdateFiles: String = ""
-    )
-
-    suspend fun startupPrefsOnce(): StartupPrefs {
+    override suspend fun startupPrefsOnce(): SettingsRepository.StartupPrefs {
         val prefs = state.first()
-        return StartupPrefs(
-            display = DisplayPrefs(
+        return SettingsRepository.StartupPrefs(
+            display = SettingsRepository.DisplayPrefs(
                 themeMode = str(prefs, K.THEME_MODE) ?: "system",
                 palette = str(prefs, K.PALETTE) ?: "CYCLE",
                 font = str(prefs, K.FONT) ?: "system"
@@ -332,8 +255,8 @@ class SettingsRepository(private val context: Context) {
             localGpuEnabled = bool(prefs, K.LOCAL_GPU_ENABLED) ?: false,
             localBackgroundReplyEnabled = bool(prefs, K.LOCAL_BACKGROUND_REPLY) ?: false,
             agentMode = bool(prefs, K.AGENT_MODE) ?: true,
-            reasoning = str(prefs, K.REASONING_EFFORT) ?: com.lucent.app.data.ReasoningEffort.DEFAULT.key,
-            webSearchEngine = str(prefs, K.WEB_SEARCH_ENGINE) ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key,
+            reasoning = str(prefs, K.REASONING_EFFORT) ?: ReasoningEffort.DEFAULT.key,
+            webSearchEngine = str(prefs, K.WEB_SEARCH_ENGINE) ?: WebSearchEngine.DEFAULT.key,
             smallModelModeEnabled = bool(prefs, K.SMALL_MODEL_MODE) ?: false,
             webSearchEnabled = bool(prefs, K.WEB_SEARCH_ENABLED) ?: false,
             memoryTier = str(prefs, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key,
@@ -361,101 +284,101 @@ class SettingsRepository(private val context: Context) {
     }
 
 
-    val appLanguage: Flow<String> = state.map { str(it, K.APP_LANGUAGE) ?: "system" }
-    suspend fun setAppLanguage(value: String) {
+    override val appLanguage: Flow<String> = state.map { str(it, K.APP_LANGUAGE) ?: "system" }
+    override suspend fun setAppLanguage(value: String) {
         edit { it[K.APP_LANGUAGE] = value }
         SettingsCache.appLanguage = value
     }
-    suspend fun appLanguageOnce(): String = str(state.first(), K.APP_LANGUAGE) ?: "system"
+    override suspend fun appLanguageOnce(): String = str(state.first(), K.APP_LANGUAGE) ?: "system"
 
 
-    val localModelEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_MODEL_ENABLED) ?: false }
+    override val localModelEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_MODEL_ENABLED) ?: false }
 
-    suspend fun setLocalModelEnabled(value: Boolean) {
+    override suspend fun setLocalModelEnabled(value: Boolean) {
         edit { it[K.LOCAL_MODEL_ENABLED] = value }
         SettingsCache.localModelEnabled = value
     }
 
-    val memoryTierLocal: Flow<String> = state.map { str(it, K.MEMORY_TIER_LOCAL) ?: MemoryTier.LOW.key }
-    suspend fun setMemoryTierLocal(value: String) {
+    override val memoryTierLocal: Flow<String> = state.map { str(it, K.MEMORY_TIER_LOCAL) ?: MemoryTier.LOW.key }
+    override suspend fun setMemoryTierLocal(value: String) {
         edit { it[K.MEMORY_TIER_LOCAL] = value }
         SettingsCache.memoryTierLocal = value
     }
 
-    val agentMode: Flow<Boolean> = state.map { bool(it, K.AGENT_MODE) ?: true }
-    suspend fun setAgentMode(value: Boolean) {
+    override val agentMode: Flow<Boolean> = state.map { bool(it, K.AGENT_MODE) ?: true }
+    override suspend fun setAgentMode(value: Boolean) {
         edit { it[K.AGENT_MODE] = value }
         SettingsCache.agentMode = value
     }
 
-    val reasoning: Flow<String> = state.map {
-        str(it, K.REASONING_EFFORT) ?: com.lucent.app.data.ReasoningEffort.DEFAULT.key
+    override val reasoning: Flow<String> = state.map {
+        str(it, K.REASONING_EFFORT) ?: ReasoningEffort.DEFAULT.key
     }
-    suspend fun setReasoning(value: String) {
+    override suspend fun setReasoning(value: String) {
         edit { it[K.REASONING_EFFORT] = value }
         SettingsCache.reasoning = value
     }
 
-    val webSearchEngine: Flow<String> = state.map {
-        str(it, K.WEB_SEARCH_ENGINE) ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key
+    override val webSearchEngine: Flow<String> = state.map {
+        str(it, K.WEB_SEARCH_ENGINE) ?: WebSearchEngine.DEFAULT.key
     }
-    suspend fun setWebSearchEngine(value: String) {
-        val engine = com.lucent.app.data.WebSearchEngine.fromKey(value).key
+    override suspend fun setWebSearchEngine(value: String) {
+        val engine = WebSearchEngine.fromKey(value).key
         edit { it[K.WEB_SEARCH_ENGINE] = engine }
         SettingsCache.webSearchEngine = engine
     }
 
-    suspend fun webSearchEngineOnce(): String =
-        str(state.first(), K.WEB_SEARCH_ENGINE) ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key
+    override suspend fun webSearchEngineOnce(): String =
+        str(state.first(), K.WEB_SEARCH_ENGINE) ?: WebSearchEngine.DEFAULT.key
 
-    val localBackgroundReplyEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_BACKGROUND_REPLY) ?: false }
-    suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
+    override val localBackgroundReplyEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_BACKGROUND_REPLY) ?: false }
+    override suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
         edit { it[K.LOCAL_BACKGROUND_REPLY] = value }
         SettingsCache.localBackgroundReplyEnabled = value
     }
-    suspend fun localBackgroundReplyEnabledOnce(): Boolean =
+    override suspend fun localBackgroundReplyEnabledOnce(): Boolean =
         bool(state.first(), K.LOCAL_BACKGROUND_REPLY) ?: false
 
-    val localToolsEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_TOOLS_ENABLED) ?: false }
-    suspend fun setLocalToolsEnabled(value: Boolean) {
+    override val localToolsEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_TOOLS_ENABLED) ?: false }
+    override suspend fun setLocalToolsEnabled(value: Boolean) {
         edit { it[K.LOCAL_TOOLS_ENABLED] = value }
         SettingsCache.localToolsEnabled = value
     }
 
-    val smallModelModeEnabled: Flow<Boolean> = state.map { bool(it, K.SMALL_MODEL_MODE) ?: false }
-    suspend fun setSmallModelModeEnabled(value: Boolean) {
+    override val smallModelModeEnabled: Flow<Boolean> = state.map { bool(it, K.SMALL_MODEL_MODE) ?: false }
+    override suspend fun setSmallModelModeEnabled(value: Boolean) {
         edit { it[K.SMALL_MODEL_MODE] = value }
         SettingsCache.smallModelModeEnabled = value
     }
 
-    val localGpuEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_GPU_ENABLED) ?: false }
-    suspend fun setLocalGpuEnabled(value: Boolean) {
+    override val localGpuEnabled: Flow<Boolean> = state.map { bool(it, K.LOCAL_GPU_ENABLED) ?: false }
+    override suspend fun setLocalGpuEnabled(value: Boolean) {
         edit { it[K.LOCAL_GPU_ENABLED] = value }
         SettingsCache.localGpuEnabled = value
     }
 
 
-    val apiKey: Flow<String> = state.map { prefs ->
+    override val apiKey: Flow<String> = state.map { prefs ->
         val stored = str(prefs, K.API_KEY_ENC) ?: ""
         if (stored.isEmpty()) "" else LocalSecrets.decrypt(stored)
     }
 
-    val apiProfilesJson: Flow<String> = state.map { prefs ->
+    override val apiProfilesJson: Flow<String> = state.map { prefs ->
         val stored = str(prefs, K.API_PROFILES_ENC) ?: ""
         if (stored.isEmpty()) "" else LocalSecrets.decrypt(stored)
     }
 
-    val apiProfileSelected: Flow<Int> = state.map { int(it, K.API_PROFILE_SELECTED) ?: 0 }
+    override val apiProfileSelected: Flow<Int> = state.map { int(it, K.API_PROFILE_SELECTED) ?: 0 }
 
-    val attachmentsMigrated: Flow<Boolean> = state.map { bool(it, K.ATTACHMENTS_MIGRATED) ?: false }
-    suspend fun setAttachmentsMigrated(value: Boolean) { edit { it[K.ATTACHMENTS_MIGRATED] = value } }
+    override val attachmentsMigrated: Flow<Boolean> = state.map { bool(it, K.ATTACHMENTS_MIGRATED) ?: false }
+    override suspend fun setAttachmentsMigrated(value: Boolean) { edit { it[K.ATTACHMENTS_MIGRATED] = value } }
 
-    val backupPassword: Flow<String> = state.map { prefs ->
+    override val backupPassword: Flow<String> = state.map { prefs ->
         val stored = str(prefs, K.BACKUP_PASSWORD_ENC) ?: ""
         if (stored.isEmpty()) "" else LocalSecrets.decrypt(stored)
     }
 
-    suspend fun setBackupPassword(value: String) {
+    override suspend fun setBackupPassword(value: String) {
         edit { prefs ->
             if (value.isEmpty()) prefs.remove(K.BACKUP_PASSWORD_ENC)
             else prefs[K.BACKUP_PASSWORD_ENC] = LocalSecrets.encrypt(value)
@@ -463,84 +386,84 @@ class SettingsRepository(private val context: Context) {
     }
 
 
-    val notesSort: Flow<String> = state.map { str(it, K.NOTES_SORT) ?: "recent" }
-    val tasksSort: Flow<String> = state.map { str(it, K.TASKS_SORT) ?: "recent" }
-    val notebooksSort: Flow<String> = state.map { str(it, K.NOTEBOOKS_SORT) ?: "recent" }
-    suspend fun setNotesSort(value: String) {
+    override val notesSort: Flow<String> = state.map { str(it, K.NOTES_SORT) ?: "recent" }
+    override val tasksSort: Flow<String> = state.map { str(it, K.TASKS_SORT) ?: "recent" }
+    override val notebooksSort: Flow<String> = state.map { str(it, K.NOTEBOOKS_SORT) ?: "recent" }
+    override suspend fun setNotesSort(value: String) {
         SettingsCache.notesSort = value
         edit { it[K.NOTES_SORT] = value }
     }
-    suspend fun setTasksSort(value: String) {
+    override suspend fun setTasksSort(value: String) {
         SettingsCache.tasksSort = value
         edit { it[K.TASKS_SORT] = value }
     }
 
-    suspend fun setNotebooksSort(value: String) {
+    override suspend fun setNotebooksSort(value: String) {
         SettingsCache.notebooksSort = value
         edit { it[K.NOTEBOOKS_SORT] = value }
     }
 
-    val notebookOpens: Flow<String> = state.map { secret(it, K.NOTEBOOK_OPENS_ENC, "{}") }
-    suspend fun notebookOpensOnce(): String = notebookOpens.first()
-    suspend fun setNotebookOpens(value: String) = putSecret(K.NOTEBOOK_OPENS_ENC, value)
+    override val notebookOpens: Flow<String> = state.map { secret(it, K.NOTEBOOK_OPENS_ENC, "{}") }
+    override suspend fun notebookOpensOnce(): String = notebookOpens.first()
+    override suspend fun setNotebookOpens(value: String) = putSecret(K.NOTEBOOK_OPENS_ENC, value)
 
-    val noteHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.NOTE_HISTORY_ENABLED) ?: true }
-    val taskHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.TASK_HISTORY_ENABLED) ?: true }
-    suspend fun setNoteHistoryEnabled(value: Boolean) {
+    override val noteHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.NOTE_HISTORY_ENABLED) ?: true }
+    override val taskHistoryEnabled: Flow<Boolean> = state.map { bool(it, K.TASK_HISTORY_ENABLED) ?: true }
+    override suspend fun setNoteHistoryEnabled(value: Boolean) {
         SettingsCache.noteHistoryEnabled = value
         edit { it[K.NOTE_HISTORY_ENABLED] = value }
     }
-    suspend fun setTaskHistoryEnabled(value: Boolean) {
+    override suspend fun setTaskHistoryEnabled(value: Boolean) {
         SettingsCache.taskHistoryEnabled = value
         edit { it[K.TASK_HISTORY_ENABLED] = value }
     }
 
-    val autoBackup: Flow<AutoBackup.State> =
+    override val autoBackup: Flow<AutoBackup.State> =
         state.map { AutoBackup.State.fromJson(str(it, K.AUTO_BACKUP) ?: "") }
-    suspend fun autoBackupOnce(): AutoBackup.State =
+    override suspend fun autoBackupOnce(): AutoBackup.State =
         AutoBackup.State.fromJson(str(state.first(), K.AUTO_BACKUP) ?: "")
-    suspend fun setAutoBackup(value: AutoBackup.State) {
-        SettingsCache.autoBackup = value
-        edit { it[K.AUTO_BACKUP] = value.toJson() }
+    override suspend fun setAutoBackup(state: AutoBackup.State) {
+        SettingsCache.autoBackup = state
+        edit { it[K.AUTO_BACKUP] = state.toJson() }
     }
 
-    val memoryTier: Flow<String> = state.map { str(it, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key }
-    suspend fun setMemoryTier(value: String) {
+    override val memoryTier: Flow<String> = state.map { str(it, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key }
+    override suspend fun setMemoryTier(value: String) {
         edit { it[K.MEMORY_TIER] = value }
         SettingsCache.memoryTier = value
     }
 
-    val webSearchEnabled: Flow<Boolean> = state.map { bool(it, K.WEB_SEARCH_ENABLED) ?: false }
-    suspend fun setWebSearchEnabled(value: Boolean) {
+    override val webSearchEnabled: Flow<Boolean> = state.map { bool(it, K.WEB_SEARCH_ENABLED) ?: false }
+    override suspend fun setWebSearchEnabled(value: Boolean) {
         edit { it[K.WEB_SEARCH_ENABLED] = value }
         SettingsCache.webSearchEnabled = value
     }
 
-    val assistantConfirmToolsEnabled: Flow<Boolean> = state.map { bool(it, K.ASSISTANT_CONFIRM_TOOLS) ?: true }
-    suspend fun setAssistantConfirmTools(value: Boolean) {
+    override val assistantConfirmToolsEnabled: Flow<Boolean> = state.map { bool(it, K.ASSISTANT_CONFIRM_TOOLS) ?: true }
+    override suspend fun setAssistantConfirmTools(value: Boolean) {
         edit { it[K.ASSISTANT_CONFIRM_TOOLS] = value }
         SettingsCache.assistantConfirmToolsEnabled = value
     }
 
-    val typingHapticsEnabled: Flow<Boolean> = state.map { bool(it, K.TYPING_HAPTICS) ?: true }
-    suspend fun setTypingHapticsEnabled(value: Boolean) {
+    override val typingHapticsEnabled: Flow<Boolean> = state.map { bool(it, K.TYPING_HAPTICS) ?: true }
+    override suspend fun setTypingHapticsEnabled(value: Boolean) {
         SettingsCache.typingHapticsEnabled = value
         edit { it[K.TYPING_HAPTICS] = value }
     }
 
 
 
-    val lastScreen: Flow<String> = state.map { str(it, K.LAST_SCREEN) ?: "" }
-    suspend fun lastScreenOnce(): String = str(state.first(), K.LAST_SCREEN) ?: ""
-    suspend fun setLastScreen(value: String) { edit { it[K.LAST_SCREEN] = value } }
+    override val lastScreen: Flow<String> = state.map { str(it, K.LAST_SCREEN) ?: "" }
+    override suspend fun lastScreenOnce(): String = str(state.first(), K.LAST_SCREEN) ?: ""
+    override suspend fun setLastScreen(value: String) { edit { it[K.LAST_SCREEN] = value } }
 
-    suspend fun setSessionSnapshot(value: String) { edit { it[K.SESSION_SNAPSHOT] = value } }
-    suspend fun sessionSnapshotOnce(): String = str(state.first(), K.SESSION_SNAPSHOT) ?: ""
+    override suspend fun setSessionSnapshot(value: String) { edit { it[K.SESSION_SNAPSHOT] = value } }
+    override suspend fun sessionSnapshotOnce(): String = str(state.first(), K.SESSION_SNAPSHOT) ?: ""
 
-    val blackoutEnabled: Flow<Boolean> = state.map { bool(it, K.BLACKOUT_ENABLED) ?: false }
-    suspend fun blackoutEnabledOnce(): Boolean = bool(state.first(), K.BLACKOUT_ENABLED) ?: false
+    override val blackoutEnabled: Flow<Boolean> = state.map { bool(it, K.BLACKOUT_ENABLED) ?: false }
+    override suspend fun blackoutEnabledOnce(): Boolean = bool(state.first(), K.BLACKOUT_ENABLED) ?: false
 
-    suspend fun setBlackoutEnabled(value: Boolean) {
+    override suspend fun setBlackoutEnabled(value: Boolean) {
         edit { prefs ->
             val wasEnabled = prefs[K.BLACKOUT_ENABLED] as? Boolean ?: false
             prefs[K.BLACKOUT_ENABLED] = value
@@ -561,12 +484,12 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.blackoutEnabled = value
     }
 
-    suspend fun appLockWasOnBeforeBlackout(): Boolean =
+    override suspend fun appLockWasOnBeforeBlackout(): Boolean =
         bool(state.first(), K.APP_LOCK_PREBLACKOUT) ?: false
 
-    val crashShieldEnabled: Flow<Boolean> = state.map { bool(it, K.CRASH_SHIELD_ENABLED) ?: false }
-    suspend fun crashShieldEnabledOnce(): Boolean = bool(state.first(), K.CRASH_SHIELD_ENABLED) ?: false
-    suspend fun setCrashShieldEnabled(value: Boolean) {
+    override val crashShieldEnabled: Flow<Boolean> = state.map { bool(it, K.CRASH_SHIELD_ENABLED) ?: false }
+    override suspend fun crashShieldEnabledOnce(): Boolean = bool(state.first(), K.CRASH_SHIELD_ENABLED) ?: false
+    override suspend fun setCrashShieldEnabled(value: Boolean) {
         edit {
             it[K.CRASH_SHIELD_ENABLED] = value
             if (value) it[K.STARTUP_LOGGING_ENABLED] = true
@@ -575,74 +498,74 @@ class SettingsRepository(private val context: Context) {
         if (value) SettingsCache.startupLoggingEnabled = true
     }
 
-    val passwordAttemptState: Flow<String> = state.map { str(it, K.PW_ATTEMPT_STATE) ?: "" }
-    suspend fun passwordAttemptStateOnce(): String = str(state.first(), K.PW_ATTEMPT_STATE) ?: ""
-    suspend fun setPasswordAttemptState(json: String) {
+    override val passwordAttemptState: Flow<String> = state.map { str(it, K.PW_ATTEMPT_STATE) ?: "" }
+    override suspend fun passwordAttemptStateOnce(): String = str(state.first(), K.PW_ATTEMPT_STATE) ?: ""
+    override suspend fun setPasswordAttemptState(json: String) {
         SettingsCache.passwordAttemptState = json
         edit { it[K.PW_ATTEMPT_STATE] = json }
     }
 
-    val pwFirstRoundLimit: Flow<Int> =
+    override val pwFirstRoundLimit: Flow<Int> =
         state.map { int(it, K.PW_FIRST_ROUND_LIMIT) ?: PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT }
-    val pwLaterRoundLimit: Flow<Int> =
+    override val pwLaterRoundLimit: Flow<Int> =
         state.map { int(it, K.PW_LATER_ROUND_LIMIT) ?: PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT }
-    suspend fun setPwFirstRoundLimit(value: Int) {
+    override suspend fun setPwFirstRoundLimit(value: Int) {
         val safe = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
         SettingsCache.pwFirstRoundLimit = safe
         edit { it[K.PW_FIRST_ROUND_LIMIT] = safe }
     }
-    suspend fun setPwLaterRoundLimit(value: Int) {
+    override suspend fun setPwLaterRoundLimit(value: Int) {
         val safe = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
         SettingsCache.pwLaterRoundLimit = safe
         edit { it[K.PW_LATER_ROUND_LIMIT] = safe }
     }
 
-    val pwSelfDestructEnabled: Flow<Boolean> = state.map { bool(it, K.PW_SELF_DESTRUCT_ENABLED) ?: false }
-    val pwSelfDestructThreshold: Flow<Int> =
+    override val pwSelfDestructEnabled: Flow<Boolean> = state.map { bool(it, K.PW_SELF_DESTRUCT_ENABLED) ?: false }
+    override val pwSelfDestructThreshold: Flow<Int> =
         state.map { int(it, K.PW_SELF_DESTRUCT_THRESHOLD) ?: PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD }
-    suspend fun setPwSelfDestructEnabled(value: Boolean) {
+    override suspend fun setPwSelfDestructEnabled(value: Boolean) {
         SettingsCache.pwSelfDestructEnabled = value
         edit { it[K.PW_SELF_DESTRUCT_ENABLED] = value }
     }
-    suspend fun setPwSelfDestructThreshold(value: Int) {
+    override suspend fun setPwSelfDestructThreshold(value: Int) {
         val safe = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
         SettingsCache.pwSelfDestructThreshold = safe
         edit { it[K.PW_SELF_DESTRUCT_THRESHOLD] = safe }
     }
 
-    val openLinksExternally: Flow<Boolean> = state.map { bool(it, K.OPEN_LINKS_EXTERNALLY) ?: false }
-    suspend fun setOpenLinksExternally(value: Boolean) {
+    override val openLinksExternally: Flow<Boolean> = state.map { bool(it, K.OPEN_LINKS_EXTERNALLY) ?: false }
+    override suspend fun setOpenLinksExternally(value: Boolean) {
         SettingsCache.openLinksExternally = value
         edit { it[K.OPEN_LINKS_EXTERNALLY] = value }
     }
 
 
-    val updateChannel: Flow<String> = state.map {
+    override val updateChannel: Flow<String> = state.map {
         secret(it, K.UPDATE_CHANNEL_ENC, "stable")
     }
-    suspend fun setUpdateChannel(value: String) {
+    override suspend fun setUpdateChannel(value: String) {
         SettingsCache.updateChannel = value
         putSecret(K.UPDATE_CHANNEL_ENC, value)
     }
 
-    val installedPreviewIdentity: Flow<String> = state.map { str(it, K.INSTALLED_PREVIEW_IDENTITY) ?: "" }
-    suspend fun setInstalledPreviewIdentity(value: String) {
+    override val installedPreviewIdentity: Flow<String> = state.map { str(it, K.INSTALLED_PREVIEW_IDENTITY) ?: "" }
+    override suspend fun setInstalledPreviewIdentity(value: String) {
         SettingsCache.installedPreviewIdentity = value
         edit { it[K.INSTALLED_PREVIEW_IDENTITY] = value }
     }
 
-    suspend fun setStagedUpdateIdentity(value: String) {
+    override suspend fun setStagedUpdateIdentity(value: String) {
         SettingsCache.stagedUpdateIdentity = value
         edit { it[K.STAGED_UPDATE_IDENTITY] = value }
     }
 
-    val autoUpdateEnabled: Flow<Boolean> = state.map { bool(it, K.AUTO_UPDATE_ENABLED) ?: false }
-    suspend fun setAutoUpdateEnabled(value: Boolean) {
+    override val autoUpdateEnabled: Flow<Boolean> = state.map { bool(it, K.AUTO_UPDATE_ENABLED) ?: false }
+    override suspend fun setAutoUpdateEnabled(value: Boolean) {
         SettingsCache.autoUpdateEnabled = value
         edit { it[K.AUTO_UPDATE_ENABLED] = value }
     }
 
-    suspend fun setStagedUpdate(tag: String, files: List<String>) {
+    override suspend fun setStagedUpdate(tag: String, files: List<String>) {
         edit { prefs ->
             if (tag.isBlank()) {
                 prefs.remove(K.STAGED_UPDATE_TAG)
@@ -654,130 +577,129 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val pendingUpdateVersion: Flow<String> = state.map { str(it, K.PENDING_UPDATE_VERSION) ?: "" }
-    suspend fun setPendingUpdateVersion(value: String) {
+    override val pendingUpdateVersion: Flow<String> = state.map { str(it, K.PENDING_UPDATE_VERSION) ?: "" }
+    override suspend fun setPendingUpdateVersion(value: String) {
         edit { prefs ->
             if (value.isBlank()) prefs.remove(K.PENDING_UPDATE_VERSION)
             else prefs[K.PENDING_UPDATE_VERSION] = value
         }
     }
 
-    val privilegedEnabled: Flow<Boolean> = state.map { bool(it, K.PRIVILEGED_ENABLED) ?: false }
-    suspend fun setPrivilegedEnabled(value: Boolean) {
+    override val privilegedEnabled: Flow<Boolean> = state.map { bool(it, K.PRIVILEGED_ENABLED) ?: false }
+    override suspend fun setPrivilegedEnabled(value: Boolean) {
         SettingsCache.privilegedEnabled = value
         edit { it[K.PRIVILEGED_ENABLED] = value }
     }
 
-    val markdownEnabled: Flow<Boolean> = state.map { bool(it, K.MARKDOWN_ENABLED) ?: false }
-    val richTextEnabled: Flow<Boolean> = state.map { bool(it, K.RICH_TEXT_ENABLED) ?: false }
-    val closeToTray: Flow<Boolean> = state.map { bool(it, K.CLOSE_TO_TRAY) ?: true }
-    suspend fun setCloseToTray(value: Boolean) {
+    override val markdownEnabled: Flow<Boolean> = state.map { bool(it, K.MARKDOWN_ENABLED) ?: false }
+    override val richTextEnabled: Flow<Boolean> = state.map { bool(it, K.RICH_TEXT_ENABLED) ?: false }
+    override suspend fun setMarkdownEnabled(value: Boolean) {
+        edit { it[K.MARKDOWN_ENABLED] = value }
+        SettingsCache.markdownEnabled = value
+    }
+    override suspend fun setRichTextEnabled(value: Boolean) {
+        edit { it[K.RICH_TEXT_ENABLED] = value }
+        SettingsCache.richTextEnabled = value
+    }
+
+    override val closeToTray: Flow<Boolean> = state.map { bool(it, K.CLOSE_TO_TRAY) ?: true }
+    override suspend fun setCloseToTray(value: Boolean) {
         SettingsCache.closeToTray = value
         edit { it[K.CLOSE_TO_TRAY] = value }
     }
-    val savedSearches: Flow<String> = state.map { str(it, K.SAVED_SEARCHES) ?: "" }
-    suspend fun setSavedSearches(json: String) { edit { it[K.SAVED_SEARCHES] = json } }
+    override val savedSearches: Flow<String> = state.map { str(it, K.SAVED_SEARCHES) ?: "" }
+    override suspend fun setSavedSearches(json: String) { edit { it[K.SAVED_SEARCHES] = json } }
 
-    val harnessConfig: Flow<String> = state.map { secret(it, K.HARNESS_CONFIG_ENC, "") }
+    override val harnessConfig: Flow<String> = state.map { secret(it, K.HARNESS_CONFIG_ENC, "") }
 
-    suspend fun setHarnessConfig(json: String) {
+    override suspend fun setHarnessConfig(json: String) {
         SettingsCache.harnessConfigJson = json
         val sealed = LocalSecrets.encrypt(json)
         edit { it[K.HARNESS_CONFIG_ENC] = sealed }
     }
 
-    suspend fun harnessConfigOnce(): String = secret(state.first(), K.HARNESS_CONFIG_ENC, "")
-    val customTemplatesJson: Flow<String> = state.map { str(it, K.CUSTOM_TEMPLATES) ?: "[]" }
-    suspend fun setCustomTemplatesJson(json: String) { edit { it[K.CUSTOM_TEMPLATES] = json } }
-    val templateDraftJson: Flow<String> = state.map { str(it, K.TEMPLATE_DRAFT) ?: "" }
-    suspend fun setTemplateDraftJson(json: String) { edit { it[K.TEMPLATE_DRAFT] = json } }
-    val hiddenTemplatesJson: Flow<String> = state.map { str(it, K.HIDDEN_TEMPLATES) ?: "" }
-    suspend fun setHiddenTemplatesJson(json: String) { edit { it[K.HIDDEN_TEMPLATES] = json } }
-    val cloudEnabled: Flow<Boolean> = state.map { bool(it, K.CLOUD_ENABLED) ?: false }
-    suspend fun setCloudEnabled(value: Boolean) {
+    override suspend fun harnessConfigOnce(): String = secret(state.first(), K.HARNESS_CONFIG_ENC, "")
+    override val customTemplatesJson: Flow<String> = state.map { str(it, K.CUSTOM_TEMPLATES) ?: "[]" }
+    override suspend fun setCustomTemplatesJson(json: String) { edit { it[K.CUSTOM_TEMPLATES] = json } }
+    override val templateDraftJson: Flow<String> = state.map { str(it, K.TEMPLATE_DRAFT) ?: "" }
+    override suspend fun setTemplateDraftJson(json: String) { edit { it[K.TEMPLATE_DRAFT] = json } }
+    override val hiddenTemplatesJson: Flow<String> = state.map { str(it, K.HIDDEN_TEMPLATES) ?: "" }
+    override suspend fun setHiddenTemplatesJson(json: String) { edit { it[K.HIDDEN_TEMPLATES] = json } }
+    override val cloudEnabled: Flow<Boolean> = state.map { bool(it, K.CLOUD_ENABLED) ?: false }
+    override suspend fun setCloudEnabled(value: Boolean) {
         edit { it[K.CLOUD_ENABLED] = value }
         SettingsCache.cloudEnabled = value
     }
-    val cloudProvider: Flow<String> = state.map { str(it, K.CLOUD_PROVIDER) ?: "Nutstore" }
-    suspend fun setCloudProvider(value: String) {
+    override val cloudProvider: Flow<String> = state.map { str(it, K.CLOUD_PROVIDER) ?: "Nutstore" }
+    override suspend fun setCloudProvider(value: String) {
         edit { it[K.CLOUD_PROVIDER] = value }
         SettingsCache.cloudProvider = value
     }
-    val cloudUrl: Flow<String> = state.map { str(it, K.CLOUD_URL) ?: "" }
-    suspend fun setCloudUrl(value: String) {
+    override val cloudUrl: Flow<String> = state.map { str(it, K.CLOUD_URL) ?: "" }
+    override suspend fun setCloudUrl(value: String) {
         edit { it[K.CLOUD_URL] = value }
         SettingsCache.cloudUrl = value
     }
-    val cloudUser: Flow<String> = state.map { str(it, K.CLOUD_USER) ?: "" }
-    suspend fun setCloudUser(value: String) {
+    override val cloudUser: Flow<String> = state.map { str(it, K.CLOUD_USER) ?: "" }
+    override suspend fun setCloudUser(value: String) {
         edit { it[K.CLOUD_USER] = value }
         SettingsCache.cloudUser = value
     }
-    val cloudPasswordEnc: Flow<String> = state.map { str(it, K.CLOUD_PASSWORD_ENC) ?: "" }
-    suspend fun setCloudPasswordEnc(value: String) {
+    override val cloudPasswordEnc: Flow<String> = state.map { str(it, K.CLOUD_PASSWORD_ENC) ?: "" }
+    override suspend fun setCloudPasswordEnc(value: String) {
         edit { it[K.CLOUD_PASSWORD_ENC] = value }
         SettingsCache.cloudPasswordEnc = value
     }
-    val embeddingProvider: Flow<String> = state.map { str(it, K.EMBEDDING_PROVIDER) ?: "local" }
-    suspend fun setEmbeddingProvider(value: String) {
+    override val embeddingProvider: Flow<String> = state.map { str(it, K.EMBEDDING_PROVIDER) ?: "local" }
+    override suspend fun setEmbeddingProvider(value: String) {
         edit { it[K.EMBEDDING_PROVIDER] = value }
         SettingsCache.embeddingProvider = value
     }
-    val cloudFolder: Flow<String> = state.map { str(it, K.CLOUD_FOLDER) ?: "Lucent" }
-    suspend fun setCloudFolder(value: String) {
+    override val cloudFolder: Flow<String> = state.map { str(it, K.CLOUD_FOLDER) ?: "Lucent" }
+    override suspend fun setCloudFolder(value: String) {
         edit { it[K.CLOUD_FOLDER] = value }
         SettingsCache.cloudFolder = value
     }
-    val cloudAutoBackup: Flow<Boolean> = state.map { bool(it, K.CLOUD_AUTO_BACKUP) ?: false }
-    suspend fun setCloudAutoBackup(value: Boolean) {
+    override val cloudAutoBackup: Flow<Boolean> = state.map { bool(it, K.CLOUD_AUTO_BACKUP) ?: false }
+    override suspend fun setCloudAutoBackup(value: Boolean) {
         edit { it[K.CLOUD_AUTO_BACKUP] = value }
         SettingsCache.cloudAutoBackup = value
     }
 
-    suspend fun setMarkdownEnabled(value: Boolean) {
-        edit { it[K.MARKDOWN_ENABLED] = value }
-        SettingsCache.markdownEnabled = value
-    }
-
-    suspend fun setRichTextEnabled(value: Boolean) {
-        edit { it[K.RICH_TEXT_ENABLED] = value }
-        SettingsCache.richTextEnabled = value
-    }
-
-    val linksEnabled: Flow<Boolean> = state.map { bool(it, K.LINKS_ENABLED) ?: false }
-    suspend fun setLinksEnabled(value: Boolean) {
+    override val linksEnabled: Flow<Boolean> = state.map { bool(it, K.LINKS_ENABLED) ?: false }
+    override suspend fun setLinksEnabled(value: Boolean) {
         edit { it[K.LINKS_ENABLED] = value }
         SettingsCache.linksEnabled = value
     }
 
-    val backgroundAnimationEnabled: Flow<Boolean> =
+    override val backgroundAnimationEnabled: Flow<Boolean> =
         state.map { bool(it, K.BACKGROUND_ANIMATION_ENABLED) ?: false }
-    suspend fun setBackgroundAnimationEnabled(value: Boolean) {
+    override suspend fun setBackgroundAnimationEnabled(value: Boolean) {
         edit { it[K.BACKGROUND_ANIMATION_ENABLED] = value }
         SettingsCache.backgroundAnimationEnabled = value
     }
 
-    val splashEnabled: Flow<Boolean> = state.map { bool(it, K.SPLASH_ENABLED) ?: true }
-    suspend fun setSplashEnabled(value: Boolean) {
+    override val splashEnabled: Flow<Boolean> = state.map { bool(it, K.SPLASH_ENABLED) ?: true }
+    override suspend fun setSplashEnabled(value: Boolean) {
         SettingsCache.splashEnabled = value
         edit { it[K.SPLASH_ENABLED] = value }
     }
 
-    val splashStyle: Flow<String> = state.map { str(it, K.SPLASH_STYLE) ?: SplashStyle.DEFAULT.key }
-    suspend fun setSplashStyle(value: String) {
+    override val splashStyle: Flow<String> = state.map { str(it, K.SPLASH_STYLE) ?: SplashStyle.DEFAULT.key }
+    override suspend fun setSplashStyle(value: String) {
         SettingsCache.splashStyle = SplashStyle.fromKey(value).key
         edit { it[K.SPLASH_STYLE] = SplashStyle.fromKey(value).key }
     }
 
 
-    val appLockEnabled: Flow<Boolean> = state.map { bool(it, K.APP_LOCK_ENABLED) ?: false }
+    override val appLockEnabled: Flow<Boolean> = state.map { bool(it, K.APP_LOCK_ENABLED) ?: false }
 
-    val appLockCredentials: Flow<String> = state.map { prefs ->
+    override val appLockCredentials: Flow<String> = state.map { prefs ->
         val stored = str(prefs, K.APP_LOCK_CREDENTIALS_ENC) ?: ""
         if (stored.isEmpty()) "" else LocalSecrets.decrypt(stored)
     }
 
-    suspend fun setAppLock(enabled: Boolean, credentialsJson: String) {
+    override suspend fun setAppLock(enabled: Boolean, credentialsJson: String) {
         edit { prefs ->
             prefs[K.APP_LOCK_ENABLED] = enabled
             if (credentialsJson.isEmpty()) prefs.remove(K.APP_LOCK_CREDENTIALS_ENC)
@@ -786,28 +708,42 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setAppLockCredentials(credentialsJson: String) {
+    override suspend fun setAppLockCredentials(credentialsJson: String) {
         edit { prefs ->
             if (credentialsJson.isEmpty()) prefs.remove(K.APP_LOCK_CREDENTIALS_ENC)
             else prefs[K.APP_LOCK_CREDENTIALS_ENC] = LocalSecrets.encrypt(credentialsJson)
         }
     }
 
-    val appLockHelloEnabled: Flow<Boolean> = state.map { bool(it, K.APP_LOCK_HELLO_ENABLED) ?: false }
+    override val appLockBiometricEnabled: Flow<Boolean> =
+        kotlinx.coroutines.flow.flowOf(false)
+    override suspend fun setAppLockBiometricEnabled(enabled: Boolean) { }
 
-    suspend fun setAppLockHelloEnabled(value: Boolean) {
+    override val appLockHelloEnabled: Flow<Boolean> = state.map { bool(it, K.APP_LOCK_HELLO_ENABLED) ?: false }
+
+    override suspend fun setAppLockHelloEnabled(value: Boolean) {
         edit { it[K.APP_LOCK_HELLO_ENABLED] = value }
     }
 
+    override suspend fun appLockEnabledOnce(): Boolean =
+        bool(state.first(), K.APP_LOCK_ENABLED) ?: false
+    override suspend fun appLockCredentialsOnce(): String {
+        val stored = str(state.first(), K.APP_LOCK_CREDENTIALS_ENC) ?: ""
+        return if (stored.isEmpty()) "" else LocalSecrets.decrypt(stored)
+    }
+    override suspend fun startupLoggingEnabledOnce(): Boolean =
+        bool(state.first(), K.STARTUP_LOGGING_ENABLED) ?: false
+    override suspend fun systemIntegrationEnabledOnce(): Boolean =
+        bool(state.first(), K.SYSTEM_INTEGRATION_ENABLED) ?: false
 
-    val systemIntegrationEnabled: Flow<Boolean> = state.map { bool(it, K.SYSTEM_INTEGRATION_ENABLED) ?: false }
-    suspend fun setSystemIntegrationEnabled(value: Boolean) {
+    override val systemIntegrationEnabled: Flow<Boolean> = state.map { bool(it, K.SYSTEM_INTEGRATION_ENABLED) ?: false }
+    override suspend fun setSystemIntegrationEnabled(value: Boolean) {
         SettingsCache.systemIntegrationEnabled = value
         edit { it[K.SYSTEM_INTEGRATION_ENABLED] = value }
     }
 
-    val startupLoggingEnabled: Flow<Boolean> = state.map { bool(it, K.STARTUP_LOGGING_ENABLED) ?: false }
-    suspend fun setStartupLoggingEnabled(value: Boolean) {
+    override val startupLoggingEnabled: Flow<Boolean> = state.map { bool(it, K.STARTUP_LOGGING_ENABLED) ?: false }
+    override suspend fun setStartupLoggingEnabled(value: Boolean) {
         SettingsCache.startupLoggingEnabled = value
         edit { it[K.STARTUP_LOGGING_ENABLED] = value }
     }
@@ -818,23 +754,23 @@ class SettingsRepository(private val context: Context) {
         edit { it[key] = sealed }
     }
 
-    suspend fun setBaseUrl(value: String) {
+    override suspend fun setBaseUrl(value: String) {
         SettingsCache.baseUrl = value
         putSecret(K.BASE_URL_ENC, value)
     }
-    suspend fun setApiSpec(value: String) {
+    override suspend fun setApiSpec(value: String) {
         SettingsCache.apiSpec = value
         putSecret(K.API_SPEC_ENC, value)
     }
-    suspend fun setModel(value: String) {
+    override suspend fun setModel(value: String) {
         SettingsCache.model = value
         putSecret(K.MODEL_ENC, value)
     }
 
 
-    val modelRecents: Flow<List<String>> = state.map { ModelRecents.parse(str(it, K.MODEL_RECENTS)) }
+    override val modelRecents: Flow<List<String>> = state.map { ModelRecents.parse(str(it, K.MODEL_RECENTS)) }
 
-    suspend fun setActiveModel(value: String) {
+    override suspend fun setActiveModel(value: String) {
         val model = value.trim()
         if (model.isBlank()) return
         val prefs = state.first()
@@ -852,61 +788,61 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val terminalFontSize: Flow<Float?> = state.map {
+    override val terminalFontSize: Flow<Float?> = state.map {
         secret(it, K.TERMINAL_FONT_SIZE_ENC, "").toFloatOrNull()
     }
-    val terminalKeyBarVisible: Flow<Boolean> = state.map {
+    override val terminalKeyBarVisible: Flow<Boolean> = state.map {
         secret(it, K.TERMINAL_KEY_BAR_VISIBLE_ENC, "true").toBooleanStrictOrNull() ?: true
     }
-    val globalTextSelectionEnabled: Flow<Boolean> = state.map {
+    override val globalTextSelectionEnabled: Flow<Boolean> = state.map {
         secret(it, K.GLOBAL_TEXT_SELECTION_ENABLED_ENC, "false").toBooleanStrictOrNull() ?: false
     }
 
-    suspend fun setTerminalFontSize(value: Float) {
+    override suspend fun setTerminalFontSize(value: Float) {
         SettingsCache.terminalFontSize = value
         putSecret(K.TERMINAL_FONT_SIZE_ENC, value.toString())
     }
-    suspend fun setTerminalKeyBarVisible(value: Boolean) {
+    override suspend fun setTerminalKeyBarVisible(value: Boolean) {
         SettingsCache.terminalKeyBarVisible = value
         putSecret(K.TERMINAL_KEY_BAR_VISIBLE_ENC, value.toString())
     }
-    suspend fun setGlobalTextSelectionEnabled(value: Boolean) {
+    override suspend fun setGlobalTextSelectionEnabled(value: Boolean) {
         SettingsCache.globalTextSelectionEnabled = value
         putSecret(K.GLOBAL_TEXT_SELECTION_ENABLED_ENC, value.toString())
     }
 
-    suspend fun setAssistantName(value: String) {
+    override suspend fun setAssistantName(value: String) {
         SettingsCache.assistantName = value
         putSecret(K.ASSISTANT_NAME_ENC, value)
     }
-    suspend fun setAssistantStyle(value: String) {
+    override suspend fun setAssistantStyle(value: String) {
         SettingsCache.assistantStyle = value
         putSecret(K.ASSISTANT_STYLE_ENC, value)
     }
 
-    suspend fun setThemeMode(value: String) {
+    override suspend fun setThemeMode(value: String) {
         edit { it[K.THEME_MODE] = value }
         SettingsCache.themeMode = value
     }
-    suspend fun setPalette(value: String) {
+    override suspend fun setPalette(value: String) {
         edit { it[K.PALETTE] = value }
         SettingsCache.palette = value
     }
-    suspend fun setFont(value: String) {
+    override suspend fun setFont(value: String) {
         edit { it[K.FONT] = value }
         SettingsCache.font = value
     }
-    suspend fun setDynamicColorEnabled(value: Boolean) {
+    override suspend fun setDynamicColorEnabled(value: Boolean) {
         edit { it[K.DYNAMIC_COLOR_ENABLED] = value }
         SettingsCache.dynamicColor = value
     }
 
-    suspend fun setApiKey(value: String) {
+    override suspend fun setApiKey(value: String) {
         SettingsCache.apiKey = value
         edit { it[K.API_KEY_ENC] = LocalSecrets.encrypt(value) }
     }
 
-    suspend fun saveApiProfiles(profiles: List<ApiProfile>, selected: Int) {
+    override suspend fun saveApiProfiles(profiles: List<ApiProfile>, selected: Int) {
         val safe = profiles.take(ApiProfiles.MAX)
         val idx = if (safe.isEmpty()) 0 else selected.coerceIn(0, safe.size - 1)
         val active = safe.getOrNull(idx)
@@ -938,5 +874,8 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun clearAll() { edit { it.clear() } }
+    override suspend fun clearAll() { edit { it.clear() } }
 }
+
+actual fun createSettingsRepository(context: PlatformContext): SettingsRepository =
+    DesktopSettingsRepository(context.desktopContext)

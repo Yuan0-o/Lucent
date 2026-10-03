@@ -60,13 +60,15 @@ import com.lucent.app.ui.TasksScreen
 import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.lucentTypography
 import kotlinx.coroutines.delay
+import com.lucent.app.data.createAppDatabase
+import com.lucent.app.data.createSettingsRepository
 
 private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
 
 @Composable
 fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val context = DesktopContext
-    val repo = remember { SettingsRepository(context) }
+    val repo = remember { createSettingsRepository(context) }
     val systemDark = isSystemInDarkTheme()
 
     val themeMode by repo.themeMode.collectAsState(initial = startup.display.themeMode)
@@ -201,7 +203,7 @@ private fun DesktopShell(
     var current by remember { mutableStateOf(Screen.Tasks) }
     var showTrashChooser by remember { mutableStateOf(false) }
     var trashInitialMode by remember { mutableStateOf<HomeMode?>(null) }
-    val notebooks by remember { AppDatabase.getInstance(DesktopContext).notebookDao().getAll() }.collectAsState(initial = emptyList())
+    val notebooks by remember { createAppDatabase(DesktopContext).notebookDao.getAll() }.collectAsState(initial = emptyList())
     val notebookOpensJson by repo.notebookOpens.collectAsState(initial = "{}")
     val recentNotebooks = remember(notebooks, notebookOpensJson) {
         runCatching {

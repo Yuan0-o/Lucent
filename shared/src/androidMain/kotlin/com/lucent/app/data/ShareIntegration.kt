@@ -6,14 +6,15 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import com.lucent.app.platform.PlatformContext
 
-object ShareIntegration {
+actual object ShareIntegration {
 
     private const val ALIAS_CLASS = "com.lucent.app.ShareTarget"
 
     private fun aliasComponent(context: Context) = ComponentName(context.packageName, ALIAS_CLASS)
 
-    fun setEnabled(context: Context, enabled: Boolean) {
+    actual fun setEnabled(context: PlatformContext, enabled: Boolean) {
         val state = if (enabled) {
             PackageManager.COMPONENT_ENABLED_STATE_ENABLED
         } else {

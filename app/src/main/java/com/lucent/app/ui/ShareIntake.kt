@@ -22,6 +22,7 @@ import com.lucent.app.data.Task
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.lucent.app.data.createAppDatabase
 
 object ShareIntake {
 
@@ -32,21 +33,21 @@ object ShareIntake {
     fun clear() { pending = null }
 
     suspend fun createNote(context: Context, shared: ShareIntegration.Shared): Long {
-        val db = AppDatabase.getInstance(context.applicationContext)
+        val db = createAppDatabase(context.applicationContext)
         val attachment = shared.streamUri?.let { importStream(context, it, shared.mime) }
         val title = deriveTitle(shared, attachment)
         val body = shared.text.orEmpty()
         val attachmentsJson = attachment?.let { Attachments.serialize(listOf(it)) } ?: "[]"
-        return db.noteDao().insert(Note(title = title, body = body, attachments = attachmentsJson))
+        return db.noteDao.insert(Note(title = title, body = body, attachments = attachmentsJson))
     }
 
     suspend fun createTask(context: Context, shared: ShareIntegration.Shared): Long {
-        val db = AppDatabase.getInstance(context.applicationContext)
+        val db = createAppDatabase(context.applicationContext)
         val attachment = shared.streamUri?.let { importStream(context, it, shared.mime) }
         val title = deriveTitle(shared, attachment)
         val remainder = shared.text?.substringAfter('\n', "")?.trim().orEmpty()
         val attachmentsJson = attachment?.let { Attachments.serialize(listOf(it)) } ?: "[]"
-        return db.taskDao().insert(Task(title = title, notes = remainder, attachments = attachmentsJson))
+        return db.taskDao.insert(Task(title = title, notes = remainder, attachments = attachmentsJson))
     }
 
     private fun deriveTitle(shared: ShareIntegration.Shared, attachment: Attachment?): String {

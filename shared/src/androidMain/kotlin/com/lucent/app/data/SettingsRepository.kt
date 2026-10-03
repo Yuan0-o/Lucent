@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -152,9 +153,7 @@ private object SettingsKeys {
 
 }
 
-const val DEFAULT_ASSISTANT_STYLE = "lively and friendly, relaxed and natural."
-
-class SettingsRepository(private val context: Context) {
+class AndroidSettingsRepository(private val context: Context) : SettingsRepository {
 
     private fun secret(
         prefs: androidx.datastore.preferences.core.Preferences,
@@ -166,118 +165,42 @@ class SettingsRepository(private val context: Context) {
         return LocalSecrets.decrypt(stored).ifEmpty { default }
     }
 
-    val baseUrl: Flow<String> = context.settingsDataStore.data.map {
+    override val baseUrl: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.BASE_URL_ENC, SettingsKeys.LEGACY_BASE_URL, "")
     }
-    val apiSpec: Flow<String> = context.settingsDataStore.data.map {
+    override val apiSpec: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.API_SPEC_ENC, SettingsKeys.LEGACY_API_SPEC, "openai")
     }
-    val model: Flow<String> = context.settingsDataStore.data.map {
+    override val model: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.MODEL_ENC, SettingsKeys.LEGACY_MODEL, "")
     }
-    val assistantName: Flow<String> = context.settingsDataStore.data.map {
+    override val assistantName: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, "Lucent")
     }
-    val assistantStyle: Flow<String> = context.settingsDataStore.data.map {
+    override val assistantStyle: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, "")
     }
 
-    val themeMode: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.THEME_MODE] ?: "system" }
-    val palette: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PALETTE] ?: "CYCLE" }
-    val font: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.FONT] ?: "system" }
+    override val themeMode: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.THEME_MODE] ?: "system" }
+    override val palette: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PALETTE] ?: "CYCLE" }
+    override val font: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.FONT] ?: "system" }
 
-    val dynamicColorEnabled: Flow<Boolean> =
+    override val dynamicColorEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] ?: false }
 
-    data class DisplayPrefs(val themeMode: String, val palette: String, val font: String)
-
-    suspend fun displayPrefsOnce(): DisplayPrefs {
+    override suspend fun displayPrefsOnce(): SettingsRepository.DisplayPrefs {
         val prefs = context.settingsDataStore.data.first()
-        return DisplayPrefs(
+        return SettingsRepository.DisplayPrefs(
             themeMode = prefs[SettingsKeys.THEME_MODE] ?: "system",
             palette = prefs[SettingsKeys.PALETTE] ?: "CYCLE",
             font = prefs[SettingsKeys.FONT] ?: "system"
         )
     }
 
-    data class StartupPrefs(
-        val display: DisplayPrefs,
-        val appLockEnabled: Boolean,
-        val startupLoggingEnabled: Boolean,
-        val systemIntegrationEnabled: Boolean,
-        val appLanguage: String = "system",
-        val assistantName: String = "Lucent",
-        val backgroundAnimationEnabled: Boolean = true,
-        val splashEnabled: Boolean = true,
-        val splashStyle: String = SplashStyle.DEFAULT.key,
-        val autoBackup: AutoBackup.State = AutoBackup.State.EMPTY,
-        val dynamicColor: Boolean = false,
-        val notesSort: String = "recent",
-        val tasksSort: String = "recent",
-        val notebooksSort: String = "recent",
-        val sessionSnapshot: String = "",
-        val assistantStyle: String = "",
-        val baseUrl: String = "",
-        val apiSpec: String = "openai",
-        val apiKey: String = "",
-        val model: String = "",
-        val apiProfilesJson: String = "",
-        val apiProfileSelected: Int = 0,
-        val noteHistoryEnabled: Boolean = true,
-        val taskHistoryEnabled: Boolean = true,
-        val crashShieldEnabled: Boolean = false,
-        val blackoutEnabled: Boolean = false,
-        val pwSelfDestructEnabled: Boolean = false,
-        val pwFirstRoundLimit: Int = PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT,
-        val pwLaterRoundLimit: Int = PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT,
-        val pwSelfDestructThreshold: Int = PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD,
-        val passwordAttemptState: String = "",
-        val appLockBiometricEnabled: Boolean = false,
-        val appLockHelloEnabled: Boolean = false,
-        val closeToTray: Boolean = true,
-        val openLinksExternally: Boolean = false,
-        val markdownEnabled: Boolean = false,
-        val richTextEnabled: Boolean = false,
-        val linksEnabled: Boolean = false,
-        val typingHapticsEnabled: Boolean = true,
-        val assistantConfirmToolsEnabled: Boolean = true,
-        val localModelEnabled: Boolean = false,
-        val localToolsEnabled: Boolean = false,
-        val localGpuEnabled: Boolean = false,
-        val localBackgroundReplyEnabled: Boolean = false,
-        val agentMode: Boolean = true,
-        val reasoning: String = com.lucent.app.data.ReasoningEffort.DEFAULT.key,
-        val webSearchEngine: String = com.lucent.app.data.WebSearchEngine.DEFAULT.key,
-        val smallModelModeEnabled: Boolean = false,
-        val webSearchEnabled: Boolean = false,
-        val memoryTier: String = MemoryTier.DEFAULT.key,
-        val memoryTierLocal: String = MemoryTier.LOW.key,
-        val embeddingProvider: String = "local",
-        val cloudEnabled: Boolean = false,
-        val cloudProvider: String = "Nutstore",
-        val cloudUrl: String = "",
-        val cloudUser: String = "",
-        val cloudFolder: String = "Lucent",
-        val cloudAutoBackup: Boolean = false,
-
-        val terminalFontSize: Float? = null,
-        val terminalKeyBarVisible: Boolean = true,
-        val globalTextSelectionEnabled: Boolean = false,
-        val cloudPasswordEnc: String = "",
-        val updateChannel: String = "stable",
-        val installedPreviewIdentity: String = "",
-        val stagedUpdateIdentity: String = "",
-        val autoUpdateEnabled: Boolean = false,
-        val privilegedEnabled: Boolean = false,
-        val pendingUpdateVersion: String = "",
-        val stagedUpdateTag: String = "",
-        val stagedUpdateFiles: String = ""
-    )
-
-    suspend fun startupPrefsOnce(): StartupPrefs {
+    override suspend fun startupPrefsOnce(): SettingsRepository.StartupPrefs {
         val prefs = context.settingsDataStore.data.first()
-        return StartupPrefs(
-            display = DisplayPrefs(
+        return SettingsRepository.StartupPrefs(
+            display = SettingsRepository.DisplayPrefs(
                 themeMode = prefs[SettingsKeys.THEME_MODE] ?: "system",
                 palette = prefs[SettingsKeys.PALETTE] ?: "CYCLE",
                 font = prefs[SettingsKeys.FONT] ?: "system"
@@ -331,8 +254,8 @@ class SettingsRepository(private val context: Context) {
             localGpuEnabled = prefs[SettingsKeys.LOCAL_GPU_ENABLED] ?: false,
             localBackgroundReplyEnabled = prefs[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false,
             agentMode = prefs[SettingsKeys.AGENT_MODE] ?: true,
-            reasoning = prefs[SettingsKeys.REASONING_EFFORT] ?: com.lucent.app.data.ReasoningEffort.DEFAULT.key,
-            webSearchEngine = prefs[SettingsKeys.WEB_SEARCH_ENGINE] ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key,
+            reasoning = prefs[SettingsKeys.REASONING_EFFORT] ?: ReasoningEffort.DEFAULT.key,
+            webSearchEngine = prefs[SettingsKeys.WEB_SEARCH_ENGINE] ?: WebSearchEngine.DEFAULT.key,
             smallModelModeEnabled = prefs[SettingsKeys.SMALL_MODEL_MODE] ?: false,
             webSearchEnabled = prefs[SettingsKeys.WEB_SEARCH_ENABLED] ?: false,
             memoryTier = prefs[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key,
@@ -344,7 +267,6 @@ class SettingsRepository(private val context: Context) {
             cloudUser = prefs[SettingsKeys.CLOUD_USER] ?: "",
             cloudFolder = prefs[SettingsKeys.CLOUD_FOLDER] ?: "Lucent",
             cloudAutoBackup = prefs[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false,
-
             terminalFontSize = secret(prefs, SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, "").toFloatOrNull(),
             terminalKeyBarVisible = secret(prefs, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true,
             globalTextSelectionEnabled = secret(prefs, SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, "false").toBooleanStrictOrNull() ?: false,
@@ -361,17 +283,17 @@ class SettingsRepository(private val context: Context) {
     }
 
 
-    val lastScreen: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.LAST_SCREEN] ?: "" }
-    suspend fun lastScreenOnce(): String = context.settingsDataStore.data.first()[SettingsKeys.LAST_SCREEN] ?: ""
-    suspend fun setLastScreen(value: String) {
+    override val lastScreen: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.LAST_SCREEN] ?: "" }
+    override suspend fun lastScreenOnce(): String = context.settingsDataStore.data.first()[SettingsKeys.LAST_SCREEN] ?: ""
+    override suspend fun setLastScreen(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.LAST_SCREEN] = value }
     }
 
-    val blackoutEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BLACKOUT_ENABLED] ?: false }
-    suspend fun blackoutEnabledOnce(): Boolean =
+    override val blackoutEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BLACKOUT_ENABLED] ?: false }
+    override suspend fun blackoutEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.BLACKOUT_ENABLED] ?: false
 
-    suspend fun setBlackoutEnabled(value: Boolean) {
+    override suspend fun setBlackoutEnabled(value: Boolean) {
         context.settingsDataStore.edit { prefs ->
             val wasEnabled = prefs[SettingsKeys.BLACKOUT_ENABLED] ?: false
             prefs[SettingsKeys.BLACKOUT_ENABLED] = value
@@ -392,14 +314,14 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.blackoutEnabled = value
     }
 
-    suspend fun appLockWasOnBeforeBlackout(): Boolean =
+    override suspend fun appLockWasOnBeforeBlackout(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LOCK_PREBLACKOUT] ?: false
 
-    val crashShieldEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false }
-    suspend fun crashShieldEnabledOnce(): Boolean =
+    override val crashShieldEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false }
+    override suspend fun crashShieldEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.CRASH_SHIELD_ENABLED] ?: false
 
-    suspend fun setCrashShieldEnabled(value: Boolean) {
+    override suspend fun setCrashShieldEnabled(value: Boolean) {
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.CRASH_SHIELD_ENABLED] = value
             if (value) prefs[SettingsKeys.STARTUP_LOGGING_ENABLED] = true
@@ -407,235 +329,267 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.crashShieldEnabled = value
     }
 
-    val passwordAttemptState: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PW_ATTEMPT_STATE] ?: "" }
-    suspend fun passwordAttemptStateOnce(): String =
+    override val passwordAttemptState: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.PW_ATTEMPT_STATE] ?: "" }
+    override suspend fun passwordAttemptStateOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.PW_ATTEMPT_STATE] ?: ""
-    suspend fun setPasswordAttemptState(json: String) {
+    override suspend fun setPasswordAttemptState(json: String) {
         SettingsCache.passwordAttemptState = json
         context.settingsDataStore.edit { it[SettingsKeys.PW_ATTEMPT_STATE] = json }
     }
 
-    val pwFirstRoundLimit: Flow<Int> = context.settingsDataStore.data.map {
+    override val pwFirstRoundLimit: Flow<Int> = context.settingsDataStore.data.map {
         it[SettingsKeys.PW_FIRST_ROUND_LIMIT] ?: PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT
     }
-    val pwLaterRoundLimit: Flow<Int> = context.settingsDataStore.data.map {
+    override val pwLaterRoundLimit: Flow<Int> = context.settingsDataStore.data.map {
         it[SettingsKeys.PW_LATER_ROUND_LIMIT] ?: PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT
     }
-    suspend fun setPwFirstRoundLimit(value: Int) {
+    override suspend fun setPwFirstRoundLimit(value: Int) {
         context.settingsDataStore.edit {
             it[SettingsKeys.PW_FIRST_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
         }
         SettingsCache.pwFirstRoundLimit = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
     }
-    suspend fun setPwLaterRoundLimit(value: Int) {
+    override suspend fun setPwLaterRoundLimit(value: Int) {
         context.settingsDataStore.edit {
             it[SettingsKeys.PW_LATER_ROUND_LIMIT] = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
         }
         SettingsCache.pwLaterRoundLimit = value.coerceIn(PasswordAttempts.ROUND_LIMIT_RANGE)
     }
 
-    val pwSelfDestructEnabled: Flow<Boolean> =
+    override val pwSelfDestructEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.PW_SELF_DESTRUCT_ENABLED] ?: false }
-    val pwSelfDestructThreshold: Flow<Int> = context.settingsDataStore.data.map {
+    override val pwSelfDestructThreshold: Flow<Int> = context.settingsDataStore.data.map {
         it[SettingsKeys.PW_SELF_DESTRUCT_THRESHOLD] ?: PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD
     }
-    suspend fun setPwSelfDestructEnabled(value: Boolean) {
+    override suspend fun setPwSelfDestructEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.PW_SELF_DESTRUCT_ENABLED] = value }
         SettingsCache.pwSelfDestructEnabled = value
     }
-    suspend fun setPwSelfDestructThreshold(value: Int) {
+    override suspend fun setPwSelfDestructThreshold(value: Int) {
         context.settingsDataStore.edit {
             it[SettingsKeys.PW_SELF_DESTRUCT_THRESHOLD] = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
         }
         SettingsCache.pwSelfDestructThreshold = value.coerceIn(PasswordAttempts.SELF_DESTRUCT_RANGE)
     }
 
-    val openLinksExternally: Flow<Boolean> =
+    override val openLinksExternally: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] ?: false }
-    suspend fun setOpenLinksExternally(value: Boolean) {
+    override suspend fun setOpenLinksExternally(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.OPEN_LINKS_EXTERNALLY] = value }
         SettingsCache.openLinksExternally = value
     }
 
-    val appLanguage: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "system" }
-    suspend fun setAppLanguage(value: String) {
+    override val appLanguage: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LANGUAGE] ?: "system" }
+    override suspend fun setAppLanguage(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.APP_LANGUAGE] = value }
         SettingsCache.appLanguage = value
     }
-    suspend fun appLanguageOnce(): String =
+    override suspend fun appLanguageOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LANGUAGE] ?: "system"
 
-    val localModelEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false }
+    override val localModelEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_MODEL_ENABLED] ?: false }
 
-    suspend fun setLocalModelEnabled(value: Boolean) {
+    override suspend fun setLocalModelEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.LOCAL_MODEL_ENABLED] = value }
         SettingsCache.localModelEnabled = value
     }
 
-    val memoryTierLocal: Flow<String> =
+    override val memoryTierLocal: Flow<String> =
         context.settingsDataStore.data.map { it[SettingsKeys.MEMORY_TIER_LOCAL] ?: MemoryTier.LOW.key }
-    suspend fun setMemoryTierLocal(value: String) {
+    override suspend fun setMemoryTierLocal(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER_LOCAL] = value }
         SettingsCache.memoryTierLocal = value
     }
 
-    val agentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AGENT_MODE] ?: true }
-    suspend fun setAgentMode(value: Boolean) {
+    override val agentMode: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AGENT_MODE] ?: true }
+    override suspend fun setAgentMode(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.AGENT_MODE] = value }
         SettingsCache.agentMode = value
     }
 
-    val reasoning: Flow<String> = context.settingsDataStore.data.map {
-        it[SettingsKeys.REASONING_EFFORT] ?: com.lucent.app.data.ReasoningEffort.DEFAULT.key
+    override val reasoning: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.REASONING_EFFORT] ?: ReasoningEffort.DEFAULT.key
     }
-    suspend fun setReasoning(value: String) {
+    override suspend fun setReasoning(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.REASONING_EFFORT] = value }
         SettingsCache.reasoning = value
     }
 
-    val webSearchEngine: Flow<String> = context.settingsDataStore.data.map {
-        it[SettingsKeys.WEB_SEARCH_ENGINE] ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key
+    override val webSearchEngine: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.WEB_SEARCH_ENGINE] ?: WebSearchEngine.DEFAULT.key
     }
-    suspend fun setWebSearchEngine(value: String) {
-        val engine = com.lucent.app.data.WebSearchEngine.fromKey(value).key
+    override suspend fun setWebSearchEngine(value: String) {
+        val engine = WebSearchEngine.fromKey(value).key
         context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENGINE] = engine }
         SettingsCache.webSearchEngine = engine
     }
 
-    suspend fun webSearchEngineOnce(): String =
+    override suspend fun webSearchEngineOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.WEB_SEARCH_ENGINE]
-            ?: com.lucent.app.data.WebSearchEngine.DEFAULT.key
+            ?: WebSearchEngine.DEFAULT.key
 
-    val localBackgroundReplyEnabled: Flow<Boolean> =
+    override val localBackgroundReplyEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false }
-    suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
+    override suspend fun setLocalBackgroundReplyEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.LOCAL_BACKGROUND_REPLY] = value }
         SettingsCache.localBackgroundReplyEnabled = value
     }
 
-    suspend fun localBackgroundReplyEnabledOnce(): Boolean =
+    override suspend fun localBackgroundReplyEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.LOCAL_BACKGROUND_REPLY] ?: false
 
-    val smallModelModeEnabled: Flow<Boolean> =
+    override val smallModelModeEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.SMALL_MODEL_MODE] ?: false }
-    suspend fun setSmallModelModeEnabled(value: Boolean) {
+    override suspend fun setSmallModelModeEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.SMALL_MODEL_MODE] = value }
         SettingsCache.smallModelModeEnabled = value
     }
 
-    val localToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false }
-    suspend fun setLocalToolsEnabled(value: Boolean) {
+    override val localToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_TOOLS_ENABLED] ?: false }
+    override suspend fun setLocalToolsEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.LOCAL_TOOLS_ENABLED] = value }
         SettingsCache.localToolsEnabled = value
     }
 
-    val localGpuEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_GPU_ENABLED] ?: false }
-    suspend fun setLocalGpuEnabled(value: Boolean) {
+    override val localGpuEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LOCAL_GPU_ENABLED] ?: false }
+    override suspend fun setLocalGpuEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.LOCAL_GPU_ENABLED] = value }
         SettingsCache.localGpuEnabled = value
     }
 
-    val apiKey: Flow<String> = context.settingsDataStore.data.map { prefs ->
+    override val apiKey: Flow<String> = context.settingsDataStore.data.map { prefs ->
         val stored = prefs[SettingsKeys.API_KEY_ENC] ?: prefs[SettingsKeys.LEGACY_API_KEY] ?: ""
         LocalSecrets.decrypt(stored)
     }
 
-    val apiProfilesJson: Flow<String> = context.settingsDataStore.data.map { prefs ->
+    override val apiProfilesJson: Flow<String> = context.settingsDataStore.data.map { prefs ->
         val stored = prefs[SettingsKeys.API_PROFILES_ENC] ?: prefs[SettingsKeys.LEGACY_API_PROFILES] ?: ""
         LocalSecrets.decrypt(stored)
     }
 
-    val apiProfileSelected: Flow<Int> = context.settingsDataStore.data.map { it[SettingsKeys.API_PROFILE_SELECTED] ?: 0 }
+    override val apiProfileSelected: Flow<Int> = context.settingsDataStore.data.map { it[SettingsKeys.API_PROFILE_SELECTED] ?: 0 }
 
-    val attachmentsMigrated: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.ATTACHMENTS_MIGRATED] ?: false }
+    override val attachmentsMigrated: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.ATTACHMENTS_MIGRATED] ?: false }
 
-    val backupPassword: Flow<String> = context.settingsDataStore.data.map { prefs ->
+    override val backupPassword: Flow<String> = context.settingsDataStore.data.map { prefs ->
         LocalSecrets.decrypt(prefs[SettingsKeys.BACKUP_PASSWORD_ENC] ?: "")
     }
 
-    val noteHistoryEnabled: Flow<Boolean> =
+    override val noteHistoryEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.NOTE_HISTORY_ENABLED] ?: true }
-    val taskHistoryEnabled: Flow<Boolean> =
+    override val taskHistoryEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.TASK_HISTORY_ENABLED] ?: true }
-    suspend fun setNoteHistoryEnabled(value: Boolean) {
+    override suspend fun setNoteHistoryEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.NOTE_HISTORY_ENABLED] = value }
         SettingsCache.noteHistoryEnabled = value
     }
-    suspend fun setTaskHistoryEnabled(value: Boolean) {
+    override suspend fun setTaskHistoryEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.TASK_HISTORY_ENABLED] = value }
         SettingsCache.taskHistoryEnabled = value
     }
 
-    val autoBackup: Flow<AutoBackup.State> = context.settingsDataStore.data
+    override val autoBackup: Flow<AutoBackup.State> = context.settingsDataStore.data
         .map { AutoBackup.State.fromJson(it[SettingsKeys.AUTO_BACKUP] ?: "") }
-    suspend fun autoBackupOnce(): AutoBackup.State =
+    override suspend fun autoBackupOnce(): AutoBackup.State =
         AutoBackup.State.fromJson(context.settingsDataStore.data.first()[SettingsKeys.AUTO_BACKUP] ?: "")
-    suspend fun setAutoBackup(state: AutoBackup.State) {
+    override suspend fun setAutoBackup(state: AutoBackup.State) {
         SettingsCache.autoBackup = state
         context.settingsDataStore.edit { it[SettingsKeys.AUTO_BACKUP] = state.toJson() }
     }
 
-    val notesSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTES_SORT] ?: "recent" }
-    val tasksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TASKS_SORT] ?: "recent" }
-    val notebooksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTEBOOKS_SORT] ?: "recent" }
+    override val notesSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTES_SORT] ?: "recent" }
+    override val tasksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TASKS_SORT] ?: "recent" }
+    override val notebooksSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTEBOOKS_SORT] ?: "recent" }
+    override suspend fun setNotesSort(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value }
+        SettingsCache.notesSort = value
+    }
+    override suspend fun setTasksSort(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value }
+        SettingsCache.tasksSort = value
+    }
+    override suspend fun setNotebooksSort(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.NOTEBOOKS_SORT] = value }
+        SettingsCache.notebooksSort = value
+    }
 
-    val memoryTier: Flow<String> = context.settingsDataStore.data.map {
+    override val notebookOpens: Flow<String> = context.settingsDataStore.data.map { prefs ->
+        prefs[SettingsKeys.NOTEBOOK_OPENS_ENC]?.let { LocalSecrets.decrypt(it) } ?: "{}"
+    }
+    override suspend fun notebookOpensOnce(): String = notebookOpens.first()
+    override suspend fun setNotebookOpens(value: String) {
+        putSecret(SettingsKeys.NOTEBOOK_OPENS_ENC, SettingsKeys.NOTEBOOK_OPENS_LEGACY, value)
+    }
+
+    override val memoryTier: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.MEMORY_TIER] ?: MemoryTier.DEFAULT.key
     }
+    override suspend fun setMemoryTier(value: String) {
+        context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER] = value }
+        SettingsCache.memoryTier = value
+    }
 
-    val webSearchEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+    override val webSearchEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[SettingsKeys.WEB_SEARCH_ENABLED] ?: false
     }
-
-    val typingHapticsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
-        it[SettingsKeys.TYPING_HAPTICS] ?: true
+    override suspend fun setWebSearchEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENABLED] = value }
+        SettingsCache.webSearchEnabled = value
     }
 
-    val assistantConfirmToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+    override val typingHapticsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+        it[SettingsKeys.TYPING_HAPTICS] ?: true
+    }
+    override suspend fun setTypingHapticsEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.TYPING_HAPTICS] = value }
+        SettingsCache.typingHapticsEnabled = value
+    }
+
+    override val assistantConfirmToolsEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] ?: true
     }
 
-    suspend fun setAssistantConfirmTools(value: Boolean) {
+    override suspend fun setAssistantConfirmTools(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.ASSISTANT_CONFIRM_TOOLS] = value }
         SettingsCache.assistantConfirmToolsEnabled = value
     }
 
-    val updateChannel: Flow<String> = context.settingsDataStore.data.map {
+    override val updateChannel: Flow<String> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.UPDATE_CHANNEL_ENC, SettingsKeys.LEGACY_UPDATE_CHANNEL, "stable")
     }
-    suspend fun setUpdateChannel(value: String) {
+    override suspend fun setUpdateChannel(value: String) {
         SettingsCache.updateChannel = value
         putSecret(SettingsKeys.UPDATE_CHANNEL_ENC, SettingsKeys.LEGACY_UPDATE_CHANNEL, value)
     }
 
-    val installedPreviewIdentity: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.INSTALLED_PREVIEW_IDENTITY] ?: "" }
-    suspend fun setInstalledPreviewIdentity(value: String) {
+    override val installedPreviewIdentity: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.INSTALLED_PREVIEW_IDENTITY] ?: "" }
+    override suspend fun setInstalledPreviewIdentity(value: String) {
         SettingsCache.installedPreviewIdentity = value
         context.settingsDataStore.edit { it[SettingsKeys.INSTALLED_PREVIEW_IDENTITY] = value }
     }
 
-    suspend fun setStagedUpdateIdentity(value: String) {
+    override suspend fun setStagedUpdateIdentity(value: String) {
         SettingsCache.stagedUpdateIdentity = value
         context.settingsDataStore.edit { it[SettingsKeys.STAGED_UPDATE_IDENTITY] = value }
     }
 
-    val autoUpdateEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false }
-    suspend fun setAutoUpdateEnabled(value: Boolean) {
+    override val autoUpdateEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.AUTO_UPDATE_ENABLED] ?: false }
+    override suspend fun setAutoUpdateEnabled(value: Boolean) {
         SettingsCache.autoUpdateEnabled = value
         context.settingsDataStore.edit { it[SettingsKeys.AUTO_UPDATE_ENABLED] = value }
     }
 
-    val pendingUpdateVersion: Flow<String> = context.settingsDataStore.data.map {
+    override val pendingUpdateVersion: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.PENDING_UPDATE_VERSION] ?: ""
     }
-    suspend fun setPendingUpdateVersion(value: String) {
+    override suspend fun setPendingUpdateVersion(value: String) {
         context.settingsDataStore.edit {
             if (value.isBlank()) it.remove(SettingsKeys.PENDING_UPDATE_VERSION)
             else it[SettingsKeys.PENDING_UPDATE_VERSION] = value
         }
     }
 
-    suspend fun setStagedUpdate(tag: String, files: List<String>) {
+    override suspend fun setStagedUpdate(tag: String, files: List<String>) {
         context.settingsDataStore.edit {
             if (tag.isBlank()) {
                 it.remove(SettingsKeys.STAGED_UPDATE_TAG)
@@ -647,123 +601,136 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    val privilegedEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.PRIVILEGED_ENABLED] ?: false }
-    suspend fun setPrivilegedEnabled(value: Boolean) {
+    override val privilegedEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.PRIVILEGED_ENABLED] ?: false }
+    override suspend fun setPrivilegedEnabled(value: Boolean) {
         SettingsCache.privilegedEnabled = value
         context.settingsDataStore.edit { it[SettingsKeys.PRIVILEGED_ENABLED] = value }
     }
 
-    val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }
-    val richTextEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.RICH_TEXT_ENABLED] ?: false }
+    override val markdownEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.MARKDOWN_ENABLED] ?: false }
+    override val richTextEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.RICH_TEXT_ENABLED] ?: false }
+    override suspend fun setMarkdownEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value }
+        SettingsCache.markdownEnabled = value
+    }
+    override suspend fun setRichTextEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.RICH_TEXT_ENABLED] = value }
+        SettingsCache.richTextEnabled = value
+    }
 
-    val savedSearches: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.SAVED_SEARCHES] ?: "" }
-    suspend fun setSavedSearches(json: String) {
+    override val savedSearches: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.SAVED_SEARCHES] ?: "" }
+    override suspend fun setSavedSearches(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SAVED_SEARCHES] = json }
     }
 
-    val harnessConfig: Flow<String> = context.settingsDataStore.data.map {
+    override val harnessConfig: Flow<String> = context.settingsDataStore.data.map {
         val stored = it[SettingsKeys.HARNESS_CONFIG_ENC] ?: return@map ""
         LocalSecrets.decrypt(stored)
     }
 
-    suspend fun setHarnessConfig(json: String) {
+    override suspend fun setHarnessConfig(json: String) {
         SettingsCache.harnessConfigJson = json
         val sealed = LocalSecrets.encrypt(json)
         context.settingsDataStore.edit { it[SettingsKeys.HARNESS_CONFIG_ENC] = sealed }
     }
 
-    suspend fun harnessConfigOnce(): String =
+    override suspend fun harnessConfigOnce(): String =
         LocalSecrets.decrypt(context.settingsDataStore.data.first()[SettingsKeys.HARNESS_CONFIG_ENC] ?: "")
-    val customTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CUSTOM_TEMPLATES] ?: "[]" }
-    suspend fun setCustomTemplatesJson(json: String) {
+
+    override val customTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CUSTOM_TEMPLATES] ?: "[]" }
+    override suspend fun setCustomTemplatesJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CUSTOM_TEMPLATES] = json }
     }
-    val templateDraftJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TEMPLATE_DRAFT] ?: "" }
-    suspend fun setTemplateDraftJson(json: String) {
+    override val templateDraftJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.TEMPLATE_DRAFT] ?: "" }
+    override suspend fun setTemplateDraftJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.TEMPLATE_DRAFT] = json }
     }
-    val hiddenTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.HIDDEN_TEMPLATES] ?: "" }
-    suspend fun setHiddenTemplatesJson(json: String) {
+    override val hiddenTemplatesJson: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.HIDDEN_TEMPLATES] ?: "" }
+    override suspend fun setHiddenTemplatesJson(json: String) {
         context.settingsDataStore.edit { it[SettingsKeys.HIDDEN_TEMPLATES] = json }
     }
-    val cloudEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_ENABLED] ?: false }
-    suspend fun setCloudEnabled(value: Boolean) {
+    override val cloudEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_ENABLED] ?: false }
+    override suspend fun setCloudEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_ENABLED] = value }
         SettingsCache.cloudEnabled = value
     }
-    val cloudProvider: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PROVIDER] ?: "Nutstore" }
-    suspend fun setCloudProvider(value: String) {
+    override val cloudProvider: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PROVIDER] ?: "Nutstore" }
+    override suspend fun setCloudProvider(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PROVIDER] = value }
         SettingsCache.cloudProvider = value
     }
-    val embeddingProvider: Flow<String> = context.settingsDataStore.data.map {
+    override val embeddingProvider: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.EMBEDDING_PROVIDER] ?: "local"
     }
-    suspend fun setEmbeddingProvider(value: String) {
+    override suspend fun setEmbeddingProvider(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.EMBEDDING_PROVIDER] = value }
         SettingsCache.embeddingProvider = value
     }
-    val cloudUrl: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_URL] ?: "" }
-    suspend fun setCloudUrl(value: String) {
+    override val cloudUrl: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_URL] ?: "" }
+    override suspend fun setCloudUrl(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_URL] = value }
         SettingsCache.cloudUrl = value
     }
-    val cloudUser: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_USER] ?: "" }
-    suspend fun setCloudUser(value: String) {
+    override val cloudUser: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_USER] ?: "" }
+    override suspend fun setCloudUser(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_USER] = value }
         SettingsCache.cloudUser = value
     }
-    val cloudPasswordEnc: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "" }
-    suspend fun setCloudPasswordEnc(value: String) {
+    override val cloudPasswordEnc: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_PASSWORD_ENC] ?: "" }
+    override suspend fun setCloudPasswordEnc(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_PASSWORD_ENC] = value }
         SettingsCache.cloudPasswordEnc = value
     }
-    val cloudFolder: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_FOLDER] ?: "Lucent" }
-    suspend fun setCloudFolder(value: String) {
+    override val cloudFolder: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_FOLDER] ?: "Lucent" }
+    override suspend fun setCloudFolder(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_FOLDER] = value }
         SettingsCache.cloudFolder = value
     }
-    val cloudAutoBackup: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false }
-    suspend fun setCloudAutoBackup(value: Boolean) {
+    override val cloudAutoBackup: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.CLOUD_AUTO_BACKUP] ?: false }
+    override suspend fun setCloudAutoBackup(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.CLOUD_AUTO_BACKUP] = value }
         SettingsCache.cloudAutoBackup = value
     }
 
-    val linksEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LINKS_ENABLED] ?: false }
+    override val linksEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.LINKS_ENABLED] ?: false }
+    override suspend fun setLinksEnabled(value: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.LINKS_ENABLED] = value }
+        SettingsCache.linksEnabled = value
+    }
 
-    val backgroundAnimationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true }
-    suspend fun setBackgroundAnimationEnabled(value: Boolean) {
+    override val backgroundAnimationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] ?: true }
+    override suspend fun setBackgroundAnimationEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.BACKGROUND_ANIMATION_ENABLED] = value }
         SettingsCache.backgroundAnimationEnabled = value
     }
 
-    val splashEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.SPLASH_ENABLED] ?: true }
-    suspend fun setSplashEnabled(value: Boolean) {
+    override val splashEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.SPLASH_ENABLED] ?: true }
+    override suspend fun setSplashEnabled(value: Boolean) {
         SettingsCache.splashEnabled = value
         context.settingsDataStore.edit { it[SettingsKeys.SPLASH_ENABLED] = value }
     }
 
-    val splashStyle: Flow<String> = context.settingsDataStore.data.map {
+    override val splashStyle: Flow<String> = context.settingsDataStore.data.map {
         it[SettingsKeys.SPLASH_STYLE] ?: SplashStyle.DEFAULT.key
     }
-    suspend fun setSplashStyle(value: String) {
+    override suspend fun setSplashStyle(value: String) {
         SettingsCache.splashStyle = SplashStyle.fromKey(value).key
         context.settingsDataStore.edit { it[SettingsKeys.SPLASH_STYLE] = SplashStyle.fromKey(value).key }
     }
 
-    val appLockEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_ENABLED] ?: false }
-    val appLockCredentials: Flow<String> = context.settingsDataStore.data.map { prefs ->
+    override val appLockEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_ENABLED] ?: false }
+    override val appLockCredentials: Flow<String> = context.settingsDataStore.data.map { prefs ->
         LocalSecrets.decrypt(prefs[SettingsKeys.APP_LOCK_CREDENTIALS_ENC] ?: "")
     }
 
-    suspend fun appLockEnabledOnce(): Boolean =
+    override suspend fun appLockEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.APP_LOCK_ENABLED] ?: false
-    suspend fun appLockCredentialsOnce(): String =
+    override suspend fun appLockCredentialsOnce(): String =
         LocalSecrets.decrypt(context.settingsDataStore.data.first()[SettingsKeys.APP_LOCK_CREDENTIALS_ENC] ?: "")
-    suspend fun startupLoggingEnabledOnce(): Boolean =
+    override suspend fun startupLoggingEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false
 
-    suspend fun setAppLock(enabled: Boolean, credentialsJson: String) {
+    override suspend fun setAppLock(enabled: Boolean, credentialsJson: String) {
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.APP_LOCK_ENABLED] = enabled
             if (enabled && credentialsJson.isNotEmpty()) {
@@ -775,26 +742,34 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setAppLockCredentials(credentialsJson: String) {
+    override suspend fun setAppLockCredentials(credentialsJson: String) {
         context.settingsDataStore.edit { it[SettingsKeys.APP_LOCK_CREDENTIALS_ENC] = LocalSecrets.encrypt(credentialsJson) }
     }
 
-    val appLockBiometricEnabled: Flow<Boolean> =
+    override val appLockBiometricEnabled: Flow<Boolean> =
         context.settingsDataStore.data.map { it[SettingsKeys.APP_LOCK_BIOMETRIC_ENABLED] ?: false }
-    suspend fun setAppLockBiometricEnabled(enabled: Boolean) {
+    override suspend fun setAppLockBiometricEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.APP_LOCK_BIOMETRIC_ENABLED] = enabled }
     }
 
-    val systemIntegrationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false }
-    suspend fun systemIntegrationEnabledOnce(): Boolean =
+    override val appLockHelloEnabled: Flow<Boolean> =
+        kotlinx.coroutines.flow.flowOf(false)
+    override suspend fun setAppLockHelloEnabled(value: Boolean) { }
+
+    override val closeToTray: Flow<Boolean> =
+        kotlinx.coroutines.flow.flowOf(true)
+    override suspend fun setCloseToTray(value: Boolean) { }
+
+    override val systemIntegrationEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false }
+    override suspend fun systemIntegrationEnabledOnce(): Boolean =
         context.settingsDataStore.data.first()[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] ?: false
-    suspend fun setSystemIntegrationEnabled(value: Boolean) {
+    override suspend fun setSystemIntegrationEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.SYSTEM_INTEGRATION_ENABLED] = value }
         SettingsCache.systemIntegrationEnabled = value
     }
 
-    val startupLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false }
-    suspend fun setStartupLoggingEnabled(value: Boolean) {
+    override val startupLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[SettingsKeys.STARTUP_LOGGING_ENABLED] ?: false }
+    override suspend fun setStartupLoggingEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.STARTUP_LOGGING_ENABLED] = value }
         SettingsCache.startupLoggingEnabled = value
     }
@@ -811,24 +786,24 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setBaseUrl(value: String) {
+    override suspend fun setBaseUrl(value: String) {
         SettingsCache.baseUrl = value
         putSecret(SettingsKeys.BASE_URL_ENC, SettingsKeys.LEGACY_BASE_URL, value)
     }
-    suspend fun setApiSpec(value: String) {
+    override suspend fun setApiSpec(value: String) {
         SettingsCache.apiSpec = value
         putSecret(SettingsKeys.API_SPEC_ENC, SettingsKeys.LEGACY_API_SPEC, value)
     }
-    suspend fun setModel(value: String) {
+    override suspend fun setModel(value: String) {
         SettingsCache.model = value
         putSecret(SettingsKeys.MODEL_ENC, SettingsKeys.LEGACY_MODEL, value)
     }
 
 
-    val modelRecents: Flow<List<String>> =
+    override val modelRecents: Flow<List<String>> =
         context.settingsDataStore.data.map { ModelRecents.parse(it[SettingsKeys.MODEL_RECENTS]) }
 
-    suspend fun setActiveModel(value: String) {
+    override suspend fun setActiveModel(value: String) {
         val model = value.trim()
         if (model.isBlank()) return
         val prefs = context.settingsDataStore.data.first()
@@ -858,116 +833,70 @@ class SettingsRepository(private val context: Context) {
         SettingsCache.model = model
     }
 
-    val terminalFontSize: Flow<Float?> = context.settingsDataStore.data.map {
+    override val terminalFontSize: Flow<Float?> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, "").toFloatOrNull()
     }
-    val terminalKeyBarVisible: Flow<Boolean> = context.settingsDataStore.data.map {
+    override val terminalKeyBarVisible: Flow<Boolean> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, "true").toBooleanStrictOrNull() ?: true
     }
-    val globalTextSelectionEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+    override val globalTextSelectionEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         secret(it, SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, "false").toBooleanStrictOrNull() ?: false
     }
 
-    suspend fun setTerminalFontSize(value: Float) {
+    override suspend fun setTerminalFontSize(value: Float) {
         SettingsCache.terminalFontSize = value
         putSecret(SettingsKeys.TERMINAL_FONT_SIZE_ENC, SettingsKeys.LEGACY_TERMINAL_FONT_SIZE, value.toString())
     }
-    suspend fun setTerminalKeyBarVisible(value: Boolean) {
+    override suspend fun setTerminalKeyBarVisible(value: Boolean) {
         SettingsCache.terminalKeyBarVisible = value
         putSecret(SettingsKeys.TERMINAL_KEY_BAR_VISIBLE_ENC, SettingsKeys.LEGACY_TERMINAL_KEY_BAR_VISIBLE, value.toString())
     }
-    suspend fun setGlobalTextSelectionEnabled(value: Boolean) {
+    override suspend fun setGlobalTextSelectionEnabled(value: Boolean) {
         SettingsCache.globalTextSelectionEnabled = value
         putSecret(SettingsKeys.GLOBAL_TEXT_SELECTION_ENABLED_ENC, SettingsKeys.LEGACY_GLOBAL_TEXT_SELECTION_ENABLED, value.toString())
     }
 
-    suspend fun setAssistantName(value: String) {
+    override suspend fun setAssistantName(value: String) {
         SettingsCache.assistantName = value
         putSecret(SettingsKeys.ASSISTANT_NAME_ENC, SettingsKeys.LEGACY_ASSISTANT_NAME, value)
     }
-    suspend fun setAssistantStyle(value: String) {
+    override suspend fun setAssistantStyle(value: String) {
         SettingsCache.assistantStyle = value
         putSecret(SettingsKeys.ASSISTANT_STYLE_ENC, SettingsKeys.LEGACY_ASSISTANT_STYLE, value)
     }
 
-    suspend fun setThemeMode(value: String) {
+    override suspend fun setThemeMode(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.THEME_MODE] = value }
         SettingsCache.themeMode = value
     }
-    suspend fun setPalette(value: String) {
+    override suspend fun setPalette(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.PALETTE] = value }
         SettingsCache.palette = value
     }
-    suspend fun setFont(value: String) {
+    override suspend fun setFont(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.FONT] = value }
         SettingsCache.font = value
     }
-    suspend fun setDynamicColorEnabled(value: Boolean) {
+    override suspend fun setDynamicColorEnabled(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.DYNAMIC_COLOR_ENABLED] = value }
         SettingsCache.dynamicColor = value
     }
-    suspend fun setAttachmentsMigrated(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.ATTACHMENTS_MIGRATED] = value } }
-    suspend fun setBackupPassword(value: String) {
+    override suspend fun setAttachmentsMigrated(value: Boolean) { context.settingsDataStore.edit { it[SettingsKeys.ATTACHMENTS_MIGRATED] = value } }
+    override suspend fun setBackupPassword(value: String) {
         context.settingsDataStore.edit { prefs ->
             if (value.isEmpty()) prefs.remove(SettingsKeys.BACKUP_PASSWORD_ENC)
             else prefs[SettingsKeys.BACKUP_PASSWORD_ENC] = LocalSecrets.encrypt(value)
         }
     }
 
-    suspend fun setNotesSort(value: String) {
-        context.settingsDataStore.edit { it[SettingsKeys.NOTES_SORT] = value }
-        SettingsCache.notesSort = value
-    }
-
-    suspend fun setSessionSnapshot(value: String) {
+    override suspend fun setSessionSnapshot(value: String) {
         context.settingsDataStore.edit { it[SettingsKeys.SESSION_SNAPSHOT] = value }
     }
 
-    suspend fun sessionSnapshotOnce(): String =
+    override suspend fun sessionSnapshotOnce(): String =
         context.settingsDataStore.data.first()[SettingsKeys.SESSION_SNAPSHOT] ?: ""
-    suspend fun setTasksSort(value: String) {
-        context.settingsDataStore.edit { it[SettingsKeys.TASKS_SORT] = value }
-        SettingsCache.tasksSort = value
-    }
-    suspend fun setNotebooksSort(value: String) {
-        context.settingsDataStore.edit { it[SettingsKeys.NOTEBOOKS_SORT] = value }
-        SettingsCache.notebooksSort = value
-    }
-    val notebookOpens: Flow<String> = context.settingsDataStore.data.map { prefs ->
-        prefs[SettingsKeys.NOTEBOOK_OPENS_ENC]?.let { LocalSecrets.decrypt(it) } ?: "{}"
-    }
-    suspend fun notebookOpensOnce(): String = notebookOpens.first()
-    suspend fun setNotebookOpens(value: String) {
-        putSecret(SettingsKeys.NOTEBOOK_OPENS_ENC, SettingsKeys.NOTEBOOK_OPENS_LEGACY, value)
-    }
-    suspend fun setMarkdownEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.MARKDOWN_ENABLED] = value }
-        SettingsCache.markdownEnabled = value
-    }
 
-    suspend fun setRichTextEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.RICH_TEXT_ENABLED] = value }
-        SettingsCache.richTextEnabled = value
-    }
-    suspend fun setLinksEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.LINKS_ENABLED] = value }
-        SettingsCache.linksEnabled = value
-    }
-
-    suspend fun setMemoryTier(value: String) {
-        context.settingsDataStore.edit { it[SettingsKeys.MEMORY_TIER] = value }
-        SettingsCache.memoryTier = value
-    }
-    suspend fun setWebSearchEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.WEB_SEARCH_ENABLED] = value }
-        SettingsCache.webSearchEnabled = value
-    }
-    suspend fun setTypingHapticsEnabled(value: Boolean) {
-        context.settingsDataStore.edit { it[SettingsKeys.TYPING_HAPTICS] = value }
-        SettingsCache.typingHapticsEnabled = value
-    }
-
-    suspend fun setApiKey(value: String) {
+    override suspend fun setApiKey(value: String) {
         SettingsCache.apiKey = value
         context.settingsDataStore.edit { prefs ->
             prefs[SettingsKeys.API_KEY_ENC] = LocalSecrets.encrypt(value)
@@ -975,7 +904,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun saveApiProfiles(profiles: List<ApiProfile>, selected: Int) {
+    override suspend fun saveApiProfiles(profiles: List<ApiProfile>, selected: Int) {
         val safe = profiles.take(ApiProfiles.MAX)
         val idx = if (safe.isEmpty()) 0 else selected.coerceIn(0, safe.size - 1)
         val active = safe.getOrNull(idx)
@@ -1016,5 +945,8 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun clearAll() { context.settingsDataStore.edit { it.clear() } }
+    override suspend fun clearAll() { context.settingsDataStore.edit { it.clear() } }
 }
+
+actual fun createSettingsRepository(context: PlatformContext): SettingsRepository =
+    AndroidSettingsRepository(context.androidContext)

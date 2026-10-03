@@ -37,6 +37,8 @@ import com.lucent.app.reminders.ReminderScheduler
 import com.lucent.app.ui.AppLockController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import com.lucent.app.data.createAppDatabase
+import com.lucent.app.data.createSettingsRepository
 
 fun main() {
     System.setProperty("java.net.useSystemProxies", "true")
@@ -45,7 +47,7 @@ fun main() {
     val context = DesktopContext
 
     val startup = try {
-        runBlocking { SettingsRepository(context).startupPrefsOnce() }
+        runBlocking { createSettingsRepository(context).startupPrefsOnce() }
             .also { com.lucent.app.data.SettingsCache.seed(it) }
             .also { com.lucent.app.data.SessionRestore.hydrate(it.sessionSnapshot) }
     } catch (t: Throwable) {
@@ -70,16 +72,16 @@ fun main() {
         startup.stagedUpdateFiles.split(",").filter { it.isNotBlank() }
     )
     com.lucent.app.data.AutoUpdate.onPendingChange = { version ->
-        AppScope.io.launch { SettingsRepository(context).setPendingUpdateVersion(version.orEmpty()) }
+        AppScope.io.launch { createSettingsRepository(context).setPendingUpdateVersion(version.orEmpty()) }
     }
     com.lucent.app.data.AutoUpdate.onStagedChange = { tag, files ->
-        AppScope.io.launch { SettingsRepository(context).setStagedUpdate(tag.orEmpty(), files) }
+        AppScope.io.launch { createSettingsRepository(context).setStagedUpdate(tag.orEmpty(), files) }
     }
     com.lucent.app.data.AutoUpdate.onPreviewInstalled = { identity ->
-        AppScope.io.launch { SettingsRepository(context).setInstalledPreviewIdentity(identity) }
+        AppScope.io.launch { createSettingsRepository(context).setInstalledPreviewIdentity(identity) }
     }
     com.lucent.app.data.AutoUpdate.onStagedIdentityChange = { identity ->
-        AppScope.io.launch { SettingsRepository(context).setStagedUpdateIdentity(identity) }
+        AppScope.io.launch { createSettingsRepository(context).setStagedUpdateIdentity(identity) }
     }
     AppScope.io.launch {
         val running = com.lucent.app.LucentBuild.VERSION
@@ -94,13 +96,13 @@ fun main() {
     com.lucent.app.harness.HarnessRuntime.pluginHost = com.lucent.app.harness.plugins.PluginManager.desktop(android.content.DesktopContext)
     com.lucent.app.harness.HarnessRuntime.terminalBackend = com.lucent.app.harness.DesktopPtyBackend
     AppScope.io.launch {
-        val raw = runCatching { SettingsRepository(context).harnessConfigOnce() }.getOrDefault("")
+        val raw = runCatching { createSettingsRepository(context).harnessConfigOnce() }.getOrDefault("")
         val config = com.lucent.app.harness.HarnessConfig.parse(raw)
         com.lucent.app.data.SettingsCache.harnessConfigJson = config.toJson()
         com.lucent.app.harness.HarnessRuntime.install(config)
     }
     com.lucent.app.harness.HarnessRuntime.observe { config ->
-        AppScope.io.launch { runCatching { SettingsRepository(context).setHarnessConfig(config.toJson()) } }
+        AppScope.io.launch { runCatching { createSettingsRepository(context).setHarnessConfig(config.toJson()) } }
     }
 
     val focusRequests = MutableStateFlow(0L)
@@ -120,14 +122,14 @@ fun main() {
         }
     }
     AppScope.io.launch { runCatching { AttachmentAccess.clearPreviewCache(context) } }
-    AppScope.io.launch { runCatching { com.lucent.app.data.AppDatabase.getInstance(context) } }
+    AppScope.io.launch { runCatching { com.lucent.app.data.createAppDatabase(context) } }
     AppScope.io.launch { runCatching { com.lucent.app.data.AutoBackupRunner.ensureStarted(context) } }
 
     application {
         val windowState = rememberWindowState(placement = WindowPlacement.Maximized)
         val trayState = rememberTrayState()
         var windowVisible by remember { mutableStateOf(true) }
-        val settingsRepo = remember { SettingsRepository(context) }
+        val settingsRepo = remember { createSettingsRepository(context) }
         val closeToTray by settingsRepo.closeToTray.collectAsState(
             initial = com.lucent.app.data.SettingsCache.closeToTray)
         val fallbackIcon = rememberVectorPainter(Icons.Default.AutoAwesome)

@@ -2,13 +2,14 @@ package com.lucent.app.data
 
 import android.content.Context
 import com.lucent.app.AppScope
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-object StartupLog {
+actual object StartupLog {
 
     private const val FILE_NAME = "startup_log.txt"
     private const val MAX_BYTES = 256 * 1024
@@ -18,12 +19,12 @@ object StartupLog {
 
     private val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
 
-    fun setEnabled(value: Boolean) { enabled = value }
-    fun isEnabled(): Boolean = enabled
+    actual fun setEnabled(value: Boolean) { enabled = value }
+    actual fun isEnabled(): Boolean = enabled
 
     private fun logFile(context: Context) = File(context.applicationContext.filesDir, FILE_NAME)
 
-    fun event(context: Context, message: String) {
+    actual fun event(context: PlatformContext, message: String) {
         if (!enabled) return
         val app = context.applicationContext
         val stamp = synchronized(lock) { format.format(Date()) }
@@ -42,12 +43,12 @@ object StartupLog {
         }
     }
 
-    fun readAll(context: Context): String = synchronized(lock) {
+    actual fun readAll(context: PlatformContext): String = synchronized(lock) {
         val f = logFile(context)
         if (!f.exists()) "" else try { f.readText() } catch (_: Throwable) { "" }
     }
 
-    fun buildExport(context: Context): String {
+    actual fun buildExport(context: PlatformContext): String {
         val events = readAll(context)
         return buildString {
             append("==== Lucent event log ====\n")
@@ -71,12 +72,12 @@ object StartupLog {
         "(couldn't read logcat on this device: ${t.message})\n"
     }
 
-    fun hasEntries(context: Context): Boolean = synchronized(lock) {
+    actual fun hasEntries(context: PlatformContext): Boolean = synchronized(lock) {
         val f = logFile(context)
         f.exists() && f.length() > 0
     }
 
-    fun clear(context: Context) {
+    actual fun clear(context: PlatformContext) {
         synchronized(lock) {
             try { logFile(context).delete() } catch (_: Throwable) {}
         }

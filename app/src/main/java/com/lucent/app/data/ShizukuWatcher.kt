@@ -62,7 +62,7 @@ object ShizukuWatcher {
     private suspend fun flagIfNotReady(context: Context): Boolean {
         val state = stateOf(context)
         if (state == ShizukuState.READY) return false
-        SettingsRepository(context).setPrivilegedEnabled(false)
+        createSettingsRepository(context).setPrivilegedEnabled(false)
         StartupLog.event(context, "shizuku: ${state.name.lowercase()} - the advanced switch was turned off")
         notice = state
         return true

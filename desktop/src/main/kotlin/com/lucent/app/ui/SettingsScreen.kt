@@ -113,6 +113,8 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
+import com.lucent.app.data.createAppDatabase
+import com.lucent.app.data.createSettingsRepository
 
 internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Workspace, Capabilities, Permissions, Groups, Execution, Github, Plugins, Mcp, Audit, Shizuku, PluginSetup }
 
@@ -124,8 +126,8 @@ private const val WRONG_PASSWORD = "__wrong_password__"
 @Composable
 fun SettingsScreen(active: Boolean = true) {
     val context = LocalContext.current
-    val repo = remember { SettingsRepository(context) }
-    val db = remember { AppDatabase.getInstance(context) }
+    val repo = remember { createSettingsRepository(context) }
+    val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -215,7 +217,7 @@ fun SettingsScreen(active: Boolean = true) {
             val wiped = runCatching {
                 com.lucent.app.data.wipeAllData(
                     context.applicationContext,
-                    com.lucent.app.data.AppDatabase.getInstance(context.applicationContext),
+                    com.lucent.app.data.createAppDatabase(context.applicationContext),
                     repo)
             }.isSuccess
             if (!wiped) {
@@ -339,9 +341,9 @@ fun SettingsScreen(active: Boolean = true) {
     }
     LaunchedEffect(showExportDialog) {
         if (showExportDialog) {
-            val loadedNotes = withContext(Dispatchers.IO) { db.noteDao().getAllOnce() }
-            val loadedTasks = withContext(Dispatchers.IO) { db.taskDao().getAllOnce() }
-            val loadedConversations = withContext(Dispatchers.IO) { db.chatConversationDao().getAllOnce() }
+            val loadedNotes = withContext(Dispatchers.IO) { db.noteDao.getAllOnce() }
+            val loadedTasks = withContext(Dispatchers.IO) { db.taskDao.getAllOnce() }
+            val loadedConversations = withContext(Dispatchers.IO) { db.chatConversationDao.getAllOnce() }
             allNotes = loadedNotes
             allTasks = loadedTasks
             allConversations = loadedConversations
@@ -1888,8 +1890,8 @@ fun SettingsScreen(active: Boolean = true) {
                 TextButton(onClick = {
                     showClearNotes = false
                     requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear notes") {
-                        db.noteVersionDao().clearAll()
-                        db.noteDao().clearAll()
+                        db.noteVersionDao.clearAll()
+                        db.noteDao.clearAll()
                         com.lucent.app.data.AttachmentMigration.pruneOrphans(appContext)
                         com.lucent.app.widget.WidgetUpdater.refreshContent(appContext)
                         withContext(Dispatchers.Main) { LucentToast.show(appContext, S.notesClearedToast) }
@@ -1912,11 +1914,11 @@ fun SettingsScreen(active: Boolean = true) {
                 TextButton(onClick = {
                     showClearTasks = false
                     requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear tasks") {
-                        db.taskDao().getAllOnce().forEach {
+                        db.taskDao.getAllOnce().forEach {
                             com.lucent.app.reminders.ReminderScheduler.cancel(appContext, it.id)
                         }
-                        db.taskVersionDao().clearAll()
-                        db.taskDao().clearAll()
+                        db.taskVersionDao.clearAll()
+                        db.taskDao.clearAll()
                         com.lucent.app.data.AttachmentMigration.pruneOrphans(appContext)
                         com.lucent.app.widget.WidgetUpdater.refreshContent(appContext)
                         withContext(Dispatchers.Main) { LucentToast.show(appContext, S.tasksClearedToast) }
@@ -1958,8 +1960,8 @@ fun SettingsScreen(active: Boolean = true) {
                 TextButton(onClick = {
                     showClearChats = false
                     requireLockAuth { com.lucent.app.data.backgroundWrite(context, "clear chats") {
-                        db.chatDao().clearAll()
-                        db.chatConversationDao().clearAll()
+                        db.chatDao.clearAll()
+                        db.chatConversationDao.clearAll()
                         AssistantController.onAllChatsCleared(appContext)
                         withContext(Dispatchers.Main) { LucentToast.show(appContext, S.chatsClearedToast) }
                     }
@@ -2173,8 +2175,8 @@ fun SettingsScreen(active: Boolean = true) {
     }
     if (lmConfirmBackgroundOn) { ConfirmBackgroundDialog() }
 
-    val notesForExport by remember { db.noteDao().getAll() }.collectAsState(initial = emptyList())
-    val tasksForExport by remember { db.taskDao().getAll() }.collectAsState(initial = emptyList())
+    val notesForExport by remember { db.noteDao.getAll() }.collectAsState(initial = emptyList())
+    val tasksForExport by remember { db.taskDao.getAll() }.collectAsState(initial = emptyList())
     var exportKind by remember { mutableStateOf<ExportKind?>(null) }
     LaunchedEffect(active) {
         if (!active) exportKind = null

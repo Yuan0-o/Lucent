@@ -125,6 +125,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import com.lucent.app.data.createAppDatabase
+import com.lucent.app.data.createSettingsRepository
 
 enum class Screen {
     Tasks, Notes, Notebooks, Assistant, Settings;
@@ -152,7 +154,7 @@ class MainActivity : FragmentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        val settingsRepo = SettingsRepository(applicationContext)
+        val settingsRepo = createSettingsRepository(applicationContext)
         val startup = try {
             runBlocking { settingsRepo.startupPrefsOnce() }
                 .also { com.lucent.app.data.SettingsCache.seed(it) }
@@ -284,7 +286,7 @@ class MainActivity : FragmentActivity() {
 
         AppScope.io.launch {
             try {
-                val db = com.lucent.app.data.AppDatabase.getInstance(applicationContext)
+                val db = com.lucent.app.data.createAppDatabase(applicationContext)
                 com.lucent.app.data.DataCache.warm(db)
                 AssistantController.ensureMessagesLoaded(applicationContext)
                 com.lucent.app.ui.AppReady.databaseReady = true
@@ -477,7 +479,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         if (AssistantController.sending && AssistantController.localTurnInFlight) {
-            val repo = SettingsRepository(applicationContext)
+            val repo = createSettingsRepository(applicationContext)
             AppScope.io.launch {
                 val keepGoing = try {
                     repo.localBackgroundReplyEnabledOnce()
@@ -507,7 +509,7 @@ class MainActivity : FragmentActivity() {
     private fun handleShareIntent(intent: Intent?) {
         val shared = ShareIntegration.parse(intent) ?: return
         val enabled = try {
-            runBlocking { SettingsRepository(applicationContext).systemIntegrationEnabledOnce() }
+            runBlocking { createSettingsRepository(applicationContext).systemIntegrationEnabledOnce() }
         } catch (t: Throwable) {
             false
         }

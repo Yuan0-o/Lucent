@@ -204,14 +204,14 @@ class AssistantControllerTest {
 
                 awaitState(controller, description = "the local turn's confirmation") { it.pendingConfirmation != null }
                 assertEquals("create_task", controller.state.value.pendingConfirmation!!.toolName)
-                assertTrue(db.taskDao().getAllOnce().isEmpty())
+                assertTrue(db.taskDao.getAllOnce().isEmpty())
 
                 controller.resolveConfirmation(approved = true)
                 awaitState(controller, description = "the local turn to finish") { !it.sending }
 
-                assertEquals(1, db.taskDao().getAllOnce().size)
-                assertEquals("Buy milk", db.taskDao().getAllOnce().first().title)
-                assertEquals("Added it.", db.chatDao().getAllOnce().last { it.role == "assistant" }.content)
+                assertEquals(1, db.taskDao.getAllOnce().size)
+                assertEquals("Buy milk", db.taskDao.getAllOnce().first().title)
+                assertEquals("Added it.", db.chatDao.getAllOnce().last { it.role == "assistant" }.content)
 
                 val prompt = engine.transcripts.first().first { it.first == "system" }.second
                 assertTrue(prompt.contains("""{"tool": "<tool_name>", "arguments": { ... }}"""))
@@ -255,10 +255,10 @@ class AssistantControllerTest {
                 controller.resolveConfirmation(approved = true)
                 awaitState(controller, description = "the multi-round local turn to finish") { !it.sending }
 
-                assertEquals(1, db.taskDao().getAllOnce().size)
+                assertEquals(1, db.taskDao.getAllOnce().size)
                 assertEquals(
                     "You have one task: Buy milk.",
-                    db.chatDao().getAllOnce().last { it.role == "assistant" }.content
+                    db.chatDao.getAllOnce().last { it.role == "assistant" }.content
                 )
                 assertEquals(3, engine.transcripts.size, "the result must feed another round of generation")
                 val thirdRound = engine.transcripts[2]
@@ -291,7 +291,7 @@ class AssistantControllerTest {
 
                 assertEquals(
                     "Nothing on your list yet.",
-                    db.chatDao().getAllOnce().last { it.role == "assistant" }.content
+                    db.chatDao.getAllOnce().last { it.role == "assistant" }.content
                 )
                 assertTrue(
                     engine.transcripts[1].any { it.first == "user" && it.second.startsWith("Result of list_tasks:") },
@@ -324,7 +324,7 @@ class AssistantControllerTest {
 
                 assertEquals(
                     "Your list is empty.",
-                    db.chatDao().getAllOnce().last { it.role == "assistant" }.content
+                    db.chatDao.getAllOnce().last { it.role == "assistant" }.content
                 )
                 assertTrue(
                     engine.transcripts[1].any { it.first == "user" && it.second.startsWith("Result of list_tasks:") },
@@ -352,7 +352,7 @@ class AssistantControllerTest {
                 controller.sendLocalFixture(context, text = "delete everything")
                 awaitState(controller, description = "the unusable local turn to finish") { !it.sending }
 
-                val assistant = db.chatDao().getAllOnce().last { it.role == "assistant" }
+                val assistant = db.chatDao.getAllOnce().last { it.role == "assistant" }
                 assertTrue(
                     !assistant.content.contains("delete_everything"),
                     "raw tool JSON must never reach the user"
@@ -378,10 +378,10 @@ class AssistantControllerTest {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
             installTestModel(context, dir)
-            val conversationId = db.chatConversationDao().insert(ChatConversation())
+            val conversationId = db.chatConversationDao.insert(ChatConversation())
             val filler = "x".repeat(1200)
             repeat(12) { i ->
-                db.chatDao().insert(
+                db.chatDao.insert(
                     ChatMessage(
                         role = if (i % 2 == 0) "user" else "assistant",
                         content = "$filler $i",
@@ -437,7 +437,7 @@ class AssistantControllerTest {
             assertEquals("Buy milk", byKey["title"])
             assertEquals("2%", byKey["notes"])
 
-            assertTrue(db.taskDao().getAllOnce().isEmpty())
+            assertTrue(db.taskDao.getAllOnce().isEmpty())
         }
     }
 
@@ -456,7 +456,7 @@ class AssistantControllerTest {
             controller.resolveConfirmation(approved = false)
 
             awaitState(controller, description = "turn to finish after declining") { !it.sending }
-            assertTrue(db.taskDao().getAllOnce().isEmpty(), "declining must not create the task")
+            assertTrue(db.taskDao.getAllOnce().isEmpty(), "declining must not create the task")
         }
     }
 
@@ -477,7 +477,7 @@ class AssistantControllerTest {
 
             awaitState(controller, description = "turn to finish after approving") { !it.sending }
 
-            val tasks = db.taskDao().getAllOnce()
+            val tasks = db.taskDao.getAllOnce()
             assertEquals(1, tasks.size, "approving twice must still write exactly one task")
             assertEquals("Buy milk", tasks.first().title)
         }
@@ -505,7 +505,7 @@ class AssistantControllerTest {
             controller.resolveConfirmation(approved = true)
             awaitState(controller, description = "turn to finish after approving") { !it.sending }
 
-            val assistant = db.chatDao().getAllOnce().last { it.role == "assistant" }
+            val assistant = db.chatDao.getAllOnce().last { it.role == "assistant" }
             val trace = AgentTraceCodec.decode(assistant.agentTrace)
             assertTrue(trace != null, "the trace must be persisted on the reply")
             assertEquals(AgentStepStatus.DONE, trace.status)
@@ -530,8 +530,8 @@ class AssistantControllerTest {
             controller.resolveConfirmation(approved = false)
             awaitState(controller, description = "turn to finish after declining") { !it.sending }
 
-            assertTrue(db.taskDao().getAllOnce().isEmpty(), "declining must not create the task")
-            val assistant = db.chatDao().getAllOnce().last { it.role == "assistant" }
+            assertTrue(db.taskDao.getAllOnce().isEmpty(), "declining must not create the task")
+            val assistant = db.chatDao.getAllOnce().last { it.role == "assistant" }
             val trace = AgentTraceCodec.decode(assistant.agentTrace)
             assertTrue(trace != null, "the cancelled trace must still be persisted")
             assertEquals(AgentStepStatus.CANCELLED, trace.status)

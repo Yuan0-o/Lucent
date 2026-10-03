@@ -8,6 +8,7 @@ import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.tools.TaskActions
 import kotlinx.coroutines.launch
+import com.lucent.app.data.createAppDatabase
 
 class NotificationActionReceiver : BroadcastReceiver() {
 
@@ -20,8 +21,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val pending = goAsync()
         AppScope.io.launch {
             try {
-                val db = AppDatabase.getInstance(appContext)
-                db.taskDao().getByIdOnce(taskId)?.let { task ->
+                val db = createAppDatabase(appContext)
+                db.taskDao.getByIdOnce(taskId)?.let { task ->
                     if (!task.isDone && task.trashedAt == null) {
                         TaskActions.complete(appContext, db, task)
                     }

@@ -54,9 +54,9 @@ class EmbeddingStoreTest {
         use(dir) {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
-            val noteA = db.noteDao().insert(Note(title = "A", body = "far from the query"))
-            val noteB = db.noteDao().insert(Note(title = "B", body = "close to the query"))
-            val noteC = db.noteDao().insert(Note(title = "C", body = "identical to the query"))
+            val noteA = db.noteDao.insert(Note(title = "A", body = "far from the query"))
+            val noteB = db.noteDao.insert(Note(title = "B", body = "close to the query"))
+            val noteC = db.noteDao.insert(Note(title = "C", body = "identical to the query"))
 
             EmbeddingStore.store(context, noteA, "test-model", floatArrayOf(1f, 0f, 0f))
             EmbeddingStore.store(context, noteB, "test-model", floatArrayOf(0.9f, 0.1f, 0f))
@@ -79,7 +79,7 @@ class EmbeddingStoreTest {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
             repeat(5) { i ->
-                val id = db.noteDao().insert(Note(title = "N$i", body = "note $i"))
+                val id = db.noteDao.insert(Note(title = "N$i", body = "note $i"))
                 EmbeddingStore.store(context, id, "test-model", floatArrayOf(i.toFloat(), 1f, 0f))
             }
             val results = EmbeddingStore.search(context, floatArrayOf(0f, 1f, 0f), "test-model", topK = 2)
@@ -93,7 +93,7 @@ class EmbeddingStoreTest {
         use(dir) {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
-            val noteId = db.noteDao().insert(Note(title = "N", body = "body"))
+            val noteId = db.noteDao.insert(Note(title = "N", body = "body"))
 
             EmbeddingStore.store(context, noteId, "local-model", floatArrayOf(1f, 0f))
             EmbeddingStore.store(context, noteId, "cloud-model", floatArrayOf(0f, 1f))
@@ -112,13 +112,13 @@ class EmbeddingStoreTest {
         use(dir) {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
-            val noteId = db.noteDao().insert(Note(title = "N", body = "body"))
+            val noteId = db.noteDao.insert(Note(title = "N", body = "body"))
             EmbeddingStore.store(context, noteId, "test-model", floatArrayOf(1f, 0f))
 
-            assertEquals(1, db.noteEmbeddingDao().getForNote(noteId).size)
-            db.noteDao().delete(Note(id = noteId, title = "", body = ""))
+            assertEquals(1, db.noteEmbeddingDao.getForNote(noteId).size)
+            db.noteDao.delete(Note(id = noteId, title = "", body = ""))
             assertTrue(
-                db.noteEmbeddingDao().getForNote(noteId).isEmpty(),
+                db.noteEmbeddingDao.getForNote(noteId).isEmpty(),
                 "expected the AFTER-DELETE trigger (MIGRATION_18_19) to remove the note's embeddings"
             )
         }
@@ -130,13 +130,13 @@ class EmbeddingStoreTest {
         use(dir) {
             val context = TestContext(dir)
             val db = AppDatabase.createForTesting(context)
-            val noteId = db.noteDao().insert(Note(title = "N", body = "body"))
+            val noteId = db.noteDao.insert(Note(title = "N", body = "body"))
             EmbeddingStore.store(context, noteId, "local-model", floatArrayOf(1f, 0f))
             EmbeddingStore.store(context, noteId, "cloud-model", floatArrayOf(0f, 1f))
 
             EmbeddingStore.clearAll(context)
 
-            assertTrue(db.noteEmbeddingDao().getForNote(noteId).isEmpty())
+            assertTrue(db.noteEmbeddingDao.getForNote(noteId).isEmpty())
         }
     }
 }

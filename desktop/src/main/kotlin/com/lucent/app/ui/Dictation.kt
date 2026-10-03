@@ -36,11 +36,12 @@ import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.DataLine
 import javax.sound.sampled.TargetDataLine
+import com.lucent.app.data.createSettingsRepository
 
 @Composable
 fun DictationButton(onText: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = DesktopContext
-    val repo = remember { SettingsRepository(context) }
+    val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val baseUrl by repo.baseUrl.collectAsState(initial = com.lucent.app.data.SettingsCache.baseUrl)
     val apiKey by repo.apiKey.collectAsState(initial = com.lucent.app.data.SettingsCache.apiKey)

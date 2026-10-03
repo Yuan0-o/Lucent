@@ -9,7 +9,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-object LocalSecrets {
+actual object LocalSecrets {
 
     private const val KEYSTORE = "AndroidKeyStore"
     private const val KEY_ALIAS = "lucent_local_secret_v1"
@@ -38,7 +38,7 @@ object LocalSecrets {
         null
     }
 
-    fun encrypt(plainText: String): String {
+    actual fun encrypt(plainText: String): String {
         if (plainText.isEmpty()) return ""
         val key = secretKey() ?: return PREFIX_PORTABLE + CryptoUtil.encrypt(plainText)
         return try {
@@ -52,7 +52,7 @@ object LocalSecrets {
         }
     }
 
-    fun decrypt(stored: String): String {
+    actual fun decrypt(stored: String): String {
         if (stored.isEmpty()) return ""
         return when {
             stored.startsWith(PREFIX_KEYSTORE) -> {

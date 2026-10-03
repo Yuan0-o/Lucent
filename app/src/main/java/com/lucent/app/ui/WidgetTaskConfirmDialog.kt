@@ -18,6 +18,7 @@ import com.lucent.app.tools.TaskActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.lucent.app.data.createAppDatabase
 
 object WidgetTaskConfirm {
 
@@ -38,7 +39,7 @@ fun WidgetTaskConfirmDialog() {
     LaunchedEffect(id) {
         val appContext = context.applicationContext
         val loaded = withContext(Dispatchers.IO) {
-            AppDatabase.getInstance(appContext).taskDao().getByIdOnce(id)
+            createAppDatabase(appContext).taskDao.getByIdOnce(id)
         }
         if (loaded == null || loaded.trashedAt != null) {
             WidgetTaskConfirm.clear()
@@ -71,8 +72,8 @@ fun WidgetTaskConfirmDialog() {
                 scope.launch {
                     val appContext = context.applicationContext
                     val done = withContext(Dispatchers.IO) {
-                        val db = AppDatabase.getInstance(appContext)
-                        val fresh = db.taskDao().getByIdOnce(id)
+                        val db = createAppDatabase(appContext)
+                        val fresh = db.taskDao.getByIdOnce(id)
                         if (fresh == null || fresh.trashedAt != null) return@withContext null
                         if (fresh.isDone) {
                             TaskActions.restore(appContext, db, fresh)

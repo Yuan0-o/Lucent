@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Task
+import com.lucent.app.data.createAppDatabase
 
 object ReminderScheduler {
 
@@ -70,7 +71,7 @@ object ReminderScheduler {
 
     suspend fun rescheduleAll(context: Context) {
         val appContext = context.applicationContext
-        val db = AppDatabase.getInstance(appContext)
-        db.taskDao().getAllOnce().forEach { sync(appContext, it) }
+        val db = createAppDatabase(appContext)
+        db.taskDao.getAllOnce().forEach { sync(appContext, it) }
     }
 }

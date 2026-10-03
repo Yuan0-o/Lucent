@@ -7,7 +7,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-object LocalSecrets {
+actual object LocalSecrets {
 
     private const val PREFIX = "v1:"
 
@@ -170,7 +170,7 @@ object LocalSecrets {
         }
     }
 
-    fun encrypt(value: String): String {
+    actual fun encrypt(value: String): String {
         if (value.isEmpty()) return ""
         val key = keyBytes ?: return degrade(value, "master key unavailable")
         return try {
@@ -185,7 +185,7 @@ object LocalSecrets {
         }
     }
 
-    fun decrypt(stored: String): String {
+    actual fun decrypt(stored: String): String {
         if (stored.isEmpty()) return ""
         if (stored.startsWith(PREFIX_PORTABLE)) {
             return CryptoUtil.decrypt(stored.removePrefix(PREFIX_PORTABLE))

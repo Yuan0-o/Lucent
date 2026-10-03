@@ -39,6 +39,8 @@ import com.lucent.app.data.AppLock
 import com.lucent.app.data.BiometricAuth
 import com.lucent.app.data.SettingsRepository
 import kotlinx.coroutines.launch
+import com.lucent.app.data.createAppDatabase
+import com.lucent.app.data.createSettingsRepository
 
 object AppLockController {
 
@@ -79,7 +81,7 @@ private enum class LockStage { ENTER_PASSWORD, ANSWER_QUESTION, SET_NEW_PASSWORD
 @Composable
 fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
     val context = LocalContext.current
-    val repo = remember { SettingsRepository(context) }
+    val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -211,7 +213,7 @@ fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnima
                                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                                 com.lucent.app.data.wipeAllData(
                                                     context.applicationContext,
-                                                    com.lucent.app.data.AppDatabase.getInstance(context.applicationContext),
+                                                    com.lucent.app.data.createAppDatabase(context.applicationContext),
                                                     repo)
                                             }
                                             error = ""

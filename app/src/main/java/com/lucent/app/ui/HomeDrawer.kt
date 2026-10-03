@@ -45,6 +45,7 @@ import com.lucent.app.data.AppDatabase
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+import com.lucent.app.data.createAppDatabase
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -54,20 +55,20 @@ fun HomeDrawerSheet(
     onOpenPanel: (HomePanel) -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val glassDark = isDarkGlass()
     val sheetShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
 
-    val noteDrafts by remember { db.noteDao().getDrafts() }.collectAsState(initial = emptyList())
-    val noteArchive by remember { db.noteDao().getArchived() }.collectAsState(initial = emptyList())
-    val noteTrash by remember { db.noteDao().getTrashed() }.collectAsState(initial = emptyList())
-    val noteHidden by remember { db.noteDao().getHidden() }.collectAsState(initial = emptyList())
-    val taskDrafts by remember { db.taskDao().getDrafts() }.collectAsState(initial = emptyList())
-    val taskArchive by remember { db.taskDao().getCompleted() }.collectAsState(initial = emptyList())
-    val taskTrash by remember { db.taskDao().getTrashed() }.collectAsState(initial = emptyList())
-    val taskHidden by remember { db.taskDao().getHidden() }.collectAsState(initial = emptyList())
+    val noteDrafts by remember { db.noteDao.getDrafts() }.collectAsState(initial = emptyList())
+    val noteArchive by remember { db.noteDao.getArchived() }.collectAsState(initial = emptyList())
+    val noteTrash by remember { db.noteDao.getTrashed() }.collectAsState(initial = emptyList())
+    val noteHidden by remember { db.noteDao.getHidden() }.collectAsState(initial = emptyList())
+    val taskDrafts by remember { db.taskDao.getDrafts() }.collectAsState(initial = emptyList())
+    val taskArchive by remember { db.taskDao.getCompleted() }.collectAsState(initial = emptyList())
+    val taskTrash by remember { db.taskDao.getTrashed() }.collectAsState(initial = emptyList())
+    val taskHidden by remember { db.taskDao.getHidden() }.collectAsState(initial = emptyList())
 
     fun countFor(panel: HomePanel): Int = when (mode) {
         HomeMode.Notes -> when (panel) {
