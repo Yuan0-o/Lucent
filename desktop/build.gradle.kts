@@ -18,9 +18,6 @@ detekt {
 kotlin {
     jvmToolchain(17)
     sourceSets {
-        main {
-            kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
-        }
         test {
             kotlin.srcDir(rootProject.file("shared/src/test/kotlin"))
         }
@@ -28,6 +25,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.compose.material3:material3:${ComposeBuildConfig.composeMaterial3Version}")
     implementation(libs.compose.material.icons.extended)

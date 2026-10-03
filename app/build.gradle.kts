@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.compose")
     id("com.google.devtools.ksp")
     id("androidx.baselineprofile")
 }
@@ -59,7 +60,6 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.directories += layout.buildDirectory.dir("rustJniLibs").get().asFile.path
-            kotlin.directories += rootProject.file("shared/src/main/kotlin").path
         }
         getByName("test") {
             kotlin.directories += rootProject.file("shared/src/test/kotlin").path
@@ -173,11 +173,12 @@ if (cargoNdkReady) {
 
 dependencies {
     implementation(platform(libs.compose.bom))
-    implementation(libs.androidx.ui)
+    implementation(project(":shared"))
+    implementation(compose.ui)
+    implementation(compose.material3)
+    implementation(compose.materialIconsExtended)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
     implementation(libs.core.splashscreen)
-    implementation(libs.androidx.material.icons.extended)
     implementation(libs.activity.compose)
     implementation(libs.core.ktx)
 
