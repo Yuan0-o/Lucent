@@ -11,15 +11,13 @@ actual object CrashShield {
     private const val TAG = "LucentCrashShield"
 
     @Volatile private var installed = false
-    @Volatile private var appContext: Context? = null
+    @Volatile private var appContext: PlatformContext? = null
 
-    @Volatile var caughtCount: Int = 0
-        private set
+    @Volatile actual var caughtCount: Int = 0
 
-    @Volatile var lastCaught: String? = null
-        private set
+    @Volatile actual var lastCaught: String? = null
 
-    fun install(context: PlatformContext) {
+    actual fun install(context: PlatformContext) {
         if (installed) return
         synchronized(this) {
             if (installed) return
@@ -31,7 +29,7 @@ actual object CrashShield {
         }
     }
 
-    fun isInstalled(): Boolean = installed
+    actual fun isInstalled(): Boolean = installed
 
     private fun installBackgroundHandler() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

@@ -45,7 +45,7 @@ actual object DataKeys {
         }
     }
 
-    private fun getOrCreate(context: Context, fileName: String): ByteArray {
+    private fun getOrCreate(context: PlatformContext, fileName: String): ByteArray {
         val file = File(keyDir(context), fileName)
         if (file.exists()) {
             val stored = try { file.readText() } catch (t: Throwable) { "" }
@@ -63,7 +63,7 @@ actual object DataKeys {
         return fresh
     }
 
-    fun attachmentKey(context: PlatformContext): SecretKey {
+    actual fun attachmentKey(context: PlatformContext): SecretKey {
         attachmentKey?.let { return it }
         synchronized(lock) {
             attachmentKey?.let { return it }
@@ -73,7 +73,7 @@ actual object DataKeys {
         }
     }
 
-    fun databasePassphrase(context: PlatformContext): String {
+    actual fun databasePassphrase(context: PlatformContext): String {
         databaseKeyHex?.let { return it }
         synchronized(lock) {
             databaseKeyHex?.let { return it }
@@ -85,10 +85,10 @@ actual object DataKeys {
         }
     }
 
-    fun hasDatabaseKey(context: PlatformContext): Boolean =
+    actual fun hasDatabaseKey(context: PlatformContext): Boolean =
         File(keyDir(context), DATABASE_KEY_FILE).exists()
 
-    fun resetCacheForTesting() {
+    actual fun resetCacheForTesting() {
         synchronized(lock) {
             attachmentKey = null
             databaseKeyHex = null

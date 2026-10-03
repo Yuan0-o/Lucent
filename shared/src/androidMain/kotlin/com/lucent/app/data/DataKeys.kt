@@ -42,7 +42,7 @@ actual object DataKeys {
         }
     }
 
-    private fun getOrCreate(context: Context, fileName: String): ByteArray {
+    private fun getOrCreate(context: PlatformContext, fileName: String): ByteArray {
         val appContext = context.applicationContext
         val file = File(keyDir(appContext), fileName)
         val recoveryFile = File(keyDir(appContext), fileName + RECOVERY_SUFFIX)
@@ -97,7 +97,7 @@ actual object DataKeys {
         if (wrapped.isNotEmpty()) atomicWrite(recoveryFile, wrapped)
     }
 
-    fun attachmentKey(context: PlatformContext): SecretKey {
+    actual fun attachmentKey(context: PlatformContext): SecretKey {
         attachmentKey?.let { return it }
         synchronized(lock) {
             attachmentKey?.let { return it }
@@ -107,7 +107,7 @@ actual object DataKeys {
         }
     }
 
-    fun databasePassphrase(context: PlatformContext): String {
+    actual fun databasePassphrase(context: PlatformContext): String {
         databaseKeyHex?.let { return it }
         synchronized(lock) {
             databaseKeyHex?.let { return it }
@@ -119,10 +119,10 @@ actual object DataKeys {
         }
     }
 
-    fun hasDatabaseKey(context: PlatformContext): Boolean =
+    actual fun hasDatabaseKey(context: PlatformContext): Boolean =
         File(keyDir(context.applicationContext), DATABASE_KEY_FILE).exists()
 
-    fun resetCacheForTesting() {
+    actual fun resetCacheForTesting() {
         synchronized(lock) {
             attachmentKey = null
             databaseKeyHex = null

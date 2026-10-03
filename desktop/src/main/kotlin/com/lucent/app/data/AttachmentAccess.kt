@@ -1,15 +1,15 @@
 package com.lucent.app.data
 
-import com.lucent.app.platform.PlatformContext
+import android.content.Context
 import java.io.File
 import java.io.OutputStream
 
-actual object AttachmentAccess {
+object AttachmentAccess {
 
     private const val PREVIEW_DIR = "attachment-preview"
     private const val COPY_BUFFER = 64 * 1024
 
-    private fun previewDir(context: PlatformContext): File =
+    private fun previewDir(context: Context): File =
         File(context.applicationContext.cacheDir, PREVIEW_DIR).apply { if (!exists()) mkdirs() }
 
     fun materialize(context: Context, att: Attachment): File? {
@@ -71,7 +71,7 @@ actual object AttachmentAccess {
         }
     }
 
-    fun clearPreviewCache(context: PlatformContext) {
+    fun clearPreviewCache(context: Context) {
         previewDir(context).deleteRecursively()
     }
 

@@ -45,6 +45,7 @@ kotlin {
                 implementation("dev.rikka.shizuku:aidl:13.1.5")
                 implementation(libs.biometric)
                 implementation(libs.fragment.ktx)
+                implementation(libs.androidx.material3)
             }
         }
         val desktopMain by getting {

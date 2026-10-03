@@ -193,4 +193,4 @@ def override_decl_for(e, idx):
 all_entries = list(ENTRIES)
 all_entries.append("")
 all_entries.extend(DESKTOP_ONLY)
-emit(all_entries, os.path.join(_REPO, "shared", "src", "main", "kotlin", "com", "lucent", "app", "i18n", "I18n.kt"))
+emit(all_entries, os.path.join(_REPO, "shared", "src", "commonMain", "kotlin", "com", "lucent", "app", "i18n", "I18n.kt"))

@@ -9,15 +9,13 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import com.lucent.app.data.FontStore
 
-const val SYSTEM_FONT_KEY = "system"
-
 actual object LucentFontResolver {
 
     private class Holder(val family: FontFamily?)
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Holder>()
 
-    fun resolve(context: Context, fontKey: String?): FontFamily? {
+    actual fun resolve(context: PlatformContext, fontKey: String?): FontFamily? {
         if (fontKey.isNullOrBlank() || fontKey == SYSTEM_FONT_KEY) return null
         return cache.getOrPut(fontKey) {
             try {
@@ -30,11 +28,11 @@ actual object LucentFontResolver {
         }.family
     }
 
-    fun evict(fontKey: String) {
+    actual fun evict(fontKey: String) {
         cache.remove(fontKey)
     }
 
-    fun evictAll() {
+    actual fun evictAll() {
         cache.clear()
     }
 }

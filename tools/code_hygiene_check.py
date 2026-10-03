@@ -6,7 +6,7 @@ REPO = os.path.abspath(os.path.join(HERE, ".."))
 
 SOURCE_ROOTS = ["app/src", "desktop/src", "shared/src", "baselineprofile/src"]
 MAX_LINES = 3000
-GENERATED = {"shared/src/main/kotlin/com/lucent/app/i18n/I18n.kt"}
+GENERATED = {"shared/src/commonMain/kotlin/com/lucent/app/i18n/I18n.kt"}
 PAIRS = {")": "(", "]": "[", "}": "{"}
 
 
