@@ -5,22 +5,6 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Attachment(
-    val mime: String,
-    val data: String,
-    val name: String
-) {
-    val isImage: Boolean get() = mime.startsWith("image/")
-
-    val isVideo: Boolean get() = mime.startsWith("video/")
-
-    val isAudio: Boolean get() = mime.startsWith("audio/")
-
-    val isPdf: Boolean get() = mime == "application/pdf" || name.endsWith(".pdf", ignoreCase = true)
-
-    val isInlineViewable: Boolean get() = isImage || isVideo || isAudio
-}
-
 object Attachments {
 
     fun parse(json: String?): List<Attachment> {

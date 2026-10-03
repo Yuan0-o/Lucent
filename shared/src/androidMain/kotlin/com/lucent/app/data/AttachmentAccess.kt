@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import com.lucent.app.PlatformFile
 import com.lucent.app.PlatformOutputStream
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.PlatformInputStream
 import java.io.File
 
 actual object AttachmentAccess {
@@ -35,7 +36,7 @@ actual object AttachmentAccess {
     actual fun materialize(context: PlatformContext, att: Attachment): PlatformFile? {
         val dir = PlatformFile(previewDir(context), safeFolder(att)).apply { if (!exists()) mkdirs() }
         val dest = PlatformFile(dir, safeName(att.name))
-        val stream = Attachments.openStream(context as Context, att) as? java.io.InputStream
+        val stream = openAttachmentStream(context, att) as? java.io.InputStream
         return try {
             if (stream != null) {
                 stream.use { input ->
@@ -51,7 +52,7 @@ actual object AttachmentAccess {
                     }
                 }
             } else {
-                val bytes = Attachments.readBytes(context as Context, att, maxBytes = Long.MAX_VALUE) ?: return null
+                val bytes = readAttachmentBytes(context, att, maxBytes = Long.MAX_VALUE) ?: return null
                 val out = dest.outputStream()
                 try {
                     out.write(bytes); out.flush()
@@ -67,7 +68,7 @@ actual object AttachmentAccess {
     }
 
     actual fun writeTo(context: PlatformContext, att: Attachment, out: PlatformOutputStream): Boolean {
-        val stream = Attachments.openStream(context as Context, att) as? java.io.InputStream
+        val stream = openAttachmentStream(context, att) as? java.io.InputStream
         return try {
             try {
                 if (stream != null) {
@@ -78,7 +79,7 @@ actual object AttachmentAccess {
                         }
                     }
                 } else {
-                    val bytes = Attachments.readBytes(context as Context, att, maxBytes = Long.MAX_VALUE) ?: return false
+                    val bytes = readAttachmentBytes(context, att, maxBytes = Long.MAX_VALUE) ?: return false
                     out.write(bytes)
                 }
                 out.flush()
@@ -96,6 +97,33 @@ actual object AttachmentAccess {
             previewDir(context).listFiles()?.forEach { it.deleteRecursively() }
         } catch (_: Throwable) {
         }
+    }
+
+    private fun openAttachmentStream(context: PlatformContext, att: Attachment): PlatformInputStream? =
+        if (AttachmentStore.looksLikeId(att.data)) AttachmentStore.openInputStream(context, att.data) else null
+
+    private fun readAttachmentBytes(context: PlatformContext, att: Attachment, maxBytes: Long): ByteArray? {
+        return if (AttachmentStore.looksLikeId(att.data)) {
+            AttachmentStore.readBytes(context, att.data, maxBytes)
+        } else {
+            val approx = estimateDecodedBase64Size(att.data)
+            if (approx > maxBytes) return null
+            try {
+                android.util.Base64.decode(att.data, android.util.Base64.DEFAULT)
+            } catch (t: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun estimateDecodedBase64Size(base64: String): Long {
+        if (base64.isEmpty()) return 0
+        val padding = when {
+            base64.endsWith("==") -> 2
+            base64.endsWith("=") -> 1
+            else -> 0
+        }
+        return (base64.length.toLong() * 3 / 4) - padding
     }
 
     private fun safeFolder(att: Attachment): String {
