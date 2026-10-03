@@ -1,8 +1,8 @@
 package com.lucent.app.nativebridge
 
-object LucentNative {
+actual object LucentNative {
 
-    val available: Boolean = try {
+    actual val available: Boolean = try {
         System.loadLibrary("lucent_native")
         true
     } catch (t: Throwable) {
@@ -10,7 +10,7 @@ object LucentNative {
     }
 
 
-    fun pbkdf2Sha256(password: ByteArray, salt: ByteArray, iterations: Int, keyLenBytes: Int): ByteArray? {
+    actual fun pbkdf2Sha256(password: ByteArray, salt: ByteArray, iterations: Int, keyLenBytes: Int): ByteArray? {
         if (!available) return null
         return try {
             nativePbkdf2Sha256(password, salt, iterations, keyLenBytes)
@@ -19,10 +19,10 @@ object LucentNative {
         }
     }
 
-    fun pbkdf2Sha256(password: CharArray, salt: ByteArray, iterations: Int, keyLenBytes: Int): ByteArray? =
+    actual fun pbkdf2Sha256(password: CharArray, salt: ByteArray, iterations: Int, keyLenBytes: Int): ByteArray? =
         pbkdf2Sha256(String(password).toByteArray(Charsets.UTF_8), salt, iterations, keyLenBytes)
 
-    fun aesGcmSeal(key: ByteArray, iv: ByteArray, aad: ByteArray, plaintext: ByteArray): ByteArray? {
+    actual fun aesGcmSeal(key: ByteArray, iv: ByteArray, aad: ByteArray, plaintext: ByteArray): ByteArray? {
         if (!available) return null
         return try {
             nativeAesGcmSeal(key, iv, aad, plaintext)
@@ -31,7 +31,7 @@ object LucentNative {
         }
     }
 
-    fun aesGcmOpen(key: ByteArray, iv: ByteArray, aad: ByteArray, sealed: ByteArray): ByteArray? {
+    actual fun aesGcmOpen(key: ByteArray, iv: ByteArray, aad: ByteArray, sealed: ByteArray): ByteArray? {
         if (!available) return null
         return try {
             nativeAesGcmOpen(key, iv, aad, sealed)
@@ -41,7 +41,7 @@ object LucentNative {
     }
 
 
-    fun blobFrame(tMs: Float, width: Float, height: Float, out: FloatArray): Boolean {
+    actual fun blobFrame(tMs: Float, width: Float, height: Float, out: FloatArray): Boolean {
         if (!available || out.size < 36) return false
         return try {
             nativeBlobFrame(tMs, width, height, out)
