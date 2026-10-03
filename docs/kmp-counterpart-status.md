@@ -44,7 +44,7 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | ui/AttachmentViewer.kt | parallel androidMain/desktopMain declarations (AttachmentViewerAndroid.kt / AttachmentViewerDesktop.kt; private local copies of not-yet-shared helpers DocumentText, PdfViewer, ImageEditorDialog pending their own pair conversions) |
 | ui/ExpandableTextField.kt | parallel androidMain/desktopMain declarations (ExpandableTextFieldAndroid.kt / ExpandableTextFieldDesktop.kt; byte-identical to originals) |
 
-## Blocked (5) — verified, do not force
+## Blocked (7) — verified, do not force
 
 | Pair | Reason |
 |---|---|
@@ -53,13 +53,10 @@ Tracks conversion of the 42 same-path counterpart pairs (app vs desktop) to
 | data/AutoBackupRunner.kt | Backup destination logic is Android SAF (`DocumentsContract`, `ContentResolver`) vs `java.io.File`; calls `BackupManager.exportEncrypted`, and `BackupManager` itself still carries Android imports — converting this pair requires converting `BackupManager` first (cascade). |
 | data/DocumentExport.kt | 477-line diff between copies; doodle export path (`DoodleExport.canvasesOf`, doodle bitmap embedding into docx/pdf) is platform-specific canvas rendering. Needs DoodleCanvas multiplatform work first. |
 | ui/PlatformSplash.kt | :shared androidMain has neither `androidx.compose.foundation:foundation-layout` (for `statusBarsPadding()`) nor the app module's `R` (for the font resource). `platform(libs.compose.bom)` is unresolvable inside KMP source-set dependency blocks (KotlinDependencyHandler has no `platform()`), and pinning foundation-layout to the BOM version string (2026.04.01) fails — the BOM manages it to 1.11.0. Two fix attempts failed 2026-10-03; reverted. Candidate for a future retry: `implementation(project.dependencies.platform(...))` workaround or a BOM-free status-bar inset in androidMain, plus moving great_vibes.ttf into :shared androidMain res. |
+| ui/AssistantScreen.kt | BLOCKED — helper cascade: app version calls `uriToChatImage` (in app/.../AttachmentUiApp.kt, itself BLOCKED on legacy `Attachments.readBytes`); `uriToChatImage` → `downscaleImageFileInPlace` (Android BitmapFactory) + `AttachmentStore.queryDisplayName`. Desktop version calls `fileToChatImage` (in desktop/.../AttachmentUi.kt, also BLOCKED). Moving AssistantScreen to shared androidMain/desktopMain requires moving these helpers, which requires unblocking AttachmentUi first. Attempted 2026-10-04, reverted. |
+| ui/SettingsScreen.kt | BLOCKED — cascade verified 2026-10-04 via attempted conversion (reverted): moving to shared androidMain/desktopMain requires (1) `AutoBackupRunner` → references `BackupManager` (in legacy shared/src/main, not visible from androidMain source set); (2) `LocalLlm` (app version) → delegates to `LocalLlmProxy` (AIDL client, lives in app module, cannot move to shared); (3) `LocalLlm` (desktop version) → references `LocalModelStore` (visibility gap in desktopMain). Additionally the file is 2549 lines with 753 lines of platform diff, and 3 of its 30 settings pages (`AutoBackupPage`, `SharePage`, `LlmPage`) depend on Android-only APIs (SAF, Intent, AIDL). |
 
-## Pending (5)
-
-| Pair | Notes |
-|---|---|
-| ui/AssistantScreen.kt | TANGLED CLUSTER — circular deps AppNavigation ↔ SettingsScreen ↔ AssistantController ↔ LocalLlm/AIDL. Leave for last. |
-| ui/SettingsScreen.kt | TANGLED CLUSTER (2549 lines). Leave for last. |
+## Pending (3)
 | ui/AttachmentUi.kt | BLOCKED — depends on legacy shared/src/main Attachments.readBytes (not in KMP shared); needs Attachments migration first |
 | ui/ImageEditor.kt | BLOCKED — depends on legacy shared/src/main Attachments.readBytes; needs Attachments migration first |
 | ui/UiComponents.kt | BLOCKED — depends on legacy Glass.kt/TaskStyling.kt (shared/src/main) and AttachmentUi; attempted 2026-10-04, reverted (compile fails in shared/) |
