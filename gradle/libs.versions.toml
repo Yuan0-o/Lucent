@@ -37,6 +37,7 @@ org-json = { module = "org.json:json", version.ref = "orgJson" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-ui = { module = "androidx.compose.ui:ui" }
+androidx-foundation-layout = { module = "androidx.compose.foundation:foundation-layout" }
 androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-material3 = { module = "androidx.compose.material3:material3" }

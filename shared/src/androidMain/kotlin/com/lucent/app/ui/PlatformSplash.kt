@@ -10,4 +10,4 @@ import androidx.compose.ui.text.font.FontFamily
 actual fun Modifier.splashTopInset(): Modifier = statusBarsPadding()
 
 @Composable
-actual fun splashScriptFont(): FontFamily? = remember { runCatching { FontFamily(Font(com.lucent.app.R.font.great_vibes)) }.getOrNull() }
+actual fun splashScriptFont(): FontFamily? = remember { runCatching { FontFamily(Font(com.lucent.shared.R.font.great_vibes)) }.getOrNull() }
