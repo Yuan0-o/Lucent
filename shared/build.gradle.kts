@@ -29,8 +29,7 @@ kotlin {
         val androidMain by getting {
             kotlin.srcDir("src/platformMain/kotlin")
             dependencies {
-                implementation(platform(libs.compose.bom))
-                implementation(libs.androidx.foundation.layout)
+                implementation(libs.compose.foundation.layout)
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
                 implementation(libs.kotlinx.coroutines.android)
