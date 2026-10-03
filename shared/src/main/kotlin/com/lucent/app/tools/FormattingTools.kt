@@ -378,7 +378,7 @@ object FormattingTools {
         val chosen = if (styles.all || find.isBlank()) hits else listOf(hits.first())
         var spans = RichText.load(note.bodySpans, note.body)
         chosen.forEach { spans = applyStyles(spans, it, styles) }
-        db.noteDao().update(
+        db.noteDao.update(
             note.copy(bodySpans = RichText.encode(spans), updatedAt = System.currentTimeMillis())
         )
         val where = if (find.isBlank()) "the whole note" else "\"$find\""
@@ -420,7 +420,7 @@ object FormattingTools {
         val chosen = if (styles.all || find.isBlank()) hits else listOf(hits.first())
         var spans = RichText.load(task.notesSpans, task.notes)
         chosen.forEach { spans = applyStyles(spans, it, styles) }
-        db.taskDao().update(task.copy(notesSpans = RichText.encode(spans)))
+        db.taskDao.update(task.copy(notesSpans = RichText.encode(spans)))
         val where = if (find.isBlank()) "the whole description" else "\"$find\""
         val times = if (find.isBlank() || chosen.size == 1) "" else " (${chosen.size} times)"
         return ToolExecResult(
@@ -519,7 +519,7 @@ object FormattingTools {
         com.lucent.app.data.NoteHistory.recordIfChanged(
             db, note, note.title, merged, note.tags, note.isChecklist, note.checklist
         )
-        db.noteDao().update(note.copy(body = merged, updatedAt = System.currentTimeMillis()))
+        db.noteDao.update(note.copy(body = merged, updatedAt = System.currentTimeMillis()))
         return ToolExecResult(
             "Added the text to the end of the note \"${note.title}\". Everything that was already " +
                 "there is kept, and the previous version sits in the note's history.",
@@ -540,7 +540,7 @@ object FormattingTools {
         com.lucent.app.data.TaskHistory.recordIfChanged(
             db, task, task.title, merged, task.subtasks, task.priority, task.dueAt
         )
-        db.taskDao().update(task.copy(notes = merged))
+        db.taskDao.update(task.copy(notes = merged))
         return ToolExecResult(
             "Added the text to the end of the notes on \"${task.title}\". Everything that was already " +
                 "there is kept.",
@@ -566,7 +566,7 @@ object FormattingTools {
         }
         val note = AppTools.resolveNote(AppTools.editableNotes(db), titleQuery)
             ?: return AppTools.noteNotFound(db, titleQuery)
-        db.noteDao().update(note.copy(formatOverride = key, updatedAt = System.currentTimeMillis()))
+        db.noteDao.update(note.copy(formatOverride = key, updatedAt = System.currentTimeMillis()))
         val label = when (key) {
             com.lucent.app.data.ContentFormats.MARKDOWN_KEY -> "Markdown"
             com.lucent.app.data.ContentFormats.RICH_TEXT_KEY -> "rich text"
@@ -586,7 +586,7 @@ object FormattingTools {
         }
         val task = AppTools.resolveTask(AppTools.editableTasks(db), titleQuery)
             ?: return AppTools.taskNotFound(db, titleQuery)
-        db.taskDao().update(task.copy(formatOverride = key))
+        db.taskDao.update(task.copy(formatOverride = key))
         val label = when (key) {
             com.lucent.app.data.ContentFormats.MARKDOWN_KEY -> "Markdown"
             com.lucent.app.data.ContentFormats.RICH_TEXT_KEY -> "rich text"
@@ -601,7 +601,7 @@ object FormattingTools {
         if (hidden) {
             val note = AppTools.resolveNote(AppTools.editableNotes(db), titleQuery)
                 ?: return AppTools.noteNotFound(db, titleQuery)
-            db.noteDao().update(note.copy(hidden = true, updatedAt = System.currentTimeMillis()))
+            db.noteDao.update(note.copy(hidden = true, updatedAt = System.currentTimeMillis()))
             return ToolExecResult(
                 "The note \"${note.title}\" is now hidden. It no longer appears in the notes list or " +
                     "in searches; it is still encrypted on the device, and the person can bring it " +
@@ -618,7 +618,7 @@ object FormattingTools {
                 AppTools.noteNotFound(db, titleQuery)
             }
         }
-        db.noteDao().update(note.copy(hidden = false, updatedAt = System.currentTimeMillis()))
+        db.noteDao.update(note.copy(hidden = false, updatedAt = System.currentTimeMillis()))
         return ToolExecResult("The note \"${note.title}\" is back in the normal notes list.", openNoteId = note.id)
     }
 
@@ -628,7 +628,7 @@ object FormattingTools {
         if (hidden) {
             val task = AppTools.resolveTask(AppTools.editableTasks(db), titleQuery)
                 ?: return AppTools.taskNotFound(db, titleQuery)
-            db.taskDao().update(task.copy(hidden = true))
+            db.taskDao.update(task.copy(hidden = true))
             return ToolExecResult(
                 "The task \"${task.title}\" is now hidden. It no longer appears in the task list or in " +
                     "searches, and the person can bring it back from the hidden area.",
@@ -644,7 +644,7 @@ object FormattingTools {
                 AppTools.taskNotFound(db, titleQuery)
             }
         }
-        db.taskDao().update(task.copy(hidden = false))
+        db.taskDao.update(task.copy(hidden = false))
         return ToolExecResult("The task \"${task.title}\" is back in the normal task list.", openTaskId = task.id)
     }
 
@@ -693,7 +693,7 @@ object FormattingTools {
         val finalOrder = ordered.filter { it != note.id }.toMutableList().also { it.add(index, note.id) }
         val byId = others.associateBy { it.id }
         finalOrder.forEachIndexed { i, id ->
-            byId[id]?.let { db.noteDao().update(it.copy(manualOrder = i * 1000)) }
+            byId[id]?.let { db.noteDao.update(it.copy(manualOrder = i * 1000)) }
         }
         val where = when (position) {
             "top" -> "at the top"
@@ -737,7 +737,7 @@ object FormattingTools {
         val finalOrder = ordered.filter { it != task.id }.toMutableList().also { it.add(index, task.id) }
         val byId = others.associateBy { it.id }
         finalOrder.forEachIndexed { i, id ->
-            byId[id]?.let { db.taskDao().update(it.copy(manualOrder = i * 1000)) }
+            byId[id]?.let { db.taskDao.update(it.copy(manualOrder = i * 1000)) }
         }
         val where = when (position) {
             "top" -> "at the top"

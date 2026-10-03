@@ -16,7 +16,7 @@ object EmbeddingProvider {
     private const val EMBEDDING_MODEL_OPENAI = "text-embedding-3-small"
 
     suspend fun embed(context: Context, text: String): Outcome {
-        val repo = SettingsRepository(context)
+        val repo = createSettingsRepository(context)
         return if (repo.localModelEnabled.first()) {
             Outcome.Unavailable(
                 "Local embedding generation isn't implemented in this build yet — see EmbeddingProvider.kt."

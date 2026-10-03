@@ -45,8 +45,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val drafts by db.noteDao().getDrafts().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val drafts by db.noteDao.getDrafts().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -84,7 +84,7 @@ fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
                 onOpen = { onOpen(note) },
                 onPromote = {
                     AppScope.io.launch {
-                        db.noteDao().update(note.copy(isDraft = false, draftSavedAt = null))
+                        db.noteDao.update(note.copy(isDraft = false, draftSavedAt = null))
                     }
                 },
                 onDelete = { toPurge = note },
@@ -98,8 +98,8 @@ fun DraftNotesScreen(onBack: () -> Unit, onOpen: (Note) -> Unit) {
 @Composable
 fun DraftTasksScreen(onBack: () -> Unit, onOpen: (Task) -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val drafts by db.taskDao().getDrafts().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val drafts by db.taskDao.getDrafts().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -137,7 +137,7 @@ fun DraftTasksScreen(onBack: () -> Unit, onOpen: (Task) -> Unit) {
                 onOpen = { onOpen(task) },
                 onPromote = {
                     AppScope.io.launch {
-                        db.taskDao().update(task.copy(isDraft = false, draftSavedAt = null))
+                        db.taskDao.update(task.copy(isDraft = false, draftSavedAt = null))
                     }
                 },
                 onDelete = { toPurge = task },

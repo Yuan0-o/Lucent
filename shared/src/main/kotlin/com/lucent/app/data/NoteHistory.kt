@@ -26,7 +26,7 @@ object NoteHistory {
             existing.checklist == newChecklist
         if (unchanged) return
 
-        db.noteVersionDao().insert(
+        db.noteVersionDao.insert(
             NoteVersion(
                 noteId = existing.id,
                 title = existing.title,
@@ -37,7 +37,7 @@ object NoteHistory {
                 savedAt = savedAt
             )
         )
-        db.noteVersionDao().trimTo(existing.id, MAX_VERSIONS_PER_NOTE)
+        db.noteVersionDao.trimTo(existing.id, MAX_VERSIONS_PER_NOTE)
     }
 
     fun applyTo(note: Note, version: NoteVersion): Note = note.copy(
@@ -50,6 +50,6 @@ object NoteHistory {
     )
 
     suspend fun deleteAllFor(db: AppDatabase, noteId: Long) {
-        db.noteVersionDao().deleteForNote(noteId)
+        db.noteVersionDao.deleteForNote(noteId)
     }
 }

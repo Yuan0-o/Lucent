@@ -183,7 +183,7 @@ object NotebookTools {
     suspend fun execute(db: AppDatabase, name: String, args: JSONObject): ToolExecResult? = when (name) {
 
         "list_notebooks" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             if (all.isEmpty()) {
                 ToolExecResult("There are no notebooks yet. Create one with create_notebook.")
             } else {
@@ -207,21 +207,21 @@ object NotebookTools {
                 val colorKey = com.lucent.app.ui.NotebookColor.entries
                     .firstOrNull { it.key == cover }?.key
                     .orEmpty()
-                db.notebookDao().insert(Notebook(title = title, color = colorKey))
+                db.notebookDao.insert(Notebook(title = title, color = colorKey))
                 val coverNote = if (colorKey.isBlank()) "" else " Its cover is $cover."
                 ToolExecResult("Created notebook \"$title\".$coverNote Add notes or tasks to it with add_to_notebook.")
             }
         }
 
         "pin_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             if (notebook == null) {
                 notFoundNotebook(query, all)
             } else {
                 val pinned = args.optBoolean("pinned", true)
-                db.notebookDao().update(
+                db.notebookDao.update(
                     notebook.copy(pinned = pinned, updatedAt = System.currentTimeMillis())
                 )
                 ToolExecResult(
@@ -232,7 +232,7 @@ object NotebookTools {
         }
 
         "set_notebook_cover" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             val raw = args.firstString("cover", "colour", "color").trim().lowercase()
@@ -246,7 +246,7 @@ object NotebookTools {
                     success = false
                 )
             } else {
-                db.notebookDao().update(
+                db.notebookDao.update(
                     notebook.copy(color = color.key, updatedAt = System.currentTimeMillis())
                 )
                 ToolExecResult("The notebook \"${displayName(notebook)}\" now has a ${color.key} cover.")
@@ -254,7 +254,7 @@ object NotebookTools {
         }
 
         "move_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             val position = args.firstString("position", "where").trim().lowercase()
@@ -298,7 +298,7 @@ object NotebookTools {
                         val finalOrder = without.toMutableList().also { it.add(index, notebook.id) }
                         val byId = all.associateBy { it.id }
                         finalOrder.forEachIndexed { i, id ->
-                            byId[id]?.let { db.notebookDao().update(it.copy(manualOrder = i * 1000)) }
+                            byId[id]?.let { db.notebookDao.update(it.copy(manualOrder = i * 1000)) }
                         }
                         val where = when (position) {
                             "first", "top" -> "to the front of the shelf"
@@ -316,7 +316,7 @@ object NotebookTools {
         }
 
         "rename_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             val newTitle = args.firstString("new_title", "new_name").trim()
@@ -327,7 +327,7 @@ object NotebookTools {
             } else if (notebook.title == newTitle) {
                 ToolExecResult("Notebook \"${displayName(notebook)}\" is already called \"$newTitle\".")
             } else {
-                db.notebookDao().update(notebook.copy(title = newTitle, updatedAt = System.currentTimeMillis()))
+                db.notebookDao.update(notebook.copy(title = newTitle, updatedAt = System.currentTimeMillis()))
                 val clash = all.any { it.id != notebook.id && it.title.equals(newTitle, ignoreCase = true) }
                 val suffix = if (clash) " Another notebook already uses that name, so tell them apart by what is inside." else ""
                 ToolExecResult("Renamed notebook \"${displayName(notebook)}\" to \"$newTitle\".$suffix")
@@ -335,14 +335,14 @@ object NotebookTools {
         }
 
         "delete_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             if (notebook == null) {
                 notFoundNotebook(query, all)
             } else {
-                val held = db.notebookDao().getItemsOnce(notebook.id).size
-                db.notebookDao().update(
+                val held = db.notebookDao.getItemsOnce(notebook.id).size
+                db.notebookDao.update(
                     notebook.copy(trashedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
                 )
                 val kept = if (held == 0) {
@@ -359,13 +359,13 @@ object NotebookTools {
         }
 
         "list_notebook_trash" -> {
-            val trashed = db.notebookDao().getTrashedOnce()
+            val trashed = db.notebookDao.getTrashedOnce()
             if (trashed.isEmpty()) {
                 ToolExecResult("The notebook Trash is empty.")
             } else {
                 val sb = StringBuilder("Notebooks in the Trash (${trashed.size}):\n")
                 trashed.forEach { notebook ->
-                    val held = db.notebookDao().getItemsOnce(notebook.id).size
+                    val held = db.notebookDao.getItemsOnce(notebook.id).size
                     sb.append("- \"").append(displayName(notebook)).append("\" (")
                     sb.append(held).append(if (held == 1) " item)\n" else " items)\n")
                 }
@@ -374,7 +374,7 @@ object NotebookTools {
         }
 
         "restore_notebook_from_trash" -> {
-            val trashed = db.notebookDao().getTrashedOnce()
+            val trashed = db.notebookDao.getTrashedOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(trashed, query)
             if (notebook == null) {
@@ -388,8 +388,8 @@ object NotebookTools {
                     )
                 }
             } else {
-                val held = db.notebookDao().getItemsOnce(notebook.id).size
-                db.notebookDao().update(
+                val held = db.notebookDao.getItemsOnce(notebook.id).size
+                db.notebookDao.update(
                     notebook.copy(trashedAt = null, updatedAt = System.currentTimeMillis())
                 )
                 ToolExecResult(
@@ -400,13 +400,13 @@ object NotebookTools {
         }
 
         "read_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             if (notebook == null) {
                 notFoundNotebook(query, all)
             } else {
-                val members = db.notebookDao().getItemsOnce(notebook.id)
+                val members = db.notebookDao.getItemsOnce(notebook.id)
                 val notes = notesIn(db, members)
                 val tasks = tasksIn(db, members)
                 val shown = notes.size + tasks.size
@@ -447,7 +447,7 @@ object NotebookTools {
         }
 
         "update_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             val newTitle = args.firstString("new_title", "new_name").trim()
@@ -478,7 +478,7 @@ object NotebookTools {
                     pinned = pinned ?: notebook.pinned,
                     updatedAt = System.currentTimeMillis()
                 )
-                db.notebookDao().update(updated)
+                db.notebookDao.update(updated)
                 val changes = ArrayList<String>()
                 if (newTitle.isNotBlank() && newTitle != notebook.title) {
                     changes.add("renamed to \"$newTitle\"")
@@ -489,7 +489,7 @@ object NotebookTools {
                 if (pinned != null && pinned != notebook.pinned) {
                     changes.add(if (pinned) "pinned to the front of the shelf" else "unpinned")
                 }
-                val kept = db.notebookDao().getItemsOnce(notebook.id).size
+                val kept = db.notebookDao.getItemsOnce(notebook.id).size
                 val holding = if (kept == 0) {
                     "It is empty."
                 } else {
@@ -505,7 +505,7 @@ object NotebookTools {
         }
 
         "list_notebook_items" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "title", "name")
             val notebook = matchNotebook(all, query)
             if (notebook == null) {
@@ -516,7 +516,7 @@ object NotebookTools {
         }
 
         "add_to_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "name")
             val notebook = matchNotebook(all, query)
             if (notebook == null) {
@@ -530,7 +530,7 @@ object NotebookTools {
         }
 
         "remove_from_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "name")
             val notebook = matchNotebook(all, query)
             if (notebook == null) {
@@ -544,7 +544,7 @@ object NotebookTools {
         }
 
         "move_to_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val toQuery = args.firstString("to_notebook", "notebook", "to")
             val to = matchNotebook(all, toQuery)
             if (to == null) {
@@ -558,7 +558,7 @@ object NotebookTools {
         }
 
         "search_notebook" -> {
-            val all = db.notebookDao().getAllOnce()
+            val all = db.notebookDao.getAllOnce()
             val query = args.firstString("notebook", "name")
             val raw = args.firstString("query", "q", "search")
             val notebook = matchNotebook(all, query)
@@ -633,7 +633,7 @@ object NotebookTools {
         val out = HashMap<Pair<String, Long>, String>()
         val kinds = listOf(NotebookItem.KIND_NOTE, NotebookItem.KIND_TASK)
         kinds.forEach { kind ->
-            val grouped = db.notebookDao().getItemsByKindOnce(kind)
+            val grouped = db.notebookDao.getItemsByKindOnce(kind)
                 .filter { it.notebookId != current }
                 .groupBy { it.itemId }
             grouped.forEach { (itemId, members) ->
@@ -647,9 +647,9 @@ object NotebookTools {
     }
 
     private suspend fun itemCounts(db: AppDatabase): Map<Long, Pair<Int, Int>> {
-        val notes = db.notebookDao().getItemsByKindOnce(NotebookItem.KIND_NOTE)
+        val notes = db.notebookDao.getItemsByKindOnce(NotebookItem.KIND_NOTE)
             .groupingBy { it.notebookId }.eachCount()
-        val tasks = db.notebookDao().getItemsByKindOnce(NotebookItem.KIND_TASK)
+        val tasks = db.notebookDao.getItemsByKindOnce(NotebookItem.KIND_TASK)
             .groupingBy { it.notebookId }.eachCount()
         return (notes.keys + tasks.keys).associateWith { (notes[it] ?: 0) to (tasks[it] ?: 0) }
     }
@@ -667,7 +667,7 @@ object NotebookTools {
     private suspend fun notesIn(db: AppDatabase, members: List<NotebookItem>): List<Pair<NotebookItem, Note>> {
         val mine = members.filter { it.itemKind == NotebookItem.KIND_NOTE }
         if (mine.isEmpty()) return emptyList()
-        val byId = db.noteDao().getByIds(mine.map { it.itemId }).associateBy { it.id }
+        val byId = db.noteDao.getByIds(mine.map { it.itemId }).associateBy { it.id }
         return mine.mapNotNull { member ->
             byId[member.itemId]?.takeIf { it.trashedAt == null && !it.hidden && !it.isDraft }?.let { member to it }
         }
@@ -676,7 +676,7 @@ object NotebookTools {
     private suspend fun tasksIn(db: AppDatabase, members: List<NotebookItem>): List<Pair<NotebookItem, Task>> {
         val mine = members.filter { it.itemKind == NotebookItem.KIND_TASK }
         if (mine.isEmpty()) return emptyList()
-        val byId = db.taskDao().getByIds(mine.map { it.itemId }).associateBy { it.id }
+        val byId = db.taskDao.getByIds(mine.map { it.itemId }).associateBy { it.id }
         return mine.mapNotNull { member ->
             byId[member.itemId]?.takeIf { it.trashedAt == null && !it.hidden && !it.isDraft }?.let { member to it }
         }
@@ -712,7 +712,7 @@ object NotebookTools {
     }
 
     private suspend fun listItems(db: AppDatabase, notebook: Notebook, filter: ItemFilter): ToolExecResult {
-        val members = db.notebookDao().getItemsOnce(notebook.id)
+        val members = db.notebookDao.getItemsOnce(notebook.id)
         val notes = if (filter != ItemFilter.TASKS) notesIn(db, members) else emptyList()
         val tasks = if (filter != ItemFilter.NOTES) tasksIn(db, members) else emptyList()
         val total = notes.size + tasks.size
@@ -743,7 +743,7 @@ object NotebookTools {
         raw: String,
         filter: ItemFilter
     ): ToolExecResult {
-        val members = db.notebookDao().getItemsOnce(notebook.id)
+        val members = db.notebookDao.getItemsOnce(notebook.id)
         val query = SearchQuery.parse(raw)
         val noteHits = if (filter != ItemFilter.TASKS) {
             notesIn(db, members).map { it.second }.filterBySearch(query)
@@ -777,27 +777,27 @@ object NotebookTools {
     }
 
     private suspend fun addTarget(db: AppDatabase, notebook: Notebook, target: Target): ToolExecResult {
-        if (db.notebookDao().membershipExistsOnce(notebook.id, target.kind, target.itemId) > 0) {
+        if (db.notebookDao.membershipExistsOnce(notebook.id, target.kind, target.itemId) > 0) {
             return ToolExecResult(
                 "${target.labelTitle} \"${target.title}\" is already in notebook \"${displayName(notebook)}\" — nothing to do."
             )
         }
-        db.notebookDao().insertItem(
+        db.notebookDao.insertItem(
             NotebookItem(notebookId = notebook.id, itemKind = target.kind, itemId = target.itemId)
         )
-        db.notebookDao().update(notebook.copy(updatedAt = System.currentTimeMillis()))
+        db.notebookDao.update(notebook.copy(updatedAt = System.currentTimeMillis()))
         return ToolExecResult("Added ${target.label} \"${target.title}\" to notebook \"${displayName(notebook)}\".")
     }
 
     private suspend fun removeTarget(db: AppDatabase, notebook: Notebook, target: Target): ToolExecResult {
-        val member = db.notebookDao().getItemsOnce(notebook.id)
+        val member = db.notebookDao.getItemsOnce(notebook.id)
             .firstOrNull { it.itemKind == target.kind && it.itemId == target.itemId }
         if (member == null) {
             return ToolExecResult(
                 "${target.labelTitle} \"${target.title}\" isn't in notebook \"${displayName(notebook)}\" — nothing was removed."
             )
         }
-        db.notebookDao().deleteItemById(member.id)
+        db.notebookDao.deleteItemById(member.id)
         return ToolExecResult(
             "Took ${target.label} \"${target.title}\" out of notebook \"${displayName(notebook)}\". " +
                 "The ${target.label} itself was not deleted."
@@ -811,7 +811,7 @@ object NotebookTools {
         target: Target,
         fromQuery: String
     ): ToolExecResult {
-        val memberships = db.notebookDao().getItemsByKindOnce(target.kind).filter { it.itemId == target.itemId }
+        val memberships = db.notebookDao.getItemsByKindOnce(target.kind).filter { it.itemId == target.itemId }
         val explicitFrom = if (fromQuery.isNotBlank()) matchNotebook(all, fromQuery) else null
         if (fromQuery.isNotBlank() && explicitFrom == null) {
             return notFoundNotebook(fromQuery, all)
@@ -850,13 +850,13 @@ object NotebookTools {
                 "${target.labelTitle} \"${target.title}\" is already in notebook \"${displayName(to)}\" — nothing to move."
             )
         }
-        db.notebookDao().deleteItemById(sourceMember.id)
-        if (db.notebookDao().membershipExistsOnce(to.id, target.kind, target.itemId) == 0) {
-            db.notebookDao().insertItem(
+        db.notebookDao.deleteItemById(sourceMember.id)
+        if (db.notebookDao.membershipExistsOnce(to.id, target.kind, target.itemId) == 0) {
+            db.notebookDao.insertItem(
                 NotebookItem(notebookId = to.id, itemKind = target.kind, itemId = target.itemId)
             )
         }
-        db.notebookDao().update(to.copy(updatedAt = System.currentTimeMillis()))
+        db.notebookDao.update(to.copy(updatedAt = System.currentTimeMillis()))
         val sourceName = source?.let { displayName(it) } ?: "its notebook"
         return ToolExecResult(
             "Moved ${target.label} \"${target.title}\" from notebook \"$sourceName\" to notebook \"${displayName(to)}\"."

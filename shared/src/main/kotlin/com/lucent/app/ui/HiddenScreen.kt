@@ -61,8 +61,8 @@ object HiddenArea {
 @Composable
 fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val hidden by db.noteDao().getHidden().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val hidden by db.noteDao.getHidden().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -81,7 +81,7 @@ fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> 
                 onOpen = { onOpen(note) },
                 onReveal = {
                     pendingReveal = {
-                        AppScope.io.launch { db.noteDao().update(note.copy(hidden = false)) }
+                        AppScope.io.launch { db.noteDao.update(note.copy(hidden = false)) }
                     }
                 },
                 onGradient = onGradient,
@@ -96,8 +96,8 @@ fun HiddenNotesScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Note) -> 
 @Composable
 fun HiddenTasksScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Task) -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val hidden by db.taskDao().getHidden().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val hidden by db.taskDao.getHidden().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -115,7 +115,7 @@ fun HiddenTasksScreen(onBack: () -> Unit, onOpen: (com.lucent.app.data.Task) -> 
                 onOpen = { onOpen(task) },
                 onReveal = {
                     pendingReveal = {
-                        AppScope.io.launch { db.taskDao().update(task.copy(hidden = false)) }
+                        AppScope.io.launch { db.taskDao.update(task.copy(hidden = false)) }
                     }
                 },
                 onGradient = onGradient,

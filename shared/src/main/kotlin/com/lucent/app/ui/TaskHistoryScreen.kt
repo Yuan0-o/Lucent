@@ -53,12 +53,12 @@ fun TaskHistoryScreen(
     onRestored: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
 
-    val versions by db.taskVersionDao().getForTask(task.id).collectAsState(initial = emptyList())
+    val versions by db.taskVersionDao.getForTask(task.id).collectAsState(initial = emptyList())
 
     var previewing by remember { mutableStateOf<TaskVersion?>(null) }
     var confirmRestore by remember { mutableStateOf<TaskVersion?>(null) }
@@ -68,7 +68,7 @@ fun TaskHistoryScreen(
 
     fun restore(version: TaskVersion) {
         AppScope.io.launch {
-            val current = db.taskDao().getByIdOnce(task.id) ?: return@launch
+            val current = db.taskDao.getByIdOnce(task.id) ?: return@launch
             val restored = TaskHistory.applyTo(current, version)
             TaskHistory.recordIfChanged(
                 db = db,
@@ -79,7 +79,7 @@ fun TaskHistoryScreen(
                 newPriority = restored.priority,
                 newDueAt = restored.dueAt
             )
-            db.taskDao().update(restored)
+            db.taskDao.update(restored)
         }
         previewing = null
         confirmRestore = null
@@ -103,7 +103,7 @@ fun TaskHistoryScreen(
             text = { Text(com.lucent.app.i18n.S.deleteVersionBody(formatTimestamp(version.savedAt))) },
             confirmButton = {
                 TextButton(onClick = {
-                    AppScope.io.launch { db.taskVersionDao().deleteById(version.id) }
+                    AppScope.io.launch { db.taskVersionDao.deleteById(version.id) }
                     if (previewing?.id == version.id) previewing = null
                     confirmDelete = null
                 }) { Text(com.lucent.app.i18n.S.actionDelete) }

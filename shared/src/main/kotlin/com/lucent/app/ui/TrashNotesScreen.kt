@@ -47,8 +47,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun TrashNotesScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val trashed by db.noteDao().getTrashed().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val trashed by db.noteDao.getTrashed().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -66,7 +66,7 @@ fun TrashNotesScreen(onBack: () -> Unit) {
                 TextButton(onClick = {
                     val target = note
                     noteToRestore = null
-                    AppScope.io.launch { db.noteDao().update(target.copy(trashedAt = null)) }
+                    AppScope.io.launch { db.noteDao.update(target.copy(trashedAt = null)) }
                 }) { Text(com.lucent.app.i18n.S.actionRestore) }
             },
             dismissButton = { TextButton(onClick = { noteToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }

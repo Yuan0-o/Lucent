@@ -51,13 +51,13 @@ object SessionRestore {
 
     suspend fun save(context: android.content.Context, snapshot: Snapshot) {
         runCatching {
-            SettingsRepository(context)
+            createSettingsRepository(context)
                 .setSessionSnapshot(serialize(snapshot.copy(savedAt = System.currentTimeMillis())))
         }
     }
 
     suspend fun clear(context: android.content.Context) {
-        runCatching { SettingsRepository(context).setSessionSnapshot("") }
+        runCatching { createSettingsRepository(context).setSessionSnapshot("") }
     }
 
 

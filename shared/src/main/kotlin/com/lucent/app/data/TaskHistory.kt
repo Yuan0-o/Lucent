@@ -25,7 +25,7 @@ object TaskHistory {
             existing.dueAt == newDueAt
         if (unchanged) return
 
-        db.taskVersionDao().insert(
+        db.taskVersionDao.insert(
             TaskVersion(
                 taskId = existing.id,
                 title = existing.title,
@@ -36,7 +36,7 @@ object TaskHistory {
                 savedAt = System.currentTimeMillis()
             )
         )
-        db.taskVersionDao().trimTo(existing.id, MAX_VERSIONS_PER_TASK)
+        db.taskVersionDao.trimTo(existing.id, MAX_VERSIONS_PER_TASK)
     }
 
     fun applyTo(task: Task, version: TaskVersion): Task = task.copy(
@@ -48,6 +48,6 @@ object TaskHistory {
     )
 
     suspend fun deleteAllFor(db: AppDatabase, taskId: Long) {
-        db.taskVersionDao().deleteForTask(taskId)
+        db.taskVersionDao.deleteForTask(taskId)
     }
 }

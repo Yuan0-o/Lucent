@@ -32,9 +32,9 @@ internal object BackupImporter {
     ): String {
         val root = JSONObject(json)
         val state = ImportState()
-        val existingNotes = db.noteDao().getAllOnce()
-        val existingTasks = db.taskDao().getAllOnce()
-        val existingChats = db.chatDao().getAll().first()
+        val existingNotes = db.noteDao.getAllOnce()
+        val existingTasks = db.taskDao.getAllOnce()
+        val existingChats = db.chatDao.getAll().first()
         val wantNotes = BackupManager.BackupModule.NOTES in modules
         val wantTasks = BackupManager.BackupModule.TASKS in modules
         val wantChats = BackupManager.BackupModule.CHATS in modules
@@ -48,7 +48,7 @@ internal object BackupImporter {
         val settingsRestored = importSettings(context, settings, root, modules, apiProfileNames)
 
         AttachmentMigration.pruneOrphans(context)
-        db.noteVersionDao().pruneOrphaned()
+        db.noteVersionDao.pruneOrphaned()
 
         if (state.importedTasks > 0) {
             ReminderScheduler.rescheduleAll(context)
@@ -63,10 +63,10 @@ internal object BackupImporter {
             else ""
 
         if (state.importedNotes > 0 || state.replacedNotes > 0) {
-            try { db.noteDao().rebuildFts() } catch (_: Exception) {  }
+            try { db.noteDao.rebuildFts() } catch (_: Exception) {  }
         }
         if (state.importedTasks > 0 || state.replacedTasks > 0) {
-            try { db.taskDao().rebuildFts() } catch (_: Exception) {  }
+            try { db.taskDao.rebuildFts() } catch (_: Exception) {  }
         }
 
         return com.lucent.app.i18n.S.importSummary(state.importedNotes, state.importedTasks, state.importedChats) +
@@ -88,7 +88,7 @@ internal object BackupImporter {
                 val title = o.optString("title", "Conversation")
                 val createdAt = o.optLong("createdAt", System.currentTimeMillis())
                 val updatedAt = o.optLong("updatedAt", createdAt)
-                val newId = db.chatConversationDao().insert(
+                val newId = db.chatConversationDao.insert(
                     ChatConversation(title = title, createdAt = createdAt, updatedAt = updatedAt)
                 )
                 if (oldId != 0L) state.convIdRemap[oldId] = newId
@@ -147,11 +147,11 @@ internal object BackupImporter {
                     formatOverride = formatOverride
                 )
                 val newNoteId = if (action == ImportAction.REPLACE && local != null) {
-                    db.noteDao().update(incoming.copy(id = local.id))
+                    db.noteDao.update(incoming.copy(id = local.id))
                     state.replacedNotes++
                     local.id
                 } else {
-                    db.noteDao().insert(incoming)
+                    db.noteDao.insert(incoming)
                 }
                 state.noteIdByKey["$title\u0000$updatedAt"] = newNoteId
                 if (action == ImportAction.INSERT) state.importedNotes++
@@ -213,11 +213,11 @@ internal object BackupImporter {
                     formatOverride = taskFormatOverride
                 )
                 val newTaskId = if (taskAction == ImportAction.REPLACE && localTask != null) {
-                    db.taskDao().update(incomingTask.copy(id = localTask.id))
+                    db.taskDao.update(incomingTask.copy(id = localTask.id))
                     state.replacedTasks++
                     localTask.id
                 } else {
-                    val inserted = db.taskDao().insert(incomingTask)
+                    val inserted = db.taskDao.insert(incomingTask)
                     state.importedTasks++
                     inserted
                 }
@@ -238,7 +238,7 @@ internal object BackupImporter {
                 val ownerTitle = o.optString("taskTitle", "")
                 val ownerCreatedAt = o.optLong("taskCreatedAt", -1L)
                 val taskId = state.taskIdByKey["$ownerTitle\u0000$ownerCreatedAt"] ?: continue
-                db.taskVersionDao().insert(
+                db.taskVersionDao.insert(
                     TaskVersion(
                         taskId = taskId,
                         title = o.optString("title", ""),
@@ -252,7 +252,7 @@ internal object BackupImporter {
                 state.importedVersions++
             }
             state.taskIdByKey.values.distinct().forEach { id ->
-                db.taskVersionDao().trimTo(id, TaskHistory.MAX_VERSIONS_PER_TASK)
+                db.taskVersionDao.trimTo(id, TaskHistory.MAX_VERSIONS_PER_TASK)
             }
         }
     }
@@ -269,7 +269,7 @@ internal object BackupImporter {
                 val ownerTitle = o.optString("noteTitle", "")
                 val ownerUpdatedAt = o.optLong("noteUpdatedAt", -1L)
                 val noteId = state.noteIdByKey["$ownerTitle\u0000$ownerUpdatedAt"] ?: continue
-                db.noteVersionDao().insert(
+                db.noteVersionDao.insert(
                     NoteVersion(
                         noteId = noteId,
                         title = o.optString("title", ""),
@@ -283,7 +283,7 @@ internal object BackupImporter {
                 state.importedVersions++
             }
             state.noteIdByKey.values.distinct().forEach { id ->
-                db.noteVersionDao().trimTo(id, NoteHistory.MAX_VERSIONS_PER_NOTE)
+                db.noteVersionDao.trimTo(id, NoteHistory.MAX_VERSIONS_PER_NOTE)
             }
         }
     }
@@ -300,7 +300,7 @@ internal object BackupImporter {
             var fallbackConvId: Long? = null
             suspend fun fallbackConversation(): Long {
                 fallbackConvId?.let { return it }
-                val id = db.chatConversationDao().insert(ChatConversation(title = com.lucent.app.i18n.S.importedConversationTitle))
+                val id = db.chatConversationDao.insert(ChatConversation(title = com.lucent.app.i18n.S.importedConversationTitle))
                 fallbackConvId = id
                 return id
             }
@@ -314,7 +314,7 @@ internal object BackupImporter {
                 val newConvId = state.convIdRemap[oldConvId] ?: fallbackConversation()
                 val isDuplicate = existingChats.any { it.role == role && it.content == content && it.timestamp == timestamp }
                 if (isDuplicate) { state.skipped++; continue }
-                db.chatDao().insert(
+                db.chatDao.insert(
                     ChatMessage(
                         role = role,
                         content = content,
@@ -348,8 +348,8 @@ internal object BackupImporter {
             val restoredNotebooks = root.optJSONArray("notebooks")
             val restoredItems = root.optJSONArray("notebookItems")
             if (restoredNotebooks != null && restoredItems != null) {
-                val liveNotes = db.noteDao().getAllOnce()
-                val liveTasks = db.taskDao().getAllOnce()
+                val liveNotes = db.noteDao.getAllOnce()
+                val liveTasks = db.taskDao.getAllOnce()
                 val notebookIdByTitle = HashMap<String, Long>()
                 for (i in 0 until restoredNotebooks.length()) {
                     val o = restoredNotebooks.getJSONObject(i)
@@ -364,7 +364,7 @@ internal object BackupImporter {
                             AttachmentStore.importBytes(context, bytes)?.let { "photo:$it" }
                         }.getOrNull() ?: storedColor
                     } else storedColor
-                    val newId = db.notebookDao().insert(
+                    val newId = db.notebookDao.insert(
                         Notebook(
                             title = title,
                             createdAt = createdAt,
@@ -395,7 +395,7 @@ internal object BackupImporter {
                         else -> null
                     }
                     if (targetId != null) {
-                        db.notebookDao().insertItem(
+                        db.notebookDao.insertItem(
                             NotebookItem(notebookId = notebookId, itemKind = kind, itemId = targetId)
                         )
                     }

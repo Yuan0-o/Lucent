@@ -128,12 +128,12 @@ import kotlinx.coroutines.withContext
 @Composable
 fun TasksScreen(active: Boolean = true) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val settingsRepo = remember { SettingsRepository(context) }
+    val db = remember { createAppDatabase(context) }
+    val settingsRepo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
 
-    val activeTasks by remember { db.taskDao().getActive() }.collectAsState(initial = com.lucent.app.data.DataCache.activeTasks)
-    val allTasks by remember { db.taskDao().getAll() }.collectAsState(initial = com.lucent.app.data.DataCache.activeTasks + com.lucent.app.data.DataCache.completedTasks)
+    val activeTasks by remember { db.taskDao.getActive() }.collectAsState(initial = com.lucent.app.data.DataCache.activeTasks)
+    val allTasks by remember { db.taskDao.getAll() }.collectAsState(initial = com.lucent.app.data.DataCache.activeTasks + com.lucent.app.data.DataCache.completedTasks)
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -151,7 +151,7 @@ fun TasksScreen(active: Boolean = true) {
     var showDrafts by remember { mutableStateOf(false) }
     var showHidden by remember { mutableStateOf(false) }
     var showNotebookPicker by remember { mutableStateOf(false) }
-    val draftCount by db.taskDao().getDrafts().collectAsState(initial = emptyList())
+    val draftCount by db.taskDao.getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
     SessionRestoreDialog()
     var historyForTaskId by remember { mutableStateOf<Long?>(null) }
@@ -209,7 +209,7 @@ fun TasksScreen(active: Boolean = true) {
     var quickActionsOpen by remember(composing) { mutableStateOf(false) }
     var composerMoreOpen by rememberSaveable(composing) { mutableStateOf(false) }
     val bodyUndo = remember(composing) { TextUndoStack(newNotes) }
-    val repo = remember { com.lucent.app.data.SettingsRepository(context) }
+    val repo = remember { com.lucent.app.data.createSettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.richTextEnabled)
     val markdownEnabled by repo.markdownEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.markdownEnabled)
     var bodySpans by remember { mutableStateOf(emptyList<com.lucent.app.data.RichSpan>()) }
@@ -357,8 +357,8 @@ fun TasksScreen(active: Boolean = true) {
                     draftSavedAt = System.currentTimeMillis()
                 )
                 val existing = draftRowId
-                if (existing == null) draftRowId = db.taskDao().insert(row)
-                else db.taskDao().update(row.copy(id = existing))
+                if (existing == null) draftRowId = db.taskDao.insert(row)
+                else db.taskDao.update(row.copy(id = existing))
                 withContext(Dispatchers.Main) {
                     LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.draftSavedToast)
                 }
@@ -376,7 +376,7 @@ fun TasksScreen(active: Boolean = true) {
         val appContext = context.applicationContext
 
         com.lucent.app.data.backgroundWrite(context, "task save") {
-            val existing = original?.let { db.taskDao().getByIdOnce(it.id) }
+            val existing = original?.let { db.taskDao.getByIdOnce(it.id) }
             val saved: Task = if (existing != null) {
                 val updated = existing.copy(
                     title = title,
@@ -399,7 +399,7 @@ fun TasksScreen(active: Boolean = true) {
                     newPriority = prioritySnapshot,
                     newDueAt = due
                 )
-                db.taskDao().update(updated)
+                db.taskDao.update(updated)
                 updated
             } else {
                 val toInsert = Task(
@@ -416,14 +416,14 @@ fun TasksScreen(active: Boolean = true) {
                     repeatRule = repeatSnapshot,
                     reminderEnabled = reminderSnapshot
                 )
-                val newId = db.taskDao().insert(toInsert)
+                val newId = db.taskDao.insert(toInsert)
                 toInsert.copy(id = newId)
             }
             ReminderScheduler.sync(appContext, saved)
 
                 if (draftToClear != null) {
-                    db.taskDao().getByIdOnce(draftToClear)?.let { row ->
-                        if (row.isDraft) db.taskDao().delete(row)
+                    db.taskDao.getByIdOnce(draftToClear)?.let { row ->
+                        if (row.isDraft) db.taskDao.delete(row)
                     }
                 }
             withContext(Dispatchers.Main) {
@@ -485,7 +485,7 @@ fun TasksScreen(active: Boolean = true) {
 
     LaunchedEffect(AppNavigation.pendingEditTaskId) {
         val id = AppNavigation.consumeEditTaskId() ?: return@LaunchedEffect
-        val task = db.taskDao().getByIdOnce(id) ?: return@LaunchedEffect
+        val task = db.taskDao.getByIdOnce(id) ?: return@LaunchedEffect
         viewingId = null
         showSearch = false
         showingHistory = false
@@ -552,7 +552,7 @@ fun TasksScreen(active: Boolean = true) {
         val p = com.lucent.app.data.SessionRestore.read(snap.payload)
         val id = snap.itemId
         resetComposer()
-        editingTask = if (id != null) db.taskDao().getByIdOnce(id) else null
+        editingTask = if (id != null) db.taskDao.getByIdOnce(id) else null
         newTitle = androidx.compose.ui.text.input.TextFieldValue(p.optString("title"))
         newNotes = p.optString("notes")
         pendingAttachments = Attachments.parse(p.optString("attachments", "[]"))
@@ -656,7 +656,7 @@ fun TasksScreen(active: Boolean = true) {
         if (reordered === sortedActive) { reorderState.cancel(); return }
         AppScope.io.launch {
             reordered.forEachIndexed { index, t ->
-                if (t.manualOrder != index) db.taskDao().setManualOrder(t.id, index)
+                if (t.manualOrder != index) db.taskDao.setManualOrder(t.id, index)
             }
         }
         if (sortOption != TaskSort.CUSTOM) {
@@ -767,7 +767,7 @@ fun TasksScreen(active: Boolean = true) {
                     val pinnedNow = !target.pinned
                     taskToTogglePin = null
                     com.lucent.app.data.backgroundWrite(context, "task pin toggle") {
-                        db.taskDao().setPinned(target.id, pinnedNow)
+                        db.taskDao.setPinned(target.id, pinnedNow)
                     }
                 }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
@@ -793,7 +793,7 @@ fun TasksScreen(active: Boolean = true) {
                     exitSelection()
                     AppScope.io.launch {
                         ids.forEach { id ->
-                            db.taskDao().getByIdOnce(id)?.let { TaskActions.trash(context, db, it) }
+                            db.taskDao.getByIdOnce(id)?.let { TaskActions.trash(context, db, it) }
                         }
                     }
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
@@ -1169,7 +1169,7 @@ fun TasksScreen(active: Boolean = true) {
                     Spacer(modifier = Modifier.width(8.dp))
 
                     var actionsExpanded by remember(task.id) { mutableStateOf(false) }
-                    val taskVersions by db.taskVersionDao().getForTask(task.id).collectAsState(initial = emptyList())
+                    val taskVersions by db.taskVersionDao.getForTask(task.id).collectAsState(initial = emptyList())
                     val taskVersionCount = taskVersions.size
                     Row(
                         modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
@@ -1211,8 +1211,8 @@ fun TasksScreen(active: Boolean = true) {
                                 current = task.formatOverride,
                                 onSelect = { key ->
                                     AppScope.io.launch {
-                                        db.taskDao().getByIdOnce(task.id)?.let { row ->
-                                            db.taskDao().update(row.copy(formatOverride = key))
+                                        db.taskDao.getByIdOnce(task.id)?.let { row ->
+                                            db.taskDao.update(row.copy(formatOverride = key))
                                         }
                                     }
                                 }
@@ -1313,7 +1313,7 @@ fun TasksScreen(active: Boolean = true) {
                             } else {
                                 { item, checked ->
                                     AppScope.io.launch {
-                                        db.taskDao().update(
+                                        db.taskDao.update(
                                             task.copy(subtasks = Checklist.setDone(task.subtasks, item.id, checked))
                                         )
                                     }
@@ -1326,7 +1326,7 @@ fun TasksScreen(active: Boolean = true) {
                         attachments, onGradient, onGradientMuted,
                         onRename = { att, newName ->
                             AppScope.io.launch {
-                                db.taskDao().update(
+                                db.taskDao.update(
                                     task.copy(
                                         attachments = Attachments.serialize(
                                             attachments.map { if (it.data == att.data) it.copy(name = newName) else it }
@@ -1420,8 +1420,8 @@ fun TasksScreen(active: Boolean = true) {
                                 val target = showHidden
                                 AppScope.io.launch {
                                     ids.forEach { id ->
-                                        db.taskDao().getByIdOnce(id)?.let { row ->
-                                            db.taskDao().update(row.copy(hidden = !target))
+                                        db.taskDao.getByIdOnce(id)?.let { row ->
+                                            db.taskDao.update(row.copy(hidden = !target))
                                         }
                                     }
                                 }

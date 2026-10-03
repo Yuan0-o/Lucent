@@ -68,13 +68,13 @@ fun SearchScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
 
     var raw by remember { mutableStateOf("") }
-    val repo = remember { SettingsRepository(context) }
+    val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val savedJson by repo.savedSearches.collectAsState(initial = "")
     val savedList = remember(savedJson) { SavedSearches.parse(savedJson) }
@@ -103,7 +103,7 @@ fun SearchScreen(
         noteResults = if (query.isTaskOnly) {
             emptyList()
         } else {
-            db.noteDao()
+            db.noteDao
                 .searchNotes(
                     text = query.sqlText,
                     tag = query.sqlTag,
@@ -121,7 +121,7 @@ fun SearchScreen(
         taskResults = if (query.isNoteOnly) {
             emptyList()
         } else {
-            db.taskDao()
+            db.taskDao
                 .searchTasks(
                     text = query.sqlText,
                     done = query.sqlDone,

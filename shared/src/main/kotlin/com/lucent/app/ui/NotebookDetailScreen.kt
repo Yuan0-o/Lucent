@@ -65,16 +65,16 @@ fun NotebookDetailScreen(
 ) {
     BackHandler { onBack() }
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
     var notebook by remember { mutableStateOf<Notebook?>(null) }
     LaunchedEffect(notebookId) {
-        notebook = db.notebookDao().getByIdOnce(notebookId)
+        notebook = db.notebookDao.getByIdOnce(notebookId)
     }
-    val items by db.notebookDao().getItems(notebookId).collectAsState(initial = emptyList())
+    val items by db.notebookDao.getItems(notebookId).collectAsState(initial = emptyList())
 
     val noteMembers = remember(items) { items.filter { it.itemKind == NotebookItem.KIND_NOTE } }
     val taskMembers = remember(items) { items.filter { it.itemKind == NotebookItem.KIND_TASK } }
@@ -82,13 +82,13 @@ fun NotebookDetailScreen(
     var tasksById by remember { mutableStateOf(emptyMap<Long, Task>()) }
     LaunchedEffect(noteMembers, taskMembers) {
         val notes = if (noteMembers.isEmpty()) emptyMap()
-        else db.noteDao().getByIds(noteMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
+        else db.noteDao.getByIds(noteMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
         val tasks = if (taskMembers.isEmpty()) emptyMap()
-        else db.taskDao().getByIds(taskMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
+        else db.taskDao.getByIds(taskMembers.map { it.itemId }.toSet().toList()).associateBy { it.id }
         notesById = notes
         tasksById = tasks
         val ghosts = noteMembers.filter { it.itemId !in notes } + taskMembers.filter { it.itemId !in tasks }
-        if (ghosts.isNotEmpty()) ghosts.forEach { db.notebookDao().deleteItemById(it.id) }
+        if (ghosts.isNotEmpty()) ghosts.forEach { db.notebookDao.deleteItemById(it.id) }
     }
 
     var renaming by remember { mutableStateOf(false) }
@@ -111,7 +111,7 @@ fun NotebookDetailScreen(
                 TextButton(onClick = {
                     deleting = false
                     AppScope.io.launch {
-                        db.notebookDao().update(
+                        db.notebookDao.update(
                             (notebook ?: return@launch).copy(trashedAt = System.currentTimeMillis())
                         )
                         LucentToast.show(context, com.lucent.app.i18n.S.notebookDeletedToast)
@@ -158,10 +158,10 @@ fun NotebookDetailScreen(
                     val target = note
                     noteToTrash = null
                     AppScope.io.launch {
-                        db.noteDao().update(target.copy(trashedAt = System.currentTimeMillis()))
+                        db.noteDao.update(target.copy(trashedAt = System.currentTimeMillis()))
                         items.firstOrNull {
                             it.itemKind == NotebookItem.KIND_NOTE && it.itemId == target.id
-                        }?.let { db.notebookDao().deleteItemById(it.id) }
+                        }?.let { db.notebookDao.deleteItemById(it.id) }
                     }
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
@@ -189,7 +189,7 @@ fun NotebookDetailScreen(
                         TaskActions.trash(context, db, target)
                         items.firstOrNull {
                             it.itemKind == NotebookItem.KIND_TASK && it.itemId == target.id
-                        }?.let { db.notebookDao().deleteItemById(it.id) }
+                        }?.let { db.notebookDao.deleteItemById(it.id) }
                     }
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
             },
@@ -208,7 +208,7 @@ fun NotebookDetailScreen(
                 val row = notebook
                 if (row != null) {
                     scope.launch {
-                        db.notebookDao().update(
+                        db.notebookDao.update(
                             row.copy(title = name.trim(), updatedAt = System.currentTimeMillis())
                         )
                         notebook = row.copy(title = name.trim(), updatedAt = System.currentTimeMillis())
@@ -232,7 +232,7 @@ fun NotebookDetailScreen(
                 val row = notebook
                 if (row != null) {
                     scope.launch {
-                        db.notebookDao().update(
+                        db.notebookDao.update(
                             row.copy(color = color, updatedAt = System.currentTimeMillis())
                         )
                         notebook = row.copy(color = color, updatedAt = System.currentTimeMillis())
@@ -341,7 +341,7 @@ fun NotebookDetailScreen(
                     },
                     onRemove = {
                         scope.launch {
-                            db.notebookDao().deleteItemById(row.member.id)
+                            db.notebookDao.deleteItemById(row.member.id)
                             LucentToast.show(context, com.lucent.app.i18n.S.notebookRemovedToast)
                         }
                     },
@@ -482,7 +482,7 @@ private fun NotebookMemberRow(
 @Composable
 private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     var title by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
 
@@ -513,12 +513,12 @@ private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCre
                 val noteBody = body
                 onCreated()
                 AppScope.io.launch {
-                    val id = db.noteDao().insert(Note(title = noteTitle, body = noteBody))
-                    db.notebookDao().insertItem(
+                    val id = db.noteDao.insert(Note(title = noteTitle, body = noteBody))
+                    db.notebookDao.insertItem(
                         NotebookItem(notebookId = notebookId, itemKind = NotebookItem.KIND_NOTE, itemId = id)
                     )
-                    db.notebookDao().getByIdOnce(notebookId)?.let { row ->
-                        db.notebookDao().update(row.copy(updatedAt = System.currentTimeMillis()))
+                    db.notebookDao.getByIdOnce(notebookId)?.let { row ->
+                        db.notebookDao.update(row.copy(updatedAt = System.currentTimeMillis()))
                     }
                     LucentToast.show(context, com.lucent.app.i18n.S.notebookAddedToast)
                 }
@@ -531,7 +531,7 @@ private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCre
 @Composable
 private fun NotebookNewTaskDialog(notebookId: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     var title by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -551,12 +551,12 @@ private fun NotebookNewTaskDialog(notebookId: Long, onDismiss: () -> Unit, onCre
                 val taskTitle = title.trim()
                 onCreated()
                 AppScope.io.launch {
-                    val id = db.taskDao().insert(Task(title = taskTitle))
-                    db.notebookDao().insertItem(
+                    val id = db.taskDao.insert(Task(title = taskTitle))
+                    db.notebookDao.insertItem(
                         NotebookItem(notebookId = notebookId, itemKind = NotebookItem.KIND_TASK, itemId = id)
                     )
-                    db.notebookDao().update(
-                        (db.notebookDao().getByIdOnce(notebookId) ?: return@launch)
+                    db.notebookDao.update(
+                        (db.notebookDao.getByIdOnce(notebookId) ?: return@launch)
                             .copy(updatedAt = System.currentTimeMillis())
                     )
                     LucentToast.show(context, com.lucent.app.i18n.S.notebookAddedToast)

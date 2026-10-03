@@ -77,11 +77,11 @@ fun NotebooksScreen(
     active: Boolean = true
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
-    val settingsRepo = remember { SettingsRepository(context) }
-    val notebooks by db.notebookDao().getAll().collectAsState(initial = emptyList())
-    val counts by db.notebookDao().itemCounts().collectAsState(initial = emptyList())
+    val settingsRepo = remember { createSettingsRepository(context) }
+    val notebooks by db.notebookDao.getAll().collectAsState(initial = emptyList())
+    val counts by db.notebookDao.itemCounts().collectAsState(initial = emptyList())
     val statsById = remember(counts) { counts.associateBy { it.notebookId } }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -129,15 +129,15 @@ fun NotebooksScreen(
     var actionsExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        runCatching { db.notebookDao().pruneOrphans(db.noteDao(), db.taskDao()) }
+        runCatching { db.notebookDao.pruneOrphans(db.noteDao, db.taskDao) }
     }
 
     LaunchedEffect(notebooks.size) {
         itemTitles = runCatching {
-            val noteTitles = db.noteDao().getAllOnce().associate { it.id to it.title }
-            val taskTitles = db.taskDao().getAllOnce().associate { it.id to it.title }
+            val noteTitles = db.noteDao.getAllOnce().associate { it.id to it.title }
+            val taskTitles = db.taskDao.getAllOnce().associate { it.id to it.title }
             val grouped = HashMap<Long, MutableList<String>>()
-            db.notebookDao().getAllItemsOnce().forEach { item ->
+            db.notebookDao.getAllItemsOnce().forEach { item ->
                 val title = when (item.itemKind) {
                     NotebookItem.KIND_NOTE -> noteTitles[item.itemId]
                     NotebookItem.KIND_TASK -> taskTitles[item.itemId]
@@ -195,7 +195,7 @@ fun NotebooksScreen(
                     val target = notebook
                     deleting = null
                     AppScope.io.launch {
-                        db.notebookDao().update(target.copy(trashedAt = System.currentTimeMillis()))
+                        db.notebookDao.update(target.copy(trashedAt = System.currentTimeMillis()))
                         StartupLog.event(context, "notebooks: trashed notebook ${target.id}")
                         LucentToast.show(context, com.lucent.app.i18n.S.notebookDeletedToast)
                     }
@@ -221,7 +221,7 @@ fun NotebooksScreen(
                     selectedIds = emptySet()
                     AppScope.io.launch {
                         notebooks.filter { it.id in ids }.forEach { notebook ->
-                            db.notebookDao().update(notebook.copy(trashedAt = System.currentTimeMillis()))
+                            db.notebookDao.update(notebook.copy(trashedAt = System.currentTimeMillis()))
                         }
                         StartupLog.event(context, "notebooks: trashed ${ids.size} notebooks")
                     }
@@ -244,7 +244,7 @@ fun NotebooksScreen(
                 nameForNew = ""
                 coverForNew = NotebookColor.DEFAULT.key
                 scope.launch {
-                    db.notebookDao().insert(Notebook(title = name.trim(), color = colorKey))
+                    db.notebookDao.insert(Notebook(title = name.trim(), color = colorKey))
                     StartupLog.event(context, "notebooks: created notebook with cover ${if (colorKey.startsWith("photo:")) "photo" else colorKey}")
                 }
             },
@@ -261,7 +261,7 @@ fun NotebooksScreen(
             showColorPicker = false,
             onConfirm = { name, _ ->
                 scope.launch {
-                    db.notebookDao().update(
+                    db.notebookDao.update(
                         notebook.copy(title = name.trim(), updatedAt = System.currentTimeMillis())
                     )
                     StartupLog.event(context, "notebooks: renamed notebook ${notebook.id}")
@@ -282,7 +282,7 @@ fun NotebooksScreen(
             onPickPhoto = onPickPhoto,
             onConfirm = { _, color ->
                 scope.launch {
-                    db.notebookDao().update(
+                    db.notebookDao.update(
                         notebook.copy(color = color, updatedAt = System.currentTimeMillis())
                     )
                     StartupLog.event(context, "notebooks: changed cover for notebook ${notebook.id}")
@@ -338,7 +338,7 @@ fun NotebooksScreen(
         AppScope.io.launch {
             reordered.forEachIndexed { index, notebook ->
                 if (notebook.manualOrder != index * 1000) {
-                    db.notebookDao().update(notebook.copy(manualOrder = index * 1000))
+                    db.notebookDao.update(notebook.copy(manualOrder = index * 1000))
                 }
             }
         }
@@ -351,7 +351,7 @@ fun NotebooksScreen(
     fun setPinned(targets: List<Notebook>, pinned: Boolean) {
         AppScope.io.launch {
             targets.forEach { notebook ->
-                db.notebookDao().update(notebook.copy(pinned = pinned, updatedAt = System.currentTimeMillis()))
+                db.notebookDao.update(notebook.copy(pinned = pinned, updatedAt = System.currentTimeMillis()))
             }
         }
     }
@@ -706,8 +706,8 @@ internal fun NotebookEditorDialog(
 @Composable
 fun NotebookTrashScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val trashed by db.notebookDao().getTrashed().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val trashed by db.notebookDao.getTrashed().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     var confirmEmpty by remember { mutableStateOf(false) }
@@ -723,8 +723,8 @@ fun NotebookTrashScreen(onBack: () -> Unit) {
                     confirmEmpty = false
                     AppScope.io.launch {
                         rows.forEach { row ->
-                            db.notebookDao().deleteItemsForNotebook(row.id)
-                            db.notebookDao().deleteById(row.id)
+                            db.notebookDao.deleteItemsForNotebook(row.id)
+                            db.notebookDao.deleteById(row.id)
                         }
                     }
                 }) { Text(com.lucent.app.i18n.S.emptyTrash) }
@@ -788,15 +788,15 @@ fun NotebookTrashScreen(onBack: () -> Unit) {
                     }
                     TextButton(onClick = {
                         AppScope.io.launch {
-                            db.notebookDao().update(
+                            db.notebookDao.update(
                                 notebook.copy(trashedAt = null, updatedAt = System.currentTimeMillis())
                             )
                         }
                     }) { Text(com.lucent.app.i18n.S.actionRestore) }
                     IconButton(onClick = {
                         AppScope.io.launch {
-                            db.notebookDao().deleteItemsForNotebook(notebook.id)
-                            db.notebookDao().deleteById(notebook.id)
+                            db.notebookDao.deleteItemsForNotebook(notebook.id)
+                            db.notebookDao.deleteById(notebook.id)
                         }
                     }) {
                         Icon(Icons.Default.Delete, contentDescription = com.lucent.app.i18n.S.deleteForever, tint = onGradientMuted)
@@ -815,9 +815,9 @@ fun AddToNotebookDialog(
     onAdded: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
-    val notebooks by db.notebookDao().getAll().collectAsState(initial = emptyList())
+    val notebooks by db.notebookDao.getAll().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
 
     var creatingNew by remember { mutableStateOf(false) }
@@ -827,21 +827,21 @@ fun AddToNotebookDialog(
     fun fileInto(notebookId: Long) {
         scope.launch {
             noteIds.forEach { id ->
-                if (db.notebookDao().membershipExistsOnce(notebookId, NotebookItem.KIND_NOTE, id) == 0) {
-                    db.notebookDao().insertItem(
+                if (db.notebookDao.membershipExistsOnce(notebookId, NotebookItem.KIND_NOTE, id) == 0) {
+                    db.notebookDao.insertItem(
                         NotebookItem(notebookId = notebookId, itemKind = NotebookItem.KIND_NOTE, itemId = id)
                     )
                 }
             }
             taskIds.forEach { id ->
-                if (db.notebookDao().membershipExistsOnce(notebookId, NotebookItem.KIND_TASK, id) == 0) {
-                    db.notebookDao().insertItem(
+                if (db.notebookDao.membershipExistsOnce(notebookId, NotebookItem.KIND_TASK, id) == 0) {
+                    db.notebookDao.insertItem(
                         NotebookItem(notebookId = notebookId, itemKind = NotebookItem.KIND_TASK, itemId = id)
                     )
                 }
             }
-            db.notebookDao().getByIdOnce(notebookId)?.let { row ->
-                db.notebookDao().update(row.copy(updatedAt = System.currentTimeMillis()))
+            db.notebookDao.getByIdOnce(notebookId)?.let { row ->
+                db.notebookDao.update(row.copy(updatedAt = System.currentTimeMillis()))
             }
             LucentToast.show(context, com.lucent.app.i18n.S.notebookAddedToast)
             onAdded()
@@ -920,14 +920,14 @@ fun AddToNotebookDialog(
                         val name = newName.trim()
                         val colorKey = newColor
                         scope.launch {
-                            val id = db.notebookDao().insert(Notebook(title = name, color = colorKey))
+                            val id = db.notebookDao.insert(Notebook(title = name, color = colorKey))
                             noteIds.forEach { nid ->
-                                db.notebookDao().insertItem(
+                                db.notebookDao.insertItem(
                                     NotebookItem(notebookId = id, itemKind = NotebookItem.KIND_NOTE, itemId = nid)
                                 )
                             }
                             taskIds.forEach { tid ->
-                                db.notebookDao().insertItem(
+                                db.notebookDao.insertItem(
                                     NotebookItem(notebookId = id, itemKind = NotebookItem.KIND_TASK, itemId = tid)
                                 )
                             }

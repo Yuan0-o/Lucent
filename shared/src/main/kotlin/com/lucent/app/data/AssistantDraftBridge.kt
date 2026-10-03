@@ -18,11 +18,11 @@ object AssistantDraftBridge {
         edits: Map<String, String>
     ) {
         if (!shouldMirror(toolName)) return
-        val db = AppDatabase.getInstance(appContext)
+        val db = createAppDatabase(appContext)
         val now = System.currentTimeMillis()
         when (toolName) {
             "create_note" -> {
-                val existing = mirroredNoteId?.let { db.noteDao().getByIdOnce(it) }
+                val existing = mirroredNoteId?.let { db.noteDao.getByIdOnce(it) }
                 val row = (existing ?: Note(title = "", body = "", updatedAt = now)).copy(
                     title = edits["title"].orEmpty(),
                     body = edits["body"] ?: edits["content"].orEmpty(),
@@ -35,13 +35,13 @@ object AssistantDraftBridge {
                     draftSavedAt = now
                 )
                 mirroredNoteId = if (existing == null) {
-                    db.noteDao().insert(row)
+                    db.noteDao.insert(row)
                 } else {
-                    db.noteDao().update(row); existing.id
+                    db.noteDao.update(row); existing.id
                 }
             }
             "create_task" -> {
-                val existing = mirroredTaskId?.let { db.taskDao().getByIdOnce(it) }
+                val existing = mirroredTaskId?.let { db.taskDao.getByIdOnce(it) }
                 val row = (existing ?: Task(title = "", createdAt = now)).copy(
                     title = edits["title"].orEmpty(),
                     notes = edits["notes"].orEmpty(),
@@ -50,21 +50,21 @@ object AssistantDraftBridge {
                     draftSavedAt = now
                 )
                 mirroredTaskId = if (existing == null) {
-                    db.taskDao().insert(row)
+                    db.taskDao.insert(row)
                 } else {
-                    db.taskDao().update(row); existing.id
+                    db.taskDao.update(row); existing.id
                 }
             }
         }
     }
 
     suspend fun clear(appContext: Context) {
-        val db = AppDatabase.getInstance(appContext)
+        val db = createAppDatabase(appContext)
         mirroredNoteId?.let { id ->
-            db.noteDao().getByIdOnce(id)?.let { if (it.isDraft) db.noteDao().delete(it) }
+            db.noteDao.getByIdOnce(id)?.let { if (it.isDraft) db.noteDao.delete(it) }
         }
         mirroredTaskId?.let { id ->
-            db.taskDao().getByIdOnce(id)?.let { if (it.isDraft) db.taskDao().delete(it) }
+            db.taskDao.getByIdOnce(id)?.let { if (it.isDraft) db.taskDao.delete(it) }
         }
         mirroredNoteId = null
         mirroredTaskId = null

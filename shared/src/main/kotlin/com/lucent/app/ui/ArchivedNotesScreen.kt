@@ -55,9 +55,9 @@ fun ArchivedNotesScreen(
     onDeleteRequest: (Note) -> Unit,
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
-    val archived by db.noteDao().getArchived().collectAsState(initial = emptyList())
+    val archived by db.noteDao.getArchived().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
@@ -77,7 +77,7 @@ fun ArchivedNotesScreen(
                 TextButton(onClick = {
                     val target = note
                     noteToRestore = null
-                    scope.launch { db.noteDao().update(target.copy(archived = false, archivedAt = null)) }
+                    scope.launch { db.noteDao.update(target.copy(archived = false, archivedAt = null)) }
                 }) { Text(com.lucent.app.i18n.S.actionRestore) }
             },
             dismissButton = { TextButton(onClick = { noteToRestore = null }) { Text(com.lucent.app.i18n.S.actionCancel) } }

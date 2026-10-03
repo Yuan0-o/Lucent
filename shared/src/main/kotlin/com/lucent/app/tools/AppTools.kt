@@ -522,34 +522,34 @@ object AppTools {
     private fun JSONObject.hasAny(vararg keys: String): Boolean = keys.any { has(it) }
 
     internal suspend fun activeNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
+        db.noteDao.getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
 
     internal suspend fun activeTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
+        db.taskDao.getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
 
     internal suspend fun editableNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.trashedAt == null && !it.hidden }
+        db.noteDao.getAllOnce().filter { it.trashedAt == null && !it.hidden }
 
     internal suspend fun editableTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.trashedAt == null && !it.hidden }
+        db.taskDao.getAllOnce().filter { it.trashedAt == null && !it.hidden }
 
     internal suspend fun hiddenNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.hidden }
+        db.noteDao.getAllOnce().filter { it.hidden }
 
     internal suspend fun hiddenTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.hidden }
+        db.taskDao.getAllOnce().filter { it.hidden }
 
     private suspend fun draftNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
+        db.noteDao.getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
 
     private suspend fun draftTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
+        db.taskDao.getAllOnce().filter { it.isDraft && it.trashedAt == null && !it.hidden }
 
     private suspend fun trashedNotes(db: AppDatabase): List<Note> =
-        db.noteDao().getAllOnce().filter { it.trashedAt != null && !it.hidden }
+        db.noteDao.getAllOnce().filter { it.trashedAt != null && !it.hidden }
 
     private suspend fun trashedTasks(db: AppDatabase): List<Task> =
-        db.taskDao().getAllOnce().filter { it.trashedAt != null && !it.hidden }
+        db.taskDao.getAllOnce().filter { it.trashedAt != null && !it.hidden }
 
     private fun matchNote(notes: List<Note>, query: String): Note? =
         bestMatch(notes, query, { it.title }, { it.updatedAt })
@@ -851,7 +851,7 @@ object AppTools {
                 val tags = args.optString("tags", "")
                 val checklistJson = Checklist.addAll("[]", args.optString("checklist", ""))
                 val isChecklist = checklistJson != "[]"
-                val newNoteId = db.noteDao().insert(
+                val newNoteId = db.noteDao.insert(
                     Note(title = title, body = body, tags = tags, isChecklist = isChecklist, checklist = checklistJson)
                 )
                 val suffix = Checklist.progress(checklistJson)?.let { (_, total) ->
@@ -946,7 +946,7 @@ object AppTools {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
                     val pinned = args.optBoolean("pinned", true)
-                    db.noteDao().update(match.copy(pinned = pinned))
+                    db.noteDao.update(match.copy(pinned = pinned))
                     ToolExecResult("${if (pinned) "Pinned" else "Unpinned"} note \"${match.title}\".")
                 }
             }
@@ -960,7 +960,7 @@ object AppTools {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
                     val archived = args.optBoolean("archived", true)
-                    db.noteDao().update(
+                    db.noteDao.update(
                         match.copy(archived = archived, archivedAt = if (archived) System.currentTimeMillis() else null)
                     )
                     ToolExecResult(
@@ -984,7 +984,7 @@ object AppTools {
                     if (color == null) {
                         ToolExecResult("Unknown colour \"$raw\". Use one of: default, red, orange, yellow, green, teal, blue, purple, pink.", success = false)
                     } else {
-                        db.noteDao().update(match.copy(color = color.key))
+                        db.noteDao.update(match.copy(color = color.key))
                         ToolExecResult(
                             if (color == NoteColor.DEFAULT) "Cleared the colour on note \"${match.title}\"."
                             else "Set note \"${match.title}\" to ${color.key}."
@@ -1023,7 +1023,7 @@ object AppTools {
                         ToolExecResult("No checklist item matching \"$itemQuery\" on note \"${match.title}\". It has: $names.", success = false)
                     } else {
                         val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
-                        db.noteDao().update(match.copy(checklist = Checklist.setDone(match.checklist, item.id, done)))
+                        db.noteDao.update(match.copy(checklist = Checklist.setDone(match.checklist, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on note \"${match.title}\".")
                     }
                 }
@@ -1080,7 +1080,7 @@ object AppTools {
                     if (toChecklist == match.isChecklist) {
                         ToolExecResult("Note \"${match.title}\" is already in ${if (toChecklist) "checklist" else "plain-text"} mode.")
                     } else {
-                        db.noteDao().update(match.copy(isChecklist = toChecklist))
+                        db.noteDao.update(match.copy(isChecklist = toChecklist))
                         ToolExecResult(
                             if (toChecklist) "Note \"${match.title}\" now shows as a checklist. Its body text is kept and comes back if it's switched to plain text again."
                             else "Note \"${match.title}\" now shows its plain-text body. Its checklist items are kept and come back if it's switched to checklist mode again."
@@ -1102,7 +1102,7 @@ object AppTools {
                         ToolExecResult("Couldn't write attachment \"$fileName\" (disk error).", success = false)
                     } else {
                         val list = Attachments.upsert(appContext, Attachments.parse(match.attachments), att)
-                        db.noteDao().update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
+                        db.noteDao.update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
                         ToolExecResult("Saved attachment \"$fileName\" on note \"${match.title}\".")
                     }
                 }
@@ -1122,8 +1122,8 @@ object AppTools {
                         ToolExecResult("No attachment named \"$fileName\" on note \"${match.title}\". It currently has: $names.", success = false)
                     } else {
                         val list = Attachments.removeByName(appContext, existing, resolved)
-                        db.noteDao().update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
-                        val after = db.noteDao().getByIdOnce(match.id)
+                        db.noteDao.update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
+                        val after = db.noteDao.getByIdOnce(match.id)
                         val stillThere = after != null &&
                             Attachments.parse(after.attachments).any { it.name.equals(resolved, ignoreCase = true) }
                         if (stillThere) {
@@ -1144,7 +1144,7 @@ object AppTools {
                 } else {
                     storeUpload(appContext, db, uploadMime, uploadData, uploadName, requestedName) { att ->
                         val list = Attachments.upsert(appContext, Attachments.parse(match.attachments), att)
-                        db.noteDao().update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
+                        db.noteDao.update(match.copy(attachments = Attachments.serialize(list), updatedAt = System.currentTimeMillis()))
                         ToolExecResult("Attached \"${att.name}\" to note \"${match.title}\".")
                     }
                 }
@@ -1156,7 +1156,7 @@ object AppTools {
                 if (match == null) {
                     noteNotFound(db, titleQuery)
                 } else {
-                    val versions = db.noteVersionDao().getForNoteOnce(match.id)
+                    val versions = db.noteVersionDao.getForNoteOnce(match.id)
                     if (versions.isEmpty()) {
                         ToolExecResult("Note \"${match.title}\" has no saved history versions yet — a version is captured the first time it's edited.")
                     } else {
@@ -1180,7 +1180,7 @@ object AppTools {
                 if (match == null) {
                     noteNotFound(db, titleQuery)
                 } else {
-                    val versions = db.noteVersionDao().getForNoteOnce(match.id)
+                    val versions = db.noteVersionDao.getForNoteOnce(match.id)
                     val version = versions.getOrNull(versionIndex - 1)
                     if (version == null) {
                         ToolExecResult(
@@ -1189,7 +1189,7 @@ object AppTools {
                             success = false
                         )
                     } else {
-                        val current = db.noteDao().getByIdOnce(match.id)
+                        val current = db.noteDao.getByIdOnce(match.id)
                         if (current == null) {
                             ToolExecResult("Note \"${match.title}\" disappeared before it could be restored.", success = false)
                         } else {
@@ -1204,7 +1204,7 @@ object AppTools {
                                 newChecklist = restored.checklist,
                                 savedAt = System.currentTimeMillis()
                             )
-                            db.noteDao().update(restored)
+                            db.noteDao.update(restored)
                             ToolExecResult("Restored note \"${restored.title}\" to its version from ${DueParsing.format(version.savedAt)}. What it said just before the restore was saved to history too, so this can be undone.")
                         }
                     }
@@ -1234,7 +1234,7 @@ object AppTools {
                     reminderEnabled = reminder,
                     subtasks = subtasks
                 )
-                val newId = db.taskDao().insert(toInsert)
+                val newId = db.taskDao.insert(toInsert)
                 ReminderScheduler.sync(appContext, toInsert.copy(id = newId))
 
                 val extras = buildList {
@@ -1365,7 +1365,7 @@ object AppTools {
                         repeatRule = if (newDue == null) RepeatRule.NONE.key else newRepeat.key,
                         reminderEnabled = newReminder
                     )
-                    db.taskDao().update(updated)
+                    db.taskDao.update(updated)
                     ReminderScheduler.sync(appContext, updated)
 
                     val warning = if (dueParseFailed) {
@@ -1395,7 +1395,7 @@ object AppTools {
                     taskNotFound(db, titleQuery)
                 } else {
                     val pinned = args.optBoolean("pinned", true)
-                    db.taskDao().update(match.copy(pinned = pinned))
+                    db.taskDao.update(match.copy(pinned = pinned))
                     ToolExecResult("${if (pinned) "Pinned" else "Unpinned"} task \"${match.title}\".")
                 }
             }
@@ -1407,7 +1407,7 @@ object AppTools {
                     taskNotFound(db, titleQuery)
                 } else {
                     val priority = TaskPriority.fromKey(args.optString("priority", "none"))
-                    db.taskDao().update(match.copy(priority = priority.value))
+                    db.taskDao.update(match.copy(priority = priority.value))
                     ToolExecResult(
                         if (priority == TaskPriority.NONE) "Cleared the priority on \"${match.title}\"."
                         else "Set \"${match.title}\" to ${priority.label.lowercase()} priority."
@@ -1457,7 +1457,7 @@ object AppTools {
                     match == null -> taskNotFound(db, titleQuery)
                     item.isBlank() -> ToolExecResult("No checklist item text was provided.", success = false)
                     else -> {
-                        db.taskDao().update(match.copy(subtasks = Checklist.add(match.subtasks, item)))
+                        db.taskDao.update(match.copy(subtasks = Checklist.add(match.subtasks, item)))
                         ToolExecResult("Added \"$item\" to the checklist on task \"${match.title}\".")
                     }
                 }
@@ -1476,7 +1476,7 @@ object AppTools {
                         ToolExecResult("No checklist item matching \"$itemQuery\" on task \"${match.title}\". It has: $names.", success = false)
                     } else {
                         val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
-                        db.taskDao().update(match.copy(subtasks = Checklist.setDone(match.subtasks, item.id, done)))
+                        db.taskDao.update(match.copy(subtasks = Checklist.setDone(match.subtasks, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on task \"${match.title}\".")
                     }
                 }
@@ -1497,7 +1497,7 @@ object AppTools {
                         val names = Checklist.parse(match.subtasks).joinToString(", ") { it.text }.ifBlank { "none" }
                         ToolExecResult("No checklist item matching \"$itemQuery\" on task \"${match.title}\". It has: $names.", success = false)
                     } else {
-                        db.taskDao().update(match.copy(subtasks = Checklist.updateText(match.subtasks, item.id, newText)))
+                        db.taskDao.update(match.copy(subtasks = Checklist.updateText(match.subtasks, item.id, newText)))
                         ToolExecResult("Changed \"${item.text}\" to \"$newText\" on task \"${match.title}\".")
                     }
                 }
@@ -1515,7 +1515,7 @@ object AppTools {
                         val names = Checklist.parse(match.subtasks).joinToString(", ") { it.text }.ifBlank { "none" }
                         ToolExecResult("No checklist item matching \"$itemQuery\" on task \"${match.title}\". It has: $names.", success = false)
                     } else {
-                        db.taskDao().update(match.copy(subtasks = Checklist.remove(match.subtasks, item.id)))
+                        db.taskDao.update(match.copy(subtasks = Checklist.remove(match.subtasks, item.id)))
                         ToolExecResult("Removed \"${item.text}\" from the checklist on task \"${match.title}\".")
                     }
                 }
@@ -1534,7 +1534,7 @@ object AppTools {
                         ToolExecResult("Couldn't write attachment \"$fileName\" (disk error).", success = false)
                     } else {
                         val list = Attachments.upsert(appContext, Attachments.parse(match.attachments), att)
-                        db.taskDao().update(match.copy(attachments = Attachments.serialize(list)))
+                        db.taskDao.update(match.copy(attachments = Attachments.serialize(list)))
                         ToolExecResult("Saved attachment \"$fileName\" on task \"${match.title}\".")
                     }
                 }
@@ -1554,8 +1554,8 @@ object AppTools {
                         ToolExecResult("No attachment named \"$fileName\" on task \"${match.title}\". It currently has: $names.", success = false)
                     } else {
                         val list = Attachments.removeByName(appContext, existing, resolved)
-                        db.taskDao().update(match.copy(attachments = Attachments.serialize(list)))
-                        val after = db.taskDao().getByIdOnce(match.id)
+                        db.taskDao.update(match.copy(attachments = Attachments.serialize(list)))
+                        val after = db.taskDao.getByIdOnce(match.id)
                         val stillThere = after != null &&
                             Attachments.parse(after.attachments).any { it.name.equals(resolved, ignoreCase = true) }
                         if (stillThere) {
@@ -1576,7 +1576,7 @@ object AppTools {
                 } else {
                     storeUpload(appContext, db, uploadMime, uploadData, uploadName, requestedName) { att ->
                         val list = Attachments.upsert(appContext, Attachments.parse(match.attachments), att)
-                        db.taskDao().update(match.copy(attachments = Attachments.serialize(list)))
+                        db.taskDao.update(match.copy(attachments = Attachments.serialize(list)))
                         ToolExecResult("Attached \"${att.name}\" to task \"${match.title}\".")
                     }
                 }
@@ -1612,7 +1612,7 @@ object AppTools {
                         val candidates = draftNotes(db)
                         val match = matchNote(candidates, titleQuery)
                         if (match == null) noteNotFound(titleQuery, candidates, kind = "draft note") else {
-                            db.noteDao().delete(match)
+                            db.noteDao.delete(match)
                             ToolExecResult("Deleted draft note \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
                     }
@@ -1620,7 +1620,7 @@ object AppTools {
                         val candidates = draftTasks(db)
                         val match = matchTask(candidates, titleQuery)
                         if (match == null) taskNotFound(titleQuery, candidates, kind = "draft task") else {
-                            db.taskDao().delete(match)
+                            db.taskDao.delete(match)
                             ToolExecResult("Deleted draft task \"${match.title.ifBlank { "Untitled" }}\". This was permanent — drafts do not go to the Trash.")
                         }
                     }
@@ -1788,7 +1788,7 @@ object AppTools {
                             val hits = com.lucent.app.data.EmbeddingStore.search(
                                 appContext, outcome.vector, outcome.model, topK = 8
                             )
-                            val byId = db.noteDao().getByIds(hits.map { it.noteId })
+                            val byId = db.noteDao.getByIds(hits.map { it.noteId })
                                 .filter { it.trashedAt == null && !it.hidden && !it.isDraft }
                                 .associateBy { it.id }
                             val ranked = hits.mapNotNull { byId[it.noteId] }
@@ -1810,7 +1810,7 @@ object AppTools {
                     ToolExecResult("No search query was provided.", success = false)
                 } else {
                     val engine = runCatching {
-                        com.lucent.app.data.SettingsRepository(appContext).webSearchEngineOnce()
+                        com.lucent.app.data.createSettingsRepository(appContext).webSearchEngineOnce()
                     }.getOrDefault(com.lucent.app.data.WebSearchEngine.AUTO.key)
                     WebSearchClient.search(query, engine).fold(
                         onSuccess = { ToolExecResult(it) },

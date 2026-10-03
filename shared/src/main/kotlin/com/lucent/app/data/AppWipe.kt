@@ -7,17 +7,17 @@ suspend fun wipeAllData(
     db: com.lucent.app.data.AppDatabase,
     repo: com.lucent.app.data.SettingsRepository
 ) {
-    db.taskDao().getAllOnce().forEach {
+    db.taskDao.getAllOnce().forEach {
         com.lucent.app.reminders.ReminderScheduler.cancel(context, it.id)
     }
-    db.noteVersionDao().clearAll()
-    db.noteDao().clearAll()
-    db.taskVersionDao().clearAll()
-    db.taskDao().clearAll()
-    db.notebookDao().clearAllItems()
-    db.notebookDao().clearAll()
-    db.chatDao().clearAll()
-    db.chatConversationDao().clearAll()
+    db.noteVersionDao.clearAll()
+    db.noteDao.clearAll()
+    db.taskVersionDao.clearAll()
+    db.taskDao.clearAll()
+    db.notebookDao.clearAllItems()
+    db.notebookDao.clearAll()
+    db.chatDao.clearAll()
+    db.chatConversationDao.clearAll()
     com.lucent.app.data.EmbeddingStore.clearAll(context)
 
     repo.clearAll()

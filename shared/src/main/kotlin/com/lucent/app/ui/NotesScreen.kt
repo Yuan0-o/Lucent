@@ -142,12 +142,12 @@ private val DEFAULT_TAGS: List<String>
 @Composable
 fun NotesScreen(active: Boolean = true) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val settingsRepo = remember { SettingsRepository(context) }
+    val db = remember { createAppDatabase(context) }
+    val settingsRepo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
-    val notes by remember { db.noteDao().getAll() }.collectAsState(initial = com.lucent.app.data.DataCache.notes)
-    val archivedNotes by remember { db.noteDao().getArchived() }.collectAsState(initial = emptyList())
-    val hiddenNotes by remember { db.noteDao().getHidden() }.collectAsState(initial = emptyList())
+    val notes by remember { db.noteDao.getAll() }.collectAsState(initial = com.lucent.app.data.DataCache.notes)
+    val archivedNotes by remember { db.noteDao.getArchived() }.collectAsState(initial = emptyList())
+    val hiddenNotes by remember { db.noteDao.getHidden() }.collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 
@@ -187,7 +187,7 @@ fun NotesScreen(active: Boolean = true) {
     var showDrafts by remember { mutableStateOf(false) }
     var showHidden by remember { mutableStateOf(false) }
     var showNotebookPicker by remember { mutableStateOf(false) }
-    val draftCount by db.noteDao().getDrafts().collectAsState(initial = emptyList())
+    val draftCount by db.noteDao.getDrafts().collectAsState(initial = emptyList())
     DraftRestoreDialog(draftCount = draftCount.size, onOpenDrafts = { showDrafts = true })
     SessionRestoreDialog()
     var showSearch by remember { mutableStateOf(false) }
@@ -219,7 +219,7 @@ fun NotesScreen(active: Boolean = true) {
     var showRestoreBuiltins by remember { mutableStateOf(false) }
     var editingTemplateId by remember { mutableStateOf<String?>(null) }
     val bodyUndo = remember(composing) { TextUndoStack(newBody) }
-    val repo = remember { com.lucent.app.data.SettingsRepository(context) }
+    val repo = remember { com.lucent.app.data.createSettingsRepository(context) }
     val richTextEnabled by repo.richTextEnabled.collectAsState(initial = com.lucent.app.data.SettingsCache.richTextEnabled)
     val customTemplatesJson by repo.customTemplatesJson.collectAsState(initial = null)
     val customTemplates = remember(customTemplatesJson) {
@@ -535,8 +535,8 @@ fun NotesScreen(active: Boolean = true) {
                     draftSavedAt = System.currentTimeMillis()
                 )
                 val existing = draftRowId
-                if (existing == null) draftRowId = db.noteDao().insert(row)
-                else db.noteDao().update(row.copy(id = existing))
+                if (existing == null) draftRowId = db.noteDao.insert(row)
+                else db.noteDao.update(row.copy(id = existing))
                 withContext(Dispatchers.Main) {
                     LucentToast.show(context.applicationContext, com.lucent.app.i18n.S.draftSavedToast)
                 }
@@ -554,7 +554,7 @@ fun NotesScreen(active: Boolean = true) {
         val appContext = context.applicationContext
 
         com.lucent.app.data.backgroundWrite(context, "note save") {
-            val existing = if (id != null) db.noteDao().getByIdOnce(id) else null
+            val existing = if (id != null) db.noteDao.getByIdOnce(id) else null
             if (existing != null) {
                 NoteHistory.recordIfChanged(
                     db = db,
@@ -579,9 +579,9 @@ fun NotesScreen(active: Boolean = true) {
                     isDoodle = isDoodleSnapshot,
                     doodle = doodleSnapshot
                 )
-                db.noteDao().update(updated)
+                db.noteDao.update(updated)
             } else {
-                db.noteDao().insert(
+                db.noteDao.insert(
                     Note(
                         id = id ?: 0,
                         title = title,
@@ -600,8 +600,8 @@ fun NotesScreen(active: Boolean = true) {
             }
 
                 if (draftToClear != null) {
-                    db.noteDao().getByIdOnce(draftToClear)?.let { row ->
-                        if (row.isDraft) db.noteDao().delete(row)
+                    db.noteDao.getByIdOnce(draftToClear)?.let { row ->
+                        if (row.isDraft) db.noteDao.delete(row)
                     }
                 }
             withContext(Dispatchers.Main) {
@@ -682,7 +682,7 @@ fun NotesScreen(active: Boolean = true) {
 
     LaunchedEffect(AppNavigation.pendingEditNoteId) {
         val id = AppNavigation.consumeEditNoteId() ?: return@LaunchedEffect
-        val note = db.noteDao().getByIdOnce(id) ?: return@LaunchedEffect
+        val note = db.noteDao.getByIdOnce(id) ?: return@LaunchedEffect
         historyForId = null
         viewingId = null
         showSearch = false
@@ -973,7 +973,7 @@ fun NotesScreen(active: Boolean = true) {
         if (reordered === sortedNotes) { reorderState.cancel(); return }
         AppScope.io.launch {
             reordered.forEachIndexed { index, n ->
-                if (n.manualOrder != index) db.noteDao().setManualOrder(n.id, index)
+                if (n.manualOrder != index) db.noteDao.setManualOrder(n.id, index)
             }
         }
         if (sortOption != NoteSort.CUSTOM) {
@@ -1020,7 +1020,7 @@ fun NotesScreen(active: Boolean = true) {
             confirmButton = {
                 TextButton(onClick = {
                     AppScope.io.launch {
-                        db.noteDao().update(note.copy(trashedAt = System.currentTimeMillis()))
+                        db.noteDao.update(note.copy(trashedAt = System.currentTimeMillis()))
                     }
                     if (viewingId == note.id) viewingId = null
                     noteToDelete = null
@@ -1046,7 +1046,7 @@ fun NotesScreen(active: Boolean = true) {
                     AppScope.io.launch {
                         val now = System.currentTimeMillis()
                         ids.forEach { id ->
-                            db.noteDao().getByIdOnce(id)?.let { db.noteDao().update(it.copy(trashedAt = now)) }
+                            db.noteDao.getByIdOnce(id)?.let { db.noteDao.update(it.copy(trashedAt = now)) }
                         }
                     }
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
@@ -1078,7 +1078,7 @@ fun NotesScreen(active: Boolean = true) {
                     noteToToggleArchive = null
                     val appContext = context.applicationContext
                     AppScope.io.launch {
-                        db.noteDao().update(
+                        db.noteDao.update(
                             if (target.archived) target.copy(archived = false, archivedAt = null)
                             else target.copy(archived = true, archivedAt = System.currentTimeMillis())
                         )
@@ -1107,7 +1107,7 @@ fun NotesScreen(active: Boolean = true) {
                     val pinnedNow = !target.pinned
                     noteToTogglePin = null
                     com.lucent.app.data.backgroundWrite(context, "note pin toggle") {
-                        db.noteDao().setPinned(target.id, pinnedNow)
+                        db.noteDao.setPinned(target.id, pinnedNow)
                     }
                 }) { Text(if (willPin) com.lucent.app.i18n.S.actionPin else com.lucent.app.i18n.S.actionUnpin) }
             },
@@ -1558,7 +1558,7 @@ fun NotesScreen(active: Boolean = true) {
             val backlinks = remember(note, linkPool) { NoteLinks.backlinks(note, linkPool) }
             val broken = remember(note, linkPool) { NoteLinks.brokenLinks(note, linkPool) }
             val brokenLower = remember(broken) { broken.map { it.lowercase() }.toSet() }
-            val versionCount by db.noteVersionDao().getForNote(note.id).collectAsState(initial = emptyList())
+            val versionCount by db.noteVersionDao.getForNote(note.id).collectAsState(initial = emptyList())
 
             val swipeList = sortedNotes
             val swipeOffset = remember { Animatable(0f) }
@@ -1677,8 +1677,8 @@ fun NotesScreen(active: Boolean = true) {
                                 current = note.formatOverride,
                                 onSelect = { key ->
                                     AppScope.io.launch {
-                                        db.noteDao().getByIdOnce(note.id)?.let { row ->
-                                            db.noteDao().update(row.copy(formatOverride = key))
+                                        db.noteDao.getByIdOnce(note.id)?.let { row ->
+                                            db.noteDao.update(row.copy(formatOverride = key))
                                         }
                                     }
                                 }
@@ -1747,7 +1747,7 @@ fun NotesScreen(active: Boolean = true) {
                             header = com.lucent.app.i18n.S.historyItemsHeader,
                             onToggle = { item, checked ->
                                 AppScope.io.launch {
-                                    db.noteDao().update(
+                                    db.noteDao.update(
                                         note.copy(checklist = Checklist.setDone(note.checklist, item.id, checked))
                                     )
                                 }
@@ -1793,7 +1793,7 @@ fun NotesScreen(active: Boolean = true) {
                         attachments, onGradient, onGradientMuted,
                         onRename = { att, newName ->
                             AppScope.io.launch {
-                                db.noteDao().update(
+                                db.noteDao.update(
                                     note.copy(
                                         attachments = Attachments.serialize(
                                             attachments.map { if (it.data == att.data) it.copy(name = newName) else it }
@@ -1905,8 +1905,8 @@ fun NotesScreen(active: Boolean = true) {
                                 val target = showHidden
                                 AppScope.io.launch {
                                     ids.forEach { id ->
-                                        db.noteDao().getByIdOnce(id)?.let { row ->
-                                            db.noteDao().update(row.copy(hidden = !target))
+                                        db.noteDao.getByIdOnce(id)?.let { row ->
+                                            db.noteDao.update(row.copy(hidden = !target))
                                         }
                                     }
                                 }

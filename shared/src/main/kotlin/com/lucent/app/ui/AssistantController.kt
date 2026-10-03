@@ -209,14 +209,14 @@ class AssistantControllerImpl(
         appContextRef = appContext.applicationContext
         if (conversationsJob == null) {
             conversationsJob = scope.launch {
-                db.chatConversationDao().getAll().collect { conversations = it }
+                db.chatConversationDao.getAll().collect { conversations = it }
             }
         }
         if (messagesJob != null) return
         messagesJob = scope.launch {
-            db.chatConversationDao().getAllOnce().forEach { conv ->
-                if (db.chatDao().countInConversation(conv.id) == 0) {
-                    db.chatConversationDao().delete(conv)
+            db.chatConversationDao.getAllOnce().forEach { conv ->
+                if (db.chatDao.countInConversation(conv.id) == 0) {
+                    db.chatConversationDao.delete(conv)
                 }
             }
             val ctx = appContextRef
@@ -226,7 +226,7 @@ class AssistantControllerImpl(
                 null
             }
             if (ctx != null && stored != null) {
-                if (db.chatConversationDao().getById(stored) != null) {
+                if (db.chatConversationDao.getById(stored) != null) {
                     currentConversationId = stored
                 } else {
                     ActiveConversationStore.save(ctx, null)
@@ -261,9 +261,9 @@ class AssistantControllerImpl(
             return
         }
         val job = scope.launch {
-            val snapshot = db.chatDao().getForConversationOnce(id)
+            val snapshot = db.chatDao.getForConversationOnce(id)
             if (currentConversationId == id) messages = snapshot
-            db.chatDao().getForConversation(id).collect {
+            db.chatDao.getForConversation(id).collect {
                 if (currentConversationId == id) messages = it
             }
         }
@@ -291,8 +291,8 @@ class AssistantControllerImpl(
         turnFor(id)?.let { stopTurn(it, silent = true) }
         if (errorConversationId == id) clearError()
         scope.launch {
-            db.chatDao().clearConversation(id)
-            db.chatConversationDao().getById(id)?.let { db.chatConversationDao().delete(it) }
+            db.chatDao.clearConversation(id)
+            db.chatConversationDao.getById(id)?.let { db.chatConversationDao.delete(it) }
             if (currentConversationId == id) {
                 setActiveConversation(null)
                 observeCurrentConversation(db)
@@ -302,9 +302,9 @@ class AssistantControllerImpl(
 
     fun renameConversation(appContext: Context, id: Long, newTitle: String) {
         scope.launch {
-            db.chatConversationDao().getById(id)?.let { conv ->
+            db.chatConversationDao.getById(id)?.let { conv ->
                 val title = newTitle.trim().ifBlank { conv.title }
-                db.chatConversationDao().update(conv.copy(title = title))
+                db.chatConversationDao.update(conv.copy(title = title))
             }
         }
     }
@@ -322,7 +322,7 @@ class AssistantControllerImpl(
         if (ids.isEmpty()) return
         AppScope.io.launch {
             try {
-                db.chatDao().deleteByIds(ids.toList())
+                db.chatDao.deleteByIds(ids.toList())
             } catch (t: Throwable) {
             }
         }
@@ -689,7 +689,7 @@ class AssistantControllerImpl(
             try {
                 var convId = targetConversationId ?: currentConversationId
                 if (convId == null) {
-                    convId = db.chatConversationDao().insert(ChatConversation())
+                    convId = db.chatConversationDao.insert(ChatConversation())
                     setActiveConversation(convId)
                     turn.conversationId = convId
                     observeCurrentConversation(db)
@@ -702,7 +702,7 @@ class AssistantControllerImpl(
 
                 var answeredId = answersMessageId
                 if (insertUserMessage) {
-                    answeredId = db.chatDao().insert(
+                    answeredId = db.chatDao.insert(
                         ChatMessage(
                             role = "user", content = text,
                             attachmentMime = attachmentMime,
@@ -716,11 +716,11 @@ class AssistantControllerImpl(
                             quotedText = quoteTarget?.content?.take(200)
                         )
                     )
-                    db.chatConversationDao().getById(conversationId)?.let { conv ->
+                    db.chatConversationDao.getById(conversationId)?.let { conv ->
                         val newTitle = if (conv.title.isBlank() || conv.title == "New conversation") {
                             text.trim().take(40).ifBlank { conv.title }
                         } else conv.title
-                        db.chatConversationDao().update(
+                        db.chatConversationDao.update(
                             conv.copy(title = newTitle, updatedAt = System.currentTimeMillis())
                         )
                     }
@@ -736,7 +736,7 @@ class AssistantControllerImpl(
 
                 var history = buildHistory(db, conversationId, memoryTier)
                 if (answeredId > 0) {
-                    val sentMessage = db.chatDao().getForConversationOnce(conversationId)
+                    val sentMessage = db.chatDao.getForConversationOnce(conversationId)
                         .firstOrNull { it.id == answeredId }
                     val quotedText = sentMessage?.quotedText
                     if (!quotedText.isNullOrBlank()) {
@@ -1331,7 +1331,7 @@ class AssistantControllerImpl(
 
         val turnImages: List<ByteArray> = if (com.lucent.app.local.LocalLlm.supportsVision() && answeredId > 0) {
             try {
-                db.chatDao().getAll().first().firstOrNull { it.id == answeredId }
+                db.chatDao.getAll().first().firstOrNull { it.id == answeredId }
                     ?.takeIf { it.attachmentMime?.startsWith("image/") == true }
                     ?.attachmentData
                     ?.let { listOf(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }
@@ -1502,7 +1502,7 @@ class AssistantControllerImpl(
     }
 
     private suspend fun buildHistory(db: AppDatabase, conversationId: Long, tier: MemoryTier): List<ChatTurn> {
-        val current = db.chatDao().getForConversationOnce(conversationId)
+        val current = db.chatDao.getForConversationOnce(conversationId)
             .map {
                 ChatTurn(
                     it.role, it.content, it.attachmentMime, it.attachmentData,
@@ -1524,7 +1524,7 @@ class AssistantControllerImpl(
         name: String?
     ): Triple<String?, String?, String?> {
         if (!data.isNullOrBlank()) return Triple(mime, data, name)
-        val previous = db.chatDao().getForConversationOnce(conversationId)
+        val previous = db.chatDao.getForConversationOnce(conversationId)
             .lastOrNull { it.role == "user" && !it.attachmentData.isNullOrBlank() }
             ?: return Triple(null, null, null)
         return Triple(previous.attachmentMime, previous.attachmentData, previous.attachmentName)
@@ -1537,7 +1537,7 @@ class AssistantControllerImpl(
         cap: Int = MemoryTier.HIGH_CROSS_MESSAGE_BUDGET
     ): String {
         if (tier != MemoryTier.HIGH) return ""
-        val all = db.chatDao().getAll().first()
+        val all = db.chatDao.getAll().first()
         val others = all.filter { it.conversationId != currentConversationId }
             .takeLast(cap)
         if (others.isEmpty()) return ""
@@ -1713,7 +1713,7 @@ class AssistantControllerImpl(
         reasoningText: String = ""
     ) {
         val hasImage = !data.isNullOrBlank()
-        db.chatDao().insert(
+        db.chatDao.insert(
             ChatMessage(
                 role = "assistant",
                 content = content,
@@ -1881,7 +1881,7 @@ object AssistantController {
             backing?.let { return it }
             val created = AssistantControllerImpl(
                 appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-                db = AppDatabase.getInstance(appContext.applicationContext),
+                db = createAppDatabase(appContext.applicationContext),
                 llmClient = RealAssistantLlmClient,
                 context = appContext.applicationContext
             )

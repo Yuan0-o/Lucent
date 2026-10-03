@@ -508,13 +508,13 @@ class Db private constructor(private val connection: Connection) {
 }
 
 
-internal fun keyedSqliteUrl(file: File, hexKey: String): String {
+fun keyedSqliteUrl(file: File, hexKey: String): String {
     val p = file.absolutePath.replace('\\', '/')
         .replace("%", "%25").replace("?", "%3F").replace("#", "%23").replace(" ", "%20")
     return "jdbc:sqlite:file:$p?cipher=sqlcipher&legacy=4&hexkey=$hexKey"
 }
 
-internal fun probeCipherCore(conn: Connection): String? {
+fun probeCipherCore(conn: Connection): String? {
     val probes = arrayOf(
         "SELECT sqlite3mc_version()",
         "PRAGMA cipher",

@@ -160,7 +160,7 @@ fun AssistantChatBody(
     onSaveZip: (suggestedName: String, entries: List<Pair<String, ByteArray>>) -> Unit
 ) {
     val context = LocalContext.current
-    val repo = remember { SettingsRepository(context) }
+    val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
@@ -280,7 +280,7 @@ fun AssistantChatBody(
         val titles = AssistantController.conversations.associate { it.id to it.title }
         val matches = withContext(Dispatchers.IO) {
             val messageDocs = try {
-                AppDatabase.getInstance(context.applicationContext).chatDao().getAllOnce().map { m ->
+                createAppDatabase(context.applicationContext).chatDao.getAllOnce().map { m ->
                     ChatSearch.MessageDoc(
                         conversationId = m.conversationId,
                         conversationTitle = titles[m.conversationId] ?: "",
@@ -1767,7 +1767,7 @@ private suspend fun saveReplyIntoItem(
     localAtts: List<com.lucent.app.data.Attachment> = emptyList(),
     asTask: Boolean
 ): Boolean = withContext(Dispatchers.IO) {
-    val db = AppDatabase.getInstance(context.applicationContext)
+    val db = createAppDatabase(context.applicationContext)
     val title = message.content.lineSequence()
         .firstOrNull { it.isNotBlank() }
         ?.trim()

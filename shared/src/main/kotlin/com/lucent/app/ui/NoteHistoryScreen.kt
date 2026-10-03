@@ -53,12 +53,12 @@ fun NoteHistoryScreen(
     onRestored: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current
 
-    val versions by db.noteVersionDao().getForNote(note.id).collectAsState(initial = emptyList())
+    val versions by db.noteVersionDao.getForNote(note.id).collectAsState(initial = emptyList())
 
     var previewing by remember { mutableStateOf<NoteVersion?>(null) }
     var confirmRestore by remember { mutableStateOf<NoteVersion?>(null) }
@@ -68,7 +68,7 @@ fun NoteHistoryScreen(
 
     fun restore(version: NoteVersion) {
         AppScope.io.launch {
-            val current = db.noteDao().getByIdOnce(note.id) ?: return@launch
+            val current = db.noteDao.getByIdOnce(note.id) ?: return@launch
             val restored = NoteHistory.applyTo(current, version)
             NoteHistory.recordIfChanged(
                 db = db,
@@ -80,7 +80,7 @@ fun NoteHistoryScreen(
                 newChecklist = restored.checklist,
                 savedAt = System.currentTimeMillis()
             )
-            db.noteDao().update(restored)
+            db.noteDao.update(restored)
         }
         previewing = null
         confirmRestore = null
@@ -106,7 +106,7 @@ fun NoteHistoryScreen(
             text = { Text(com.lucent.app.i18n.S.deleteVersionBody(formatTimestamp(version.savedAt))) },
             confirmButton = {
                 TextButton(onClick = {
-                    AppScope.io.launch { db.noteVersionDao().deleteById(version.id) }
+                    AppScope.io.launch { db.noteVersionDao.deleteById(version.id) }
                     if (previewing?.id == version.id) previewing = null
                     confirmDelete = null
                 }) { Text(com.lucent.app.i18n.S.actionDelete) }

@@ -28,19 +28,19 @@ object EmbeddingStore {
         vec: FloatArray,
         updatedAt: Long = System.currentTimeMillis()
     ) {
-        val db = AppDatabase.getInstance(context)
-        db.noteEmbeddingDao().upsert(
+        val db = createAppDatabase(context)
+        db.noteEmbeddingDao.upsert(
             NoteEmbedding(noteId = noteId, model = model, dim = vec.size, vec = encode(vec), updatedAt = updatedAt)
         )
     }
 
     suspend fun search(context: Context, queryVec: FloatArray, model: String, topK: Int): List<ScoredNote> {
         if (topK <= 0 || queryVec.isEmpty()) return emptyList()
-        val db = AppDatabase.getInstance(context)
+        val db = createAppDatabase(context)
         val queryNorm = norm(queryVec)
         if (queryNorm == 0f) return emptyList()
 
-        return db.noteEmbeddingDao().getForModel(model)
+        return db.noteEmbeddingDao.getForModel(model)
             .mapNotNull { row ->
                 if (row.vec.size != row.dim * 4) return@mapNotNull null
                 val vec = try {
@@ -57,15 +57,15 @@ object EmbeddingStore {
     }
 
     suspend fun delete(context: Context, noteId: Long, model: String) {
-        AppDatabase.getInstance(context).noteEmbeddingDao().delete(noteId, model)
+        createAppDatabase(context).noteEmbeddingDao.delete(noteId, model)
     }
 
     suspend fun deleteAllForModel(context: Context, model: String) {
-        AppDatabase.getInstance(context).noteEmbeddingDao().deleteAllForModel(model)
+        createAppDatabase(context).noteEmbeddingDao.deleteAllForModel(model)
     }
 
     suspend fun clearAll(context: Context) {
-        AppDatabase.getInstance(context).noteEmbeddingDao().clearAll()
+        createAppDatabase(context).noteEmbeddingDao.clearAll()
     }
 
 

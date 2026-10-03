@@ -10,25 +10,25 @@ object TrashCleanup {
 
     suspend fun purgeExpired(context: Context) {
         val appContext = context.applicationContext
-        val db = AppDatabase.getInstance(appContext)
+        val db = createAppDatabase(appContext)
         val cutoff = System.currentTimeMillis() - RETENTION_MILLIS
 
-        db.noteDao().getAllOnce().forEach { note ->
+        db.noteDao.getAllOnce().forEach { note ->
             val trashedAt = note.trashedAt ?: return@forEach
             if (trashedAt >= cutoff) return@forEach
             purgeNote(appContext, db, note)
         }
 
-        db.taskDao().getAllOnce().forEach { task ->
+        db.taskDao.getAllOnce().forEach { task ->
             val trashedAt = task.trashedAt ?: return@forEach
             if (trashedAt >= cutoff) return@forEach
             purgeTask(appContext, db, task)
         }
 
-        db.notebookDao().purgeTrashedBefore(cutoff)
+        db.notebookDao.purgeTrashedBefore(cutoff)
 
-        db.noteVersionDao().pruneOrphaned()
-        db.taskVersionDao().pruneOrphaned()
+        db.noteVersionDao.pruneOrphaned()
+        db.taskVersionDao.pruneOrphaned()
 
     }
 
@@ -38,7 +38,7 @@ object TrashCleanup {
             if (AttachmentStore.looksLikeId(att.data)) AttachmentStore.delete(appContext, att.data)
         }
         NoteHistory.deleteAllFor(db, note.id)
-        db.noteDao().delete(note)
+        db.noteDao.delete(note)
     }
 
     suspend fun purgeTask(context: Context, db: AppDatabase, task: Task) {
@@ -48,6 +48,6 @@ object TrashCleanup {
         }
         ReminderScheduler.cancel(appContext, task.id)
         TaskHistory.deleteAllFor(db, task.id)
-        db.taskDao().delete(task)
+        db.taskDao.delete(task)
     }
 }

@@ -74,7 +74,7 @@ import kotlinx.coroutines.launch
 fun TerminalScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repo = remember { SettingsRepository(context) }
+    val repo = remember { createSettingsRepository(context) }
 
     BackClaim(active = true)
     BackHandler { onBack() }

@@ -49,8 +49,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun TrashTasksScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val trashed by db.taskDao().getTrashed().collectAsState(initial = emptyList())
+    val db = remember { createAppDatabase(context) }
+    val trashed by db.taskDao.getTrashed().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current

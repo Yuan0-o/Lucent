@@ -48,7 +48,7 @@ internal data class InlineGlobalResults(
 @Composable
 internal fun rememberInlineGlobalResults(raw: String): InlineGlobalResults {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     val query = remember(raw) { SearchQuery.parse(raw) }
     var results by remember { mutableStateOf(InlineGlobalResults()) }
 
@@ -63,7 +63,7 @@ internal fun rememberInlineGlobalResults(raw: String): InlineGlobalResults {
         val notes = if (query.isTaskOnly) {
             emptyList()
         } else {
-            db.noteDao()
+            db.noteDao
                 .searchNotes(
                     text = query.sqlText,
                     tag = query.sqlTag,
@@ -81,7 +81,7 @@ internal fun rememberInlineGlobalResults(raw: String): InlineGlobalResults {
         val tasks = if (query.isNoteOnly) {
             emptyList()
         } else {
-            db.taskDao()
+            db.taskDao
                 .searchTasks(
                     text = query.sqlText,
                     done = query.sqlDone,

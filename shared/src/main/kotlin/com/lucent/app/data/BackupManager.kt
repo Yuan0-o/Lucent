@@ -61,31 +61,31 @@ object BackupManager {
     ): String {
         val modules = selection.modules
         val notes = if (BackupModule.NOTES in modules) {
-            db.noteDao().getAllOnce().filter { selection.wantsNote(it.id) }
+            db.noteDao.getAllOnce().filter { selection.wantsNote(it.id) }
         } else emptyList()
         val tasks = if (BackupModule.TASKS in modules) {
-            db.taskDao().getAllOnce().filter { selection.wantsTask(it.id) }
+            db.taskDao.getAllOnce().filter { selection.wantsTask(it.id) }
         } else emptyList()
         val keptNoteIds = notes.map { it.id }.toHashSet()
         val noteVersions = if (BackupModule.NOTES in modules) {
-            db.noteVersionDao().getAllOnce().filter { it.noteId in keptNoteIds }
+            db.noteVersionDao.getAllOnce().filter { it.noteId in keptNoteIds }
         } else emptyList()
         val keptTaskIds = tasks.map { it.id }.toHashSet()
         val taskVersions = if (BackupModule.TASKS in modules) {
-            db.taskVersionDao().getAllOnce().filter { it.taskId in keptTaskIds }
+            db.taskVersionDao.getAllOnce().filter { it.taskId in keptTaskIds }
         } else emptyList()
         val conversations =
             if (BackupModule.CHATS in modules) {
-                db.chatConversationDao().getAllOnce().filter { selection.wantsConversation(it.id) }
+                db.chatConversationDao.getAllOnce().filter { selection.wantsConversation(it.id) }
             } else emptyList()
         val chats = if (BackupModule.CHATS in modules) {
-            db.chatDao().getAll().first().filter { selection.wantsConversation(it.conversationId) }
+            db.chatDao.getAll().first().filter { selection.wantsConversation(it.conversationId) }
         } else emptyList()
         val notebooks = if (BackupModule.NOTES in modules || BackupModule.TASKS in modules) {
-            db.notebookDao().getAllOnce()
+            db.notebookDao.getAllOnce()
         } else emptyList()
         val notebookItems = if (notebooks.isNotEmpty()) {
-            notebooks.flatMap { db.notebookDao().getItemsOnce(it.id) }
+            notebooks.flatMap { db.notebookDao.getItemsOnce(it.id) }
         } else emptyList()
         return BackupManifestBuilder.build(
             context, notes, tasks, noteVersions, taskVersions, chats, conversations, settings,

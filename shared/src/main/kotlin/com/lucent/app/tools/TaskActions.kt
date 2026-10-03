@@ -15,7 +15,7 @@ object TaskActions {
     suspend fun complete(context: Context, db: AppDatabase, task: Task): Task? {
         val appContext = context.applicationContext
 
-        db.taskDao().update(
+        db.taskDao.update(
             task.copy(
                 isDone = true,
                 completedAt = System.currentTimeMillis(),
@@ -25,7 +25,7 @@ object TaskActions {
         ReminderScheduler.cancel(appContext, task.id)
 
         val next = Recurrence.nextOccurrence(task) ?: return null
-        val newId = db.taskDao().insert(next)
+        val newId = db.taskDao.insert(next)
         val inserted = next.copy(id = newId)
         ReminderScheduler.sync(appContext, inserted)
         return inserted
@@ -33,28 +33,28 @@ object TaskActions {
 
     suspend fun restore(context: Context, db: AppDatabase, task: Task) {
         val restored = task.copy(isDone = false, completedAt = null)
-        db.taskDao().update(restored)
+        db.taskDao.update(restored)
         ReminderScheduler.sync(context.applicationContext, restored)
     }
 
     suspend fun trash(context: Context, db: AppDatabase, task: Task) {
         val trashed = task.copy(trashedAt = System.currentTimeMillis())
-        db.taskDao().update(trashed)
+        db.taskDao.update(trashed)
         ReminderScheduler.cancel(context.applicationContext, task.id)
     }
 
     suspend fun untrash(context: Context, db: AppDatabase, task: Task) {
         val restored = task.copy(trashedAt = null)
-        db.taskDao().update(restored)
+        db.taskDao.update(restored)
         ReminderScheduler.sync(context.applicationContext, restored)
     }
 
     suspend fun trashNote(db: AppDatabase, note: Note) {
-        db.noteDao().update(note.copy(trashedAt = System.currentTimeMillis()))
+        db.noteDao.update(note.copy(trashedAt = System.currentTimeMillis()))
     }
 
     suspend fun untrashNote(db: AppDatabase, note: Note) {
-        db.noteDao().update(note.copy(trashedAt = null))
+        db.noteDao.update(note.copy(trashedAt = null))
     }
 
     suspend fun updateNoteWithHistory(db: AppDatabase, existing: Note, updated: Note) {
@@ -67,7 +67,7 @@ object TaskActions {
             newIsChecklist = updated.isChecklist,
             newChecklist = updated.checklist
         )
-        db.noteDao().update(updated.copy(updatedAt = System.currentTimeMillis()))
+        db.noteDao.update(updated.copy(updatedAt = System.currentTimeMillis()))
     }
 
     suspend fun setSchedule(
@@ -84,7 +84,7 @@ object TaskActions {
             repeatRule = if (dueAt == null) RepeatRule.NONE.key else rule.key,
             reminderEnabled = reminderEnabled ?: task.reminderEnabled
         )
-        db.taskDao().update(updated)
+        db.taskDao.update(updated)
         ReminderScheduler.sync(context.applicationContext, updated)
         return updated
     }

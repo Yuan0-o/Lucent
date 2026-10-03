@@ -278,7 +278,7 @@ fun CloudSettingsPage(
                             val r = runCatching {
                                 val bytes = ByteArrayOutputStream().use { out ->
                                     BackupManager.exportEncrypted(
-                                        context, AppDatabase.getInstance(context), repo, out, null
+                                        context, createAppDatabase(context), repo, out, null
                                     )
                                     out.toByteArray()
                                 }
@@ -359,7 +359,7 @@ fun CloudSettingsPage(
                     scope.launch {
                         val r = runCatching {
                             val bytes = CloudSync.download(cfg, name).getOrThrow()
-                            val db = AppDatabase.getInstance(context)
+                            val db = createAppDatabase(context)
                             val source = BackupManager.BackupSource { ByteArrayInputStream(bytes) }
                             val preview = BackupManager.inspect(context, source, null)
                             BackupManager.commit(context, db, repo, preview, source = source)

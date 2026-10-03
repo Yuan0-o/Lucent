@@ -54,8 +54,8 @@ fun CompletedTasksScreen(
     onDeleteRequest: (Task) -> Unit,
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
-    val completed by db.taskDao().getCompleted().collectAsState(initial = com.lucent.app.data.DataCache.completedTasks)
+    val db = remember { createAppDatabase(context) }
+    val completed by db.taskDao.getCompleted().collectAsState(initial = com.lucent.app.data.DataCache.completedTasks)
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val hazeState = LocalHazeState.current

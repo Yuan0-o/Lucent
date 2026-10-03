@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomePanelPage(panel: HomePanel, from: Screen, initialMode: HomeMode? = null) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) }
+    val db = remember { createAppDatabase(context) }
     var mode by rememberSaveable(panel, initialMode) { mutableStateOf(initialMode ?: LastScreen.homeMode) }
     var noteToTrash by remember { mutableStateOf<Note?>(null) }
     var taskToTrash by remember { mutableStateOf<Task?>(null) }
@@ -84,7 +84,7 @@ fun HomePanelPage(panel: HomePanel, from: Screen, initialMode: HomeMode? = null)
                     val target = note
                     noteToTrash = null
                     AppScope.io.launch {
-                        db.noteDao().update(target.copy(trashedAt = System.currentTimeMillis()))
+                        db.noteDao.update(target.copy(trashedAt = System.currentTimeMillis()))
                         StartupLog.event(context, "panel: moved an archived note to the trash")
                     }
                 }) { Text(com.lucent.app.i18n.S.moveToTrash) }
