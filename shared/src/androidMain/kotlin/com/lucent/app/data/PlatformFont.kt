@@ -1,16 +1,16 @@
 package com.lucent.app.data
 
-import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import java.io.InputStream
+import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.PlatformInputStream
 
-typealias PlatformFontSource = Uri
+actual typealias PlatformFontSource = Uri
 
-internal fun openFontSource(context: Context, source: PlatformFontSource): InputStream? =
+actual fun openFontSource(context: PlatformContext, source: PlatformFontSource): PlatformInputStream? =
     context.contentResolver.openInputStream(source)
 
-internal fun fontSourceDisplayName(context: Context, source: PlatformFontSource): String? = try {
+actual fun fontSourceDisplayName(context: PlatformContext, source: PlatformFontSource): String? = try {
     context.contentResolver.query(source, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
         if (c.moveToFirst()) c.getString(0) else null
     }

@@ -1,12 +1,14 @@
 package com.lucent.app.data
 
 import com.lucent.app.AppScope
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
-object AutoBackupRunner {
+
+actual object AutoBackupRunner {
 
     private const val CHECK_INTERVAL_MS = 15L * 60L * 1000L
 
@@ -58,8 +60,6 @@ object AutoBackupRunner {
         }
     }
 }
-
-private typealias PlatformContext = android.content.Context
 
 private fun appContextOf(context: PlatformContext): PlatformContext = context.applicationContext
 

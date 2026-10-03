@@ -1,6 +1,6 @@
 package com.lucent.app.reminders
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Task
@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import com.lucent.app.data.createAppDatabase
 
-object ReminderScheduler {
+actual object ReminderScheduler {
 
     @Volatile var notifier: ((title: String, message: String) -> Unit)? = null
 
@@ -24,7 +24,7 @@ object ReminderScheduler {
             due > System.currentTimeMillis()
     }
 
-    fun sync(context: Context, task: Task) {
+    fun sync(context: PlatformContext, task: Task) {
         cancel(context, task.id)
         if (!shouldFire(task)) return
         val due = task.dueAt ?: return
@@ -39,11 +39,11 @@ object ReminderScheduler {
         pending[id] = job
     }
 
-    fun cancel(context: Context, taskId: Long) {
+    fun cancel(context: PlatformContext, taskId: Long) {
         pending.remove(taskId)?.cancel()
     }
 
-    suspend fun rescheduleAll(context: Context) {
+    suspend fun rescheduleAll(context: PlatformContext) {
         val tasks = try {
             createAppDatabase(context.applicationContext).taskDao.getAllOnce()
         } catch (t: Throwable) {
@@ -52,7 +52,7 @@ object ReminderScheduler {
         tasks.forEach { sync(context, it) }
     }
 
-    private suspend fun fire(context: Context, taskId: Long, scheduledTitle: String) {
+    private suspend fun fire(context: PlatformContext, taskId: Long, scheduledTitle: String) {
         val task = try {
             createAppDatabase(context.applicationContext).taskDao.getByIdOnce(taskId)
         } catch (t: Throwable) {
