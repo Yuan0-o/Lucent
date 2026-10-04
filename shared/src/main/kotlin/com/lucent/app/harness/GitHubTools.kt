@@ -2,6 +2,7 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.CancellationException
+import kotlin.io.encoding.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
@@ -285,7 +286,7 @@ object GitHubTools : HarnessGroupTools {
 
     private fun decode(content: String): String? = try {
         val clean = content.replace(Regex("\\s+"), "")
-        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+        val bytes = Base64.Mime.decode(clean)
         String(bytes, StandardCharsets.UTF_8)
     } catch (t: Throwable) {
         null

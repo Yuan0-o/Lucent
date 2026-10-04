@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
 import android.content.Context
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import kotlinx.coroutines.flow.first
 import com.lucent.app.harness.HarnessConfig
 import org.json.JSONArray
@@ -262,7 +262,7 @@ internal object BackupManifestBuilder {
                     .put("pinned", nb.pinned)
             if (nb.color.startsWith("photo:")) {
                 val photoBytes = AttachmentStore.readBytes(context, nb.color.removePrefix("photo:"), Long.MAX_VALUE)
-                if (photoBytes != null) notebookObject.put("coverData", Base64.encodeToString(photoBytes, Base64.NO_WRAP))
+                if (photoBytes != null) notebookObject.put("coverData", Base64.Default.encode(photoBytes))
             }
             notebooksArray.put(notebookObject)
         }
@@ -307,7 +307,7 @@ internal object BackupManifestBuilder {
             val plain = AttachmentStore.readBytes(context, att.data, maxBytes = Long.MAX_VALUE)
                 ?: return@mapNotNull null
             val encoded = try {
-                Base64.encodeToString(plain, Base64.NO_WRAP)
+                Base64.Default.encode(plain)
             } catch (t: Throwable) {
                 return@mapNotNull null
             }

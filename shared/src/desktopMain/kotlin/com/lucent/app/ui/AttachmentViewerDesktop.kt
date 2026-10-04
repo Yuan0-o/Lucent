@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import kotlin.io.encoding.Base64
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -410,7 +411,7 @@ private fun readAttachmentBytes(context: PlatformContext, att: Attachment, maxBy
         val approx = estimateDecodedBase64Size(att.data)
         if (approx > maxBytes) return null
         try {
-            android.util.Base64.decode(att.data, android.util.Base64.DEFAULT)
+            Base64.Mime.decode(att.data)
         } catch (t: Throwable) {
             null
         }

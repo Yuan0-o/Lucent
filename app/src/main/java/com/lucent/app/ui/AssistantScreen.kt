@@ -3,7 +3,7 @@ package com.lucent.app.ui
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -98,7 +98,7 @@ fun AssistantScreen(active: Boolean = true) {
                 }
             } catch (t: Throwable) { null }
             if (bytes != null) {
-                val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                val base64 = Base64.Default.encode(bytes)
                 draft.attachments = draft.attachments + AssistantAttachmentDraft(mime, base64, name)
             }
             val asText: String? = if (bytes != null && bytes.none { it.toInt() == 0 }) {

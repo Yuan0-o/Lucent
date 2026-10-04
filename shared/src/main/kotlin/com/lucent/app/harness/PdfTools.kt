@@ -2,6 +2,7 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
+import kotlin.io.encoding.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -1368,7 +1369,7 @@ private fun pdfImageName(source: File, page: Int): String =
     source.nameWithoutExtension + "-p" + page + ".png"
 
 private fun pdfBase64(bytes: ByteArray): String =
-    android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+    Base64.Default.encode(bytes)
 
 object PdfTools : HarnessGroupTools {
 

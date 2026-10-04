@@ -23,6 +23,7 @@ import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import com.lucent.app.network.ToolParam
 import com.lucent.app.network.WebSearchClient
+import kotlin.io.encoding.Base64
 import com.lucent.app.reminders.ReminderScheduler
 import org.json.JSONObject
 
@@ -801,7 +802,7 @@ object AppTools {
             return ToolExecResult("There's no uploaded file in this conversation yet. Ask the user to attach the file in the chat box, then try again.", success = false)
         }
         val bytes = try {
-            android.util.Base64.decode(uploadData, android.util.Base64.DEFAULT)
+            Base64.Mime.decode(uploadData)
         } catch (t: Throwable) {
             null
         } ?: return ToolExecResult("Couldn't read the uploaded file.", success = false)

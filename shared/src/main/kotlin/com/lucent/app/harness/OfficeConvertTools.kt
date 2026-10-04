@@ -2,6 +2,7 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
+import kotlin.io.encoding.Base64
 import org.json.JSONObject
 import java.io.File
 import java.util.zip.ZipInputStream
@@ -147,7 +148,7 @@ object OfficeConvertTools : HarnessGroupTools {
             images.add(
                 ToolImage(
                     "image/png",
-                    android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP),
+                    Base64.Default.encode(bytes),
                     file.name
                 )
             )
