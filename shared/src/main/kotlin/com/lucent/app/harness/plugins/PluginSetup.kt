@@ -45,7 +45,7 @@ object PluginSetup {
         val dir = HarnessRuntime.workspace()
         val workspaceShared = PluginPreflight.sharedStorage(dir)
         val largestDownload = PluginCatalog.effective().maxOfOrNull { it.bytes } ?: 0L
-        val diskSpaceBytes = HarnessRuntime.downloadsDir().usableSpace
+        val diskSpaceBytes = File(HarnessRuntime.downloadsDirPath()).usableSpace
         var diskSpaceNeeded = largestDownload * 2L
         if (android) {
             diskSpaceNeeded = max(diskSpaceNeeded, BUILTIN_ENV_DISK_BYTES)
