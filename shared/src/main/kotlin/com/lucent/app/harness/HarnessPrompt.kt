@@ -99,7 +99,7 @@ object HarnessPrompt {
 
     fun memoryLine(): String? {
         val context = AppScope.appContext ?: return null
-        val dir = File(File(HarnessRuntime.filesDir(), "harness"), "memory")
+        val dir = File(HarnessRuntime.filesDirPath(), "harness/memory")
         val scopes = listOf(
             "user" to File(dir, "user.json"),
             "project" to File(dir, "project-${workspaceSlug()}.json")
