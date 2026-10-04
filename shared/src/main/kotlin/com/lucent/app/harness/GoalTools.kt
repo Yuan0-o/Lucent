@@ -482,7 +482,7 @@ object GoalStore {
 object GoalFiles {
 
     fun fileFor(conversationId: Long): File =
-        File(HarnessRuntime.subDir("goals"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
+        File(HarnessRuntime.subDirPath("goals"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
     fun read(context: PlatformContext, conversationId: Long): GoalState? {
         val text = HarnessVault.read(context, fileFor(conversationId))
