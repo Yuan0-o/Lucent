@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 import android.content.Context
+import android.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable

@@ -4,7 +4,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
 import android.content.Context
-import kotlin.io.encoding.Base64
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -138,7 +137,7 @@ fun uriToChatImage(context: Context, uri: Uri): Triple<String, String, String>? 
             }
         } ?: return null
         val finalMime = downscaleImageFileInPlace(scratch, mime)
-        val base64 = Base64.Default.encode(scratch.readBytes())
+        val base64 = android.util.Base64.encodeToString(scratch.readBytes(), android.util.Base64.NO_WRAP)
         Triple(finalMime, base64, name)
     } catch (t: Throwable) {
         null

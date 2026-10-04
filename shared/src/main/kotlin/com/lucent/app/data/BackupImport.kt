@@ -3,7 +3,6 @@ package com.lucent.app.data
 import android.content.Context
 import com.lucent.app.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.first
-import kotlin.io.encoding.Base64
 import org.json.JSONObject
 
 private class ImportState {
@@ -361,7 +360,7 @@ internal object BackupImporter {
                     val coverData = o.optString("coverData", "")
                     val restoredColor = if (storedColor.startsWith("photo:") && coverData.isNotEmpty()) {
                         runCatching {
-                            val bytes = Base64.Mime.decode(coverData)
+                            val bytes = android.util.Base64.decode(coverData, android.util.Base64.DEFAULT)
                             AttachmentStore.importBytes(context, bytes)?.let { "photo:$it" }
                         }.getOrNull() ?: storedColor
                     } else storedColor
@@ -625,7 +624,7 @@ internal object BackupImporter {
         val migrated = list.map { att ->
             if (AttachmentStore.looksLikeId(att.data)) return@map att
             val bytes = try {
-                Base64.Mime.decode(att.data)
+                android.util.Base64.decode(att.data, android.util.Base64.DEFAULT)
             } catch (t: Throwable) {
                 return@map att
             }

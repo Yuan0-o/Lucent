@@ -4,7 +4,7 @@ import com.lucent.app.data.createSettingsRepository
 
 import com.lucent.app.data.createAppDatabase
 
-import kotlin.io.encoding.Base64
+import android.util.Base64
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -1734,7 +1734,7 @@ private fun DownloadFilesDialog(
                         if (selText && hasText) entries.add(textFileName to message.content.toByteArray())
                         messageAtts.forEachIndexed { idx, att ->
                             if (selAtts[idx] != true) return@forEachIndexed
-                            val bytes = try { Base64.Mime.decode(att.data) } catch (t: Throwable) { ByteArray(0) }
+                            val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
                             entries.add((att.name.ifBlank { "attachment" }) to bytes)
                         }
                         var missed = 0
@@ -1787,7 +1787,7 @@ private suspend fun saveReplyIntoItem(
     }
     var saved = 0
     for (att in localAtts) {
-        val bytes = try { Base64.Mime.decode(att.data) } catch (t: Throwable) { ByteArray(0) }
+        val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
         val ok = ReplyFiles.saveToNewItem(
             context.applicationContext, db, asTask, title, message.content,
             att.name, att.mime, bytes
@@ -1823,7 +1823,7 @@ private fun buildChatExportEntries(
         com.lucent.app.data.ChatAttachments.all(m.attachmentMime, m.attachmentData, m.attachmentName, m.attachmentList)
             .forEach { att ->
                 val entryName = "%02d_%s".format(attIndex, sanitizeExportName(att.name.ifBlank { "attachment" }))
-                val bytes = try { Base64.Mime.decode(att.data) } catch (t: Throwable) { ByteArray(0) }
+                val bytes = try { Base64.decode(att.data, Base64.DEFAULT) } catch (t: Throwable) { ByteArray(0) }
                 entries.add(entryName to bytes)
                 sb.append("[attachment: ").append(entryName).append("]\n")
                 attIndex++

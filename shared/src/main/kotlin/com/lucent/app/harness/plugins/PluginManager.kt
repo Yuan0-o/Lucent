@@ -1,6 +1,6 @@
 package com.lucent.app.harness.plugins
 
-import com.lucent.app.platform.PlatformContext
+import android.content.Context
 import com.lucent.app.harness.AuditEntry
 import com.lucent.app.harness.AuditTrail
 import com.lucent.app.harness.HarnessRuntime
@@ -11,7 +11,7 @@ import com.lucent.app.harness.PluginState
 import com.lucent.app.harness.ShellOutcome
 import java.io.File
 
-class PluginManager private constructor(private val context: PlatformContext?, private val android: Boolean) : PluginHost {
+class PluginManager private constructor(private val context: Context?, private val android: Boolean) : PluginHost {
 
     override val id = "lucent-plugins"
 
@@ -301,9 +301,9 @@ class PluginManager private constructor(private val context: PlatformContext?, p
     }
 
     companion object {
-        fun android(context: PlatformContext): PluginManager = PluginManager(context.applicationContext, true)
+        fun android(context: Context): PluginManager = PluginManager(context.applicationContext, true)
 
-        fun desktop(context: PlatformContext? = null): PluginManager = PluginManager(context?.applicationContext, false)
+        fun desktop(context: Context? = null): PluginManager = PluginManager(context?.applicationContext, false)
 
         internal fun testInstance(android: Boolean): PluginManager = PluginManager(null, android)
     }

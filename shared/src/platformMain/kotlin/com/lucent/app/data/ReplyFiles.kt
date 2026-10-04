@@ -1,7 +1,6 @@
 package com.lucent.app.data
 
 import android.content.Context
-import kotlin.io.encoding.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -89,7 +88,7 @@ object ReplyFiles {
                 val payload = file.url.substringAfter(',', "")
                 if (payload.isBlank()) return null
                 if (file.url.substringBefore(',').contains("base64", ignoreCase = true)) {
-                    Base64.Mime.decode(payload)
+                    android.util.Base64.decode(payload, android.util.Base64.DEFAULT)
                 } else {
                     java.net.URLDecoder.decode(payload, "UTF-8").toByteArray()
                 }

@@ -23,7 +23,6 @@ import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import com.lucent.app.network.ToolResultTurn
-import kotlin.io.encoding.Base64
 import com.lucent.app.assistant.tools.LocalToolCallParser
 import com.lucent.app.assistant.text.ReplyPolish
 import com.lucent.app.assistant.prompts.SystemPrompts
@@ -1338,7 +1337,7 @@ class AssistantControllerImpl(
                 db.chatDao.getAll().first().firstOrNull { it.id == answeredId }
                     ?.takeIf { it.attachmentMime?.startsWith("image/") == true }
                     ?.attachmentData
-                    ?.let { listOf(Base64.Mime.decode(it)) }
+                    ?.let { listOf(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }
                     ?: emptyList()
             } catch (t: Throwable) {
                 emptyList()

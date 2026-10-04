@@ -411,7 +411,7 @@ private fun readAttachmentBytes(context: PlatformContext, att: Attachment, maxBy
         val approx = estimateDecodedBase64Size(att.data)
         if (approx > maxBytes) return null
         try {
-            Base64.Mime.decode(att.data)
+            android.util.Base64.decode(att.data, android.util.Base64.DEFAULT)
         } catch (t: Throwable) {
             null
         }

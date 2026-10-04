@@ -2,7 +2,6 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
-import kotlin.io.encoding.Base64
 import org.json.JSONObject
 
 object DeviceTools : HarnessGroupTools {
@@ -147,7 +146,7 @@ object DeviceTools : HarnessGroupTools {
 
     private suspend fun screenshot(host: HarnessHost): ToolExecResult {
         val bytes = host.screenshot() ?: return ToolExecResult("No screenshot came back.", success = false)
-        val encoded = Base64.Default.encode(bytes)
+        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         return ToolExecResult(
             "Screenshot taken (${bytes.size / 1024} KiB).",
             images = listOf(ToolImage("image/png", encoded, "screenshot.png"))

@@ -5,7 +5,7 @@ import com.lucent.app.data.createSettingsRepository
 import com.lucent.app.data.createAppDatabase
 
 import android.content.Context
-import kotlin.io.encoding.Base64
+import android.util.Base64
 import kotlinx.coroutines.flow.first
 
 object AttachmentMigration {
@@ -55,7 +55,7 @@ object AttachmentMigration {
         val migrated = list.map { att ->
             if (AttachmentStore.looksLikeId(att.data)) return@map att
             val bytes = try {
-                Base64.Mime.decode(att.data)
+                Base64.decode(att.data, Base64.DEFAULT)
             } catch (t: Throwable) {
                 remaining = true
                 return@map att

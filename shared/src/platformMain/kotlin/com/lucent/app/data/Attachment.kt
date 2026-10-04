@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
 import android.content.Context
-import kotlin.io.encoding.Base64
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -53,7 +53,7 @@ object Attachments {
             val approx = estimateDecodedBase64Size(att.data)
             if (approx > maxBytes) return null
             try {
-                Base64.Mime.decode(att.data)
+                android.util.Base64.decode(att.data, android.util.Base64.DEFAULT)
             } catch (t: Throwable) {
                 null
             }
@@ -83,7 +83,7 @@ object Attachments {
 
     fun readAsBase64(context: Context, att: Attachment, maxBytes: Long = 8L * 1024 * 1024): String? {
         val bytes = readBytes(context, att, maxBytes) ?: return null
-        return Base64.Default.encode(bytes)
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
     }
 
     fun textAttachment(context: Context, name: String, content: String): Attachment? {

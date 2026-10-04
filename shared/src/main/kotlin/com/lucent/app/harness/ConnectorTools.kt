@@ -4,7 +4,6 @@ import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.io.encoding.Base64
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -1352,8 +1351,9 @@ object ConnectorTools : HarnessGroupTools {
         return listOf(own, children.joinToString(separator)).filter { it.isNotBlank() }.joinToString(" ").trim()
     }
 
-    private fun basic(user: String, secret: String): String = Base64.Default.encode(
+    private fun basic(user: String, secret: String): String = android.util.Base64.encodeToString(
         "$user:$secret".toByteArray(StandardCharsets.UTF_8),
+        android.util.Base64.NO_WRAP
     )
 
     private suspend fun linear(args: JSONObject): ToolExecResult {

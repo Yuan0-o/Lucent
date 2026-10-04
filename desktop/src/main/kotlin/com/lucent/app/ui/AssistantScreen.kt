@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import kotlin.io.encoding.Base64
+import android.util.Base64
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -75,7 +75,7 @@ fun AssistantScreen(active: Boolean = true) {
                 } catch (t: Throwable) { null }
 
                 if (bytes != null) {
-                    val base64 = Base64.Default.encode(bytes)
+                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                     draft.attachments = draft.attachments + AssistantAttachmentDraft(mime, base64, name)
                 }
                 val asText: String? = if (bytes != null && bytes.none { it.toInt() == 0 }) {
