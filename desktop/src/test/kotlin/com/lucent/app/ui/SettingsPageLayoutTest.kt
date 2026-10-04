@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import com.lucent.app.platform.DesktopPlatformContext
+import com.lucent.app.platform.LocalPlatformContext
 import com.lucent.app.ui.settings.AgentSettingsPage
 import com.lucent.app.ui.settings.AuditSettingsPage
 import com.lucent.app.ui.settings.CapabilitiesSettingsPage
@@ -23,13 +26,15 @@ class SettingsPageLayoutTest {
 
     private fun renderInsideTheScrollingHost(page: @Composable () -> Unit) = runComposeUiTest {
         setContent {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                page()
+            CompositionLocalProvider(LocalPlatformContext provides DesktopPlatformContext()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    page()
+                }
             }
         }
         waitForIdle()
