@@ -1,6 +1,5 @@
 package com.lucent.app.data
 
-import android.os.SystemClock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -30,7 +29,7 @@ class PasswordAttemptsTest {
     @Test
     fun remainingLockoutUsesElapsedClock() {
         val wall = System.currentTimeMillis()
-        val elapsed = SystemClock.elapsedRealtime()
+        val elapsed = System.nanoTime() / 1_000_000L
         val state = PasswordAttempts.State(
             untilWall = wall + 60_000L,
             untilElapsed = elapsed + 60_000L,
