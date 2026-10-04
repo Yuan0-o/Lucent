@@ -352,7 +352,7 @@ private class StdioTransport : McpTransport {
         }
         return try {
             val builder = ProcessBuilder(parts)
-            val workspace = HarnessRuntime.workspace()
+            val workspace = java.io.File(HarnessRuntime.workspacePath())
             if (workspace.isDirectory) builder.directory(workspace)
             Opened(session = StdioSession(server, builder.start()))
         } catch (t: Throwable) {

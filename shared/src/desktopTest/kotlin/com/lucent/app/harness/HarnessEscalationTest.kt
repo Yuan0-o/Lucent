@@ -14,9 +14,9 @@ import org.json.JSONObject
 
 private class EscalationHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
-    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
-    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+    override fun defaultWorkspacePath(): String { val f = File(root, "workspace"); f.mkdirs(); return f.path }
+    override fun filesDirPath(): String { val f = File(root, "files"); f.mkdirs(); return f.path }
+    override fun cacheDirPath(): String { val f = File(root, "cache"); f.mkdirs(); return f.path }
 }
 
 class HarnessEscalationTest {
@@ -32,7 +32,7 @@ class HarnessEscalationTest {
         HarnessRuntime.update(HarnessConfig(enabled = true))
         HarnessGate.clearEscalations()
         try {
-            HarnessRuntime.workspace().mkdirs()
+            File(HarnessRuntime.workspacePath()).mkdirs()
             val context = harnessTestContext()
             val db: AppDatabase? = null
             block(root, context, db)

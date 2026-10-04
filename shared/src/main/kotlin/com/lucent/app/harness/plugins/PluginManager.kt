@@ -274,7 +274,7 @@ class PluginManager private constructor(private val context: PlatformContext?, p
     private suspend fun runScript(plugin: PluginSpec, script: String, timeoutSeconds: Int, onOutput: ((String) -> Unit)? = null): ShellOutcome {
         return HarnessRuntime.runShellAsync(
             script,
-            HarnessRuntime.workspace(),
+            HarnessRuntime.workspacePath(),
             timeoutSeconds,
             env = if (android) HarnessRuntime.builtinOnlyEnv() else emptyMap(),
             onOutput = onOutput

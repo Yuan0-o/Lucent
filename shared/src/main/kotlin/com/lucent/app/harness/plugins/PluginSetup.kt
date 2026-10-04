@@ -43,7 +43,7 @@ object PluginSetup {
         val runtimeMode = config.runtimeMode
         val builtinState = host?.builtinRuntimeState() ?: "unavailable"
         val capabilities = HarnessRuntime.capabilities()
-        val dir = HarnessRuntime.workspace()
+        val dir = File(HarnessRuntime.workspacePath())
         val workspaceShared = PluginPreflight.sharedStorage(dir)
         val largestDownload = PluginCatalog.effective().maxOfOrNull { it.bytes } ?: 0L
         val diskSpaceBytes = File(HarnessRuntime.downloadsDirPath()).usableSpace

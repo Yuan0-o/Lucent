@@ -326,11 +326,11 @@ object TerminalTools : HarnessGroupTools {
 
     private fun workdirOf(ctx: HarnessCtx, args: JSONObject): File {
         val raw = args.optString("workdir", "")
-        if (raw.isBlank()) return HarnessRuntime.workspace()
+        if (raw.isBlank()) return File(HarnessRuntime.workspacePath())
         val dir = try {
             Workspace.resolveFile(raw)
         } catch (e: HarnessError) {
-            HarnessRuntime.workspace()
+            File(HarnessRuntime.workspacePath())
         }
         if (!dir.exists()) dir.mkdirs()
         return dir
@@ -422,7 +422,7 @@ object TerminalTools : HarnessGroupTools {
             if (safe.isBlank()) return@forEach
             val outcome = HarnessRuntime.runShell(
                 "command -v $safe >/dev/null 2>&1 && { echo \"$safe: $(command -v $safe)\"; $safe --version 2>&1 | head -n 2; } || echo \"$safe: not found\"",
-                HarnessRuntime.workspace(),
+                HarnessRuntime.workspacePath(),
                 30
             )
             sb.append(outcome.text.ifBlank { "$safe: no answer" }).append('\n')

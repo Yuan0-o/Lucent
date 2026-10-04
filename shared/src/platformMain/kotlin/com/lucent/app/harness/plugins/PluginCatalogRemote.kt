@@ -95,7 +95,7 @@ object PluginCatalogRemote {
 
         if (memoryCacheUrl == urlStr) memoryCache?.let { return it }
 
-        val cacheFile = File(HarnessRuntime.downloadsDir(), "catalog-cache.json")
+        val cacheFile = File(HarnessRuntime.downloadsDirPath(), "catalog-cache.json")
         val now = System.currentTimeMillis()
         val epoch = config.pluginCatalogCacheEpoch
 

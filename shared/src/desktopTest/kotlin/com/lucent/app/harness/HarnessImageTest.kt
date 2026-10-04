@@ -15,9 +15,9 @@ import org.json.JSONObject
 
 private class ImageHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
-    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
-    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+    override fun defaultWorkspacePath(): String { val f = File(root, "workspace"); f.mkdirs(); return f.path }
+    override fun filesDirPath(): String { val f = File(root, "files"); f.mkdirs(); return f.path }
+    override fun cacheDirPath(): String { val f = File(root, "cache"); f.mkdirs(); return f.path }
 }
 
 private val PNG_ONE_PIXEL = byteArrayOf(
@@ -36,7 +36,7 @@ class HarnessImageTest {
         HarnessRuntime.android = false
         HarnessRuntime.update(HarnessConfig(enabled = true))
         try {
-            HarnessRuntime.workspace().mkdirs()
+            File(HarnessRuntime.workspacePath()).mkdirs()
             block(root)
         } finally {
             HarnessRuntime.host = previousHost
@@ -83,7 +83,7 @@ class HarnessImageTest {
     @Test
     fun aRealImageComesBackAsAnAttachment() = withImageSandbox { root ->
         val ctx = contextFactory(root)
-        File(HarnessRuntime.workspace(), "pixel.png").writeBytes(PNG_ONE_PIXEL)
+        File(HarnessRuntime.workspacePath(), "pixel.png").writeBytes(PNG_ONE_PIXEL)
         val result = read(ctx, "pixel.png")
         assertTrue(result.success, result.summary)
         assertEquals(1, result.images.size)
@@ -95,7 +95,7 @@ class HarnessImageTest {
     @Test
     fun aTextFileIsRefusedEvenWhenItIsCalledAnImage() = withImageSandbox { root ->
         val ctx = contextFactory(root)
-        val notAnImage = File(HarnessRuntime.workspace(), "notes.png")
+        val notAnImage = File(HarnessRuntime.workspacePath(), "notes.png")
         notAnImage.writeText("this is not a picture")
         val result = read(ctx, "notes.png")
         assertFalse(result.success)
@@ -106,7 +106,7 @@ class HarnessImageTest {
     @Test
     fun aNonImageExtensionIsRefused() = withImageSandbox { root ->
         val ctx = contextFactory(root)
-        File(HarnessRuntime.workspace(), "report.txt").writeText("plain text")
+        File(HarnessRuntime.workspacePath(), "report.txt").writeText("plain text")
         val result = read(ctx, "report.txt")
         assertFalse(result.success)
         assertTrue(result.summary.contains("not an image"), result.summary)
@@ -116,7 +116,7 @@ class HarnessImageTest {
     @Test
     fun aRenamedImageIsRefusedWhenTheBytesDisagree() = withImageSandbox { root ->
         val ctx = contextFactory(root)
-        File(HarnessRuntime.workspace(), "picture.png").writeBytes("GIF89a".toByteArray())
+        File(HarnessRuntime.workspacePath(), "picture.png").writeBytes("GIF89a".toByteArray())
         val result = read(ctx, "picture.png")
         assertFalse(result.success)
         assertTrue(result.summary.contains("image/gif"), result.summary)
@@ -125,7 +125,7 @@ class HarnessImageTest {
     @Test
     fun directoriesAndMissingFilesAreRefused() = withImageSandbox { root ->
         val ctx = contextFactory(root)
-        File(HarnessRuntime.workspace(), "gallery").mkdirs()
+        File(HarnessRuntime.workspacePath(), "gallery").mkdirs()
         val directory = read(ctx, "gallery")
         assertFalse(directory.success)
         assertTrue(directory.summary.contains("directory"), directory.summary)
@@ -137,7 +137,7 @@ class HarnessImageTest {
     @Test
     fun oversizedImagesAreRefused() = withImageSandbox { root ->
         val ctx = contextFactory(root)
-        File(HarnessRuntime.workspace(), "big.png").writeBytes(PNG_ONE_PIXEL + ByteArray(4096))
+        File(HarnessRuntime.workspacePath(), "big.png").writeBytes(PNG_ONE_PIXEL + ByteArray(4096))
         val result = read(ctx, "big.png", maxBytes = 1024L)
         assertFalse(result.success)
         assertTrue(result.summary.contains("limit"), result.summary)

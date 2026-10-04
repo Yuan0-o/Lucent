@@ -22,9 +22,9 @@ class BackupRoundTripTest {
 
     private class TestHarnessHost(private val dir: File) : com.lucent.app.harness.HarnessHost {
         override val android: Boolean = false
-        override fun defaultWorkspace(): File = File(dir, "Lucent")
-        override fun filesDir(): File = dir
-        override fun cacheDir(): File = File(dir, "cache")
+        override fun defaultWorkspacePath(): String { val f = File(dir, "Lucent"); f.mkdirs(); return f.path }
+        override fun filesDirPath(): String { dir.mkdirs(); return dir.path }
+        override fun cacheDirPath(): String { val f = File(dir, "cache"); f.mkdirs(); return f.path }
     }
 
     private fun freshDir(): File =
@@ -163,7 +163,7 @@ class BackupRoundTripTest {
             try {
                 val db = DesktopAppDatabase.createForTesting(context)
                 val settings = createSettingsRepository(context)
-                val harnessHome = com.lucent.app.harness.HarnessRuntime.home()
+                val harnessHome = java.io.File(com.lucent.app.harness.HarnessRuntime.homePath())
                 File(harnessHome, "todos").mkdirs()
                 File(harnessHome, "todos").resolve("today.json").writeText("""{"items":["buy milk"]}""")
                 File(harnessHome, "memory").mkdirs()
@@ -202,7 +202,7 @@ class BackupRoundTripTest {
                         source = BackupManager.BackupSource { bytes.inputStream() }
                     )
 
-                    val restoredHome = com.lucent.app.harness.HarnessRuntime.home()
+                    val restoredHome = java.io.File(com.lucent.app.harness.HarnessRuntime.homePath())
                     assertEquals(
                         """{"items":["buy milk"]}""",
                         restoredHome.resolve("todos/today.json").readText()
@@ -232,7 +232,7 @@ class BackupRoundTripTest {
             try {
                 val db = DesktopAppDatabase.createForTesting(context)
                 val settings = createSettingsRepository(context)
-                val harnessHome = com.lucent.app.harness.HarnessRuntime.home()
+                val harnessHome = java.io.File(com.lucent.app.harness.HarnessRuntime.homePath())
                 File(harnessHome, "todos").mkdirs()
                 File(harnessHome, "todos").resolve("today.json").writeText("original")
 
@@ -259,7 +259,7 @@ class BackupRoundTripTest {
                         source = BackupManager.BackupSource { bytes.inputStream() }
                     )
 
-                    val restoredHome = com.lucent.app.harness.HarnessRuntime.home()
+                    val restoredHome = java.io.File(com.lucent.app.harness.HarnessRuntime.homePath())
                     assertTrue(!restoredHome.resolve("todos/today.json").exists())
                 }
             } finally {

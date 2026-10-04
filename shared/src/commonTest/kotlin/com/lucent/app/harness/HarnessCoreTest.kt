@@ -10,9 +10,9 @@ import kotlin.test.assertTrue
 
 private class TestHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
-    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
-    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+    override fun defaultWorkspacePath(): String { val f = File(root, "workspace"); f.mkdirs(); return f.path }
+    override fun filesDirPath(): String { val f = File(root, "files"); f.mkdirs(); return f.path }
+    override fun cacheDirPath(): String { val f = File(root, "cache"); f.mkdirs(); return f.path }
 }
 
 private fun withSandbox(config: HarnessConfig = HarnessConfig(enabled = true), block: (File) -> Unit) {
@@ -23,7 +23,7 @@ private fun withSandbox(config: HarnessConfig = HarnessConfig(enabled = true), b
     HarnessRuntime.android = false
     HarnessRuntime.update(config.copy(enabled = true))
     try {
-        HarnessRuntime.workspace().mkdirs()
+        File(HarnessRuntime.workspacePath()).mkdirs()
         block(root)
     } finally {
         HarnessRuntime.host = previousHost
@@ -91,7 +91,7 @@ class HarnessWorkspaceTest {
 
     @Test
     fun snapshotsRestoreWhatWasThereBefore() = withSandbox { _ ->
-        val file = File(HarnessRuntime.workspace(), "report.md")
+        val file = File(HarnessRuntime.workspacePath(), "report.md")
         file.writeText("first version")
         Snapshots.capture(file)
         file.writeText("second version")
@@ -243,7 +243,7 @@ class HarnessPlanTest {
 
     @Test
     fun skillFilesAreDiscoveredAndReadable() = withSandbox { _ ->
-        val dir = File(HarnessRuntime.workspace(), ".lucent/skills").apply { mkdirs() }
+        val dir = File(HarnessRuntime.workspacePath(), ".lucent/skills").apply { mkdirs() }
         File(dir, "reports.md").writeText("---\nname: reports\ndescription: how to write them\n---\n\nUse headings.\n")
         assertTrue(SkillTools.tools.map { it.name }.contains("list_skills"))
         assertTrue(File(dir, "reports.md").exists())

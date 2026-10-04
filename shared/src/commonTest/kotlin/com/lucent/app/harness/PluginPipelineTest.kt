@@ -16,9 +16,9 @@ import kotlin.test.assertTrue
 
 private class PipelineHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
-    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
-    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+    override fun defaultWorkspacePath(): String { val f = File(root, "workspace"); f.mkdirs(); return f.path }
+    override fun filesDirPath(): String { val f = File(root, "files"); f.mkdirs(); return f.path }
+    override fun cacheDirPath(): String { val f = File(root, "cache"); f.mkdirs(); return f.path }
 }
 
 private class ScriptedShell(private val respond: (String) -> ShellOutcome) : HarnessShell {
@@ -28,7 +28,7 @@ private class ScriptedShell(private val respond: (String) -> ShellOutcome) : Har
     val seen = mutableListOf<String>()
     override suspend fun run(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String>,
         onOutput: ((String) -> Unit)?
@@ -168,7 +168,7 @@ class PluginPipelineTest {
             val staged = File(outcome.installedPath)
             assertTrue(staged.isFile, "the payload must survive for a later install")
             assertEquals(bytes.size.toLong(), staged.length())
-            assertTrue(staged.path.startsWith(HarnessRuntime.workspace().path), staged.path)
+            assertTrue(staged.path.startsWith(HarnessRuntime.workspacePath()), staged.path)
         } finally {
             server.stop(0)
         }
@@ -196,7 +196,7 @@ class PluginPipelineTest {
         val (server, url) = serve(bytes)
         try {
             val source = PluginSource("test", "Test mirror", url, official = true, bytes = 9999L)
-            val target = File(HarnessRuntime.downloadsDir(), "short.bin")
+            val target = File(HarnessRuntime.downloadsDirPath(), "short.bin")
             val outcome = runBlocking { PluginDownload.fetch(source, target) { _, _ -> } }
             assertFalse(outcome.ok)
             assertFalse(target.exists())
@@ -218,7 +218,7 @@ class PluginPipelineTest {
                 sha256 = "00",
                 bytes = bytes.size.toLong()
             )
-            val target = File(HarnessRuntime.downloadsDir(), "checksum.bin")
+            val target = File(HarnessRuntime.downloadsDirPath(), "checksum.bin")
             val outcome = runBlocking { PluginDownload.fetch(source, target) { _, _ -> } }
             assertFalse(outcome.ok)
             assertFalse(target.exists())

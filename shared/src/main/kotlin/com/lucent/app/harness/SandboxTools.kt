@@ -162,7 +162,7 @@ object SandboxTools : HarnessGroupTools {
         val proot = prootVersion()
         val route = route(ctx, docker, proot)
         val timeout = args.optInt("timeout", ctx.config.timeoutSeconds).coerceIn(5, 1800)
-        val workdir = if (args.optString("workdir", "").isBlank()) HarnessRuntime.workspace() else try {
+        val workdir = if (args.optString("workdir", "").isBlank()) File(HarnessRuntime.workspacePath()) else try {
             Workspace.resolveFile(args.optString("workdir", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That working directory cannot be used", success = false)
@@ -181,7 +181,7 @@ object SandboxTools : HarnessGroupTools {
                 val line = "docker run --rm -i" + flags +
                     " -v '" + workdir.path.replace("'", "'\\''") + ":/work' -w /work " + image +
                     " sh -lc '" + quoted + "'"
-                HarnessRuntime.runShell(line, workdir, timeout)
+                HarnessRuntime.runShell(line, workdir.path, timeout)
             }
             "proot" -> {
                 val rootfs = File(HarnessRuntime.filesDirPath(), "home/lucent/ubuntu/rootfs")
@@ -189,9 +189,9 @@ object SandboxTools : HarnessGroupTools {
                     workdir.path.replace("'", "'\\''") + ":/work' " +
                     "/usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " +
                     "/bin/sh -lc '" + quoted + "'"
-                HarnessRuntime.runShell(line, workdir, timeout)
+                HarnessRuntime.runShell(line, workdir.path, timeout)
             }
-            else -> HarnessRuntime.runShell(command, workdir, timeout)
+            else -> HarnessRuntime.runShell(command, workdir.path, timeout)
         }
         val elapsed = System.currentTimeMillis() - started
         val body = buildString {

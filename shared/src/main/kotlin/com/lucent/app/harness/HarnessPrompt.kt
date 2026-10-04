@@ -132,7 +132,7 @@ object HarnessPrompt {
     }
 
     private fun workspaceSlug(): String =
-        HarnessRuntime.workspace().name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+        File(HarnessRuntime.workspacePath()).name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
 
     fun skillsLine(): String? {
         val dirs = mutableListOf(File(HarnessRuntime.workspacePath(), ".lucent/skills"))

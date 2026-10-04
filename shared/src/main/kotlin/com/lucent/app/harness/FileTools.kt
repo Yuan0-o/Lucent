@@ -253,7 +253,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun workspaceInfo(ctx: HarnessCtx): ToolExecResult {
-        val root = HarnessRuntime.workspace()
+        val root = File(HarnessRuntime.workspacePath())
         val files = root.walkTopDown().filter { it.isFile }.take(20000).toList()
         val bytes = files.sumOf { it.length() }
         val groups = HarnessGroup.entries.filter { ctx.config.groupEnabled(it) }.joinToString(", ") { it.key }
@@ -550,7 +550,7 @@ object FileTools : HarnessGroupTools {
     private fun fileInfo(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val path = Workspace.resolveFile(args.optString("path", ""))
         if (!path.exists()) return ToolExecResult("${Workspace.display(ctx, path)} does not exist.", success = false)
-        val inside = Workspace.isInside(path, HarnessRuntime.workspace())
+        val inside = Workspace.isInside(path, File(HarnessRuntime.workspacePath()))
         val snapshots = Snapshots.history(ctx, path.canonicalPath, 5)
         val sb = StringBuilder()
         sb.append("${Workspace.display(ctx, path)}\n")

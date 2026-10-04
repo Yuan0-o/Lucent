@@ -140,7 +140,7 @@ object PluginPreflight {
                 }
             }
         }
-        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(HarnessRuntime.workspace())) {
+        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(File(HarnessRuntime.workspacePath()))) {
             problems.add(
                 PreflightProblem(
                     "workspace_not_shared",

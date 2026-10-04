@@ -13,9 +13,9 @@ import org.json.JSONObject
 
 private class GoalHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
-    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
-    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+    override fun defaultWorkspacePath(): String { val f = File(root, "workspace"); f.mkdirs(); return f.path }
+    override fun filesDirPath(): String { val f = File(root, "files"); f.mkdirs(); return f.path }
+    override fun cacheDirPath(): String { val f = File(root, "cache"); f.mkdirs(); return f.path }
 }
 
 class GoalToolsTest {
@@ -31,14 +31,14 @@ class GoalToolsTest {
         HarnessRuntime.update(HarnessConfig(enabled = true))
         GoalStore.clear()
         try {
-            HarnessRuntime.workspace().mkdirs()
+            File(HarnessRuntime.workspacePath()).mkdirs()
             val ctx = HarnessCtx(
                 harnessTestContext(),
                 null,
                 HarnessRuntime.config(),
                 emptySet(),
                 false,
-                HarnessRuntime.workspace()
+                File(HarnessRuntime.workspacePath())
             )
             block(ctx)
         } finally {

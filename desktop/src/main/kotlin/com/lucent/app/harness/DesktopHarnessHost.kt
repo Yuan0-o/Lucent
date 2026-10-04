@@ -44,7 +44,7 @@ object DesktopHarnessShell : HarnessShell {
 
     override suspend fun run(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String>,
         onOutput: ((String) -> Unit)?
@@ -65,7 +65,8 @@ object DesktopHarnessShell : HarnessShell {
                     -1
                 )
             }
-            if (workdir != null && workdir.isDirectory) builder.directory(workdir)
+            val workdirFile = if (workdir != null) File(workdir) else null
+            if (workdirFile != null && workdirFile.isDirectory) builder.directory(workdirFile)
             if (env.isNotEmpty()) builder.environment().putAll(env)
             val process = builder.start()
             val stdout = StringBuilder()
