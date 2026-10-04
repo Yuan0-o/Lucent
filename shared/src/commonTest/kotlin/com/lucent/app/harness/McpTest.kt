@@ -442,13 +442,13 @@ class McpTest {
         val context = allocate(PlatformContext::class.java) as? PlatformContext
         val db = allocate(AppDatabase::class.java) as? AppDatabase
         if (context != null && db != null) {
-            return HarnessCtx(context, db, config, emptySet(), false, dir)
+            return HarnessCtx(context, db, config, emptySet(), false, dir.path)
         }
         val ctx = allocate(HarnessCtx::class.java) as? HarnessCtx ?: return null
         fill(ctx, "config", config)
         fill(ctx, "capabilities", emptySet<String>())
         fill(ctx, "android", false)
-        fill(ctx, "workspace", dir)
+        fill(ctx, "workspacePath", dir.path)
         return ctx
     }
 

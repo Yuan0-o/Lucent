@@ -37,14 +37,14 @@ class HarnessWorkspaceTest {
     @Test
     fun relativePathsLandInsideTheWorkspace() = withSandbox { _ ->
         val resolved = Workspace.resolve("notes/today.txt")
-        assertTrue(Workspace.isInside(resolved, HarnessRuntime.workspace()), resolved.path)
+        assertTrue(Workspace.isInside(resolved, HarnessRuntime.workspacePath()), resolved)
     }
 
     @Test
     fun tildeIsRelativeToTheWorkspace() = withSandbox { _ ->
         val resolved = Workspace.resolve("~/draft.md")
-        assertTrue(Workspace.isInside(resolved, HarnessRuntime.workspace()))
-        assertEquals("draft.md", resolved.name)
+        assertTrue(Workspace.isInside(resolved, HarnessRuntime.workspacePath()))
+        assertEquals("draft.md", File(resolved).name)
     }
 
     @Test

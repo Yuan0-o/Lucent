@@ -206,13 +206,13 @@ class GitToolsTest {
         val context = allocate(PlatformContext::class.java) as? PlatformContext
         val db = allocate(AppDatabase::class.java) as? AppDatabase
         if (context != null && db != null) {
-            return HarnessCtx(context, db, HarnessConfig(workspace = dir.path), emptySet(), false, dir)
+            return HarnessCtx(context, db, HarnessConfig(workspace = dir.path), emptySet(), false, dir.path)
         }
         val ctx = allocate(HarnessCtx::class.java) as HarnessCtx
         fill(ctx, "config", HarnessConfig(workspace = dir.path))
         fill(ctx, "capabilities", emptySet<String>())
         fill(ctx, "android", false)
-        fill(ctx, "workspace", dir)
+        fill(ctx, "workspacePath", dir.path)
         return ctx
     }
 

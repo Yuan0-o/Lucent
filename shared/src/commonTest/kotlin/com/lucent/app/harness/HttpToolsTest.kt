@@ -413,7 +413,7 @@ class HttpToolsTest {
         fill(ctx, "config", config)
         fill(ctx, "capabilities", emptySet<String>())
         fill(ctx, "android", false)
-        fill(ctx, "workspace", dir)
+        fill(ctx, "workspacePath", dir.path)
         return ctx
     }
 

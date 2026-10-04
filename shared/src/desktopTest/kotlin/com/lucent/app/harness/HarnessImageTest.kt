@@ -47,7 +47,7 @@ class HarnessImageTest {
 
     private fun contextFactory(root: File): HarnessCtx {
         val context = harnessTestContext()
-        return HarnessCtx(context, null, HarnessRuntime.config(), emptySet(), false, HarnessRuntime.workspace())
+        return HarnessCtx(context, null, HarnessRuntime.config(), emptySet(), false, HarnessRuntime.workspacePath())
     }
 
     private fun read(ctx: HarnessCtx, path: String, maxBytes: Long? = null): ToolExecResult {
