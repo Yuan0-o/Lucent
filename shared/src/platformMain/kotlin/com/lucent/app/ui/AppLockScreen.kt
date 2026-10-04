@@ -3,7 +3,7 @@ package com.lucent.app.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import android.os.SystemClock
+import com.lucent.app.platform.platformElapsedRealtime
 
 object AppLockController {
 
@@ -24,12 +24,12 @@ object AppLockController {
     }
 
     fun onStop() {
-        backgroundedAt = SystemClock.elapsedRealtime()
+        backgroundedAt = platformElapsedRealtime()
     }
 
     fun onStart() {
         if (enabled && backgroundedAt != 0L &&
-            SystemClock.elapsedRealtime() - backgroundedAt > GRACE_MS
+            platformElapsedRealtime() - backgroundedAt > GRACE_MS
         ) {
             locked = true
         }
