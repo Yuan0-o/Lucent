@@ -132,15 +132,15 @@ object DesktopHarnessHost : HarnessHost {
 
     override val android: Boolean = false
 
-    override fun filesDir(): File = File(System.getProperty("user.home"), ".lucent").apply { mkdirs() }
+    override fun filesDirPath(): String = File(System.getProperty("user.home"), ".lucent").apply { mkdirs() }.path
 
-    override fun cacheDir(): File = File(filesDir(), "cache").apply { mkdirs() }
+    override fun cacheDirPath(): String = File(filesDirPath(), "cache").apply { mkdirs() }.path
 
-    override fun defaultWorkspace(): File {
+    override fun defaultWorkspacePath(): String {
         val home = File(System.getProperty("user.home") ?: ".")
         val documents = File(home, "Documents")
         val base = if (documents.isDirectory) documents else home
-        return File(base, "Lucent").apply { mkdirs() }
+        return File(base, "Lucent").apply { mkdirs() }.path
     }
 
     override fun capabilities(): Set<String> = setOf("sqlite", "pdf", "clipboard", "notify", "open_url", "share")

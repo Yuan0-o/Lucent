@@ -27,7 +27,7 @@ class AndroidPtyBackend(private val context: Context) : PtyBackend {
         val libDir = File(context.applicationInfo.nativeLibraryDir)
         val proot = File(libDir, "libproot.so")
         val tmpDir = File(context.filesDir, "proot-tmp").apply { mkdirs() }
-        val workspace = request.workdir ?: HarnessRuntime.workspace()
+        val workspace = request.workdir ?: File(HarnessRuntime.workspacePath())
 
         val args = mutableListOf<String>()
         args.add(proot.absolutePath)

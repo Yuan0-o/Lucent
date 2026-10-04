@@ -218,7 +218,7 @@ data class PluginJournalEntry(val stage: String, val message: String, val ok: Bo
 object PluginJournal {
 
     private fun dir(): File? {
-        val files = HarnessRuntime.host?.filesDir() ?: return null
+        val files = HarnessRuntime.host?.filesDirPath() ?: return null
         return File(files, "harness/plugin-journal").apply { mkdirs() }
     }
 
