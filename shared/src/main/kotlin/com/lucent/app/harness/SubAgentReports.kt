@@ -7,7 +7,7 @@ object SubAgentReports {
 
     const val FOLDER = "sub-agents"
 
-    fun folder(): File = File(HarnessRuntime.workspace(), FOLDER).apply { mkdirs() }
+    fun folder(): File = File(HarnessRuntime.workspacePath(), FOLDER).apply { mkdirs() }
 
     fun write(context: PlatformContext, agent: SubAgent): File {
         val file = File(folder(), agent.id + ".md")
