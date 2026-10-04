@@ -184,7 +184,7 @@ object SandboxTools : HarnessGroupTools {
                 HarnessRuntime.runShell(line, workdir, timeout)
             }
             "proot" -> {
-                val rootfs = File(HarnessRuntime.filesDir(), "home/lucent/ubuntu/rootfs")
+                val rootfs = File(HarnessRuntime.filesDirPath(), "home/lucent/ubuntu/rootfs")
                 val line = "proot -0 -r '" + rootfs.path.replace("'", "'\\''") + "' -w /work -b '" +
                     workdir.path.replace("'", "'\\''") + ":/work' " +
                     "/usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " +
