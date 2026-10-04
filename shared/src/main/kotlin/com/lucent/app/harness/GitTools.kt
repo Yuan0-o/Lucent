@@ -747,7 +747,7 @@ object GitTools : HarnessGroupTools {
         val patch = args.optString("patch", "")
         if (patch.isBlank()) return ToolExecResult("There is no patch text to apply.", success = false)
         if (!HarnessRuntime.shellReady()) return ToolExecResult(SHELL_MESSAGE, success = false)
-        val file = File(HarnessRuntime.subDir("tmp"), "lucent-patch-${System.currentTimeMillis()}.patch")
+        val file = File(HarnessRuntime.subDirPath("tmp"), "lucent-patch-${System.currentTimeMillis()}.patch")
         return try {
             file.writeText(patch)
             val reverse = if (args.optBoolean("reverse", false)) "-R " else ""
