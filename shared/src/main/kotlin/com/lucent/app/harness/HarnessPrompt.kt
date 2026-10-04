@@ -17,13 +17,13 @@ object HarnessPrompt {
     fun block(): String {
         val config = HarnessRuntime.config()
         if (!config.enabled) return ""
-        val workspace = HarnessRuntime.workspace()
+        val workspacePath = HarnessRuntime.workspacePath()
         val capabilities = HarnessRuntime.capabilities()
         val tools = HarnessGate.enabledTools(HarnessRuntime.android, capabilities)
         if (tools.isEmpty()) return ""
         return buildString {
             append("\n\nYou also have a working toolkit on this device, not just the notes and tasks tools. ")
-            append("Your workspace is ").append(workspace.path).append(". ")
+            append("Your workspace is ").append(workspacePath).append(". ")
             append("Everything you make — documents, spreadsheets, slides, code, reports, converted files — belongs ")
             append("inside that workspace; the person can open it from there, and you can attach a finished file to a ")
             append("note or a task with the note and task tools. ")
