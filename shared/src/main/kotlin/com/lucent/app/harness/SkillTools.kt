@@ -47,7 +47,7 @@ object SkillTools : HarnessGroupTools {
     }
 
     fun skillDirs(ctx: HarnessCtx): List<File> {
-        val dirs = mutableListOf(File(HarnessRuntime.workspace(), ".lucent/skills"))
+        val dirs = mutableListOf(File(HarnessRuntime.workspacePath(), ".lucent/skills"))
         ctx.config.skillDirs.forEach { dirs.add(File(it)) }
         return dirs
     }
@@ -60,7 +60,7 @@ object SkillTools : HarnessGroupTools {
         val files = discover(ctx)
         if (files.isEmpty()) {
             return ToolExecResult(
-                "No skills yet. Write one with save_skill, or drop markdown files into ${Workspace.display(ctx, File(HarnessRuntime.workspace(), ".lucent/skills"))}."
+                "No skills yet. Write one with save_skill, or drop markdown files into ${Workspace.display(ctx, File(HarnessRuntime.workspacePath(), ".lucent/skills"))}."
             )
         }
         val sb = StringBuilder("${files.size} skill(s):\n")
@@ -89,7 +89,7 @@ object SkillTools : HarnessGroupTools {
         if (raw.isEmpty()) return ToolExecResult("Name the skill.", success = false)
         val slug = raw.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
         if (slug.isEmpty()) return ToolExecResult("That name has no usable characters.", success = false)
-        val dir = File(HarnessRuntime.workspace(), ".lucent/skills")
+        val dir = File(HarnessRuntime.workspacePath(), ".lucent/skills")
         dir.mkdirs()
         val file = File(dir, "$slug.md")
         val description = args.optString("description", "").replace("\n", " ").trim()
