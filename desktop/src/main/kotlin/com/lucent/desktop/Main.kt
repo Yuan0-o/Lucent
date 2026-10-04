@@ -24,6 +24,8 @@ import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
+import androidx.compose.runtime.CompositionLocalProvider
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
@@ -227,7 +229,9 @@ fun main() {
                     window.toFront()
                 }
             }
-            DesktopApp(startup, active = windowVisible && !windowState.isMinimized)
+            CompositionLocalProvider(LocalPlatformContext provides desktopPlatformContext) {
+                DesktopApp(startup, active = windowVisible && !windowState.isMinimized)
+            }
         }
     }
 

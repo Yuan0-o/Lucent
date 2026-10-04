@@ -7,6 +7,8 @@ import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -302,6 +304,7 @@ class MainActivity : FragmentActivity() {
         StartupLog.event(applicationContext, "Startup tasks dispatched; composing UI")
 
         setContent {
+            CompositionLocalProvider(LocalPlatformContext provides applicationContext) {
             val themeMode by settingsRepo.themeMode.collectAsState(initial = initialThemeMode)
             val paletteName by settingsRepo.palette.collectAsState(initial = initialPalette)
             val fontKey by settingsRepo.font.collectAsState(initial = initialFont)
@@ -467,6 +470,7 @@ class MainActivity : FragmentActivity() {
                         }
                     }
                 }
+            }
             }
         }
     }
