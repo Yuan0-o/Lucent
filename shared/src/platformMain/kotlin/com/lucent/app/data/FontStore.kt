@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -27,11 +27,11 @@ object FontStore {
 
     data class FontIndex(val slots: List<FontSlot>)
 
-    private fun dir(context: Context): File = File(context.filesDir, DIR)
+    private fun dir(context: PlatformContext): File = File(context.filesDir, DIR)
 
 
     @Synchronized
-    fun index(context: Context): FontIndex {
+    fun index(context: PlatformContext): FontIndex {
         val dir = dir(context)
         val indexFile = File(dir, INDEX_FILE)
         if (!indexFile.exists()) return FontIndex(emptyList())
@@ -56,7 +56,7 @@ object FontStore {
     }
 
     @Synchronized
-    private fun rebuildFromFiles(context: Context): FontIndex {
+    private fun rebuildFromFiles(context: PlatformContext): FontIndex {
         val dir = dir(context)
         val files = dir.listFiles()?.filter { f ->
             f.isFile && f.length() > 0L && listOf(".ttf", ".otf", ".ttc").any {
@@ -77,7 +77,7 @@ object FontStore {
     }
 
     @Synchronized
-    private fun writeIndex(context: Context, idx: FontIndex) {
+    private fun writeIndex(context: PlatformContext, idx: FontIndex) {
         val dir = dir(context)
         if (!dir.exists()) dir.mkdirs()
         val arr = JSONArray()
@@ -89,18 +89,18 @@ object FontStore {
     }
 
 
-    fun fonts(context: Context): List<FontSlot> = index(context).slots
+    fun fonts(context: PlatformContext): List<FontSlot> = index(context).slots
 
-    fun fontFile(context: Context, id: String): File? =
+    fun fontFile(context: PlatformContext, id: String): File? =
         index(context).slots.firstOrNull { it.id == id }
             ?.let { File(dir(context), it.fileName) }
             ?.takeIf { it.exists() && it.length() > 0L }
 
-    fun canImportMore(context: Context): Boolean = fonts(context).size < MAX_FONTS
+    fun canImportMore(context: PlatformContext): Boolean = fonts(context).size < MAX_FONTS
 
 
     @Throws(IOException::class)
-    fun import(context: Context, source: PlatformFontSource, customName: String? = null): FontSlot {
+    fun import(context: PlatformContext, source: PlatformFontSource, customName: String? = null): FontSlot {
         val existing = index(context)
         if (existing.slots.size >= MAX_FONTS) throw TooManyFontsException()
 
@@ -134,7 +134,7 @@ object FontStore {
     }
 
     @Synchronized
-    fun delete(context: Context, id: String) {
+    fun delete(context: PlatformContext, id: String) {
         val idx = index(context)
         val slot = idx.slots.firstOrNull { it.id == id } ?: return
         File(dir(context), slot.fileName).delete()
@@ -143,7 +143,7 @@ object FontStore {
     }
 
     @Synchronized
-    fun deleteAll(context: Context) {
+    fun deleteAll(context: PlatformContext) {
         val idx = index(context)
         idx.slots.forEach { s ->
             File(dir(context), s.fileName).delete()
@@ -154,7 +154,7 @@ object FontStore {
 
 
     @Synchronized
-    fun exportManifestJson(context: Context): String {
+    fun exportManifestJson(context: PlatformContext): String {
         val idx = index(context)
         val arr = JSONArray()
         idx.slots.forEach { s ->
@@ -169,21 +169,21 @@ object FontStore {
         return JSONObject().put("fonts", arr).toString()
     }
 
-    fun totalFontBytes(context: Context): Long =
+    fun totalFontBytes(context: PlatformContext): Long =
         fonts(context).sumOf { File(dir(context), it.fileName).length() }
 
-    fun fontFileForSlot(context: Context, slot: FontSlot): File? =
+    fun fontFileForSlot(context: PlatformContext, slot: FontSlot): File? =
         File(dir(context), slot.fileName).takeIf { it.exists() && it.length() > 0L }
 
     @Synchronized
-    fun prepareRestoreTarget(context: Context, fileName: String): File {
+    fun prepareRestoreTarget(context: PlatformContext, fileName: String): File {
         val d = dir(context)
         if (!d.exists()) d.mkdirs()
         return File(d, File(fileName).name)
     }
 
     @Synchronized
-    fun restoreFromBackup(context: Context, manifestJson: String): Int {
+    fun restoreFromBackup(context: PlatformContext, manifestJson: String): Int {
         val d = dir(context)
         if (!d.exists()) d.mkdirs()
         val root = try {
