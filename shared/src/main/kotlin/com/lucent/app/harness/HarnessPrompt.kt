@@ -135,7 +135,7 @@ object HarnessPrompt {
         HarnessRuntime.workspace().name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
 
     fun skillsLine(): String? {
-        val dirs = mutableListOf(File(HarnessRuntime.workspace(), ".lucent/skills"))
+        val dirs = mutableListOf(File(HarnessRuntime.workspacePath(), ".lucent/skills"))
         HarnessRuntime.config().skillDirs.forEach { if (it.isNotBlank()) dirs.add(File(it)) }
         val files = dirs.filter { it.isDirectory }
             .flatMap { dir -> (dir.listFiles() ?: emptyArray()).filter { it.isFile && it.name.endsWith(".md") } }
