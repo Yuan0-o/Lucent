@@ -3,6 +3,7 @@ package com.lucent.app.harness.plugins
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.Workspace
 import com.lucent.app.i18n.S
+import java.io.File
 import kotlin.math.max
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
