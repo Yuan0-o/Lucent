@@ -52,7 +52,7 @@ object Workspace {
     fun resolve(ctx: HarnessCtx, raw: String): File = resolve(raw)
 
     fun writable(config: HarnessConfig, file: File): Boolean {
-        val roots = mutableListOf(File(HarnessRuntime.workspace()))
+        val roots = mutableListOf(HarnessRuntime.workspace())
         config.writeRoots.forEach { roots.add(File(it)) }
         return roots.any { isInside(file, it) }
     }
@@ -60,7 +60,7 @@ object Workspace {
     fun writable(ctx: HarnessCtx, file: File): Boolean = writable(ctx.config, file)
 
     fun readable(config: HarnessConfig, file: File): Boolean {
-        val roots = mutableListOf(File(HarnessRuntime.workspace()))
+        val roots = mutableListOf(HarnessRuntime.workspace())
         config.writeRoots.forEach { roots.add(File(it)) }
         config.readOnlyRoots.forEach { roots.add(File(it)) }
         return roots.any { isInside(file, it) }
@@ -86,7 +86,7 @@ object Workspace {
     }
 
     fun display(file: File): String {
-        val root = File(HarnessRuntime.workspace())
+        val root = HarnessRuntime.workspace()
         return if (isInside(file, root)) {
             val rel = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
             if (rel.isEmpty()) "." else rel

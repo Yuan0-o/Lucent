@@ -56,7 +56,7 @@ internal fun WorkspaceSettingsPage(
     BackHeader(onBack = { onRoute(SettingsRoute.Agent) })
     Column(modifier = Modifier.fillMaxWidth()) {
         Section(onGradient, onGradientMuted, S.agentWorkspaceTitle, S.agentWorkspaceSub) {
-            Text(HarnessRuntime.workspace(), color = onGradientMuted, fontSize = 11.sp)
+            Text(HarnessRuntime.workspace().path, color = onGradientMuted, fontSize = 11.sp)
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = draft,
@@ -89,7 +89,7 @@ internal fun WorkspaceSettingsPage(
 
     if (picking) {
         DirectoryPickerDialog(
-            initialPath = draft.trim().ifBlank { HarnessRuntime.workspace() },
+            initialPath = draft.trim().ifBlank { HarnessRuntime.workspace().path },
             onDismiss = { picking = false },
             onOpen = { picked ->
                 apply(picked)

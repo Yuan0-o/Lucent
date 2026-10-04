@@ -37,13 +37,13 @@ class HarnessSupportTest {
         val previousHost = HarnessRuntime.host
         HarnessRuntime.host = object : HarnessHost {
             override val android: Boolean = false
-            override fun defaultWorkspace(): String = File(root, "workspace").apply { mkdirs() }.path
-            override fun filesDir(): String = File(root, "files").apply { mkdirs() }.path
-            override fun cacheDir(): String = File(root, "cache").apply { mkdirs() }.path
+            override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
+            override fun filesDir(): File = File(root, "files").apply { mkdirs() }
+            override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
         }
         try {
             val folder = SubAgentReports.folder()
-            assertTrue(Workspace.isInside(folder, File(HarnessRuntime.workspace())), folder.path)
+            assertTrue(Workspace.isInside(folder, HarnessRuntime.workspace()), folder.path)
         } finally {
             HarnessRuntime.host = previousHost
             root.deleteRecursively()

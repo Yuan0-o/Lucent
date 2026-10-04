@@ -326,11 +326,11 @@ object TerminalTools : HarnessGroupTools {
 
     private fun workdirOf(ctx: HarnessCtx, args: JSONObject): File {
         val raw = args.optString("workdir", "")
-        if (raw.isBlank()) return File(HarnessRuntime.workspace())
+        if (raw.isBlank()) return HarnessRuntime.workspace()
         val dir = try {
             Workspace.resolve(ctx, raw)
         } catch (e: HarnessError) {
-            File(HarnessRuntime.workspace())
+            HarnessRuntime.workspace()
         }
         if (!dir.exists()) dir.mkdirs()
         return dir
@@ -434,7 +434,7 @@ object TerminalTools : HarnessGroupTools {
         val shell = HarnessRuntime.shell
         val sb = StringBuilder()
         sb.append("Platform: ${if (ctx.android) "Android" else System.getProperty("os.name") + " " + System.getProperty("os.version")}\n")
-        sb.append("Workspace: ${HarnessRuntime.workspace()}\n")
+        sb.append("Workspace: ${HarnessRuntime.workspace().path}\n")
         sb.append("Shell backend: ${shell?.id ?: "none"} — ${shell?.describe() ?: "not installed"}\n")
         sb.append("Plugin host: ${HarnessRuntime.pluginHost?.id ?: "none"} — ${HarnessRuntime.pluginHost?.describe() ?: "not installed"}\n")
         val plugins = ctx.config.installedPlugins()

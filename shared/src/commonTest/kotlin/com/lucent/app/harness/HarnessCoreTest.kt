@@ -10,9 +10,9 @@ import kotlin.test.assertTrue
 
 private class TestHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): String = File(root, "workspace").apply { mkdirs() }.path
-    override fun filesDir(): String = File(root, "files").apply { mkdirs() }.path
-    override fun cacheDir(): String = File(root, "cache").apply { mkdirs() }.path
+    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
+    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
+    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
 }
 
 private fun withSandbox(config: HarnessConfig = HarnessConfig(enabled = true), block: (File) -> Unit) {
@@ -23,7 +23,7 @@ private fun withSandbox(config: HarnessConfig = HarnessConfig(enabled = true), b
     HarnessRuntime.android = false
     HarnessRuntime.update(config.copy(enabled = true))
     try {
-        File(HarnessRuntime.workspace()).mkdirs()
+        HarnessRuntime.workspace().mkdirs()
         block(root)
     } finally {
         HarnessRuntime.host = previousHost
@@ -37,13 +37,13 @@ class HarnessWorkspaceTest {
     @Test
     fun relativePathsLandInsideTheWorkspace() = withSandbox { _ ->
         val resolved = Workspace.resolve("notes/today.txt")
-        assertTrue(Workspace.isInside(resolved, File(HarnessRuntime.workspace())), resolved.path)
+        assertTrue(Workspace.isInside(resolved, HarnessRuntime.workspace()), resolved.path)
     }
 
     @Test
     fun tildeIsRelativeToTheWorkspace() = withSandbox { _ ->
         val resolved = Workspace.resolve("~/draft.md")
-        assertTrue(Workspace.isInside(resolved, File(HarnessRuntime.workspace())))
+        assertTrue(Workspace.isInside(resolved, HarnessRuntime.workspace()))
         assertEquals("draft.md", resolved.name)
     }
 

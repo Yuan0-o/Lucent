@@ -3,7 +3,6 @@ package com.lucent.app.harness.plugins
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.Workspace
 import com.lucent.app.i18n.S
-import java.io.File
 import kotlin.math.max
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -43,10 +42,10 @@ object PluginSetup {
         val runtimeMode = config.runtimeMode
         val builtinState = host?.builtinRuntimeState() ?: "unavailable"
         val capabilities = HarnessRuntime.capabilities()
-        val dir = File(HarnessRuntime.workspace())
+        val dir = HarnessRuntime.workspace()
         val workspaceShared = PluginPreflight.sharedStorage(dir)
         val largestDownload = PluginCatalog.effective().maxOfOrNull { it.bytes } ?: 0L
-        val diskSpaceBytes = File(HarnessRuntime.downloadsDir()).usableSpace
+        val diskSpaceBytes = HarnessRuntime.downloadsDir().usableSpace
         var diskSpaceNeeded = largestDownload * 2L
         if (android) {
             diskSpaceNeeded = max(diskSpaceNeeded, BUILTIN_ENV_DISK_BYTES)

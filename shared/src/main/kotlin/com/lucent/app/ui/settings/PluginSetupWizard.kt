@@ -165,7 +165,7 @@ internal fun PluginSetupWizard(onBack: () -> Unit) {
 
     if (pickingWorkspace) {
         DirectoryPickerDialog(
-            initialPath = HarnessRuntime.workspace(),
+            initialPath = HarnessRuntime.workspace().path,
             onDismiss = { pickingWorkspace = false },
             onOpen = { picked ->
                 pickingWorkspace = false
