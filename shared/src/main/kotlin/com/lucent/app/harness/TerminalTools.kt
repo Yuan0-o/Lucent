@@ -434,7 +434,7 @@ object TerminalTools : HarnessGroupTools {
         val shell = HarnessRuntime.shell
         val sb = StringBuilder()
         sb.append("Platform: ${if (ctx.android) "Android" else System.getProperty("os.name") + " " + System.getProperty("os.version")}\n")
-        sb.append("Workspace: ${HarnessRuntime.workspace().path}\n")
+        sb.append("Workspace: ${HarnessRuntime.workspacePath()}\n")
         sb.append("Shell backend: ${shell?.id ?: "none"} — ${shell?.describe() ?: "not installed"}\n")
         sb.append("Plugin host: ${HarnessRuntime.pluginHost?.id ?: "none"} — ${HarnessRuntime.pluginHost?.describe() ?: "not installed"}\n")
         val plugins = ctx.config.installedPlugins()
