@@ -1,10 +1,9 @@
 package com.lucent.app.harness
 
-import com.lucent.app.AppScope
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
 import com.lucent.app.harness.terminal.PtyBackend
-import java.io.File
+
 
 data class ShellOutcome(
     val ok: Boolean,
@@ -32,7 +31,7 @@ interface HarnessShell {
     fun describe(): String
     suspend fun run(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String>,
         onOutput: ((String) -> Unit)? = null
@@ -70,9 +69,9 @@ data class PluginOutcome(
 
 interface HarnessHost {
     val android: Boolean
-    fun defaultWorkspace(): File
-    fun filesDir(): File
-    fun cacheDir(): File
+    fun defaultWorkspace(): String
+    fun filesDir(): String
+    fun cacheDir(): String
     suspend fun probeShell(): ShellOutcome = ShellOutcome(true, "", "", 0)
     fun capabilities(): Set<String> = emptySet()
     fun openUrl(url: String): Boolean = false
@@ -108,11 +107,7 @@ interface HarnessHost {
     suspend fun pdfMerge(inputs: List<String>, out: String): Boolean = false
     suspend fun pdfSplit(input: String, out: String, pages: String): Boolean = false
     fun workspaceCandidates(): List<String> = emptyList()
-    fun pluginRoot(): File = File(filesDir(), "plugins")
-    fun defaultWorkspacePath(): String = defaultWorkspace().path
-    fun filesDirPath(): String = filesDir().path
-    fun cacheDirPath(): String = cacheDir().path
-    fun pluginRootPath(): String = pluginRoot().path
+    fun pluginRoot(): String = systemHarnessFs().join(filesDir(), "plugins")
     fun permissionNote(): String = ""
     fun builtinRuntimeState(): String = "unavailable"
     suspend fun extractBuiltinRuntime(onProgress: (String) -> Unit): ShellOutcome =
@@ -147,14 +142,14 @@ object HarnessRuntime {
     const val CAP_DEVICE = "device"
     const val CAP_PARENT = "parent"
 
-    @Volatile var android: Boolean = false
-    @Volatile var host: HarnessHost? = null
-    @Volatile var shell: HarnessShell? = null
-    @Volatile var pluginHost: PluginHost? = null
-    @Volatile var terminalBackend: PtyBackend? = null
-    @Volatile var llm: SubAgentLlm? = null
-    @Volatile var conversationId: Long = 0L
-    @Volatile var noteSink: ((String) -> Unit)? = null
+    @HarnessVolatile var android: Boolean = false
+    @HarnessVolatile var host: HarnessHost? = null
+    @HarnessVolatile var shell: HarnessShell? = null
+    @HarnessVolatile var pluginHost: PluginHost? = null
+    @HarnessVolatile var terminalBackend: PtyBackend? = null
+    @HarnessVolatile var llm: SubAgentLlm? = null
+    @HarnessVolatile var conversationId: Long = 0L
+    @HarnessVolatile var noteSink: ((String) -> Unit)? = null
 
     fun note(text: String) {
         if (text.isBlank()) return
@@ -164,7 +159,7 @@ object HarnessRuntime {
         }
     }
 
-    @Volatile private var current: HarnessConfig = HarnessConfig.DEFAULT
+    @HarnessVolatile private var current: HarnessConfig = HarnessConfig.DEFAULT
 
     private val listeners = mutableListOf<(HarnessConfig) -> Unit>()
     private val lock = Any()
@@ -177,16 +172,16 @@ object HarnessRuntime {
 
     fun update(config: HarnessConfig) {
         current = config
-        val snapshot = synchronized(lock) { listeners.toList() }
+        val snapshot = withHarnessLock(lock) { listeners.toList() }
         snapshot.forEach { it(config) }
     }
 
     fun observe(listener: (HarnessConfig) -> Unit) {
-        synchronized(lock) { listeners.add(listener) }
+        withHarnessLock(lock) { listeners.add(listener) }
     }
 
     fun unobserve(listener: (HarnessConfig) -> Unit) {
-        synchronized(lock) { listeners.remove(listener) }
+        withHarnessLock(lock) { listeners.remove(listener) }
     }
 
     fun capabilities(): Set<String> {
@@ -217,19 +212,19 @@ object HarnessRuntime {
 
     fun runShell(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String> = emptyMap()
     ): ShellOutcome {
         val sh = shell ?: return ShellOutcome(false, "", "No shell backend is available", -1, false)
         if (!sh.isReady()) return ShellOutcome(false, "", sh.describe(), -1, false)
         if (!current.shellEnabled) return ShellOutcome(false, "", SHELL_SWITCHED_OFF, -1, false)
-        return kotlinx.coroutines.runBlocking { sh.run(command, workdir, timeoutSeconds, env) }
+        return harnessRunBlocking { sh.run(command, workdir, timeoutSeconds, env) }
     }
 
     suspend fun runShellAsync(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String> = emptyMap(),
         onOutput: ((String) -> Unit)? = null
@@ -240,75 +235,52 @@ object HarnessRuntime {
         return sh.run(command, workdir, timeoutSeconds, env, onOutput)
     }
 
-    fun downloadsDir(): File {
-        val dir = File(workspace(), ".lucent/downloads")
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
+    fun background(): kotlinx.coroutines.CoroutineScope = harnessBackgroundScope()
 
-    fun workspace(): File {
+    fun workspace(): String {
         val configured = current.workspace.trim()
-        val base = if (configured.isNotEmpty()) File(configured) else defaultWorkspace()
-        if (!base.exists()) base.mkdirs()
-        return base
-    }
-
-    fun defaultWorkspace(): File = host?.defaultWorkspace() ?: File(System.getProperty("user.home"), "Lucent")
-
-    fun filesDir(): File = host?.filesDir() ?: File(System.getProperty("user.home"), ".lucent")
-
-    fun cacheDir(): File = host?.cacheDir() ?: File(System.getProperty("java.io.tmpdir"), "lucent")
-
-    fun home(): File = File(filesDir(), "harness").apply { mkdirs() }
-
-    fun subDir(name: String): File = File(home(), name).apply { mkdirs() }
-
-    fun background(): kotlinx.coroutines.CoroutineScope = AppScope.io
-
-    fun workspacePath(): String {
-        val configured = current.workspace.trim()
-        val path = if (configured.isNotEmpty()) configured else defaultWorkspacePath()
-        val dir = File(path)
-        if (!dir.exists()) dir.mkdirs()
+        val path = if (configured.isNotEmpty()) configured else defaultWorkspace()
+        val fs = systemHarnessFs()
+        if (!fs.exists(path)) fs.mkdirs(path)
         return path
     }
 
-    fun subDirPath(name: String): String {
-        val path = homePath() + File.separator + name
-        val dir = File(path)
-        if (!dir.exists()) dir.mkdirs()
+    fun subDir(name: String): String {
+        val fs = systemHarnessFs()
+        val path = home() + fs.separator + name
+        if (!fs.exists(path)) fs.mkdirs(path)
         return path
     }
 
-    fun downloadsDirPath(): String {
-        val path = workspacePath() + File.separator + ".lucent" + File.separator + "downloads"
-        val dir = File(path)
-        if (!dir.exists()) dir.mkdirs()
+    fun downloadsDir(): String {
+        val fs = systemHarnessFs()
+        val path = workspace() + fs.separator + ".lucent" + fs.separator + "downloads"
+        if (!fs.exists(path)) fs.mkdirs(path)
         return path
     }
 
-    fun defaultWorkspacePath(): String {
+    fun defaultWorkspace(): String {
         val h = host
-        if (h != null) return h.defaultWorkspacePath()
-        return System.getProperty("user.home") + File.separator + "Lucent"
+        if (h != null) return h.defaultWorkspace()
+        return harnessUserHome() + systemHarnessFs().separator + "Lucent"
     }
 
-    fun filesDirPath(): String {
+    fun filesDir(): String {
         val h = host
-        if (h != null) return h.filesDirPath()
-        return System.getProperty("user.home") + File.separator + ".lucent"
+        if (h != null) return h.filesDir()
+        return harnessUserHome() + systemHarnessFs().separator + ".lucent"
     }
 
-    fun cacheDirPath(): String {
+    fun cacheDir(): String {
         val h = host
-        if (h != null) return h.cacheDirPath()
-        return System.getProperty("java.io.tmpdir") + File.separator + "lucent"
+        if (h != null) return h.cacheDir()
+        return harnessTempDir() + systemHarnessFs().separator + "lucent"
     }
 
-    fun homePath(): String {
-        val path = filesDirPath() + File.separator + "harness"
-        val dir = File(path)
-        if (!dir.exists()) dir.mkdirs()
+    fun home(): String {
+        val fs = systemHarnessFs()
+        val path = filesDir() + fs.separator + "harness"
+        if (!fs.exists(path)) fs.mkdirs(path)
         return path
     }
 }

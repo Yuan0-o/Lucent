@@ -16,9 +16,9 @@ import kotlin.test.assertTrue
 
 private class PipelineHost(private val root: File) : HarnessHost {
     override val android: Boolean = false
-    override fun defaultWorkspace(): File = File(root, "workspace").apply { mkdirs() }
-    override fun filesDir(): File = File(root, "files").apply { mkdirs() }
-    override fun cacheDir(): File = File(root, "cache").apply { mkdirs() }
+    override fun defaultWorkspace(): String = File(root, "workspace").apply { mkdirs() }.path
+    override fun filesDir(): String = File(root, "files").apply { mkdirs() }.path
+    override fun cacheDir(): String = File(root, "cache").apply { mkdirs() }.path
 }
 
 private class ScriptedShell(private val respond: (String) -> ShellOutcome) : HarnessShell {
@@ -28,7 +28,7 @@ private class ScriptedShell(private val respond: (String) -> ShellOutcome) : Har
     val seen = mutableListOf<String>()
     override suspend fun run(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String>,
         onOutput: ((String) -> Unit)?
@@ -168,7 +168,7 @@ class PluginPipelineTest {
             val staged = File(outcome.installedPath)
             assertTrue(staged.isFile, "the payload must survive for a later install")
             assertEquals(bytes.size.toLong(), staged.length())
-            assertTrue(staged.path.startsWith(HarnessRuntime.workspace().path), staged.path)
+            assertTrue(staged.path.startsWith(HarnessRuntime.workspace()), staged.path)
         } finally {
             server.stop(0)
         }

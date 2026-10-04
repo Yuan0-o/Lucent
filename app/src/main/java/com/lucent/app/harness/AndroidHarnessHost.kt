@@ -46,20 +46,20 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     override suspend fun probeShell(): ShellOutcome {
         val builtin = BuiltinShell.builtinAvailable(context)
         if (builtin) {
-            return BuiltinShell.run(context, "echo probe", HarnessRuntime.workspace(), 10000L)
+            return BuiltinShell.run(context, "echo probe", File(HarnessRuntime.workspace()), 10000L)
         }
         return ShellOutcome(false, "", "built-in runtime is not bundled in this build", -1)
     }
 
-    override fun filesDir(): File = context.filesDir
+    override fun filesDir(): String = context.filesDir.path
 
-    override fun cacheDir(): File = context.cacheDir
+    override fun cacheDir(): String = context.cacheDir.path
 
-    override fun defaultWorkspace(): File {
+    override fun defaultWorkspace(): String {
         val documents = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
         val base = if (documents != null && (documents.isDirectory || documents.mkdirs())) documents
         else context.getExternalFilesDir(null) ?: context.filesDir
-        return File(base, "Lucent").apply { if (!exists()) mkdirs() }
+        return File(base, "Lucent").apply { if (!exists()) mkdirs() }.path
     }
 
     override fun workspaceCandidates(): List<String> {

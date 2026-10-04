@@ -36,12 +36,12 @@ class AndroidHarnessShell(private val context: Context) : HarnessShell {
 
     override suspend fun run(
         command: String,
-        workdir: File?,
+        workdir: String?,
         timeoutSeconds: Int,
         env: Map<String, String>,
         onOutput: ((String) -> Unit)?
     ): ShellOutcome {
-        val dir = workdir ?: HarnessRuntime.workspace()
+        val dir = File(workdir ?: HarnessRuntime.workspace())
         if (privilegedReady() && env[HarnessRuntime.ENV_BUILTIN_ONLY] != "1") {
             val prefix = buildString {
                 append("cd '").append(dir.path.replace("'", "'\\''")).append("' 2>/dev/null; ")

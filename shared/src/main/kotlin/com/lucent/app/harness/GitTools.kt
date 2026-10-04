@@ -409,7 +409,7 @@ object GitTools : HarnessGroupTools {
         }
         val command = "git -C ${quote(directory.path)} $arguments"
         val outcome = try {
-            HarnessRuntime.runShell(command, directory, timeoutSeconds, HarnessRuntime.builtinOnlyEnv())
+            HarnessRuntime.runShell(command, directory.path, timeoutSeconds, HarnessRuntime.builtinOnlyEnv())
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (t: Throwable) {
@@ -428,7 +428,7 @@ object GitTools : HarnessGroupTools {
 
     private fun repository(ctx: HarnessCtx, repo: String, arguments: String): File {
         val clean = repo.trim()
-        if (clean.isEmpty()) return HarnessRuntime.workspace()
+        if (clean.isEmpty()) return File(HarnessRuntime.workspace())
         return if (readOnlyArguments(arguments)) Workspace.forRead(ctx, clean) else Workspace.forWrite(ctx, clean)
     }
 
@@ -732,7 +732,7 @@ object GitTools : HarnessGroupTools {
     private suspend fun initRepo(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val raw = repoOf(args)
         val directory = try {
-            if (raw.isEmpty()) HarnessRuntime.workspace() else Workspace.forWrite(ctx, raw)
+            if (raw.isEmpty()) File(HarnessRuntime.workspace()) else Workspace.forWrite(ctx, raw)
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That directory is outside the workspace.", success = false)
         }

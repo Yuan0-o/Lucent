@@ -10,10 +10,10 @@ internal object HarnessBackup {
 
     @Volatile private var activeHome: File? = null
 
-    fun home(): File = activeHome ?: HarnessRuntime.home()
+    fun home(): File = activeHome ?: File(HarnessRuntime.home())
 
     fun begin(): File {
-        val dir = HarnessRuntime.home()
+        val dir = File(HarnessRuntime.home())
         activeHome = dir
         return dir
     }
