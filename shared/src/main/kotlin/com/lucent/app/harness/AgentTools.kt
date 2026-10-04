@@ -148,7 +148,7 @@ object SubAgents {
             HarnessGate.enabledTools(parent.android).joinToString(", ") { it.name }
         } else toolNames.joinToString(", ")
         return "You are a focused sub-agent working inside Lucent. Finish the single task you were given and then " +
-            "reply with your findings; nothing else. The workspace is ${HarnessRuntime.workspace().path}. " +
+            "reply with your findings; nothing else. The workspace is ${HarnessRuntime.workspacePath()}. " +
             "Tools you may call: $catalogue. Keep your final answer short and factual, and say plainly if you could " +
             "not do something."
     }
