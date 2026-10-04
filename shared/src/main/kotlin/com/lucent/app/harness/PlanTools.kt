@@ -214,7 +214,7 @@ object MemoryTools : HarnessGroupTools {
     }
 
     private fun fileFor(ctx: HarnessCtx, scope: String): File {
-        val dir = HarnessRuntime.subDir("memory")
+        val dir = HarnessRuntime.subDirPath("memory")
         return when (scope.lowercase()) {
             "user" -> File(dir, "user.json")
             "project" -> File(dir, "project-" + HarnessRuntime.workspace().name.lowercase().replace(Regex("[^a-z0-9]+"), "-") + ".json")
