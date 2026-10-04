@@ -183,7 +183,7 @@ object DeviceTools : HarnessGroupTools {
 
     private fun export(ctx: HarnessCtx, host: HarnessHost, args: JSONObject): ToolExecResult {
         val file = try {
-            Workspace.forRead(ctx, args.optString("path", ""))
+            Workspace.forReadFile(ctx, args.optString("path", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That path cannot be read", success = false)
         }

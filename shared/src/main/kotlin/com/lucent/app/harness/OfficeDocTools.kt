@@ -66,7 +66,7 @@ object OfficeDocTools : HarnessGroupTools {
     }
 
     private fun createDocument(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, stringOf(args, "path"))
+        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
@@ -80,7 +80,7 @@ object OfficeDocTools : HarnessGroupTools {
     }
 
     private fun readDocument(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, stringOf(args, "path"))
+        val file = Workspace.forReadFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
@@ -89,7 +89,7 @@ object OfficeDocTools : HarnessGroupTools {
     }
 
     private fun editDocument(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, stringOf(args, "path"))
+        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }

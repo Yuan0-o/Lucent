@@ -429,7 +429,7 @@ object GitTools : HarnessGroupTools {
     private fun repository(ctx: HarnessCtx, repo: String, arguments: String): File {
         val clean = repo.trim()
         if (clean.isEmpty()) return HarnessRuntime.workspace()
-        return if (readOnlyArguments(arguments)) Workspace.forRead(ctx, clean) else Workspace.forWrite(ctx, clean)
+        return if (readOnlyArguments(arguments)) Workspace.forReadFile(ctx, clean) else Workspace.forWriteFile(ctx, clean)
     }
 
     private fun repoOf(args: JSONObject): String = args.optString("repo", "").trim()
@@ -654,7 +654,7 @@ object GitTools : HarnessGroupTools {
         urlProblem(url)?.let { return ToolExecResult(it, success = false) }
         val raw = textOf(args, "directory")
         val directory = try {
-            if (raw.isEmpty()) "" else Workspace.forWrite(ctx, raw).path
+            if (raw.isEmpty()) "" else Workspace.forWriteFile(ctx, raw).path
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That directory is outside the workspace.", success = false)
         }
@@ -732,7 +732,7 @@ object GitTools : HarnessGroupTools {
     private suspend fun initRepo(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val raw = repoOf(args)
         val directory = try {
-            if (raw.isEmpty()) HarnessRuntime.workspace() else Workspace.forWrite(ctx, raw)
+            if (raw.isEmpty()) HarnessRuntime.workspace() else Workspace.forWriteFile(ctx, raw)
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That directory is outside the workspace.", success = false)
         }

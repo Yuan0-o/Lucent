@@ -220,10 +220,10 @@ object BrowserTools : HarnessGroupTools {
         if (!valid(url)) return ToolExecResult("Give me an http or https url.", success = false)
         val target = if (args.optString("path", "").isBlank()) {
             val name = url.substringAfterLast('/').substringBefore('?').ifBlank { "download.bin" }
-            Workspace.forWrite(ctx, name)
+            Workspace.forWriteFile(ctx, name)
         } else {
             try {
-                Workspace.forWrite(ctx, args.optString("path", ""))
+                Workspace.forWriteFile(ctx, args.optString("path", ""))
             } catch (e: HarnessError) {
                 return ToolExecResult(e.message ?: "That path cannot be written", success = false)
             }

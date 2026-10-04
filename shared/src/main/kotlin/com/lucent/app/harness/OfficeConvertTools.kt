@@ -80,7 +80,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun convert(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val input = try {
-            Workspace.forRead(ctx, args.optString("path", ""))
+            Workspace.forReadFile(ctx, args.optString("path", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -90,7 +90,7 @@ object OfficeConvertTools : HarnessGroupTools {
             return ToolExecResult("Converting needs a shell: install the libreoffice plugin first.", success = false)
         }
         val outDir = if (args.optString("out", "").isBlank()) input.parentFile
-        else Workspace.forWrite(ctx, args.optString("out", "")).parentFile ?: input.parentFile
+        else Workspace.forWriteFile(ctx, args.optString("out", "")).parentFile ?: input.parentFile
         outDir.mkdirs()
         val outcome = sofficeCall(ctx, input, target, outDir)
         val produced = outDir.listFiles()?.firstOrNull {
@@ -104,7 +104,7 @@ object OfficeConvertTools : HarnessGroupTools {
         }
         val asked = args.optString("out", "")
         val finalFile = if (asked.isNotBlank()) {
-            val wanted = Workspace.forWrite(ctx, asked)
+            val wanted = Workspace.forWriteFile(ctx, asked)
             wanted.parentFile?.mkdirs()
             produced.copyTo(wanted, overwrite = true)
             wanted
@@ -117,7 +117,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private suspend fun render(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val input = try {
-            Workspace.forRead(ctx, args.optString("path", ""))
+            Workspace.forReadFile(ctx, args.optString("path", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -185,7 +185,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun doctor(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val file = try {
-            Workspace.forRead(ctx, args.optString("path", ""))
+            Workspace.forReadFile(ctx, args.optString("path", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -230,7 +230,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun documentText(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val file = try {
-            Workspace.forRead(ctx, args.optString("path", ""))
+            Workspace.forReadFile(ctx, args.optString("path", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }

@@ -1,7 +1,6 @@
 package com.lucent.app.harness
 
 import org.json.JSONObject
-import java.io.File
 
 data class SnapshotEntry(
     val id: String,
@@ -15,26 +14,28 @@ object Snapshots {
 
     private const val INDEX = "index.jsonl"
 
-    private fun dir(): File = HarnessRuntime.subDir("snapshots")
+    private val fs get() = systemHarnessFs()
 
-    private fun index(): File = File(dir(), INDEX)
+    private fun dir(): String = HarnessRuntime.subDirPath("snapshots")
 
-    fun capture(file: File) {
-        if (!file.exists() || file.isDirectory) return
+    private fun index(): String = fs.join(dir(), INDEX)
+
+    fun capture(path: String) {
+        if (!fs.exists(path) || fs.isDirectory(path)) return
         try {
-            val id = "${System.currentTimeMillis()}-${(1000..9999).random()}"
-            val store = File(dir(), id)
-            store.mkdirs()
-            val copy = File(store, file.name)
-            file.copyTo(copy, overwrite = true)
+            val id = "${harnessCurrentTimeMillis()}-${(1000..9999).random()}"
+            val store = fs.join(dir(), id)
+            fs.mkdirs(store)
+            val copy = fs.join(store, fs.nameOf(path))
+            fs.copy(path, copy, overwrite = true)
             val line = JSONObject().apply {
                 put("id", id)
-                put("at", System.currentTimeMillis())
-                put("path", file.canonicalPath)
-                put("store", copy.canonicalPath)
-                put("bytes", copy.length())
+                put("at", harnessCurrentTimeMillis())
+                put("path", fs.canonicalize(path))
+                put("store", fs.canonicalize(copy))
+                put("bytes", fs.length(copy))
             }.toString()
-            index().appendText(line + "\n")
+            fs.appendText(index(), line + "\n")
             prune()
         } catch (_: Throwable) {
         }
@@ -45,9 +46,9 @@ object Snapshots {
 
     fun all(): List<SnapshotEntry> {
         val target = index()
-        if (!target.exists()) return emptyList()
+        if (!fs.exists(target)) return emptyList()
         return try {
-            target.readLines().mapNotNull { line ->
+            fs.readLines(target).mapNotNull { line ->
                 if (line.isBlank()) null else {
                     val o = try { JSONObject(line) } catch (e: Exception) { return@mapNotNull null }
                     SnapshotEntry(
@@ -64,14 +65,15 @@ object Snapshots {
         }
     }
 
-    fun restore(id: String): File {
+    fun restore(id: String): String {
         val entry = all().firstOrNull { it.id == id } ?: throw HarnessError("No snapshot with id $id")
-        val copy = File(entry.store)
-        if (!copy.exists()) throw HarnessError("That snapshot is no longer on disk")
-        val target = File(entry.path)
+        val copy = entry.store
+        if (!fs.exists(copy)) throw HarnessError("That snapshot is no longer on disk")
+        val target = entry.path
         if (!Workspace.writable(HarnessRuntime.config(), target)) throw HarnessError("${entry.path} is outside the workspace", blocked = true)
-        target.parentFile?.mkdirs()
-        copy.copyTo(target, overwrite = true)
+        val parent = fs.parentOf(target)
+        if (parent != null) fs.mkdirs(parent)
+        fs.copy(copy, target, overwrite = true)
         return target
     }
 
@@ -81,8 +83,8 @@ object Snapshots {
 
     fun clear() {
         try {
-            dir().deleteRecursively()
-            dir().mkdirs()
+            fs.deleteRecursively(dir())
+            fs.mkdirs(dir())
         } catch (_: Throwable) {
         }
     }
@@ -93,29 +95,33 @@ object Snapshots {
         if (entries.size <= limit) return
         val doomed = entries.take(entries.size - limit)
         doomed.forEach { entry ->
-            try { File(entry.store).delete() } catch (_: Throwable) {
+            try { fs.delete(entry.store) } catch (_: Throwable) {
             }
         }
         val keep = entries.drop(entries.size - limit).map { it.id }.toSet()
         val kept = try {
-            index().readLines().filter { line ->
+            fs.readLines(index()).filter { line ->
                 val id = try { JSONObject(line).optString("id", "") } catch (e: Exception) { "" }
                 keep.contains(id)
             }
         } catch (e: Exception) {
             emptyList()
         }
-        try { index().writeText(kept.joinToString("\n") + "\n") } catch (_: Throwable) {
+        try { fs.writeText(index(), kept.joinToString("\n") + "\n") } catch (_: Throwable) {
         }
     }
 
-    fun capture(ctx: HarnessCtx, file: File) = capture(file)
+    fun capture(ctx: HarnessCtx, path: String) = capture(path)
+    fun capture(path: java.io.File) = capture(path.path)
+    fun capture(ctx: HarnessCtx, file: java.io.File) = capture(file.path)
+    fun restoreFile(id: String): java.io.File = java.io.File(restore(id))
+    fun restoreFile(ctx: HarnessCtx, id: String): java.io.File = java.io.File(restore(ctx, id))
 
     fun history(ctx: HarnessCtx, path: String, limit: Int = 20): List<SnapshotEntry> = history(path, limit)
 
     fun all(ctx: HarnessCtx): List<SnapshotEntry> = all()
 
-    fun restore(ctx: HarnessCtx, id: String): File = restore(id)
+    fun restore(ctx: HarnessCtx, id: String): String = restore(id)
 
     fun latest(ctx: HarnessCtx, path: String): SnapshotEntry? = latest(path)
 

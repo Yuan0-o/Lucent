@@ -92,7 +92,7 @@ object OfficeSheetTools : HarnessGroupTools {
     }
 
     private fun createSpreadsheet(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, stringOf(args, "path"))
+        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -106,7 +106,7 @@ object OfficeSheetTools : HarnessGroupTools {
     }
 
     private fun readSpreadsheet(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, stringOf(args, "path"))
+        val file = Workspace.forReadFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -116,7 +116,7 @@ object OfficeSheetTools : HarnessGroupTools {
     }
 
     private fun editSpreadsheet(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, stringOf(args, "path"))
+        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -132,16 +132,16 @@ object OfficeSheetTools : HarnessGroupTools {
     }
 
     private fun exportCsv(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val source = Workspace.forRead(ctx, stringOf(args, "path"))
+        val source = Workspace.forReadFile(ctx, stringOf(args, "path"))
         if (source.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, source)} is a directory, not an .xlsx file.", success = false)
         }
         val declared = stringOf(args, "out")
         val target = if (declared.isBlank()) {
             val sibling = File(source.parentFile ?: ctx.workspace, source.nameWithoutExtension + ".csv")
-            Workspace.forWrite(ctx, sibling.path)
+            Workspace.forWriteFile(ctx, sibling.path)
         } else {
-            Workspace.forWrite(ctx, declared)
+            Workspace.forWriteFile(ctx, declared)
         }
         val csv = Xlsx.csvOut(source, stringOf(args, "sheet"))
         Workspace.writeText(ctx, target, csv)
@@ -153,7 +153,7 @@ object OfficeSheetTools : HarnessGroupTools {
     }
 
     private fun importCsv(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, stringOf(args, "path"))
+        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -165,7 +165,7 @@ object OfficeSheetTools : HarnessGroupTools {
             if (declared.isBlank()) {
                 throw IllegalArgumentException("Give the CSV either as \"csv_text\" or as a file in \"csv_path\".")
             }
-            val source = Workspace.forRead(ctx, declared)
+            val source = Workspace.forReadFile(ctx, declared)
             if (source.isDirectory) throw IllegalArgumentException("${Workspace.display(ctx, source)} is a directory.")
             Workspace.readText(source, 4 * 1024 * 1024)
         }

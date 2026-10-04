@@ -328,7 +328,7 @@ object TerminalTools : HarnessGroupTools {
         val raw = args.optString("workdir", "")
         if (raw.isBlank()) return HarnessRuntime.workspace()
         val dir = try {
-            Workspace.resolve(ctx, raw)
+            Workspace.resolveFile(ctx, raw)
         } catch (e: HarnessError) {
             HarnessRuntime.workspace()
         }
