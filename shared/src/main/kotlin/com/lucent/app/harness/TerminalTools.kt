@@ -240,7 +240,7 @@ object TerminalTools : HarnessGroupTools {
         return try {
             val request = PtyStartRequest(workdir = workdir)
             val tab = TerminalSessions.manager.createSession(request, "助手")
-            com.lucent.app.AppNavigation.terminalOpen = true
+            com.lucent.app.TerminalState.terminalOpen = true
             ToolExecResult("Opened session ${tab.id}. State: ${tab.value.state}. Backend: ${TerminalSessions.manager.describe()}")
         } catch (e: Exception) {
             ToolExecResult("Failed to open session: ${e.message}", success = false)

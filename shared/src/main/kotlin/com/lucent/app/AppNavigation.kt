@@ -37,7 +37,9 @@ object AppNavigation {
     var terminalRequested by mutableStateOf(false)
         private set
 
-    var terminalOpen by mutableStateOf(false)
+    var terminalOpen: Boolean
+        get() = TerminalState.terminalOpen
+        set(value) { TerminalState.terminalOpen = value }
 
     var subAgentPageId by mutableStateOf<String?>(null)
     private val subAgentBackStack = mutableListOf<String>()
