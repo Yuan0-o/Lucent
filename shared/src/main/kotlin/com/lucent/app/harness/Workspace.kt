@@ -41,10 +41,10 @@ object Workspace {
         if (clean.isEmpty()) throw HarnessError("No path was given")
         if (blocked(clean)) throw HarnessError("$clean is off limits", blocked = true)
         val file = if (clean.startsWith("~")) {
-            File(HarnessRuntime.workspace(), clean.removePrefix("~").removePrefix("/"))
+            File(HarnessRuntime.workspacePath(), clean.removePrefix("~").removePrefix("/"))
         } else {
             val candidate = File(clean)
-            if (candidate.isAbsolute) candidate else File(HarnessRuntime.workspace(), clean)
+            if (candidate.isAbsolute) candidate else File(HarnessRuntime.workspacePath(), clean)
         }
         return file.canonicalFile
     }
