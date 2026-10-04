@@ -1576,7 +1576,7 @@ object ConnectorTools : HarnessGroupTools {
         val saveTo = args.optString("save_to", "").trim()
         if (saveTo.isNotEmpty()) {
             val file = try {
-                Workspace.forWrite(ctx, saveTo)
+                Workspace.forWriteFile(ctx, saveTo)
             } catch (e: HarnessError) {
                 return ToolExecResult(e.message ?: "That path cannot be written.", success = false)
             }

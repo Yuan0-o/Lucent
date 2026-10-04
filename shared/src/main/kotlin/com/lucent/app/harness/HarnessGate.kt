@@ -5,8 +5,8 @@ import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.StartupLog
 import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolExecResult
+import kotlin.concurrent.Volatile
 import org.json.JSONObject
-import java.io.File
 
 data class HarnessCtx(
     val context: PlatformContext,
@@ -14,9 +14,11 @@ data class HarnessCtx(
     val config: HarnessConfig,
     val capabilities: Set<String>,
     val android: Boolean,
-    val workspace: File,
+    val workspacePath: String,
     val subAgentId: String? = null
 ) {
+    val workspace: java.io.File get() = java.io.File(workspacePath)
+
     fun cap(name: String): Boolean = capabilities.contains(name)
 
     fun shellReady(): Boolean = cap(HarnessRuntime.CAP_SHELL)
@@ -111,7 +113,7 @@ object HarnessGate {
     private val escalations = LinkedHashSet<String>()
     private var escalationConversation = Long.MIN_VALUE
 
-    fun escalatedInThisConversation(name: String): Boolean = synchronized(escalations) {
+    fun escalatedInThisConversation(name: String): Boolean = withHarnessLock(escalations) {
         val conversation = HarnessRuntime.conversationId
         if (conversation != escalationConversation) {
             escalations.clear()
@@ -121,7 +123,7 @@ object HarnessGate {
     }
 
     fun clearEscalations() {
-        synchronized(escalations) { escalations.clear() }
+        withHarnessLock(escalations) { escalations.clear() }
     }
 
     fun escalationProblem(tool: HarnessTool, escalation: HarnessEscalation): String? = when {
@@ -136,11 +138,12 @@ object HarnessGate {
 
     fun widenedConfig(config: HarnessConfig, argsJson: String, escalation: HarnessEscalation): HarnessConfig {
         val args = try { JSONObject(argsJson) } catch (e: Exception) { JSONObject() }
+        val fs = systemHarnessFs()
         val roots = mutableListOf<String>()
         HarnessDescribe.files(args.toString()).forEach { raw ->
-            val file = runCatching { Workspace.resolve(raw) }.getOrNull() ?: return@forEach
-            val root = if (escalation.fullAccess) file.toPath().root?.toFile() ?: file else file.parentFile ?: file
-            if (!Workspace.blocked(root.path)) roots.add(root.path)
+            val p = runCatching { Workspace.resolveFile(raw) }.getOrNull() ?: return@forEach
+            val root = if (escalation.fullAccess) fs.rootOf(p) ?: p else fs.parentOf(p) ?: p
+            if (!Workspace.blocked(root)) roots.add(root)
         }
         val extra = roots.distinct()
         if (extra.isEmpty()) return config
@@ -213,7 +216,7 @@ object HarnessGate {
         }
         val args = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
         val escalation = HarnessEscalation.of(args)
-        val started = System.currentTimeMillis()
+        val started = harnessCurrentTimeMillis()
         if (escalation != null) {
             val problem = escalationProblem(tool, escalation)
             if (problem != null) {
@@ -232,21 +235,21 @@ object HarnessGate {
                 audit(tool, argumentsJson, started, "asked", "asked", "waiting for the user to allow ${tool.name}")
             )
         }
-        var ctx = HarnessCtx(context, db, config, capabilities, android, HarnessRuntime.workspace(), subAgentId)
+        var ctx = HarnessCtx(context, db, config, capabilities, android, HarnessRuntime.workspacePath(), subAgentId)
         var attempt = run(name, ctx, args)
         var escalated = false
         if (attempt.blocked && escalation != null && !escalatedInThisConversation(name)) {
             val wider = widenedConfig(config, argumentsJson, escalation)
             if (wider != config) {
                 escalated = true
-                synchronized(escalations) { escalations.add(name) }
+                withHarnessLock(escalations) { escalations.add(name) }
                 if (config.auditEnabled) {
                     AuditTrail.record(
                         context,
                         audit(
                             tool,
                             argumentsJson,
-                            System.currentTimeMillis(),
+                            harnessCurrentTimeMillis(),
                             "escalated",
                             "escalated",
                             "retrying ${tool.name} once with ${escalation.sandboxPermissions}: " +
@@ -259,7 +262,7 @@ object HarnessGate {
             }
         }
         val result = attempt.result
-        val elapsed = System.currentTimeMillis() - started
+        val elapsed = harnessCurrentTimeMillis() - started
         val summary = ctx.limit(result.summary)
         if (config.auditEnabled) {
             AuditTrail.record(

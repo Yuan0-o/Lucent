@@ -69,7 +69,7 @@ object OfficeDeckTools : HarnessGroupTools {
     }
 
     private fun create(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val out = Workspace.forWrite(ctx, args.optString("path", ""))
+        val out = Workspace.forWriteFile(ctx, args.optString("path", ""))
         val spec = deckSpec(args)
         if (spec.length() == 0) {
             return ToolExecResult(
@@ -120,7 +120,7 @@ object OfficeDeckTools : HarnessGroupTools {
     }
 
     private fun read(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         val maxChars = args.optInt("max_chars", 20000)
         val shown = Workspace.display(ctx, file)
         val text = Pptx.read(file, maxChars)
@@ -128,7 +128,7 @@ object OfficeDeckTools : HarnessGroupTools {
     }
 
     private fun edit(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, args.optString("path", ""))
+        val file = Workspace.forWriteFile(ctx, args.optString("path", ""))
         val ops = opsJson(args.opt("ops"))
         if (ops.isBlank()) return ToolExecResult("Give at least one operation in ops.", success = false)
         if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)

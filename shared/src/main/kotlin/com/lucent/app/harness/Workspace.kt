@@ -1,11 +1,10 @@
 package com.lucent.app.harness
 
-import java.io.File
-import java.nio.charset.StandardCharsets
-
 class HarnessError(message: String, val blocked: Boolean = false) : Exception(message)
 
 object Workspace {
+
+    private val fs: HarnessFs = systemHarnessFs()
 
     private const val TEXT_PROBE_BYTES = 4096
 
@@ -15,11 +14,11 @@ object Workspace {
 
     fun normalize(path: String): String = path.trim().replace('\\', '/').removeSuffix("/")
 
-    fun isInside(file: File, root: File): Boolean = try {
-        val target = file.canonicalPath
-        val base = root.canonicalPath
+    fun isInside(path: String, root: String): Boolean = try {
+        val target = fs.canonicalize(path)
+        val base = fs.canonicalize(root)
         if (target == base) return true
-        val prefix = if (base.endsWith(File.separator)) base else base + File.separator
+        val prefix = if (base.endsWith(fs.separator)) base else base + fs.separator
         target.startsWith(prefix)
     } catch (e: Exception) {
         false
@@ -36,138 +35,19 @@ object Workspace {
         return false
     }
 
-    fun resolve(raw: String): File {
+    fun resolve(raw: String): String {
         val clean = raw.trim()
         if (clean.isEmpty()) throw HarnessError("No path was given")
         if (blocked(clean)) throw HarnessError("$clean is off limits", blocked = true)
-        val file = if (clean.startsWith("~")) {
-            File(HarnessRuntime.workspacePath(), clean.removePrefix("~").removePrefix("/"))
-        } else {
-            val candidate = File(clean)
-            if (candidate.isAbsolute) candidate else File(HarnessRuntime.workspacePath(), clean)
-        }
-        return file.canonicalFile
-    }
-
-    fun resolve(ctx: HarnessCtx, raw: String): File = resolve(raw)
-
-    fun writable(config: HarnessConfig, file: File): Boolean {
-        val roots = mutableListOf(HarnessRuntime.workspace())
-        config.writeRoots.forEach { roots.add(File(it)) }
-        return roots.any { isInside(file, it) }
-    }
-
-    fun writable(ctx: HarnessCtx, file: File): Boolean = writable(ctx.config, file)
-
-    fun readable(config: HarnessConfig, file: File): Boolean {
-        val roots = mutableListOf(HarnessRuntime.workspace())
-        config.writeRoots.forEach { roots.add(File(it)) }
-        config.readOnlyRoots.forEach { roots.add(File(it)) }
-        return roots.any { isInside(file, it) }
-    }
-
-    fun readable(ctx: HarnessCtx, file: File): Boolean = readable(ctx.config, file)
-
-    fun forRead(ctx: HarnessCtx, raw: String): File {
-        val file = resolve(ctx, raw)
-        if (!file.exists()) throw HarnessError("${display(ctx, file)} does not exist")
-        if (!readable(ctx, file) && ctx.config.approvalFor(HarnessPermission.SENSITIVE) == Approval.DENY) {
-            throw HarnessError("${display(ctx, file)} is outside the workspace and reading outside is blocked", blocked = true)
-        }
-        return file
-    }
-
-    fun forWrite(ctx: HarnessCtx, raw: String): File {
-        val file = resolve(ctx, raw)
-        if (!writable(ctx, file)) {
-            throw HarnessError("${display(ctx, file)} is outside the workspace, so it cannot be written", blocked = true)
-        }
-        return file
-    }
-
-    fun display(file: File): String {
-        val root = HarnessRuntime.workspace()
-        return if (isInside(file, root)) {
-            val rel = root.toPath().relativize(file.toPath()).toString().replace('\\', '/')
-            if (rel.isEmpty()) "." else rel
-        } else file.path
-    }
-
-    fun display(ctx: HarnessCtx, file: File): String = display(file)
-
-    fun readBytes(file: File, maxBytes: Long = 32L * 1024 * 1024): ByteArray {
-        if (file.length() > maxBytes) throw HarnessError("${file.name} is larger than ${maxBytes / 1048576} MiB")
-        return file.readBytes()
-    }
-
-    fun readText(file: File, maxBytes: Int = 1024 * 1024): String {
-        if (file.isDirectory) throw HarnessError("${file.name} is a directory")
-        if (file.length() > maxBytes) {
-            val head = ByteArray(maxBytes)
-            file.inputStream().use { it.read(head) }
-            return String(head, StandardCharsets.UTF_8) + "\n… file truncated at ${maxBytes / 1024} KiB"
-        }
-        val bytes = file.readBytes()
-        return if (looksBinary(bytes)) throw HarnessError("${file.name} looks like a binary file") else String(bytes, StandardCharsets.UTF_8)
-    }
-
-    fun looksBinary(bytes: ByteArray): Boolean {
-        val probe = bytes.take(TEXT_PROBE_BYTES)
-        if (probe.isEmpty()) return false
-        var weird = 0
-        probe.forEach { b ->
-            val value = b.toInt() and 0xFF
-            if (value == 0) return true
-            if (value < 9 || (value in 14..31)) weird++
-        }
-        return weird > probe.size / 20
-    }
-
-    fun writeText(ctx: HarnessCtx, file: File, text: String) {
-        if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
-        file.parentFile?.mkdirs()
-        file.writeText(text)
-    }
-
-    fun countLines(file: File): Int = try {
-        file.readLines().size
-    } catch (e: Exception) {
-        0
-    }
-
-    fun humanSize(bytes: Long): String = when {
-        bytes >= 1073741824 -> String.format("%.2f GiB", bytes / 1073741824.0)
-        bytes >= 1048576 -> String.format("%.2f MiB", bytes / 1048576.0)
-        bytes >= 1024 -> String.format("%.1f KiB", bytes / 1024.0)
-        else -> "$bytes B"
-    }
-
-    private val fs: HarnessFs
-        get() = systemHarnessFs()
-
-    fun isInside(path: String, root: String): Boolean = try {
-        val target = fs.canonicalize(path)
-        val base = fs.canonicalize(root)
-        if (target == base) return true
-        val prefix = if (base.endsWith(fs.separator)) base else base + fs.separator
-        target.startsWith(prefix)
-    } catch (e: Exception) {
-        false
-    }
-
-    fun resolvePath(raw: String): String {
-        val clean = raw.trim()
-        if (clean.isEmpty()) throw HarnessError("No path was given")
-        if (blocked(clean)) throw HarnessError("$clean is off limits", blocked = true)
-        val path = if (clean.startsWith("~")) {
+        val resolved = if (clean.startsWith("~")) {
             fs.join(HarnessRuntime.workspacePath(), clean.removePrefix("~").removePrefix("/"))
         } else {
             if (fs.isAbsolute(clean)) clean else fs.join(HarnessRuntime.workspacePath(), clean)
         }
-        return fs.canonicalize(path)
+        return fs.canonicalize(resolved)
     }
 
-    fun resolvePath(ctx: HarnessCtx, raw: String): String = resolvePath(raw)
+    fun resolve(ctx: HarnessCtx, raw: String): String = resolve(raw)
 
     fun writable(config: HarnessConfig, path: String): Boolean {
         val roots = mutableListOf(HarnessRuntime.workspacePath())
@@ -186,32 +66,32 @@ object Workspace {
 
     fun readable(ctx: HarnessCtx, path: String): Boolean = readable(ctx.config, path)
 
-    fun forReadPath(ctx: HarnessCtx, raw: String): String {
-        val path = resolvePath(ctx, raw)
-        if (!fs.exists(path)) throw HarnessError("${displayPath(ctx, path)} does not exist")
+    fun forRead(ctx: HarnessCtx, raw: String): String {
+        val path = resolve(ctx, raw)
+        if (!fs.exists(path)) throw HarnessError("${display(path)} does not exist")
         if (!readable(ctx, path) && ctx.config.approvalFor(HarnessPermission.SENSITIVE) == Approval.DENY) {
-            throw HarnessError("${displayPath(ctx, path)} is outside the workspace and reading outside is blocked", blocked = true)
+            throw HarnessError("${display(path)} is outside the workspace and reading outside is blocked", blocked = true)
         }
         return path
     }
 
-    fun forWritePath(ctx: HarnessCtx, raw: String): String {
-        val path = resolvePath(ctx, raw)
+    fun forWrite(ctx: HarnessCtx, raw: String): String {
+        val path = resolve(ctx, raw)
         if (!writable(ctx, path)) {
-            throw HarnessError("${displayPath(ctx, path)} is outside the workspace, so it cannot be written", blocked = true)
+            throw HarnessError("${display(path)} is outside the workspace, so it cannot be written", blocked = true)
         }
         return path
     }
 
-    fun displayPath(path: String): String {
+    fun display(path: String): String {
         val root = HarnessRuntime.workspacePath()
         return if (isInside(path, root)) {
-            val rel = fs.relativize(root, path)
+            val rel = fs.relativize(root, path).replace('\\', '/')
             if (rel.isEmpty()) "." else rel
         } else path
     }
 
-    fun displayPath(ctx: HarnessCtx, path: String): String = displayPath(path)
+    fun display(ctx: HarnessCtx, path: String): String = display(path)
 
     fun readBytes(path: String, maxBytes: Long = 32L * 1024 * 1024): ByteArray {
         if (fs.length(path) > maxBytes) throw HarnessError("${fs.nameOf(path)} is larger than ${maxBytes / 1048576} MiB")
@@ -228,9 +108,22 @@ object Workspace {
         return if (looksBinary(bytes)) throw HarnessError("${fs.nameOf(path)} looks like a binary file") else bytes.decodeToString()
     }
 
+    fun looksBinary(bytes: ByteArray): Boolean {
+        val probe = bytes.take(TEXT_PROBE_BYTES)
+        if (probe.isEmpty()) return false
+        var weird = 0
+        probe.forEach { b ->
+            val value = b.toInt() and 0xFF
+            if (value == 0) return true
+            if (value < 9 || (value in 14..31)) weird++
+        }
+        return weird > probe.size / 20
+    }
+
     fun writeText(ctx: HarnessCtx, path: String, text: String) {
-        if (ctx.config.snapshots && fs.exists(path)) Snapshots.capture(ctx, File(path))
-        fs.parentOf(path)?.let { fs.mkdirs(it) }
+        if (ctx.config.snapshots && fs.exists(path)) Snapshots.capture(ctx, path)
+        val parent = fs.parentOf(path)
+        if (parent != null) fs.mkdirs(parent)
         fs.writeText(path, text)
     }
 
@@ -239,4 +132,34 @@ object Workspace {
     } catch (e: Exception) {
         0
     }
+
+    fun humanSize(bytes: Long): String = when {
+        bytes >= 1073741824 -> formatDecimal(bytes / 1073741824.0, 2) + " GiB"
+        bytes >= 1048576 -> formatDecimal(bytes / 1048576.0, 2) + " MiB"
+        bytes >= 1024 -> formatDecimal(bytes / 1024.0, 1) + " KiB"
+        else -> "$bytes B"
+    }
+
+    private fun formatDecimal(value: Double, decimals: Int): String {
+        val factor = when (decimals) { 1 -> 10.0; else -> 100.0 }
+        val rounded = kotlin.math.round(value * factor).toLong()
+        val intPart = rounded / factor.toLong()
+        val fracPart = kotlin.math.abs(rounded % factor.toLong()).toString().padStart(decimals, '0')
+        return "$intPart.$fracPart"
+    }
+
+    fun resolveFile(raw: String): java.io.File = java.io.File(resolve(raw))
+    fun forReadFile(ctx: HarnessCtx, raw: String): java.io.File = java.io.File(forRead(ctx, raw))
+    fun forWriteFile(ctx: HarnessCtx, raw: String): java.io.File = java.io.File(forWrite(ctx, raw))
+    fun isInside(file: java.io.File, root: java.io.File): Boolean = isInside(file.path, root.path)
+    fun writable(config: HarnessConfig, file: java.io.File): Boolean = writable(config, file.path)
+    fun writable(ctx: HarnessCtx, file: java.io.File): Boolean = writable(ctx.config, file.path)
+    fun readable(config: HarnessConfig, file: java.io.File): Boolean = readable(config, file.path)
+    fun readable(ctx: HarnessCtx, file: java.io.File): Boolean = readable(ctx.config, file.path)
+    fun display(file: java.io.File): String = display(file.path)
+    fun display(ctx: HarnessCtx, file: java.io.File): String = display(file.path)
+    fun readBytes(file: java.io.File, maxBytes: Long = 32L * 1024 * 1024): ByteArray = readBytes(file.path, maxBytes)
+    fun readText(file: java.io.File, maxBytes: Int = 1024 * 1024): String = readText(file.path, maxBytes)
+    fun writeText(ctx: HarnessCtx, file: java.io.File, text: String) = writeText(ctx, file.path, text)
+    fun countLines(file: java.io.File): Int = countLines(file.path)
 }

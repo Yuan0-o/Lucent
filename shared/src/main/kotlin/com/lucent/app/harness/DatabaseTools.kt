@@ -147,7 +147,7 @@ object DatabaseTools : HarnessGroupTools {
 
     private fun database(ctx: HarnessCtx, args: JSONObject): File? =
         try {
-            Workspace.forWrite(ctx, args.optString("path", ""))
+            Workspace.forWriteFile(ctx, args.optString("path", ""))
         } catch (e: HarnessError) {
             null
         }
@@ -209,7 +209,7 @@ object DatabaseTools : HarnessGroupTools {
             args.optString("csv_text", "").isNotBlank() -> args.optString("csv_text", "")
             args.optString("csv_path", "").isNotBlank() -> {
                 val source = try {
-                    Workspace.forRead(ctx, args.optString("csv_path", ""))
+                    Workspace.forReadFile(ctx, args.optString("csv_path", ""))
                 } catch (e: HarnessError) {
                     return ToolExecResult(e.message ?: "That CSV cannot be read", success = false)
                 }
@@ -276,7 +276,7 @@ object DatabaseTools : HarnessGroupTools {
         val csvText = when {
             args.optString("csv_text", "").isNotBlank() -> args.optString("csv_text", "")
             args.optString("path", "").isNotBlank() -> try {
-                Workspace.readText(Workspace.forRead(ctx, args.optString("path", "")))
+                Workspace.readText(Workspace.forReadFile(ctx, args.optString("path", "")))
             } catch (e: HarnessError) {
                 return ToolExecResult(e.message ?: "That file cannot be read", success = false)
             }

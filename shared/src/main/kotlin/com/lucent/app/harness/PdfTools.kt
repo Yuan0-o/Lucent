@@ -1484,19 +1484,19 @@ object PdfTools : HarnessGroupTools {
     }
 
     private fun readPdf(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         val pages = args.optString("pages", "")
         val maxChars = args.optInt("max_chars", 40000)
         return pdfResult(PdfBook.text(file, pages, maxChars))
     }
 
     private fun info(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         return pdfResult(PdfBook.info(file))
     }
 
     private fun search(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         val query = args.optString("query", "")
         val maxHits = args.optInt("max_hits", 40)
         return pdfResult(PdfBook.search(file, query, maxHits))
@@ -1506,7 +1506,7 @@ object PdfTools : HarnessGroupTools {
         if (text.startsWith(PDF_PROBLEM)) ToolExecResult(text, success = false) else ToolExecResult(text)
 
     private suspend fun renderPage(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         val page = args.optInt("page", 1).coerceAtLeast(1)
         val width = args.optInt("width", 1400).coerceIn(120, 4000)
         val host = HarnessRuntime.host
@@ -1533,7 +1533,7 @@ object PdfTools : HarnessGroupTools {
     }
 
     private suspend fun toImages(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         val width = args.optInt("width", 1200).coerceIn(120, 4000)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("No platform renderer is available, so pages cannot be drawn.", success = false)
@@ -1576,8 +1576,8 @@ object PdfTools : HarnessGroupTools {
     private suspend fun merge(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
         val paths = pdfPathList(args, "paths")
         if (paths.size < 2) return ToolExecResult("Give at least two PDFs to merge.", success = false)
-        val inputs = paths.map { Workspace.forRead(ctx, it) }
-        val out = Workspace.forWrite(ctx, args.optString("out", ""))
+        val inputs = paths.map { Workspace.forReadFile(ctx, it) }
+        val out = Workspace.forWriteFile(ctx, args.optString("out", ""))
         out.parentFile?.mkdirs()
         if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
         val host = HarnessRuntime.host
@@ -1592,14 +1592,14 @@ object PdfTools : HarnessGroupTools {
     }
 
     private suspend fun split(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args.optString("path", ""))
+        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
         val pages = args.optString("pages", "").trim()
         if (pages.isEmpty()) return ToolExecResult("Give the pages to keep, for example \"2-4,9\".", success = false)
         val raw = args.optString("out", "")
         val out = if (raw.isBlank()) {
             pdfWritableTarget(ctx, pdfSibling(ctx, file, file.nameWithoutExtension + "-pages.pdf"))
         } else {
-            Workspace.forWrite(ctx, raw)
+            Workspace.forWriteFile(ctx, raw)
         }
         out.parentFile?.mkdirs()
         if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
@@ -1619,7 +1619,7 @@ object PdfTools : HarnessGroupTools {
             "run_command instead, for example: python3 -c \"import pypdf; ...\"."
 
     private fun pdfOutputTarget(ctx: HarnessCtx, raw: String, fallback: File): File {
-        if (raw.isNotBlank()) return Workspace.forWrite(ctx, raw)
+        if (raw.isNotBlank()) return Workspace.forWriteFile(ctx, raw)
         return pdfWritableTarget(ctx, fallback)
     }
 
