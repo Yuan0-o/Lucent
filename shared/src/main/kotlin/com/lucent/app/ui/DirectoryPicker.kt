@@ -119,7 +119,7 @@ internal object DirectoryBrowse {
     fun home(): String = if (HarnessRuntime.android) {
         "/storage/emulated/0"
     } else {
-        runCatching { HarnessRuntime.defaultWorkspace().path }.getOrDefault("")
+        runCatching { HarnessRuntime.defaultWorkspace() }.getOrDefault("")
     }
 
     fun startingPoint(wanted: String): String {

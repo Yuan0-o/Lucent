@@ -17,7 +17,7 @@ object HarnessPrompt {
     fun block(): String {
         val config = HarnessRuntime.config()
         if (!config.enabled) return ""
-        val workspace = HarnessRuntime.workspace()
+        val workspace = File(HarnessRuntime.workspace())
         val capabilities = HarnessRuntime.capabilities()
         val tools = HarnessGate.enabledTools(HarnessRuntime.android, capabilities)
         if (tools.isEmpty()) return ""
@@ -132,7 +132,7 @@ object HarnessPrompt {
     }
 
     private fun workspaceSlug(): String =
-        HarnessRuntime.workspace().name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+        File(HarnessRuntime.workspace()).name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
 
     fun skillsLine(): String? {
         val dirs = mutableListOf(File(HarnessRuntime.workspace(), ".lucent/skills"))
@@ -175,7 +175,7 @@ object HarnessPrompt {
         if (!config.enabled) return ""
         val tools = HarnessGate.enabledTools(HarnessRuntime.android)
         if (tools.isEmpty()) return ""
-        return "You can also work with real files in " + HarnessRuntime.workspace().path +
+        return "You can also work with real files in " + HarnessRuntime.workspace() +
             ": read, write and edit them, create Word, Excel and PowerPoint documents, look things up on the web " +
             "when that is switched on, and run commands when a shell is available. Do the work with the tools " +
             "before you answer, keep a short plan with update_plan for anything long, and never claim something " +

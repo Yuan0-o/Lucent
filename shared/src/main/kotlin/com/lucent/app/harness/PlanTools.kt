@@ -217,7 +217,7 @@ object MemoryTools : HarnessGroupTools {
         val dir = HarnessRuntime.subDir("memory")
         return when (scope.lowercase()) {
             "user" -> File(dir, "user.json")
-            "project" -> File(dir, "project-" + HarnessRuntime.workspace().name.lowercase().replace(Regex("[^a-z0-9]+"), "-") + ".json")
+            "project" -> File(dir, "project-" + File(HarnessRuntime.workspace()).name.lowercase().replace(Regex("[^a-z0-9]+"), "-") + ".json")
             else -> File(dir, "session-" + HarnessRuntime.conversationId + ".json")
         }
     }
