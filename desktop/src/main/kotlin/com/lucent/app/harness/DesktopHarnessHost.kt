@@ -44,7 +44,7 @@ object DesktopHarnessShell : HarnessShell {
 
     override suspend fun run(
         command: String,
-        workdir: String?,
+        workdir: File?,
         timeoutSeconds: Int,
         env: Map<String, String>,
         onOutput: ((String) -> Unit)?
@@ -65,7 +65,7 @@ object DesktopHarnessShell : HarnessShell {
                     -1
                 )
             }
-            if (workdir != null) { val dir = File(workdir); if (dir.isDirectory) builder.directory(dir) }
+            if (workdir != null && workdir.isDirectory) builder.directory(workdir)
             if (env.isNotEmpty()) builder.environment().putAll(env)
             val process = builder.start()
             val stdout = StringBuilder()
@@ -131,15 +131,15 @@ object DesktopHarnessHost : HarnessHost {
 
     override val android: Boolean = false
 
-    override fun filesDir(): String = File(System.getProperty("user.home"), ".lucent").apply { mkdirs() }.path
+    override fun filesDir(): File = File(System.getProperty("user.home"), ".lucent").apply { mkdirs() }
 
-    override fun cacheDir(): String = File(filesDir(), "cache").apply { mkdirs() }.path
+    override fun cacheDir(): File = File(filesDir(), "cache").apply { mkdirs() }
 
-    override fun defaultWorkspace(): String {
+    override fun defaultWorkspace(): File {
         val home = File(System.getProperty("user.home") ?: ".")
         val documents = File(home, "Documents")
         val base = if (documents.isDirectory) documents else home
-        return File(base, "Lucent").apply { mkdirs() }.path
+        return File(base, "Lucent").apply { mkdirs() }
     }
 
     override fun capabilities(): Set<String> = setOf("sqlite", "pdf", "clipboard", "notify", "open_url", "share")

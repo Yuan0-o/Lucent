@@ -5,7 +5,6 @@ import com.lucent.app.harness.terminal.PtyProcess
 import com.lucent.app.harness.terminal.PtyStartRequest
 import java.io.InputStream
 import java.io.OutputStream
-import java.io.File
 
 object DesktopPtyBackend : PtyBackend {
 
@@ -21,7 +20,7 @@ object DesktopPtyBackend : PtyBackend {
             listOf("/bin/bash", "-li")
         }
         val pb = ProcessBuilder(command)
-        val dir = request.workdir ?: File(HarnessRuntime.workspace())
+        val dir = request.workdir ?: HarnessRuntime.workspace()
         if (dir.exists()) pb.directory(dir)
         pb.environment()["TERM"] = "xterm-256color"
         request.env.forEach { (key, value) -> pb.environment()[key] = value }

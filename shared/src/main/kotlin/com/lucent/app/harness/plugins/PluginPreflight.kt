@@ -80,7 +80,7 @@ object PluginPreflight {
             return PreflightReport(plugin, problems, notes, mirrorResults)
         }
         if (plugin.bytes > 0L) {
-            val space = File(HarnessRuntime.downloadsDir()).usableSpace
+            val space = HarnessRuntime.downloadsDir().usableSpace
             val needed = plugin.bytes * 2L
             if (space in 1L..<needed) {
                 problems.add(
@@ -129,7 +129,7 @@ object PluginPreflight {
                         notes.add(S.pluginJournalNote(journal.stage, journal.message))
                     }
                 }
-                if (!File(HarnessRuntime.downloadsDir()).canWrite()) {
+                if (!HarnessRuntime.downloadsDir().canWrite()) {
                     problems.add(
                         PreflightProblem(
                             "storage",
@@ -140,7 +140,7 @@ object PluginPreflight {
                 }
             }
         }
-        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(File(HarnessRuntime.workspace()))) {
+        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(HarnessRuntime.workspace())) {
             problems.add(
                 PreflightProblem(
                     "workspace_not_shared",

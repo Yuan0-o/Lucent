@@ -148,7 +148,7 @@ object SandboxTools : HarnessGroupTools {
             append("route=").append(route(ctx, docker, proot)).append('\n')
             append("docker=").append(docker.ifEmpty { "no" }).append('\n')
             append("proot=").append(proot.ifEmpty { "no" }).append('\n')
-            append("workspace=").append(HarnessRuntime.workspace())
+            append("workspace=").append(HarnessRuntime.workspace().path)
         }
     }
 
@@ -163,7 +163,7 @@ object SandboxTools : HarnessGroupTools {
         val route = route(ctx, docker, proot)
         val timeout = args.optInt("timeout", ctx.config.timeoutSeconds).coerceIn(5, 1800)
         val workdir = if (args.optString("workdir", "").isBlank()) HarnessRuntime.workspace() else try {
-            Workspace.resolve(ctx, args.optString("workdir", "")).path
+            Workspace.resolve(ctx, args.optString("workdir", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That working directory cannot be used", success = false)
         }
@@ -179,14 +179,14 @@ object SandboxTools : HarnessGroupTools {
                 val cpus = args.optString("cpus", "")
                 if (cpus.isNotBlank()) flags.append(" --cpus ").append(cpus.filter { it.isDigit() || it == '.' })
                 val line = "docker run --rm -i" + flags +
-                    " -v '" + workdir.replace("'", "'\\''") + ":/work' -w /work " + image +
+                    " -v '" + workdir.path.replace("'", "'\\''") + ":/work' -w /work " + image +
                     " sh -lc '" + quoted + "'"
                 HarnessRuntime.runShell(line, workdir, timeout)
             }
             "proot" -> {
                 val rootfs = File(HarnessRuntime.filesDir(), "home/lucent/ubuntu/rootfs")
                 val line = "proot -0 -r '" + rootfs.path.replace("'", "'\\''") + "' -w /work -b '" +
-                    workdir.replace("'", "'\\''") + ":/work' " +
+                    workdir.path.replace("'", "'\\''") + ":/work' " +
                     "/usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " +
                     "/bin/sh -lc '" + quoted + "'"
                 HarnessRuntime.runShell(line, workdir, timeout)
