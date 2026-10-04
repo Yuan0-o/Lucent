@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-internal class BackgroundTimeline {
+class BackgroundTimeline {
     private var previousNanos = System.nanoTime()
     private var elapsedNanos = 0L
     private var paused = false
@@ -27,7 +27,7 @@ internal class BackgroundTimeline {
     }
 }
 
-internal class BackgroundFramePolicy {
+class BackgroundFramePolicy {
     var tier: Int = 0
         private set
     private var slowFrames = 0

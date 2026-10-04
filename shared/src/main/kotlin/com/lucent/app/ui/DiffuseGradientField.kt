@@ -6,7 +6,7 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-internal class DiffuseGradientField(val edge: Int) {
+class DiffuseGradientField(val edge: Int) {
     init { require(edge in 2..128) }
 
     private val pixels = IntArray(edge * edge)
