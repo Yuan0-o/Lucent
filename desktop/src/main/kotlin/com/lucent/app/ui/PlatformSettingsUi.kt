@@ -26,6 +26,7 @@ import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.launch
+import com.lucent.app.platform.desktopPlatformContext
 
 @Composable
 fun DynamicColorRow(repo: SettingsRepository) {

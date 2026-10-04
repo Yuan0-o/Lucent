@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 import com.lucent.app.AppScope
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,8 +59,6 @@ object AutoBackupRunner {
         }
     }
 }
-
-import com.lucent.app.platform.PlatformContext
 
 private fun appContextOf(context: PlatformContext): PlatformContext = context
 

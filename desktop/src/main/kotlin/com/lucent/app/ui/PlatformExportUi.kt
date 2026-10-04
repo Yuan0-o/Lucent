@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.lucent.app.data.FontStore
 import com.lucent.app.i18n.S
+import com.lucent.app.platform.desktopPlatformContext
 
 @Composable
 fun rememberExportPdfFontHint(): String? {

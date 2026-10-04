@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import com.lucent.app.data.AttachmentStore
+import com.lucent.app.platform.desktopPlatformContext
 
 @Composable
 fun PlatformPhotoCover(colorKey: String, modifier: Modifier = Modifier) {

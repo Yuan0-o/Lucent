@@ -47,6 +47,7 @@ import com.lucent.app.ui.Haptics
 import com.lucent.app.ui.LocalOnGradient
 import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.frostedGlass
+import com.lucent.app.platform.desktopPlatformContext
 
 @Composable
 fun Sidebar(current: Screen, recentNotebooks: List<Notebook> = emptyList(), onSelect: (Screen) -> Unit, onOpenNotebook: (Long) -> Unit = {}) {

@@ -5,6 +5,7 @@ import kotlin.io.encoding.Base64
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.desktopPlatformContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures

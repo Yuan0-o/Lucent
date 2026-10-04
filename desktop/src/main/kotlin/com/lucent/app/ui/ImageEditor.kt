@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.desktopPlatformContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
