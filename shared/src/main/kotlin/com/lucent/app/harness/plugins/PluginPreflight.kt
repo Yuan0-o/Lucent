@@ -27,7 +27,7 @@ object PluginPreflight {
     fun targetFile(plugin: PluginSpec, source: PluginSource): File {
         val fromUrl = source.url.substringAfterLast('/').substringBefore('?')
         val name = if (fromUrl.contains('.')) fromUrl else "${plugin.id}.download"
-        return File(HarnessRuntime.downloadsDir(), name)
+        return File(HarnessRuntime.downloadsDirPath(), name)
     }
 
     fun reusableStaged(plugin: PluginSpec, source: PluginSource): File? {
@@ -80,7 +80,7 @@ object PluginPreflight {
             return PreflightReport(plugin, problems, notes, mirrorResults)
         }
         if (plugin.bytes > 0L) {
-            val space = HarnessRuntime.downloadsDir().usableSpace
+            val space = File(HarnessRuntime.downloadsDirPath()).usableSpace
             val needed = plugin.bytes * 2L
             if (space in 1L..<needed) {
                 problems.add(
@@ -129,7 +129,7 @@ object PluginPreflight {
                         notes.add(S.pluginJournalNote(journal.stage, journal.message))
                     }
                 }
-                if (!HarnessRuntime.downloadsDir().canWrite()) {
+                if (!File(HarnessRuntime.downloadsDirPath()).canWrite()) {
                     problems.add(
                         PreflightProblem(
                             "storage",
