@@ -124,7 +124,7 @@ object OfficeConvertTools : HarnessGroupTools {
         if (!HarnessRuntime.shellReady()) {
             return ToolExecResult("Rendering needs a shell: install the libreoffice plugin first.", success = false)
         }
-        val work = File(HarnessRuntime.subDir("render"), input.nameWithoutExtension)
+        val work = File(HarnessRuntime.subDirPath("render"), input.nameWithoutExtension)
         work.mkdirs()
         val pdf = if (input.extension.equals("pdf", true)) input else {
             val outcome = sofficeCall(ctx, input, "pdf", work)
