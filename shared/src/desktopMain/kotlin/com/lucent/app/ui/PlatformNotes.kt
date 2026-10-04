@@ -6,7 +6,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import com.lucent.app.data.Attachment
 import com.lucent.app.platform.PlatformContext
@@ -15,6 +14,14 @@ import com.lucent.desktop.platform.DesktopShare
 import com.lucent.desktop.platform.LucentDateTimePickerFlow
 
 typealias PlatformPickedFile = java.io.File
+
+private fun is24HourFormat(): Boolean = try {
+    val df = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, java.util.Locale.getDefault())
+    val pattern = (df as? java.text.SimpleDateFormat)?.toPattern().orEmpty()
+    !pattern.contains('a', ignoreCase = true)
+} catch (t: Throwable) {
+    true
+}
 
 @Composable
 fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit = {
@@ -52,7 +59,7 @@ fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long
         LucentDateTimePickerFlow(
             initialMillis = initialMillis,
             minMillis = minMillis,
-            is24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current),
+            is24Hour = is24HourFormat(),
             onDismiss = { showPicker = false },
             onConfirm = { millis -> showPicker = false; onChange(millis) }
         )
