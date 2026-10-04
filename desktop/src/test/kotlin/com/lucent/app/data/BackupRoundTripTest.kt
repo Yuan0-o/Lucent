@@ -14,7 +14,10 @@ import org.json.JSONException
 class BackupRoundTripTest {
 
     private class TestContext(private val dir: File) : PlatformContext() {
+        override val applicationContext: PlatformContext get() = this
         override val filesDir: File get() = dir
+        override val cacheDir: File get() = File(dir, "cache").apply { mkdirs() }
+        override val packageName: String get() = "com.lucent.desktop.test"
     }
 
     private class TestHarnessHost(private val dir: File) : com.lucent.app.harness.HarnessHost {
