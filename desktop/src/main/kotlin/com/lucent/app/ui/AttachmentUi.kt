@@ -4,7 +4,7 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlin.io.encoding.Base64
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -125,7 +125,7 @@ private fun downscaleImageBytes(bytes: ByteArray, mime: String, maxDim: Int = MA
     }
 }
 
-fun fileToChatImage(context: Context, file: File): Triple<String, String, String>? = try {
+fun fileToChatImage(context: PlatformContext, file: File): Triple<String, String, String>? = try {
     if (!file.exists() || file.length() > AttachmentLimits.MAX_SINGLE_BYTES) {
         null
     } else {
@@ -154,7 +154,7 @@ fun CardAttachments(
 ) {
     if (attachments.isEmpty()) return
     var renaming by remember { mutableStateOf<Attachment?>(null) }
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     val save = rememberSaveAttachmentLauncher()
 
@@ -218,7 +218,7 @@ fun PendingAttachmentChips(
     onReorder: ((Int, Int) -> Unit)? = null
 ) {
     if (attachments.isEmpty()) return
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var viewing by remember { mutableStateOf<Attachment?>(null) }
     var renaming by remember { mutableStateOf<Attachment?>(null) }
     val rowHeightPx = with(LocalDensity.current) { ATTACHMENT_ROW_HEIGHT.toPx() }
@@ -439,7 +439,7 @@ fun iconForAttachment(att: Attachment) = when {
 
 @Composable
 fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     return remember {
         { att ->
             Thread {

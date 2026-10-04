@@ -1,8 +1,8 @@
 package com.lucent.app.widget
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 
 object WidgetUpdater {
-    fun refreshContent(context: Context) {
+    fun refreshContent(context: PlatformContext) {
     }
 }

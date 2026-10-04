@@ -1,7 +1,7 @@
 @file:JvmName("DesktopSettingsRepositoryKt")
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.File
 
-class DesktopSettingsRepository(private val context: Context) : SettingsRepository {
+class DesktopSettingsRepository(private val context: PlatformContext) : SettingsRepository {
 
     private object K {
         const val THEME_MODE = "theme_mode"

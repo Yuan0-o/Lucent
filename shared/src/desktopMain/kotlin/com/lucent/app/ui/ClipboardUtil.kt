@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.PlatformContext
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection

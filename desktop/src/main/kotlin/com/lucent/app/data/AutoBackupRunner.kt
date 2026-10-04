@@ -59,7 +59,7 @@ object AutoBackupRunner {
     }
 }
 
-private typealias PlatformContext = android.content.Context
+import com.lucent.app.platform.PlatformContext
 
 private fun appContextOf(context: PlatformContext): PlatformContext = context
 

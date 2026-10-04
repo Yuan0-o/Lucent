@@ -1,8 +1,8 @@
 package com.lucent.app
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 
 object GenerationService {
-    fun start(context: Context, assistantName: String) {  }
-    fun stop(context: Context) {  }
+    fun start(context: PlatformContext, assistantName: String) {  }
+    fun stop(context: PlatformContext) {  }
 }

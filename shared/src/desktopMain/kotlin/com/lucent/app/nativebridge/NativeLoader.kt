@@ -1,6 +1,6 @@
 package com.lucent.app.nativebridge
 
-import android.content.DesktopContext
+import com.lucent.app.platform.desktopPlatformContext
 import java.io.File
 
 object NativeLoader {
@@ -42,7 +42,7 @@ object NativeLoader {
         return try {
             val mapped = System.mapLibraryName(baseName)
             val resource = NativeLoader::class.java.getResourceAsStream("/native/$mapped") ?: return false
-            val dir = File(DesktopContext.filesDir, "native").apply { mkdirs() }
+            val dir = File(desktopPlatformContext.filesDir, "native").apply { mkdirs() }
             val target = File(dir, mapped)
             resource.use { input ->
                 val bytes = input.readBytes()

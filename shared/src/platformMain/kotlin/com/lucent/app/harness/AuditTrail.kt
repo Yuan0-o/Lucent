@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -31,17 +31,17 @@ object AuditTrail {
     private val lock = Any()
     private val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    fun file(context: Context): File {
+    fun file(context: PlatformContext): File {
         val dir = File(baseDir(context), "harness")
         if (!dir.exists()) dir.mkdirs()
         return File(dir, FILE_NAME)
     }
 
-    private fun baseDir(context: Context): File =
+    private fun baseDir(context: PlatformContext): File =
         runCatching { context.filesDir }.getOrNull()
             ?: File(System.getProperty("java.io.tmpdir"), "lucent-audit")
 
-    fun record(context: Context?, entry: AuditEntry) {
+    fun record(context: PlatformContext?, entry: AuditEntry) {
         val app = context ?: return
         val line = JSONObject().apply {
             put("at", entry.at)
@@ -70,7 +70,7 @@ object AuditTrail {
         }
     }
 
-    fun entries(context: Context, limit: Int = 200): List<AuditEntry> {
+    fun entries(context: PlatformContext, limit: Int = 200): List<AuditEntry> {
         val target = file(context)
         if (!target.exists()) return emptyList()
         val lines = synchronized(lock) {
@@ -79,7 +79,7 @@ object AuditTrail {
         return lines.asReversed().take(limit).mapNotNull { parse(it) }
     }
 
-    fun clear(context: Context) {
+    fun clear(context: PlatformContext) {
         synchronized(lock) {
             try { file(context).writeText("") } catch (_: Throwable) {
             }

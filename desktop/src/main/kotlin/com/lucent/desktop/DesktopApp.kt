@@ -1,6 +1,6 @@
 package com.lucent.desktop
 
-import android.content.DesktopContext
+import com.lucent.app.platform.desktopPlatformContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -67,7 +67,7 @@ private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
 
 @Composable
 fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
-    val context = DesktopContext
+    val context = desktopPlatformContext
     val repo = remember { createSettingsRepository(context) }
     val systemDark = isSystemInDarkTheme()
 
@@ -203,7 +203,7 @@ private fun DesktopShell(
     var current by remember { mutableStateOf(Screen.Tasks) }
     var showTrashChooser by remember { mutableStateOf(false) }
     var trashInitialMode by remember { mutableStateOf<HomeMode?>(null) }
-    val notebooks by remember { createAppDatabase(DesktopContext).notebookDao.getAll() }.collectAsState(initial = emptyList())
+    val notebooks by remember { createAppDatabase(desktopPlatformContext).notebookDao.getAll() }.collectAsState(initial = emptyList())
     val notebookOpensJson by repo.notebookOpens.collectAsState(initial = "{}")
     val recentNotebooks = remember(notebooks, notebookOpensJson) {
         runCatching {
@@ -219,7 +219,7 @@ private fun DesktopShell(
     }
     LaunchedEffect(current) {
         LastScreen.remember(current)
-        com.lucent.app.data.StartupLog.event(DesktopContext, "nav: showing ${current.name.lowercase()}")
+        com.lucent.app.data.StartupLog.event(desktopPlatformContext, "nav: showing ${current.name.lowercase()}")
     }
     LaunchedEffect(HiddenArea.visible) {
         if (!HiddenArea.visible && current == Screen.Hidden) current = LastScreen.homeMode.screen

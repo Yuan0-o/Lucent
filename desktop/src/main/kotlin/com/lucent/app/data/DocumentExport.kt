@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 
+import com.lucent.app.platform.PlatformContext
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
@@ -412,7 +413,7 @@ object DocumentExport {
     private fun loadPdfFonts(doc: PDDocument): List<PDFont> {
         cjkFontMissing = false
         val faces = mutableListOf<PDFont>()
-        val context = android.content.DesktopContext
+        val context = desktopPlatformContext
         for (slot in FontStore.fonts(context)) {
             try {
                 FontStore.fontFile(context, slot.id)?.inputStream()?.use { stream ->
@@ -696,7 +697,7 @@ object DocumentExport {
 
 
     fun zipWithAttachments(
-        context: android.content.Context,
+        context: PlatformContext,
         documentName: String,
         documentBytes: ByteArray,
         attachments: List<Attachment>,

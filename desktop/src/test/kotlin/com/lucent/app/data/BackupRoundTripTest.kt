@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.test.Test
@@ -13,7 +13,7 @@ import org.json.JSONException
 
 class BackupRoundTripTest {
 
-    private class TestContext(private val dir: File) : Context() {
+    private class TestContext(private val dir: File) : PlatformContext() {
         override val filesDir: File get() = dir
     }
 

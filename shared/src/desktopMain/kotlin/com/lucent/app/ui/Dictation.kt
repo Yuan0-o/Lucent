@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import android.content.DesktopContext
+import com.lucent.app.platform.desktopPlatformContext
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -40,7 +40,7 @@ import javax.sound.sampled.TargetDataLine
 
 @Composable
 actual fun DictationButton(onText: (String) -> Unit, modifier: Modifier) {
-    val context = DesktopContext
+    val context = desktopPlatformContext
     val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val baseUrl by repo.baseUrl.collectAsState(initial = com.lucent.app.data.SettingsCache.baseUrl)

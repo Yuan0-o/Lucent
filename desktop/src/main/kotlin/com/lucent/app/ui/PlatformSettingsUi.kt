@@ -115,7 +115,7 @@ fun DesktopIntegrationRows(repo: SettingsRepository) {
 
 @Composable
 fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     val biometricAvailable = remember { isBiometricUnlockAvailable(context) }
     var helloAvailable by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { helloAvailable = isWindowsHelloAvailable() }

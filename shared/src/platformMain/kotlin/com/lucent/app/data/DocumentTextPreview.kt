@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.ByteArrayInputStream
 import java.util.zip.ZipInputStream
 
@@ -33,7 +33,7 @@ object DocumentText {
             looksTextualByMime(att.mime)
     }
 
-    fun extract(context: Context, att: Attachment): Result? {
+    fun extract(context: PlatformContext, att: Attachment): Result? {
         val ext = extensionOf(att.name)
         val bytes = Attachments.readBytes(context, att, maxBytes = 32L * 1024 * 1024) ?: return null
         val raw = when {

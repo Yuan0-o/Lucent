@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.File
 import java.util.Base64
 import kotlin.test.Test
@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class DataKeysTest {
 
-    private class TestContext(private val dir: File) : Context() {
+    private class TestContext(private val dir: File) : PlatformContext() {
         override val filesDir: File get() = dir
     }
 

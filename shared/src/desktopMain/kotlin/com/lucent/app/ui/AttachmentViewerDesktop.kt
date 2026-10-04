@@ -1,5 +1,7 @@
 package com.lucent.app.ui
 
+import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.desktopPlatformContext
 import androidx.compose.foundation.Canvas as ComposeCanvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -90,7 +92,7 @@ fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
 @Composable
 fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
     if (attachments.isEmpty()) return
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     val save = rememberSaveAttachmentLauncher()
     var editing by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
@@ -198,7 +200,7 @@ private fun ZoomableImage(
     reloadKey: Int = 0,
     onZoomChanged: (Boolean) -> Unit = {}
 ) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var bitmap by remember(att.data, reloadKey) { mutableStateOf<ImageBitmap?>(null) }
     var failed by remember(att.data, reloadKey) { mutableStateOf(false) }
 
@@ -257,7 +259,7 @@ private fun ZoomableImage(
 
 @Composable
 private fun PdfViewer(att: Attachment) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var pages by remember(att.data) { mutableStateOf<List<ImageBitmap>?>(null) }
     var failed by remember(att.data) { mutableStateOf(false) }
 
@@ -304,7 +306,7 @@ private fun PdfViewer(att: Attachment) {
 
 @Composable
 private fun NonPreviewableInfo(att: Attachment) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
         Icon(Icons.AutoMirrored.Filled.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
         Spacer(Modifier.height(12.dp))
@@ -336,7 +338,7 @@ private fun NonPreviewableInfo(att: Attachment) {
 
 @Composable
 private fun TextPreview(att: Attachment) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var result by remember(att.data) { mutableStateOf<DocumentText.Result?>(null) }
     var failed by remember(att.data) { mutableStateOf(false) }
 
@@ -626,7 +628,7 @@ private enum class EditTool { DOODLE, MOSAIC, CROP }
 
 @Composable
 private fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Unit) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var working by remember(att.data) { mutableStateOf<BufferedImage?>(null) }
     var failed by remember(att.data) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -965,7 +967,7 @@ private fun applyCrop(bmp: BufferedImage, topLeft: Offset, bottomRight: Offset):
     }
 }
 
-private fun saveEdited(context: android.content.Context, att: Attachment, bmp: BufferedImage): Boolean {
+private fun saveEdited(context: PlatformContext, att: Attachment, bmp: BufferedImage): Boolean {
     return try {
         if (!AttachmentStore.looksLikeId(att.data)) return false
         val useJpeg = att.mime.equals("image/jpeg", true) || att.mime.equals("image/jpg", true)
@@ -1021,7 +1023,7 @@ private const val MOSAIC_BLOCK = 28
 
 @Composable
 private fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     return remember {
         { att ->
             Thread {

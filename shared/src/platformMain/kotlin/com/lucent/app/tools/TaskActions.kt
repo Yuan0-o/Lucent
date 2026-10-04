@@ -1,6 +1,6 @@
 package com.lucent.app.tools
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Checklist
 import com.lucent.app.data.Note
@@ -12,7 +12,7 @@ import com.lucent.app.reminders.ReminderScheduler
 
 object TaskActions {
 
-    suspend fun complete(context: Context, db: AppDatabase, task: Task): Task? {
+    suspend fun complete(context: PlatformContext, db: AppDatabase, task: Task): Task? {
         val appContext = context.applicationContext
 
         db.taskDao.update(
@@ -31,19 +31,19 @@ object TaskActions {
         return inserted
     }
 
-    suspend fun restore(context: Context, db: AppDatabase, task: Task) {
+    suspend fun restore(context: PlatformContext, db: AppDatabase, task: Task) {
         val restored = task.copy(isDone = false, completedAt = null)
         db.taskDao.update(restored)
         ReminderScheduler.sync(context.applicationContext, restored)
     }
 
-    suspend fun trash(context: Context, db: AppDatabase, task: Task) {
+    suspend fun trash(context: PlatformContext, db: AppDatabase, task: Task) {
         val trashed = task.copy(trashedAt = System.currentTimeMillis())
         db.taskDao.update(trashed)
         ReminderScheduler.cancel(context.applicationContext, task.id)
     }
 
-    suspend fun untrash(context: Context, db: AppDatabase, task: Task) {
+    suspend fun untrash(context: PlatformContext, db: AppDatabase, task: Task) {
         val restored = task.copy(trashedAt = null)
         db.taskDao.update(restored)
         ReminderScheduler.sync(context.applicationContext, restored)
@@ -71,7 +71,7 @@ object TaskActions {
     }
 
     suspend fun setSchedule(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         task: Task,
         dueAt: Long?,

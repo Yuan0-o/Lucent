@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.AppDatabase
 import java.io.File
 import kotlin.test.Test
@@ -21,7 +21,7 @@ private class EscalationHost(private val root: File) : HarnessHost {
 
 class HarnessEscalationTest {
 
-    private fun withEscalationSandbox(block: (File, Context, AppDatabase?) -> Unit) {
+    private fun withEscalationSandbox(block: (File, PlatformContext, AppDatabase?) -> Unit) {
         val root = java.nio.file.Files.createTempDirectory("lucent-escalation").toFile()
         val previousHost = HarnessRuntime.host
         val previousConfig = HarnessRuntime.config()
@@ -144,7 +144,7 @@ class HarnessEscalationTest {
         assertFalse(HarnessGate.escalatedInThisConversation("write_file"))
     }
 
-    private fun awaitEscalatedAudit(context: Context): Boolean {
+    private fun awaitEscalatedAudit(context: PlatformContext): Boolean {
         val deadline = System.currentTimeMillis() + 4000
         while (System.currentTimeMillis() < deadline) {
             if (AuditTrail.entries(context, 40).any { it.approval == "escalated" }) return true

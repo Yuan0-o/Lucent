@@ -1,6 +1,6 @@
 package com.lucent.desktop.platform
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.StartupLog
 import java.io.File
 import java.net.InetAddress
@@ -16,7 +16,7 @@ object SingleInstance {
 
     @Volatile private var server: ServerSocket? = null
 
-    fun acquire(context: Context, onFocusRequested: () -> Unit): Boolean {
+    fun acquire(context: PlatformContext, onFocusRequested: () -> Unit): Boolean {
         val portFile = File(context.filesDir, PORT_FILE)
 
         val recorded = portFile.takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull()

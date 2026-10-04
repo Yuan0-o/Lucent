@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import com.lucent.app.platform.PlatformContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,7 +68,7 @@ private enum class EditTool { DOODLE, MOSAIC, CROP }
 
 @Composable
 fun ImageEditorDialog(att: Attachment, onDismiss: () -> Unit, onSaved: () -> Unit) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     var working by remember(att.data) { mutableStateOf<BufferedImage?>(null) }
     var failed by remember(att.data) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -406,7 +407,7 @@ private fun applyCrop(bmp: BufferedImage, topLeft: Offset, bottomRight: Offset):
     }
 }
 
-private fun saveEdited(context: android.content.Context, att: Attachment, bmp: BufferedImage): Boolean {
+private fun saveEdited(context: PlatformContext, att: Attachment, bmp: BufferedImage): Boolean {
     return try {
         if (!AttachmentStore.looksLikeId(att.data)) return false
         val useJpeg = att.mime.equals("image/jpeg", true) || att.mime.equals("image/jpg", true)

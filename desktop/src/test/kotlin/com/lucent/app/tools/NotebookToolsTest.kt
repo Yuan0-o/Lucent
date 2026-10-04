@@ -1,6 +1,6 @@
 package com.lucent.app.tools
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.DesktopAppDatabase
 import com.lucent.app.data.DataKeys
@@ -21,7 +21,7 @@ import org.json.JSONObject
 
 class NotebookToolsTest {
 
-    private class TestContext(private val dir: File) : Context() {
+    private class TestContext(private val dir: File) : PlatformContext() {
         override val filesDir: File get() = dir
     }
 

@@ -1,6 +1,6 @@
 package com.lucent.app.local
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.LocalSecrets
 import org.json.JSONArray
 import org.json.JSONObject
@@ -30,11 +30,11 @@ object LocalModelStore {
 
     data class ModelIndex(val slots: List<ModelSlot>, val activeId: String?)
 
-    private fun dir(context: Context): File = File(context.filesDir, DIR)
+    private fun dir(context: PlatformContext): File = File(context.filesDir, DIR)
 
 
     @Synchronized
-    fun index(context: Context): ModelIndex {
+    fun index(context: PlatformContext): ModelIndex {
         val dir = dir(context)
         val indexFile = File(dir, INDEX_FILE)
 
@@ -76,7 +76,7 @@ object LocalModelStore {
     }
 
     @Synchronized
-    private fun rebuildFromFiles(context: Context): ModelIndex {
+    private fun rebuildFromFiles(context: PlatformContext): ModelIndex {
         val dir = dir(context)
         val files = dir.listFiles()?.filter {
             it.isFile && it.name.lowercase().endsWith(".gguf") && it.length() > 0L
@@ -95,7 +95,7 @@ object LocalModelStore {
     }
 
     @Synchronized
-    private fun writeIndex(context: Context, idx: ModelIndex) {
+    private fun writeIndex(context: PlatformContext, idx: ModelIndex) {
         val dir = dir(context)
         if (!dir.exists()) dir.mkdirs()
         val arr = JSONArray()
@@ -108,43 +108,43 @@ object LocalModelStore {
     }
 
 
-    fun slots(context: Context): List<ModelSlot> = index(context).slots
+    fun slots(context: PlatformContext): List<ModelSlot> = index(context).slots
 
-    fun activeSlot(context: Context): ModelSlot? {
+    fun activeSlot(context: PlatformContext): ModelSlot? {
         val idx = index(context)
         return idx.slots.firstOrNull { it.id == idx.activeId }
     }
 
-    fun modelFile(context: Context, id: String): File? =
+    fun modelFile(context: PlatformContext, id: String): File? =
         index(context).slots.firstOrNull { it.id == id }?.let { File(dir(context), it.fileName) }
 
-    fun activeModelFile(context: Context): File? {
+    fun activeModelFile(context: PlatformContext): File? {
         val slot = activeSlot(context) ?: return null
         val f = File(dir(context), slot.fileName)
         return if (f.exists() && f.length() > 0L) f else null
     }
 
-    fun hasModel(context: Context): Boolean = activeModelFile(context) != null
+    fun hasModel(context: PlatformContext): Boolean = activeModelFile(context) != null
 
-    fun displayName(context: Context): String? = activeSlot(context)?.name
+    fun displayName(context: PlatformContext): String? = activeSlot(context)?.name
 
-    fun modelSizeBytes(context: Context): Long = activeModelFile(context)?.length() ?: 0L
+    fun modelSizeBytes(context: PlatformContext): Long = activeModelFile(context)?.length() ?: 0L
 
-    fun modelSizeBytes(context: Context, id: String): Long =
+    fun modelSizeBytes(context: PlatformContext, id: String): Long =
         modelFile(context, id)?.takeIf { it.exists() }?.length() ?: 0L
 
-    fun canImportMore(context: Context): Boolean = slots(context).size < MAX_MODELS
+    fun canImportMore(context: PlatformContext): Boolean = slots(context).size < MAX_MODELS
 
 
     @Synchronized
-    fun setActive(context: Context, id: String) {
+    fun setActive(context: PlatformContext, id: String) {
         val idx = index(context)
         if (idx.slots.none { it.id == id }) return
         writeIndex(context, idx.copy(activeId = id))
     }
 
     @Synchronized
-    fun rename(context: Context, id: String, newName: String) {
+    fun rename(context: PlatformContext, id: String, newName: String) {
         val idx = index(context)
         val clean = newName.trim().take(60)
         val updated = idx.slots.map {
@@ -154,7 +154,7 @@ object LocalModelStore {
     }
 
     @Throws(IOException::class)
-    fun import(context: Context, source: PlatformModelSource, customName: String? = null): ModelSlot {
+    fun import(context: PlatformContext, source: PlatformModelSource, customName: String? = null): ModelSlot {
         val existing = index(context)
         if (existing.slots.size >= MAX_MODELS) throw TooManyModelsException()
 
@@ -207,7 +207,7 @@ object LocalModelStore {
     }
 
     @Synchronized
-    fun delete(context: Context, id: String) {
+    fun delete(context: PlatformContext, id: String) {
         val idx = index(context)
         val slot = idx.slots.firstOrNull { it.id == id } ?: return
         File(dir(context), slot.fileName).delete()
@@ -220,7 +220,7 @@ object LocalModelStore {
 
 
     @Synchronized
-    fun exportManifestJson(context: Context): String {
+    fun exportManifestJson(context: PlatformContext): String {
         val idx = index(context)
         val arr = JSONArray()
         idx.slots.forEach { s ->
@@ -237,21 +237,21 @@ object LocalModelStore {
         return root.toString()
     }
 
-    fun totalModelBytes(context: Context): Long =
+    fun totalModelBytes(context: PlatformContext): Long =
         slots(context).sumOf { File(dir(context), it.fileName).length() }
 
-    fun modelFileForSlot(context: Context, slot: ModelSlot): File? =
+    fun modelFileForSlot(context: PlatformContext, slot: ModelSlot): File? =
         File(dir(context), slot.fileName).takeIf { it.exists() && it.length() > 0L }
 
     @Synchronized
-    fun prepareRestoreTarget(context: Context, fileName: String): File {
+    fun prepareRestoreTarget(context: PlatformContext, fileName: String): File {
         val d = dir(context)
         if (!d.exists()) d.mkdirs()
         return File(d, File(fileName).name)
     }
 
     @Synchronized
-    fun restoreFromBackup(context: Context, manifestJson: String): Int {
+    fun restoreFromBackup(context: PlatformContext, manifestJson: String): Int {
         val d = dir(context)
         if (!d.exists()) d.mkdirs()
         val root = try {
@@ -280,7 +280,7 @@ object LocalModelStore {
     }
 
     @Synchronized
-    fun deleteAll(context: Context) {
+    fun deleteAll(context: PlatformContext) {
         val idx = index(context)
         idx.slots.forEach { s ->
             File(dir(context), s.fileName).delete()
@@ -345,13 +345,13 @@ object LocalModelStore {
 
     private fun mmprojFileName(id: String) = "mmproj_$id.gguf"
 
-    fun mmprojFile(context: Context, id: String): File? =
+    fun mmprojFile(context: PlatformContext, id: String): File? =
         File(dir(context), mmprojFileName(id)).takeIf { it.exists() && it.length() > 0L }
 
-    fun activeMmprojFile(context: Context): File? =
+    fun activeMmprojFile(context: PlatformContext): File? =
         activeSlot(context)?.let { mmprojFile(context, it.id) }
 
-    fun importMmproj(context: Context, id: String, source: PlatformModelSource): File {
+    fun importMmproj(context: PlatformContext, id: String, source: PlatformModelSource): File {
         val dir = dir(context)
         if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create model directory")
         val target = File(dir, mmprojFileName(id))
@@ -371,7 +371,7 @@ object LocalModelStore {
         }
     }
 
-    fun deleteMmproj(context: Context, id: String) {
+    fun deleteMmproj(context: PlatformContext, id: String) {
         File(dir(context), mmprojFileName(id)).delete()
         File(dir(context), "${mmprojFileName(id)}.tmp").delete()
     }

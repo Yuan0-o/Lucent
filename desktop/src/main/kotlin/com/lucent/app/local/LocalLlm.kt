@@ -1,6 +1,6 @@
 package com.lucent.app.local
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.PlatformLog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -121,7 +121,7 @@ object LocalLlm {
         return (if (total > 4) total - 1 else total).coerceIn(2, 8)
     }
 
-    internal var ensureLoadedOverride: (suspend (Context) -> Boolean)? = null
+    internal var ensureLoadedOverride: (suspend (PlatformContext) -> Boolean)? = null
 
     internal var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
 
@@ -130,7 +130,7 @@ object LocalLlm {
         generateOverride = null
     }
 
-    suspend fun ensureLoaded(context: Context): Boolean = ensureLoadedOverride?.invoke(context)
+    suspend fun ensureLoaded(context: PlatformContext): Boolean = ensureLoadedOverride?.invoke(context)
         ?: withContext(llmDispatcher) {
         if (!available) return@withContext false
         val activeSlot = LocalModelStore.activeSlot(context) ?: return@withContext false

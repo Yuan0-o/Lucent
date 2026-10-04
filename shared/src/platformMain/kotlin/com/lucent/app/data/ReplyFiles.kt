@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -123,7 +123,7 @@ object ReplyFiles {
     }
 
     suspend fun saveToNewItem(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         asTask: Boolean,
         title: String,

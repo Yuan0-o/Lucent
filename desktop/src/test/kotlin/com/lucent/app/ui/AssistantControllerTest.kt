@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.DesktopAppDatabase
 import com.lucent.app.data.ChatConversation
@@ -33,7 +33,7 @@ import kotlinx.coroutines.withTimeout
 
 class AssistantControllerTest {
 
-    private class TestContext(private val dir: File) : Context() {
+    private class TestContext(private val dir: File) : PlatformContext() {
         override val filesDir: File get() = dir
     }
 
@@ -77,7 +77,7 @@ class AssistantControllerTest {
         }
     }
 
-    private fun newController(context: Context, db: AppDatabase, llmClient: AssistantLlmClient) =
+    private fun newController(context: PlatformContext, db: AppDatabase, llmClient: AssistantLlmClient) =
         AssistantControllerImpl(
             appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
             db = db,
@@ -117,7 +117,7 @@ class AssistantControllerTest {
     private fun finalTextReply(text: String = "Done.") =
         Result.success(RawModelReply(text = text, toolCalls = emptyList()))
 
-    private fun AssistantControllerImpl.sendFixture(context: Context, text: String = "add a task to buy milk") {
+    private fun AssistantControllerImpl.sendFixture(context: PlatformContext, text: String = "add a task to buy milk") {
         send(
             appContext = context,
             text = text,
@@ -152,7 +152,7 @@ class AssistantControllerTest {
         }
     }
 
-    private fun installTestModel(context: Context, dir: File) {
+    private fun installTestModel(context: PlatformContext, dir: File) {
         val modelDir = File(dir, "local_model").apply { mkdirs() }
         File(modelDir, "model.gguf").writeBytes(byteArrayOf(0x47, 0x47, 0x55, 0x46, 0x01))
         LocalLlm.ensureLoadedOverride = { _ -> true }
@@ -160,7 +160,7 @@ class AssistantControllerTest {
     }
 
     private fun AssistantControllerImpl.sendLocalFixture(
-        context: Context,
+        context: PlatformContext,
         text: String = "add a task to buy milk",
         memoryTier: MemoryTier = MemoryTier.LOW,
         targetConversationId: Long? = null

@@ -4,13 +4,13 @@ import com.lucent.app.data.createSettingsRepository
 
 import com.lucent.app.data.createAppDatabase
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.flow.first
 
 object AttachmentMigration {
 
-    suspend fun runIfNeeded(context: Context) {
+    suspend fun runIfNeeded(context: PlatformContext) {
         val appContext = context.applicationContext
         val settings = createSettingsRepository(appContext)
         if (settings.attachmentsMigrated.first()) {
@@ -44,7 +44,7 @@ object AttachmentMigration {
     }
 
     private fun migrateAttachmentsJson(
-        context: Context,
+        context: PlatformContext,
         attachmentsJson: String
     ): Pair<String, Boolean> {
         val list = Attachments.parse(attachmentsJson)
@@ -72,7 +72,7 @@ object AttachmentMigration {
         return (if (changed) Attachments.serialize(migrated) else attachmentsJson) to remaining
     }
 
-    suspend fun encryptExistingAttachments(context: Context) {
+    suspend fun encryptExistingAttachments(context: PlatformContext) {
         val appContext = context.applicationContext
         val db = createAppDatabase(appContext)
         val referenced = buildSet {
@@ -89,7 +89,7 @@ object AttachmentMigration {
         }
     }
 
-    suspend fun pruneOrphans(context: Context) {
+    suspend fun pruneOrphans(context: PlatformContext) {
         val db = createAppDatabase(context)
         val notes = db.noteDao.getAllOnce()
         val tasks = db.taskDao.getAllOnce()

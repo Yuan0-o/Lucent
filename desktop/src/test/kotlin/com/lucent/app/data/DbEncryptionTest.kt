@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.File
 import java.sql.DriverManager
 import kotlin.test.Test
@@ -12,7 +12,7 @@ import kotlinx.coroutines.runBlocking
 
 class DbEncryptionTest {
 
-    private class TestContext(private val dir: File) : Context() {
+    private class TestContext(private val dir: File) : PlatformContext() {
         override val filesDir: File get() = dir
     }
 

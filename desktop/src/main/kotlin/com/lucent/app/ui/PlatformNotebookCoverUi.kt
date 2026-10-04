@@ -10,7 +10,7 @@ import com.lucent.app.data.AttachmentStore
 
 @Composable
 fun PlatformPhotoCover(colorKey: String, modifier: Modifier = Modifier) {
-    val context = android.content.DesktopContext
+    val context = desktopPlatformContext
     val id = colorKey.removePrefix("photo:")
     val bitmap = remember(id) {
         try {

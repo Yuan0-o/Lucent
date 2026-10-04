@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.launch
@@ -22,7 +22,7 @@ actual object StartupLog {
     actual fun setEnabled(value: Boolean) { enabled = value }
     actual fun isEnabled(): Boolean = enabled
 
-    private fun logFile(context: Context) = File(context.applicationContext.filesDir, FILE_NAME)
+    private fun logFile(context: PlatformContext) = File(context.applicationContext.filesDir, FILE_NAME)
 
     actual fun event(context: PlatformContext, message: String) {
         if (!enabled) return

@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,7 +38,7 @@ object Attachments {
     }
 
 
-    fun byteSize(context: Context, att: Attachment): Long {
+    fun byteSize(context: PlatformContext, att: Attachment): Long {
         return if (AttachmentStore.looksLikeId(att.data)) {
             AttachmentStore.sizeOf(context, att.data)
         } else {
@@ -46,7 +46,7 @@ object Attachments {
         }
     }
 
-    fun readBytes(context: Context, att: Attachment, maxBytes: Long = 32L * 1024 * 1024): ByteArray? {
+    fun readBytes(context: PlatformContext, att: Attachment, maxBytes: Long = 32L * 1024 * 1024): ByteArray? {
         return if (AttachmentStore.looksLikeId(att.data)) {
             AttachmentStore.readBytes(context, att.data, maxBytes)
         } else {
@@ -60,10 +60,10 @@ object Attachments {
         }
     }
 
-    fun openStream(context: Context, att: Attachment) =
+    fun openStream(context: PlatformContext, att: Attachment) =
         if (AttachmentStore.looksLikeId(att.data)) AttachmentStore.openInputStream(context, att.data) else null
 
-    fun decodeText(context: Context, att: Attachment): String? {
+    fun decodeText(context: PlatformContext, att: Attachment): String? {
         if (att.isImage) return null
         val looksTextual = att.mime.startsWith("text/") ||
             att.mime == "application/json" ||
@@ -81,18 +81,18 @@ object Attachments {
         }
     }
 
-    fun readAsBase64(context: Context, att: Attachment, maxBytes: Long = 8L * 1024 * 1024): String? {
+    fun readAsBase64(context: PlatformContext, att: Attachment, maxBytes: Long = 8L * 1024 * 1024): String? {
         val bytes = readBytes(context, att, maxBytes) ?: return null
         return Base64.Default.encode(bytes)
     }
 
-    fun textAttachment(context: Context, name: String, content: String): Attachment? {
+    fun textAttachment(context: PlatformContext, name: String, content: String): Attachment? {
         val safeName = if (name.isBlank()) "note.txt" else name
         val id = AttachmentStore.importBytes(context, content.toByteArray(Charsets.UTF_8)) ?: return null
         return Attachment(mime = "text/plain", data = id, name = safeName)
     }
 
-    fun upsert(context: Context, list: List<Attachment>, attachment: Attachment): List<Attachment> {
+    fun upsert(context: PlatformContext, list: List<Attachment>, attachment: Attachment): List<Attachment> {
         val idx = list.indexOfFirst { it.name.equals(attachment.name, ignoreCase = true) }
         return if (idx >= 0) {
             val displaced = list[idx]
@@ -103,7 +103,7 @@ object Attachments {
         } else list + attachment
     }
 
-    fun removeByName(context: Context, list: List<Attachment>, name: String): List<Attachment> {
+    fun removeByName(context: PlatformContext, list: List<Attachment>, name: String): List<Attachment> {
         val toRemove = list.filter { it.name.equals(name, ignoreCase = true) }
         toRemove.forEach { att ->
             if (AttachmentStore.looksLikeId(att.data)) AttachmentStore.delete(context, att.data)

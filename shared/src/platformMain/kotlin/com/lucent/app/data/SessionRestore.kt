@@ -1,5 +1,6 @@
 package com.lucent.app.data
 
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.createSettingsRepository
 
 import androidx.compose.runtime.getValue
@@ -51,14 +52,14 @@ object SessionRestore {
     }
 
 
-    suspend fun save(context: android.content.Context, snapshot: Snapshot) {
+    suspend fun save(context: PlatformContext, snapshot: Snapshot) {
         runCatching {
             createSettingsRepository(context)
                 .setSessionSnapshot(serialize(snapshot.copy(savedAt = System.currentTimeMillis())))
         }
     }
 
-    suspend fun clear(context: android.content.Context) {
+    suspend fun clear(context: PlatformContext) {
         runCatching { createSettingsRepository(context).setSessionSnapshot("") }
     }
 

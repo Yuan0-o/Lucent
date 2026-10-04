@@ -4,7 +4,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -349,7 +349,7 @@ private fun startOfDayMillis(year: Int, month: Int, day: Int): Long =
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
-fun showDateRangePicker(context: Context, currentStart: Long?, currentEnd: Long?, onPicked: (Long, Long) -> Unit) {
+fun showDateRangePicker(context: PlatformContext, currentStart: Long?, currentEnd: Long?, onPicked: (Long, Long) -> Unit) {
     DesktopDatePicker.open(currentStart, currentEnd) { start, end ->
         onPicked(start, maxOf(start, end))
     }

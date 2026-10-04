@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.DesktopContext
+import com.lucent.app.platform.desktopPlatformContext
 import com.lucent.app.AppScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -193,6 +193,6 @@ class DesktopUpdateInstaller : AutoUpdate.Installer {
     }
 
     private fun log(message: String) {
-        StartupLog.event(DesktopContext, message)
+        StartupLog.event(desktopPlatformContext, message)
     }
 }

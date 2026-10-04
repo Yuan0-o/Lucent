@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,7 +52,7 @@ class Db private constructor(private val connection: Connection) {
 
         const val SCHEMA_VERSION = 25
 
-        fun open(context: Context): Db {
+        fun open(context: PlatformContext): Db {
             val file = File(context.filesDir, "lucent.db")
             file.parentFile?.mkdirs()
             Class.forName("org.sqlite.JDBC")
@@ -76,7 +76,7 @@ class Db private constructor(private val connection: Connection) {
             return head.contentEquals(PLAINTEXT_HEADER)
         }
 
-        private fun openConnection(context: Context, file: File): Connection {
+        private fun openConnection(context: PlatformContext, file: File): Connection {
             val passphrase = try {
                 DataKeys.databasePassphrase(context)
             } catch (t: Throwable) {
@@ -153,7 +153,7 @@ class Db private constructor(private val connection: Connection) {
             return conn
         }
 
-        private fun migrateSchema(context: Context, conn: Connection) {
+        private fun migrateSchema(context: PlatformContext, conn: Connection) {
             runSchemaMigrations(conn) { StartupLog.event(context, it) }
         }
 

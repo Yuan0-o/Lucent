@@ -1,13 +1,13 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.DataKeys
 import com.lucent.app.data.FileCrypto
 import java.io.File
 
 object HarnessVault {
 
-    fun write(context: Context, file: File, text: String) {
+    fun write(context: PlatformContext, file: File, text: String) {
         try {
             file.parentFile?.mkdirs()
             val key = DataKeys.attachmentKey(context.applicationContext)
@@ -17,7 +17,7 @@ object HarnessVault {
         }
     }
 
-    fun read(context: Context, file: File): String {
+    fun read(context: PlatformContext, file: File): String {
         if (!file.exists()) return ""
         return try {
             val raw = file.readBytes()

@@ -87,13 +87,13 @@ fun Sidebar(current: Screen, recentNotebooks: List<Notebook> = emptyList(), onSe
                         selected = current == screen,
                         onGradient = onGradient,
                         onGradientMuted = onGradientMuted,
-                        onClick = { Haptics.tick(android.content.DesktopContext); onSelect(screen) }
+                        onClick = { Haptics.tick(desktopPlatformContext); onSelect(screen) }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     if (screen == Screen.Notebooks) recentNotebooks.take(3).forEach { notebook ->
                         Text(notebook.title.ifBlank { com.lucent.app.i18n.S.notebookEmptyTitle }, color = onGradientMuted, fontSize = 12.sp, maxLines = 1,
                             modifier = Modifier.fillMaxWidth().padding(start = 52.dp, end = 12.dp, top = 3.dp, bottom = 7.dp)
-                                .clickable { Haptics.tick(android.content.DesktopContext); onOpenNotebook(notebook.id) })
+                                .clickable { Haptics.tick(desktopPlatformContext); onOpenNotebook(notebook.id) })
                     }
                 }
             }

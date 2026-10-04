@@ -1,6 +1,6 @@
 package com.lucent.app
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.StartupLog
 import com.lucent.app.platform.PlatformLog
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -23,7 +23,7 @@ object AppScope {
     )
 
     @Volatile
-    var appContext: Context? = null
+    var appContext: PlatformContext? = null
 
     private const val TAG = "LucentAppScope"
 }

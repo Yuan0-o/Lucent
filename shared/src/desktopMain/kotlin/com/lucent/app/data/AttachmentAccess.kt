@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import com.lucent.app.PlatformFile
 import com.lucent.app.PlatformOutputStream
@@ -13,7 +13,7 @@ actual object AttachmentAccess {
     private const val COPY_BUFFER = 64 * 1024
 
     private fun previewDir(context: PlatformContext): PlatformFile {
-        val ctx = context as Context
+        val ctx = context as PlatformContext
         return PlatformFile(File(ctx.applicationContext.cacheDir, PREVIEW_DIR).apply { if (!exists()) mkdirs() }.absolutePath)
     }
 

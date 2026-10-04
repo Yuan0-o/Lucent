@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.LucentBuild
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.harness.mcp.McpProtocol
@@ -439,7 +439,7 @@ class McpTest {
     private fun testCtx(): HarnessCtx? {
         val dir = tempDir()
         val config = HarnessRuntime.config()
-        val context = allocate(Context::class.java) as? Context
+        val context = allocate(PlatformContext::class.java) as? PlatformContext
         val db = allocate(AppDatabase::class.java) as? AppDatabase
         if (context != null && db != null) {
             return HarnessCtx(context, db, config, emptySet(), false, dir)

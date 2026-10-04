@@ -1,11 +1,11 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 
-internal fun harnessTestContext(): Context {
-    objectInstanceForTest("android.content.DesktopContext")?.let { return it as Context }
-    allocatedForTest(Context::class.java)?.let { return it as Context }
-    reflectiveForTest("android.app.Application")?.let { return it as Context }
+internal fun harnessTestContext(): PlatformContext {
+    objectInstanceForTest("com.lucent.app.platform.DesktopPlatformContext")?.let { return it as PlatformContext }
+    allocatedForTest(PlatformContext::class.java)?.let { return it as PlatformContext }
+    reflectiveForTest("android.app.Application")?.let { return it as PlatformContext }
     throw IllegalStateException("This platform gives tests no way to make a Context")
 }
 

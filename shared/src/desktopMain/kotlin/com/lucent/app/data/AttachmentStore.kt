@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.PlatformFile
 import com.lucent.app.PlatformOutputStream
 import com.lucent.app.platform.PlatformContext
@@ -14,7 +14,7 @@ actual object AttachmentStore {
     private const val COPY_BUFFER = 64 * 1024
 
     actual fun baseDir(context: PlatformContext): PlatformFile {
-        val ctx = context as Context
+        val ctx = context as PlatformContext
         return PlatformFile(File(ctx.applicationContext.filesDir, DIR_NAME).apply { if (!exists()) mkdirs() }.absolutePath)
     }
 

@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.DesktopContext
+import com.lucent.app.platform.desktopPlatformContext
 import java.io.File
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -69,7 +69,7 @@ actual object LocalSecrets {
     private fun wrapper(): MasterKeyWrapper = wrapperOverride ?: dpapiWrapper
 
     private fun keyDir(): File {
-        val base = filesDirOverride ?: DesktopContext.filesDir
+        val base = filesDirOverride ?: desktopPlatformContext.filesDir
         return File(base, "keys").apply { mkdirs() }
     }
 

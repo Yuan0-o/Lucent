@@ -1,6 +1,6 @@
 package com.lucent.desktop
 
-import android.content.DesktopContext
+import com.lucent.app.platform.desktopPlatformContext
 import androidx.activity.compose.DesktopBackDispatcher
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -44,7 +44,7 @@ fun main() {
     System.setProperty("java.net.useSystemProxies", "true")
     System.setProperty("java.net.preferIPv4Stack", "true")
 
-    val context = DesktopContext
+    val context = desktopPlatformContext
 
     val startup = try {
         runBlocking { createSettingsRepository(context).startupPrefsOnce() }
@@ -93,7 +93,7 @@ fun main() {
     com.lucent.app.harness.HarnessRuntime.android = false
     com.lucent.app.harness.HarnessRuntime.host = com.lucent.app.harness.DesktopHarnessHost
     com.lucent.app.harness.HarnessRuntime.shell = com.lucent.app.harness.DesktopHarnessShell
-    com.lucent.app.harness.HarnessRuntime.pluginHost = com.lucent.app.harness.plugins.PluginManager.desktop(android.content.DesktopContext)
+    com.lucent.app.harness.HarnessRuntime.pluginHost = com.lucent.app.harness.plugins.PluginManager.desktop(desktopPlatformContext)
     com.lucent.app.harness.HarnessRuntime.terminalBackend = com.lucent.app.harness.DesktopPtyBackend
     AppScope.io.launch {
         val raw = runCatching { createSettingsRepository(context).harnessConfigOnce() }.getOrDefault("")

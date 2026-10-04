@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.AppDatabase
 import java.io.File
 import kotlin.test.Test
@@ -203,7 +203,7 @@ class GitToolsTest {
     }
 
     private fun blankCtx(dir: File = File(System.getProperty("java.io.tmpdir"))): HarnessCtx {
-        val context = allocate(Context::class.java) as? Context
+        val context = allocate(PlatformContext::class.java) as? PlatformContext
         val db = allocate(AppDatabase::class.java) as? AppDatabase
         if (context != null && db != null) {
             return HarnessCtx(context, db, HarnessConfig(workspace = dir.path), emptySet(), false, dir)
