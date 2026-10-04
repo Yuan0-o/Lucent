@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
-import android.util.Log
+import com.lucent.app.platform.PlatformLog
 import java.awt.AWTEvent
 import java.awt.EventQueue
 import java.awt.Toolkit
@@ -53,7 +53,7 @@ actual object CrashShield {
     private fun record(where: String, throwable: Throwable) {
         caughtCount += 1
         lastCaught = "${throwable.javaClass.simpleName}: ${throwable.message ?: "(no message)"}"
-        Log.e(TAG, "swallowed on $where", throwable)
+        PlatformLog.e(TAG, "swallowed on $where", throwable)
         val ctx = appContext ?: return
         val trace = java.io.StringWriter().also { sw ->
             throwable.printStackTrace(java.io.PrintWriter(sw))

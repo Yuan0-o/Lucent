@@ -1,7 +1,7 @@
 package com.lucent.app.local
 
 import android.content.Context
-import android.util.Log
+import com.lucent.app.platform.PlatformLog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -21,7 +21,7 @@ object LocalLlm {
 
     private val available: Boolean = run {
         val ok = com.lucent.app.nativebridge.NativeLoader.loadLlmEngine()
-        if (!ok) Log.e("LocalLlm", "native engine library missing — local models unavailable")
+        if (!ok) PlatformLog.e("LocalLlm", "native engine library missing — local models unavailable")
         ok
     }
 
@@ -56,14 +56,14 @@ object LocalLlm {
     private fun gpuLayersFor(modelFile: java.io.File): Int {
         val vram = detectVramBytes()
         if (vram <= 0L) {
-            Log.w("LocalLlm", "VRAM unknown; capping GPU offload at $GPU_LAYERS_BLIND_CAP layers")
+            PlatformLog.w("LocalLlm", "VRAM unknown; capping GPU offload at $GPU_LAYERS_BLIND_CAP layers")
             return GPU_LAYERS_BLIND_CAP
         }
         val weights = modelFile.length()
         if (weights <= 0L) return GPU_LAYERS_BLIND_CAP
         val budget = vram - VRAM_HEADROOM_BYTES
         if (budget <= 0L) {
-            Log.w("LocalLlm", "VRAM too small for any offload; staying on CPU")
+            PlatformLog.w("LocalLlm", "VRAM too small for any offload; staying on CPU")
             return 0
         }
         val assumedLayers = 32
@@ -71,7 +71,7 @@ object LocalLlm {
         val perLayerKv = KV_BYTES_PER_LAYER_PER_TOKEN * N_CTX_GPU
         val affordable = (budget / (perLayerWeights + perLayerKv)).toInt()
         val layers = affordable.coerceIn(0, assumedLayers)
-        Log.i(
+        PlatformLog.i(
             "LocalLlm",
             "GPU budget: vram=${vram / (1024 * 1024)}MB model=${weights / (1024 * 1024)}MB -> $layers layers"
         )
@@ -98,7 +98,7 @@ object LocalLlm {
                 .mapNotNull { it.trim().toLongOrNull() }
                 .maxOrNull() ?: 0L
         } catch (t: Throwable) {
-            Log.w("LocalLlm", "VRAM probe failed: ${t.message}")
+            PlatformLog.w("LocalLlm", "VRAM probe failed: ${t.message}")
             0L
         }
     }
@@ -152,7 +152,7 @@ object LocalLlm {
             val ctx = if (gpuLayers > 0) N_CTX_GPU else N_CTX
             nativeLoad(file.absolutePath, ctx, threadCount(), gpuLayers)
         } catch (t: Throwable) {
-            Log.e("LocalLlm", "load failed (gpuLayers=$gpuLayers)", t)
+            PlatformLog.e("LocalLlm", "load failed (gpuLayers=$gpuLayers)", t)
             0L
         }
         loading.set(true)
@@ -160,7 +160,7 @@ object LocalLlm {
             var used = wantGpu
             var h = attempt(wantGpu)
             if (h == 0L && wantGpu > 0) {
-                Log.w("LocalLlm", "GPU load failed; falling back to CPU")
+                PlatformLog.w("LocalLlm", "GPU load failed; falling back to CPU")
                 used = 0
                 h = attempt(0)
             }
@@ -173,7 +173,7 @@ object LocalLlm {
                     val mmproj = LocalModelStore.activeMmprojFile(context)
                     mmproj != null && nativeMtmdLoad(h, mmproj.absolutePath, threadCount())
                 } catch (t: Throwable) {
-                    Log.e("LocalLlm", "mmproj load failed", t)
+                    PlatformLog.e("LocalLlm", "mmproj load failed", t)
                     false
                 }
             }
@@ -212,7 +212,7 @@ object LocalLlm {
             val prompt = try {
                 nativeChatPrompt(h, roles, texts, true)
             } catch (t: Throwable) {
-                Log.e("LocalLlm", "template failed", t)
+                PlatformLog.e("LocalLlm", "template failed", t)
                 ""
             }
             if (prompt.isBlank()) return@withContext -2
@@ -229,7 +229,7 @@ object LocalLlm {
                     nativeGenerate(h, prompt, MAX_NEW_TOKENS, cb)
                 }
             } catch (t: Throwable) {
-                Log.e("LocalLlm", "nativeGenerate threw", t)
+                PlatformLog.e("LocalLlm", "nativeGenerate threw", t)
                 -20
             }
         } finally {
@@ -257,7 +257,7 @@ object LocalLlm {
             if (h != 0L) try {
                 nativeUnload(h)
             } catch (t: Throwable) {
-                Log.e("LocalLlm", "unload failed", t)
+                PlatformLog.e("LocalLlm", "unload failed", t)
             }
         }
     }

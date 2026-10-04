@@ -1,6 +1,6 @@
-package android.util
+package com.lucent.app.platform
 
-object Log {
+object PlatformLog {
     private fun line(level: String, tag: String, msg: String, tr: Throwable? = null): Int {
         System.err.println("[$level/$tag] $msg")
         tr?.printStackTrace()
