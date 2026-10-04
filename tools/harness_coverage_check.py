@@ -5,7 +5,10 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, ".."))
 
-HARNESS = os.path.join(REPO, "shared", "src", "main", "kotlin", "com", "lucent", "app", "harness")
+HARNESS_DIRS = [
+    os.path.join(REPO, "shared", "src", "main", "kotlin", "com", "lucent", "app", "harness"),
+    os.path.join(REPO, "shared", "src", "platformMain", "kotlin", "com", "lucent", "app", "harness"),
+]
 TESTS = [
     os.path.join(REPO, "shared", "src", "commonTest", "kotlin"),
     os.path.join(REPO, "desktop", "src", "test", "kotlin"),
@@ -38,10 +41,13 @@ def read(path):
 
 
 def harness_sources():
-    for folder, _, names in os.walk(HARNESS):
-        for name in sorted(names):
-            if name.endswith(".kt"):
-                yield os.path.join(folder, name)
+    for harness in HARNESS_DIRS:
+        if not os.path.isdir(harness):
+            continue
+        for folder, _, names in os.walk(harness):
+            for name in sorted(names):
+                if name.endswith(".kt"):
+                    yield os.path.join(folder, name)
 
 
 def test_text():
