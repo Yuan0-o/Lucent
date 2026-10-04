@@ -3,15 +3,14 @@ package com.lucent.app.harness
 import com.lucent.app.platform.PlatformContext
 
 internal fun harnessTestContext(): PlatformContext {
-    newDesktopContext()?.let { return it }
+    objectInstanceForTest("com.lucent.app.platform.DesktopPlatformContext")?.let { return it as PlatformContext }
     allocatedForTest(PlatformContext::class.java)?.let { return it as PlatformContext }
     reflectiveForTest("android.app.Application")?.let { return it as PlatformContext }
     throw IllegalStateException("This platform gives tests no way to make a Context")
 }
 
-private fun newDesktopContext(): PlatformContext? = try {
-    val cls = Class.forName("com.lucent.app.platform.DesktopPlatformContext")
-    cls.getDeclaredConstructor().newInstance() as PlatformContext
+private fun objectInstanceForTest(name: String): Any? = try {
+    Class.forName(name).getDeclaredField("INSTANCE").get(null)
 } catch (t: Throwable) {
     null
 }

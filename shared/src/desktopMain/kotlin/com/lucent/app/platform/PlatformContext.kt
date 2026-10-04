@@ -9,7 +9,7 @@ actual abstract class PlatformContext {
     abstract val packageName: String
 }
 
-class DesktopPlatformContext : PlatformContext() {
+object DesktopPlatformContext : PlatformContext() {
     override val applicationContext: PlatformContext get() = this
 
     override val filesDir: File by lazy {
@@ -31,4 +31,4 @@ class DesktopPlatformContext : PlatformContext() {
     override val packageName: String get() = "com.lucent.desktop"
 }
 
-val desktopPlatformContext: PlatformContext = DesktopPlatformContext()
+val desktopPlatformContext: PlatformContext = DesktopPlatformContext
