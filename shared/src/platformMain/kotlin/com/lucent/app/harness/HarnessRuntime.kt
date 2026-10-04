@@ -109,6 +109,10 @@ interface HarnessHost {
     suspend fun pdfSplit(input: String, out: String, pages: String): Boolean = false
     fun workspaceCandidates(): List<String> = emptyList()
     fun pluginRoot(): File = File(filesDir(), "plugins")
+    fun defaultWorkspacePath(): String = defaultWorkspace().path
+    fun filesDirPath(): String = filesDir().path
+    fun cacheDirPath(): String = cacheDir().path
+    fun pluginRootPath(): String = pluginRoot().path
     fun permissionNote(): String = ""
     fun builtinRuntimeState(): String = "unavailable"
     suspend fun extractBuiltinRuntime(onProgress: (String) -> Unit): ShellOutcome =
@@ -260,4 +264,51 @@ object HarnessRuntime {
     fun subDir(name: String): File = File(home(), name).apply { mkdirs() }
 
     fun background(): kotlinx.coroutines.CoroutineScope = AppScope.io
+
+    fun workspacePath(): String {
+        val configured = current.workspace.trim()
+        val path = if (configured.isNotEmpty()) configured else defaultWorkspacePath()
+        val dir = File(path)
+        if (!dir.exists()) dir.mkdirs()
+        return path
+    }
+
+    fun subDirPath(name: String): String {
+        val path = homePath() + File.separator + name
+        val dir = File(path)
+        if (!dir.exists()) dir.mkdirs()
+        return path
+    }
+
+    fun downloadsDirPath(): String {
+        val path = workspacePath() + File.separator + ".lucent" + File.separator + "downloads"
+        val dir = File(path)
+        if (!dir.exists()) dir.mkdirs()
+        return path
+    }
+
+    fun defaultWorkspacePath(): String {
+        val h = host
+        if (h != null) return h.defaultWorkspacePath()
+        return System.getProperty("user.home") + File.separator + "Lucent"
+    }
+
+    fun filesDirPath(): String {
+        val h = host
+        if (h != null) return h.filesDirPath()
+        return System.getProperty("user.home") + File.separator + ".lucent"
+    }
+
+    fun cacheDirPath(): String {
+        val h = host
+        if (h != null) return h.cacheDirPath()
+        return System.getProperty("java.io.tmpdir") + File.separator + "lucent"
+    }
+
+    fun homePath(): String {
+        val path = filesDirPath() + File.separator + "harness"
+        val dir = File(path)
+        if (!dir.exists()) dir.mkdirs()
+        return path
+    }
 }
