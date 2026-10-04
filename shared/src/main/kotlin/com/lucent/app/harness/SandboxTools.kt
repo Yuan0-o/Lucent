@@ -163,7 +163,7 @@ object SandboxTools : HarnessGroupTools {
         val route = route(ctx, docker, proot)
         val timeout = args.optInt("timeout", ctx.config.timeoutSeconds).coerceIn(5, 1800)
         val workdir = if (args.optString("workdir", "").isBlank()) HarnessRuntime.workspace() else try {
-            Workspace.resolveFile(ctx, args.optString("workdir", ""))
+            Workspace.resolveFile(args.optString("workdir", ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That working directory cannot be used", success = false)
         }

@@ -142,7 +142,7 @@ object HarnessGate {
         val roots = mutableListOf<String>()
         HarnessDescribe.files(args.toString()).forEach { raw ->
             val p = runCatching { Workspace.resolveFile(raw) }.getOrNull() ?: return@forEach
-            val root = if (escalation.fullAccess) fs.rootOf(p) ?: p else fs.parentOf(p) ?: p
+            val root = if (escalation.fullAccess) fs.rootOf(p.path) ?: p.path else fs.parentOf(p.path) ?: p.path
             if (!Workspace.blocked(root)) roots.add(root)
         }
         val extra = roots.distinct()

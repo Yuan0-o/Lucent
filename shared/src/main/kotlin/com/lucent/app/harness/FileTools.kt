@@ -548,7 +548,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun fileInfo(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val path = Workspace.resolveFile(ctx, args.optString("path", ""))
+        val path = Workspace.resolveFile(args.optString("path", ""))
         if (!path.exists()) return ToolExecResult("${Workspace.display(ctx, path)} does not exist.", success = false)
         val inside = Workspace.isInside(path, HarnessRuntime.workspace())
         val snapshots = Snapshots.history(ctx, path.canonicalPath, 5)
@@ -639,7 +639,7 @@ object FileTools : HarnessGroupTools {
         val entries = if (raw.isBlank()) {
             Snapshots.all(ctx).takeLast(limit).reversed()
         } else {
-            Workspace.resolveFile(ctx, raw).let { Snapshots.history(ctx, it.canonicalPath, limit) }
+            Workspace.resolveFile(raw).let { Snapshots.history(ctx, it.canonicalPath, limit) }
         }
         if (entries.isEmpty()) return ToolExecResult("No snapshots yet.")
         val sb = StringBuilder("Snapshots (${entries.size}):\n")
@@ -652,7 +652,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun restoreFile(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val path = Workspace.resolveFile(ctx, args.optString("path", ""))
+        val path = Workspace.resolveFile(args.optString("path", ""))
         val id = args.optString("snapshot_id", "")
         val entry = if (id.isNotBlank()) {
             Snapshots.all(ctx).firstOrNull { it.id == id }
