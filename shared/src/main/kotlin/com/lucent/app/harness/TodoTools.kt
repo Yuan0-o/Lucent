@@ -133,7 +133,7 @@ object TodoBoard {
 object TodoFiles {
 
     fun fileFor(conversationId: Long): File =
-        File(HarnessRuntime.subDir("todos"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
+        File(HarnessRuntime.subDirPath("todos"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
     fun read(context: PlatformContext, conversationId: Long): List<TodoItem> {
         val text = HarnessVault.read(context, fileFor(conversationId))
