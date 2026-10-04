@@ -277,7 +277,7 @@ object MemoryTools : HarnessGroupTools {
     }
 
     private fun projectNotes(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = File(HarnessRuntime.workspace(), "LUCENT.md")
+        val file = File(HarnessRuntime.workspacePath(), "LUCENT.md")
         val action = args.optString("action", "read").lowercase()
         if (action == "append") {
             val text = args.optString("text", "").trim()
