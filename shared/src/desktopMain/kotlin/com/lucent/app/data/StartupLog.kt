@@ -2,7 +2,6 @@ package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
-import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat

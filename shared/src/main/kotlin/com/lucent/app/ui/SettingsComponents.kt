@@ -224,7 +224,7 @@ internal fun SettingsBreadcrumb(
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = androidx.compose.ui.platform.LocalPlatformContext.current
+    val context = LocalPlatformContext.current
     val crumbs = remember(route) { SettingsTrail.trail(route) }
     val scroll = rememberScrollState()
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {

@@ -72,7 +72,6 @@ import com.lucent.app.AppScope
 import com.lucent.app.data.Attachment
 import com.lucent.app.data.AttachmentAccess
 import com.lucent.app.data.AttachmentStore
-import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
