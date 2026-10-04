@@ -27,7 +27,7 @@ private object JvmHarnessFs : HarnessFs {
     override fun writeText(path: String, text: String) = File(path).writeText(text)
     override fun appendText(path: String, text: String) = File(path).appendText(text)
     override fun mkdirs(path: String) { File(path).mkdirs() }
-    override fun copy(src: String, dst: String, overwrite: Boolean) = File(src).copyTo(File(dst), overwrite = overwrite)
+    override fun copy(src: String, dst: String, overwrite: Boolean) { File(src).copyTo(File(dst), overwrite = overwrite) }
     override fun delete(path: String) { File(path).delete() }
     override fun deleteRecursively(path: String) { File(path).deleteRecursively() }
     override fun list(path: String): List<String> = File(path).list()?.toList() ?: emptyList()
