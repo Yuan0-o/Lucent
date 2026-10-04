@@ -49,7 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -131,7 +131,7 @@ fun QuickActionFab(
     activeColor: Int? = null,
     activeSize: Int? = null
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val onGradient = LocalOnGradient.current
     val reveal by animateFloatAsState(targetValue = if (expanded) 1f else 0f, label = "quickActionRing")
 
@@ -235,7 +235,7 @@ private fun RingAction(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val onGradient = LocalOnGradient.current
     val radians = Math.toRadians(angleDegrees.toDouble())
     val radiusPx = with(androidx.compose.ui.platform.LocalDensity.current) { RING_RADIUS.toPx() }
@@ -480,7 +480,7 @@ private fun PanelCell(
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     Column(
         modifier = Modifier
             .width(54.dp)

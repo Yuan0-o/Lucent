@@ -31,7 +31,7 @@ import com.lucent.app.security.WindowsHello
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,7 +45,7 @@ private enum class LockStage { ENTER_PASSWORD, ANSWER_QUESTION, SET_NEW_PASSWORD
 
 @Composable
 fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current

@@ -54,7 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -125,7 +125,7 @@ private const val WRONG_PASSWORD = "__wrong_password__"
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(active: Boolean = true) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val repo = remember { createSettingsRepository(context) }
     val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()

@@ -8,7 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import com.lucent.app.AppScope
 import com.lucent.app.Screen
 import com.lucent.app.data.SessionRestore
@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SessionRestoreDialog() {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val snapshot = SessionRestore.pending
     var visible by remember { mutableStateOf(!SessionRestore.asked && snapshot != null) }
     if (!visible || snapshot == null) return

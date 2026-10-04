@@ -110,7 +110,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -145,7 +145,7 @@ private val DEFAULT_TAGS: List<String>
 
 @Composable
 fun NotesScreen(active: Boolean = true) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val settingsRepo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()

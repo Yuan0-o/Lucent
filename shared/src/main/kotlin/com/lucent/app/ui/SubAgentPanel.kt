@@ -44,7 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -256,7 +256,7 @@ fun SubAgentDialog(
     mutedTint: Color,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     var tick by remember { mutableStateOf(0) }
     var instruction by remember { mutableStateOf("") }
     val current = remember(tick) { SubAgents.get(agent.id) ?: agent }

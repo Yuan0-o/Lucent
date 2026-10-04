@@ -27,7 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.i18n.S
@@ -42,7 +42,7 @@ fun MoreOptionsFold(
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(16.dp)
 
     Column(modifier = modifier.fillMaxWidth()) {

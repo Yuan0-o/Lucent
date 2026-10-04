@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -90,7 +91,7 @@ fun GlassCapsuleButton(
     modifier: Modifier = Modifier
 ) {
     val onGradient = LocalOnGradient.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(percent = 50)
     val glassDark = isDarkGlass()
     val fill = Color.White.copy(
@@ -134,7 +135,7 @@ fun GlassButton(
     compact: Boolean = false
 ) {
     val onGradient = LocalOnGradient.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(percent = 50)
     val glassDark = isDarkGlass()
 
@@ -317,7 +318,7 @@ fun CollapsibleActionBar(
 @Composable
 fun NewItemButton(contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(percent = 50)
     val plusDark = isDarkGlass()
     val plusFill = Color.White.copy(alpha = if (plusDark) 0.13f else 0.30f)
@@ -443,7 +444,7 @@ fun NoteLinkChips(
     if (notes.isEmpty()) return
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(percent = 50)
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -501,7 +502,7 @@ fun BrokenLinkChips(
 ) {
     if (targets.isEmpty()) return
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(percent = 50)
 
     Column(modifier = modifier.fillMaxWidth()) {

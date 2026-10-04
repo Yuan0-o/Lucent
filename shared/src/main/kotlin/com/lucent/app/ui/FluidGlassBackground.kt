@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -58,7 +58,7 @@ fun FluidGlassBackground(
     modifier: Modifier = Modifier,
     animated: Boolean = true
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val environment = LocalBackgroundEnvironment.current
     val inspection = LocalInspectionMode.current
     val moving = animated && environment.motionEnabled && !inspection

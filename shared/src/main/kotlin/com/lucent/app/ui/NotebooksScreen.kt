@@ -52,7 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,7 +80,7 @@ fun NotebooksScreen(
     showBack: Boolean = true,
     active: Boolean = true
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
     val settingsRepo = remember { createSettingsRepository(context) }
@@ -550,7 +550,7 @@ private fun NotebookShelfItem(
     onRecolour: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     var menuOpen by remember { mutableStateOf(false) }
@@ -658,7 +658,7 @@ internal fun NotebookEditorDialog(
     onPickPhoto: (((String?) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     var name by remember { mutableStateOf(initialName) }
     var colorKey by remember { mutableStateOf(initialColorKey) }
     AlertDialog(
@@ -709,7 +709,7 @@ internal fun NotebookEditorDialog(
 
 @Composable
 fun NotebookTrashScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val trashed by db.notebookDao.getTrashed().collectAsState(initial = emptyList())
     val onGradient = LocalOnGradient.current
@@ -818,7 +818,7 @@ fun AddToNotebookDialog(
     onDismiss: () -> Unit,
     onAdded: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
     val notebooks by db.notebookDao.getAll().collectAsState(initial = emptyList())

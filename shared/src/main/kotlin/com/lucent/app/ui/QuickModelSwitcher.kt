@@ -39,7 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -104,7 +104,7 @@ fun QuickModelSwitcher(
     reasoningCurrent: String = ReasoningEffort.DEFAULT.key,
     onPickReasoning: (ReasoningEffort) -> Unit = {}
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val scope = rememberCoroutineScope()
 
     var menu by remember { mutableStateOf(MENU_CLOSED) }

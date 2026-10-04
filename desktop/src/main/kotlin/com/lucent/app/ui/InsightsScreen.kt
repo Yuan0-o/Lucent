@@ -18,7 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,7 +29,7 @@ import com.lucent.app.data.createAppDatabase
 
 @Composable
 fun InsightsScreen() {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val allTasks by remember { db.taskDao.getAll() }.collectAsState(initial = emptyList())
 

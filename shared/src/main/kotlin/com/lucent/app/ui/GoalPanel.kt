@@ -23,7 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.harness.GoalPhase
@@ -39,7 +39,7 @@ fun GoalChip(
     mutedTint: Color,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     var open by remember { mutableStateOf(false) }
     val revision by GoalStore.changes.collectAsState()
     var goal by remember { mutableStateOf<GoalState?>(GoalStore.current()) }
@@ -77,7 +77,7 @@ fun GoalPanelDialog(
     mutedTint: Color,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     var goal by remember { mutableStateOf(GoalStore.current()) }
 
     LaunchedEffect(conversationId) {

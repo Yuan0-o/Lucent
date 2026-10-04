@@ -36,7 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,7 +56,7 @@ fun ArchivedNotesScreen(
     onOpen: (Note) -> Unit,
     onDeleteRequest: (Note) -> Unit,
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
     val archived by db.noteDao.getArchived().collectAsState(initial = emptyList())

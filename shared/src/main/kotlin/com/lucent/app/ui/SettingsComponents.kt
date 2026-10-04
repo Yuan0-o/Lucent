@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -223,7 +224,7 @@ internal fun SettingsBreadcrumb(
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = androidx.compose.ui.platform.LocalPlatformContext.current
     val crumbs = remember(route) { SettingsTrail.trail(route) }
     val scroll = rememberScrollState()
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {

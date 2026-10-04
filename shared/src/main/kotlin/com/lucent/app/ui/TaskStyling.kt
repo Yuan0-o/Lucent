@@ -35,7 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -125,7 +125,7 @@ private fun PriorityChip(
 ) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val shape = RoundedCornerShape(10.dp)
     val accent = if (option == TaskPriority.NONE) onGradient else option.color()
     val fill = if (selected) accent.copy(alpha = 0.20f) else Color.Transparent
@@ -257,7 +257,7 @@ fun ReminderToggleRow(
 fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     IconButton(
         onClick = {
             Haptics.tick(context)
@@ -276,7 +276,7 @@ fun PinIconButton(pinned: Boolean, onToggle: () -> Unit, modifier: Modifier = Mo
 @Composable
 fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp, onUnpin: (() -> Unit)? = null) {
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     Icon(
         Icons.Filled.PushPin,
         contentDescription = if (onUnpin == null) S.pinned else S.actionUnpin,

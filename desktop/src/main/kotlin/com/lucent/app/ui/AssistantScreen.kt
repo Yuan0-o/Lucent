@@ -22,7 +22,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.io.encoding.Base64
@@ -35,7 +35,7 @@ import java.io.File
 
 @Composable
 fun AssistantScreen(active: Boolean = true) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val scope = rememberCoroutineScope()
     val draft = remember { AssistantChatDraft() }
     val onGradientMuted = LocalOnGradientMuted.current

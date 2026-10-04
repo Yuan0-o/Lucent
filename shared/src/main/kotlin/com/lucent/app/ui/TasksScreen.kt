@@ -94,7 +94,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -131,7 +131,7 @@ import kotlinx.coroutines.withContext
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TasksScreen(active: Boolean = true) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val settingsRepo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()

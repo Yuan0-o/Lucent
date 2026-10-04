@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -56,7 +56,7 @@ enum class NoteColor(val key: String, val swatch: Color) {
 @Composable
 fun ColorPickerRow(selected: NoteColor, onSelect: (NoteColor) -> Unit, modifier: Modifier = Modifier) {
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     FlowRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(10.dp),

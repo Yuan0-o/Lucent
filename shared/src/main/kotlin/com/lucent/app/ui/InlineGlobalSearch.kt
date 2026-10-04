@@ -26,7 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,7 +49,7 @@ internal data class InlineGlobalResults(
 
 @Composable
 internal fun rememberInlineGlobalResults(raw: String): InlineGlobalResults {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val query = remember(raw) { SearchQuery.parse(raw) }
     var results by remember { mutableStateOf(InlineGlobalResults()) }

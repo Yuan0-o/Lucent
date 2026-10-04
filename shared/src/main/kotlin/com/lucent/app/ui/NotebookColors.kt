@@ -23,7 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -68,7 +68,7 @@ fun NotebookCoverPicker(
     modifier: Modifier = Modifier
 ) {
     val onGradientMuted = LocalOnGradientMuted.current
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         NotebookColor.entries.forEach { option ->
             val isSelected = option.key == selectedKey

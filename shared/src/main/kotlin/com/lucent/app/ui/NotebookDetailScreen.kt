@@ -41,7 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +66,7 @@ fun NotebookDetailScreen(
     onPickPhoto: (((String?) -> Unit) -> Unit)? = null
 ) {
     BackHandler { onBack() }
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
@@ -386,7 +386,7 @@ private fun NotebookMemberRow(
     onRemove: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     var menuOpen by remember { mutableStateOf(false) }
@@ -483,7 +483,7 @@ private fun NotebookMemberRow(
 
 @Composable
 private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     var title by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
@@ -532,7 +532,7 @@ private fun NotebookNewNoteDialog(notebookId: Long, onDismiss: () -> Unit, onCre
 
 @Composable
 private fun NotebookNewTaskDialog(notebookId: Long, onDismiss: () -> Unit, onCreated: () -> Unit) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     var title by remember { mutableStateOf("") }
 

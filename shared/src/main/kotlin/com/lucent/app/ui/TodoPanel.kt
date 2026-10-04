@@ -36,7 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.harness.PlanBoard
@@ -53,7 +53,7 @@ fun TodoChip(
     mutedTint: Color,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     var open by remember { mutableStateOf(false) }
     val revision by TodoBoard.changes.collectAsState()
     var items by remember { mutableStateOf<List<TodoItem>>(emptyList()) }

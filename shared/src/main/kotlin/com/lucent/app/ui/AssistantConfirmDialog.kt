@@ -20,7 +20,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.collect
 
 @Composable
 fun AssistantConfirmationDialog() {
-    val ctx = LocalContext.current
+    val ctx = LocalPlatformContext.current
     var confirm by remember { mutableStateOf<PendingConfirmation?>(null) }
     LaunchedEffect(ctx) {
         AssistantController.ensureMessagesLoaded(ctx.applicationContext)

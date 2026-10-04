@@ -104,7 +104,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -164,7 +164,7 @@ fun AssistantChatBody(
     onSaveFile: (fileName: String, bytes: ByteArray) -> Unit,
     onSaveZip: (suggestedName: String, entries: List<Pair<String, ByteArray>>) -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
@@ -1613,7 +1613,7 @@ private fun DownloadFilesDialog(
     onSaveFile: (fileName: String, bytes: ByteArray) -> Unit,
     onSaveZip: (entries: List<Pair<String, ByteArray>>) -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val scope = rememberCoroutineScope()
     val hasText = message.content.isNotBlank()
     val messageAtts = remember(message.id, message.attachmentData, message.attachmentList) {
