@@ -3,6 +3,7 @@ package com.lucent.app.data
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.harness.HarnessRuntime
 import java.io.File
+import kotlin.concurrent.Volatile
 
 internal object HarnessBackup {
 
