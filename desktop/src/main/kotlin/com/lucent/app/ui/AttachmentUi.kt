@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import androidx.compose.runtime.LaunchedEffect
+import kotlin.io.encoding.Base64
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
 import android.content.Context
@@ -133,7 +134,7 @@ fun fileToChatImage(context: Context, file: File): Triple<String, String, String
             null
         } else {
             val (finalMime, bytes) = downscaleImageBytes(file.readBytes(), mime)
-            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            val base64 = Base64.Default.encode(bytes)
             Triple(finalMime, base64, file.name.ifBlank { "image" })
         }
     }

@@ -1,5 +1,6 @@
 package com.lucent.app.harness
 
+import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -1351,10 +1352,8 @@ object ConnectorTools : HarnessGroupTools {
         return listOf(own, children.joinToString(separator)).filter { it.isNotBlank() }.joinToString(" ").trim()
     }
 
-    private fun basic(user: String, secret: String): String = android.util.Base64.encodeToString(
-        "$user:$secret".toByteArray(StandardCharsets.UTF_8),
-        android.util.Base64.NO_WRAP
-    )
+    private fun basic(user: String, secret: String): String =
+        Base64.Default.encode("$user:$secret".toByteArray(StandardCharsets.UTF_8))
 
     private suspend fun linear(args: JSONObject): ToolExecResult {
         val config = lookup(LINEAR_IDS) ?: return absent("Linear")

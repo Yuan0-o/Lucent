@@ -3,6 +3,7 @@ package com.lucent.app.tools
 import com.lucent.app.data.createSettingsRepository
 
 import android.content.Context
+import kotlin.io.encoding.Base64
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Attachment
 import com.lucent.app.data.AttachmentLimits
@@ -801,7 +802,7 @@ object AppTools {
             return ToolExecResult("There's no uploaded file in this conversation yet. Ask the user to attach the file in the chat box, then try again.", success = false)
         }
         val bytes = try {
-            android.util.Base64.decode(uploadData, android.util.Base64.DEFAULT)
+            Base64.Mime.decode(uploadData)
         } catch (t: Throwable) {
             null
         } ?: return ToolExecResult("Couldn't read the uploaded file.", success = false)

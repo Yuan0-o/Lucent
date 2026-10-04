@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.io.encoding.Base64
 import com.lucent.app.AppScope
 import com.lucent.app.GenerationService
 import com.lucent.app.data.AppDatabase
@@ -1337,7 +1338,7 @@ class AssistantControllerImpl(
                 db.chatDao.getAll().first().firstOrNull { it.id == answeredId }
                     ?.takeIf { it.attachmentMime?.startsWith("image/") == true }
                     ?.attachmentData
-                    ?.let { listOf(android.util.Base64.decode(it, android.util.Base64.DEFAULT)) }
+                    ?.let { listOf(Base64.Mime.decode(it)) }
                     ?: emptyList()
             } catch (t: Throwable) {
                 emptyList()
