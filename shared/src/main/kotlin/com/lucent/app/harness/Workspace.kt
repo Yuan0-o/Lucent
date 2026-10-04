@@ -141,4 +141,102 @@ object Workspace {
         bytes >= 1024 -> String.format("%.1f KiB", bytes / 1024.0)
         else -> "$bytes B"
     }
+
+    private val fs: HarnessFs
+        get() = systemHarnessFs()
+
+    fun isInside(path: String, root: String): Boolean = try {
+        val target = fs.canonicalize(path)
+        val base = fs.canonicalize(root)
+        if (target == base) return true
+        val prefix = if (base.endsWith(fs.separator)) base else base + fs.separator
+        target.startsWith(prefix)
+    } catch (e: Exception) {
+        false
+    }
+
+    fun resolvePath(raw: String): String {
+        val clean = raw.trim()
+        if (clean.isEmpty()) throw HarnessError("No path was given")
+        if (blocked(clean)) throw HarnessError("$clean is off limits", blocked = true)
+        val path = if (clean.startsWith("~")) {
+            fs.join(HarnessRuntime.workspacePath(), clean.removePrefix("~").removePrefix("/"))
+        } else {
+            if (fs.isAbsolute(clean)) clean else fs.join(HarnessRuntime.workspacePath(), clean)
+        }
+        return fs.canonicalize(path)
+    }
+
+    fun resolvePath(ctx: HarnessCtx, raw: String): String = resolvePath(raw)
+
+    fun writable(config: HarnessConfig, path: String): Boolean {
+        val roots = mutableListOf(HarnessRuntime.workspacePath())
+        config.writeRoots.forEach { roots.add(it) }
+        return roots.any { isInside(path, it) }
+    }
+
+    fun writable(ctx: HarnessCtx, path: String): Boolean = writable(ctx.config, path)
+
+    fun readable(config: HarnessConfig, path: String): Boolean {
+        val roots = mutableListOf(HarnessRuntime.workspacePath())
+        config.writeRoots.forEach { roots.add(it) }
+        config.readOnlyRoots.forEach { roots.add(it) }
+        return roots.any { isInside(path, it) }
+    }
+
+    fun readable(ctx: HarnessCtx, path: String): Boolean = readable(ctx.config, path)
+
+    fun forReadPath(ctx: HarnessCtx, raw: String): String {
+        val path = resolvePath(ctx, raw)
+        if (!fs.exists(path)) throw HarnessError("${displayPath(ctx, path)} does not exist")
+        if (!readable(ctx, path) && ctx.config.approvalFor(HarnessPermission.SENSITIVE) == Approval.DENY) {
+            throw HarnessError("${displayPath(ctx, path)} is outside the workspace and reading outside is blocked", blocked = true)
+        }
+        return path
+    }
+
+    fun forWritePath(ctx: HarnessCtx, raw: String): String {
+        val path = resolvePath(ctx, raw)
+        if (!writable(ctx, path)) {
+            throw HarnessError("${displayPath(ctx, path)} is outside the workspace, so it cannot be written", blocked = true)
+        }
+        return path
+    }
+
+    fun displayPath(path: String): String {
+        val root = HarnessRuntime.workspacePath()
+        return if (isInside(path, root)) {
+            val rel = fs.relativize(root, path)
+            if (rel.isEmpty()) "." else rel
+        } else path
+    }
+
+    fun displayPath(ctx: HarnessCtx, path: String): String = displayPath(path)
+
+    fun readBytes(path: String, maxBytes: Long = 32L * 1024 * 1024): ByteArray {
+        if (fs.length(path) > maxBytes) throw HarnessError("${fs.nameOf(path)} is larger than ${maxBytes / 1048576} MiB")
+        return fs.readBytes(path)
+    }
+
+    fun readText(path: String, maxBytes: Int = 1024 * 1024): String {
+        if (fs.isDirectory(path)) throw HarnessError("${fs.nameOf(path)} is a directory")
+        if (fs.length(path) > maxBytes) {
+            val head = fs.readHead(path, maxBytes)
+            return head.decodeToString() + "\n… file truncated at ${maxBytes / 1024} KiB"
+        }
+        val bytes = fs.readBytes(path)
+        return if (looksBinary(bytes)) throw HarnessError("${fs.nameOf(path)} looks like a binary file") else bytes.decodeToString()
+    }
+
+    fun writeText(ctx: HarnessCtx, path: String, text: String) {
+        if (ctx.config.snapshots && fs.exists(path)) Snapshots.capture(ctx, File(path))
+        fs.parentOf(path)?.let { fs.mkdirs(it) }
+        fs.writeText(path, text)
+    }
+
+    fun countLines(path: String): Int = try {
+        fs.readLines(path).size
+    } catch (e: Exception) {
+        0
+    }
 }
