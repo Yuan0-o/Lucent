@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import org.json.JSONObject
 import java.io.File
@@ -115,7 +115,7 @@ object HarnessPrompt {
         return if (text.length <= MEMORY_CHARS) text else text.take(MEMORY_CHARS) + "… "
     }
 
-    private fun factsIn(context: Context, file: File): List<String> {
+    private fun factsIn(context: PlatformContext, file: File): List<String> {
         val text = HarnessVault.read(context, file)
         if (text.isBlank()) return emptyList()
         val json = try { JSONObject(text) } catch (e: Exception) { return emptyList() }

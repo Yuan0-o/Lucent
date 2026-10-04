@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -291,7 +291,7 @@ object GoalStore {
 
     fun roundLimit(requested: Int): Int = requested.coerceIn(MIN_ROUNDS, MAX_ROUNDS)
 
-    fun load(context: Context, conversationId: Long) {
+    fun load(context: PlatformContext, conversationId: Long) {
         val id = conversationId.coerceAtLeast(1L)
         if (loadedConversation == id) return
         goal = GoalFiles.read(context, id)
@@ -307,7 +307,7 @@ object GoalStore {
         publish()
     }
 
-    fun create(context: Context, conversationId: Long, objective: String, maxRounds: Int): GoalState {
+    fun create(context: PlatformContext, conversationId: Long, objective: String, maxRounds: Int): GoalState {
         val now = System.currentTimeMillis()
         val fresh = GoalState(
             id = "goal-" + java.util.UUID.randomUUID().toString().replace("-", "").take(10),
@@ -324,14 +324,14 @@ object GoalStore {
         return fresh
     }
 
-    fun commit(context: Context, conversationId: Long, state: GoalState) {
+    fun commit(context: PlatformContext, conversationId: Long, state: GoalState) {
         goal = state
         loadedConversation = conversationId.coerceAtLeast(1L)
         GoalFiles.write(context, conversationId, state)
         publish()
     }
 
-    fun beginRound(context: Context, conversationId: Long, automatic: Boolean): GoalState? {
+    fun beginRound(context: PlatformContext, conversationId: Long, automatic: Boolean): GoalState? {
         val current = goal ?: return null
         if (loadedConversation != conversationId.coerceAtLeast(1L)) return null
         if (!current.active) return null
@@ -367,7 +367,7 @@ object GoalStore {
         return note
     }
 
-    fun logRound(context: Context, conversationId: Long, line: String) {
+    fun logRound(context: PlatformContext, conversationId: Long, line: String) {
         val current = goal ?: return
         if (loadedConversation != conversationId.coerceAtLeast(1L)) return
         val entry = line.replace(Regex("\\s+"), " ").trim().take(LOG_CHARS)
@@ -377,7 +377,7 @@ object GoalStore {
 
     data class BlockerReport(val accepted: Boolean, val streak: Int, val message: String)
 
-    fun reportBlocker(context: Context, conversationId: Long, reason: String): BlockerReport {
+    fun reportBlocker(context: PlatformContext, conversationId: Long, reason: String): BlockerReport {
         val current = goal ?: return BlockerReport(false, 0, "There is no goal to block.")
         val clean = reason.trim()
         if (clean.isEmpty()) return BlockerReport(false, 0, "blocked needs a concrete blocked_reason.")
@@ -410,7 +410,7 @@ object GoalStore {
         return BlockerReport(accepted, streak, message)
     }
 
-    fun pause(context: Context, conversationId: Long): GoalState? {
+    fun pause(context: PlatformContext, conversationId: Long): GoalState? {
         val current = goal ?: return null
         if (!current.active) return current
         clearAutomatic()
@@ -423,7 +423,7 @@ object GoalStore {
         return next
     }
 
-    fun resume(context: Context, conversationId: Long): GoalState? {
+    fun resume(context: PlatformContext, conversationId: Long): GoalState? {
         val current = goal ?: return null
         if (current.active || current.phase == GoalPhase.COMPLETE) return current
         val next = current.copy(
@@ -437,7 +437,7 @@ object GoalStore {
         return next
     }
 
-    fun complete(context: Context, conversationId: Long): GoalState? {
+    fun complete(context: PlatformContext, conversationId: Long): GoalState? {
         val current = goal ?: return null
         if (current.phase == GoalPhase.COMPLETE) return current
         clearAutomatic()
@@ -484,7 +484,7 @@ object GoalFiles {
     fun fileFor(conversationId: Long): File =
         File(HarnessRuntime.subDir("goals"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
-    fun read(context: Context, conversationId: Long): GoalState? {
+    fun read(context: PlatformContext, conversationId: Long): GoalState? {
         val text = HarnessVault.read(context, fileFor(conversationId))
         if (text.isBlank()) return null
         return try {
@@ -494,7 +494,7 @@ object GoalFiles {
         }
     }
 
-    fun write(context: Context, conversationId: Long, state: GoalState) {
+    fun write(context: PlatformContext, conversationId: Long, state: GoalState) {
         HarnessVault.write(context, fileFor(conversationId), toJson(state).toString())
     }
 

@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.File
 
 object SubAgentReports {
@@ -9,7 +9,7 @@ object SubAgentReports {
 
     fun folder(): File = File(HarnessRuntime.workspace(), FOLDER).apply { mkdirs() }
 
-    fun write(context: Context, agent: SubAgent): File {
+    fun write(context: PlatformContext, agent: SubAgent): File {
         val file = File(folder(), agent.id + ".md")
         file.writeText(markdown(agent))
         AuditTrail.record(

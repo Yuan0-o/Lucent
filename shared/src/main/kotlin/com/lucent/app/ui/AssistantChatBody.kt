@@ -1,5 +1,6 @@
 package com.lucent.app.ui
 
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.createSettingsRepository
 
 import com.lucent.app.data.createAppDatabase
@@ -1764,7 +1765,7 @@ private fun DownloadFilesDialog(
 }
 
 private suspend fun saveReplyIntoItem(
-    context: android.content.Context,
+    context: PlatformContext,
     message: ChatMessage,
     replyFiles: List<ReplyFiles.ReplyFile>,
     selected: Map<String, Boolean>,

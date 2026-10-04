@@ -1,5 +1,6 @@
 package com.lucent.app.data
 
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.harness.HarnessRuntime
 import java.io.File
 
@@ -101,7 +102,7 @@ internal object HarnessBackup {
     }
 
     fun writeEntry(
-        context: android.content.Context,
+        context: PlatformContext,
         name: String,
         dataLen: Long,
         data: java.io.InputStream,
@@ -149,7 +150,7 @@ internal object HarnessBackup {
         }
     }
 
-    fun record(context: android.content.Context, name: String, detail: String) {
+    fun record(context: PlatformContext, name: String, detail: String) {
         val rel = relativePath(name) ?: name
         try {
             StartupLog.event(context, "Harness restore skipped $rel — $detail")

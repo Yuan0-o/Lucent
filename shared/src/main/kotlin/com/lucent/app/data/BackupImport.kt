@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import com.lucent.app.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.first
@@ -22,7 +22,7 @@ private class ImportState {
 internal object BackupImporter {
 
     suspend fun import(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         settings: SettingsRepository,
         json: String,
@@ -98,7 +98,7 @@ internal object BackupImporter {
     }
 
     private suspend fun importNotes(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         root: JSONObject,
         wantNotes: Boolean,
@@ -161,7 +161,7 @@ internal object BackupImporter {
     }
 
     private suspend fun importTasks(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         root: JSONObject,
         wantTasks: Boolean,
@@ -339,7 +339,7 @@ internal object BackupImporter {
     }
 
     private suspend fun importNotebooks(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         root: JSONObject,
         wantNotes: Boolean,
@@ -406,7 +406,7 @@ internal object BackupImporter {
     }
 
     private suspend fun importSettings(
-        context: Context,
+        context: PlatformContext,
         settings: SettingsRepository,
         root: JSONObject,
         modules: Set<BackupManager.BackupModule>,
@@ -584,7 +584,7 @@ internal object BackupImporter {
     )
 
     internal suspend fun restoreHarness(
-        context: Context,
+        context: PlatformContext,
         source: BackupManager.BackupSource,
         password: String?,
         cancelled: () -> Boolean
@@ -618,7 +618,7 @@ internal object BackupImporter {
         return HarnessRestoreResult(restored, problems)
     }
 
-    private fun migrateInlineAttachmentsIfNeeded(context: Context, attachmentsJson: String): String {
+    private fun migrateInlineAttachmentsIfNeeded(context: PlatformContext, attachmentsJson: String): String {
         val list = Attachments.parse(attachmentsJson)
         if (list.isEmpty()) return attachmentsJson
         var changed = false

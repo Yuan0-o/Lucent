@@ -2,7 +2,7 @@ package com.lucent.app.ui
 
 import com.lucent.app.data.createAppDatabase
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -77,12 +77,12 @@ private object ActiveConversationStore {
     private var cached: Long? = null
 
     @Volatile
-    private var cachedFor: Context? = null
+    private var cachedFor: PlatformContext? = null
 
-    private fun file(context: Context): java.io.File =
+    private fun file(context: PlatformContext): java.io.File =
         java.io.File(context.applicationContext.filesDir, FILE_NAME)
 
-    fun load(context: Context): Long? {
+    fun load(context: PlatformContext): Long? {
         val app = context.applicationContext
         if (cachedFor === app) return cached
         val stored = runCatching {
@@ -93,7 +93,7 @@ private object ActiveConversationStore {
         return stored
     }
 
-    fun save(context: Context, id: Long?) {
+    fun save(context: PlatformContext, id: Long?) {
         val app = context.applicationContext
         cached = id
         cachedFor = app
@@ -109,7 +109,7 @@ class AssistantControllerImpl(
     private val appScope: CoroutineScope,
     private val db: AppDatabase,
     private val llmClient: AssistantLlmClient,
-    private val context: Context
+    private val context: PlatformContext
 ) {
 
     private val scope: CoroutineScope = appScope
@@ -195,7 +195,7 @@ class AssistantControllerImpl(
         publishState()
     }
 
-    private var appContextRef: Context? = context
+    private var appContextRef: PlatformContext? = context
 
     private val confirmationMutex = Mutex()
     @Volatile private var confirmingTurn: Turn? = null
@@ -208,7 +208,7 @@ class AssistantControllerImpl(
         private set
     private var conversationsJob: Job? = null
 
-    fun ensureMessagesLoaded(appContext: Context) {
+    fun ensureMessagesLoaded(appContext: PlatformContext) {
         appContextRef = appContext.applicationContext
         if (conversationsJob == null) {
             conversationsJob = scope.launch {
@@ -244,7 +244,7 @@ class AssistantControllerImpl(
         appContextRef?.let { ActiveConversationStore.save(it, id) }
     }
 
-    fun onAllChatsCleared(appContext: Context) {
+    fun onAllChatsCleared(appContext: PlatformContext) {
         stopAllGeneration(silent = true)
         setActiveConversation(null)
         clearError()
@@ -273,14 +273,14 @@ class AssistantControllerImpl(
         observeJob = job
     }
 
-    fun startNewConversation(appContext: Context) {
+    fun startNewConversation(appContext: PlatformContext) {
         localTurnOrNull()?.let { stopTurn(it, silent = true) }
         setActiveConversation(null)
         if (errorConversationId == null) clearError()
         observeCurrentConversation(db)
     }
 
-    fun switchConversation(appContext: Context, id: Long) {
+    fun switchConversation(appContext: PlatformContext, id: Long) {
         val localTurn = localTurnOrNull()
         if (localTurn != null) {
             if (localTurn.conversationId == id) return
@@ -290,7 +290,7 @@ class AssistantControllerImpl(
         observeCurrentConversation(db)
     }
 
-    fun deleteConversation(appContext: Context, id: Long) {
+    fun deleteConversation(appContext: PlatformContext, id: Long) {
         turnFor(id)?.let { stopTurn(it, silent = true) }
         if (errorConversationId == id) clearError()
         scope.launch {
@@ -303,7 +303,7 @@ class AssistantControllerImpl(
         }
     }
 
-    fun renameConversation(appContext: Context, id: Long, newTitle: String) {
+    fun renameConversation(appContext: PlatformContext, id: Long, newTitle: String) {
         scope.launch {
             db.chatConversationDao.getById(id)?.let { conv ->
                 val title = newTitle.trim().ifBlank { conv.title }
@@ -321,7 +321,7 @@ class AssistantControllerImpl(
 
     fun clearNetworkError() { networkErrorMessage = null }
 
-    fun deleteMessages(appContext: Context, ids: Set<Long>) {
+    fun deleteMessages(appContext: PlatformContext, ids: Set<Long>) {
         if (ids.isEmpty()) return
         AppScope.io.launch {
             try {
@@ -575,7 +575,7 @@ class AssistantControllerImpl(
     }
 
     fun resend(
-        appContext: Context,
+        appContext: PlatformContext,
         message: ChatMessage,
         url: String,
         spec: ApiSpec,
@@ -632,7 +632,7 @@ class AssistantControllerImpl(
     }
 
     fun send(
-        appContext: Context,
+        appContext: PlatformContext,
         text: String,
         attachmentMime: String?,
         attachmentData: String?,
@@ -1883,7 +1883,7 @@ object AssistantController {
 
     @Volatile private var backing: AssistantControllerImpl? = null
 
-    private fun impl(appContext: Context): AssistantControllerImpl {
+    private fun impl(appContext: PlatformContext): AssistantControllerImpl {
         backing?.let { return it }
         synchronized(this) {
             backing?.let { return it }
@@ -1928,17 +1928,17 @@ object AssistantController {
     val variantSelection get() = backing?.variantSelection ?: fallbackVariantSelection
 
 
-    fun ensureMessagesLoaded(appContext: Context) = impl(appContext).ensureMessagesLoaded(appContext)
-    fun onAllChatsCleared(appContext: Context) = impl(appContext).onAllChatsCleared(appContext)
-    fun startNewConversation(appContext: Context) = impl(appContext).startNewConversation(appContext)
-    fun switchConversation(appContext: Context, id: Long) = impl(appContext).switchConversation(appContext, id)
-    fun deleteConversation(appContext: Context, id: Long) = impl(appContext).deleteConversation(appContext, id)
-    fun renameConversation(appContext: Context, id: Long, newTitle: String) =
+    fun ensureMessagesLoaded(appContext: PlatformContext) = impl(appContext).ensureMessagesLoaded(appContext)
+    fun onAllChatsCleared(appContext: PlatformContext) = impl(appContext).onAllChatsCleared(appContext)
+    fun startNewConversation(appContext: PlatformContext) = impl(appContext).startNewConversation(appContext)
+    fun switchConversation(appContext: PlatformContext, id: Long) = impl(appContext).switchConversation(appContext, id)
+    fun deleteConversation(appContext: PlatformContext, id: Long) = impl(appContext).deleteConversation(appContext, id)
+    fun renameConversation(appContext: PlatformContext, id: Long, newTitle: String) =
         impl(appContext).renameConversation(appContext, id, newTitle)
-    fun deleteMessages(appContext: Context, ids: Set<Long>) = impl(appContext).deleteMessages(appContext, ids)
+    fun deleteMessages(appContext: PlatformContext, ids: Set<Long>) = impl(appContext).deleteMessages(appContext, ids)
 
     fun resend(
-        appContext: Context,
+        appContext: PlatformContext,
         message: ChatMessage,
         url: String,
         spec: ApiSpec,
@@ -1964,7 +1964,7 @@ object AssistantController {
     )
 
     fun send(
-        appContext: Context,
+        appContext: PlatformContext,
         text: String,
         attachmentMime: String?,
         attachmentData: String?,

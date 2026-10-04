@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.flow.first
 import com.lucent.app.harness.HarnessConfig
@@ -10,7 +10,7 @@ import org.json.JSONObject
 internal object BackupManifestBuilder {
 
     suspend fun build(
-        context: Context,
+        context: PlatformContext,
         notes: List<Note>,
         tasks: List<Task>,
         noteVersions: List<NoteVersion>,
@@ -299,7 +299,7 @@ internal object BackupManifestBuilder {
         return root
     }
 
-    private fun inlineAttachmentBytes(context: Context, attachmentsJson: String): String {
+    private fun inlineAttachmentBytes(context: PlatformContext, attachmentsJson: String): String {
         val list = Attachments.parse(attachmentsJson)
         if (list.isEmpty()) return attachmentsJson
         val inlined = list.mapNotNull { att ->

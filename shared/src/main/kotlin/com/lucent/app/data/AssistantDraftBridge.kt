@@ -2,7 +2,7 @@ package com.lucent.app.data
 
 import com.lucent.app.data.createAppDatabase
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.ui.AssistantController
 
 object AssistantDraftBridge {
@@ -15,7 +15,7 @@ object AssistantDraftBridge {
         toolName == "create_note" || toolName == "create_task"
 
     suspend fun mirror(
-        appContext: Context,
+        appContext: PlatformContext,
         toolName: String,
         edits: Map<String, String>
     ) {
@@ -60,7 +60,7 @@ object AssistantDraftBridge {
         }
     }
 
-    suspend fun clear(appContext: Context) {
+    suspend fun clear(appContext: PlatformContext) {
         val db = createAppDatabase(appContext)
         mirroredNoteId?.let { id ->
             db.noteDao.getByIdOnce(id)?.let { if (it.isDraft) db.noteDao.delete(it) }

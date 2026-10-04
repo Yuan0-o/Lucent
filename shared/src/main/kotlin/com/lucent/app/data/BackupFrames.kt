@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.io.OutputStream
 import kotlinx.coroutines.CancellationException
 
@@ -202,7 +202,7 @@ internal object BackupFrames {
     }
 
     fun restoreOneBlob(
-        context: Context,
+        context: PlatformContext,
         name: String,
         dataLen: Long,
         data: java.io.InputStream,

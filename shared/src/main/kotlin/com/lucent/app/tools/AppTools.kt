@@ -2,7 +2,7 @@ package com.lucent.app.tools
 
 import com.lucent.app.data.createSettingsRepository
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.Attachment
@@ -730,7 +730,7 @@ object AppTools {
         return if (names.isEmpty()) "no attachments" else "attachments: ${names.joinToString(", ")}"
     }
 
-    private fun describeAttachment(context: Context, att: Attachment): String {
+    private fun describeAttachment(context: PlatformContext, att: Attachment): String {
         return if (att.isImage) {
             "[image \"${att.name}\" - shown to you below]"
         } else {
@@ -743,7 +743,7 @@ object AppTools {
         }
     }
 
-    private fun imagesFrom(context: Context, list: List<Attachment>): List<ToolImage> =
+    private fun imagesFrom(context: PlatformContext, list: List<Attachment>): List<ToolImage> =
         list.filter { it.isImage }.mapNotNull { att ->
             val base64 = Attachments.readAsBase64(context, att) ?: return@mapNotNull null
             ToolImage(mime = att.mime, data = base64, name = att.name)
@@ -790,7 +790,7 @@ object AppTools {
     }
 
     private suspend fun storeUpload(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         uploadMime: String?,
         uploadData: String?,
@@ -834,7 +834,7 @@ object AppTools {
 
 
     suspend fun execute(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         name: String,
         argumentsJson: String,

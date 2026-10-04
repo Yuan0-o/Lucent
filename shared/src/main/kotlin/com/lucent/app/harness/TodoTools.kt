@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,13 +93,13 @@ object TodoBoard {
 
     fun todos(): List<TodoItem> = items
 
-    fun save(context: Context, conversationId: Long, list: List<TodoItem>) {
+    fun save(context: PlatformContext, conversationId: Long, list: List<TodoItem>) {
         items = list
         TodoFiles.write(context, conversationId, list)
         publish()
     }
 
-    fun load(context: Context, conversationId: Long) {
+    fun load(context: PlatformContext, conversationId: Long) {
         items = TodoFiles.read(context, conversationId)
         publish()
     }
@@ -135,7 +135,7 @@ object TodoFiles {
     fun fileFor(conversationId: Long): File =
         File(HarnessRuntime.subDir("todos"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
-    fun read(context: Context, conversationId: Long): List<TodoItem> {
+    fun read(context: PlatformContext, conversationId: Long): List<TodoItem> {
         val text = HarnessVault.read(context, fileFor(conversationId))
         if (text.isBlank()) return emptyList()
         return try {
@@ -145,7 +145,7 @@ object TodoFiles {
         }
     }
 
-    fun write(context: Context, conversationId: Long, list: List<TodoItem>) {
+    fun write(context: PlatformContext, conversationId: Long, list: List<TodoItem>) {
         val array = JSONArray()
         list.forEach { item ->
             array.put(JSONObject().put("title", item.title).put("status", item.status))

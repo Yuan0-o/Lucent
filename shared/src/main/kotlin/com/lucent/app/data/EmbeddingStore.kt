@@ -2,7 +2,7 @@ package com.lucent.app.data
 
 import com.lucent.app.data.createAppDatabase
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.sqrt
@@ -24,7 +24,7 @@ object EmbeddingStore {
     }
 
     suspend fun store(
-        context: Context,
+        context: PlatformContext,
         noteId: Long,
         model: String,
         vec: FloatArray,
@@ -36,7 +36,7 @@ object EmbeddingStore {
         )
     }
 
-    suspend fun search(context: Context, queryVec: FloatArray, model: String, topK: Int): List<ScoredNote> {
+    suspend fun search(context: PlatformContext, queryVec: FloatArray, model: String, topK: Int): List<ScoredNote> {
         if (topK <= 0 || queryVec.isEmpty()) return emptyList()
         val db = createAppDatabase(context)
         val queryNorm = norm(queryVec)
@@ -58,15 +58,15 @@ object EmbeddingStore {
             .take(topK)
     }
 
-    suspend fun delete(context: Context, noteId: Long, model: String) {
+    suspend fun delete(context: PlatformContext, noteId: Long, model: String) {
         createAppDatabase(context).noteEmbeddingDao.delete(noteId, model)
     }
 
-    suspend fun deleteAllForModel(context: Context, model: String) {
+    suspend fun deleteAllForModel(context: PlatformContext, model: String) {
         createAppDatabase(context).noteEmbeddingDao.deleteAllForModel(model)
     }
 
-    suspend fun clearAll(context: Context) {
+    suspend fun clearAll(context: PlatformContext) {
         createAppDatabase(context).noteEmbeddingDao.clearAll()
     }
 

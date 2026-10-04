@@ -1,6 +1,6 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -53,7 +53,7 @@ object BackupManager {
 
 
     suspend fun exportJsonFull(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         settings: SettingsRepository,
         selection: BackupSelection = BackupSelection()
@@ -94,7 +94,7 @@ object BackupManager {
     }
 
     suspend fun exportEncrypted(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         settings: SettingsRepository,
         out: OutputStream,
@@ -205,7 +205,7 @@ object BackupManager {
                 !hasSettings && modelFiles == 0 && fontFiles == 0 && harnessFiles == 0
     }
 
-    suspend fun inspect(context: Context, source: BackupSource, password: String? = null): BackupPreview {
+    suspend fun inspect(context: PlatformContext, source: BackupSource, password: String? = null): BackupPreview {
         val inspectJob = coroutineContext[Job]
         val cancelled: () -> Boolean = { inspectJob?.isActive == false }
         val needsPassword: Boolean
@@ -302,11 +302,11 @@ object BackupManager {
         )
     }
 
-    suspend fun inspect(context: Context, bytes: ByteArray, password: String? = null): BackupPreview =
+    suspend fun inspect(context: PlatformContext, bytes: ByteArray, password: String? = null): BackupPreview =
         inspect(context, BackupSource { bytes.inputStream() }, password)
 
     suspend fun commit(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         settings: SettingsRepository,
         preview: BackupPreview,
@@ -391,7 +391,7 @@ object BackupManager {
     }
 
     suspend fun importJson(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase,
         settings: SettingsRepository,
         json: String,

@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.StartupLog
 import com.lucent.app.network.ToolDefinition
@@ -9,7 +9,7 @@ import org.json.JSONObject
 import java.io.File
 
 data class HarnessCtx(
-    val context: Context,
+    val context: PlatformContext,
     val db: AppDatabase?,
     val config: HarnessConfig,
     val capabilities: Set<String>,
@@ -184,7 +184,7 @@ object HarnessGate {
     )
 
     suspend fun execute(
-        context: Context,
+        context: PlatformContext,
         db: AppDatabase?,
         name: String,
         argumentsJson: String,

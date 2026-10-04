@@ -2,7 +2,7 @@ package com.lucent.app.data
 
 import com.lucent.app.data.createSettingsRepository
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import com.lucent.app.network.ApiSpec
 import com.lucent.app.network.LlmClient
 import kotlinx.coroutines.flow.first
@@ -17,7 +17,7 @@ object EmbeddingProvider {
 
     private const val EMBEDDING_MODEL_OPENAI = "text-embedding-3-small"
 
-    suspend fun embed(context: Context, text: String): Outcome {
+    suspend fun embed(context: PlatformContext, text: String): Outcome {
         val repo = createSettingsRepository(context)
         return if (repo.localModelEnabled.first()) {
             Outcome.Unavailable(

@@ -1,9 +1,9 @@
 package com.lucent.app.data
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 
 suspend fun wipeAllData(
-    context: Context,
+    context: PlatformContext,
     db: com.lucent.app.data.AppDatabase,
     repo: com.lucent.app.data.SettingsRepository
 ) {

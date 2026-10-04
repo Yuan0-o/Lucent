@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -16,7 +16,7 @@ object LucentFontResolver {
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Holder>()
 
-    fun resolve(context: Context, fontKey: String?): FontFamily? {
+    fun resolve(context: PlatformContext, fontKey: String?): FontFamily? {
         if (fontKey.isNullOrBlank() || fontKey == SYSTEM_FONT_KEY) return null
         return cache.getOrPut(fontKey) {
             try {
