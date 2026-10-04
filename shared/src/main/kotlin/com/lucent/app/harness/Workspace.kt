@@ -27,7 +27,7 @@ object Workspace {
     fun blocked(path: String): Boolean {
         val clean = normalize(path)
         if (clean.isEmpty()) return false
-        if (HarnessRuntime.android) {
+        if (harnessIsAndroid) {
             if (BLOCKED_PREFIXES.any { clean == it || clean.startsWith("$it/") }) return true
         } else {
             if (clean.startsWith("/proc") || clean.startsWith("/sys") || clean.startsWith("/dev/")) return true
