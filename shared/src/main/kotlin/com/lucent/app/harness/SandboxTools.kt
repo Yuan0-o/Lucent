@@ -148,7 +148,7 @@ object SandboxTools : HarnessGroupTools {
             append("route=").append(route(ctx, docker, proot)).append('\n')
             append("docker=").append(docker.ifEmpty { "no" }).append('\n')
             append("proot=").append(proot.ifEmpty { "no" }).append('\n')
-            append("workspace=").append(HarnessRuntime.workspace().path)
+            append("workspace=").append(HarnessRuntime.workspacePath())
         }
     }
 
