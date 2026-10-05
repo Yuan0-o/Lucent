@@ -1,6 +1,7 @@
 package com.lucent.app.harness.plugins
 
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.appContext
 import com.lucent.app.harness.AuditEntry
 import com.lucent.app.harness.AuditTrail
 import com.lucent.app.harness.HarnessRuntime
@@ -301,9 +302,9 @@ class PluginManager private constructor(private val context: PlatformContext?, p
     }
 
     companion object {
-        fun android(context: PlatformContext): PluginManager = PluginManager(context.applicationContext, true)
+        fun android(context: PlatformContext): PluginManager = PluginManager(context.appContext(), true)
 
-        fun desktop(context: PlatformContext? = null): PluginManager = PluginManager(context?.applicationContext, false)
+        fun desktop(context: PlatformContext? = null): PluginManager = PluginManager(context?.appContext(), false)
 
         internal fun testInstance(android: Boolean): PluginManager = PluginManager(null, android)
     }

@@ -23,42 +23,6 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-data class McpReply(
-    val ok: Boolean = false,
-    val result: JSONObject? = null,
-    val error: String = "",
-    val sessionId: String = "",
-    val status: Int = 0
-)
-
-data class McpDiscovery(
-    val tools: List<McpTool> = emptyList(),
-    val error: String = ""
-)
-
-data class McpPrompts(
-    val prompts: List<McpPromptInfo> = emptyList(),
-    val error: String = ""
-)
-
-data class McpStatus(
-    val ok: Boolean,
-    val millis: Long,
-    val detail: String = ""
-)
-
-data class McpText(
-    val text: String = "",
-    val error: String = ""
-)
-
-interface McpTransport {
-    val id: String
-    fun describe(server: McpServer): String
-    suspend fun send(server: McpServer, method: String, params: JSONObject?, notification: Boolean): McpReply
-    fun close(serverId: String)
-}
-
 fun mcpCommandLine(server: McpServer): List<String> {
     val parts = mutableListOf<String>()
     val command = server.command.trim()
@@ -509,7 +473,7 @@ object McpTransports {
     }
 }
 
-object McpSessions {
+actual object McpSessions {
 
     private class Entry(val tools: List<McpTool>, val at: Long)
 
@@ -529,13 +493,13 @@ object McpSessions {
         failures.remove(serverId)
     }
 
-    fun cachedTools(serverId: String): List<McpTool> = cached[serverId]?.tools.orEmpty()
+    actual fun cachedTools(serverId: String): List<McpTool> = cached[serverId]?.tools.orEmpty()
 
-    fun lastError(serverId: String): String = failures[serverId].orEmpty()
+    actual fun lastError(serverId: String): String = failures[serverId].orEmpty()
 
-    fun transportName(server: McpServer): String = McpTransports.describe(server)
+    actual fun transportName(server: McpServer): String = McpTransports.describe(server)
 
-    fun endpoint(server: McpServer): String = when {
+    actual fun endpoint(server: McpServer): String = when {
         server.url.isNotBlank() -> server.url
         server.command.isNotBlank() -> mcpCommandLine(server).joinToString(" ")
         else -> "no url or command yet"
@@ -559,7 +523,7 @@ object McpSessions {
         }
     }
 
-    suspend fun discovery(server: McpServer, force: Boolean = false): McpDiscovery {
+    actual suspend fun discovery(server: McpServer, force: Boolean): McpDiscovery {
         val problem = unavailable(server)
         if (problem.isNotBlank()) {
             failures[server.id] = problem
@@ -612,7 +576,7 @@ object McpSessions {
         }
     }
 
-    suspend fun call(server: McpServer, tool: String, argumentsJson: String): McpResult {
+    actual suspend fun call(server: McpServer, tool: String, argumentsJson: String): McpResult {
         val name = tool.trim()
         if (name.isEmpty()) {
             return McpResult("No MCP tool name was given.", emptyList(), true)
@@ -637,7 +601,7 @@ object McpSessions {
         return McpProtocol.decodeResult(result)
     }
 
-    suspend fun readResource(server: McpServer, uri: String): McpText {
+    actual suspend fun readResource(server: McpServer, uri: String): McpText {
         val clean = uri.trim()
         if (clean.isEmpty()) return McpText(error = "No resource uri was given.")
         val reply = exchange(server, McpProtocol.RESOURCES_READ, McpProtocol.readParams(clean))
@@ -666,7 +630,7 @@ object McpSessions {
         return McpText(text = lines.joinToString("\n"))
     }
 
-    suspend fun prompts(server: McpServer): McpPrompts {
+    actual suspend fun prompts(server: McpServer): McpPrompts {
         return try {
             val collected = mutableListOf<McpPromptInfo>()
             var cursor = ""
@@ -697,7 +661,7 @@ object McpSessions {
         }
     }
 
-    suspend fun ping(server: McpServer): McpStatus {
+    actual suspend fun ping(server: McpServer): McpStatus {
         val started = System.currentTimeMillis()
         val reply = exchange(server, McpProtocol.PING)
         val millis = System.currentTimeMillis() - started
@@ -718,7 +682,7 @@ object McpSessions {
         stdio.close(serverId)
     }
 
-    suspend fun close() {
+    actual suspend fun close() {
         withContext(Dispatchers.IO) { invalidate("") }
     }
 
