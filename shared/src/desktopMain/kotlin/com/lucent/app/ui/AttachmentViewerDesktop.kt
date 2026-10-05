@@ -85,11 +85,11 @@ import java.io.File
 import java.util.zip.ZipInputStream
 
 @Composable
-fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
+actual fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
     AttachmentViewerDialog(listOf(att), 0, onDismiss)
 
 @Composable
-fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
+actual fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
     if (attachments.isEmpty()) return
     val context = desktopPlatformContext
     val save = rememberSaveAttachmentLauncher()

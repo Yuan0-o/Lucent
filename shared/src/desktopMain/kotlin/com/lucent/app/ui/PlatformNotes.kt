@@ -13,7 +13,7 @@ import com.lucent.desktop.platform.DesktopFiles
 import com.lucent.desktop.platform.DesktopShare
 import com.lucent.desktop.platform.LucentDateTimePickerFlow
 
-typealias PlatformPickedFile = java.io.File
+actual typealias PlatformPickedFile = java.io.File
 
 private fun is24HourFormat(): Boolean = try {
     val df = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, java.util.Locale.getDefault())
@@ -24,36 +24,36 @@ private fun is24HourFormat(): Boolean = try {
 }
 
 @Composable
-fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit = {
+actual fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit = {
     val files = DesktopFiles.openFiles()
     if (files.isNotEmpty()) onPicked(files)
 }
 
-fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long = source.length()
+actual fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long = source.length()
 
-fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
+actual fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
     fileToAttachment(context, source)
 
-fun templateToastContext(context: PlatformContext): PlatformContext = context.applicationContext
+actual fun templateToastContext(context: PlatformContext): PlatformContext = context.applicationContext
 
 @Composable
-fun OnAppHidden(action: () -> Unit) {
+actual fun OnAppHidden(action: () -> Unit) {
     val isWindowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(isWindowFocused) {
         if (!isWindowFocused) action()
     }
 }
 
-fun shareText(context: PlatformContext, subject: String?, text: String, chooserTitle: String) =
+actual fun shareText(context: PlatformContext, subject: String?, text: String, chooserTitle: String) =
     DesktopShare.shareText(context, subject = subject, text = text)
 
-val notesGridColumns: Int = 4
+actual val notesGridColumns: Int = 4
 
 @Composable
-fun rememberNotificationPermissionRequester(): () -> Unit = {}
+actual fun rememberNotificationPermissionRequester(): () -> Unit = {}
 
 @Composable
-fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
+actual fun rememberDateTimePicker(minMillis: Long, initialMillis: Long, onChange: (Long) -> Unit): () -> Unit {
     var showPicker by remember { mutableStateOf(false) }
     if (showPicker) {
         LucentDateTimePickerFlow(

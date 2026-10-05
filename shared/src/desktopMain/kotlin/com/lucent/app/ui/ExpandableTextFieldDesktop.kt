@@ -54,7 +54,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 @Composable
-fun ExpandableGlassTextField(
+actual fun ExpandableGlassTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,

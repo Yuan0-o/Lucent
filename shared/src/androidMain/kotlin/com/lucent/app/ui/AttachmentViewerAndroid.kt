@@ -229,11 +229,11 @@ fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
 
 
 @Composable
-fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
+actual fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit) =
     AttachmentViewerDialog(listOf(att), 0, onDismiss)
 
 @Composable
-fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
+actual fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit) {
     if (attachments.isEmpty()) return
     val context = LocalContext.current
     val save = rememberSaveAttachmentLauncher()
