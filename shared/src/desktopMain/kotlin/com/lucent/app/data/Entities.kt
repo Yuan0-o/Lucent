@@ -48,6 +48,26 @@ actual data class Task(
     actual val formatOverride: String? = null
 )
 
+actual fun Task.copyForRecurrence(
+    id: Long,
+    isDone: Boolean,
+    createdAt: Long,
+    attachments: String,
+    dueAt: Long?,
+    completedAt: Long?,
+    subtasks: String,
+    trashedAt: Long?
+): Task = copy(
+    id = id,
+    isDone = isDone,
+    createdAt = createdAt,
+    attachments = attachments,
+    dueAt = dueAt,
+    completedAt = completedAt,
+    subtasks = subtasks,
+    trashedAt = trashedAt
+)
+
 actual data class NoteVersion(
     actual val id: Long = 0,
     actual val noteId: Long,

@@ -55,7 +55,7 @@ object Recurrence {
         if (rule == RepeatRule.NONE) return null
         val base = task.dueAt ?: return null
         val nextDue = nextOccurrence(base, rule) ?: return null
-        return task.copy(
+        return task.copyForRecurrence(
             id = 0,
             isDone = false,
             createdAt = System.currentTimeMillis(),
