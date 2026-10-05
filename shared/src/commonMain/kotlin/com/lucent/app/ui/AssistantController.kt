@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import com.lucent.app.data.createAppDatabase
+import kotlinx.datetime.Clock
 
 import com.lucent.app.platform.PlatformContext
 import androidx.compose.runtime.getValue
@@ -724,7 +725,7 @@ class AssistantControllerImpl(
                             text.trim().take(40).ifBlank { conv.title }
                         } else conv.title
                         db.chatConversationDao.update(
-                            conv.copy(title = newTitle, updatedAt = System.currentTimeMillis())
+                            conv.copy(title = newTitle, updatedAt = Clock.System.now().toEpochMilliseconds())
                         )
                     }
                 }

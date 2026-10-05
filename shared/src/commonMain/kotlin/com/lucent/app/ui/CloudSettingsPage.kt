@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import com.lucent.app.data.createAppDatabase
+import kotlinx.datetime.Clock
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -284,7 +285,7 @@ fun CloudSettingsPage(
                                     )
                                     out.toByteArray()
                                 }
-                                CloudSync.upload(cfg, "lucent-backup-${System.currentTimeMillis()}.lcb", bytes)
+                                CloudSync.upload(cfg, "lucent-backup-${Clock.System.now().toEpochMilliseconds()}.lcb", bytes)
                             }
                             busy = false
                             showToast(r.fold(
