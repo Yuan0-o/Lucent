@@ -4,9 +4,9 @@ import com.lucent.app.network.ToolExecResult
 import org.json.JSONObject
 import java.io.File
 
-internal fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
-internal fun shellSyntax(value: String): String? {
+fun shellSyntax(value: String): String? {
     val tokens = listOf(";", "&&", "||", "|", "`", "\$(", ">", "<")
     for (token in tokens) {
         if (value.contains(token)) {
@@ -16,7 +16,7 @@ internal fun shellSyntax(value: String): String? {
     return null
 }
 
-internal fun blocked(arguments: String): String? {
+fun blocked(arguments: String): String? {
     val text = arguments.trim()
     if (text.isEmpty()) return "No git arguments were given, so nothing was run."
     shellSyntax(text)?.let { return it }
@@ -49,7 +49,7 @@ internal fun blocked(arguments: String): String? {
     return null
 }
 
-internal fun relativePathProblem(value: String): String? {
+fun relativePathProblem(value: String): String? {
     val clean = value.trim()
     if (clean.isEmpty()) return "A path is required."
     if (clean.startsWith("/") || clean.startsWith("~") || (clean.length > 1 && clean[1] == ':')) {
@@ -60,7 +60,7 @@ internal fun relativePathProblem(value: String): String? {
     return shellSyntax(clean)
 }
 
-internal fun revisionProblem(value: String, label: String): String? {
+fun revisionProblem(value: String, label: String): String? {
     val clean = value.trim()
     if (clean.isEmpty()) return "A $label is required."
     if (clean.startsWith("-")) return "A $label cannot start with a dash."
@@ -68,7 +68,7 @@ internal fun revisionProblem(value: String, label: String): String? {
     return shellSyntax(clean)
 }
 
-internal fun urlProblem(value: String): String? {
+fun urlProblem(value: String): String? {
     val clean = value.trim()
     if (clean.isEmpty()) return "A url is required."
     if (clean.startsWith("-")) return "A url cannot start with a dash."
@@ -76,9 +76,9 @@ internal fun urlProblem(value: String): String? {
     return shellSyntax(clean)
 }
 
-internal fun splitPathList(raw: String): List<String> = raw.split(Regex("\\s+")).filter { it.isNotBlank() }
+fun splitPathList(raw: String): List<String> = raw.split(Regex("\\s+")).filter { it.isNotBlank() }
 
-internal fun pathListProblem(paths: List<String>): String? {
+fun pathListProblem(paths: List<String>): String? {
     if (paths.isEmpty()) return "At least one relative path is required."
     for (path in paths) {
         relativePathProblem(path)?.let { return it }
@@ -86,11 +86,11 @@ internal fun pathListProblem(paths: List<String>): String? {
     return null
 }
 
-internal fun quotedPaths(paths: List<String>): String = paths.joinToString(" ") { quote(it) }
+fun quotedPaths(paths: List<String>): String = paths.joinToString(" ") { quote(it) }
 
 private val READ_ONLY_COMMANDS = setOf("status", "diff", "log", "show", "blame")
 
-internal fun readOnlyArguments(arguments: String): Boolean {
+fun readOnlyArguments(arguments: String): Boolean {
     val command = arguments.trim().split(Regex("\\s+")).firstOrNull() ?: return false
     return command in READ_ONLY_COMMANDS
 }
