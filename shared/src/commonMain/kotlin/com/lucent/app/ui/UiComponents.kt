@@ -486,8 +486,7 @@ fun LucentExpandedInput(
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onCollapse,
         properties = androidx.compose.ui.window.DialogProperties(
-            usePlatformDefaultWidth = false,
-            usePlatformInsets = false
+            usePlatformDefaultWidth = false
         )
     ) {
         androidx.compose.foundation.layout.Column(
