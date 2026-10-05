@@ -116,8 +116,6 @@ import androidx.compose.ui.text.style.TextAlign
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
 
-internal enum class SettingsRoute { Root, Language, Assistant, Personalization, CloudModel, LocalModel, Appearance, Theme, Background, Splash, Editor, Cloud, Security, Privacy, Data, About, Licences, Advanced, Agent, Workspace, Capabilities, Permissions, Groups, Execution, Github, Plugins, Mcp, Audit, Shizuku, PluginSetup }
-
 internal enum class ExportKind { NOTES, TASKS }
 
 private const val WRONG_PASSWORD = "__wrong_password__"
