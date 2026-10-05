@@ -11,8 +11,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class PtySessionState { RUNNING, EXITED, CLOSED, FAILED }
-
 interface PtySessionListener {
     fun onOutput(session: PtySession, chunk: String)
     fun onExit(session: PtySession, exitCode: Int)
