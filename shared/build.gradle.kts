@@ -38,7 +38,7 @@ kotlin {
             }
         }
         val androidMain by getting {
-            dependsOn(jvmMain)
+            dependsOn(jvmMain.get())
             dependencies {
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
@@ -63,7 +63,7 @@ kotlin {
             }
         }
         val desktopMain by getting {
-            dependsOn(jvmMain)
+            dependsOn(jvmMain.get())
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.swing)
