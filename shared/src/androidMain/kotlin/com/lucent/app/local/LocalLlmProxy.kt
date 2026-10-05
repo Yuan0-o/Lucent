@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
+import com.lucent.app.platform.PlatformContext
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
@@ -86,7 +87,7 @@ internal object LocalLlmProxy {
         cachedGpuEnabled = enabled
     }
 
-    suspend fun ensureLoaded(context: Context): Boolean = withContext(Dispatchers.IO) {
+    suspend fun ensureLoaded(context: PlatformContext): Boolean = withContext(Dispatchers.IO) {
         cachedIsLoading = true
         try {
             val stub = ensureBound(context) ?: return@withContext false
@@ -134,8 +135,8 @@ internal object LocalLlmProxy {
                     pendingGenerate.set(cont)
                     cont.invokeOnCancellation { pendingGenerate.compareAndSet(cont, null) }
                     val callback = object : ILocalLlmCallback.Stub() {
-                        override fun onPiece(piece: String) {
-                            onDelta(piece)
+                        override fun onPiece(piece: String?) {
+                            if (piece != null) onDelta(piece)
                         }
                         override fun onDone(rc: Int) {
                             pendingGenerate.getAndSet(null)?.let { c -> if (c.isActive) c.resume(rc, onCancellation = null) }
@@ -178,7 +179,7 @@ internal object LocalLlmProxy {
     }
 
 
-    private suspend fun ensureBound(contextHint: Context?): ILocalLlmEngine? {
+    private suspend fun ensureBound(contextHint: PlatformContext?): ILocalLlmEngine? {
         engineStub?.let { return it }
         val appCtx = (contextHint ?: LocalLlmContextHolder.appContext)?.applicationContext
             ?: return null
@@ -227,3 +228,4 @@ internal object LocalLlmProxy {
         }
     }
 }
+

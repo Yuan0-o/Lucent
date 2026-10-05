@@ -3,11 +3,12 @@ package com.lucent.app.platform
 import java.io.File
 
 actual abstract class PlatformContext {
-    abstract val applicationContext: PlatformContext
-    abstract val filesDir: File
     abstract val cacheDir: File
     abstract val packageName: String
 }
+
+actual val PlatformContext.applicationContext: PlatformContext get() = (this as DesktopPlatformContext).applicationContext
+actual val PlatformContext.filesDir: File get() = (this as DesktopPlatformContext).filesDir
 
 class DesktopPlatformContext : PlatformContext() {
     override val applicationContext: PlatformContext get() = this

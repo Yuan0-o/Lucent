@@ -78,11 +78,6 @@ const val SWIPE_ENTER_MS = 220
 
 const val SWIPE_RESIST = 0.33f
 
-private val CapsuleLabelLineHeight = LineHeightStyle(
-    alignment = LineHeightStyle.Alignment.Center,
-    trim = LineHeightStyle.Trim.Both
-)
-
 @Composable
 fun GlassCapsuleButton(
     text: String,
@@ -124,6 +119,7 @@ fun GlassCapsuleButton(
 
 val COMPOSER_ACTION_HEIGHT = 52.dp
 
+@Composable
 fun AttachmentSection(
     attachments: List<com.lucent.app.data.Attachment>,
     onPick: () -> Unit,
@@ -491,7 +487,7 @@ fun LucentExpandedInput(
         onDismissRequest = onCollapse,
         properties = androidx.compose.ui.window.DialogProperties(
             usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
+            usePlatformInsets = false
         )
     ) {
         androidx.compose.foundation.layout.Column(

@@ -189,7 +189,7 @@ actual object LocalLlm {
 
     actual suspend fun generate(
         messages: List<Pair<String, String>>,
-        images: List<ByteArray> = emptyList(),
+        images: List<ByteArray>,
         onDelta: (String) -> Unit
     ): Int = generateOverride?.invoke(messages, images, onDelta)
         ?: withContext(llmDispatcher) {

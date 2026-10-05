@@ -139,11 +139,11 @@ fun CardAttachments(
         }
     }
 
-    renaming?.let { att ->
+    renaming?.let<Attachment, Unit> { att ->
         AttachmentRenameDialog(
             current = att,
             takenNames = attachments.filterNot { it.data == att.data }.map { it.name },
-            onConfirm = { newName -> onRename?.invoke(att, newName); renaming = null },
+            onConfirm = { newName: String -> onRename?.invoke(att, newName); renaming = null },
             onDismiss = { renaming = null }
         )
     }
@@ -260,11 +260,11 @@ fun PendingAttachmentChips(
         }
     }
 
-    renaming?.let { att ->
+    renaming?.let<Attachment, Unit> { att ->
         AttachmentRenameDialog(
             current = att,
             takenNames = attachments.filterNot { it.data == att.data }.map { it.name },
-            onConfirm = { newName -> onRename?.invoke(att, newName); renaming = null },
+            onConfirm = { newName: String -> onRename?.invoke(att, newName); renaming = null },
             onDismiss = { renaming = null }
         )
     }
@@ -320,122 +320,6 @@ private fun AttachmentRow(
         trailing?.invoke(this)
     }
 }
-
-@Composable
-private fun AttachmentRenameDialog(
-    current: Attachment,
-    takenNames: List<String>,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var text by remember(current.data) { mutableStateOf(current.name) }
-    val proposed = withPreservedExtension(text.trim(), current.name)
-    val clash = proposed.isNotEmpty() && takenNames.any { it.equals(proposed, ignoreCase = true) }
-    val valid = proposed.isNotEmpty() && !clash
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(com.lucent.app.i18n.S.attachmentRenameTitle) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text  = com.lucent.app.collapseExcessBlankLines(it) },
-                    label = { Text(com.lucent.app.i18n.S.attachmentNameLabel) },
-                    singleLine = true,
-                    isError = clash,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (clash) {
-                    Spacer(modifier = Modifier.size(6.dp))
-                    Text(com.lucent.app.i18n.S.attachmentNameTaken, fontSize = 12.sp)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = valid, onClick = { onConfirm(proposed) }) {
-                Text(com.lucent.app.i18n.S.actionRename)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(com.lucent.app.i18n.S.actionCancel) }
-        }
-    )
-}
-
-private fun withPreservedExtension(typed: String, original: String): String {
-    if (typed.isEmpty()) return ""
-    if (typed.substringAfterLast('.', "").isNotEmpty()) return typed
-    val ext = original.substringAfterLast('.', "")
-    return if (ext.isEmpty()) typed else "$typed.$ext"
-}
-
-private fun iconForAttachment(att: Attachment) = when {
-    att.isVideo -> Icons.Default.Movie
-    att.isAudio -> Icons.Default.MusicNote
-    att.isPdf -> Icons.Default.PictureAsPdf
-    att.isImage -> Icons.Default.Image
-    else -> Icons.AutoMirrored.Filled.InsertDriveFile
-}
-
-
-@Composable
-private fun AttachmentRenameDialog(
-    current: Attachment,
-    takenNames: List<String>,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var text by remember(current.data) { mutableStateOf(current.name) }
-    val proposed = withPreservedExtension(text.trim(), current.name)
-    val clash = proposed.isNotEmpty() && takenNames.any { it.equals(proposed, ignoreCase = true) }
-    val valid = proposed.isNotEmpty() && !clash
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(com.lucent.app.i18n.S.attachmentRenameTitle) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text  = com.lucent.app.collapseExcessBlankLines(it) },
-                    label = { Text(com.lucent.app.i18n.S.attachmentNameLabel) },
-                    singleLine = true,
-                    isError = clash,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (clash) {
-                    Spacer(modifier = Modifier.size(6.dp))
-                    Text(com.lucent.app.i18n.S.attachmentNameTaken, fontSize = 12.sp)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = valid, onClick = { onConfirm(proposed) }) {
-                Text(com.lucent.app.i18n.S.actionRename)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(com.lucent.app.i18n.S.actionCancel) }
-        }
-    )
-}
-
-private fun withPreservedExtension(typed: String, original: String): String {
-    if (typed.isEmpty()) return ""
-    if (typed.substringAfterLast('.', "").isNotEmpty()) return typed
-    val ext = original.substringAfterLast('.', "")
-    return if (ext.isEmpty()) typed else "$typed.$ext"
-}
-
-private fun iconForAttachment(att: Attachment) = when {
-    att.isVideo -> Icons.Default.Movie
-    att.isAudio -> Icons.Default.MusicNote
-    att.isPdf -> Icons.Default.PictureAsPdf
-    att.isImage -> Icons.Default.Image
-    else -> Icons.AutoMirrored.Filled.InsertDriveFile
-}
-
 
 @Composable
 private fun AttachmentRenameDialog(
