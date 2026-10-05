@@ -49,17 +49,20 @@ class GenerationService : Service() {
         ) {
             engineScope.launch {
                 val rc = try {
-                    val images = imagePaths.mapNotNull { path ->
+                    val safeRoles = roles ?: emptyArray()
+                    val safeTexts = texts ?: emptyArray()
+                    val safeImagePaths = imagePaths ?: emptyArray()
+                    val images = safeImagePaths.mapNotNull { path ->
                         try {
                             File(path).readBytes()
                         } catch (t: Throwable) {
                             null
                         }
                     }
-                    val messages = roles.indices.map { roles[it] to texts[it] }
+                    val messages = safeRoles.indices.map { safeRoles[it] to safeTexts[it] }
                     LocalLlm.engineGenerate(messages, images) { piece ->
                         try {
-                            callback.onPiece(piece)
+                            callback?.onPiece(piece)
                         } catch (t: RemoteException) {
                         }
                     }
@@ -67,7 +70,7 @@ class GenerationService : Service() {
                     LocalLlm.RC_ENGINE_GLUE_ERROR
                 }
                 try {
-                    callback.onDone(rc)
+                    callback?.onDone(rc)
                 } catch (t: RemoteException) {
                 }
             }
