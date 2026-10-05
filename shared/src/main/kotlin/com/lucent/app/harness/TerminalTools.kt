@@ -61,7 +61,7 @@ object HarnessJobs {
                 if (shell == null || !shell.isReady()) {
                     handle.failure = "no shell backend is available"
                 } else {
-                    handle.outcome = shell.run(command, workdir, timeoutSeconds, emptyMap())
+                    handle.outcome = shell.run(command, workdir.path, timeoutSeconds, emptyMap())
                 }
             } catch (e: Exception) {
                 handle.failure = e.message ?: e::class.simpleName ?: "failed"
@@ -359,7 +359,7 @@ object TerminalTools : HarnessGroupTools {
             }
         }
         val shell = HarnessRuntime.shell
-        val outcome = shell?.run(command, dir, timeout, env)
+        val outcome = shell?.run(command, dir.path, timeout, env)
             ?: ShellOutcome(false, "", "no shell backend is available", -1)
         val text = ctx.limit(outcome.text)
         val body = buildString {

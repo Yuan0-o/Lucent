@@ -219,7 +219,7 @@ object DesktopHarnessHost : HarnessHost {
     override fun exportFile(path: String): Boolean {
         val source = File(path)
         if (!source.isFile) return false
-        val target = File(defaultWorkspace(), source.name)
+        val target = File(defaultWorkspacePath(), source.name)
         return try {
             target.parentFile?.mkdirs()
             source.copyTo(target, overwrite = true)
