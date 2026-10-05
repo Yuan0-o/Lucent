@@ -1,4 +1,5 @@
 package com.lucent.app.harness.plugins
+import com.lucent.app.platform.filesDir
 
 import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.PluginFailure

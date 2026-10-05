@@ -1,4 +1,5 @@
 package com.lucent.app.harness
+import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope

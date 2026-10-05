@@ -1,4 +1,6 @@
 package com.lucent.app.ui
+import com.lucent.app.platform.applicationContext
+import com.lucent.app.platform.filesDir
 
 import com.lucent.app.startGenerationService
 import com.lucent.app.stopGenerationService
