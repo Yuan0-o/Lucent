@@ -3,7 +3,7 @@ package com.lucent.app.assistant.prompts
 import com.lucent.app.data.DEFAULT_ASSISTANT_STYLE
 import com.lucent.app.data.MemoryTier
 import com.lucent.app.network.ToolDefinition
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format.DayOfWeekNames

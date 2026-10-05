@@ -1,7 +1,7 @@
 package com.lucent.app.ui
 
 import com.lucent.app.data.createAppDatabase
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
