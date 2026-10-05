@@ -45,9 +45,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-internal data class DirectoryEntry(val name: String, val path: String)
+data class DirectoryEntry(val name: String, val path: String)
 
-internal object DirectoryBrowse {
+object DirectoryBrowse {
 
     fun normalize(path: String): String {
         val trimmed = path.trim()
