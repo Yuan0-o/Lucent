@@ -561,9 +561,9 @@ object AppTools {
     private fun matchTask(tasks: List<Task>, query: String): Task? =
         bestMatch(tasks, query, { it.title }, { it.createdAt })
 
-    internal fun resolveNote(notes: List<Note>, query: String): Note? = matchNote(notes, query)
+    fun resolveNote(notes: List<Note>, query: String): Note? = matchNote(notes, query)
 
-    internal fun resolveTask(tasks: List<Task>, query: String): Task? = matchTask(tasks, query)
+    fun resolveTask(tasks: List<Task>, query: String): Task? = matchTask(tasks, query)
 
     private fun composed(value: String): String =
         try {
