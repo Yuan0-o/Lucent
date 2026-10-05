@@ -2,18 +2,17 @@ package com.lucent.app.platform
 
 import java.io.File
 
-actual abstract class PlatformContext {
-    abstract val cacheDir: File
-    abstract val packageName: String
-}
+actual class PlatformContext
 
 actual val PlatformContext.applicationContext: PlatformContext get() = (this as DesktopPlatformContext).applicationContext
-actual val PlatformContext.filesDir: File get() = (this as DesktopPlatformContext).filesDir
+actual val PlatformContext.filesDir: java.io.File get() = (this as DesktopPlatformContext).filesDir
+
+actual fun PlatformContext.appContext(): PlatformContext = applicationContext
 
 class DesktopPlatformContext : PlatformContext() {
-    override val applicationContext: PlatformContext get() = this
+    val applicationContext: PlatformContext get() = this
 
-    override val filesDir: File by lazy {
+    val filesDir: File by lazy {
         val os = System.getProperty("os.name").lowercase()
         val home = System.getProperty("user.home")
         val base: File = when {
@@ -27,11 +26,9 @@ class DesktopPlatformContext : PlatformContext() {
         File(base, "Lucent").apply { mkdirs() }
     }
 
-    override val cacheDir: File by lazy { File(filesDir, "cache").apply { mkdirs() } }
+    val cacheDir: File by lazy { File(filesDir, "cache").apply { mkdirs() } }
 
-    override val packageName: String get() = "com.lucent.desktop"
+    val packageName: String get() = "com.lucent.desktop"
 }
 
 val desktopPlatformContext: PlatformContext = DesktopPlatformContext()
-
-actual fun PlatformContext.appContext(): PlatformContext = applicationContext

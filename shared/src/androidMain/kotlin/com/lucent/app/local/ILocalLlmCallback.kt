@@ -13,7 +13,12 @@ interface ILocalLlmCallback : IInterface {
     @Throws(RemoteException::class)
     fun onDone(rc: Int)
 
-    abstract class Stub : Binder(), ILocalLlmCallback {
+    open class Stub : Binder(), ILocalLlmCallback {
+        @Throws(RemoteException::class)
+        override fun onPiece(piece: String?) {}
+
+        @Throws(RemoteException::class)
+        override fun onDone(rc: Int) {}
         companion object {
             private const val DESCRIPTOR = "com.lucent.app.local.ILocalLlmCallback"
             private const val TRANSACTION_onPiece = IBinder.FIRST_CALL_TRANSACTION + 0
