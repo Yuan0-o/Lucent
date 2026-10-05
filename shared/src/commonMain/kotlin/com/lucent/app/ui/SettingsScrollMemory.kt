@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-internal object SettingsScrollMemory {
+object SettingsScrollMemory {
 
     private val offsets = mutableMapOf<SettingsRoute, Int>()
 

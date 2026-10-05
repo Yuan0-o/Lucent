@@ -23,11 +23,11 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
 
-internal const val PEN_WRITE_START_MS = 260f
-internal const val PEN_WRITE_END_MS = 3000f
-internal const val PEN_HOLD_END_MS = 3150f
-internal const val PEN_LIFT_MS = 3560f
-internal const val PEN_TOTAL_MS = 4300f
+const val PEN_WRITE_START_MS = 260f
+const val PEN_WRITE_END_MS = 3000f
+const val PEN_HOLD_END_MS = 3150f
+const val PEN_LIFT_MS = 3560f
+const val PEN_TOTAL_MS = 4300f
 
 private const val PEN_WORD = "Lucent"
 private const val PEN_FONT_SP = 64f
@@ -35,7 +35,7 @@ private const val PEN_TILT_DEG = 34f
 private const val PEN_LEAD_PX = 3f
 
 @Composable
-internal fun PenSplashArtwork(elapsed: MutableFloatState, tint: Color) {
+fun PenSplashArtwork(elapsed: MutableFloatState, tint: Color) {
     val measurer = rememberTextMeasurer()
     val script = splashScriptFont()
     val word = remember(measurer, script) {
