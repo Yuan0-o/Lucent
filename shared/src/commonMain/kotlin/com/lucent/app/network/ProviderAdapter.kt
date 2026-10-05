@@ -103,7 +103,7 @@ class StreamAccumulator {
     }
 }
 
-internal fun adapterFor(spec: ApiSpec): ProviderAdapter = when (spec) {
+fun adapterFor(spec: ApiSpec): ProviderAdapter = when (spec) {
     ApiSpec.OPENAI -> OpenAiAdapter
     ApiSpec.ANTHROPIC -> AnthropicAdapter
     ApiSpec.GOOGLE -> GoogleAdapter
