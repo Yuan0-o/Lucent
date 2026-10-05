@@ -24,7 +24,13 @@ expect class Note {
     val formatOverride: String?
 }
 
-expect class NoteEmbedding {
+expect class NoteEmbedding(
+    noteId: Long,
+    model: String,
+    dim: Int,
+    vec: ByteArray,
+    updatedAt: Long
+) {
     val noteId: Long
     val model: String
     val dim: Int
