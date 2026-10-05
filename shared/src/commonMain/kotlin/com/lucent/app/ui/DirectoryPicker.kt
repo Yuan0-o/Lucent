@@ -133,7 +133,7 @@ internal object DirectoryBrowse {
 }
 
 @Composable
-internal fun DirectoryPickerDialog(
+fun DirectoryPickerDialog(
     initialPath: String,
     onDismiss: () -> Unit,
     onOpen: (String) -> Unit

@@ -97,7 +97,7 @@ class ReorderDragState internal constructor() {
         return landed
     }
 
-    internal fun cancel() {
+    fun cancel() {
         dragging = false
         if (!moved) {
             clear()
