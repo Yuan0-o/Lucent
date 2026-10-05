@@ -13,3 +13,6 @@ rust/target/
 keystore-base64.txt
 
 RELEASE_NOTES*.md
+
+# Test report dirs accidentally created at repo root (must not be committed)
+com.lucent.*/
