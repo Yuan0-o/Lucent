@@ -12,7 +12,7 @@ import com.lucent.app.data.Attachment
 import com.lucent.app.data.RichSpan
 import com.lucent.app.platform.PlatformContext
 
-expect class PlatformPickedFile
+expect class PlatformPickedFile()
 
 @Composable
 expect fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit
