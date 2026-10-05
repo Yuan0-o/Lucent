@@ -4,7 +4,7 @@ import com.lucent.app.platform.PlatformContext
 import java.io.OutputStream
 import kotlinx.coroutines.CancellationException
 
-internal object BackupFrames {
+object BackupFrames {
 
     fun throwIfCancelled(cancelled: (() -> Boolean)?) {
         if (cancelled != null && cancelled()) {

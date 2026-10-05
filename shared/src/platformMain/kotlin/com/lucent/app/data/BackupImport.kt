@@ -19,7 +19,7 @@ private class ImportState {
     val convIdRemap = HashMap<Long, Long>()
 }
 
-internal object BackupImporter {
+object BackupImporter {
 
     suspend fun import(
         context: PlatformContext,

@@ -7,7 +7,7 @@ import com.lucent.app.harness.HarnessConfig
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal object BackupManifestBuilder {
+object BackupManifestBuilder {
 
     suspend fun build(
         context: PlatformContext,
