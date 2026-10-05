@@ -55,17 +55,6 @@ expect class Task {
     val formatOverride: String?
 }
 
-expect fun Task.copyForRecurrence(
-    id: Long,
-    isDone: Boolean,
-    createdAt: Long,
-    attachments: String,
-    dueAt: Long?,
-    completedAt: Long?,
-    subtasks: String,
-    trashedAt: Long?
-): Task
-
 expect class NoteVersion {
     val id: Long
     val noteId: Long

@@ -4,10 +4,10 @@ import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.PlatformInputStream
 import java.io.File
 
-actual typealias PlatformFontSource = File
+typealias PlatformFontSource = File
 
-actual fun openFontSource(context: PlatformContext, source: PlatformFontSource): PlatformInputStream? =
+fun openFontSource(context: PlatformContext, source: PlatformFontSource): PlatformInputStream? =
     source.inputStream()
 
-actual fun fontSourceDisplayName(context: PlatformContext, source: PlatformFontSource): String? =
+fun fontSourceDisplayName(context: PlatformContext, source: PlatformFontSource): String? =
     source.name.ifBlank { "font" }
