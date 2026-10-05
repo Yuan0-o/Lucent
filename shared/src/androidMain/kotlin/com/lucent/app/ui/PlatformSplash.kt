@@ -1,3 +1,4 @@
+@file:JvmName("PlatformSplashAndroidKt")
 package com.lucent.app.ui
 
 import androidx.compose.foundation.layout.statusBarsPadding

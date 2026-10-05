@@ -1,3 +1,4 @@
+@file:JvmName("PlatformSplashDesktopKt")
 package com.lucent.app.ui
 
 import androidx.compose.runtime.Composable
