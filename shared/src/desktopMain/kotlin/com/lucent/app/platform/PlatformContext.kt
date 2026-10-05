@@ -2,10 +2,10 @@ package com.lucent.app.platform
 
 import java.io.File
 
-actual class PlatformContext
+actual abstract class PlatformContext
 
-actual val PlatformContext.applicationContext: PlatformContext get() = (this as DesktopPlatformContext).applicationContext
-actual val PlatformContext.filesDir: java.io.File get() = (this as DesktopPlatformContext).filesDir
+actual fun PlatformContext.getApplicationContext(): PlatformContext = (this as DesktopPlatformContext).applicationContext
+actual fun PlatformContext.getFilesDir(): java.io.File = (this as DesktopPlatformContext).filesDir
 
 actual fun PlatformContext.appContext(): PlatformContext = applicationContext
 
