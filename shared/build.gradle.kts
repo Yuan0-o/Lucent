@@ -23,8 +23,8 @@ kotlin {
     }
 
     sourceSets {
-        val jvmMain by creating {
-            dependsOn(commonMain)
+        val jvmMain = create("jvmMain") {
+            dependsOn(getByName("commonMain"))
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.okhttp)
@@ -38,7 +38,7 @@ kotlin {
             }
         }
         val androidMain by getting {
-            dependsOn(jvmMain.get())
+            dependsOn(jvmMain)
             dependencies {
                 implementation(libs.core.ktx)
                 implementation(libs.activity.compose)
@@ -63,7 +63,7 @@ kotlin {
             }
         }
         val desktopMain by getting {
-            dependsOn(jvmMain.get())
+            dependsOn(jvmMain)
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.swing)
