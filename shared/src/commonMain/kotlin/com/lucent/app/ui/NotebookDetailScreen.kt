@@ -2,7 +2,6 @@ package com.lucent.app.ui
 
 import com.lucent.app.data.createAppDatabase
 
-import androidx.activity.compose.BackHandler
 import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

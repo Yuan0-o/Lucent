@@ -1,3 +1,4 @@
+@file:JvmName("PlatformNotebookCoverCommonKt")
 package com.lucent.app.ui
 
 import androidx.compose.foundation.Image

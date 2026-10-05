@@ -1,3 +1,5 @@
+@file:JvmName("PlatformNotebookCoverAndroidKt")
+
 package com.lucent.app.ui
 
 import android.graphics.BitmapFactory
