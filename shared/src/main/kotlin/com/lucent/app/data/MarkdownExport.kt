@@ -1,13 +1,30 @@
 package com.lucent.app.data
 
-import java.time.Instant
-import java.time.ZoneId
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.char
+import kotlinx.datetime.toLocalDateTime
 
 object MarkdownExport {
 
+    private val timeFormat = LocalDateTime.Format {
+        year()
+        char('-')
+        monthNumber()
+        char('-')
+        dayOfMonth()
+        char(' ')
+        hour()
+        char(':')
+        minute()
+    }
+
     private fun formatTime(millis: Long): String =
-        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
-            .format(com.lucent.app.i18n.LDates.of("yyyy-MM-dd HH:mm"))
+        Instant.fromEpochMilliseconds(millis)
+            .toLocalDateTime(TimeZone.currentSystemDefault())
+            .format(timeFormat)
 
     private val S get() = com.lucent.app.i18n.S
 
@@ -18,7 +35,7 @@ object MarkdownExport {
         val sb = StringBuilder()
         sb.appendLine("# ${S.exportDocNotesTitle}")
         sb.appendLine()
-        sb.appendLine("_${S.exportDocNoteCount(live.size)}, ${S.exportDocExportedAt(formatTime(System.currentTimeMillis()))}_")
+        sb.appendLine("_${S.exportDocNoteCount(live.size)}, ${S.exportDocExportedAt(formatTime(Clock.System.now().toEpochMilliseconds()))}_")
         sb.appendLine()
         sb.appendLine(S.exportDocAttachmentsNote)
         sb.appendLine()
@@ -89,7 +106,7 @@ object MarkdownExport {
         val sb = StringBuilder()
         sb.appendLine("# ${S.exportDocTasksTitle}")
         sb.appendLine()
-        sb.appendLine("_${S.exportDocTaskCount(live.size)}, ${S.exportDocExportedAt(formatTime(System.currentTimeMillis()))}_")
+        sb.appendLine("_${S.exportDocTaskCount(live.size)}, ${S.exportDocExportedAt(formatTime(Clock.System.now().toEpochMilliseconds()))}_")
         sb.appendLine()
         sb.appendLine(S.exportDocAttachmentsNote)
         sb.appendLine()
