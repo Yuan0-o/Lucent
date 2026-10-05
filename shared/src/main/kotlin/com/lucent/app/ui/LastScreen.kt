@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import com.lucent.app.Screen
+import kotlin.concurrent.Volatile
 
 object LastScreen {
 
