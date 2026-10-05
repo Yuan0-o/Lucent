@@ -523,7 +523,7 @@ actual object McpSessions {
         }
     }
 
-    actual suspend fun discovery(server: McpServer, force: Boolean = false): McpDiscovery {
+    actual suspend fun discovery(server: McpServer, force: Boolean): McpDiscovery {
         val problem = unavailable(server)
         if (problem.isNotBlank()) {
             failures[server.id] = problem

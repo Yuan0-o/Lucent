@@ -1,6 +1,7 @@
 package com.lucent.app.harness
 
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.appContext
 import com.lucent.app.data.DataKeys
 import com.lucent.app.data.FileCrypto
 import java.io.File
