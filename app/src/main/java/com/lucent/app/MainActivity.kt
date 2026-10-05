@@ -129,19 +129,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
-
-enum class Screen {
-    Tasks, Notes, Notebooks, Assistant, Settings;
-
-    val label: String
-        get() = when (this) {
-            Tasks -> com.lucent.app.i18n.S.tabTasks
-            Notes -> com.lucent.app.i18n.S.tabNotes
-            Notebooks -> com.lucent.app.i18n.S.screenNotebooks
-            Assistant -> com.lucent.app.i18n.S.tabAssistant
-            Settings -> com.lucent.app.i18n.S.tabSettings
-        }
-}
+import com.lucent.app.Screen
 
 private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
 
