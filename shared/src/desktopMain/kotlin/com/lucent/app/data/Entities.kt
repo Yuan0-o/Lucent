@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
 
-actual class Note(
+actual class Note actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val body: String,
@@ -80,7 +80,7 @@ actual class Note(
     override fun toString(): String = "Note(id=$id, title=$title, body=$body, updatedAt=$updatedAt, tags=$tags, attachments=$attachments, archived=$archived, archivedAt=$archivedAt, pinned=$pinned, color=$color, isChecklist=$isChecklist, checklist=$checklist, trashedAt=$trashedAt, manualOrder=$manualOrder, isDraft=$isDraft, draftSavedAt=$draftSavedAt, hidden=$hidden, bodySpans=$bodySpans, isDoodle=$isDoodle, doodle=$doodle, formatOverride=$formatOverride)"
 }
 
-actual class Task(
+actual class Task actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val isDone: Boolean,
@@ -156,7 +156,7 @@ actual class Task(
     override fun toString(): String = "Task(id=$id, title=$title, isDone=$isDone, createdAt=$createdAt, attachments=$attachments, dueAt=$dueAt, notes=$notes, completedAt=$completedAt, priority=$priority, pinned=$pinned, subtasks=$subtasks, repeatRule=$repeatRule, reminderEnabled=$reminderEnabled, trashedAt=$trashedAt, manualOrder=$manualOrder, isDraft=$isDraft, draftSavedAt=$draftSavedAt, hidden=$hidden, notesSpans=$notesSpans, formatOverride=$formatOverride)"
 }
 
-actual data class NoteVersion(
+actual data class NoteVersion actual constructor(
     actual val id: Long,
     actual val noteId: Long,
     actual val title: String,
@@ -167,7 +167,7 @@ actual data class NoteVersion(
     actual val savedAt: Long
 )
 
-actual data class TaskVersion(
+actual data class TaskVersion actual constructor(
     actual val id: Long,
     actual val taskId: Long,
     actual val title: String,
@@ -178,7 +178,7 @@ actual data class TaskVersion(
     actual val savedAt: Long
 )
 
-actual class ChatMessage(
+actual class ChatMessage actual constructor(
     actual val id: Long,
     actual val role: String,
     actual val content: String,
@@ -242,7 +242,7 @@ actual class ChatMessage(
     override fun toString(): String = "ChatMessage(id=$id, role=$role, content=$content, timestamp=$timestamp, attachmentMime=$attachmentMime, attachmentData=$attachmentData, attachmentName=$attachmentName, attachmentList=$attachmentList, conversationId=$conversationId, tokens=$tokens, replyToId=$replyToId, agentTrace=$agentTrace, reasoningBlocks=$reasoningBlocks, reasoningText=$reasoningText, quotedRole=$quotedRole, quotedText=$quotedText)"
 }
 
-actual class ChatConversation(
+actual class ChatConversation actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val createdAt: Long,
@@ -270,7 +270,7 @@ actual class ChatConversation(
     override fun toString(): String = "ChatConversation(id=$id, title=$title, createdAt=$createdAt, updatedAt=$updatedAt)"
 }
 
-actual class Notebook(
+actual class Notebook actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val createdAt: Long,
@@ -310,7 +310,7 @@ actual class Notebook(
     override fun toString(): String = "Notebook(id=$id, title=$title, createdAt=$createdAt, updatedAt=$updatedAt, color=$color, manualOrder=$manualOrder, trashedAt=$trashedAt, pinned=$pinned)"
 }
 
-actual data class NotebookItem(
+actual data class NotebookItem actual constructor(
     actual val id: Long,
     actual val notebookId: Long,
     actual val itemKind: String,
@@ -323,7 +323,7 @@ actual data class NotebookItem(
     }
 }
 
-actual data class NoteEmbedding(
+actual data class NoteEmbedding actual constructor(
     actual val noteId: Long,
     actual val model: String,
     actual val dim: Int,
