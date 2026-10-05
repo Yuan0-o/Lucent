@@ -18,7 +18,7 @@ import androidx.compose.runtime.setValue
 import com.lucent.app.data.ContentFormats
 
 @Composable
-internal fun FormatOverrideButton(
+fun FormatOverrideButton(
     current: String?,
     onSelect: (String?) -> Unit
 ) {
