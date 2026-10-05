@@ -7,7 +7,7 @@ import com.lucent.app.platform.PlatformInputStream
 
 actual typealias PlatformModelSource = Uri
 
-actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream? =
+actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): java.io.InputStream? =
     context.contentResolver.openInputStream(source)
 
 actual fun modelSourceDisplayName(context: PlatformContext, source: PlatformModelSource): String? = try {

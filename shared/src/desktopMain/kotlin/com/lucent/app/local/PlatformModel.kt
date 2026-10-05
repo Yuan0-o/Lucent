@@ -6,7 +6,7 @@ import java.io.File
 
 actual typealias PlatformModelSource = File
 
-actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream? =
+actual fun openModelSource(context: PlatformContext, source: PlatformModelSource): java.io.InputStream? =
     source.inputStream()
 
 actual fun modelSourceDisplayName(context: PlatformContext, source: PlatformModelSource): String? =

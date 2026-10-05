@@ -5,6 +5,6 @@ import com.lucent.app.platform.PlatformInputStream
 
 expect class PlatformModelSource()
 
-expect fun openModelSource(context: PlatformContext, source: PlatformModelSource): PlatformInputStream?
+expect fun openModelSource(context: PlatformContext, source: PlatformModelSource): java.io.InputStream?
 
 expect fun modelSourceDisplayName(context: PlatformContext, source: PlatformModelSource): String?

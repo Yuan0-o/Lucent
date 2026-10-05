@@ -7,7 +7,7 @@ import com.lucent.app.platform.PlatformInputStream
 
 actual typealias PlatformFontSource = Uri
 
-actual fun openFontSource(context: PlatformContext, source: PlatformFontSource): PlatformInputStream? =
+actual fun openFontSource(context: PlatformContext, source: PlatformFontSource): java.io.InputStream? =
     context.contentResolver.openInputStream(source)
 
 actual fun fontSourceDisplayName(context: PlatformContext, source: PlatformFontSource): String? = try {

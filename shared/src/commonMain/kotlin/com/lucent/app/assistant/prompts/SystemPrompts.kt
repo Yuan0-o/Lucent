@@ -34,7 +34,7 @@ object SystemPrompts {
     ): String = buildString {
         append("[Lucent context for your next reply. This is background, not a message from the person, ")
         append("and it is not the thing to answer.]\n")
-        append("It is now ").append(now.format(CONTEXT_TIME)).append(" in the person's local time. ")
+        append("It is now ").append(CONTEXT_TIME.format(now)).append(" in the person's local time. ")
         append("This is the real current time; trust it over any assumption. Work any concrete date out ")
         append("from it and pass dates as absolute values.\n")
         if (crossMemory.isNotBlank()) {
