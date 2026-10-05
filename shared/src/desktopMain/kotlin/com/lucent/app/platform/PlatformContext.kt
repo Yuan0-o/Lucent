@@ -32,3 +32,5 @@ class DesktopPlatformContext : PlatformContext() {
 }
 
 val desktopPlatformContext: PlatformContext = DesktopPlatformContext()
+
+actual fun PlatformContext.appContext(): PlatformContext = applicationContext

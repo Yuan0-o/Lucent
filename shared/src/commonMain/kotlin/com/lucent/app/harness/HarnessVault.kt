@@ -10,7 +10,7 @@ object HarnessVault {
     fun write(context: PlatformContext, file: File, text: String) {
         try {
             file.parentFile?.mkdirs()
-            val key = DataKeys.attachmentKey(context.applicationContext)
+            val key = DataKeys.attachmentKey(context.appContext())
             val bytes = FileCrypto.encrypt(text.toByteArray(Charsets.UTF_8), key)
             file.writeBytes(bytes)
         } catch (_: Throwable) {
@@ -22,7 +22,7 @@ object HarnessVault {
         return try {
             val raw = file.readBytes()
             if (!FileCrypto.isEncrypted(file)) return String(raw, Charsets.UTF_8)
-            val key = DataKeys.attachmentKey(context.applicationContext)
+            val key = DataKeys.attachmentKey(context.appContext())
             String(FileCrypto.decrypt(raw, key), Charsets.UTF_8)
         } catch (_: Throwable) {
             ""

@@ -493,13 +493,13 @@ actual object McpSessions {
         failures.remove(serverId)
     }
 
-    fun cachedTools(serverId: String): List<McpTool> = cached[serverId]?.tools.orEmpty()
+    actual fun cachedTools(serverId: String): List<McpTool> = cached[serverId]?.tools.orEmpty()
 
-    fun lastError(serverId: String): String = failures[serverId].orEmpty()
+    actual fun lastError(serverId: String): String = failures[serverId].orEmpty()
 
-    fun transportName(server: McpServer): String = McpTransports.describe(server)
+    actual fun transportName(server: McpServer): String = McpTransports.describe(server)
 
-    fun endpoint(server: McpServer): String = when {
+    actual fun endpoint(server: McpServer): String = when {
         server.url.isNotBlank() -> server.url
         server.command.isNotBlank() -> mcpCommandLine(server).joinToString(" ")
         else -> "no url or command yet"
@@ -523,7 +523,7 @@ actual object McpSessions {
         }
     }
 
-    suspend fun discovery(server: McpServer, force: Boolean = false): McpDiscovery {
+    actual suspend fun discovery(server: McpServer, force: Boolean = false): McpDiscovery {
         val problem = unavailable(server)
         if (problem.isNotBlank()) {
             failures[server.id] = problem
@@ -576,7 +576,7 @@ actual object McpSessions {
         }
     }
 
-    suspend fun call(server: McpServer, tool: String, argumentsJson: String): McpResult {
+    actual suspend fun call(server: McpServer, tool: String, argumentsJson: String): McpResult {
         val name = tool.trim()
         if (name.isEmpty()) {
             return McpResult("No MCP tool name was given.", emptyList(), true)
@@ -601,7 +601,7 @@ actual object McpSessions {
         return McpProtocol.decodeResult(result)
     }
 
-    suspend fun readResource(server: McpServer, uri: String): McpText {
+    actual suspend fun readResource(server: McpServer, uri: String): McpText {
         val clean = uri.trim()
         if (clean.isEmpty()) return McpText(error = "No resource uri was given.")
         val reply = exchange(server, McpProtocol.RESOURCES_READ, McpProtocol.readParams(clean))
@@ -630,7 +630,7 @@ actual object McpSessions {
         return McpText(text = lines.joinToString("\n"))
     }
 
-    suspend fun prompts(server: McpServer): McpPrompts {
+    actual suspend fun prompts(server: McpServer): McpPrompts {
         return try {
             val collected = mutableListOf<McpPromptInfo>()
             var cursor = ""
@@ -661,7 +661,7 @@ actual object McpSessions {
         }
     }
 
-    suspend fun ping(server: McpServer): McpStatus {
+    actual suspend fun ping(server: McpServer): McpStatus {
         val started = System.currentTimeMillis()
         val reply = exchange(server, McpProtocol.PING)
         val millis = System.currentTimeMillis() - started
@@ -682,7 +682,7 @@ actual object McpSessions {
         stdio.close(serverId)
     }
 
-    suspend fun close() {
+    actual suspend fun close() {
         withContext(Dispatchers.IO) { invalidate("") }
     }
 

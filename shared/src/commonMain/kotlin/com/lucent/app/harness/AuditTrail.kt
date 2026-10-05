@@ -38,7 +38,7 @@ object AuditTrail {
     }
 
     private fun baseDir(context: PlatformContext): File =
-        runCatching { context.filesDir }.getOrNull()
+        runCatching { File(HarnessRuntime.filesDirPath()) }.getOrNull()
             ?: File(System.getProperty("java.io.tmpdir"), "lucent-audit")
 
     fun record(context: PlatformContext?, entry: AuditEntry) {
