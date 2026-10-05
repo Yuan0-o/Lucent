@@ -13,27 +13,27 @@ import androidx.room.PrimaryKey
     ]
 )
 actual data class Note(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
     actual val body: String,
-    actual val updatedAt: Long = System.currentTimeMillis(),
-    actual val tags: String = "",
-    actual val attachments: String = "[]",
-    actual val archived: Boolean = false,
-    actual val archivedAt: Long? = null,
-    actual val pinned: Boolean = false,
-    actual val color: String = "",
-    actual val isChecklist: Boolean = false,
-    actual val checklist: String = "[]",
-    actual val trashedAt: Long? = null,
-    actual val manualOrder: Int = 0,
-    actual val isDraft: Boolean = false,
-    actual val draftSavedAt: Long? = null,
-    actual val hidden: Boolean = false,
-    actual val bodySpans: String = "",
-    actual val isDoodle: Boolean = false,
-    actual val doodle: String = "",
-    actual val formatOverride: String? = null
+    actual val updatedAt: Long,
+    actual val tags: String,
+    actual val attachments: String,
+    actual val archived: Boolean,
+    actual val archivedAt: Long?,
+    actual val pinned: Boolean,
+    actual val color: String,
+    actual val isChecklist: Boolean,
+    actual val checklist: String,
+    actual val trashedAt: Long?,
+    actual val manualOrder: Int,
+    actual val isDraft: Boolean,
+    actual val draftSavedAt: Long?,
+    actual val hidden: Boolean,
+    actual val bodySpans: String,
+    actual val isDoodle: Boolean,
+    actual val doodle: String,
+    actual val formatOverride: String?
 )
 
 @Entity(tableName = "note_embeddings", primaryKeys = ["noteId", "model"])
@@ -70,26 +70,26 @@ actual data class NoteEmbedding actual constructor(
     ]
 )
 actual data class Task(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
-    actual val isDone: Boolean = false,
-    actual val createdAt: Long = System.currentTimeMillis(),
-    actual val attachments: String = "[]",
-    actual val dueAt: Long? = null,
-    actual val notes: String = "",
-    actual val completedAt: Long? = null,
-    actual val priority: Int = 0,
-    actual val pinned: Boolean = false,
-    actual val subtasks: String = "[]",
-    actual val repeatRule: String = "NONE",
-    actual val reminderEnabled: Boolean = false,
-    actual val trashedAt: Long? = null,
-    actual val manualOrder: Int = 0,
-    actual val isDraft: Boolean = false,
-    actual val draftSavedAt: Long? = null,
-    actual val hidden: Boolean = false,
-    actual val notesSpans: String = "",
-    actual val formatOverride: String? = null
+    actual val isDone: Boolean,
+    actual val createdAt: Long,
+    actual val attachments: String,
+    actual val dueAt: Long?,
+    actual val notes: String,
+    actual val completedAt: Long?,
+    actual val priority: Int,
+    actual val pinned: Boolean,
+    actual val subtasks: String,
+    actual val repeatRule: String,
+    actual val reminderEnabled: Boolean,
+    actual val trashedAt: Long?,
+    actual val manualOrder: Int,
+    actual val isDraft: Boolean,
+    actual val draftSavedAt: Long?,
+    actual val hidden: Boolean,
+    actual val notesSpans: String,
+    actual val formatOverride: String?
 )
 
 @Entity(
@@ -97,14 +97,14 @@ actual data class Task(
     indices = [Index(value = ["noteId"])]
 )
 actual data class NoteVersion(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val noteId: Long,
     actual val title: String,
     actual val body: String,
-    actual val tags: String = "",
-    actual val isChecklist: Boolean = false,
-    actual val checklist: String = "[]",
-    actual val savedAt: Long = System.currentTimeMillis()
+    actual val tags: String,
+    actual val isChecklist: Boolean,
+    actual val checklist: String,
+    actual val savedAt: Long
 )
 
 @Entity(
@@ -112,14 +112,14 @@ actual data class NoteVersion(
     indices = [Index(value = ["taskId"])]
 )
 actual data class TaskVersion(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val taskId: Long,
     actual val title: String,
-    actual val notes: String = "",
-    actual val subtasks: String = "[]",
-    actual val priority: Int = 0,
-    actual val dueAt: Long? = null,
-    actual val savedAt: Long = System.currentTimeMillis()
+    actual val notes: String,
+    actual val subtasks: String,
+    actual val priority: Int,
+    actual val dueAt: Long?,
+    actual val savedAt: Long
 )
 
 @Entity(
@@ -127,14 +127,14 @@ actual data class TaskVersion(
     indices = [Index(value = ["updatedAt"])]
 )
 actual data class Notebook(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
-    actual val createdAt: Long = System.currentTimeMillis(),
-    actual val updatedAt: Long = System.currentTimeMillis(),
-    actual val color: String = "",
-    actual val manualOrder: Int = 0,
-    actual val trashedAt: Long? = null,
-    actual val pinned: Boolean = false
+    actual val createdAt: Long,
+    actual val updatedAt: Long,
+    actual val color: String,
+    actual val manualOrder: Int,
+    actual val trashedAt: Long?,
+    actual val pinned: Boolean
 )
 
 @Entity(
@@ -145,11 +145,11 @@ actual data class Notebook(
     ]
 )
 actual data class NotebookItem(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val notebookId: Long,
     actual val itemKind: String,
     actual val itemId: Long,
-    actual val addedAt: Long = System.currentTimeMillis()
+    actual val addedAt: Long
 ) {
     actual companion object {
         actual val KIND_NOTE = "NOTE"
@@ -159,28 +159,28 @@ actual data class NotebookItem(
 
 @Entity(tableName = "chat_messages")
 actual data class ChatMessage(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val role: String,
     actual val content: String,
-    actual val timestamp: Long = System.currentTimeMillis(),
-    actual val attachmentMime: String? = null,
-    actual val attachmentData: String? = null,
-    actual val attachmentName: String? = null,
-    actual val attachmentList: String? = null,
-    actual val conversationId: Long = 1,
-    actual val tokens: Int = 0,
-    actual val replyToId: Long = 0,
-    actual val agentTrace: String? = null,
-    actual val reasoningBlocks: String? = null,
-    actual val reasoningText: String? = null,
-    actual val quotedRole: String? = null,
-    actual val quotedText: String? = null
+    actual val timestamp: Long,
+    actual val attachmentMime: String?,
+    actual val attachmentData: String?,
+    actual val attachmentName: String?,
+    actual val attachmentList: String?,
+    actual val conversationId: Long,
+    actual val tokens: Int,
+    actual val replyToId: Long,
+    actual val agentTrace: String?,
+    actual val reasoningBlocks: String?,
+    actual val reasoningText: String?,
+    actual val quotedRole: String?,
+    actual val quotedText: String?
 )
 
 @Entity(tableName = "chat_conversations")
 actual data class ChatConversation(
-    @PrimaryKey(autoGenerate = true) actual val id: Long = 0,
-    actual val title: String = "New conversation",
-    actual val createdAt: Long = System.currentTimeMillis(),
-    actual val updatedAt: Long = System.currentTimeMillis()
+    @PrimaryKey(autoGenerate = true) actual val id: Long,
+    actual val title: String,
+    actual val createdAt: Long,
+    actual val updatedAt: Long
 )

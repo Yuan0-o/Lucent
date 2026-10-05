@@ -151,7 +151,16 @@ expect class Task(
     ): Task
 }
 
-expect class NoteVersion {
+expect class NoteVersion(
+    id: Long = 0,
+    noteId: Long,
+    title: String,
+    body: String,
+    tags: String = "",
+    isChecklist: Boolean = false,
+    checklist: String = "[]",
+    savedAt: Long = System.currentTimeMillis()
+) {
     val id: Long
     val noteId: Long
     val title: String
@@ -162,7 +171,16 @@ expect class NoteVersion {
     val savedAt: Long
 }
 
-expect class TaskVersion {
+expect class TaskVersion(
+    id: Long = 0,
+    taskId: Long,
+    title: String,
+    notes: String = "",
+    subtasks: String = "[]",
+    priority: Int = 0,
+    dueAt: Long? = null,
+    savedAt: Long = System.currentTimeMillis()
+) {
     val id: Long
     val taskId: Long
     val title: String
@@ -173,7 +191,16 @@ expect class TaskVersion {
     val savedAt: Long
 }
 
-expect class Notebook {
+expect class Notebook(
+    id: Long = 0,
+    title: String,
+    createdAt: Long = System.currentTimeMillis(),
+    updatedAt: Long = System.currentTimeMillis(),
+    color: String = "",
+    manualOrder: Int = 0,
+    trashedAt: Long? = null,
+    pinned: Boolean = false
+) {
     val id: Long
     val title: String
     val createdAt: Long
@@ -182,9 +209,26 @@ expect class Notebook {
     val manualOrder: Int
     val trashedAt: Long?
     val pinned: Boolean
+
+    fun copy(
+        id: Long = this.id,
+        title: String = this.title,
+        createdAt: Long = this.createdAt,
+        updatedAt: Long = this.updatedAt,
+        color: String = this.color,
+        manualOrder: Int = this.manualOrder,
+        trashedAt: Long? = this.trashedAt,
+        pinned: Boolean = this.pinned
+    ): Notebook
 }
 
-expect class NotebookItem {
+expect class NotebookItem(
+    id: Long = 0,
+    notebookId: Long,
+    itemKind: String,
+    itemId: Long,
+    addedAt: Long = System.currentTimeMillis()
+) {
     val id: Long
     val notebookId: Long
     val itemKind: String
@@ -196,7 +240,24 @@ expect class NotebookItem {
     }
 }
 
-expect class ChatMessage {
+expect class ChatMessage(
+    id: Long = 0,
+    role: String,
+    content: String,
+    timestamp: Long = System.currentTimeMillis(),
+    attachmentMime: String? = null,
+    attachmentData: String? = null,
+    attachmentName: String? = null,
+    attachmentList: String? = null,
+    conversationId: Long = 1,
+    tokens: Int = 0,
+    replyToId: Long = 0,
+    agentTrace: String? = null,
+    reasoningBlocks: String? = null,
+    reasoningText: String? = null,
+    quotedRole: String? = null,
+    quotedText: String? = null
+) {
     val id: Long
     val role: String
     val content: String
@@ -213,11 +274,42 @@ expect class ChatMessage {
     val reasoningText: String?
     val quotedRole: String?
     val quotedText: String?
+
+    fun copy(
+        id: Long = this.id,
+        role: String = this.role,
+        content: String = this.content,
+        timestamp: Long = this.timestamp,
+        attachmentMime: String? = this.attachmentMime,
+        attachmentData: String? = this.attachmentData,
+        attachmentName: String? = this.attachmentName,
+        attachmentList: String? = this.attachmentList,
+        conversationId: Long = this.conversationId,
+        tokens: Int = this.tokens,
+        replyToId: Long = this.replyToId,
+        agentTrace: String? = this.agentTrace,
+        reasoningBlocks: String? = this.reasoningBlocks,
+        reasoningText: String? = this.reasoningText,
+        quotedRole: String? = this.quotedRole,
+        quotedText: String? = this.quotedText
+    ): ChatMessage
 }
 
-expect class ChatConversation {
+expect class ChatConversation(
+    id: Long = 0,
+    title: String = "New conversation",
+    createdAt: Long = System.currentTimeMillis(),
+    updatedAt: Long = System.currentTimeMillis()
+) {
     val id: Long
     val title: String
     val createdAt: Long
     val updatedAt: Long
+
+    fun copy(
+        id: Long = this.id,
+        title: String = this.title,
+        createdAt: Long = this.createdAt,
+        updatedAt: Long = this.updatedAt
+    ): ChatConversation
 }
