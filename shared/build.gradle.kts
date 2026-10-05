@@ -26,6 +26,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(libs.org.json)
+                implementation(libs.kotlinx.datetime)
             }
         }
         val androidMain by getting {

@@ -44,10 +44,16 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.RepeatRule
 import com.lucent.app.data.TaskPriority
 import com.lucent.app.i18n.S
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
 
 val PriorityHighColor = Color(0xFFE57373)
 val PriorityMediumColor = Color(0xFFFFB74D)
@@ -294,26 +300,35 @@ fun PinnedMarker(modifier: Modifier = Modifier, size: Dp = 16.dp, onUnpin: (() -
 }
 
 
-private val dueDayFormatter get() = com.lucent.app.i18n.LDates.of(S.patternMonthDay)
-private val dueTimeFormatter get() = com.lucent.app.i18n.LDates.of(S.patternTime)
+private val dueDayFormatter: (LocalDate) -> String = { date ->
+    val month = date.monthNumber.toString().padStart(2, '0')
+    val day = date.dayOfMonth.toString().padStart(2, '0')
+    "$month-$day"
+}
+
+private val dueTimeFormatter: (LocalDateTime) -> String = { dateTime ->
+    val hour = dateTime.hour.toString().padStart(2, '0')
+    val minute = dateTime.minute.toString().padStart(2, '0')
+    "$hour:$minute"
+}
 
 fun isOverdue(dueAt: Long?, isDone: Boolean): Boolean {
     if (dueAt == null || isDone) return false
-    return dueAt < System.currentTimeMillis()
+    return dueAt < Clock.System.now().toEpochMilliseconds()
 }
 
 fun friendlyDue(dueAt: Long): String {
-    val zone = ZoneId.systemDefault()
-    val today = LocalDate.now(zone)
-    val zoned = Instant.ofEpochMilli(dueAt).atZone(zone)
-    val date = zoned.toLocalDate()
-    val time = zoned.format(dueTimeFormatter)
+    val zone = TimeZone.currentSystemDefault()
+    val today = Clock.System.todayIn(zone)
+    val localDateTime = Instant.fromEpochMilliseconds(dueAt).toLocalDateTime(zone)
+    val date = localDateTime.date
+    val time = dueTimeFormatter(localDateTime)
     return when {
-        date.isEqual(today) -> S.dueTodayAt(time)
-        date.isEqual(today.plusDays(1)) -> S.dueTomorrowAt(time)
-        date.isEqual(today.minusDays(1)) -> S.dueYesterdayAt(time)
-        date.isBefore(today) -> S.dueOverdueOn(zoned.format(dueDayFormatter))
-        else -> S.dueOn(zoned.format(dueDayFormatter), time)
+        date == today -> S.dueTodayAt(time)
+        date == today.plus(1, DateTimeUnit.DAY) -> S.dueTomorrowAt(time)
+        date == today.minus(1, DateTimeUnit.DAY) -> S.dueYesterdayAt(time)
+        date < today -> S.dueOverdueOn(dueDayFormatter(date))
+        else -> S.dueOn(dueDayFormatter(date), time)
     }
 }
 
