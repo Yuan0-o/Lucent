@@ -15,6 +15,11 @@ kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
+        sourceSets {
+            getByName("main") {
+                aidl.srcDir("src/androidMain/aidl")
+            }
+        }
     }
     jvm("desktop") {
         compilerOptions {

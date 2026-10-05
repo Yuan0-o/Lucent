@@ -79,7 +79,7 @@ fun TerminalScreen(onBack: () -> Unit) {
     val repo = remember { createSettingsRepository(context) }
 
     BackClaim(active = true)
-    BackHandler { onBack() }
+    LucentBackHandler { onBack() }
 
     var tabs by remember { mutableStateOf(TerminalSessions.manager.snapshot()) }
     var currentTab by remember { mutableStateOf(TerminalSessions.manager.current()) }

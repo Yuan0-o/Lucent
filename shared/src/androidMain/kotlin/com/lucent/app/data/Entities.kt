@@ -12,7 +12,7 @@ import androidx.room.PrimaryKey
         Index(value = ["trashedAt"])
     ]
 )
-actual data class Note(
+actual data class Note actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
     actual val body: String,
@@ -69,7 +69,7 @@ actual data class NoteEmbedding actual constructor(
         Index(value = ["trashedAt"])
     ]
 )
-actual data class Task(
+actual data class Task actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
     actual val isDone: Boolean,
@@ -96,7 +96,7 @@ actual data class Task(
     tableName = "note_versions",
     indices = [Index(value = ["noteId"])]
 )
-actual data class NoteVersion(
+actual data class NoteVersion actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val noteId: Long,
     actual val title: String,
@@ -111,7 +111,7 @@ actual data class NoteVersion(
     tableName = "task_versions",
     indices = [Index(value = ["taskId"])]
 )
-actual data class TaskVersion(
+actual data class TaskVersion actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val taskId: Long,
     actual val title: String,
@@ -126,7 +126,7 @@ actual data class TaskVersion(
     tableName = "notebooks",
     indices = [Index(value = ["updatedAt"])]
 )
-actual data class Notebook(
+actual data class Notebook actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
     actual val createdAt: Long,
@@ -144,7 +144,7 @@ actual data class Notebook(
         Index(value = ["itemKind", "itemId"])
     ]
 )
-actual data class NotebookItem(
+actual data class NotebookItem actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val notebookId: Long,
     actual val itemKind: String,
@@ -158,7 +158,7 @@ actual data class NotebookItem(
 }
 
 @Entity(tableName = "chat_messages")
-actual data class ChatMessage(
+actual data class ChatMessage actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val role: String,
     actual val content: String,
@@ -178,7 +178,7 @@ actual data class ChatMessage(
 )
 
 @Entity(tableName = "chat_conversations")
-actual data class ChatConversation(
+actual data class ChatConversation actual constructor(
     @PrimaryKey(autoGenerate = true) actual val id: Long,
     actual val title: String,
     actual val createdAt: Long,

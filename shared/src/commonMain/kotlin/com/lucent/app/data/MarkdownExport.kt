@@ -22,9 +22,10 @@ object MarkdownExport {
     }
 
     private fun formatTime(millis: Long): String =
-        Instant.fromEpochMilliseconds(millis)
-            .toLocalDateTime(TimeZone.currentSystemDefault())
-            .format(timeFormat)
+        timeFormat.format(
+            Instant.fromEpochMilliseconds(millis)
+                .toLocalDateTime(TimeZone.currentSystemDefault())
+        )
 
     private val S get() = com.lucent.app.i18n.S
 

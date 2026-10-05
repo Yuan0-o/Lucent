@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
 
-actual data class Note(
+actual data class Note actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val body: String,
@@ -25,7 +25,7 @@ actual data class Note(
     actual val formatOverride: String?
 )
 
-actual data class Task(
+actual data class Task actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val isDone: Boolean,
@@ -48,7 +48,7 @@ actual data class Task(
     actual val formatOverride: String?
 )
 
-actual data class NoteVersion(
+actual data class NoteVersion actual constructor(
     actual val id: Long,
     actual val noteId: Long,
     actual val title: String,
@@ -59,7 +59,7 @@ actual data class NoteVersion(
     actual val savedAt: Long
 )
 
-actual data class TaskVersion(
+actual data class TaskVersion actual constructor(
     actual val id: Long,
     actual val taskId: Long,
     actual val title: String,
@@ -70,7 +70,7 @@ actual data class TaskVersion(
     actual val savedAt: Long
 )
 
-actual data class ChatMessage(
+actual data class ChatMessage actual constructor(
     actual val id: Long,
     actual val role: String,
     actual val content: String,
@@ -89,14 +89,14 @@ actual data class ChatMessage(
     actual val quotedText: String?
 )
 
-actual data class ChatConversation(
+actual data class ChatConversation actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val createdAt: Long,
     actual val updatedAt: Long
 )
 
-actual data class Notebook(
+actual data class Notebook actual constructor(
     actual val id: Long,
     actual val title: String,
     actual val createdAt: Long,
@@ -107,7 +107,7 @@ actual data class Notebook(
     actual val pinned: Boolean
 )
 
-actual data class NotebookItem(
+actual data class NotebookItem actual constructor(
     actual val id: Long,
     actual val notebookId: Long,
     actual val itemKind: String,

@@ -7,7 +7,6 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.RemoteException
 import android.util.Log
-import com.lucent.app.GenerationService
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
@@ -190,7 +189,7 @@ internal object LocalLlmProxy {
                     connectWaiter = cont
                     val requested = try {
                         appCtx.bindService(
-                            Intent(appCtx, GenerationService::class.java),
+                            Intent().setClassName(appCtx, "com.lucent.app.GenerationService"),
                             connection,
                             Context.BIND_AUTO_CREATE
                         )

@@ -51,6 +51,8 @@ import com.lucent.app.data.AttachmentStore
 import com.lucent.app.data.Attachments
 import com.lucent.app.platform.LocalPlatformContext
 
+private val ATTACHMENT_ROW_HEIGHT = 44.dp
+
 fun mimeForFileName(name: String): String {
     val ext = name.substringAfterLast('.', "").lowercase()
     return when (ext) {
@@ -376,44 +378,6 @@ private fun iconForAttachment(att: Attachment) = when {
     else -> Icons.AutoMirrored.Filled.InsertDriveFile
 }
 
-
-@Composable
-private fun AttachmentRow(
-    att: Attachment,
-    tint: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable RowScope.() -> Unit)? = null
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = 0.10f))
-            .pointerInput(att.data) { detectTapGestures(onTap = { onClick() }) }
-            .heightIn(min = ATTACHMENT_ROW_HEIGHT)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (leading != null) {
-            leading()
-            Spacer(modifier = Modifier.size(6.dp))
-        }
-        Icon(iconForAttachment(att), contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-        Text(
-            att.name,
-            color = tint,
-            fontSize = 13.sp,
-            lineHeight = 20.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 6.dp)
-        )
-        trailing?.invoke(this)
-    }
-}
 
 @Composable
 private fun AttachmentRenameDialog(
