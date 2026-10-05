@@ -2,7 +2,7 @@ package com.lucent.app.ui
 
 import com.lucent.app.data.createSettingsRepository
 
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll

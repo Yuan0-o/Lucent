@@ -2,7 +2,7 @@ package com.lucent.app.ui
 
 import com.lucent.app.data.createAppDatabase
 
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -66,7 +66,7 @@ fun NoteHistoryScreen(
     var confirmRestore by remember { mutableStateOf<NoteVersion?>(null) }
     var confirmDelete by remember { mutableStateOf<NoteVersion?>(null) }
 
-    BackHandler(enabled = previewing != null) { previewing = null }
+    LucentBackHandler(enabled = previewing != null) { previewing = null }
 
     fun restore(version: NoteVersion) {
         AppScope.io.launch {

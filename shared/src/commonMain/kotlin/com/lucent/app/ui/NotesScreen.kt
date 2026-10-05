@@ -4,7 +4,7 @@ import com.lucent.app.data.createSettingsRepository
 
 import com.lucent.app.data.createAppDatabase
 
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -660,16 +660,16 @@ fun NotesScreen(active: Boolean = true) {
     }
 
     BackClaim(active && (composing || viewingId != null || historyForId != null || showArchive || showTrash || showSearch || showDrafts || showHidden || selectionMode))
-    BackHandler(enabled = composing) { leaveComposer() }
-    BackHandler(enabled = !composing && historyForId != null) { historyForId = null }
-    BackHandler(enabled = !composing && historyForId == null && viewingId != null) { closeDetail() }
-    BackHandler(enabled = !composing && historyForId == null && viewingId == null && showArchive) { showArchive = false }
-    BackHandler(enabled = !composing && historyForId == null && viewingId == null && !showArchive && showTrash) { showTrash = false }
-    BackHandler(enabled = !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && showSearch) { showSearch = false }
-    BackHandler(enabled = !composing && historyForId == null && viewingId == null && (showDrafts || showHidden)) {
+    LucentBackHandler(enabled = composing) { leaveComposer() }
+    LucentBackHandler(enabled = !composing && historyForId != null) { historyForId = null }
+    LucentBackHandler(enabled = !composing && historyForId == null && viewingId != null) { closeDetail() }
+    LucentBackHandler(enabled = !composing && historyForId == null && viewingId == null && showArchive) { showArchive = false }
+    LucentBackHandler(enabled = !composing && historyForId == null && viewingId == null && !showArchive && showTrash) { showTrash = false }
+    LucentBackHandler(enabled = !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && showSearch) { showSearch = false }
+    LucentBackHandler(enabled = !composing && historyForId == null && viewingId == null && (showDrafts || showHidden)) {
         if (showDrafts) showDrafts = false else showHidden = false
     }
-    BackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
+    LucentBackHandler(enabled = selectionMode && !composing && historyForId == null && viewingId == null && !showArchive && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
     LaunchedEffect(AppNavigation.requestedPanel, active) {
         if (!active) return@LaunchedEffect

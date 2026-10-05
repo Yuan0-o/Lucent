@@ -1,6 +1,6 @@
 package com.lucent.app.ui
 
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -88,7 +88,7 @@ fun LucentSplash(
         finish()
     }
 
-    BackHandler(enabled = true) { finish() }
+    LucentBackHandler(enabled = true) { finish() }
 
     Box(
         modifier = Modifier

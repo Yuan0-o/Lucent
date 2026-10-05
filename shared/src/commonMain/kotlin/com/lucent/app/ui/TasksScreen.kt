@@ -4,7 +4,7 @@ import com.lucent.app.data.createSettingsRepository
 
 import com.lucent.app.data.createAppDatabase
 
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -465,15 +465,15 @@ fun TasksScreen(active: Boolean = true) {
     }
 
     BackClaim(active && (composing || viewingId != null || showingHistory || showTrash || showSearch || showDrafts || showHidden || selectionMode))
-    BackHandler(enabled = composing) { leaveComposer() }
-    BackHandler(enabled = !composing && viewingId != null) { closeDetail() }
-    BackHandler(enabled = !composing && viewingId == null && showingHistory) { showingHistory = false }
-    BackHandler(enabled = !composing && viewingId == null && !showingHistory && showTrash) { showTrash = false }
-    BackHandler(enabled = !composing && viewingId == null && !showingHistory && !showTrash && showSearch) { showSearch = false }
-    BackHandler(enabled = !composing && viewingId == null && (showDrafts || showHidden)) {
+    LucentBackHandler(enabled = composing) { leaveComposer() }
+    LucentBackHandler(enabled = !composing && viewingId != null) { closeDetail() }
+    LucentBackHandler(enabled = !composing && viewingId == null && showingHistory) { showingHistory = false }
+    LucentBackHandler(enabled = !composing && viewingId == null && !showingHistory && showTrash) { showTrash = false }
+    LucentBackHandler(enabled = !composing && viewingId == null && !showingHistory && !showTrash && showSearch) { showSearch = false }
+    LucentBackHandler(enabled = !composing && viewingId == null && (showDrafts || showHidden)) {
         if (showDrafts) showDrafts = false else showHidden = false
     }
-    BackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
+    LucentBackHandler(enabled = selectionMode && !composing && viewingId == null && !showingHistory && !showTrash && !showSearch && !showDrafts && !showHidden) { exitSelection() }
 
     LaunchedEffect(AppNavigation.requestedPanel, active) {
         if (!active) return@LaunchedEffect

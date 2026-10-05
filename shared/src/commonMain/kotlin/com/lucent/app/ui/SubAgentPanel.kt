@@ -48,7 +48,7 @@ import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import com.lucent.app.harness.SubAgent
 import com.lucent.app.harness.SubAgentReports
 import com.lucent.app.harness.SubAgents
@@ -361,7 +361,7 @@ fun SubAgentChatPage(agentId: String, tint: Color, mutedTint: Color, onBack: () 
     var instruction by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val current = remember(agentId, tick) { SubAgents.get(agentId) }
-    BackHandler(onBack = onBack)
+    LucentBackHandler(onBack = onBack)
     LaunchedEffect(agentId) {
         while (true) {
             delay(800)

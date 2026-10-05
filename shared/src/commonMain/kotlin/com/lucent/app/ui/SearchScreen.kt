@@ -4,7 +4,7 @@ import com.lucent.app.data.createSettingsRepository
 
 import com.lucent.app.data.createAppDatabase
 
-import androidx.activity.compose.BackHandler
+import com.lucent.app.ui.LucentBackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -88,7 +88,7 @@ fun SearchScreen(
     var taskResults by remember { mutableStateOf<List<Task>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = true) { onBack() }
+    LucentBackHandler(enabled = true) { onBack() }
 
     val query = remember(raw) { SearchQuery.parse(raw) }
 
