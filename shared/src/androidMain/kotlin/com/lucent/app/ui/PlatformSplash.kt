@@ -1,12 +1,11 @@
 package com.lucent.app.ui
 
-import android.graphics.Typeface
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.platform.Typeface as ComposeTypeface
 import java.io.File
 
 actual fun Modifier.splashTopInset(): Modifier = statusBarsPadding()
@@ -26,8 +25,7 @@ actual fun splashScriptFont(): FontFamily? = remember {
             val tmp = File.createTempFile("splashScript", ".ttf")
             tmp.writeBytes(bytes)
             tmp.deleteOnExit()
-            val tf = Typeface.createFromFile(tmp)
-            FontFamily(ComposeTypeface(tf))
+            FontFamily(Font(tmp))
         }
     } catch (t: Throwable) {
         null
