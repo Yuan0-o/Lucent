@@ -3,16 +3,34 @@ package com.lucent.app.assistant.prompts
 import com.lucent.app.data.DEFAULT_ASSISTANT_STYLE
 import com.lucent.app.data.MemoryTier
 import com.lucent.app.network.ToolDefinition
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.DayOfWeekNames
+import kotlinx.datetime.format.char
+import kotlinx.datetime.toLocalDateTime
 
 object SystemPrompts {
 
-    private val CONTEXT_TIME = java.time.format.DateTimeFormatter.ofPattern("EEEE, yyyy-MM-dd, HH:mm")
+    private val CONTEXT_TIME = LocalDateTime.Format {
+        dayOfWeek(DayOfWeekNames.ENGLISH_FULL)
+        chars(", ")
+        year()
+        char('-')
+        monthNumber()
+        char('-')
+        dayOfMonth()
+        chars(", ")
+        hour()
+        char(':')
+        minute()
+    }
 
     fun context(
         userText: String,
         crossMemory: String = "",
         recentItems: String = "",
-        now: java.time.ZonedDateTime = java.time.ZonedDateTime.now()
+        now: LocalDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     ): String = buildString {
         append("[Lucent context for your next reply. This is background, not a message from the person, ")
         append("and it is not the thing to answer.]\n")
