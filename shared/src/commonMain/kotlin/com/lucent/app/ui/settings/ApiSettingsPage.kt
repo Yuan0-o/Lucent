@@ -78,7 +78,7 @@ private fun modelChoices(fetched: List<String>, saved: List<String>): List<Strin
 }
 
 @Composable
-internal fun CloudModelSettingsPage(
+fun CloudModelSettingsPage(
     repo: SettingsRepository,
     profiles: List<ApiProfile>,
     selectedProfileIdx: Int,

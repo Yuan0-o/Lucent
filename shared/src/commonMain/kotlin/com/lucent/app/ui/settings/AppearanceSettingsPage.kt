@@ -14,7 +14,7 @@ import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.rememberDynamicColorActive
 
 @Composable
-internal fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+fun AppearanceSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val dynamicColorActive = rememberDynamicColorActive(repo)
 
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })

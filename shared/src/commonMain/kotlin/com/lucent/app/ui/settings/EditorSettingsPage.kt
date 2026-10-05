@@ -32,7 +32,7 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun EditorSettingsPage(
+fun EditorSettingsPage(
     repo: SettingsRepository,
     onRequestOpenLinksWarning: () -> Unit,
     onRoute: (SettingsRoute) -> Unit

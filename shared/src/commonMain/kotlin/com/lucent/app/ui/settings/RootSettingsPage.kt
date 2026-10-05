@@ -10,7 +10,7 @@ import com.lucent.app.ui.NavCard
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+fun RootSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     NavCard(S.settingsAppearanceTitle, S.settingsAppearanceSub) { onRoute(SettingsRoute.Appearance) }
     Spacer(modifier = Modifier.height(12.dp))
     NavCard(S.settingsLanguageTitle, S.settingsLanguageSub) { onRoute(SettingsRoute.Language) }

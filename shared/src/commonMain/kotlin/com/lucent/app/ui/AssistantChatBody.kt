@@ -128,7 +128,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal const val MAX_CHAT_UPLOAD_BYTES = 1_000_000L
+const val MAX_CHAT_UPLOAD_BYTES = 1_000_000L
 
 data class AssistantAttachmentDraft(val mime: String, val data: String, val name: String)
 

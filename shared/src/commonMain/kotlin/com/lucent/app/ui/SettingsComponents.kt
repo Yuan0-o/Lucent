@@ -154,7 +154,7 @@ internal fun BackHeader(onBack: () -> Unit) {
     Spacer(modifier = Modifier.height(8.dp))
 }
 
-internal object SettingsTrail {
+object SettingsTrail {
 
     fun parent(route: SettingsRoute): SettingsRoute? = when (route) {
         SettingsRoute.Root -> null
@@ -215,7 +215,7 @@ internal object SettingsTrail {
 }
 
 @Composable
-internal fun SettingsBreadcrumb(
+fun SettingsBreadcrumb(
     route: SettingsRoute,
     onNavigate: (SettingsRoute) -> Unit,
     modifier: Modifier = Modifier,
@@ -295,7 +295,7 @@ internal fun MemoryTierRow(
 }
 
 @Composable
-internal fun BackupModuleRow(
+fun BackupModuleRow(
     label: String,
     module: BackupManager.BackupModule,
     selected: Set<BackupManager.BackupModule>,
@@ -332,10 +332,10 @@ internal fun BackupModuleRow(
     }
 }
 
-internal enum class ExportItemKind { NOTES, TASKS, CHATS, API }
+enum class ExportItemKind { NOTES, TASKS, CHATS, API }
 
 @Composable
-internal fun ExportItemPickerDialog(
+fun ExportItemPickerDialog(
     title: String,
     items: List<Pair<Long, String>>,
     selected: Set<Long>,
@@ -386,7 +386,7 @@ internal fun ExportItemPickerDialog(
 }
 
 @Composable
-internal fun ApiImportLimitDialog(
+fun ApiImportLimitDialog(
     incoming: List<String>,
     canAdd: Int,
     max: Int,
@@ -501,7 +501,7 @@ internal fun ApiModelPickerDialog(
 }
 
 @Composable
-internal fun BackupContentLine(label: String, count: Int, details: List<String>) {
+fun BackupContentLine(label: String, count: Int, details: List<String>) {
     if (count <= 0) return
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text("$count", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(52.dp))

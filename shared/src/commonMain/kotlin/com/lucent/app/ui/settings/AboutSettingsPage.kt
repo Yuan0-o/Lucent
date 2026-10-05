@@ -37,7 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun AboutSettingsPage(
+fun AboutSettingsPage(
     repo: SettingsRepository,
     onRoute: (SettingsRoute) -> Unit,
     onOpenUrl: ((String) -> Unit)? = null,

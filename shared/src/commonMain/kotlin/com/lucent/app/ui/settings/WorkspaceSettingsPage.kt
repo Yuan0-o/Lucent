@@ -28,7 +28,7 @@ import com.lucent.app.ui.LucentToast
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun WorkspaceSettingsPage(
+fun WorkspaceSettingsPage(
     onRoute: (SettingsRoute) -> Unit,
     onGrantStorage: () -> Unit = {},
     storageGranted: Boolean = true

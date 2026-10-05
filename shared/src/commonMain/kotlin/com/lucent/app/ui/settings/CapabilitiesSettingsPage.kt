@@ -20,7 +20,7 @@ import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun CapabilitiesSettingsPage(
+fun CapabilitiesSettingsPage(
     onRoute: (SettingsRoute) -> Unit,
     onOpenAccessibility: () -> Unit = {},
     accessibilityRunning: Boolean = true

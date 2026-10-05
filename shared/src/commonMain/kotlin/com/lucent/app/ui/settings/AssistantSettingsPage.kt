@@ -17,7 +17,7 @@ import com.lucent.app.ui.NavCard
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun AssistantSettingsPage(
+fun AssistantSettingsPage(
     repo: SettingsRepository,
     profiles: List<ApiProfile>,
     selectedProfileIdx: Int,

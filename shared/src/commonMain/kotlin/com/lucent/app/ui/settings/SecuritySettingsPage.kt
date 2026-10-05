@@ -33,7 +33,7 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun SecuritySettingsPage(
+fun SecuritySettingsPage(
     repo: SettingsRepository,
     onRequestEnableAppLock: () -> Unit,
     onRequestDisableAppLock: () -> Unit,

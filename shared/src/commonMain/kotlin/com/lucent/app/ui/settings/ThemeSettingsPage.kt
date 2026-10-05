@@ -33,7 +33,7 @@ import com.lucent.app.ui.rememberDynamicColorActive
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+fun ThemeSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val savedTheme by repo.themeMode.collectAsState(initial = SettingsCache.themeMode)

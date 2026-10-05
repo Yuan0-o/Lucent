@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 import com.lucent.app.ui.HomePanel
 import com.lucent.app.ui.SettingsRoute
 
-internal object SettingsNav {
+object SettingsNav {
     var handler: ((SettingsRoute) -> Unit)? = null
 
     fun go(route: SettingsRoute) {
@@ -30,7 +30,7 @@ object AppNavigation {
     var returnScreen by mutableStateOf<Screen?>(null)
         private set
 
-    internal var settingsRoute by mutableStateOf(SettingsRoute.Root)
+    var settingsRoute by mutableStateOf(SettingsRoute.Root)
         private set
 
 
@@ -124,11 +124,11 @@ object AppNavigation {
         requestedScreen = Screen.Tasks
     }
 
-    internal fun rememberSettingsRoute(route: SettingsRoute) {
+    fun rememberSettingsRoute(route: SettingsRoute) {
         settingsRoute = route
     }
 
-    internal fun resetSettingsRoute() {
+    fun resetSettingsRoute() {
         settingsRoute = SettingsRoute.Root
     }
 

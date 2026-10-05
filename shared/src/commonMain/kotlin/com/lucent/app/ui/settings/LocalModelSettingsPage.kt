@@ -43,7 +43,7 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun LocalModelSettingsPage(
+fun LocalModelSettingsPage(
     repo: SettingsRepository,
     lmModels: List<LocalModelStore.ModelSlot>,
     lmActiveId: String?,

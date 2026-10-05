@@ -26,7 +26,7 @@ import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun ExecutionSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+fun ExecutionSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     var config by remember { mutableStateOf(HarnessRuntime.config()) }

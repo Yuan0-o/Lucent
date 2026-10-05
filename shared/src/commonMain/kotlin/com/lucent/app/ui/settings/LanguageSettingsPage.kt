@@ -42,7 +42,7 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun LanguageSettingsPage(
+fun LanguageSettingsPage(
     repo: SettingsRepository,
     importedFonts: List<FontStore.FontSlot>,
     fontCanImportMore: Boolean,

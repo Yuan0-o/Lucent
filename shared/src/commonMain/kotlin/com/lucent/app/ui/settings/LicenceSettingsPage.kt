@@ -94,7 +94,7 @@ private val ENTRIES = listOf(
 )
 
 @Composable
-internal fun LicenceSettingsPage(onRoute: (SettingsRoute) -> Unit, onOpenUrl: ((String) -> Unit)? = null) {
+fun LicenceSettingsPage(onRoute: (SettingsRoute) -> Unit, onOpenUrl: ((String) -> Unit)? = null) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
 

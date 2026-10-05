@@ -37,7 +37,7 @@ import com.lucent.app.ui.LucentToast
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun GithubSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+fun GithubSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     val context = LocalPlatformContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current

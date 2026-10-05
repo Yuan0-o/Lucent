@@ -59,7 +59,7 @@ actual object LocalLlm {
     actual fun shutdown() = LocalLlmProxy.shutdown()
 
 
-    internal const val RC_ENGINE_GLUE_ERROR = -21
+    actual const val RC_ENGINE_GLUE_ERROR = -21
 
     private val available: Boolean by lazy {
         try {
@@ -73,7 +73,7 @@ actual object LocalLlm {
 
     internal fun engineIsSupported(): Boolean = available
 
-    internal fun engineSupportsVision(): Boolean = handle != 0L && visionReady
+    actual fun engineSupportsVision(): Boolean = handle != 0L && visionReady
 
     private val llmDispatcher: CoroutineDispatcher by lazy {
         Executors.newSingleThreadExecutor { r -> Thread(r, "LucentLocalLlm") }.asCoroutineDispatcher()
@@ -126,7 +126,7 @@ actual object LocalLlm {
         return safe
     }
 
-    internal suspend fun engineEnsureLoaded(context: Context, gpuEnabled: Boolean): Boolean =
+    actual suspend fun engineEnsureLoaded(context: Context, gpuEnabled: Boolean): Boolean =
         withContext(llmDispatcher) {
         if (!available) return@withContext false
         val activeSlot = LocalModelStore.activeSlot(context) ?: return@withContext false
@@ -182,7 +182,7 @@ actual object LocalLlm {
         fun onPiece(piece: String)
     }
 
-    internal suspend fun engineGenerate(
+    actual suspend fun engineGenerate(
         messages: List<Pair<String, String>>,
         images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
@@ -231,7 +231,7 @@ actual object LocalLlm {
         }
     }
 
-    internal fun engineStop() {
+    actual fun engineStop() {
         val h = handle
         if (h != 0L) try {
             nativeStop(h)
@@ -239,7 +239,7 @@ actual object LocalLlm {
         }
     }
 
-    internal fun engineShutdown() {
+    actual fun engineShutdown() {
         if (!available) return
         engineStop()
         llmScope.launch {

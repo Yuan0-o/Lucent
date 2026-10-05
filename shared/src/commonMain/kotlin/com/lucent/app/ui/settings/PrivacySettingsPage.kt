@@ -47,7 +47,7 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun PrivacySettingsPage(
+fun PrivacySettingsPage(
     repo: SettingsRepository,
     gateLockedOut: Boolean,
     gateWiping: Boolean,

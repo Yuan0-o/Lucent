@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 @Composable
-internal fun PluginSetupWizard(onBack: () -> Unit) {
+fun PluginSetupWizard(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var steps by remember { mutableStateOf<List<SetupStep>>(emptyList()) }
     var busy by remember { mutableStateOf("") }

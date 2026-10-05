@@ -28,7 +28,7 @@ import com.lucent.app.ui.LocalOnGradientMuted
 import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
 
-internal data class AdvancedPrivilegeUi(
+data class AdvancedPrivilegeUi(
     val title: String,
     val description: String,
     val status: String,
@@ -39,7 +39,7 @@ internal data class AdvancedPrivilegeUi(
 )
 
 @Composable
-internal fun ShizukuSettingsPage(
+fun ShizukuSettingsPage(
     ui: AdvancedPrivilegeUi,
     onToggle: (Boolean) -> Unit,
     onAction: () -> Unit,

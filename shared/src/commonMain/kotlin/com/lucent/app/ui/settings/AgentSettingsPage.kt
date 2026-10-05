@@ -29,7 +29,7 @@ import com.lucent.app.ui.SettingsRoute
 import com.lucent.app.ui.frostedGlass
 
 @Composable
-internal fun AgentSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+fun AgentSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     var config by remember { mutableStateOf(HarnessRuntime.config()) }

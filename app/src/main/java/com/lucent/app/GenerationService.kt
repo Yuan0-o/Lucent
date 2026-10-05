@@ -42,10 +42,10 @@ class GenerationService : Service() {
         }
 
         override fun generate(
-            roles: Array<String>,
-            texts: Array<String>,
-            imagePaths: Array<String>,
-            callback: ILocalLlmCallback
+            roles: Array<String>?,
+            texts: Array<String>?,
+            imagePaths: Array<String>?,
+            callback: ILocalLlmCallback?
         ) {
             engineScope.launch {
                 val rc = try {

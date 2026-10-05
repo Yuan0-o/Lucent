@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
 internal data class PluginFailureReport(val plugin: PluginSpec, val outcome: PluginOutcome)
 
 @Composable
-internal fun PluginSettingsPage(
+fun PluginSettingsPage(
     onRoute: (SettingsRoute) -> Unit,
     onOpenUrl: (String) -> Unit = {},
     storageGranted: Boolean = true,

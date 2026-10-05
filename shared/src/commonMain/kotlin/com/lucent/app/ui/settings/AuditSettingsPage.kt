@@ -27,7 +27,7 @@ import com.lucent.app.ui.SettingsRoute
 private const val PAGE_SIZE = 40
 
 @Composable
-internal fun AuditSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+fun AuditSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     val context = LocalPlatformContext.current

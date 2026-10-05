@@ -262,6 +262,22 @@ actual object LocalLlm {
         }
     }
 
+    actual val RC_ENGINE_GLUE_ERROR: Int = -21
+
+    actual suspend fun engineEnsureLoaded(context: PlatformContext, gpuEnabled: Boolean): Boolean = false
+
+    actual fun engineSupportsVision(): Boolean = false
+
+    actual suspend fun engineGenerate(
+        messages: List<Pair<String, String>>,
+        images: List<ByteArray>,
+        onDelta: (String) -> Unit
+    ): Int = -1
+
+    actual fun engineStop() {}
+
+    actual fun engineShutdown() {}
+
     private external fun nativeLoad(path: String, nCtx: Int, nThreads: Int, nGpuLayers: Int): Long
     private external fun nativeMtmdLoad(handle: Long, mmprojPath: String, nThreads: Int): Boolean
     private external fun nativeMediaMarker(): String

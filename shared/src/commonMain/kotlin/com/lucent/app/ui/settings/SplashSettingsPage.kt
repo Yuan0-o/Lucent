@@ -34,7 +34,7 @@ import com.lucent.app.ui.frostedGlass
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun SplashSettingsPage(
+fun SplashSettingsPage(
     repo: SettingsRepository,
     onRoute: (SettingsRoute) -> Unit
 ) {

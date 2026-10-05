@@ -71,6 +71,7 @@ enum class HomeTab {
             Screen.Notebooks -> Notebooks
             Screen.Assistant -> Assistant
             Screen.Settings -> Settings
+            else -> Home
         }
     }
 }
@@ -177,6 +178,7 @@ internal fun KeepAliveTabs(pagerState: PagerState, modifier: Modifier = Modifier
                         )
                         Screen.Assistant -> AssistantScreen(active = isActive)
                         Screen.Settings -> SettingsScreen(active = isActive)
+                        else -> {}
                     }
                 }
             }

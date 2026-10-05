@@ -44,7 +44,7 @@ import com.lucent.app.ui.rememberBackupFolderPicker
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun DataSettingsPage(
+fun DataSettingsPage(
     repo: SettingsRepository,
     lockedNotice: String?,
     lockedNoticeFileName: String?,

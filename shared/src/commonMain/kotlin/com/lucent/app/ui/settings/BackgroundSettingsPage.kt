@@ -42,7 +42,7 @@ import com.lucent.app.ui.title
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
+fun BackgroundSettingsPage(repo: SettingsRepository, onRoute: (SettingsRoute) -> Unit) {
     val context = LocalPlatformContext.current
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current

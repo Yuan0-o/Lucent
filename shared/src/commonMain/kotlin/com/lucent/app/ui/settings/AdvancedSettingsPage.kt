@@ -14,7 +14,7 @@ import com.lucent.app.ui.NavCard
 import com.lucent.app.ui.SettingsRoute
 
 @Composable
-internal fun AdvancedSettingsPage(onRoute: (SettingsRoute) -> Unit) {
+fun AdvancedSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     BackHeader(onBack = { onRoute(SettingsRoute.Root) })
     Column(modifier = Modifier.fillMaxWidth()) {
         NavCard(
