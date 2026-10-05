@@ -1,5 +1,8 @@
 package com.lucent.app.ui
 
+import com.lucent.app.startGenerationService
+import com.lucent.app.stopGenerationService
+
 import com.lucent.app.data.createAppDatabase
 import kotlin.time.Clock
 
@@ -10,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlin.io.encoding.Base64
 import com.lucent.app.AppScope
-import com.lucent.app.GenerationService
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.data.ChatConversation
 import com.lucent.app.data.ChatMessage
@@ -1696,7 +1698,7 @@ class AssistantControllerImpl(
     private fun startGenerationService(assistantName: String) {
         val ctx = appContextRef ?: return
         try {
-            GenerationService.start(ctx, assistantName)
+            startGenerationService(ctx, assistantName)
         } catch (_: Throwable) {
         }
     }
@@ -1704,7 +1706,7 @@ class AssistantControllerImpl(
     private fun stopGenerationService() {
         val ctx = appContextRef ?: return
         try {
-            GenerationService.stop(ctx)
+            stopGenerationService(ctx)
         } catch (_: Throwable) {
         }
     }
