@@ -1,5 +1,56 @@
 package com.lucent.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lucent.app.data.Attachment
+import com.lucent.app.data.AttachmentStore
+import com.lucent.app.data.Attachments
+import com.lucent.app.platform.LocalPlatformContext
+
 fun mimeForFileName(name: String): String {
     val ext = name.substringAfterLast('.', "").lowercase()
     return when (ext) {
@@ -30,4 +81,451 @@ fun mimeForFileName(name: String): String {
         "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else -> "application/octet-stream"
     }
+}
+
+@Composable
+fun CardAttachments(
+    attachments: List<Attachment>,
+    onGradient: Color,
+    onGradientMuted: Color,
+    onRename: ((Attachment, String) -> Unit)? = null
+) {
+    if (attachments.isEmpty()) return
+    var renaming by remember { mutableStateOf<Attachment?>(null) }
+    val context = LocalPlatformContext.current
+    var viewing by remember { mutableStateOf<Attachment?>(null) }
+    val save = rememberSaveAttachmentLauncher()
+
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        attachments.forEach { att ->
+            AttachmentRow(
+                att = att,
+                tint = if (att.isImage) onGradientMuted else onGradient,
+                onClick = { Haptics.tick(context); viewing = att },
+                trailing = {
+                    if (onRename != null) {
+                        IconButton(onClick = { renaming = att }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Default.DriveFileRenameOutline,
+                                contentDescription = com.lucent.app.i18n.S.a11yRenameNamed(att.name),
+                                tint = onGradientMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    IconButton(onClick = { Haptics.tick(context); save(att) }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = com.lucent.app.i18n.S.a11yDownloadNamed(att.name),
+                            tint = onGradientMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    viewing?.let { att ->
+        val idx = attachments.indexOfFirst { it.data == att.data }
+        if (idx >= 0) {
+            AttachmentViewerDialog(
+                attachments = attachments,
+                initialIndex = idx,
+                onDismiss = { viewing = null }
+            )
+        }
+    }
+
+    renaming?.let { att ->
+        AttachmentRenameDialog(
+            current = att,
+            takenNames = attachments.filterNot { it.data == att.data }.map { it.name },
+            onConfirm = { newName -> onRename?.invoke(att, newName); renaming = null },
+            onDismiss = { renaming = null }
+        )
+    }
+}
+
+
+@Composable
+fun PendingAttachmentChips(
+    attachments: List<Attachment>,
+    tint: Color,
+    onRemove: (Attachment) -> Unit,
+    onRename: ((Attachment, String) -> Unit)? = null,
+    onReorder: ((Int, Int) -> Unit)? = null
+) {
+    if (attachments.isEmpty()) return
+    val context = LocalPlatformContext.current
+    var viewing by remember { mutableStateOf<Attachment?>(null) }
+    var renaming by remember { mutableStateOf<Attachment?>(null) }
+    val rowHeightPx = with(LocalDensity.current) { ATTACHMENT_ROW_HEIGHT.toPx() }
+    val liveAttachments = androidx.compose.runtime.rememberUpdatedState(attachments)
+
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        attachments.forEach { att ->
+            key(att.data) {
+                val position = liveAttachments.value.indexOfFirst { it.data == att.data }
+                var lastPosition by remember { mutableStateOf(position) }
+                val slide = remember { androidx.compose.animation.core.Animatable(0f) }
+                LaunchedEffect(position) {
+                    if (position >= 0 && position != lastPosition) {
+                        slide.snapTo((lastPosition - position) * rowHeightPx)
+                        lastPosition = position
+                        slide.animateTo(
+                            0f,
+                            androidx.compose.animation.core.spring(
+                                dampingRatio = 0.62f,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
+                AttachmentRow(
+                    modifier = Modifier.graphicsLayer { translationY = slide.value },
+                    att = att,
+                    tint = tint,
+                    onClick = { Haptics.tick(context); viewing = att },
+                    leading = if (onReorder == null) null else {
+                        {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .pointerInput(att.data) {
+                                        var travelled = 0f
+                                        detectDragGestures(
+                                            onDragEnd = { travelled = 0f },
+                                            onDragCancel = { travelled = 0f },
+                                            onDrag = { change, delta ->
+                                                change.consume()
+                                                travelled += delta.y
+                                                while (travelled >= rowHeightPx) {
+                                                    travelled -= rowHeightPx
+                                                    moveAttachment(liveAttachments.value, att, +1, onReorder)
+                                                }
+                                                while (travelled <= -rowHeightPx) {
+                                                    travelled += rowHeightPx
+                                                    moveAttachment(liveAttachments.value, att, -1, onReorder)
+                                                }
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.DragHandle,
+                                    contentDescription = com.lucent.app.i18n.S.a11yDragToReorder,
+                                    tint = tint.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    },
+                    trailing = {
+                        if (onRename != null) {
+                            IconButton(onClick = { renaming = att }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Default.DriveFileRenameOutline,
+                                    contentDescription = com.lucent.app.i18n.S.a11yRenameNamed(att.name),
+                                    tint = tint,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        IconButton(onClick = { onRemove(att) }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = com.lucent.app.i18n.S.a11yRemoveNamed(att.name),
+                                tint = tint,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    viewing?.let { att ->
+        val idx = attachments.indexOfFirst { it.data == att.data }
+        if (idx >= 0) {
+            AttachmentViewerDialog(
+                attachments = attachments,
+                initialIndex = idx,
+                onDismiss = { viewing = null }
+            )
+        }
+    }
+
+    renaming?.let { att ->
+        AttachmentRenameDialog(
+            current = att,
+            takenNames = attachments.filterNot { it.data == att.data }.map { it.name },
+            onConfirm = { newName -> onRename?.invoke(att, newName); renaming = null },
+            onDismiss = { renaming = null }
+        )
+    }
+}
+
+private fun moveAttachment(
+    attachments: List<Attachment>,
+    att: Attachment,
+    step: Int,
+    onReorder: ((Int, Int) -> Unit)?
+) {
+    val from = attachments.indexOfFirst { it.data == att.data }
+    if (from < 0) return
+    val to = from + step
+    if (to !in attachments.indices) return
+    onReorder?.invoke(from, to)
+}
+
+@Composable
+private fun AttachmentRow(
+    att: Attachment,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.10f))
+            .pointerInput(att.data) { detectTapGestures(onTap = { onClick() }) }
+            .heightIn(min = ATTACHMENT_ROW_HEIGHT)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (leading != null) {
+            leading()
+            Spacer(modifier = Modifier.size(6.dp))
+        }
+        Icon(iconForAttachment(att), contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Text(
+            att.name,
+            color = tint,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 6.dp)
+        )
+        trailing?.invoke(this)
+    }
+}
+
+@Composable
+private fun AttachmentRenameDialog(
+    current: Attachment,
+    takenNames: List<String>,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember(current.data) { mutableStateOf(current.name) }
+    val proposed = withPreservedExtension(text.trim(), current.name)
+    val clash = proposed.isNotEmpty() && takenNames.any { it.equals(proposed, ignoreCase = true) }
+    val valid = proposed.isNotEmpty() && !clash
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(com.lucent.app.i18n.S.attachmentRenameTitle) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text  = com.lucent.app.collapseExcessBlankLines(it) },
+                    label = { Text(com.lucent.app.i18n.S.attachmentNameLabel) },
+                    singleLine = true,
+                    isError = clash,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (clash) {
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(com.lucent.app.i18n.S.attachmentNameTaken, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(proposed) }) {
+                Text(com.lucent.app.i18n.S.actionRename)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(com.lucent.app.i18n.S.actionCancel) }
+        }
+    )
+}
+
+private fun withPreservedExtension(typed: String, original: String): String {
+    if (typed.isEmpty()) return ""
+    if (typed.substringAfterLast('.', "").isNotEmpty()) return typed
+    val ext = original.substringAfterLast('.', "")
+    return if (ext.isEmpty()) typed else "$typed.$ext"
+}
+
+private fun iconForAttachment(att: Attachment) = when {
+    att.isVideo -> Icons.Default.Movie
+    att.isAudio -> Icons.Default.MusicNote
+    att.isPdf -> Icons.Default.PictureAsPdf
+    att.isImage -> Icons.Default.Image
+    else -> Icons.AutoMirrored.Filled.InsertDriveFile
+}
+
+
+@Composable
+private fun AttachmentRow(
+    att: Attachment,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.10f))
+            .pointerInput(att.data) { detectTapGestures(onTap = { onClick() }) }
+            .heightIn(min = ATTACHMENT_ROW_HEIGHT)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (leading != null) {
+            leading()
+            Spacer(modifier = Modifier.size(6.dp))
+        }
+        Icon(iconForAttachment(att), contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        Text(
+            att.name,
+            color = tint,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 6.dp)
+        )
+        trailing?.invoke(this)
+    }
+}
+
+@Composable
+private fun AttachmentRenameDialog(
+    current: Attachment,
+    takenNames: List<String>,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember(current.data) { mutableStateOf(current.name) }
+    val proposed = withPreservedExtension(text.trim(), current.name)
+    val clash = proposed.isNotEmpty() && takenNames.any { it.equals(proposed, ignoreCase = true) }
+    val valid = proposed.isNotEmpty() && !clash
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(com.lucent.app.i18n.S.attachmentRenameTitle) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text  = com.lucent.app.collapseExcessBlankLines(it) },
+                    label = { Text(com.lucent.app.i18n.S.attachmentNameLabel) },
+                    singleLine = true,
+                    isError = clash,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (clash) {
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(com.lucent.app.i18n.S.attachmentNameTaken, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(proposed) }) {
+                Text(com.lucent.app.i18n.S.actionRename)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(com.lucent.app.i18n.S.actionCancel) }
+        }
+    )
+}
+
+private fun withPreservedExtension(typed: String, original: String): String {
+    if (typed.isEmpty()) return ""
+    if (typed.substringAfterLast('.', "").isNotEmpty()) return typed
+    val ext = original.substringAfterLast('.', "")
+    return if (ext.isEmpty()) typed else "$typed.$ext"
+}
+
+private fun iconForAttachment(att: Attachment) = when {
+    att.isVideo -> Icons.Default.Movie
+    att.isAudio -> Icons.Default.MusicNote
+    att.isPdf -> Icons.Default.PictureAsPdf
+    att.isImage -> Icons.Default.Image
+    else -> Icons.AutoMirrored.Filled.InsertDriveFile
+}
+
+
+@Composable
+private fun AttachmentRenameDialog(
+    current: Attachment,
+    takenNames: List<String>,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember(current.data) { mutableStateOf(current.name) }
+    val proposed = withPreservedExtension(text.trim(), current.name)
+    val clash = proposed.isNotEmpty() && takenNames.any { it.equals(proposed, ignoreCase = true) }
+    val valid = proposed.isNotEmpty() && !clash
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(com.lucent.app.i18n.S.attachmentRenameTitle) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text  = com.lucent.app.collapseExcessBlankLines(it) },
+                    label = { Text(com.lucent.app.i18n.S.attachmentNameLabel) },
+                    singleLine = true,
+                    isError = clash,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (clash) {
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(com.lucent.app.i18n.S.attachmentNameTaken, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(proposed) }) {
+                Text(com.lucent.app.i18n.S.actionRename)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(com.lucent.app.i18n.S.actionCancel) }
+        }
+    )
+}
+
+private fun withPreservedExtension(typed: String, original: String): String {
+    if (typed.isEmpty()) return ""
+    if (typed.substringAfterLast('.', "").isNotEmpty()) return typed
+    val ext = original.substringAfterLast('.', "")
+    return if (ext.isEmpty()) typed else "$typed.$ext"
+}
+
+private fun iconForAttachment(att: Attachment) = when {
+    att.isVideo -> Icons.Default.Movie
+    att.isAudio -> Icons.Default.MusicNote
+    att.isPdf -> Icons.Default.PictureAsPdf
+    att.isImage -> Icons.Default.Image
+    else -> Icons.AutoMirrored.Filled.InsertDriveFile
 }

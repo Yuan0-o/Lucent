@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.lucent.app.platform.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lucent.app.AppScope
@@ -26,7 +27,6 @@ import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.launch
-import com.lucent.app.platform.desktopPlatformContext
 
 @Composable
 fun DynamicColorRow(repo: SettingsRepository) {
@@ -116,7 +116,7 @@ fun DesktopIntegrationRows(repo: SettingsRepository) {
 
 @Composable
 fun SecondaryUnlockRow(repo: SettingsRepository, appLockOn: Boolean) {
-    val context = desktopPlatformContext
+    val context = LocalPlatformContext.current
     val biometricAvailable = remember { isBiometricUnlockAvailable(context) }
     var helloAvailable by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { helloAvailable = isWindowsHelloAvailable() }

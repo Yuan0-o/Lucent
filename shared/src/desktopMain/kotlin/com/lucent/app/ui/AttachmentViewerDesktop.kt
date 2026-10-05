@@ -1021,7 +1021,7 @@ private const val DOODLE_STROKE = 12f
 private const val MOSAIC_BLOCK = 28
 
 @Composable
-private fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
+actual fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
     val context = desktopPlatformContext
     return remember {
         { att ->

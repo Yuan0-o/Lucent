@@ -199,7 +199,7 @@ fun shareAttachment(context: PlatformContext, att: Attachment) {
 }
 
 @Composable
-fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
+actual fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
     val context = LocalContext.current
     var pending by remember { mutableStateOf<Attachment?>(null) }
     val launcher = rememberLauncherForActivityResult(

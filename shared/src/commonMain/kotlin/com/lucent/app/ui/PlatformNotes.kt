@@ -43,6 +43,9 @@ expect fun AttachmentViewerDialog(att: Attachment, onDismiss: () -> Unit)
 expect fun AttachmentViewerDialog(attachments: List<Attachment>, initialIndex: Int, onDismiss: () -> Unit)
 
 @Composable
+expect fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit
+
+@Composable
 expect fun ExpandableGlassTextField(
     value: String,
     onValueChange: (String) -> Unit,

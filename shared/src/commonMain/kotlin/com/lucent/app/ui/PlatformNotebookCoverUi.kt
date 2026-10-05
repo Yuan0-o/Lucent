@@ -6,12 +6,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import com.lucent.app.platform.LocalPlatformContext
 import com.lucent.app.data.AttachmentStore
 
 @Composable
 fun PlatformPhotoCover(colorKey: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val id = colorKey.removePrefix("photo:")
     val bitmap = remember(id) {
         try {

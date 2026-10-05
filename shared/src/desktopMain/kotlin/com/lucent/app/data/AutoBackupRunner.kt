@@ -1,18 +1,19 @@
 package com.lucent.app.data
 
 import com.lucent.app.AppScope
+import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
-object AutoBackupRunner {
+actual object AutoBackupRunner {
 
     private const val CHECK_INTERVAL_MS = 15L * 60L * 1000L
 
     private var loop: Job? = null
 
-    fun ensureStarted(context: PlatformContext) {
+    actual fun ensureStarted(context: PlatformContext) {
         if (loop?.isActive == true) return
         val appContext = appContextOf(context)
         loop = AppScope.io.launch {
@@ -28,7 +29,7 @@ object AutoBackupRunner {
         }
     }
 
-    suspend fun runNow(context: PlatformContext): String? {
+    actual suspend fun runNow(context: PlatformContext): String? {
         val appContext = appContextOf(context)
         val settings = createSettingsRepository(appContext)
         val state = settings.autoBackupOnce()
@@ -59,22 +60,14 @@ object AutoBackupRunner {
     }
 }
 
-private typealias PlatformContext = android.content.Context
-
-private fun appContextOf(context: PlatformContext): PlatformContext = context.applicationContext
+private fun appContextOf(context: PlatformContext): PlatformContext = context
 
 private suspend fun writeBackup(context: PlatformContext, folderUri: String, name: String) {
-    val tree = android.net.Uri.parse(folderUri)
-    val resolver = context.contentResolver
-    val parent = android.provider.DocumentsContract.buildDocumentUriUsingTree(
-        tree, android.provider.DocumentsContract.getTreeDocumentId(tree)
-    )
-    val file = android.provider.DocumentsContract.createDocument(
-        resolver, parent, "application/octet-stream", name
-    ) ?: throw java.io.IOException("could not create $name")
+    val dir = java.io.File(folderUri)
+    if (!dir.isDirectory && !dir.mkdirs()) throw java.io.IOException("no folder $folderUri")
     val db = createAppDatabase(context)
     val settings = createSettingsRepository(context)
-    resolver.openOutputStream(file)?.use { out ->
+    java.io.FileOutputStream(java.io.File(dir, name)).use { out ->
         val tee = java.io.ByteArrayOutputStream()
         val mirrored = object : java.io.OutputStream() {
             override fun write(b: Int) { out.write(b); tee.write(b) }
@@ -100,42 +93,12 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
                 com.lucent.app.data.CloudSync.upload(cfg, name, tee.toByteArray())
             }
         }
-    } ?: throw java.io.IOException("could not open $name")
+    }
 }
 
-private fun listOurFiles(context: PlatformContext, folderUri: String): List<String> {
-    val tree = android.net.Uri.parse(folderUri)
-    val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
-        tree, android.provider.DocumentsContract.getTreeDocumentId(tree)
-    )
-    val out = ArrayList<String>()
-    context.contentResolver.query(
-        children,
-        arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME),
-        null, null, null
-    )?.use { c -> while (c.moveToNext()) out.add(c.getString(0) ?: "") }
-    return out
-}
+private fun listOurFiles(context: PlatformContext, folderUri: String): List<String> =
+    java.io.File(folderUri).listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
 
 private fun deleteFile(context: PlatformContext, folderUri: String, name: String) {
-    val tree = android.net.Uri.parse(folderUri)
-    val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
-        tree, android.provider.DocumentsContract.getTreeDocumentId(tree)
-    )
-    context.contentResolver.query(
-        children,
-        arrayOf(
-            android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME
-        ),
-        null, null, null
-    )?.use { c ->
-        while (c.moveToNext()) {
-            if (c.getString(1) == name) {
-                val doc = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0))
-                android.provider.DocumentsContract.deleteDocument(context.contentResolver, doc)
-                return
-            }
-        }
-    }
+    java.io.File(java.io.File(folderUri), name).delete()
 }
