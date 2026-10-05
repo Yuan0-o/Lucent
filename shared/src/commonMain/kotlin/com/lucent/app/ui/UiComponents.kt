@@ -1,11 +1,12 @@
 package com.lucent.app.ui
 
 import com.lucent.app.platform.LocalPlatformContext
+import com.lucent.app.platform.PlatformContext
+
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import com.lucent.app.platform.PlatformContext
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -70,7 +71,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.Calendar
 
 const val SWIPE_EXIT_MS = 160
 
@@ -123,6 +123,68 @@ fun GlassCapsuleButton(
 }
 
 val COMPOSER_ACTION_HEIGHT = 52.dp
+
+@Composable
+fun GlassButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+    danger: Boolean = false,
+    compact: Boolean = false
+) {
+    val onGradient = LocalOnGradient.current
+    val context = LocalPlatformContext.current
+    val shape = RoundedCornerShape(percent = 50)
+    val glassDark = isDarkGlass()
+
+    val padH = if (compact) 14.dp else 22.dp
+    val padV = if (compact) 8.dp else 13.dp
+    val iconSize = if (compact) 15.dp else 18.dp
+    val iconGap = if (compact) 6.dp else 8.dp
+    val labelSize = if (compact) 13.sp else 15.sp
+
+    val dangerFill = DANGER_RED
+    val dangerRim = DANGER_RED_RIM
+    val fill = when {
+        danger -> dangerFill
+        glassDark -> Color.White.copy(alpha = LucentGlass.CARD_FILL_DARK)
+        else -> Color.White.copy(alpha = LucentGlass.CARD_FILL_LIGHT)
+    }
+    val label = if (danger) Color.White else onGradient
+    val fade = if (enabled) 1f else 0.38f
+
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(fill.copy(alpha = fill.alpha * fade))
+            .then(
+                if (danger) Modifier.border(1.dp, dangerRim.copy(alpha = dangerRim.alpha * fade), shape)
+                else Modifier.border(1.dp, lucentGlassRim(strong = true), shape)
+            )
+            .clickable(enabled = enabled) {
+                Haptics.tick(context)
+                onClick()
+            }
+            .padding(horizontal = padH, vertical = padV),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = label.copy(alpha = label.alpha * fade), modifier = Modifier.size(iconSize))
+            Spacer(modifier = Modifier.width(iconGap))
+        }
+        Text(
+            text,
+            color = label.copy(alpha = label.alpha * fade),
+            fontSize = labelSize,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = LocalTextStyle.current.copy(lineHeightStyle = CapsuleLabelLineHeight)
+        )
+    }
+}
 
 @Composable
 fun AttachmentSection(
@@ -490,7 +552,10 @@ fun LucentExpandedInput(
     val onGradientMuted = LocalOnGradientMuted.current
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onCollapse,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
@@ -523,7 +588,7 @@ fun LucentExpandedInput(
             Spacer(modifier = Modifier.height(8.dp))
             androidx.compose.material3.OutlinedTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = { onValueChange(com.lucent.app.collapseExcessBlankLines(it)) },
                 placeholder = { Text(placeholder, color = onGradientMuted) },
                 textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = onGradient),
                 modifier = Modifier.fillMaxWidth().weight(1f)
@@ -531,3 +596,5 @@ fun LucentExpandedInput(
         }
     }
 }
+
+expect fun showDateRangePicker(context: PlatformContext, currentStart: Long?, currentEnd: Long?, onPicked: (Long, Long) -> Unit)
