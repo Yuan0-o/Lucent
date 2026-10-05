@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.PlatformInputStream
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -220,7 +221,7 @@ object FontStore {
         }
     }
 
-    private fun readUpTo(input: InputStream, buffer: ByteArray): Int {
+    private fun readUpTo(input: PlatformInputStream, buffer: ByteArray): Int {
         var read = 0
         while (read < buffer.size) {
             val n = input.read(buffer, read, buffer.size - read)
@@ -230,7 +231,7 @@ object FontStore {
         return read
     }
 
-    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: InputStream, out: File) {
+    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: PlatformInputStream, out: File) {
         out.outputStream().use { os ->
             os.write(prefix, 0, prefixLen)
             val buf = ByteArray(1 shl 16)

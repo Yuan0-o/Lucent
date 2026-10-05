@@ -1,6 +1,7 @@
 package com.lucent.app.local
 
 import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.PlatformInputStream
 import com.lucent.app.data.LocalSecrets
 import org.json.JSONArray
 import org.json.JSONObject
@@ -292,7 +293,7 @@ object LocalModelStore {
 
     private fun newId(): String = java.util.UUID.randomUUID().toString().replace("-", "").take(12)
 
-    private fun readUpTo(input: InputStream, buffer: ByteArray): Int {
+    private fun readUpTo(input: PlatformInputStream, buffer: ByteArray): Int {
         var read = 0
         while (read < buffer.size) {
             val n = input.read(buffer, read, buffer.size - read)
@@ -325,7 +326,7 @@ object LocalModelStore {
     private class StitchedInputStream(
         private val head: ByteArray,
         private val headLen: Int,
-        private val rest: InputStream
+        private val rest: PlatformInputStream
     ) : InputStream() {
         private var pos = 0
         override fun read(): Int =

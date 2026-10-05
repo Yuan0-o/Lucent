@@ -1,3 +1,10 @@
 package com.lucent.app.platform
 
-expect abstract class PlatformContext
+import java.io.File
+
+expect abstract class PlatformContext {
+    val applicationContext: PlatformContext
+    val filesDir: File
+    val cacheDir: File
+    val packageName: String
+}
