@@ -1,6 +1,7 @@
 package com.lucent.app.local
 
 import android.content.Context
+import com.lucent.app.platform.PlatformContext
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -11,28 +12,28 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-object LocalLlm {
+actual object LocalLlm {
 
-    const val N_CTX = 4096
+    actual val N_CTX: Int = 4096
 
-    const val MAX_NEW_TOKENS = 512
+    actual val MAX_NEW_TOKENS: Int = 512
 
-    const val HISTORY_TURNS = 8
+    actual val HISTORY_TURNS: Int = 8
 
 
-    fun isSupported(): Boolean = LocalLlmProxy.isSupported()
+    actual fun isSupported(): Boolean = LocalLlmProxy.isSupported()
 
-    fun supportsVision(): Boolean = LocalLlmProxy.supportsVision()
+    actual fun supportsVision(): Boolean = LocalLlmProxy.supportsVision()
 
     fun unsupportedBecauseCpuLacksAvx2(): Boolean = false
 
-    fun setGpuEnabled(enabled: Boolean) = LocalLlmProxy.setGpuEnabled(enabled)
+    actual fun setGpuEnabled(enabled: Boolean) = LocalLlmProxy.setGpuEnabled(enabled)
 
-    fun isLoaded(): Boolean = LocalLlmProxy.isLoaded()
+    actual fun isLoaded(): Boolean = LocalLlmProxy.isLoaded()
 
-    fun isLoading(): Boolean = LocalLlmProxy.isLoading()
+    actual fun isLoading(): Boolean = LocalLlmProxy.isLoading()
 
-    fun isGenerating(): Boolean = LocalLlmProxy.isGenerating()
+    actual fun isGenerating(): Boolean = LocalLlmProxy.isGenerating()
 
     internal var ensureLoadedOverride: (suspend (Context) -> Boolean)? = null
 
@@ -43,19 +44,19 @@ object LocalLlm {
         generateOverride = null
     }
 
-    suspend fun ensureLoaded(context: Context): Boolean =
+    actual suspend fun ensureLoaded(context: PlatformContext): Boolean =
         ensureLoadedOverride?.invoke(context) ?: LocalLlmProxy.ensureLoaded(context)
 
-    suspend fun generate(
+    actual suspend fun generate(
         messages: List<Pair<String, String>>,
         images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
     ): Int = generateOverride?.invoke(messages, images, onDelta)
         ?: LocalLlmProxy.generate(messages, images, onDelta)
 
-    fun stop() = LocalLlmProxy.stop()
+    actual fun stop() = LocalLlmProxy.stop()
 
-    fun shutdown() = LocalLlmProxy.shutdown()
+    actual fun shutdown() = LocalLlmProxy.shutdown()
 
 
     internal const val RC_ENGINE_GLUE_ERROR = -21

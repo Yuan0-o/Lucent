@@ -120,10 +120,6 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <provider
-            android:name=".local.LocalLlmInitProvider"
-            android:authorities="${applicationId}.localllminit"
-            android:exported="false" />
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

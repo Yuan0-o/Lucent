@@ -11,13 +11,13 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-object LocalLlm {
+actual object LocalLlm {
 
-    const val N_CTX = 4096
+    actual val N_CTX: Int = 4096
 
-    const val MAX_NEW_TOKENS = 512
+    actual val MAX_NEW_TOKENS: Int = 512
 
-    const val HISTORY_TURNS = 8
+    actual val HISTORY_TURNS: Int = 8
 
     private val available: Boolean = run {
         val ok = com.lucent.app.nativebridge.NativeLoader.loadLlmEngine()
@@ -25,9 +25,9 @@ object LocalLlm {
         ok
     }
 
-    fun isSupported(): Boolean = available
+    actual fun isSupported(): Boolean = available
 
-    fun supportsVision(): Boolean = handle != 0L && visionReady
+    actual fun supportsVision(): Boolean = handle != 0L && visionReady
 
     fun unsupportedBecauseCpuLacksAvx2(): Boolean =
         com.lucent.app.nativebridge.NativeLoader.cpuMissingAvx2
@@ -106,15 +106,15 @@ object LocalLlm {
     @Volatile private var desiredGpuLayers: Int = 0
     @Volatile private var loadedGpuLayers: Int = 0
 
-    fun setGpuEnabled(enabled: Boolean) {
+    actual fun setGpuEnabled(enabled: Boolean) {
         desiredGpuLayers = if (enabled) GPU_OFFLOAD_ALL else 0
     }
 
-    fun isLoaded(): Boolean = handle != 0L
+    actual fun isLoaded(): Boolean = handle != 0L
 
-    fun isLoading(): Boolean = loading.get()
+    actual fun isLoading(): Boolean = loading.get()
 
-    fun isGenerating(): Boolean = generating.get()
+    actual fun isGenerating(): Boolean = generating.get()
 
     private fun threadCount(): Int {
         val total = Runtime.getRuntime().availableProcessors()
@@ -130,7 +130,7 @@ object LocalLlm {
         generateOverride = null
     }
 
-    suspend fun ensureLoaded(context: PlatformContext): Boolean = ensureLoadedOverride?.invoke(context)
+    actual suspend fun ensureLoaded(context: PlatformContext): Boolean = ensureLoadedOverride?.invoke(context)
         ?: withContext(llmDispatcher) {
         if (!available) return@withContext false
         val activeSlot = LocalModelStore.activeSlot(context) ?: return@withContext false
@@ -187,7 +187,7 @@ object LocalLlm {
         fun onPiece(piece: String)
     }
 
-    suspend fun generate(
+    actual suspend fun generate(
         messages: List<Pair<String, String>>,
         images: List<ByteArray> = emptyList(),
         onDelta: (String) -> Unit
@@ -237,7 +237,7 @@ object LocalLlm {
         }
     }
 
-    fun stop() {
+    actual fun stop() {
         val h = handle
         if (h != 0L) try {
             nativeStop(h)
@@ -245,7 +245,7 @@ object LocalLlm {
         }
     }
 
-    fun shutdown() {
+    actual fun shutdown() {
         if (!available) return
         stop()
         llmScope.launch {
