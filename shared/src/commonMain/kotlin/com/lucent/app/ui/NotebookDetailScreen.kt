@@ -66,7 +66,7 @@ fun NotebookDetailScreen(
     onOpenTask: (Task) -> Unit,
     onPickPhoto: (((String?) -> Unit) -> Unit)? = null
 ) {
-    BackHandler { onBack() }
+    LucentBackHandler { onBack() }
     val context = LocalPlatformContext.current
     val db = remember { createAppDatabase(context) }
     val scope = rememberCoroutineScope()

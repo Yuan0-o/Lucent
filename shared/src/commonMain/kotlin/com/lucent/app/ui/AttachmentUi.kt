@@ -139,7 +139,7 @@ fun CardAttachments(
         }
     }
 
-    renaming?.let<Attachment, Unit> { att ->
+    renaming?.let { att ->
         AttachmentRenameDialog(
             current = att,
             takenNames = attachments.filterNot { it.data == att.data }.map { it.name },
@@ -260,7 +260,7 @@ fun PendingAttachmentChips(
         }
     }
 
-    renaming?.let<Attachment, Unit> { att ->
+    renaming?.let { att ->
         AttachmentRenameDialog(
             current = att,
             takenNames = attachments.filterNot { it.data == att.data }.map { it.name },
