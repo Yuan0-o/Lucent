@@ -1,9 +1,7 @@
 package com.lucent.app.data
 
-import com.lucent.app.data.createAppDatabase
-
 import com.lucent.app.platform.PlatformContext
-import com.lucent.app.ui.AssistantController
+import kotlin.concurrent.Volatile
 
 object AssistantDraftBridge {
 
@@ -21,7 +19,7 @@ object AssistantDraftBridge {
     ) {
         if (!shouldMirror(toolName)) return
         val db = createAppDatabase(appContext)
-        val now = System.currentTimeMillis()
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         when (toolName) {
             "create_note" -> {
                 val existing = mirroredNoteId?.let { db.noteDao.getByIdOnce(it) }
