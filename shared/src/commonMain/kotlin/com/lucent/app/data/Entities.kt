@@ -1,6 +1,28 @@
 package com.lucent.app.data
 
-expect class Note {
+expect class Note(
+    id: Long = 0,
+    title: String,
+    body: String,
+    updatedAt: Long = 0,
+    tags: String = "",
+    attachments: String = "[]",
+    archived: Boolean = false,
+    archivedAt: Long? = null,
+    pinned: Boolean = false,
+    color: String = "",
+    isChecklist: Boolean = false,
+    checklist: String = "[]",
+    trashedAt: Long? = null,
+    manualOrder: Int = 0,
+    isDraft: Boolean = false,
+    draftSavedAt: Long? = null,
+    hidden: Boolean = false,
+    bodySpans: String = "",
+    isDoodle: Boolean = false,
+    doodle: String = "",
+    formatOverride: String? = null
+) {
     val id: Long
     val title: String
     val body: String
@@ -22,6 +44,30 @@ expect class Note {
     val isDoodle: Boolean
     val doodle: String
     val formatOverride: String?
+
+    fun copy(
+        id: Long = this.id,
+        title: String = this.title,
+        body: String = this.body,
+        updatedAt: Long = this.updatedAt,
+        tags: String = this.tags,
+        attachments: String = this.attachments,
+        archived: Boolean = this.archived,
+        archivedAt: Long? = this.archivedAt,
+        pinned: Boolean = this.pinned,
+        color: String = this.color,
+        isChecklist: Boolean = this.isChecklist,
+        checklist: String = this.checklist,
+        trashedAt: Long? = this.trashedAt,
+        manualOrder: Int = this.manualOrder,
+        isDraft: Boolean = this.isDraft,
+        draftSavedAt: Long? = this.draftSavedAt,
+        hidden: Boolean = this.hidden,
+        bodySpans: String = this.bodySpans,
+        isDoodle: Boolean = this.isDoodle,
+        doodle: String = this.doodle,
+        formatOverride: String? = this.formatOverride
+    ): Note
 }
 
 expect class NoteEmbedding(
@@ -38,7 +84,28 @@ expect class NoteEmbedding(
     val updatedAt: Long
 }
 
-expect class Task {
+expect class Task(
+    id: Long = 0,
+    title: String,
+    isDone: Boolean = false,
+    createdAt: Long = 0,
+    attachments: String = "[]",
+    dueAt: Long? = null,
+    notes: String = "",
+    completedAt: Long? = null,
+    priority: Int = 0,
+    pinned: Boolean = false,
+    subtasks: String = "[]",
+    repeatRule: String = "",
+    reminderEnabled: Boolean = false,
+    trashedAt: Long? = null,
+    manualOrder: Int = 0,
+    isDraft: Boolean = false,
+    draftSavedAt: Long? = null,
+    hidden: Boolean = false,
+    notesSpans: String = "",
+    formatOverride: String? = null
+) {
     val id: Long
     val title: String
     val isDone: Boolean
@@ -59,6 +126,29 @@ expect class Task {
     val hidden: Boolean
     val notesSpans: String
     val formatOverride: String?
+
+    fun copy(
+        id: Long = this.id,
+        title: String = this.title,
+        isDone: Boolean = this.isDone,
+        createdAt: Long = this.createdAt,
+        attachments: String = this.attachments,
+        dueAt: Long? = this.dueAt,
+        notes: String = this.notes,
+        completedAt: Long? = this.completedAt,
+        priority: Int = this.priority,
+        pinned: Boolean = this.pinned,
+        subtasks: String = this.subtasks,
+        repeatRule: String = this.repeatRule,
+        reminderEnabled: Boolean = this.reminderEnabled,
+        trashedAt: Long? = this.trashedAt,
+        manualOrder: Int = this.manualOrder,
+        isDraft: Boolean = this.isDraft,
+        draftSavedAt: Long? = this.draftSavedAt,
+        hidden: Boolean = this.hidden,
+        notesSpans: String = this.notesSpans,
+        formatOverride: String? = this.formatOverride
+    ): Task
 }
 
 expect class NoteVersion {

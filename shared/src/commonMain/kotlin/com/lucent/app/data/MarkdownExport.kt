@@ -129,8 +129,8 @@ object MarkdownExport {
                 add(S.exportDocCreated(formatTime(task.createdAt)))
                 task.dueAt?.let { add(S.exportDocDue(formatTime(it))) }
                 if (task.pinned) add(S.exportDocPinned)
-                TaskPriority.fromValue(task.priority).takeIf { it != TaskPriority.NONE }?.let { add(S.exportDocPriority(it.label)) }
-                RepeatRule.fromKey(task.repeatRule).takeIf { it != RepeatRule.NONE }?.let { add(S.exportDocRepeats(it.label)) }
+                TaskPriority.fromValue(task.priority).takeIf { p -> p != TaskPriority.NONE }?.let { p -> add(S.exportDocPriority(p.label)) }
+                RepeatRule.fromKey(task.repeatRule).takeIf { r -> r != RepeatRule.NONE }?.let { r -> add(S.exportDocRepeats(r.label)) }
                 add(if (task.isDone) S.exportDocDone else S.exportDocOpen)
             }
             sb.appendLine("_${meta.joinToString(" · ")}_")
