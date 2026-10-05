@@ -306,6 +306,6 @@ class PluginManager private constructor(private val context: PlatformContext?, p
 
         fun desktop(context: PlatformContext? = null): PluginManager = PluginManager(context?.appContext(), false)
 
-        internal fun testInstance(android: Boolean): PluginManager = PluginManager(null, android)
+        fun testInstance(android: Boolean): PluginManager = PluginManager(null, android)
     }
 }
