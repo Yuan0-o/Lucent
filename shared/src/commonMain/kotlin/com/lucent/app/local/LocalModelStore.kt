@@ -154,7 +154,7 @@ object LocalModelStore {
     }
 
     @Throws(IOException::class)
-    fun import(context: PlatformContext, source: PlatformModelSource, customName: String? = null): ModelSlot {
+    fun import(context: PlatformContext, source: Any, customName: String? = null): ModelSlot {
         val existing = index(context)
         if (existing.slots.size >= MAX_MODELS) throw TooManyModelsException()
 
@@ -351,7 +351,7 @@ object LocalModelStore {
     fun activeMmprojFile(context: PlatformContext): File? =
         activeSlot(context)?.let { mmprojFile(context, it.id) }
 
-    fun importMmproj(context: PlatformContext, id: String, source: PlatformModelSource): File {
+    fun importMmproj(context: PlatformContext, id: String, source: Any): File {
         val dir = dir(context)
         if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create model directory")
         val target = File(dir, mmprojFileName(id))

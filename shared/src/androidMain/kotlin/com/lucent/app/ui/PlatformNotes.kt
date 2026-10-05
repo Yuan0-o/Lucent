@@ -19,21 +19,20 @@ import com.lucent.app.platform.PlatformContext
 import com.lucent.app.reminders.Notifications
 import java.util.Calendar
 
-actual typealias PlatformPickedFile = android.net.Uri
 
 @Composable
-actual fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit {
+actual fun rememberAttachmentFilePicker(onPicked: (List<Any>) -> Unit): () -> Unit {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<android.net.Uri> ->
         if (uris.isNotEmpty()) onPicked(uris)
     }
     return { launcher.launch("*/*") }
 }
 
-actual fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long =
-    AttachmentStore.sizeHint(context, source)
+actual fun attachmentSizeHint(context: PlatformContext, source: Any): Long =
+    AttachmentStore.sizeHint(context, source as android.net.Uri)
 
-actual fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
-    uriToAttachment(context, source)
+actual fun pickedFileToAttachment(context: PlatformContext, source: Any): Attachment? =
+    uriToAttachment(context, source as android.net.Uri)
 
 actual fun templateToastContext(context: PlatformContext): PlatformContext = context
 

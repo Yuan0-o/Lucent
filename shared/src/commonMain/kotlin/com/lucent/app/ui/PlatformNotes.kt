@@ -12,14 +12,12 @@ import com.lucent.app.data.Attachment
 import com.lucent.app.data.RichSpan
 import com.lucent.app.platform.PlatformContext
 
-expect class PlatformPickedFile()
-
 @Composable
-expect fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit
+expect fun rememberAttachmentFilePicker(onPicked: (List<Any>) -> Unit): () -> Unit
 
-expect fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long
+expect fun attachmentSizeHint(context: PlatformContext, source: Any): Long
 
-expect fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment?
+expect fun pickedFileToAttachment(context: PlatformContext, source: Any): Attachment?
 
 expect fun templateToastContext(context: PlatformContext): PlatformContext
 

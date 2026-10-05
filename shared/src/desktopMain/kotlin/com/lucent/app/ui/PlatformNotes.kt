@@ -13,7 +13,6 @@ import com.lucent.desktop.platform.DesktopFiles
 import com.lucent.desktop.platform.DesktopShare
 import com.lucent.desktop.platform.LucentDateTimePickerFlow
 
-actual typealias PlatformPickedFile = java.io.File
 
 private fun is24HourFormat(): Boolean = try {
     val df = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, java.util.Locale.getDefault())
@@ -24,15 +23,15 @@ private fun is24HourFormat(): Boolean = try {
 }
 
 @Composable
-actual fun rememberAttachmentFilePicker(onPicked: (List<PlatformPickedFile>) -> Unit): () -> Unit = {
+actual fun rememberAttachmentFilePicker(onPicked: (List<Any>) -> Unit): () -> Unit = {
     val files = DesktopFiles.openFiles()
     if (files.isNotEmpty()) onPicked(files)
 }
 
-actual fun attachmentSizeHint(context: PlatformContext, source: PlatformPickedFile): Long = source.length()
+actual fun attachmentSizeHint(context: PlatformContext, source: Any): Long = (source as java.io.File).length()
 
-actual fun pickedFileToAttachment(context: PlatformContext, source: PlatformPickedFile): Attachment? =
-    fileToAttachment(context, source)
+actual fun pickedFileToAttachment(context: PlatformContext, source: Any): Attachment? =
+    fileToAttachment(context, source as java.io.File)
 
 actual fun templateToastContext(context: PlatformContext): PlatformContext = context.applicationContext
 

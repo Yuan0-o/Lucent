@@ -100,7 +100,7 @@ object FontStore {
 
 
     @Throws(IOException::class)
-    fun import(context: PlatformContext, source: PlatformFontSource, customName: String? = null): FontSlot {
+    fun import(context: PlatformContext, source: Any, customName: String? = null): FontSlot {
         val existing = index(context)
         if (existing.slots.size >= MAX_FONTS) throw TooManyFontsException()
 
