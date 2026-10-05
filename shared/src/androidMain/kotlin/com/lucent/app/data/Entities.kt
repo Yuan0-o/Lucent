@@ -37,7 +37,7 @@ actual data class Note(
 )
 
 @Entity(tableName = "note_embeddings", primaryKeys = ["noteId", "model"])
-actual data class NoteEmbedding(
+actual data class NoteEmbedding actual constructor(
     actual val noteId: Long,
     actual val model: String,
     actual val dim: Int,
