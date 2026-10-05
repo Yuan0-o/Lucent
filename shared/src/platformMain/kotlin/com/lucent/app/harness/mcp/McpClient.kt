@@ -23,42 +23,6 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-data class McpReply(
-    val ok: Boolean = false,
-    val result: JSONObject? = null,
-    val error: String = "",
-    val sessionId: String = "",
-    val status: Int = 0
-)
-
-data class McpDiscovery(
-    val tools: List<McpTool> = emptyList(),
-    val error: String = ""
-)
-
-data class McpPrompts(
-    val prompts: List<McpPromptInfo> = emptyList(),
-    val error: String = ""
-)
-
-data class McpStatus(
-    val ok: Boolean,
-    val millis: Long,
-    val detail: String = ""
-)
-
-data class McpText(
-    val text: String = "",
-    val error: String = ""
-)
-
-interface McpTransport {
-    val id: String
-    fun describe(server: McpServer): String
-    suspend fun send(server: McpServer, method: String, params: JSONObject?, notification: Boolean): McpReply
-    fun close(serverId: String)
-}
-
 fun mcpCommandLine(server: McpServer): List<String> {
     val parts = mutableListOf<String>()
     val command = server.command.trim()
@@ -509,7 +473,7 @@ object McpTransports {
     }
 }
 
-object McpSessions {
+actual object McpSessions {
 
     private class Entry(val tools: List<McpTool>, val at: Long)
 

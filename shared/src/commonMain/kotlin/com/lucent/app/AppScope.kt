@@ -1,6 +1,7 @@
 package com.lucent.app
 
 import com.lucent.app.platform.PlatformContext
+import kotlin.concurrent.Volatile
 import com.lucent.app.data.StartupLog
 import com.lucent.app.platform.PlatformLog
 import kotlinx.coroutines.CoroutineExceptionHandler
