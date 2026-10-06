@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +49,7 @@ fun AboutSettingsPage(
     val scope = rememberCoroutineScope()
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = SettingsCache.autoUpdateEnabled)
     val updateChannel by repo.updateChannel.collectAsState(initial = SettingsCache.updateChannel)
+    val pendingChannel = remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(AutoUpdate.message, AutoUpdate.offered) {
         if (AutoUpdate.message != null && AutoUpdate.offered == null) {
@@ -71,8 +74,7 @@ fun AboutSettingsPage(
         onCheck = { scope.launch { AutoUpdate.check(versionName, notifyWhenCurrent = true) } },
         onChannelToggle = {
             val next = if (updateChannel == "stable") "preview" else "stable"
-            SettingsCache.updateChannel = next
-            scope.launch { repo.setUpdateChannel(next) }
+            pendingChannel.value = next
         },
         onOpenUrl = onOpenUrl
     )
@@ -83,6 +85,30 @@ fun AboutSettingsPage(
         onOpenUrl = onOpenUrl,
         onLicences = { onRoute(SettingsRoute.Licences) }
     )
+
+    pendingChannel.value?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingChannel.value = null },
+            title = {
+                Text(if (target == "preview") S.trackSwitchTitlePreview else S.trackSwitchTitleOfficial)
+            },
+            text = {
+                Text(if (target == "preview") S.trackSwitchBodyPreview else S.trackSwitchBodyOfficial)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        SettingsCache.updateChannel = target
+                        scope.launch { repo.setUpdateChannel(target) }
+                        pendingChannel.value = null
+                    }
+                ) { Text(S.trackSwitchConfirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingChannel.value = null }) { Text(S.trackSwitchCancel) }
+            }
+        )
+    }
 }
 
 @Composable
@@ -96,7 +122,7 @@ private fun AboutIdentityCard(versionName: String, buildNumber: String) {
         Spacer(modifier = Modifier.height(10.dp))
         Text("${S.aboutVersion} v$versionName", color = onGradient, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(2.dp))
-        Text("${S.aboutBuild} $buildNumber", color = onGradientMuted, fontSize = 13.sp)
+        Text("${S.aboutBuild} ${LucentBuild.BUILD_ID}", color = onGradientMuted, fontSize = 13.sp)
     }
 }
 
@@ -180,7 +206,7 @@ private fun AboutFooter(
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Lucent v$versionName (${S.aboutBuild} $buildNumber)",
+            "Lucent v$versionName (${S.aboutBuild} ${LucentBuild.BUILD_ID})",
             color = onGradientMuted.copy(alpha = 0.6f),
             fontSize = 10.sp
         )
