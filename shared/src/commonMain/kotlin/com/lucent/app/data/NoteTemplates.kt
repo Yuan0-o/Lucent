@@ -1,7 +1,8 @@
 package com.lucent.app.data
 
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 
 enum class TemplateIcon { JOURNAL, MEETING, IDEA, CHECKLIST }
 
@@ -21,10 +22,13 @@ enum class NoteTemplate(val iconName: TemplateIcon) {
         }
 
     fun prefill(): Prefill {
-        val today = LocalDate.now()
-        val locale = com.lucent.app.i18n.lucentLocale()
-        val longDate = today.format(DateTimeFormatter.ofPattern(com.lucent.app.i18n.S.tplLongDatePattern, locale))
-        val shortDate = today.format(DateTimeFormatter.ofPattern(com.lucent.app.i18n.S.tplShortDatePattern, locale))
+        val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        
+        val monthName = today.month.name.lowercase().replaceFirstChar { it.uppercase() }
+        val dayName = today.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
+        
+        val longDate = "$dayName, ${today.dayOfMonth} $monthName ${today.year}"
+        val shortDate = "${today.dayOfMonth} ${monthName.substring(0, 3)} ${today.year}"
 
         return when (this) {
             JOURNAL -> Prefill(

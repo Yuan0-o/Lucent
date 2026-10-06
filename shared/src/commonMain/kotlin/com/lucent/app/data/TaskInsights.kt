@@ -1,7 +1,12 @@
 package com.lucent.app.data
 
-import java.time.Instant
-import java.time.ZoneId
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 object TaskInsights {
 
@@ -11,30 +16,30 @@ object TaskInsights {
         val total: Int get() = done + active + overdue
     }
 
-    fun completedPerDay(tasks: List<Task>, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): List<DayValue> {
-        val today = now.atZone(zone).toLocalDate()
+    fun completedPerDay(tasks: List<Task>, now: Instant = Clock.System.now(), zone: TimeZone = TimeZone.currentSystemDefault()): List<DayValue> {
+        val today = now.toLocalDateTime(zone).date
         return (13 downTo 0).map { offset ->
-            val day = today.minusDays(offset.toLong())
+            val day = today.minus(offset, DateTimeUnit.DAY)
             DayValue(day.dayOfMonth.toString(), tasks.count {
-                it.trashedAt == null && it.completedAt?.let { time -> Instant.ofEpochMilli(time).atZone(zone).toLocalDate() == day } == true
+                it.trashedAt == null && it.completedAt?.let { time -> Instant.fromEpochMilliseconds(time).toLocalDateTime(zone).date == day } == true
             })
         }
     }
 
-    fun createdAndCompletedPerDay(tasks: List<Task>, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): List<DayPair> {
-        val today = now.atZone(zone).toLocalDate()
+    fun createdAndCompletedPerDay(tasks: List<Task>, now: Instant = Clock.System.now(), zone: TimeZone = TimeZone.currentSystemDefault()): List<DayPair> {
+        val today = now.toLocalDateTime(zone).date
         return (6 downTo 0).map { offset ->
-            val day = today.minusDays(offset.toLong())
+            val day = today.minus(offset, DateTimeUnit.DAY)
             val label = day.dayOfMonth.toString()
             DayPair(label,
-                tasks.count { it.trashedAt == null && Instant.ofEpochMilli(it.createdAt).atZone(zone).toLocalDate() == day },
-                tasks.count { it.trashedAt == null && it.completedAt?.let { time -> Instant.ofEpochMilli(time).atZone(zone).toLocalDate() == day } == true })
+                tasks.count { it.trashedAt == null && Instant.fromEpochMilliseconds(it.createdAt).toLocalDateTime(zone).date == day },
+                tasks.count { it.trashedAt == null && it.completedAt?.let { time -> Instant.fromEpochMilliseconds(time).toLocalDateTime(zone).date == day } == true })
         }
     }
 
-    fun statusDistribution(tasks: List<Task>, now: Instant = Instant.now()): StatusDistribution {
+    fun statusDistribution(tasks: List<Task>, now: Instant = Clock.System.now()): StatusDistribution {
         val live = tasks.filter { it.trashedAt == null }
-        val overdue = live.count { !it.isDone && it.dueAt?.let { due -> due < now.toEpochMilli() } == true }
+        val overdue = live.count { !it.isDone && it.dueAt?.let { due -> due < now.toEpochMilliseconds() } == true }
         return StatusDistribution(live.count { it.isDone }, live.count { !it.isDone } - overdue, overdue)
     }
 
@@ -53,12 +58,12 @@ object TaskInsights {
 
     fun summarize(
         tasks: List<Task>,
-        now: Instant = Instant.now(),
-        zone: ZoneId = ZoneId.systemDefault()
+        now: Instant = Clock.System.now(),
+        zone: TimeZone = TimeZone.currentSystemDefault()
     ): Summary {
         val live = tasks.filter { it.trashedAt == null }
-        val today = now.atZone(zone).toLocalDate()
-        val nowMs = now.toEpochMilli()
+        val today = now.toLocalDateTime(zone).date
+        val nowMs = now.toEpochMilliseconds()
 
         var active = 0
         var overdue = 0
@@ -78,9 +83,9 @@ object TaskInsights {
             when {
                 due < nowMs -> overdue++
                 else -> {
-                    val dueDate = Instant.ofEpochMilli(due).atZone(zone).toLocalDate()
+                    val dueDate = Instant.fromEpochMilliseconds(due).toLocalDateTime(zone).date
                     if (dueDate == today) dueToday++
-                    if (!dueDate.isBefore(today) && dueDate.isBefore(today.plusDays(7))) dueThisWeek++
+                    if (dueDate >= today && dueDate < today.plus(7, DateTimeUnit.DAY)) dueThisWeek++
                 }
             }
         }

@@ -14,9 +14,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 val LocalHazeState = compositionLocalOf { HazeState() }
 
@@ -86,11 +86,13 @@ fun Modifier.frostedGlass(cornerRadius: Dp = 20.dp, tint: Color = Color.White): 
         )
 }
 
-private val timestampFormatter get() = com.lucent.app.i18n.LDates.of(com.lucent.app.i18n.S.patternTimestamp)
-
 fun formatTimestamp(millis: Long): String {
-    val zoned = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
-    return zoned.format(timestampFormatter)
+    val dt = Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.currentSystemDefault())
+    val month = dt.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+    val hr = if (dt.hour == 0) 12 else if (dt.hour > 12) dt.hour - 12 else dt.hour
+    val min = dt.minute.toString().padStart(2, '0')
+    val ampm = if (dt.hour < 12) "AM" else "PM"
+    return "$month ${dt.dayOfMonth}, $hr:$min $ampm"
 }
 
 @androidx.compose.runtime.Composable
@@ -99,27 +101,26 @@ fun rememberFormattedTimestamp(millis: Long): String {
     return androidx.compose.runtime.remember(millis, language) { formatTimestamp(millis) }
 }
 
-private val dateFormatter get() = com.lucent.app.i18n.LDates.of(com.lucent.app.i18n.S.patternDateFull)
-
 fun formatDate(millis: Long): String {
-    val zoned = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
-    return zoned.format(dateFormatter)
+    val dt = Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.currentSystemDefault())
+    val month = dt.month.name.lowercase().replaceFirstChar { it.uppercase() }
+    return "$month ${dt.dayOfMonth}, ${dt.year}"
 }
 
 fun sameLocalDay(a: Long, b: Long): Boolean {
-    val zone = ZoneId.systemDefault()
-    return Instant.ofEpochMilli(a).atZone(zone).toLocalDate() ==
-        Instant.ofEpochMilli(b).atZone(zone).toLocalDate()
+    val zone = TimeZone.currentSystemDefault()
+    return Instant.fromEpochMilliseconds(a).toLocalDateTime(zone).date ==
+        Instant.fromEpochMilliseconds(b).toLocalDateTime(zone).date
 }
 
 fun withinLocalDayRange(itemMillis: Long, startMillis: Long, endMillis: Long): Boolean {
-    val zone = ZoneId.systemDefault()
-    val day = Instant.ofEpochMilli(itemMillis).atZone(zone).toLocalDate()
-    val start = Instant.ofEpochMilli(startMillis).atZone(zone).toLocalDate()
-    val end = Instant.ofEpochMilli(endMillis).atZone(zone).toLocalDate()
-    val lo = if (start.isAfter(end)) end else start
-    val hi = if (start.isAfter(end)) start else end
-    return !day.isBefore(lo) && !day.isAfter(hi)
+    val zone = TimeZone.currentSystemDefault()
+    val day = Instant.fromEpochMilliseconds(itemMillis).toLocalDateTime(zone).date
+    val start = Instant.fromEpochMilliseconds(startMillis).toLocalDateTime(zone).date
+    val end = Instant.fromEpochMilliseconds(endMillis).toLocalDateTime(zone).date
+    val lo = if (start > end) end else start
+    val hi = if (start > end) start else end
+    return day >= lo && day <= hi
 }
 
 fun formatDateRange(startMillis: Long, endMillis: Long): String {

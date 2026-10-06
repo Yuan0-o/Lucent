@@ -1,51 +1,37 @@
 package com.lucent.app.data
 
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 
 object DueParsing {
 
-    private val LOCAL_PATTERNS = listOf(
-        "yyyy-MM-dd'T'HH:mm:ss.SSS",
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm",
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd HH:mm"
-    )
-
     private const val DEFAULT_HOUR = 9
-
-    private val OUT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
     fun parse(input: String?): Long? {
         val s = input?.trim().orEmpty()
         if (s.isEmpty()) return null
 
         try {
-            return Instant.parse(s).toEpochMilli()
+            return Instant.parse(s).toEpochMilliseconds()
         } catch (t: Throwable) {
         }
 
-        for (pattern in LOCAL_PATTERNS) {
-            try {
-                val formatter = DateTimeFormatter.ofPattern(pattern)
-                return LocalDateTime.parse(s, formatter)
-                    .atZone(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
-            } catch (t: Throwable) {
-            }
+        try {
+            return LocalDateTime.parse(s.replace(" ", "T"))
+                .toInstant(TimeZone.currentSystemDefault())
+                .toEpochMilliseconds()
+        } catch (t: Throwable) {
         }
 
         return try {
-            LocalDate.parse(s, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                .atTime(DEFAULT_HOUR, 0)
-                .atZone(ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli()
+            val date = LocalDate.parse(s)
+            LocalDateTime(date.year, date.monthNumber, date.dayOfMonth, DEFAULT_HOUR, 0)
+                .toInstant(TimeZone.currentSystemDefault())
+                .toEpochMilliseconds()
         } catch (t: Throwable) {
             null
         }
@@ -56,6 +42,8 @@ object DueParsing {
         return s in setOf("", "none", "clear", "remove", "no", "unset", "null")
     }
 
-    fun format(millis: Long): String =
-        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(OUT_FORMAT)
+    fun format(millis: Long): String {
+        val dt = Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.currentSystemDefault())
+        return "${dt.year}-${dt.monthNumber.toString().padStart(2, '0')}-${dt.dayOfMonth.toString().padStart(2, '0')} ${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
+    }
 }
