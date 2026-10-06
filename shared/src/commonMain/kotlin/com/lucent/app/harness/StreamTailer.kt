@@ -1,11 +1,11 @@
 package com.lucent.app.harness
 
-import java.io.ByteArrayOutputStream
+import okio.Buffer
 
 class StreamTailer {
     var offset = 0L
         private set
-    private val buffer = ByteArrayOutputStream()
+    private val buffer = Buffer()
 
     fun processNewBytes(chunk: ByteArray, onLine: (String) -> Unit) {
         offset += chunk.size
@@ -13,10 +13,9 @@ class StreamTailer {
         for (i in chunk.indices) {
             if (chunk[i] == '\n'.code.toByte()) {
                 buffer.write(chunk, start, i - start)
-                var line = buffer.toString(Charsets.UTF_8.name())
+                var line = buffer.readUtf8()
                 if (line.endsWith("\r")) line = line.dropLast(1)
                 onLine(line)
-                buffer.reset()
                 start = i + 1
             }
         }
@@ -26,11 +25,10 @@ class StreamTailer {
     }
 
     fun flush(onLine: (String) -> Unit) {
-        if (buffer.size() > 0) {
-            var line = buffer.toString(Charsets.UTF_8.name())
+        if (buffer.size > 0) {
+            var line = buffer.readUtf8()
             if (line.endsWith("\r")) line = line.dropLast(1)
             onLine(line)
-            buffer.reset()
         }
     }
 }

@@ -12,7 +12,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.ByteArrayOutputStream
+import okio.Buffer
 import kotlin.time.Duration.Companion.seconds
 
 data class HttpReply(
@@ -124,21 +124,21 @@ object HttpJson {
             .callTimeout(seconds.seconds)
             .build()
         client.newCall(request).execute().use { response ->
-            val store = ByteArrayOutputStream()
+            val store = Buffer()
             var truncated = false
-            val stream = response.body?.byteStream()
-            if (stream != null) {
+            val source = response.body?.source()
+            if (source != null) {
                 val chunk = ByteArray(16384)
                 var total = 0
                 while (total < MAX_BYTES) {
-                    val read = stream.read(chunk, 0, minOf(chunk.size, MAX_BYTES - total))
+                    val read = source.read(chunk, 0, minOf(chunk.size, MAX_BYTES - total))
                     if (read <= 0) break
                     store.write(chunk, 0, read)
                     total += read
                 }
-                if (total >= MAX_BYTES && stream.read() >= 0) truncated = true
+                if (total >= MAX_BYTES && !source.exhausted()) truncated = true
             }
-            return Triple(response.code, store.toByteArray(), truncated)
+            return Triple(response.code, store.readByteArray(), truncated)
         }
     }
 

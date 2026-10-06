@@ -51,8 +51,7 @@ import com.lucent.app.data.SettingsCache
 import com.lucent.app.data.SettingsRepository
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.launch
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import okio.Buffer
 
 @Composable
 fun CloudSettingsPage(
@@ -279,12 +278,11 @@ fun CloudSettingsPage(
                         busy = true
                         scope.launch {
                             val r = runCatching {
-                                val bytes = ByteArrayOutputStream().use { out ->
-                                    BackupManager.exportEncrypted(
-                                        context, createAppDatabase(context), repo, out, null
-                                    )
-                                    out.toByteArray()
-                                }
+                                val buffer = Buffer()
+                                BackupManager.exportEncrypted(
+                                    context, createAppDatabase(context), repo, buffer.outputStream(), null
+                                )
+                                val bytes = buffer.readByteArray()
                                 CloudSync.upload(cfg, "lucent-backup-${Clock.System.now().toEpochMilliseconds()}.lcb", bytes)
                             }
                             busy = false
@@ -363,7 +361,7 @@ fun CloudSettingsPage(
                         val r = runCatching {
                             val bytes = CloudSync.download(cfg, name).getOrThrow()
                             val db = createAppDatabase(context)
-                            val source = BackupManager.BackupSource { ByteArrayInputStream(bytes) }
+                            val source = BackupManager.BackupSource { Buffer().write(bytes).inputStream() }
                             val preview = BackupManager.inspect(context, source, null)
                             BackupManager.commit(context, db, repo, preview, source = source)
                         }
