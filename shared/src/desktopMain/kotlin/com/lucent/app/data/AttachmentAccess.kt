@@ -1,4 +1,6 @@
 package com.lucent.app.data
+import com.lucent.app.platform.cacheDir
+import com.lucent.app.platform.applicationContext
 
 import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64

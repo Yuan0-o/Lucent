@@ -1,4 +1,5 @@
 package com.lucent.app.local
+import com.lucent.app.platform.applicationContext
 
 import android.content.ContentProvider
 import android.content.ContentValues

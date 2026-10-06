@@ -1,4 +1,5 @@
 package com.lucent.app.data
+import com.lucent.app.platform.applicationContext
 
 import com.lucent.app.AppScope
 import kotlinx.coroutines.Job

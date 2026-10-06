@@ -1,4 +1,5 @@
 package com.lucent.app.reminders
+import com.lucent.app.platform.applicationContext
 
 import android.app.AlarmManager
 import android.app.PendingIntent

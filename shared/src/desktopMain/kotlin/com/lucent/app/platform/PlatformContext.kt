@@ -6,6 +6,7 @@ actual abstract class PlatformContext
 
 actual fun PlatformContext.getApplicationContext(): PlatformContext = (this as DesktopPlatformContext).applicationContext
 actual fun PlatformContext.getFilesDir(): java.io.File = (this as DesktopPlatformContext).filesDir
+actual fun PlatformContext.getCacheDir(): java.io.File = (this as DesktopPlatformContext).cacheDir
 
 actual fun PlatformContext.appContext(): PlatformContext = applicationContext
 

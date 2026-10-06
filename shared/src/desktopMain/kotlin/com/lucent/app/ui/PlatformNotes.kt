@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import com.lucent.app.platform.applicationContext
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
