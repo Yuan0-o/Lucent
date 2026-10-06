@@ -1,8 +1,8 @@
 package com.lucent.app.harness.ooxml
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import org.w3c.dom.Element
+import kotlinx.serialization.json.*
 import org.w3c.dom.Node
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -288,7 +288,7 @@ object Pptx {
 
     fun create(specJson: String, out: File): String {
         val spec = try {
-            JSONObject(specJson)
+            Json.parseToJsonElement(specJson).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The deck specification is not valid JSON: ${e.message}")
         }
@@ -341,7 +341,7 @@ object Pptx {
 private fun pptxEntries(file: File): Map<String, ByteArray> {
     if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
     if (file.isDirectory) throw IllegalArgumentException("${file.name} is a directory, not a presentation")
-    if (file.length() > 256L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to read")
+    if (file.size > 256L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to read")
     val entries = try {
         Ooxml.readZip(file)
     } catch (e: Exception) {
@@ -353,124 +353,124 @@ private fun pptxEntries(file: File): Map<String, ByteArray> {
     return entries
 }
 
-private fun pptxOps(opsJson: String): List<JSONObject> {
+private fun pptxOps(opsJson: String): List<JsonObject> {
     val trimmed = opsJson.trim()
     if (trimmed.isEmpty()) return emptyList()
     val parsed = try {
-        if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONObject(trimmed)
+        if (trimmed.startsWith("[")) Json.parseToJsonElement(trimmed).jsonArray else Json.parseToJsonElement(trimmed).jsonObject
     } catch (e: Exception) {
         throw IllegalArgumentException("The operations are not valid JSON: ${e.message}")
     }
     val array = when (parsed) {
-        is JSONArray -> parsed
-        is JSONObject -> parsed.optJSONArray("ops") ?: JSONArray().put(parsed)
-        else -> JSONArray()
+        is JsonArray -> parsed
+        is JsonObject -> parsed["ops"]?.jsonArray ?: buildJsonArray { add(parsed) }
+        else -> buildJsonArray {}
     }
-    val out = mutableListOf<JSONObject>()
-    for (i in 0 until array.length()) {
-        val item = array.optJSONObject(i)
+    val out = mutableListOf<JsonObject>()
+    for (i in 0 until array.size) {
+        val item = array[i]?.jsonObject
         if (item != null) out.add(item)
     }
     return out
 }
 
-private fun pptxDeckFromSpec(spec: JSONObject): PptxDeck {
+private fun pptxDeckFromSpec(spec: JsonObject): PptxDeck {
     val deck = PptxDeck()
-    deck.title = spec.optString("title", "").trim()
-    deck.subtitle = spec.optString("subtitle", "").trim()
-    deck.author = spec.optString("author", "").trim()
-    val size = pptxSizeKey(spec.optString("size", "16:9"))
+    deck.title = (spec["title"]?.jsonPrimitive?.content ?: "").trim()
+    deck.subtitle = (spec["subtitle"]?.jsonPrimitive?.content ?: "").trim()
+    deck.author = (spec["author"]?.jsonPrimitive?.content ?: "").trim()
+    val size = pptxSizeKey(spec["size"]?.jsonPrimitive?.content ?: "16:9")
     if (size == "4:3") {
         deck.cx = PPTX_STD_CX
         deck.cy = PPTX_STD_CY
     }
-    val theme = spec.optJSONObject("theme")
+    val theme = spec["theme"]?.jsonObject
     if (theme != null) {
         deck.theme = PptxTheme(
-            accent1 = pptxColour(theme.optString("accent1", ""), deck.theme.accent1),
-            accent2 = pptxColour(theme.optString("accent2", ""), deck.theme.accent2),
-            background = pptxColour(theme.optString("background", ""), deck.theme.background),
-            titleColour = pptxColour(theme.optString("title_colour", ""), deck.theme.titleColour),
-            bodyColour = pptxColour(theme.optString("body_colour", ""), deck.theme.bodyColour),
-            font = theme.optString("font", deck.theme.font).trim().ifEmpty { deck.theme.font }
+            accent1 = pptxColour(theme["accent1"]?.jsonPrimitive?.content ?: "", deck.theme.accent1),
+            accent2 = pptxColour(theme["accent2"]?.jsonPrimitive?.content ?: "", deck.theme.accent2),
+            background = pptxColour(theme["background"]?.jsonPrimitive?.content ?: "", deck.theme.background),
+            titleColour = pptxColour(theme["title_colour"]?.jsonPrimitive?.content ?: "", deck.theme.titleColour),
+            bodyColour = pptxColour(theme["body_colour"]?.jsonPrimitive?.content ?: "", deck.theme.bodyColour),
+            font = theme["font"]?.jsonPrimitive?.content ?: deck.theme.font.trim().ifEmpty { deck.theme.font }
         )
     }
-    val slides = spec.optJSONArray("slides")
-    if (slides != null && slides.length() > 0) {
-        for (i in 0 until slides.length()) {
-            val item = slides.optJSONObject(i) ?: continue
+    val slides = spec["slides"]?.jsonArray
+    if (slides != null && slides.size > 0) {
+        for (i in 0 until slides.size) {
+            val item = slides[i]?.jsonObject ?: continue
             deck.slides.add(pptxSlideFromJson(item, "bullets"))
         }
     }
-    val markdown = spec.optString("content", "").ifBlank { spec.optString("markdown", "") }
+    val markdown = (spec["content"]?.jsonPrimitive?.content ?: "").ifBlank { spec["markdown"]?.jsonPrimitive?.content ?: "" }
     if (markdown.isNotBlank()) pptxDeckFromMarkdown(deck, markdown)
     return deck
 }
 
-private fun pptxSlideFromJson(json: JSONObject, fallbackLayout: String): PptxSlide {
+private fun pptxSlideFromJson(json: JsonObject, fallbackLayout: String): PptxSlide {
     val slide = PptxSlide()
-    slide.layout = pptxLayoutKey(json.optString("layout", fallbackLayout))
-    slide.title = json.optString("title", "").trim()
-    slide.subtitle = json.optString("subtitle", "").trim()
-    slide.notes = json.optString("notes", "").trim()
-    slide.bullets = pptxStrings(json.opt("bullets"))
-    slide.bulletsRight = pptxStrings(json.opt("bullets_right"))
-    val image = json.optJSONObject("image")
+    slide.layout = pptxLayoutKey(json["layout"]?.jsonPrimitive?.content ?: fallbackLayout)
+    slide.title = (json["title"]?.jsonPrimitive?.content ?: "").trim()
+    slide.subtitle = (json["subtitle"]?.jsonPrimitive?.content ?: "").trim()
+    slide.notes = (json["notes"]?.jsonPrimitive?.content ?: "").trim()
+    slide.bullets = pptxStrings(json["bullets"])
+    slide.bulletsRight = pptxStrings(json["bullets_right"])
+    val image = json["image"]?.jsonObject
     if (image != null) slide.image = pptxImageFromJson(image)
-    val table = json.optJSONObject("table")
+    val table = json["table"]?.jsonObject
     if (table != null) slide.table = pptxTableFromJson(table)
-    val chart = json.optJSONObject("chart")
+    val chart = json["chart"]?.jsonObject
     if (chart != null) slide.chart = pptxChartFromJson(chart)
     return slide
 }
 
-private fun pptxImageFromJson(json: JSONObject): PptxImage = PptxImage(
-    path = json.optString("path", "").trim(),
-    x = json.optDouble("x", 0.6),
-    y = json.optDouble("y", 1.6),
-    w = json.optDouble("w", 8.0),
-    h = json.optDouble("h", 4.5),
-    caption = json.optString("caption", "").trim()
+private fun pptxImageFromJson(json: JsonObject): PptxImage = PptxImage(
+    path = (json["path"]?.jsonPrimitive?.content ?: "").trim(),
+    x = json["x"]?.jsonPrimitive?.doubleOrNull ?: 0.6,
+    y = json["y"]?.jsonPrimitive?.doubleOrNull ?: 1.6,
+    w = json["w"]?.jsonPrimitive?.doubleOrNull ?: 8.0,
+    h = json["h"]?.jsonPrimitive?.doubleOrNull ?: 4.5,
+    caption = (json["caption"]?.jsonPrimitive?.content ?: "").trim()
 )
 
-private fun pptxTableFromJson(json: JSONObject): PptxTable {
+private fun pptxTableFromJson(json: JsonObject): PptxTable {
     val table = PptxTable(
-        x = json.optDouble("x", 0.6),
-        y = json.optDouble("y", 1.6),
-        w = json.optDouble("w", 9.0)
+        x = json["x"]?.jsonPrimitive?.doubleOrNull ?: 0.6,
+        y = json["y"]?.jsonPrimitive?.doubleOrNull ?: 1.6,
+        w = json["w"]?.jsonPrimitive?.doubleOrNull ?: 9.0
     )
-    table.header = pptxStrings(json.opt("header"))
-    val rows = json.optJSONArray("rows")
+    table.header = pptxStrings(json["header"])
+    val rows = json["rows"]?.jsonArray
     if (rows != null) {
-        for (i in 0 until rows.length()) {
-            val row = rows.optJSONArray(i) ?: continue
+        for (i in 0 until rows.size) {
+            val row = rows[i]?.jsonArray ?: continue
             val cells = mutableListOf<String>()
-            for (c in 0 until row.length()) cells.add(row.optString(c, ""))
+            for (c in 0 until row.size) cells.add(row[c]?.jsonPrimitive?.content ?: "")
             table.rows.add(cells)
         }
     }
     return table
 }
 
-private fun pptxChartFromJson(json: JSONObject): PptxChart {
+private fun pptxChartFromJson(json: JsonObject): PptxChart {
     val chart = PptxChart(
-        type = pptxChartType(json.optString("type", "bar")),
-        title = json.optString("title", "").trim(),
-        categories = pptxStrings(json.opt("categories")),
-        x = json.optDouble("x", 0.6),
-        y = json.optDouble("y", 1.6),
-        w = json.optDouble("w", 9.0),
-        h = json.optDouble("h", 4.5)
+        type = pptxChartType(json["type"]?.jsonPrimitive?.content ?: "bar"),
+        title = (json["title"]?.jsonPrimitive?.content ?: "").trim(),
+        categories = pptxStrings(json["categories"]),
+        x = json["x"]?.jsonPrimitive?.doubleOrNull ?: 0.6,
+        y = json["y"]?.jsonPrimitive?.doubleOrNull ?: 1.6,
+        w = json["w"]?.jsonPrimitive?.doubleOrNull ?: 9.0,
+        h = json["h"]?.jsonPrimitive?.doubleOrNull ?: 4.5
     )
-    val series = json.optJSONArray("series")
+    val series = json["series"]?.jsonArray
     if (series != null) {
-        for (i in 0 until series.length()) {
-            val item = series.optJSONObject(i) ?: continue
-            val name = item.optString("name", "").trim()
+        for (i in 0 until series.size) {
+            val item = series[i]?.jsonObject ?: continue
+            val name = (item["name"]?.jsonPrimitive?.content ?: "").trim()
             chart.series.add(
                 PptxSeries(
                     name.ifEmpty { "Series ${i + 1}" },
-                    pptxNumbers(item.optJSONArray("values"))
+                    pptxNumbers(item["values"]?.jsonArray)
                 )
             )
         }
@@ -537,9 +537,9 @@ private fun pptxDeckFromMarkdown(deck: PptxDeck, markdown: String) {
 private fun pptxStrings(value: Any?): MutableList<String> {
     val out = mutableListOf<String>()
     when (value) {
-        is JSONArray -> {
-            for (i in 0 until value.length()) {
-                val text = value.optString(i, "").trim()
+        is JsonArray -> {
+            for (i in 0 until value.size) {
+                val text = (value[i]?.jsonPrimitive?.content ?: "").trim()
                 if (text.isNotEmpty()) out.add(text)
             }
         }
@@ -553,10 +553,10 @@ private fun pptxStrings(value: Any?): MutableList<String> {
     return out
 }
 
-private fun pptxNumbers(array: JSONArray?): MutableList<Double> {
+private fun pptxNumbers(array: JsonArray?): MutableList<Double> {
     val out = mutableListOf<Double>()
     if (array == null) return out
-    for (i in 0 until array.length()) out.add(array.optDouble(i, 0.0))
+    for (i in 0 until array.size) out.add(array[i]?.jsonPrimitive?.doubleOrNull ?: 0.0)
     return out
 }
 
@@ -713,7 +713,7 @@ private fun pptxImagePart(builder: PptxBuilder, image: PptxImage): String {
     } else {
         val file = File(image.path)
         if (!file.exists() || file.isDirectory) throw IllegalArgumentException("Image not found: ${image.path}")
-        if (file.length() > 64L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to embed")
+        if (file.size > 64L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to embed")
         file.readBytes()
     }
     val extension = pptxImageExtension(bytes, image.path)
@@ -1843,8 +1843,8 @@ private fun pptxDescribeSlide(sb: StringBuilder, slide: PptxSlide) {
     }
 }
 
-private fun pptxApplyOp(deck: PptxDeck, op: JSONObject): String {
-    val name = op.optString("op", "").trim().lowercase(Locale.US)
+private fun pptxApplyOp(deck: PptxDeck, op: JsonObject): String {
+    val name = (op["op"]?.jsonPrimitive?.content ?: "").trim().lowercase(Locale.US)
     return when (name) {
         "append_slide" -> {
             val slide = pptxSlideFromJson(op, "bullets")
@@ -1852,10 +1852,10 @@ private fun pptxApplyOp(deck: PptxDeck, op: JSONObject): String {
             "appended slide ${deck.slides.size} (${slide.layout})"
         }
         "replace" -> {
-            val find = op.optString("find", "")
+            val find = op["find"]?.jsonPrimitive?.content ?: ""
             if (find.isEmpty()) throw IllegalArgumentException("The replace op needs a find value")
-            val replacement = op.optString("replace", "")
-            val all = op.optBoolean("all", false)
+            val replacement = op["replace"]?.jsonPrimitive?.content ?: ""
+            val all = op["all"]?.jsonPrimitive?.booleanOrNull ?: false
             val count = pptxReplace(deck, find, replacement, all)
             if (count == 0) {
                 "replace: no match for \"$find\""
@@ -1864,43 +1864,43 @@ private fun pptxApplyOp(deck: PptxDeck, op: JSONObject): String {
             }
         }
         "set_title" -> {
-            val slide = pptxSlideAt(deck, op.optInt("slide", 0))
-            slide.title = op.optString("text", "")
-            "slide ${op.optInt("slide", 0)} title set"
+            val slide = pptxSlideAt(deck, op["slide"]?.jsonPrimitive?.intOrNull ?: 0)
+            slide.title = op["text"]?.jsonPrimitive?.content ?: ""
+            "slide ${op["slide"]?.jsonPrimitive?.intOrNull ?: 0} title set"
         }
         "set_notes" -> {
-            val slide = pptxSlideAt(deck, op.optInt("slide", 0))
-            slide.notes = op.optString("text", "")
-            "slide ${op.optInt("slide", 0)} notes set"
+            val slide = pptxSlideAt(deck, op["slide"]?.jsonPrimitive?.intOrNull ?: 0)
+            slide.notes = op["text"]?.jsonPrimitive?.content ?: ""
+            "slide ${op["slide"]?.jsonPrimitive?.intOrNull ?: 0} notes set"
         }
         "add_bullet" -> {
-            val slide = pptxSlideAt(deck, op.optInt("slide", 0))
-            val text = op.optString("text", "").trim()
+            val slide = pptxSlideAt(deck, op["slide"]?.jsonPrimitive?.intOrNull ?: 0)
+            val text = (op["text"]?.jsonPrimitive?.content ?: "").trim()
             if (text.isEmpty()) throw IllegalArgumentException("The add_bullet op needs text")
-            if (op.optInt("column", 1) == 2) slide.bulletsRight.add(text) else slide.bullets.add(text)
-            "bullet added to slide ${op.optInt("slide", 0)}"
+            if (op["column"]?.jsonPrimitive?.intOrNull ?: 1 == 2) slide.bulletsRight.add(text) else slide.bullets.add(text)
+            "bullet added to slide ${op["slide"]?.jsonPrimitive?.intOrNull ?: 0}"
         }
         "insert_image" -> {
-            val slide = pptxSlideAt(deck, op.optInt("slide", 0))
-            val path = op.optString("path", "").trim()
+            val slide = pptxSlideAt(deck, op["slide"]?.jsonPrimitive?.intOrNull ?: 0)
+            val path = (op["path"]?.jsonPrimitive?.content ?: "").trim()
             if (path.isEmpty()) throw IllegalArgumentException("The insert_image op needs a path")
             slide.image = pptxImageFromJson(op)
             if (slide.layout == "title") slide.layout = "image"
-            "image inserted on slide ${op.optInt("slide", 0)}"
+            "image inserted on slide ${op["slide"]?.jsonPrimitive?.intOrNull ?: 0}"
         }
         "delete_slide" -> {
-            val number = op.optInt("slide", 0)
+            val number = op["slide"]?.jsonPrimitive?.intOrNull ?: 0
             val slide = pptxSlideAt(deck, number)
             deck.slides.remove(slide)
             "deleted slide $number"
         }
         "set_theme_colour", "set_theme_color" -> {
-            val key = op.optString("name", "").trim()
-            val value = op.optString("value", "").trim()
+            val key = (op["name"]?.jsonPrimitive?.content ?: "").trim()
+            val value = (op["value"]?.jsonPrimitive?.content ?: "").trim()
             pptxSetTheme(deck.theme, key, value)
             "theme $key set to $value"
         }
-        else -> throw IllegalArgumentException("Unknown op: ${op.optString("op", "")}")
+        else -> throw IllegalArgumentException("Unknown op: ${op["op"]?.jsonPrimitive?.content ?: ""}")
     }
 }
 

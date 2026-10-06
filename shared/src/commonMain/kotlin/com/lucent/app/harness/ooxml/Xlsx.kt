@@ -1,8 +1,8 @@
 package com.lucent.app.harness.ooxml
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import org.w3c.dom.Document
+import kotlinx.serialization.json.*
 import org.w3c.dom.Element
 import java.io.File
 
@@ -98,9 +98,9 @@ object Xlsx {
 
     fun create(specJson: String, out: File): String {
         val spec = jsonObject(specJson, "spreadsheet spec")
-        val sheets = spec.optJSONArray("sheets")
+        val sheets = spec["sheets"]?.jsonArray
             ?: throw IllegalArgumentException("The spreadsheet spec needs a \"sheets\" array")
-        if (sheets.length() == 0) throw IllegalArgumentException("The spreadsheet spec needs at least one sheet")
+        if (sheets.size == 0) throw IllegalArgumentException("The spreadsheet spec needs at least one sheet")
         val parts = LinkedHashMap<String, ByteArray>()
         val contentTypes = parse(minimalContentTypesBytes())
         val workbook = parse(emptyWorkbookBytes())
@@ -115,20 +115,20 @@ object Xlsx {
         val names = mutableListOf<String>()
         var chartCount = 0
         var drawingCount = 0
-        for (index in 0 until sheets.length()) {
-            val sheetSpec = sheets.optJSONObject(index)
+        for (index in 0 until sheets.size) {
+            val sheetSpec = sheets[index]?.jsonObject
                 ?: throw IllegalArgumentException("Sheet ${index + 1} in the spec is not a JSON object")
             val name = validSheetName(stringOf(sheetSpec, "name", "Sheet${index + 1}"), names)
             names.add(name)
             val sheetDoc = parse(emptyWorksheetBytes())
             populateSheet(sheetDoc, book, sheetSpec)
-            val charts = sheetSpec.optJSONArray("charts")
-            if (charts != null && charts.length() > 0) {
+            val charts = sheetSpec["charts"]?.jsonArray
+            if (charts != null && charts.size > 0) {
                 drawingCount++
                 val drawingDoc = parse(emptyDrawingBytes())
                 val drawingRels = parse(emptyRelationshipsBytes())
-                for (position in 0 until charts.length()) {
-                    val chartSpec = charts.optJSONObject(position) ?: continue
+                for (position in 0 until charts.size) {
+                    val chartSpec = charts[position]?.jsonObject ?: continue
                     chartCount++
                     val chartPart = "xl/charts/chart$chartCount.xml"
                     parts[chartPart] = documentBytes(chartNode(chartSpec, name, chartCount))
@@ -224,7 +224,7 @@ object Xlsx {
     fun edit(file: File, opsJson: String): String {
         if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
         val ops = jsonArray(opsJson, "spreadsheet edit operations")
-        if (ops.length() == 0) throw IllegalArgumentException("Give at least one edit operation")
+        if (ops.size == 0) throw IllegalArgumentException("Give at least one edit operation")
         val parts = readZip(file).toMutableMap()
         val book = MutableBook(parts)
         val shared: ((String) -> Int)? = if (book.useSharedStrings()) {
@@ -233,8 +233,8 @@ object Xlsx {
             null
         }
         val applied = LinkedHashSet<String>()
-        for (index in 0 until ops.length()) {
-            val op = ops.optJSONObject(index)
+        for (index in 0 until ops.size) {
+            val op = ops[index]?.jsonObject
                 ?: throw IllegalArgumentException("Operation ${index + 1} is not a JSON object")
             val kind = stringOf(op, "op").trim().lowercase()
             when (kind) {
@@ -242,22 +242,22 @@ object Xlsx {
                     val refText = stringOf(op, "ref")
                     if (refText.isBlank()) throw IllegalArgumentException("The set op needs a \"ref\" cell such as B2")
                     val sheetDoc = book.document(stringOf(op, "sheet"))
-                    val data = cellData(op.opt("value"))
+                    val data = cellData(op["value"])
                     val formula = stringOf(op, "formula")
                     if (formula.isNotEmpty()) data.formula = formula
-                    val styleIndex = if (op.has("style")) book.styleBook.xf(op.optJSONObject("style")) else -1
+                    val styleIndex = if (op.containsKey("style")) book.styleBook.xf(op["style"]?.jsonObject) else -1
                     setCell(sheetDoc, parseRef(refText), data, styleIndex, shared)
                     updateDimension(sheetDoc)
                 }
                 "append_rows" -> {
-                    val rows = op.optJSONArray("rows")
+                    val rows = op["rows"]?.jsonArray
                         ?: throw IllegalArgumentException("The append_rows op needs a \"rows\" array")
                     val sheetDoc = book.document(stringOf(op, "sheet"))
                     val start = lastRow(sheetDoc) + 1
-                    for (rowIndex in 0 until rows.length()) {
-                        val values = rows.optJSONArray(rowIndex) ?: continue
-                        for (column in 0 until values.length()) {
-                            setCell(sheetDoc, Ref(start + rowIndex, column + 1), cellData(values.opt(column)), -1, shared)
+                    for (rowIndex in 0 until rows.size) {
+                        val values = rows[rowIndex]?.jsonArray ?: continue
+                        for (column in 0 until values.size) {
+                            setCell(sheetDoc, Ref(start + rowIndex, column + 1), cellData(values[column]), -1, shared)
                         }
                     }
                     updateDimension(sheetDoc)
@@ -271,7 +271,7 @@ object Xlsx {
                 "delete_sheet" -> book.delete(stringOf(op, "name"))
                 "set_column_width" -> {
                     val sheetDoc = book.document(stringOf(op, "sheet"))
-                    val width = op.optDouble("width", 0.0)
+                    val width = op["width"]?.jsonPrimitive?.doubleOrNull ?: 0.0
                     if (width <= 0.0) throw IllegalArgumentException("The set_column_width op needs a positive \"width\"")
                     setColumnWidth(sheetDoc, stringOf(op, "column"), width)
                 }
@@ -283,7 +283,7 @@ object Xlsx {
                 "freeze" -> setFreeze(book.document(stringOf(op, "sheet")), stringOf(op, "cell", "A1"))
                 "autofilter" -> {
                     val sheetDoc = book.document(stringOf(op, "sheet"))
-                    if (op.optBoolean("on", true)) {
+                    if (op["on"]?.jsonPrimitive?.booleanOrNull ?: true) {
                         val declared = stringOf(op, "range")
                         setAutoFilter(sheetDoc, if (declared.isBlank()) autoFilterRange(sheetDoc) else declared)
                     } else {
@@ -296,7 +296,7 @@ object Xlsx {
         }
         book.save()
         writZip(file, parts.entries.map { it.key to it.value })
-        return "Applied ${ops.length()} operation(s): ${applied.joinToString(", ")}"
+        return "Applied ${ops.size} operation(s): ${applied.joinToString(", ")}"
     }
 
     fun csvOut(file: File, sheet: String = ""): String {
@@ -336,19 +336,19 @@ object Xlsx {
         return "Imported ${rows.size} ${word(rows.size, "row")} into sheet $name at ${columnName(start.col)}${start.row}"
     }
 
-    private fun jsonObject(text: String, what: String): JSONObject {
+    private fun jsonObject(text: String, what: String): JsonObject {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            JSONObject(text)
+            Json.parseToJsonElement(text).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
     }
 
-    private fun jsonArray(text: String, what: String): JSONArray {
+    private fun jsonArray(text: String, what: String): JsonArray {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            JSONArray(text)
+            Json.parseToJsonElement(text).jsonArray
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -367,8 +367,8 @@ private class StyleBook(private val styles: Document) {
     private val xfIds = HashMap<String, Int>()
     private val dxfIds = HashMap<String, Int>()
 
-    fun xf(style: JSONObject?): Int {
-        if (style == null || style.length() == 0) return 0
+    fun xf(style: JsonObject?): Int {
+        if (style == null || style.size == 0) return 0
         val key = style.toString()
         val existing = xfIds[key]
         if (existing != null) return existing
@@ -397,10 +397,10 @@ private class StyleBook(private val styles: Document) {
         return index
     }
 
-    private fun createXf(style: JSONObject): Int {
+    private fun createXf(style: JsonObject): Int {
         val font = fontId(style)
         val fill = fillId(stringOf(style, "fill"))
-        val border = if (style.optBoolean("border", false)) borderId() else 0
+        val border = if (style["border"]?.jsonPrimitive?.booleanOrNull ?: false) borderId() else 0
         val formatCode = stringOf(style, "format")
         val format = if (formatCode.isBlank()) 0 else numFmtId(formatCode)
         val alignment = alignmentAttributes(style)
@@ -422,12 +422,12 @@ private class StyleBook(private val styles: Document) {
         return indexOfChild(container, created)
     }
 
-    private fun fontId(style: JSONObject): Int {
-        val bold = style.optBoolean("bold", false)
-        val italic = style.optBoolean("italic", false)
-        val strike = style.optBoolean("strike", false)
-        val underline = style.optBoolean("underline", false)
-        val size = style.optDouble("size", 0.0)
+    private fun fontId(style: JsonObject): Int {
+        val bold = style["bold"]?.jsonPrimitive?.booleanOrNull ?: false
+        val italic = style["italic"]?.jsonPrimitive?.booleanOrNull ?: false
+        val strike = style["strike"]?.jsonPrimitive?.booleanOrNull ?: false
+        val underline = style["underline"]?.jsonPrimitive?.booleanOrNull ?: false
+        val size = style["size"]?.jsonPrimitive?.doubleOrNull ?: 0.0
         val colour = stringOf(style, "colour").ifEmpty { stringOf(style, "color") }
         val name = stringOf(style, "font")
         if (!bold && !italic && !strike && !underline && size <= 0.0 && colour.isBlank() && name.isBlank()) return 0
@@ -506,13 +506,13 @@ private class StyleBook(private val styles: Document) {
         return id
     }
 
-    private fun alignmentAttributes(style: JSONObject): Map<String, String> {
+    private fun alignmentAttributes(style: JsonObject): Map<String, String> {
         val out = LinkedHashMap<String, String>()
         val horizontal = alignmentValue(stringOf(style, "align"), HORIZONTAL_ALIGNMENTS)
         if (horizontal.isNotEmpty()) out["horizontal"] = horizontal
         val vertical = alignmentValue(stringOf(style, "valign"), VERTICAL_ALIGNMENTS)
         if (vertical.isNotEmpty()) out["vertical"] = vertical
-        if (style.optBoolean("wrap", false)) out["wrapText"] = "1"
+        if (style["wrap"]?.jsonPrimitive?.booleanOrNull ?: false) out["wrapText"] = "1"
         return out
     }
 
@@ -810,65 +810,65 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
     }
 }
 
-private fun populateSheet(document: Document, book: StyleBook, spec: JSONObject) {
-    val startRow = spec.optInt("row_start", 1).coerceAtLeast(1)
-    val columns = spec.optJSONArray("columns")
+private fun populateSheet(document: Document, book: StyleBook, spec: JsonObject) {
+    val startRow = (spec["row_start"]?.jsonPrimitive?.intOrNull ?: 1).coerceAtLeast(1)
+    val columns = spec["columns"]?.jsonArray
     if (columns != null) {
-        for (index in 0 until columns.length()) {
-            val column = columns.optJSONObject(index) ?: continue
-            val width = column.optDouble("width", 0.0)
+        for (index in 0 until columns.size) {
+            val column = columns[index]?.jsonObject ?: continue
+            val width = column["width"]?.jsonPrimitive?.doubleOrNull ?: 0.0
             if (width > 0.0) setColumnWidth(document, columnName(index + 1), width)
         }
     }
-    val heights = spec.optJSONObject("heights") ?: spec.optJSONObject("row_heights")
+    val heights = spec["heights"]?.jsonObject ?: spec["row_heights"]?.jsonObject
     if (heights != null) {
         heights.keys().forEach { key ->
             val row = key.toIntOrNull()
-            val height = heights.optDouble(key, 0.0)
+            val height = heights[key]?.jsonPrimitive?.doubleOrNull ?: 0.0
             if (row != null && row > 0 && height > 0.0) setRowHeight(document, row, height)
         }
     }
-    val rows = spec.optJSONArray("rows")
+    val rows = spec["rows"]?.jsonArray
     if (rows != null) {
-        for (index in 0 until rows.length()) {
-            val values = rows.optJSONArray(index) ?: continue
-            for (column in 0 until values.length()) {
-                setCell(document, Ref(startRow + index, column + 1), cellData(values.opt(column)), 0, null)
+        for (index in 0 until rows.size) {
+            val values = rows[index]?.jsonArray ?: continue
+            for (column in 0 until values.size) {
+                setCell(document, Ref(startRow + index, column + 1), cellData(values[column]), 0, null)
             }
         }
     }
-    val cells = spec.optJSONArray("cells")
+    val cells = spec["cells"]?.jsonArray
     if (cells != null) {
-        for (index in 0 until cells.length()) {
-            val cell = cells.optJSONObject(index)
+        for (index in 0 until cells.size) {
+            val cell = cells[index]?.jsonObject
                 ?: throw IllegalArgumentException("Cell ${index + 1} in the sheet spec is not a JSON object")
             val refText = stringOf(cell, "ref")
             if (refText.isBlank()) throw IllegalArgumentException("Cell ${index + 1} needs a \"ref\" such as B2")
-            val data = cellData(cell.opt("value"))
+            val data = cellData(cell["value"])
             val formula = stringOf(cell, "formula")
             if (formula.isNotEmpty()) data.formula = formula
-            setCell(document, parseRef(refText), data, book.xf(cell.optJSONObject("style")), null)
+            setCell(document, parseRef(refText), data, book.xf(cell["style"]?.jsonObject), null)
         }
     }
-    val merges = spec.optJSONArray("merges")
+    val merges = spec["merges"]?.jsonArray
     if (merges != null) {
-        for (index in 0 until merges.length()) {
-            val range = merges.optString(index, "")
+        for (index in 0 until merges.size) {
+            val range = merges[index]?.jsonPrimitive?.content ?: ""
             if (range.isNotBlank()) appendMerge(document, range)
         }
     }
     val freeze = stringOf(spec, "freeze")
     if (freeze.isNotBlank()) setFreeze(document, freeze)
-    val filter = spec.opt("autofilter")
+    val filter = spec["autofilter"]
     if (filter == true) {
         setAutoFilter(document, autoFilterRange(document))
     } else if (filter is String && filter.isNotBlank()) {
         setAutoFilter(document, filter)
     }
-    val conditional = spec.optJSONArray("conditional")
+    val conditional = spec["conditional"]?.jsonArray
     if (conditional != null) {
-        for (index in 0 until conditional.length()) {
-            val rule = conditional.optJSONObject(index)
+        for (index in 0 until conditional.size) {
+            val rule = conditional[index]?.jsonObject
                 ?: throw IllegalArgumentException("Conditional rule ${index + 1} is not a JSON object")
             addConditional(document, rule, book)
         }
@@ -1053,7 +1053,7 @@ private fun clearAutoFilter(document: Document) {
     document.documentElement.removeChild(existing)
 }
 
-private fun addConditional(document: Document, rule: JSONObject, book: StyleBook) {
+private fun addConditional(document: Document, rule: JsonObject, book: StyleBook) {
     val range = stringOf(rule, "range")
     val parsed = parseRange(range) ?: throw IllegalArgumentException("Bad conditional formatting range: $range")
     val type = stringOf(rule, "type", "cellIs").trim().lowercase()
@@ -1066,7 +1066,7 @@ private fun addConditional(document: Document, rule: JSONObject, book: StyleBook
     when (type) {
         "cellis", "cell_is" -> {
             val operator = operatorValue(stringOf(rule, "operator", "greaterThan"))
-            val formulas = formulaList(rule.opt("formula"))
+            val formulas = formulaList(rule["formula"])
             if (formulas.isEmpty()) throw IllegalArgumentException("A cellIs conditional rule needs a \"formula\"")
             val dxfId = book.dxf(
                 stringOf(rule, "colour").ifEmpty { stringOf(rule, "color") },
@@ -1170,10 +1170,10 @@ private fun lastRow(document: Document): Int {
     return last
 }
 
-private fun chartNode(spec: JSONObject, sheetName: String, index: Int): XmlBuilder {
+private fun chartNode(spec: JsonObject, sheetName: String, index: Int): XmlBuilder {
     val type = stringOf(spec, "type", "bar").trim().lowercase()
-    val series = spec.optJSONArray("series")
-    if (series == null || series.length() == 0) {
+    val series = spec["series"]?.jsonArray
+    if (series == null || series.size == 0) {
         throw IllegalArgumentException("Chart $index needs a \"series\" array")
     }
     val categories = stringOf(spec, "categories")
@@ -1212,8 +1212,8 @@ private fun chartNode(spec: JSONObject, sheetName: String, index: Int): XmlBuild
             child("c:varyColors").attr("val", 0)
         }
     }
-    for (position in 0 until series.length()) {
-        val item = series.optJSONObject(position) ?: continue
+    for (position in 0 until series.size) {
+        val item = series[position]?.jsonObject ?: continue
         group.add(chartSeries(item, position, sheetName, categories))
     }
     if (type == "line") group.child("c:marker").attr("val", 1)
@@ -1232,7 +1232,7 @@ private fun chartNode(spec: JSONObject, sheetName: String, index: Int): XmlBuild
     return root
 }
 
-private fun chartSeries(series: JSONObject, index: Int, sheetName: String, categories: String): XmlBuilder {
+private fun chartSeries(series: JsonObject, index: Int, sheetName: String, categories: String): XmlBuilder {
     val values = stringOf(series, "values")
     if (values.isBlank()) {
         throw IllegalArgumentException("Chart series ${index + 1} needs a \"values\" range such as B2:B9")
@@ -1270,10 +1270,10 @@ private fun valueAxis(): XmlBuilder {
     return axis
 }
 
-private fun anchorNode(spec: JSONObject, relId: String, index: Int): XmlBuilder {
+private fun anchorNode(spec: JsonObject, relId: String, index: Int): XmlBuilder {
     val anchor = parseRef(stringOf(spec, "anchor", "E2"))
-    val width = spec.optDouble("width", 12.0).toInt().coerceIn(2, 200)
-    val height = spec.optDouble("height", 8.0).toInt().coerceIn(2, 200)
+    val width = (spec["width"]?.jsonPrimitive?.doubleOrNull ?: 12.0).toInt().coerceIn(2, 200)
+    val height = (spec["height"]?.jsonPrimitive?.doubleOrNull ?: 8.0).toInt().coerceIn(2, 200)
     val fromColumn = anchor.col - 1
     val fromRow = anchor.row - 1
     val out = node("xdr:twoCellAnchor")
@@ -1521,7 +1521,7 @@ private fun colourValue(text: String): String {
 
 private fun cellData(value: Any?): CellData = when (value) {
     null -> CellData()
-    JSONObject.NULL -> CellData()
+    is JsonNull -> CellData()
     is Boolean -> CellData(flag = value)
     is Number -> CellData(number = value.toDouble())
     else -> CellData(text = value.toString())
@@ -1548,12 +1548,12 @@ private fun operatorValue(value: String): String {
 }
 
 private fun formulaList(value: Any?): List<String> {
-    if (value == null || value == JSONObject.NULL) return emptyList()
-    if (value is JSONArray) {
+    if (value == null || value is JsonNull) return emptyList()
+    if (value is JsonArray) {
         val out = mutableListOf<String>()
-        for (index in 0 until value.length()) {
-            val item = value.opt(index) ?: continue
-            if (item != JSONObject.NULL) out.add(item.toString())
+        for (index in 0 until value.size) {
+            val item = value[index] ?: continue
+            if (item !is JsonNull) out.add(item.toString())
         }
         return out
     }
