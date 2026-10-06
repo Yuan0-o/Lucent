@@ -2,39 +2,24 @@ package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 object Attachments {
 
-    fun parse(json: String?): List<Attachment> {
-        if (json.isNullOrBlank()) return emptyList()
+    private val jsonParser = Json { ignoreUnknownKeys = true }
+
+    fun parse(jsonStr: String?): List<Attachment> {
+        if (jsonStr.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                Attachment(
-                    mime = o.optString("mime", "application/octet-stream"),
-                    data = o.optString("data", ""),
-                    name = o.optString("name", "file")
-                )
-            }
+            jsonParser.decodeFromString(jsonStr)
         } catch (e: Exception) {
             emptyList()
         }
     }
 
     fun serialize(list: List<Attachment>): String {
-        val arr = JSONArray()
-        list.forEach {
-            arr.put(
-                JSONObject()
-                    .put("mime", it.mime)
-                    .put("data", it.data)
-                    .put("name", it.name)
-            )
-        }
-        return arr.toString()
+        return jsonParser.encodeToString(list)
     }
 
 

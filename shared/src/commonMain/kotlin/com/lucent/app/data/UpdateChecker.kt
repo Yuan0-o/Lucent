@@ -5,15 +5,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.util.concurrent.TimeUnit
 
+@Serializable
 data class ReleaseAsset(
     val name: String,
     val url: String,
     val sizeBytes: Long
 )
 
+@Serializable
 data class ReleaseInfo(
     val tag: String,
     val version: String,
@@ -65,7 +74,7 @@ object UpdateChecker {
         return false
     }
 
-    private suspend fun fetchJson(url: String): JSONObject? = withContext(Dispatchers.IO) {
+    private suspend fun fetchJson(url: String): JsonObject? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/vnd.github+json")
@@ -77,31 +86,31 @@ object UpdateChecker {
             }
         }.getOrNull() ?: return@withContext null
         if (body.isBlank()) return@withContext null
-        runCatching { JSONObject(body) }.getOrNull()
+        runCatching { Json.parseToJsonElement(body).jsonObject }.getOrNull()
     }
 
     private suspend fun fetchTagCommit(tag: String): String? {
         val ref = fetchJson(LucentBuild.REPO_API + "/git/ref/tags/" + tag) ?: return null
-        val obj = ref.optJSONObject("object") ?: return null
-        val sha = obj.optString("sha")
+        val obj = ref["object"]?.jsonObject ?: return null
+        val sha = obj["sha"]?.jsonPrimitive?.content ?: ""
         if (sha.isBlank()) return null
-        if (obj.optString("type") == "tag") {
+        if (obj["type"]?.jsonPrimitive?.content == "tag") {
             val tagObject = fetchJson(LucentBuild.REPO_API + "/git/tags/" + sha) ?: return null
-            return tagObject.optJSONObject("object")?.optString("sha")?.ifBlank { null }
+            return tagObject["object"]?.jsonObject?.get("sha")?.jsonPrimitive?.content?.ifBlank { null }
         }
         return sha
     }
 
-    private fun parseAssets(root: JSONObject): Pair<ReleaseAsset?, ReleaseAsset?> {
+    private fun parseAssets(root: JsonObject): Pair<ReleaseAsset?, ReleaseAsset?> {
         var apk: ReleaseAsset? = null
         var installer: ReleaseAsset? = null
-        val assets = root.optJSONArray("assets") ?: return null to null
-        for (i in 0 until assets.length()) {
-            val item = assets.optJSONObject(i) ?: continue
-            val name = item.optString("name")
-            val url = item.optString("browser_download_url")
+        val assets = root["assets"]?.jsonArray ?: return null to null
+        for (i in 0 until assets.size) {
+            val item = assets[i] as? JsonObject ?: continue
+            val name = item["name"]?.jsonPrimitive?.content ?: ""
+            val url = item["browser_download_url"]?.jsonPrimitive?.content ?: ""
             if (name.isBlank() || url.isBlank()) continue
-            val asset = ReleaseAsset(name, url, item.optLong("size"))
+            val asset = ReleaseAsset(name, url, item["size"]?.jsonPrimitive?.longOrNull ?: 0L)
             when {
                 name.endsWith(".apk", ignoreCase = true) && apk == null -> apk = asset
                 name.endsWith(".exe", ignoreCase = true) && installer == null -> installer = asset
@@ -115,8 +124,8 @@ object UpdateChecker {
         var stableTag = ""
         val root = fetchJson(LucentBuild.RELEASES_API)
         if (root != null) {
-            val tag = root.optString("tag_name")
-            val isDraftOrPrerelease = root.optBoolean("draft") || root.optBoolean("prerelease")
+            val tag = root["tag_name"]?.jsonPrimitive?.content ?: ""
+            val isDraftOrPrerelease = (root["draft"]?.jsonPrimitive?.booleanOrNull == true) || (root["prerelease"]?.jsonPrimitive?.booleanOrNull == true)
             if (tag.isNotBlank() && !isDraftOrPrerelease) {
                 stableTag = tag
                 if (isNewer(tag, currentVersion)) {
@@ -124,10 +133,10 @@ object UpdateChecker {
                     stable = ReleaseInfo(
                         tag = tag,
                         version = tag.trimStart('v', 'V'),
-                        title = root.optString("name").ifBlank { tag },
+                        title = root["name"]?.jsonPrimitive?.content?.ifBlank { tag } ?: tag,
                         apk = apk,
                         installer = installer,
-                        notesUrl = root.optString("html_url"),
+                        notesUrl = root["html_url"]?.jsonPrimitive?.content ?: "",
                         channel = "stable"
                     )
                 }

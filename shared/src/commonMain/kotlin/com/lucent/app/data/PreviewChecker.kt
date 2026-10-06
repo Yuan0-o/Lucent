@@ -6,11 +6,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 object PreviewChecker {
 
-    private suspend fun fetch(url: String, client: OkHttpClient): JSONObject? = withContext(Dispatchers.IO) {
+    private suspend fun fetch(url: String, client: OkHttpClient): JsonObject? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/vnd.github+json")
@@ -22,7 +27,7 @@ object PreviewChecker {
             }
         }.getOrNull() ?: return@withContext null
         if (body.isBlank()) return@withContext null
-        runCatching { JSONObject(body) }.getOrNull()
+        runCatching { Json.parseToJsonElement(body).jsonObject }.getOrNull()
     }
 
     private fun field(body: String, name: String): String? {
@@ -35,18 +40,18 @@ object PreviewChecker {
         return if (UpdateChecker.isNewer(second, first)) second else first
     }
 
-    private fun parsePrerelease(root: JSONObject): ReleaseInfo? {
-        if (root.optString("tag_name") != "preview") return null
+    private fun parsePrerelease(root: JsonObject): ReleaseInfo? {
+        if (root["tag_name"]?.jsonPrimitive?.content != "preview") return null
         var apk: ReleaseAsset? = null
         var installer: ReleaseAsset? = null
-        val assets = root.optJSONArray("assets")
+        val assets = root["assets"]?.jsonArray
         if (assets != null) {
-            for (i in 0 until assets.length()) {
-                val item = assets.optJSONObject(i) ?: continue
-                val name = item.optString("name")
-                val url = item.optString("browser_download_url")
+            for (i in 0 until assets.size) {
+                val item = assets[i] as? JsonObject ?: continue
+                val name = item["name"]?.jsonPrimitive?.content ?: ""
+                val url = item["browser_download_url"]?.jsonPrimitive?.content ?: ""
                 if (name.isBlank() || url.isBlank()) continue
-                val asset = ReleaseAsset(name, url, item.optLong("size"))
+                val asset = ReleaseAsset(name, url, item["size"]?.jsonPrimitive?.longOrNull ?: 0L)
                 when {
                     name.endsWith(".apk", ignoreCase = true) && apk == null -> apk = asset
                     name.endsWith(".exe", ignoreCase = true) && installer == null -> installer = asset
@@ -54,7 +59,7 @@ object PreviewChecker {
             }
         }
         if (apk == null && installer == null) return null
-        val body = root.optString("body")
+        val body = root["body"]?.jsonPrimitive?.content ?: ""
         val genericSha = field(body, "Commit")
         val genericVersion = field(body, "Version")
         val apkVersion = field(body, "APK-Version") ?: genericVersion
@@ -62,10 +67,10 @@ object PreviewChecker {
         return ReleaseInfo(
             tag = "preview",
             version = newestVersion(apkVersion, exeVersion),
-            title = root.optString("name").ifBlank { "Preview" } + " - " + S.previewBuildLabel,
+            title = (root["name"]?.jsonPrimitive?.content?.ifBlank { null } ?: "Preview") + " - " + S.previewBuildLabel,
             apk = apk,
             installer = installer,
-            notesUrl = root.optString("html_url"),
+            notesUrl = root["html_url"]?.jsonPrimitive?.content ?: "",
             channel = "preview",
             apkSha = field(body, "APK-Commit") ?: genericSha,
             exeSha = field(body, "EXE-Commit") ?: genericSha,
@@ -78,17 +83,17 @@ object PreviewChecker {
         val candidate = fetch(LucentBuild.REPO_API + "/releases/tags/preview", client)
             ?.let { parsePrerelease(it) } ?: return null
         val runsRoot = fetch(LucentBuild.REPO_API + "/actions/runs?status=success&per_page=20", client)
-        val runs = runsRoot?.optJSONArray("workflow_runs")
+        val runs = runsRoot?.get("workflow_runs")?.jsonArray
         var newestApkSha: String? = null
         var newestExeSha: String? = null
         if (runs != null) {
-            for (i in 0 until runs.length()) {
-                val run = runs.optJSONObject(i) ?: continue
-                when (run.optString("name")) {
-                    "Build APK only" -> if (newestApkSha == null) newestApkSha = run.optString("head_sha").ifBlank { null }
-                    "Build EXE only" -> if (newestExeSha == null) newestExeSha = run.optString("head_sha").ifBlank { null }
+            for (i in 0 until runs.size) {
+                val run = runs[i] as? JsonObject ?: continue
+                when (run["name"]?.jsonPrimitive?.content) {
+                    "Build APK only" -> if (newestApkSha == null) newestApkSha = run["head_sha"]?.jsonPrimitive?.content?.ifBlank { null }
+                    "Build EXE only" -> if (newestExeSha == null) newestExeSha = run["head_sha"]?.jsonPrimitive?.content?.ifBlank { null }
                     "Build Internal (APK+EXE)" -> {
-                        val sha = run.optString("head_sha").ifBlank { null }
+                        val sha = run["head_sha"]?.jsonPrimitive?.content?.ifBlank { null }
                         if (newestApkSha == null) newestApkSha = sha
                         if (newestExeSha == null) newestExeSha = sha
                     }
