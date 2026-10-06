@@ -1,9 +1,6 @@
 package com.lucent.app.harness.ooxml
 
 import kotlinx.serialization.json.*
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.w3c.dom.Node
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
@@ -82,18 +79,18 @@ object Docx {
         if (hasFooter) entries.add(FOOTER_PART to headerFooterPart(true, footer, pageNumbers))
         entries.add(DOCUMENT_RELS_PART to documentBytes(documentRelationships(sink.rels.values)))
         sink.media.forEach { item -> entries.add("word/${item.key}" to item.value) }
-        writZip(java.io.File(out.toString()), entries)
+        writZip(out, entries)
         return describe(blocks)
     }
 
     fun read(file: Path, maxChars: Int = 20000): String {
-        val parts = readZip(java.io.File(file.toString()))
+        val parts = readZip(file)
         val bytes = parts[DOCUMENT_PART]
             ?: throw IllegalArgumentException("${file.name} is not a Word document: word/document.xml is missing")
         val document = parse(bytes)
         val targets = relationshipTargets(parts)
         val formats = numberingFormats(parts)
-        val body = children(document.documentElement, "body").firstOrNull() ?: document.documentElement
+        val body = children(document, "body").firstOrNull() ?: document
         val out = StringBuilder()
         val counters = HashMap<String, Int>()
         var paragraphs = 0
@@ -153,14 +150,14 @@ object Docx {
         if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("${file.name} does not exist")
         val ops = jsonArray(opsJson, "document edit operations")
         if (ops.size == 0) throw IllegalArgumentException("Give at least one edit operation")
-        val parts = readZip(java.io.File(file.toString())).toMutableMap()
+        val parts = readZip(file).toMutableMap()
         val bytes = parts[DOCUMENT_PART]
             ?: throw IllegalArgumentException("${file.name} is not a Word document: word/document.xml is missing")
         val document = parse(bytes)
         val rels = parse(parts[DOCUMENT_RELS_PART] ?: emptyRelationships())
         val sink = EditSink(parts, rels)
         val writer = DocBlocks(sink, file.parent ?: ".".toPath())
-        val body = children(document.documentElement, "body").firstOrNull()
+        val body = children(document, "body").firstOrNull()
             ?: throw IllegalArgumentException("word/document.xml has no body")
         val applied = LinkedHashSet<String>()
         for (index in 0 until ops.size) {
@@ -195,14 +192,14 @@ object Docx {
         parts[DOCUMENT_PART] = serialize(document)
         parts[DOCUMENT_RELS_PART] = serialize(rels)
         if (sink.addedMedia) ensureImageDefaults(parts)
-        writZip(java.io.File(file.toString()), parts.entries.map { it.key to it.value })
+        writZip(file, parts.entries.map { it.key to it.value })
         return "Applied ${ops.size} operation(s): ${applied.joinToString(", ")}"
     }
 
     private fun jsonObject(text: String, what: String): JsonObject {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            Json.parseToJsonElement(text).jsonObject
+            Json.parseToJsonXmlNode(text).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -211,7 +208,7 @@ object Docx {
     private fun jsonArray(text: String, what: String): JsonArray {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            Json.parseToJsonElement(text).jsonArray
+            Json.parseToJsonXmlNode(text).jsonArray
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -390,7 +387,7 @@ object Docx {
             .attr("xmlns:mc", NS_MARKUP_COMPATIBILITY)
             .attr("xmlns:o", "urn:schemas-microsoft-com:office:office")
             .attr("xmlns:r", NS_OFFICE_RELATIONSHIPS)
-            .attr("xmlns:m", "http://schemas.openxmlformats.org/officeDocument/2006/math")
+            .attr("xmlns:m", "http://schemas.openxmlformats.org/officeXmlNode/2006/math")
             .attr("xmlns:v", "urn:schemas-microsoft-com:vml")
             .attr("xmlns:wp14", "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing")
             .attr("xmlns:wp", NS_WORD_DRAWING)
@@ -405,9 +402,9 @@ object Docx {
             .attr("xmlns:a", NS_DRAWING)
             .attr("xmlns:pic", NS_PICTURE)
             .attr("mc:Ignorable", "w14 w15 wp14")
-        val bodyNode = root.child("w:body")
-        bodyNode.addAll(body)
-        bodyNode.add(section)
+        val bodyXmlNode = root.child("w:body")
+        bodyXmlNode.addAll(body)
+        bodyXmlNode.add(section)
         return root
     }
 
@@ -444,18 +441,18 @@ object Docx {
         return run
     }
 
-    private fun paragraphStyle(paragraph: Element): String {
+    private fun paragraphStyle(paragraph: XmlNode): String {
         val props = children(paragraph, "pPr").firstOrNull() ?: return ""
         return attr(children(props, "pStyle").firstOrNull(), "w:val")
     }
 
-    private fun numberingId(paragraph: Element): String {
+    private fun numberingId(paragraph: XmlNode): String {
         val props = children(paragraph, "pPr").firstOrNull() ?: return ""
         val numbering = children(props, "numPr").firstOrNull() ?: return ""
         return attr(children(numbering, "numId").firstOrNull(), "w:val")
     }
 
-    private fun headingLevel(paragraph: Element, style: String): Int {
+    private fun headingLevel(paragraph: XmlNode, style: String): Int {
         val match = Regex("""(?i)^heading([1-9])$""").matchEntire(style)
         if (match != null) return match.groupValues[1].toInt()
         if (style.equals("Title", ignoreCase = true)) return 1
@@ -469,7 +466,7 @@ object Docx {
     }
 
     private fun paragraphText(
-        paragraph: Element,
+        paragraph: XmlNode,
         targets: Map<String, String>,
         formats: Map<String, String>,
         counters: MutableMap<String, Int>
@@ -508,13 +505,13 @@ object Docx {
         return out.toString()
     }
 
-    private fun imageMarkers(paragraph: Element, targets: Map<String, String>): List<String> =
+    private fun imageMarkers(paragraph: XmlNode, targets: Map<String, String>): List<String> =
         descendants(paragraph, "blip").mapNotNull { blip ->
             val id = attr(blip, "r:embed").ifEmpty { attr(blip, "r:link") }
             if (id.isEmpty()) null else "[image ${targets[id] ?: id}]"
         }
 
-    private fun tableText(table: Element): String {
+    private fun tableText(table: XmlNode): String {
         val rows = children(table, "tr").map { row ->
             children(row, "tc").map { cell -> textOf(cell).trim().replace('\n', ' ') }
         }
@@ -548,7 +545,7 @@ object Docx {
             return emptyMap()
         }
         val abstracts = HashMap<String, Map<String, String>>()
-        children(document.documentElement, "abstractNum").forEach { abstract ->
+        children(document, "abstractNum").forEach { abstract ->
             val levels = HashMap<String, String>()
             children(abstract, "lvl").forEach { level ->
                 levels[attr(level, "w:ilvl")] = attr(children(level, "numFmt").firstOrNull(), "w:val")
@@ -556,7 +553,7 @@ object Docx {
             abstracts[attr(abstract, "w:abstractNumId")] = levels
         }
         val out = HashMap<String, String>()
-        children(document.documentElement, "num").forEach { num ->
+        children(document, "num").forEach { num ->
             val abstractId = attr(children(num, "abstractNumId").firstOrNull(), "w:val")
             val levels = abstracts[abstractId] ?: return@forEach
             out[attr(num, "w:numId")] = levels["0"] ?: levels.values.firstOrNull() ?: ""
@@ -572,7 +569,7 @@ object Docx {
             return emptyMap()
         }
         val out = HashMap<String, String>()
-        children(document.documentElement, "Relationship").forEach { rel ->
+        children(document, "Relationship").forEach { rel ->
             val target = attr(rel, "Target")
             val external = attr(rel, "TargetMode").equals("External", ignoreCase = true)
             out[attr(rel, "Id")] = if (external) target else normalizePart(target)
@@ -587,7 +584,7 @@ object Docx {
         return "word/$clean"
     }
 
-    private fun insert(document: Document, body: Element, nodes: List<XmlBuilder>) {
+    private fun insert(document: XmlNode, body: XmlNode, nodes: List<XmlBuilder>) {
         val section = children(body, "sectPr").firstOrNull()
         nodes.forEach { builder ->
             val element = appendXml(document, body, builder.render(), BODY_NAMESPACES)
@@ -595,23 +592,22 @@ object Docx {
         }
     }
 
-    private fun replaceText(document: Document, op: JsonObject) {
+    private fun replaceText(document: XmlNode, op: JsonObject) {
         val find = stringOf(op, "find")
         if (find.isEmpty()) throw IllegalArgumentException("The replace op needs a non-empty \"find\" value")
         val replacement = stringOf(op, "replace")
         val all = op["all"]?.jsonPrimitive?.booleanOrNull ?: false
         var done = 0
-        val texts = descendants(document.documentElement, "t")
+        val texts = descendants(document, "t")
         for (element in texts) {
             if (!all && done > 0) break
-            val node = element.firstChild ?: continue
-            val value = node.nodeValue ?: continue
+            val value = element.text
             if (!value.contains(find)) continue
-            node.nodeValue = if (all) value.replace(find, replacement) else value.replaceFirst(find, replacement)
+            element.text = if (all) value.replace(find, replacement) else value.replaceFirst(find, replacement)
             done++
         }
         if (done > 0) return
-        val paragraphs = descendants(document.documentElement, "p")
+        val paragraphs = descendants(document, "p")
         for (paragraph in paragraphs) {
             if (!all && done > 0) break
             val full = textOf(paragraph)
@@ -623,36 +619,38 @@ object Docx {
         if (done == 0) throw IllegalArgumentException("No text matching \"$find\" was found")
     }
 
-    private fun deleteParagraph(document: Document, find: String) {
+    private fun deleteParagraph(document: XmlNode, find: String) {
         if (find.isBlank()) throw IllegalArgumentException("The delete_paragraph op needs a \"find\" value")
-        val paragraphs = descendants(document.documentElement, "p")
+        val paragraphs = descendants(document, "p")
         val target = paragraphs.firstOrNull { textOf(it).trim() == find.trim() }
             ?: throw IllegalArgumentException("No paragraph matches \"$find\"")
-        target.parentNode?.removeChild(target)
+        target.parentXmlNode?.removeChild(target)
     }
 
-    private fun setParagraphText(document: Document, paragraph: Element, text: String) {
+    private fun setParagraphText(document: XmlNode, paragraph: XmlNode, text: String) {
         val nodes = descendants(paragraph, "t")
         if (nodes.isEmpty()) {
             val run = appendXml(document, paragraph, "<w:r><w:t xml:space=\"preserve\"></w:t></w:r>", BODY_NAMESPACES)
             val created = run?.let { children(it, "t").firstOrNull() }
             if (created != null) {
-                created.appendChild(document.createTextNode(text))
+                created.appendChild(document.createTextXmlNode(text))
                 return
             }
             return
         }
         val first = nodes.first()
-        while (first.firstChild != null) first.removeChild(first.firstChild)
-        first.appendChild(document.createTextNode(text))
+        first.children.clear()
+            first.text = ""
+        first.appendChild(document.createTextXmlNode(text))
         nodes.drop(1).forEach { node ->
-            while (node.firstChild != null) node.removeChild(node.firstChild)
+            node.children.clear()
+            node.text = ""
         }
     }
 
-    private fun setTitle(parts: MutableMap<String, ByteArray>, document: Document, text: String) {
+    private fun setTitle(parts: MutableMap<String, ByteArray>, document: XmlNode, text: String) {
         if (text.isBlank()) throw IllegalArgumentException("The set_title op needs a \"text\" value")
-        val body = children(document.documentElement, "body").firstOrNull() ?: return
+        val body = children(document, "body").firstOrNull() ?: return
         val existing = children(body, "p").firstOrNull { paragraphStyle(it) == "Title" }
         if (existing != null) {
             setParagraphText(document, existing, text)
@@ -663,7 +661,7 @@ object Docx {
                 BODY_NAMESPACES
             ).firstOrNull()
             if (created != null) {
-                val imported = document.importNode(created, true) as Element
+                val imported = document.importXmlNode(created, true) as XmlNode
                 val first = body.firstChild
                 if (first != null) body.insertBefore(imported, first) else body.appendChild(imported)
             }
@@ -674,25 +672,26 @@ object Docx {
         } catch (e: Exception) {
             return
         }
-        val title = children(core.documentElement, "title").firstOrNull()
+        val title = children(core, "title").firstOrNull()
         if (title == null) {
-            appendXml(core, core.documentElement, "<dc:title>${escapeXml(text)}</dc:title>", "xmlns:dc=\"$NS_DUBLIN_CORE\"")
+            appendXml(core, core, "<dc:title>${escapeXml(text)}</dc:title>", "xmlns:dc=\"$NS_DUBLIN_CORE\"")
         } else {
-            while (title.firstChild != null) title.removeChild(title.firstChild)
-            title.appendChild(core.createTextNode(text))
+            title.children.clear()
+            title.text = ""
+            title.appendChild(core.createTextXmlNode(text))
         }
         parts[CORE_PART] = serialize(core)
     }
 
     private fun setHeaderFooter(
         parts: MutableMap<String, ByteArray>,
-        rels: Document,
-        document: Document,
+        rels: XmlNode,
+        document: XmlNode,
         footer: Boolean,
         text: String,
         pageNumbers: Boolean
     ) {
-        val body = children(document.documentElement, "body").firstOrNull() ?: return
+        val body = children(document, "body").firstOrNull() ?: return
         val section = ensureSection(document, body)
         val tag = if (footer) "footerReference" else "headerReference"
         val type = if (footer) REL_FOOTER else REL_HEADER
@@ -711,38 +710,38 @@ object Docx {
         if (bytes == null) {
             parts[partName] = headerFooterPart(footer, text, pageNumbers)
         } else {
-            val partDocument = try {
+            val partXmlNode = try {
                 parse(bytes)
             } catch (e: Exception) {
                 null
             }
-            if (partDocument == null) {
+            if (partXmlNode == null) {
                 parts[partName] = headerFooterPart(footer, text, pageNumbers)
             } else {
-                val paragraphs = children(partDocument.documentElement, "p")
+                val paragraphs = children(partXmlNode, "p")
                 if (paragraphs.isEmpty()) {
                     appendXml(
-                        partDocument,
-                        partDocument.documentElement,
+                        partXmlNode,
+                        partXmlNode,
                         headerFooterParagraph(text, pageNumbers).render(),
                         BODY_NAMESPACES
                     )
                 } else {
-                    setParagraphText(partDocument, paragraphs.first(), text)
-                    paragraphs.drop(1).forEach { partDocument.documentElement.removeChild(it) }
+                    setParagraphText(partXmlNode, paragraphs.first(), text)
+                    paragraphs.drop(1).forEach { partXmlNode.removeChild(it) }
                 }
-                parts[partName] = serialize(partDocument)
+                parts[partName] = serialize(partXmlNode)
             }
         }
         addContentType(parts, "/$partName", if (footer) CONTENT_TYPE_FOOTER else CONTENT_TYPE_HEADER)
     }
 
-    private fun referenceType(reference: Element): String {
+    private fun referenceType(reference: XmlNode): String {
         val declared = attr(reference, "w:type")
         return if (declared.isEmpty()) "default" else declared
     }
 
-    private fun ensureSection(document: Document, body: Element): Element {
+    private fun ensureSection(document: XmlNode, body: XmlNode): XmlNode {
         val existing = children(body, "sectPr").firstOrNull()
         if (existing != null) return existing
         val section = node("w:sectPr")
@@ -755,16 +754,16 @@ object Docx {
         return element ?: body
     }
 
-    private fun addSectionReference(document: Document, section: Element, tag: String, relId: String) {
+    private fun addSectionReference(document: XmlNode, section: XmlNode, tag: String, relId: String) {
         ensureRelationshipPrefix(document)
-        val reference = document.createElement("w:$tag")
+        val reference = document.createXmlNode("w:$tag")
         reference.setAttribute("w:type", "default")
         reference.setAttribute("r:id", relId)
         val allowed = if (tag == "headerReference") setOf("headerReference") else setOf("headerReference", "footerReference")
-        var anchor: Node? = null
+        var anchor: XmlNode? = null
         var child = section.firstChild
         while (child != null) {
-            if (child is Element && localName(child) !in allowed) {
+            if (child is XmlNode && localName(child) !in allowed) {
                 anchor = child
                 break
             }
@@ -773,34 +772,34 @@ object Docx {
         if (anchor != null) section.insertBefore(reference, anchor) else section.appendChild(reference)
     }
 
-    private fun ensureRelationshipPrefix(document: Document) {
-        val root = document.documentElement ?: return
+    private fun ensureRelationshipPrefix(document: XmlNode) {
+        val root = document ?: return
         if (attr(root, "xmlns:r").isEmpty()) root.setAttribute("xmlns:r", NS_OFFICE_RELATIONSHIPS)
     }
 
-    private fun relationshipPart(rels: Document, relId: String): String {
-        val rel = children(rels.documentElement, "Relationship").firstOrNull { attr(it, "Id") == relId } ?: return ""
+    private fun relationshipPart(rels: XmlNode, relId: String): String {
+        val rel = children(rels, "Relationship").firstOrNull { attr(it, "Id") == relId } ?: return ""
         if (attr(rel, "TargetMode").equals("External", ignoreCase = true)) return ""
         return normalizePart(attr(rel, "Target"))
     }
 
-    private fun addRelationship(rels: Document, type: String, target: String, external: Boolean): String {
-        val existing = children(rels.documentElement, "Relationship").firstOrNull {
+    private fun addRelationship(rels: XmlNode, type: String, target: String, external: Boolean): String {
+        val existing = children(rels, "Relationship").firstOrNull {
             attr(it, "Type") == type && attr(it, "Target") == target
         }
         if (existing != null) return attr(existing, "Id")
         val id = nextRelId(rels)
-        val element = rels.createElement("Relationship")
+        val element = rels.createXmlNode("Relationship")
         element.setAttribute("Id", id)
         element.setAttribute("Type", type)
         element.setAttribute("Target", target)
         if (external) element.setAttribute("TargetMode", "External")
-        rels.documentElement.appendChild(element)
+        rels.appendChild(element)
         return id
     }
 
-    private fun nextRelId(rels: Document): String {
-        val used = children(rels.documentElement, "Relationship").map { attr(it, "Id") }.toMutableSet()
+    private fun nextRelId(rels: XmlNode): String {
+        val used = children(rels, "Relationship").map { attr(it, "Id") }.toMutableSet()
         var index = used.size + 1
         while (used.contains("rId$index")) index++
         return "rId$index"
@@ -819,11 +818,11 @@ object Docx {
         } catch (e: Exception) {
             return
         }
-        val exists = children(document.documentElement, "Override").any { attr(it, "PartName") == partName }
+        val exists = children(document, "Override").any { attr(it, "PartName") == partName }
         if (exists) return
         appendXml(
             document,
-            document.documentElement,
+            document,
             "<Override PartName=\"${escapeXml(partName)}\" ContentType=\"${escapeXml(contentType)}\"/>",
             "xmlns=\"$NS_CONTENT_TYPES\""
         )
@@ -840,14 +839,14 @@ object Docx {
         val defaults = mapOf("png" to "image/png", "jpeg" to "image/jpeg", "jpg" to "image/jpeg", "gif" to "image/gif")
         var changed = false
         defaults.forEach { entry ->
-            val exists = children(document.documentElement, "Default").any {
+            val exists = children(document, "Default").any {
                 attr(it, "Extension").equals(entry.key, ignoreCase = true)
             }
             if (!exists) {
-                val created = document.createElement("Default")
+                val created = document.createXmlNode("Default")
                 created.setAttribute("Extension", entry.key)
                 created.setAttribute("ContentType", entry.value)
-                document.documentElement.insertBefore(created, document.documentElement.firstChild)
+                document.insertBefore(created, document.firstChild)
                 changed = true
             }
         }
@@ -898,25 +897,25 @@ private class CreateSink : DocxRelSink {
     }
 }
 
-private class EditSink(private val parts: MutableMap<String, ByteArray>, private val rels: Document) : DocxRelSink {
+private class EditSink(private val parts: MutableMap<String, ByteArray>, private val rels: XmlNode) : DocxRelSink {
 
     var addedMedia = false
 
     override fun relationship(type: String, target: String, external: Boolean): String {
-        val existing = children(rels.documentElement, "Relationship").firstOrNull {
+        val existing = children(rels, "Relationship").firstOrNull {
             attr(it, "Type") == type && attr(it, "Target") == target
         }
         if (existing != null) return attr(existing, "Id")
-        val used = children(rels.documentElement, "Relationship").map { attr(it, "Id") }.toMutableSet()
+        val used = children(rels, "Relationship").map { attr(it, "Id") }.toMutableSet()
         var index = used.size + 1
         while (used.contains("rId$index")) index++
         val id = "rId$index"
-        val element = rels.createElement("Relationship")
+        val element = rels.createXmlNode("Relationship")
         element.setAttribute("Id", id)
         element.setAttribute("Type", type)
         element.setAttribute("Target", target)
         if (external) element.setAttribute("TargetMode", "External")
-        rels.documentElement.appendChild(element)
+        rels.appendChild(element)
         return id
     }
 
@@ -1358,7 +1357,7 @@ private fun jpegSize(bytes: ByteArray): Pair<Int, Int>? {
 }
 
 private const val APP_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+<Properties xmlns="http://schemas.openxmlformats.org/officeXmlNode/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeXmlNode/2006/docPropsVTypes">
     <Application>Lucent</Application>
     <DocSecurity>0</DocSecurity>
     <ScaleCrop>false</ScaleCrop>

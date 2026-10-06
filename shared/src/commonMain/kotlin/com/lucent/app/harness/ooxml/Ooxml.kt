@@ -1,17 +1,9 @@
 package com.lucent.app.harness.ooxml
 
 import kotlinx.serialization.json.*
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.w3c.dom.Node
-import org.xml.sax.InputSource
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.util.zip.CRC32
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipOutputStream
-import javax.xml.parsers.DocumentBuilderFactory
+import com.lucent.app.harness.ZipWriter
+import okio.FileSystem
+import okio.Path
 
 const val CONTENT_TYPES_PART = "[Content_Types].xml"
 
@@ -144,275 +136,156 @@ private fun storedEntry(name: String): Boolean {
         lower.endsWith(".gif") || lower.endsWith(".bmp") || lower.endsWith(".webp")
 }
 
-fun writZip(out: File, entries: List<Pair<String, ByteArray>>) {
-    out.parentFile?.mkdirs()
-    out.writeBytes(buildZip(entries))
+fun writZip(out: Path, entries: List<Pair<String, ByteArray>>) {
+    val parent = out.parent
+    if (parent != null) FileSystem.SYSTEM.createDirectories(parent)
+    FileSystem.SYSTEM.write(out) { write(buildZip(entries)) }
 }
 
 private fun buildZip(entries: List<Pair<String, ByteArray>>): ByteArray {
     val head = entries.firstOrNull { it.first == CONTENT_TYPES_PART }
     val ordered = if (head == null) entries else listOf(head) + entries.filter { it.first != CONTENT_TYPES_PART }
-    val buffer = java.io.ByteArrayOutputStream()
-    ZipOutputStream(buffer).use { zip ->
-        ordered.forEach { entry ->
-            val item = ZipEntry(entry.first)
-            item.time = ZIP_TIME
-            if (storedEntry(entry.first)) {
-                val crc = CRC32()
-                crc.update(entry.second)
-                item.method = ZipEntry.STORED
-                item.size = entry.second.size.toLong()
-                item.compressedSize = entry.second.size.toLong()
-                item.crc = crc.value
-            } else {
-                item.method = ZipEntry.DEFLATED
-            }
-            zip.putNextEntry(item)
-            zip.write(entry.second)
-            zip.closeEntry()
-        }
+    val writer = ZipWriter()
+    ordered.forEach { entry ->
+        if (storedEntry(entry.first)) writer.addStoredEntry(entry.first, entry.second)
+        else writer.addEntry(entry.first, entry.second)
     }
-    return buffer.toByteArray()
+    return writer.close()
 }
 
-fun readZip(file: File): Map<String, ByteArray> = openZip(file)
-
-private fun openZip(file: File): Map<String, ByteArray> {
-    if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
+fun readZip(path: Path): Map<String, ByteArray> {
+    if (!FileSystem.SYSTEM.exists(path)) throw IllegalArgumentException("${path.name} does not exist")
     val out = LinkedHashMap<String, ByteArray>()
     try {
-        ZipFile(file).use { zip ->
-            val entries = zip.entries()
-            while (entries.hasMoreElements()) {
-                val entry = entries.nextElement()
-                if (entry.isDirectory) continue
-                val name = entry.name.replace('\\', '/')
-                out[name] = zip.getInputStream(entry).use { it.readBytes() }
+        FileSystem.SYSTEM.openZip(path).use { zip ->
+            for (entry in zip.listRecursively(".".toPath())) {
+                val metadata = zip.metadataOrNull(entry)
+                if (metadata?.isDirectory == true) continue
+                val name = entry.toString().replace('\', '/')
+                out[name] = zip.read(entry) { readByteArray() }
             }
         }
     } catch (e: Exception) {
-        throw IllegalArgumentException("${file.name} is not a readable Office package: ${e.message ?: "zip error"}")
+        throw IllegalArgumentException("${path.name} is not a readable Office package: ${e.message ?: "zip error"}")
     }
     return out
 }
 
-fun readEntry(file: File, name: String): ByteArray? = openEntry(file, name)
-
-private fun openEntry(file: File, name: String): ByteArray? {
-    if (!file.exists()) return null
+fun readEntry(path: Path, name: String): ByteArray? {
+    if (!FileSystem.SYSTEM.exists(path)) return null
     return try {
-        ZipFile(file).use { zip ->
-            val entry = zip.getEntry(name)
-            if (entry == null) null else zip.getInputStream(entry).use { it.readBytes() }
+        FileSystem.SYSTEM.openZip(path).use { zip ->
+            val entry = name.toPath()
+            if (!zip.exists(entry)) null else zip.read(entry) { readByteArray() }
         }
     } catch (e: Exception) {
         null
     }
 }
 
-fun parse(bytes: ByteArray): Document = parseXml(bytes)
+fun parse(bytes: ByteArray): XmlNode = parseXmlDocument(bytes)
 
-private fun parseXml(bytes: ByteArray): Document {
-    val factory = DocumentBuilderFactory.newInstance()
-    factory.isNamespaceAware = true
-    factory.isCoalescing = true
-    factory.setExpandEntityReferences(false)
-    try {
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-    } catch (e: Exception) {
-    }
-    try {
-        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-    } catch (e: Exception) {
-    }
-    try {
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-    } catch (e: Exception) {
-    }
-    try {
-        factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-    } catch (e: Exception) {
-    }
-    try {
-        factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
-    } catch (e: Exception) {
-    }
-    val builder = factory.newDocumentBuilder()
-    builder.setEntityResolver { _, _ -> InputSource(ByteArrayInputStream(ByteArray(0))) }
-    builder.setErrorHandler(null)
-    return builder.parse(ByteArrayInputStream(bytes))
-}
 
-fun parse(text: String): Document = parseXml(text.toByteArray(Charsets.UTF_8))
+fun parse(text: String): XmlNode = parseXmlDocument(text.encodeToByteArray())
 
-fun localName(node: Node): String {
-    val local = node.localName
-    if (local != null && local.isNotEmpty()) return local.substringAfterLast(':')
-    val name = node.nodeName ?: ""
-    return name.substringAfterLast(':')
-}
+fun localName(node: XmlNode): String = node.localName
 
-fun attr(node: Node?, name: String): String = attributeOf(node, name)
-
-private fun attributeOf(node: Node?, name: String): String {
-    val element = node as? Element ?: return ""
+fun attr(node: XmlNode?, name: String): String {
+    if (node == null) return ""
     val wanted = name.substringAfterLast(':')
-    val attributes = element.attributes ?: return ""
-    for (index in 0 until attributes.length) {
-        val item = attributes.item(index) ?: continue
-        val qualified = item.nodeName ?: ""
-        if (qualified == name || qualified.substringAfterLast(':') == wanted) {
-            return item.nodeValue ?: ""
-        }
-    }
-    return ""
+    return node.attributes[name] ?: node.attributes.entries.firstOrNull { it.key.substringAfterLast(':') == wanted }?.value ?: ""
 }
 
-fun children(node: Node?, tag: String): List<Element> = elementChildren(node, tag)
-
-private fun elementChildren(node: Node?, tag: String): List<Element> {
+fun children(node: XmlNode?, tag: String): List<XmlNode> {
     if (node == null) return emptyList()
     val wanted = tag.substringAfterLast(':')
-    val out = mutableListOf<Element>()
-    var child = node.firstChild
-    while (child != null) {
-        if (child is Element && localName(child) == wanted) out.add(child)
-        child = child.nextSibling
-    }
-    return out
+    return node.children.filter { it.localName == wanted }
 }
 
-fun directChildren(node: Node?): List<Element> {
-    if (node == null) return emptyList()
-    val out = mutableListOf<Element>()
-    var child = node.firstChild
-    while (child != null) {
-        if (child is Element) out.add(child)
-        child = child.nextSibling
-    }
-    return out
+fun directChildren(node: XmlNode?): List<XmlNode> {
+    return node?.children ?: emptyList()
 }
 
-fun descendants(node: Node?, tag: String): List<Element> {
+fun descendants(node: XmlNode?, tag: String): List<XmlNode> {
     if (node == null) return emptyList()
     val wanted = tag.substringAfterLast(':')
-    val out = mutableListOf<Element>()
+    val out = mutableListOf<XmlNode>()
     collect(node, wanted, out)
     return out
 }
 
-private fun collect(node: Node, wanted: String, out: MutableList<Element>) {
-    var child = node.firstChild
-    while (child != null) {
-        if (child is Element) {
-            if (localName(child) == wanted) out.add(child)
-            collect(child, wanted, out)
-        }
-        child = child.nextSibling
+private fun collect(node: XmlNode, wanted: String, out: MutableList<XmlNode>) {
+    for (child in node.children) {
+        if (child.localName == wanted) out.add(child)
+        collect(child, wanted, out)
     }
 }
 
-fun textOf(node: Node?): String = xmlText(node)
-
-private fun xmlText(node: Node?): String {
+fun textOf(node: XmlNode?): String {
     if (node == null) return ""
     val out = StringBuilder()
     appendText(node, out)
     return out.toString()
 }
 
-private fun appendText(node: Node, out: StringBuilder) {
-    var child = node.firstChild
-    while (child != null) {
-        when (child.nodeType) {
-            Node.TEXT_NODE, Node.CDATA_SECTION_NODE -> out.append(child.nodeValue ?: "")
-            Node.ELEMENT_NODE -> when (localName(child)) {
-                "tab" -> out.append('\t')
-                "br", "cr" -> out.append('\n')
-                "instrText" -> {
-                }
-                else -> appendText(child, out)
-            }
-            else -> {
-            }
+private fun appendText(node: XmlNode, out: StringBuilder) {
+    if (node.text.isNotEmpty()) out.append(node.text)
+    for (child in node.children) {
+        when (child.localName) {
+            "tab" -> out.append('\t')
+            "br", "cr" -> out.append('
+')
+            "instrText" -> {}
+            else -> appendText(child, out)
         }
-        child = child.nextSibling
     }
 }
 
-fun serialize(document: Document): ByteArray {
+fun serialize(document: XmlNode): ByteArray {
     val out = StringBuilder()
-    out.append(XML_DECLARATION).append('\n')
-    var child = document.firstChild
-    while (child != null) {
-        render(child, out)
-        child = child.nextSibling
-    }
-    return out.toString().toByteArray(Charsets.UTF_8)
+    out.append(XML_DECLARATION).append('
+')
+    render(document, out)
+    return out.toString().encodeToByteArray()
 }
 
-fun renderNode(node: Node): String {
+fun renderNode(node: XmlNode): String {
     val out = StringBuilder()
     render(node, out)
     return out.toString()
 }
 
-private fun render(node: Node, out: StringBuilder) {
-    when (node.nodeType) {
-        Node.DOCUMENT_NODE -> {
-            var child = node.firstChild
-            while (child != null) {
-                render(child, out)
-                child = child.nextSibling
-            }
-        }
-        Node.ELEMENT_NODE -> {
-            out.append('<').append(node.nodeName)
-            val attributes = node.attributes
-            if (attributes != null) {
-                for (index in 0 until attributes.length) {
-                    val item = attributes.item(index) ?: continue
-                    out.append(' ').append(item.nodeName).append("=\"")
-                    out.append(escapeXml(item.nodeValue ?: "")).append('"')
-                }
-            }
-            if (!node.hasChildNodes()) {
-                out.append("/>")
-                return
-            }
-            out.append('>')
-            var child = node.firstChild
-            while (child != null) {
-                render(child, out)
-                child = child.nextSibling
-            }
-            out.append("</").append(node.nodeName).append('>')
-        }
-        Node.TEXT_NODE -> out.append(escapeXml(node.nodeValue ?: ""))
-        Node.CDATA_SECTION_NODE -> out.append("<![CDATA[").append(node.nodeValue ?: "").append("]]>")
-        Node.COMMENT_NODE -> out.append("<!--").append(node.nodeValue ?: "").append("-->")
-        Node.PROCESSING_INSTRUCTION_NODE -> out.append("<?").append(node.nodeName).append(' ')
-            .append(node.nodeValue ?: "").append("?>")
-        else -> {
-        }
+private fun render(node: XmlNode, out: StringBuilder) {
+    if (node.name.isEmpty()) {
+        out.append(escapeXml(node.text))
+        return
     }
+    out.append('<').append(node.name)
+    for ((k, v) in node.attributes) {
+        out.append(' ').append(k).append("=\"").append(escapeXml(v)).append('\"')
+    }
+    if (node.children.isEmpty() && node.text.isEmpty()) {
+        out.append("/>")
+        return
+    }
+    out.append('>')
+    if (node.text.isNotEmpty()) out.append(escapeXml(node.text))
+    for (child in node.children) render(child, out)
+    out.append("</").append(node.name).append('>')
 }
 
-fun parseFragment(xml: String, namespaces: String = ""): List<Element> {
+fun parseFragment(xml: String, namespaces: String = ""): List<XmlNode> {
     val wrapped = if (namespaces.isEmpty()) "<frag>$xml</frag>" else "<frag $namespaces>$xml</frag>"
     val document = parse(wrapped)
-    return directChildren(document.documentElement)
+    return document.children
 }
 
-fun appendXml(document: Document, parent: Element, xml: String, namespaces: String = ""): Element? {
+fun appendXml(document: XmlNode, parent: XmlNode, xml: String, namespaces: String = ""): XmlNode? {
     val nodes = parseFragment(xml, namespaces)
-    var last: Element? = null
-    nodes.forEach { element ->
-        val imported = document.importNode(element, true) as? Element
-        if (imported != null) {
-            parent.appendChild(imported)
-            last = imported
-        }
+    var last: XmlNode? = null
+    for (element in nodes) {
+        parent.children.add(element)
+        last = element
     }
     return last
 }
@@ -458,7 +331,7 @@ fun coreProperty(parts: Map<String, ByteArray>, tag: String): String {
     val bytes = parts["docProps/core.xml"] ?: return ""
     return try {
         val document = parse(bytes)
-        textOf(children(document.documentElement, tag).firstOrNull()).trim()
+        textOf(children(document, tag).firstOrNull()).trim()
     } catch (e: Exception) {
         ""
     }
@@ -472,9 +345,9 @@ object Ooxml {
 
     fun readEntry(file: File, name: String): ByteArray? = openEntry(file, name)
 
-    fun parse(bytes: ByteArray): Document = parseXml(bytes)
+    fun parse(bytes: ByteArray): XmlNode = parseXmlDocument(bytes)
 
-    fun parse(text: String): Document = parseXml(text.toByteArray(Charsets.UTF_8))
+    fun parse(text: String): XmlNode = parseXmlDocument(text.encodeToByteArray())
 
     fun escape(value: String): String = escapeXml(value)
 
@@ -687,4 +560,50 @@ object SimpleMarkdown {
         if (clean.endsWith("|")) clean = clean.removeSuffix("|")
         return clean.split("|").map { it.trim() }
     }
+}
+
+
+fun XmlNode.createXmlNode(name: String): XmlNode {
+    return XmlNode(name, name.substringAfterLast(':'), mutableMapOf(), mutableListOf(), "")
+}
+
+fun XmlNode.createTextXmlNode(text: String): XmlNode {
+    return XmlNode("", "", mutableMapOf(), mutableListOf(), text)
+}
+
+fun XmlNode.importXmlNode(node: XmlNode, deep: Boolean): XmlNode {
+    return XmlNode(
+        node.name,
+        node.localName,
+        node.attributes.toMutableMap(),
+        if (deep) node.children.map { this.importXmlNode(it, true) }.toMutableList() else mutableListOf(),
+        node.text
+    )
+}
+
+fun XmlNode.appendChild(child: XmlNode) {
+    this.children.add(child)
+}
+
+fun XmlNode.insertBefore(child: XmlNode, ref: XmlNode?) {
+    if (ref == null) {
+        this.children.add(child)
+    } else {
+        val idx = this.children.indexOf(ref)
+        if (idx >= 0) this.children.add(idx, child)
+        else this.children.add(child)
+    }
+}
+
+fun XmlNode.removeChild(child: XmlNode) {
+    this.children.remove(child)
+}
+
+fun parentOf(root: XmlNode, target: XmlNode): XmlNode? {
+    if (target in root.children) return root
+    for (c in root.children) {
+        val p = parentOf(c, target)
+        if (p != null) return p
+    }
+    return null
 }

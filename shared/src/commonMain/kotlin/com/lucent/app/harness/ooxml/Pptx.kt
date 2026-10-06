@@ -1,9 +1,7 @@
 package com.lucent.app.harness.ooxml
 
 import kotlinx.serialization.json.*
-import org.w3c.dom.Element
 import kotlinx.serialization.json.*
-import org.w3c.dom.Node
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
@@ -19,13 +17,13 @@ private const val PPTX_STD_CY = 6858000L
 
 private const val PPTX_NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 private const val PPTX_NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
-private const val PPTX_NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+private const val PPTX_NS_R = "http://schemas.openxmlformats.org/officeXmlNode/2006/relationships"
 private const val PPTX_NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 private const val PPTX_NS_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 private const val PPTX_NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 private const val PPTX_NS_SS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
-private const val PPTX_REL_OD = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+private const val PPTX_REL_OD = "http://schemas.openxmlformats.org/officeXmlNode/2006/relationships"
 
 private const val PPTX_CT_PRESENTATION = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"
 private const val PPTX_CT_SLIDE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
@@ -237,7 +235,7 @@ private class PptxBuilder(val deck: PptxDeck, val existingMedia: Map<String, Byt
         overrides["/docProps/app.xml"] = PPTX_CT_APP
 
         val rootRels = PptxRelBuilder()
-        rootRels.add(PPTX_REL_OD + "/officeDocument", "ppt/presentation.xml")
+        rootRels.add(PPTX_REL_OD + "/officeXmlNode", "ppt/presentation.xml")
         rootRels.add("http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml")
         rootRels.add(PPTX_REL_OD + "/extended-properties", "docProps/app.xml")
         entries["_rels/.rels"] = pptxXml(rootRels.document())
@@ -288,7 +286,7 @@ object Pptx {
 
     fun create(specJson: String, out: Path): String {
         val spec = try {
-            Json.parseToJsonElement(specJson).jsonObject
+            Json.parseToJsonXmlNode(specJson).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The deck specification is not valid JSON: ${e.message}")
         }
@@ -343,7 +341,7 @@ private fun pptxEntries(file: Path): Map<String, ByteArray> {
     if (FileSystem.SYSTEM.metadata(file).isDirectory == true) throw IllegalArgumentException("${file.name} is a directory, not a presentation")
     if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > 256L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to read")
     val entries = try {
-        Ooxml.readZip(java.io.File(file.toString()))
+        Ooxml.readZip(file)
     } catch (e: Exception) {
         throw IllegalArgumentException("${file.name} is not a readable .pptx package: ${e.message}")
     }
@@ -357,7 +355,7 @@ private fun pptxOps(opsJson: String): List<JsonObject> {
     val trimmed = opsJson.trim()
     if (trimmed.isEmpty()) return emptyList()
     val parsed = try {
-        if (trimmed.startsWith("[")) Json.parseToJsonElement(trimmed).jsonArray else Json.parseToJsonElement(trimmed).jsonObject
+        if (trimmed.startsWith("[")) Json.parseToJsonXmlNode(trimmed).jsonArray else Json.parseToJsonXmlNode(trimmed).jsonObject
     } catch (e: Exception) {
         throw IllegalArgumentException("The operations are not valid JSON: ${e.message}")
     }
@@ -1197,7 +1195,7 @@ private fun pptxChartWorkbook(chart: PptxChart): ByteArray {
         "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>" +
         "</Types>"
     val rootRels = "<Relationships xmlns=\"" + PPTX_NS_REL + "\">" +
-        "<Relationship Id=\"rId1\" Type=\"" + PPTX_REL_OD + "/officeDocument\" Target=\"xl/workbook.xml\"/>" +
+        "<Relationship Id=\"rId1\" Type=\"" + PPTX_REL_OD + "/officeXmlNode\" Target=\"xl/workbook.xml\"/>" +
         "</Relationships>"
     val workbook = "<workbook xmlns=\"" + PPTX_NS_SS + "\" xmlns:r=\"" + PPTX_NS_R + "\">" +
         "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>"
@@ -1252,7 +1250,7 @@ private fun pptxTableStyles(): String =
 private fun pptxThemeXml(theme: PptxTheme): String {
     val major = if (theme.font.equals("Calibri", ignoreCase = true)) "Calibri Light" else theme.font
     val sb = StringBuilder()
-    sb.append("<a:theme xmlns:a=\"").append(PPTX_NS_A).append("\" name=\"Lucent\"><a:themeElements>")
+    sb.append("<a:theme xmlns:a=\"").append(PPTX_NS_A).append("\" name=\"Lucent\"><a:themeXmlNodes>")
     sb.append("<a:clrScheme name=\"Lucent\">")
     sb.append("<a:dk1><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:dk1>")
     sb.append("<a:lt1><a:srgbClr val=\"").append(theme.background).append("\"/></a:lt1>")
@@ -1307,7 +1305,7 @@ private fun pptxThemeXml(theme: PptxTheme): String {
     sb.append("<a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:shade val=\"63000\"/><a:satMod val=\"120000\"/><a:lumMod val=\"80000\"/></a:schemeClr></a:gs>")
     sb.append("</a:gsLst><a:path path=\"circle\"><a:fillToRect l=\"50000\" t=\"-80000\" r=\"50000\" b=\"180000\"/></a:path></a:gradFill>")
     sb.append("</a:bgFillStyleLst>")
-    sb.append("</a:fmtScheme></a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>")
+    sb.append("</a:fmtScheme></a:themeXmlNodes><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>")
     return sb.toString()
 }
 
@@ -1508,8 +1506,8 @@ private fun pptxCoreXml(deck: PptxDeck): String {
 
 private fun pptxAppXml(deck: PptxDeck, notesCount: Int): String {
     val sb = StringBuilder()
-    sb.append("<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" ")
-    sb.append("xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">")
+    sb.append("<Properties xmlns=\"http://schemas.openxmlformats.org/officeXmlNode/2006/extended-properties\" ")
+    sb.append("xmlns:vt=\"http://schemas.openxmlformats.org/officeXmlNode/2006/docPropsVTypes\">")
     sb.append("<Application>Lucent</Application>")
     sb.append("<PresentationFormat>").append(pptxSizeLabel(deck.cx, deck.cy)).append("</PresentationFormat>")
     sb.append("<Slides>").append(deck.slides.size).append("</Slides>")
@@ -1531,7 +1529,7 @@ private fun pptxDeckFromEntries(entries: Map<String, ByteArray>, file: Path): Pp
     val deck = PptxDeck()
     val presentation = entries["ppt/presentation.xml"]?.let { pptxParse(it, file.name) }
         ?: throw IllegalArgumentException("${file.name} has no ppt/presentation.xml")
-    val root = presentation.documentElement
+    val root = presentation
     val size = pptxChild(root, "sldSz")
     if (size != null) {
         deck.cx = pptxAttr(size, "cx").toLongOrNull() ?: deck.cx
@@ -1539,11 +1537,11 @@ private fun pptxDeckFromEntries(entries: Map<String, ByteArray>, file: Path): Pp
     }
     val core = entries["docProps/core.xml"]?.let { runCatching { Ooxml.parse(it) }.getOrNull() }
     if (core != null) {
-        deck.title = pptxDescend(core.documentElement, "title").firstOrNull()?.let { pptxText(it) } ?: ""
-        deck.author = pptxDescend(core.documentElement, "creator").firstOrNull()?.let { pptxText(it) } ?: ""
+        deck.title = pptxDescend(core, "title").firstOrNull()?.let { pptxText(it) } ?: ""
+        deck.author = pptxDescend(core, "creator").firstOrNull()?.let { pptxText(it) } ?: ""
     }
     val theme = entries["ppt/theme/theme1.xml"]?.let { runCatching { Ooxml.parse(it) }.getOrNull() }
-    if (theme != null) pptxReadTheme(theme.documentElement, deck.theme)
+    if (theme != null) pptxReadTheme(theme, deck.theme)
     val presentationRels = pptxRels(entries, "ppt/_rels/presentation.xml.rels")
     val ids = pptxChildren(pptxChild(root, "sldIdLst"), "sldId")
     ids.forEach { element ->
@@ -1563,7 +1561,7 @@ private fun pptxDeckFromEntries(entries: Map<String, ByteArray>, file: Path): Pp
     return deck
 }
 
-private fun pptxReadTheme(root: Element, theme: PptxTheme) {
+private fun pptxReadTheme(root: XmlNode, theme: PptxTheme) {
     val scheme = pptxDescend(root, "clrScheme").firstOrNull() ?: return
     listOf("accent1", "accent2", "dk2", "lt1", "dk1").forEach { name ->
         val value = pptxColourOf(pptxDescend(scheme, name).firstOrNull()) ?: return@forEach
@@ -1580,7 +1578,7 @@ private fun pptxReadTheme(root: Element, theme: PptxTheme) {
     if (face.isNotEmpty()) theme.font = face
 }
 
-private fun pptxColourOf(node: Element?): String? {
+private fun pptxColourOf(node: XmlNode?): String? {
     if (node == null) return null
     val srgb = pptxDescend(node, "srgbClr").firstOrNull()
     if (srgb != null) {
@@ -1599,7 +1597,7 @@ private fun pptxReadSlide(entries: Map<String, ByteArray>, part: String, bytes: 
     val slide = PptxSlide()
     val rels = pptxRels(entries, pptxRelsName(part))
     val document = runCatching { Ooxml.parse(bytes) }.getOrNull()
-    val root = document?.documentElement ?: return slide
+    val root = document? ?: return slide
     val tree = pptxDescend(root, "spTree").firstOrNull() ?: return slide
     rels.forEach { (id, target) ->
         if (target.contains("slideLayout")) {
@@ -1633,7 +1631,7 @@ private fun pptxReadSlide(entries: Map<String, ByteArray>, part: String, bytes: 
     return slide
 }
 
-private fun pptxReadShape(shape: Element, slide: PptxSlide) {
+private fun pptxReadShape(shape: XmlNode, slide: PptxSlide) {
     val nv = pptxChild(pptxChild(shape, "nvSpPr"), "nvPr")
     val ph = pptxChild(nv, "ph")
     val lines = pptxParagraphTexts(shape).filter { it.isNotBlank() }
@@ -1656,7 +1654,7 @@ private fun pptxReadShape(shape: Element, slide: PptxSlide) {
     }
 }
 
-private fun pptxReadPicture(picture: Element, slide: PptxSlide, rels: Map<String, String>) {
+private fun pptxReadPicture(picture: XmlNode, slide: PptxSlide, rels: Map<String, String>) {
     val nv = pptxDescend(picture, "cNvPr").firstOrNull()
     val name = pptxAttr(nv, "name").ifBlank { "Picture" }
     val caption = pptxAttr(nv, "descr").trim()
@@ -1680,7 +1678,7 @@ private fun pptxReadPicture(picture: Element, slide: PptxSlide, rels: Map<String
     if (slide.image == null) slide.image = image
 }
 
-private fun pptxReadFrame(frame: Element, slide: PptxSlide, rels: Map<String, String>, entries: Map<String, ByteArray>) {
+private fun pptxReadFrame(frame: XmlNode, slide: PptxSlide, rels: Map<String, String>, entries: Map<String, ByteArray>) {
     val table = pptxDescend(frame, "tbl").firstOrNull()
     if (table != null) {
         if (slide.table == null) slide.table = pptxReadTable(table)
@@ -1693,7 +1691,7 @@ private fun pptxReadFrame(frame: Element, slide: PptxSlide, rels: Map<String, St
     if (slide.chart == null) slide.chart = pptxReadChart(bytes)
 }
 
-private fun pptxReadTable(table: Element): PptxTable {
+private fun pptxReadTable(table: XmlNode): PptxTable {
     val model = PptxTable()
     val rows = pptxDescend(table, "tr")
     rows.forEachIndexed { index, row ->
@@ -1708,7 +1706,7 @@ private fun pptxReadTable(table: Element): PptxTable {
 private fun pptxReadChart(bytes: ByteArray): PptxChart {
     val chart = PptxChart()
     val document = runCatching { Ooxml.parse(bytes) }.getOrNull() ?: return chart
-    val root = document.documentElement
+    val root = document
     chart.type = when {
         pptxDescend(root, "barChart").isNotEmpty() -> "bar"
         pptxDescend(root, "lineChart").isNotEmpty() -> "line"
@@ -1733,7 +1731,7 @@ private fun pptxReadChart(bytes: ByteArray): PptxChart {
 
 private fun pptxNotesText(bytes: ByteArray): String {
     val document = runCatching { Ooxml.parse(bytes) }.getOrNull() ?: return ""
-    val root = document.documentElement
+    val root = document
     val tree = pptxDescend(root, "spTree").firstOrNull() ?: return ""
     val lines = mutableListOf<String>()
     pptxDescend(tree, "sp").forEach { shape ->
@@ -1744,22 +1742,22 @@ private fun pptxNotesText(bytes: ByteArray): String {
     return lines.joinToString("\n").trim()
 }
 
-private fun pptxShapeText(shape: Element): String {
+private fun pptxShapeText(shape: XmlNode): String {
     val body = pptxChild(shape, "txBody") ?: return ""
     return pptxText(body).trim()
 }
 
-private fun pptxParagraphTexts(node: Element): List<String> {
+private fun pptxParagraphTexts(node: XmlNode): List<String> {
     val body = pptxChild(node, "txBody") ?: return emptyList()
     return pptxDirectChildren(body).filter { pptxLocal(it.nodeName) == "p" }.map { paragraph ->
         pptxFlatten(paragraph).trim()
     }
 }
 
-private fun pptxFlatten(paragraph: Element): String {
+private fun pptxFlatten(paragraph: XmlNode): String {
     val sb = StringBuilder()
     pptxDirectChildren(paragraph).forEach { child ->
-        when (pptxLocal(child.nodeName)) {
+        when (pptxLocal(child.name)) {
             "r" -> sb.append(pptxText(child))
             "br" -> sb.append(' ')
             "fld" -> sb.append(pptxText(child))
@@ -1770,7 +1768,7 @@ private fun pptxFlatten(paragraph: Element): String {
     return sb.toString()
 }
 
-private fun pptxNumericPoints(node: Element): List<Double> {
+private fun pptxNumericPoints(node: XmlNode): List<Double> {
     val cache = pptxDescend(node, "numCache").firstOrNull() ?: pptxDescend(node, "numLit").firstOrNull() ?: node
     val points = pptxDescend(cache, "pt")
     val values = mutableListOf<Double>()
@@ -1787,7 +1785,7 @@ private fun pptxNumericPoints(node: Element): List<Double> {
     return values
 }
 
-private fun pptxPointTexts(node: Element): List<String> {
+private fun pptxPointTexts(node: XmlNode): List<String> {
     val cache = pptxDescend(node, "strCache").firstOrNull()
         ?: pptxDescend(node, "numCache").firstOrNull()
         ?: pptxDescend(node, "strLit").firstOrNull()
@@ -1995,7 +1993,7 @@ private fun pptxRels(entries: Map<String, ByteArray>, part: String): Map<String,
     val bytes = entries[part] ?: return emptyMap()
     val document = runCatching { Ooxml.parse(bytes) }.getOrNull() ?: return emptyMap()
     val out = LinkedHashMap<String, String>()
-    pptxDescend(document.documentElement, "Relationship").forEach { element ->
+    pptxDescend(document, "Relationship").forEach { element ->
         val id = pptxAttr(element, "Id")
         val target = pptxAttr(element, "Target")
         if (id.isNotEmpty() && target.isNotEmpty()) out[id] = target
@@ -2025,7 +2023,7 @@ private fun pptxResolve(base: String, target: String): String {
     return segments.joinToString("/")
 }
 
-private fun pptxParse(bytes: ByteArray, name: String): org.w3c.dom.Document = try {
+private fun pptxParse(bytes: ByteArray, name: String): XmlNode = try {
     Ooxml.parse(bytes)
 } catch (e: Exception) {
     throw IllegalArgumentException("$name holds damaged XML: ${e.message}")
@@ -2171,71 +2169,71 @@ private fun pptxLocal(tag: String): String {
     return if (colon < 0) tag else tag.substring(colon + 1)
 }
 
-private fun pptxChild(node: Node?, tag: String): Element? {
+private fun pptxChild(node: XmlNode?, tag: String): XmlNode? {
     if (node == null) return null
     var child = node.firstChild
     while (child != null) {
-        if (child is Element && pptxLocal(child.nodeName) == tag) return child
+        if (child is XmlNode && pptxLocal(child.name) == tag) return child
         child = child.nextSibling
     }
     return null
 }
 
-private fun pptxChildren(node: Node?, tag: String): List<Element> {
+private fun pptxChildren(node: XmlNode?, tag: String): List<XmlNode> {
     if (node == null) return emptyList()
-    val out = mutableListOf<Element>()
+    val out = mutableListOf<XmlNode>()
     var child = node.firstChild
     while (child != null) {
-        if (child is Element && pptxLocal(child.nodeName) == tag) out.add(child)
+        if (child is XmlNode && pptxLocal(child.name) == tag) out.add(child)
         child = child.nextSibling
     }
     return out
 }
 
-private fun pptxDirectChildren(node: Node?): List<Element> {
+private fun pptxDirectChildren(node: XmlNode?): List<XmlNode> {
     if (node == null) return emptyList()
-    val out = mutableListOf<Element>()
+    val out = mutableListOf<XmlNode>()
     var child = node.firstChild
     while (child != null) {
-        if (child is Element) out.add(child)
+        if (child is XmlNode) out.add(child)
         child = child.nextSibling
     }
     return out
 }
 
-private fun pptxDescend(node: Node?, tag: String): List<Element> {
+private fun pptxDescend(node: XmlNode?, tag: String): List<XmlNode> {
     if (node == null) return emptyList()
-    val out = mutableListOf<Element>()
+    val out = mutableListOf<XmlNode>()
     pptxCollect(node, tag, out)
     return out
 }
 
-private fun pptxCollect(node: Node, tag: String, out: MutableList<Element>) {
+private fun pptxCollect(node: XmlNode, tag: String, out: MutableList<XmlNode>) {
     var child = node.firstChild
     while (child != null) {
-        if (child is Element) {
-            if (pptxLocal(child.nodeName) == tag) out.add(child)
+        if (child is XmlNode) {
+            if (pptxLocal(child.name) == tag) out.add(child)
             pptxCollect(child, tag, out)
         }
         child = child.nextSibling
     }
 }
 
-private fun pptxAttr(node: Element?, name: String): String {
+private fun pptxAttr(node: XmlNode?, name: String): String {
     if (node == null) return ""
     val attribute = node.attributes?.getNamedItem(name) ?: return ""
-    return attribute.nodeValue ?: ""
+    return attribute.value ?: ""
 }
 
-private fun pptxNsAttr(node: Element?, name: String): String {
+private fun pptxNsAttr(node: XmlNode?, name: String): String {
     if (node == null) return ""
     val attributes = node.attributes ?: return ""
     for (i in 0 until attributes.length) {
         val attribute = attributes.item(i) ?: continue
-        val local = pptxLocal(attribute.nodeName)
-        if (local == name) return attribute.nodeValue ?: ""
+        val local = pptxLocal(attribute.key)
+        if (local == name) return attribute.value ?: ""
     }
     return ""
 }
 
-private fun pptxText(node: Node?): String = if (node == null) "" else Ooxml.textOf(node)
+private fun pptxText(node: XmlNode?): String = if (node == null) "" else Ooxml.textOf(node)
