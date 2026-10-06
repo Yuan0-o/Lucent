@@ -276,7 +276,7 @@ object GitHubTools : HarnessGroupTools {
         if (array == null || array.size == 0) return "none"
         val out = mutableListOf<String>()
         for (i in 0 until array.size) {
-            val name = (array[i] as? JsonObject)?["name"]?.jsonPrimitive?.content ?: "".orEmpty()
+            val name = (array[i] as? JsonObject)?.get("name")?.jsonPrimitive?.content ?: "".orEmpty()
             if (name.isNotBlank()) out.add(name)
         }
         return if (out.isEmpty()) "none" else out.joinToString(", ")
@@ -427,8 +427,8 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("POST", "$root/issues", payload)
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
-                val created = (issue?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()
-                val createdNumber = (issue?["number"]?.jsonPrimitive?.intOrNull ?: 0) ?: 0
+                val created = (issue?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
+                val createdNumber = (issue?.get("number")?.jsonPrimitive?.intOrNull ?: 0) ?: 0
                 if (createdNumber > 0) {
                     ToolExecResult("Created #$createdNumber $created".trim())
                 } else {
@@ -521,8 +521,8 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("POST", "$root/pulls", payload)
                 problem(reply)?.let { return it }
                 val pull = HttpJson.objectOf(reply.body)
-                val created = (pull?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()
-                val createdNumber = (pull?["number"]?.jsonPrimitive?.intOrNull ?: 0) ?: 0
+                val created = (pull?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
+                val createdNumber = (pull?.get("number")?.jsonPrimitive?.intOrNull ?: 0) ?: 0
                 if (createdNumber > 0) {
                     ToolExecResult("Created #$createdNumber $created".trim())
                 } else {
@@ -578,8 +578,8 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("PUT", "$root/pulls/$number/merge", JSONObject().put("merge_method", "merge"))
                 problem(reply)?.let { return it }
                 val outcome = HttpJson.objectOf(reply.body)
-                val message = (outcome?["message"]?.jsonPrimitive?.content ?: "").orEmpty()
-                if ((outcome?["merged"]?.jsonPrimitive?.booleanOrNull ?: false) == true) {
+                val message = (outcome?.get("message")?.jsonPrimitive?.content ?: "").orEmpty()
+                if ((outcome?.get("merged")?.jsonPrimitive?.booleanOrNull ?: false) == true) {
                     ToolExecResult("Merged #$number. $message".trim())
                 } else {
                     ToolExecResult("GitHub did not merge #$number: $message", success = false)
@@ -717,7 +717,7 @@ object GitHubTools : HarnessGroupTools {
             "runs" -> {
                 val reply = call("GET", "$root/actions/runs?per_page=15")
                 problem(reply)?.let { return it }
-                val runs = HttpJson.objectOf(reply.body)?["workflow_runs"]?.jsonArray
+                val runs = HttpJson.objectOf(reply.body)?.get("workflow_runs")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(runs, 15) { run ->
                         "${(run["id"]?.jsonPrimitive?.longOrNull ?: 0L)} | ${(run["name"]?.jsonPrimitive?.content ?: "")} | " +
@@ -745,7 +745,7 @@ object GitHubTools : HarnessGroupTools {
                 if (runId <= 0) return ToolExecResult("jobs needs run_id.", success = false)
                 val reply = call("GET", "$root/actions/runs/$runId/jobs?per_page=30")
                 problem(reply)?.let { return it }
-                val jobs = HttpJson.objectOf(reply.body)?["jobs"]?.jsonArray
+                val jobs = HttpJson.objectOf(reply.body)?.get("jobs")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(jobs, 30) { job ->
                         "${(job["id"]?.jsonPrimitive?.longOrNull ?: 0L)} | ${(job["name"]?.jsonPrimitive?.content ?: "")} | " +
@@ -812,11 +812,11 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val release = HttpJson.objectOf(reply.body)
                 val sb = StringBuilder()
-                sb.append(release?["name"]?.jsonPrimitive?.content ?: tag.orEmpty()).append(" (").append(tag).append(")\n")
-                sb.append("draft: ").append(if ((release?["draft"]?.jsonPrimitive?.booleanOrNull ?: false) == true) "yes" else "no")
-                sb.append(" | published: ").append((release?["published_at"]?.jsonPrimitive?.content ?: "").orEmpty()).append('\n')
-                sb.append((release?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()).append("\n\n")
-                sb.append((release?["body"]?.jsonPrimitive?.content ?: "").orEmpty().ifBlank { "(no notes)" })
+                sb.append(release?.get("name")?.jsonPrimitive?.content ?: tag.orEmpty()).append(" (").append(tag).append(")\n")
+                sb.append("draft: ").append(if ((release?.get("draft")?.jsonPrimitive?.booleanOrNull ?: false) == true) "yes" else "no")
+                sb.append(" | published: ").append((release?.get("published_at")?.jsonPrimitive?.content ?: "").orEmpty()).append('\n')
+                sb.append((release?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()).append("\n\n")
+                sb.append((release?.get("body")?.jsonPrimitive?.content ?: "").orEmpty().ifBlank { "(no notes)" })
                 ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
             }
             else -> {
@@ -830,8 +830,8 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val release = HttpJson.objectOf(reply.body)
                 ToolExecResult(
-                    "Created release ${release?["tag_name"]?.jsonPrimitive?.content ?: tag.orEmpty()} " +
-                        (release?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()
+                    "Created release ${release?.get("tag_name")?.jsonPrimitive?.content ?: tag.orEmpty()} " +
+                        (release?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
                 )
             }
         }
@@ -849,9 +849,9 @@ object GitHubTools : HarnessGroupTools {
         sb.append("profile: ").append((account["html_url"]?.jsonPrimitive?.content ?: "")).append('\n')
         val limits = call("GET", "/rate_limit")
         if (limits.ok) {
-            val resources = HttpJson.objectOf(limits.body)?["resources"]?.jsonObject
-            val core = resources?["core"]?.jsonObject
-            val search = resources?["search"]?.jsonObject
+            val resources = HttpJson.objectOf(limits.body)?.get("resources")?.jsonObject
+            val core = resources?.get("core")?.jsonObject
+            val search = resources?.get("search")?.jsonObject
             if (core != null) {
                 sb.append("core requests left: ").append((core["remaining"]?.jsonPrimitive?.intOrNull ?: 0))
                 sb.append(" of ").append((core["limit"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')

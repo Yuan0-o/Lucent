@@ -13,7 +13,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import kotlin.time.Duration.Companion.seconds
+
 
 @Serializable
 data class ReleaseAsset(
@@ -48,8 +48,8 @@ object UpdateChecker {
 
     internal val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(20.seconds)
-            .readTimeout(30.seconds)
+            .connectTimeout(java.time.Duration.ofSeconds(20))
+            .readTimeout(java.time.Duration.ofSeconds(30))
             .build()
     }
 

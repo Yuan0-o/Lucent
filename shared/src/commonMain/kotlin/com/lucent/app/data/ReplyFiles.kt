@@ -4,7 +4,7 @@ import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import kotlin.time.Duration.Companion.seconds
+
 
 object ReplyFiles {
 
@@ -78,8 +78,8 @@ object ReplyFiles {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(20.seconds)
-            .readTimeout(60.seconds)
+            .connectTimeout(java.time.Duration.ofSeconds(20))
+            .readTimeout(java.time.Duration.ofSeconds(60))
             .build()
     }
 

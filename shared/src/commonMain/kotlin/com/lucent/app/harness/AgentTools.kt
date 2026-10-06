@@ -69,6 +69,7 @@ object SubAgents {
         finished.drop(6).forEach { agents.remove(it.id) }
     }
 
+    @OptIn(kotlin.concurrent.atomics.ExperimentalAtomicApi::class)
     fun start(parent: HarnessCtx, task: String, toolNames: Set<String>, model: String): SubAgent {
         val id = "sub-${counter.fetchAndIncrement()}"
         val agent = SubAgent(id, task, toolNames, System.currentTimeMillis(), parent.subAgentId)

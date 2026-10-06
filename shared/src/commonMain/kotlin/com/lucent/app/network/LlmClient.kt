@@ -7,16 +7,16 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.serialization.json.*
-import kotlin.time.Duration.Companion.seconds
+
 
 data class ToolAcc(var id: String = "", var name: String = "", val args: StringBuilder = StringBuilder(), var thoughtSignature: String? = null)
 
 object LlmClient {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30.seconds)
-        .readTimeout(120.seconds)
-        .callTimeout(180.seconds)
+        .connectTimeout(java.time.Duration.ofSeconds(30))
+        .readTimeout(java.time.Duration.ofSeconds(120))
+        .callTimeout(java.time.Duration.ofSeconds(180))
         .retryOnConnectionFailure(true)
         .build()
 

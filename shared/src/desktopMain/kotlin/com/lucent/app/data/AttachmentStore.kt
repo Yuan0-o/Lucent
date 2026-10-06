@@ -21,7 +21,7 @@ actual object AttachmentStore {
 
     actual fun baseDir(context: PlatformContext): PlatformFile {
         val ctx = context as PlatformContext
-        return PlatformFile(File(ctx.applicationContext.filesDir, DIR_NAME).apply { if (!exists()) mkdirs() }.absolutePath)
+        return PlatformFile(File(ctx.applicationContext.filesDir.toString(), DIR_NAME).apply { if (!exists()) mkdirs() }.absolutePath)
     }
 
     actual fun fileFor(context: PlatformContext, id: String): PlatformFile =
@@ -58,7 +58,7 @@ actual object AttachmentStore {
     actual fun openOutputStream(context: PlatformContext, id: String): PlatformOutputStream? = try {
         val key = DataKeys.attachmentKey(context)
         val dest = File(fileFor(context, id).absolutePath)
-        PlatformOutputStream(FileCrypto.encryptingSink(okio.sink(dest), DataKeys.attachmentKey(context)).buffer().outputStream())
+        PlatformOutputStream(FileCrypto.encryptingSink(dest.sink(), DataKeys.attachmentKey(context)).buffer().outputStream())
     } catch (t: Throwable) {
         null
     }
@@ -67,8 +67,8 @@ actual object AttachmentStore {
         val file = File(fileFor(context, id).absolutePath)
         when {
             !file.exists() -> null
-            FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(file.absolutePath)) ->
-                FileCrypto.decryptingSource(okio.source(file), DataKeys.attachmentKey(context)).buffer().inputStream()
+            FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, file.absolutePath.toPath()) ->
+                FileCrypto.decryptingSource(file.source(), DataKeys.attachmentKey(context)).buffer().inputStream()
             else -> file.inputStream()
         }
     } catch (t: Throwable) {
@@ -102,24 +102,24 @@ actual object AttachmentStore {
     actual fun sizeOf(context: PlatformContext, id: String): Long {
         val file = File(fileFor(context, id).absolutePath)
         if (!file.exists()) return 0L
-        return if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(file.absolutePath))) FileCrypto.plaintextSizeOf(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(file.absolutePath)) else file.length()
+        return if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, file.absolutePath.toPath())) FileCrypto.plaintextSizeOf(okio.FileSystem.SYSTEM, file.absolutePath.toPath()) else file.length()
     }
 
     actual fun totalBytes(context: PlatformContext): Long =
         baseDir(context).listFiles()?.sumOf { f ->
             val jf = File(f.absolutePath)
-            if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(jf.absolutePath))) FileCrypto.plaintextSizeOf(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(jf.absolutePath)) else jf.length()
+            if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, jf.absolutePath.toPath())) FileCrypto.plaintextSizeOf(okio.FileSystem.SYSTEM, jf.absolutePath.toPath()) else jf.length()
         } ?: 0L
 
     actual fun encryptExistingFile(context: PlatformContext, id: String): Boolean {
         val file = File(fileFor(context, id).absolutePath)
         if (!file.exists()) return false
-        if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(file.absolutePath))) return true
+        if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, file.absolutePath.toPath())) return true
         return try {
             val key = DataKeys.attachmentKey(context)
             val temp = File(file.parentFile, "${file.name}.enc.tmp")
             file.inputStream().use { input ->
-                FileCrypto.encryptingSink(okio.sink(temp), DataKeys.attachmentKey(context)).buffer().outputStream().use { output ->
+                FileCrypto.encryptingSink(temp.sink(), DataKeys.attachmentKey(context)).buffer().outputStream().use { output ->
                     copyStream(input, output)
                 }
             }

@@ -8,7 +8,7 @@ import okhttp3.Request
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlin.time.Duration.Companion.seconds
+
 
 @Serializable
 private data class DuckResponse(
@@ -34,8 +34,8 @@ private val webJson = Json { ignoreUnknownKeys = true }
 object WebSearchClient {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(12.seconds)
-        .readTimeout(16.seconds)
+        .connectTimeout(java.time.Duration.ofSeconds(12))
+        .readTimeout(java.time.Duration.ofSeconds(16))
         .retryOnConnectionFailure(true)
         .build()
 

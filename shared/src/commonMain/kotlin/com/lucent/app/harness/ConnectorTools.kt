@@ -13,7 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.Buffer
-import kotlin.time.Duration.Companion.seconds
+
 
 data class HttpReply(
     val code: Int,
@@ -46,9 +46,9 @@ object HttpJson {
     private val jsonMedia: MediaType = JSON_TYPE.toMediaType()
 
     private val plain = OkHttpClient.Builder()
-        .connectTimeout(60.seconds)
-        .readTimeout(60.seconds)
-        .writeTimeout(60.seconds)
+        .connectTimeout(java.time.Duration.ofSeconds(60))
+        .readTimeout(java.time.Duration.ofSeconds(60))
+        .writeTimeout(java.time.Duration.ofSeconds(60))
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(true)
@@ -121,7 +121,7 @@ object HttpJson {
         val request = builder.method(verb, payload).build()
         val seconds = timeoutSeconds.coerceIn(5, 300).toLong()
         val client = (if (followRedirects) following else plain).newBuilder()
-            .callTimeout(seconds.seconds)
+            .callTimeout(java.time.Duration.ofSeconds(seconds))
             .build()
         client.newCall(request).execute().use { response ->
             val store = Buffer()
@@ -274,7 +274,7 @@ object HttpJson {
         val size = minOf(array.size, limit.coerceAtLeast(1))
         val out = mutableListOf<String>()
         for (i in 0 until size) {
-            val item = array.optJSONObject(i) ?: continue
+            val item = array?.getOrNull(i)?.jsonObject ?: continue
             val line = render(item).trim()
             if (line.isNotEmpty()) out.add("- $line")
         }
@@ -625,7 +625,7 @@ object ConnectorTools : HarnessGroupTools {
                 if (query.isNotEmpty()) payload.put("query", query)
                 val reply = send("POST", "$base/search", headers, payload.toString())
                 problem(reply, "Notion")?.let { return it }
-                val results = HttpJson.objectOf(reply.body)?.optJSONArray("results")
+                val results = HttpJson.objectOf(reply.body)?.get("results")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(results, 20) { item ->
                         val kind = (item["object"]?.jsonPrimitive?.content ?: "page")
@@ -662,7 +662,7 @@ object ConnectorTools : HarnessGroupTools {
                         success = false
                     )
                 }
-                val properties = args.optJSONObject("properties") ?: JsonObject()
+                val properties = args?.get("properties")?.jsonObject ?: JsonObject()
                 val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isNotEmpty() && !properties.containsKey("title")) {
                     properties.put(
@@ -674,20 +674,20 @@ object ConnectorTools : HarnessGroupTools {
                     )
                 }
                 val payload = JsonObject().put("parent", parent).put("properties", properties)
-                val blocks = args.optJSONArray("blocks")
+                val blocks = args?.get("blocks")?.jsonArray
                 if (blocks != null && blocks.size > 0) payload.put("children", blocks)
                 val reply = send("POST", "$base/pages", headers, payload.toString())
                 problem(reply, "Notion")?.let { return it }
                 val page = HttpJson.objectOf(reply.body)
                 ToolExecResult(
-                    "Created page ${page?.optString("id", "").orEmpty()} " +
-                        "${page?.optString("url", "").orEmpty()}".trim()
+                    "Created page ${page?.get("id")?.jsonPrimitive?.content.orEmpty()} " +
+                        "${page?.get("url")?.jsonPrimitive?.content.orEmpty()}".trim()
                 )
             }
             "page_update" -> {
                 val id = notionId(args)
                 if (id.isEmpty()) return ToolExecResult("page_update needs the page id in id.", success = false)
-                val properties = args.optJSONObject("properties")
+                val properties = args?.get("properties")?.jsonObject
                     ?: return ToolExecResult("page_update needs properties to change.", success = false)
                 val reply = send(
                     "PATCH",
@@ -697,14 +697,14 @@ object ConnectorTools : HarnessGroupTools {
                 )
                 problem(reply, "Notion")?.let { return it }
                 val page = HttpJson.objectOf(reply.body)
-                ToolExecResult("Updated page ${page?.optString("url", "").orEmpty()}".trim())
+                ToolExecResult("Updated page ${page?.get("url")?.jsonPrimitive?.content.orEmpty()}".trim())
             }
             "block_children" -> {
                 val id = notionId(args)
                 if (id.isEmpty()) return ToolExecResult("block_children needs the block or page id in id.", success = false)
                 val reply = send("GET", "$base/blocks/${HttpJson.enc(id)}/children?page_size=50", headers)
                 problem(reply, "Notion")?.let { return it }
-                val results = HttpJson.objectOf(reply.body)?.optJSONArray("results")
+                val results = HttpJson.objectOf(reply.body)?.get("results")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(results, 50) { block ->
                         val kind = (block["type"]?.jsonPrimitive?.content ?: "block")
@@ -719,7 +719,7 @@ object ConnectorTools : HarnessGroupTools {
                 val payload = JsonObject().put("page_size", 20)
                 val reply = send("POST", "$base/databases/${HttpJson.enc(id)}/query", headers, payload.toString())
                 problem(reply, "Notion")?.let { return it }
-                val results = HttpJson.objectOf(reply.body)?.optJSONArray("results")
+                val results = HttpJson.objectOf(reply.body)?.get("results")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(results, 20) { row ->
                         "${(row["id"]?.jsonPrimitive?.content ?: "")} | ${HttpJson.oneLine(notionTitle(row).ifBlank { "untitled" }, 90)}" +
@@ -734,13 +734,13 @@ object ConnectorTools : HarnessGroupTools {
         (args["id"]?.jsonPrimitive?.content ?: "").trim().ifBlank { (args["page_id"]?.jsonPrimitive?.content ?: "").trim() }
 
     private fun notionTitle(item: JsonObject): String {
-        val direct = item.optJSONArray("title")
+        val direct = item?.get("title")?.jsonArray
         if (direct != null) return notionRichText(direct)
-        val properties = item.optJSONObject("properties") ?: return ""
+        val properties = item?.get("properties")?.jsonObject ?: return ""
         val keys = properties.keys()
         while (keys.hasNext()) {
-            val node = properties.optJSONObject(keys.next()) ?: continue
-            if ((node["type"]?.jsonPrimitive?.content ?: "") == "title") return notionRichText(node.optJSONArray("title"))
+            val node = properties?.getOrNull(keys.next()?.jsonObject) ?: continue
+            if ((node["type"]?.jsonPrimitive?.content ?: "") == "title") return notionRichText(node?.get("title")?.jsonArray)
         }
         return ""
     }
@@ -749,28 +749,28 @@ object ConnectorTools : HarnessGroupTools {
         if (array == null) return ""
         val sb = StringBuilder()
         for (i in 0 until array.size) {
-            val node = array.optJSONObject(i) ?: continue
+            val node = array?.getOrNull(i)?.jsonObject ?: continue
             val plain = (node["plain_text"]?.jsonPrimitive?.content ?: "")
-            sb.append(plain.ifBlank { node.optJSONObject("text")?.optString("content", "").orEmpty() })
+            sb.append(plain.ifBlank { node?.get("text")?.jsonObject?.get("content")?.jsonPrimitive?.content.orEmpty() })
         }
         return sb.toString().trim()
     }
 
     private fun notionBlockText(block: JsonObject): String {
         val type = (block["type"]?.jsonPrimitive?.content ?: "")
-        val node = block.optJSONObject(type) ?: return ""
-        val rich = notionRichText(node.optJSONArray("rich_text"))
+        val node = block?.getOrNull(type)?.jsonObject ?: return ""
+        val rich = notionRichText(node?.get("rich_text")?.jsonArray)
         if (rich.isNotBlank()) return rich
         return (node["title"]?.jsonPrimitive?.content ?: "")
     }
 
     private fun notionProperties(page: JsonObject): String {
-        val properties = page.optJSONObject("properties") ?: return ""
+        val properties = page?.get("properties")?.jsonObject ?: return ""
         val sb = StringBuilder()
         val keys = properties.keys()
         while (keys.hasNext()) {
             val name = keys.next()
-            val node = properties.optJSONObject(name) ?: continue
+            val node = properties?.getOrNull(name)?.jsonObject ?: continue
             val value = notionValue(node)
             if (value.isBlank()) continue
             sb.append("- ").append(name).append(": ").append(HttpJson.oneLine(value, 120)).append('\n')
@@ -779,29 +779,29 @@ object ConnectorTools : HarnessGroupTools {
     }
 
     private fun notionValue(node: JsonObject): String = when ((node["type"]?.jsonPrimitive?.content ?: "")) {
-        "title" -> notionRichText(node.optJSONArray("title"))
-        "rich_text" -> notionRichText(node.optJSONArray("rich_text"))
+        "title" -> notionRichText(node?.get("title")?.jsonArray)
+        "rich_text" -> notionRichText(node?.get("rich_text")?.jsonArray)
         "number" -> if (node.isNull("number")) "" else HttpJson.text(node["number"])
-        "select" -> node.optJSONObject("select")?.optString("name", "").orEmpty()
-        "status" -> node.optJSONObject("status")?.optString("name", "").orEmpty()
+        "select" -> node?.get("select")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()
+        "status" -> node?.get("status")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()
         "multi_select" -> {
-            val array = node.optJSONArray("multi_select")
+            val array = node?.get("multi_select")?.jsonArray
             val out = mutableListOf<String>()
             if (array != null) {
                 for (i in 0 until array.size) {
-                    val name = array.optJSONObject(i)?.optString("name", "").orEmpty()
+                    val name = array?.getOrNull(i)?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()
                     if (name.isNotBlank()) out.add(name)
                 }
             }
             out.joinToString(", ")
         }
-        "date" -> node.optJSONObject("date")?.optString("start", "").orEmpty()
+        "date" -> node?.get("date")?.jsonObject?.get("start")?.jsonPrimitive?.content.orEmpty()
         "checkbox" -> if ((node["checkbox"]?.jsonPrimitive?.booleanOrNull ?: false)) "yes" else "no"
         "url" -> (node["url"]?.jsonPrimitive?.content ?: "")
         "email" -> (node["email"]?.jsonPrimitive?.content ?: "")
         "phone_number" -> (node["phone_number"]?.jsonPrimitive?.content ?: "")
         "formula" -> {
-            val formula = node.optJSONObject("formula")
+            val formula = node?.get("formula")?.jsonObject
             if (formula == null) {
                 ""
             } else {
@@ -868,16 +868,16 @@ object ConnectorTools : HarnessGroupTools {
         }
         val text = when (action) {
             "post_message" -> "Posted to ${(payload["channel"]?.jsonPrimitive?.content ?: channel)} at ${(payload["ts"]?.jsonPrimitive?.content ?: "")}."
-            "history" -> HttpJson.rows(payload.optJSONArray("messages"), 20) { message ->
+            "history" -> HttpJson.rows(payload?.get("messages")?.jsonArray, 20) { message ->
                 "${(message["ts"]?.jsonPrimitive?.content ?: "")} | ${(message["user"]?.jsonPrimitive?.content ?: "unknown")} | " +
                     HttpJson.oneLine((message["text"]?.jsonPrimitive?.content ?: ""), 160)
             }
-            "list_channels" -> HttpJson.rows(payload.optJSONArray("channels"), 50) { item ->
+            "list_channels" -> HttpJson.rows(payload?.get("channels")?.jsonArray, 50) { item ->
                 "${(item["id"]?.jsonPrimitive?.content ?: "")} | #${(item["name"]?.jsonPrimitive?.content ?: "")} | " +
                     "${if ((item["is_private"]?.jsonPrimitive?.booleanOrNull ?: false)) "private" else "public"}"
             }
             else -> {
-                val matches = payload.optJSONObject("messages")?.optJSONArray("matches")
+                val matches = payload?.get("messages")?.jsonObject?.get("matches")?.jsonArray
                 HttpJson.rows(matches, 20) { match ->
                     "${(match["channel"]?.jsonPrimitive?.content ?: "")} | ${(match["username"]?.jsonPrimitive?.content ?: "")} | " +
                         HttpJson.oneLine((match["text"]?.jsonPrimitive?.content ?: ""), 160)
@@ -914,7 +914,7 @@ object ConnectorTools : HarnessGroupTools {
                 }
                 val reply = send("GET", url, headers)
                 problem(reply, "Google Drive")?.let { return it }
-                val files = HttpJson.objectOf(reply.body)?.optJSONArray("files")
+                val files = HttpJson.objectOf(reply.body)?.get("files")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(files, 20) { file ->
                         "${(file["id"]?.jsonPrimitive?.content ?: "")} | ${(file["name"]?.jsonPrimitive?.content ?: "")} | " +
@@ -937,8 +937,8 @@ object ConnectorTools : HarnessGroupTools {
                 val meta = send("GET", "$base/files/${HttpJson.enc(fileId)}?fields=name,mimeType", headers)
                 problem(meta, "Google Drive")?.let { return it }
                 val metaBody = HttpJson.objectOf(meta.body)
-                val kind = metaBody?.optString("mimeType", "").orEmpty()
-                val label = metaBody?.optString("name", fileId).orEmpty()
+                val kind = metaBody?.get("mimeType")?.jsonPrimitive?.content.orEmpty()
+                val label = metaBody?.get("name")?.jsonPrimitive?.content ?: fileId.orEmpty()
                 val url = when (kind) {
                     "application/vnd.google-apps.document" -> "$base/files/${HttpJson.enc(fileId)}/export?mimeType=text/plain"
                     "application/vnd.google-apps.spreadsheet" -> "$base/files/${HttpJson.enc(fileId)}/export?mimeType=text/csv"
@@ -965,9 +965,9 @@ object ConnectorTools : HarnessGroupTools {
                 problem(reply, "Google Drive")?.let { return it }
                 val file = HttpJson.objectOf(reply.body)
                 ToolExecResult(
-                    "Uploaded ${file?.optString("name", name).orEmpty()} " +
+                    "Uploaded ${file?.get("name")?.jsonPrimitive?.content ?: name.orEmpty()} " +
                         "(${content.toByteArray(Charsets.UTF_8).size} bytes) " +
-                        file?.optString("webViewLink", "").orEmpty()
+                        file?.get("webViewLink")?.jsonPrimitive?.content.orEmpty()
                 )
             }
             else -> {
@@ -978,8 +978,8 @@ object ConnectorTools : HarnessGroupTools {
                 val reply = send("POST", "$base/files?fields=id,name,webViewLink", headers, payload.toString())
                 problem(reply, "Google Drive")?.let { return it }
                 val folder = HttpJson.objectOf(reply.body)
-                val link = folder?.optString("webViewLink", "").orEmpty()
-                ToolExecResult("Created folder ${folder?.optString("name", name).orEmpty()} $link".trim())
+                val link = folder?.get("webViewLink")?.jsonPrimitive?.content.orEmpty()
+                ToolExecResult("Created folder ${folder?.get("name")?.jsonPrimitive?.content ?: name.orEmpty()} $link".trim())
             }
         }
     }
@@ -1021,7 +1021,7 @@ object ConnectorTools : HarnessGroupTools {
                 }
                 val reply = send("GET", "$url?\$select=id,name,folder,file,size,lastModifiedDateTime&top=50", headers)
                 problem(reply, "OneDrive")?.let { return it }
-                val items = HttpJson.objectOf(reply.body)?.optJSONArray("value")
+                val items = HttpJson.objectOf(reply.body)?.get("value")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(items, 50) { item ->
                         val kind = if (item.containsKey("folder")) "folder" else "file"
@@ -1063,7 +1063,7 @@ object ConnectorTools : HarnessGroupTools {
                 problem(reply, "OneDrive")?.let { return it }
                 val item = HttpJson.objectOf(reply.body)
                 ToolExecResult(
-                    "Uploaded ${item?.optString("name", path).orEmpty()} " +
+                    "Uploaded ${item?.get("name")?.jsonPrimitive?.content ?: path.orEmpty()} " +
                         "(${content.toByteArray(Charsets.UTF_8).size} bytes)"
                 )
             }
@@ -1123,8 +1123,8 @@ object ConnectorTools : HarnessGroupTools {
                 )
                 problem(reply, "GitLab")?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
-                val created = issue?.optString("web_url", "").orEmpty()
-                val createdIid = issue?.optInt("iid", 0) ?: 0
+                val created = issue?.get("web_url")?.jsonPrimitive?.content.orEmpty()
+                val createdIid = issue?.get("iid")?.jsonPrimitive?.intOrNull ?: 0 ?: 0
                 if (createdIid > 0) {
                     ToolExecResult("Created issue !$createdIid $created".trim())
                 } else {
@@ -1239,15 +1239,15 @@ object ConnectorTools : HarnessGroupTools {
                 problem(reply, "Jira")?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
                     ?: return ToolExecResult("Jira returned something that is not an issue.", success = false)
-                val fields = issue.optJSONObject("fields")
+                val fields = issue?.get("fields")?.jsonObject
                 val sb = StringBuilder()
-                sb.append((issue["key"]?.jsonPrimitive?.content ?: key)).append(" — ").append(fields?.optString("summary", "").orEmpty())
+                sb.append((issue["key"]?.jsonPrimitive?.content ?: key)).append(" — ").append(fields?.get("summary")?.jsonPrimitive?.content.orEmpty())
                 sb.append('\n')
-                sb.append("status: ").append(fields?.optJSONObject("status")?.optString("name", "").orEmpty())
-                sb.append(" | type: ").append(fields?.optJSONObject("issuetype")?.optString("name", "").orEmpty())
-                val assignee = fields?.optJSONObject("assignee")?.optString("displayName", "").orEmpty()
+                sb.append("status: ").append(fields?.get("status")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty())
+                sb.append(" | type: ").append(fields?.get("issuetype")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty())
+                val assignee = fields?.get("assignee")?.jsonObject?.get("displayName")?.jsonPrimitive?.content.orEmpty()
                 sb.append(" | assignee: ").append(assignee.ifBlank { "unassigned" })
-                sb.append(" | updated: ").append(fields?.optString("updated", "").orEmpty())
+                sb.append(" | updated: ").append(fields?.get("updated")?.jsonPrimitive?.content.orEmpty())
                 sb.append('\n').append(adfText(fields?.opt("description")))
                 ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
             }
@@ -1266,7 +1266,7 @@ object ConnectorTools : HarnessGroupTools {
                 val reply = send("POST", "$base/issue", headers, JsonObject().put("fields", fields).toString())
                 problem(reply, "Jira")?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
-                ToolExecResult("Created ${issue?.optString("key", "").orEmpty()} ${issue?.optString("self", "").orEmpty()}".trim())
+                ToolExecResult("Created ${issue?.get("key")?.jsonPrimitive?.content.orEmpty()} ${issue?.get("self")?.jsonPrimitive?.content.orEmpty()}".trim())
             }
             "issue_update" -> {
                 if (key.isEmpty()) return ToolExecResult("issue_update needs issue_key.", success = false)
@@ -1304,13 +1304,13 @@ object ConnectorTools : HarnessGroupTools {
                     .put("fields", JsonArray().put("summary").put("status").put("assignee").put("updated"))
                 val reply = send("POST", "$base/search/jql", headers, payload.toString())
                 problem(reply, "Jira")?.let { return it }
-                val issues = HttpJson.objectOf(reply.body)?.optJSONArray("issues")
+                val issues = HttpJson.objectOf(reply.body)?.get("issues")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(issues, 20) { issue ->
-                        val fields = issue.optJSONObject("fields")
+                        val fields = issue?.get("fields")?.jsonObject
                         "${(issue["key"]?.jsonPrimitive?.content ?: "")} | " +
-                            "${fields?.optJSONObject("status")?.optString("name", "").orEmpty()} | " +
-                            HttpJson.oneLine(fields?.optString("summary", "").orEmpty(), 110)
+                            "${fields?.get("status")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()} | " +
+                            HttpJson.oneLine(fields?.get("summary")?.jsonPrimitive?.content.orEmpty(), 110)
                     }
                 )
             }
@@ -1318,7 +1318,7 @@ object ConnectorTools : HarnessGroupTools {
                 if (key.isEmpty()) return ToolExecResult("transitions needs issue_key.", success = false)
                 val reply = send("GET", "$base/issue/${HttpJson.enc(key)}/transitions", headers)
                 problem(reply, "Jira")?.let { return it }
-                val items = HttpJson.objectOf(reply.body)?.optJSONArray("transitions")
+                val items = HttpJson.objectOf(reply.body)?.get("transitions")?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(items, 30) { item ->
                         "${(item["id"]?.jsonPrimitive?.content ?: "")} | ${(item["name"]?.jsonPrimitive?.content ?: "")}"
@@ -1335,9 +1335,9 @@ object ConnectorTools : HarnessGroupTools {
                 if (id.isEmpty()) {
                     val list = send("GET", "$base/issue/${HttpJson.enc(key)}/transitions", headers)
                     problem(list, "Jira")?.let { return it }
-                    val items = HttpJson.objectOf(list.body)?.optJSONArray("transitions")
+                    val items = HttpJson.objectOf(list.body)?.get("transitions")?.jsonArray
                     val match = (0 until (items?.length() ?: 0))
-                        .mapNotNull { items?.optJSONObject(it) }
+                        .mapNotNull { items?.getOrNull(it)?.jsonObject }
                         .firstOrNull {
                             val name = (it["name"]?.jsonPrimitive?.content ?: "")
                             name.equals(wanted, ignoreCase = true) || name.contains(wanted, ignoreCase = true)
@@ -1374,7 +1374,7 @@ object ConnectorTools : HarnessGroupTools {
         if (node is String) return node
         val obj = node as? JsonObject ?: return ""
         val own = (obj["text"]?.jsonPrimitive?.content ?: "")
-        val content = obj.optJSONArray("content")
+        val content = obj?.get("content")?.jsonArray
         val children = mutableListOf<String>()
         if (content != null) {
             for (i in 0 until content.size) {
@@ -1461,35 +1461,35 @@ object ConnectorTools : HarnessGroupTools {
         problem(reply, "Linear")?.let { return it }
         val body = HttpJson.objectOf(reply.body)
             ?: return ToolExecResult("Linear returned something that is not JSON.", success = false)
-        val errors = body.optJSONArray("errors")
+        val errors = body?.get("errors")?.jsonArray
         if (errors != null && errors.size > 0) {
             val messages = (0 until errors.size).mapNotNull { index ->
-                errors.optJSONObject(index)?.optString("message", "")
+                errors?.getOrNull(index)?.jsonObject?.get("message")?.jsonPrimitive?.content
             }.filter { it.isNotBlank() }
             return ToolExecResult("Linear refused that query: ${messages.joinToString("; ")}", success = false)
         }
-        val data = body.optJSONObject("data")
+        val data = body?.get("data")?.jsonObject
             ?: return ToolExecResult("Linear answered without any data:\n${HttpJson.pretty(reply.body)}", success = false)
         return ToolExecResult(linearText(action, data))
     }
 
     private fun linearText(action: String, data: JsonObject): String {
         return when (action) {
-            "issues" -> HttpJson.rows(data.optJSONObject("issues")?.optJSONArray("nodes"), 25) { node ->
+            "issues" -> HttpJson.rows(data?.get("issues")?.jsonObject?.get("nodes")?.jsonArray, 25) { node ->
                 "${(node["identifier"]?.jsonPrimitive?.content ?: "")} | " +
-                    "${node.optJSONObject("state")?.optString("name", "").orEmpty()} | " +
+                    "${node?.get("state")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()} | " +
                     "${HttpJson.oneLine((node["title"]?.jsonPrimitive?.content ?: ""), 110)} | ${(node["url"]?.jsonPrimitive?.content ?: "")}"
             }
             "issue_get" -> {
-                val issue = data.optJSONObject("issue")
+                val issue = data?.get("issue")?.jsonObject
                 if (issue == null) {
                     "Linear has no issue with that id."
                 } else {
                     val sb = StringBuilder()
                     sb.append((issue["identifier"]?.jsonPrimitive?.content ?: "")).append(" — ")
                     sb.append((issue["title"]?.jsonPrimitive?.content ?: "")).append('\n')
-                    sb.append("state: ").append(issue.optJSONObject("state")?.optString("name", "").orEmpty())
-                    val assignee = issue.optJSONObject("assignee")?.optString("name", "").orEmpty()
+                    sb.append("state: ").append(issue?.get("state")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty())
+                    val assignee = issue?.get("assignee")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()
                     sb.append(" | assignee: ").append(assignee.ifBlank { "none" })
                     sb.append('\n').append((issue["url"]?.jsonPrimitive?.content ?: "")).append('\n')
                     sb.append(HttpJson.cut((issue["description"]?.jsonPrimitive?.content ?: ""), 2500))
@@ -1498,8 +1498,8 @@ object ConnectorTools : HarnessGroupTools {
             }
             "issue_create", "issue_update" -> {
                 val key = if (action == "issue_create") "issueCreate" else "issueUpdate"
-                val result = data.optJSONObject(key)
-                val issue = result?.optJSONObject("issue")
+                val result = data?.getOrNull(key)?.jsonObject
+                val issue = result?.get("issue")?.jsonObject
                 if (result == null || !(result["success"]?.jsonPrimitive?.booleanOrNull ?: false) || issue == null) {
                     "Linear reported that the change did not go through."
                 } else {
@@ -1507,10 +1507,10 @@ object ConnectorTools : HarnessGroupTools {
                         (issue["url"]?.jsonPrimitive?.content ?: "")
                 }
             }
-            "teams" -> HttpJson.rows(data.optJSONObject("teams")?.optJSONArray("nodes"), 50) { node ->
+            "teams" -> HttpJson.rows(data?.get("teams")?.jsonObject?.get("nodes")?.jsonArray, 50) { node ->
                 "${(node["id"]?.jsonPrimitive?.content ?: "")} | ${(node["key"]?.jsonPrimitive?.content ?: "")} | ${(node["name"]?.jsonPrimitive?.content ?: "")}"
             }
-            else -> HttpJson.rows(data.optJSONObject("searchIssues")?.optJSONArray("nodes"), 25) { node ->
+            else -> HttpJson.rows(data?.get("searchIssues")?.jsonObject?.get("nodes")?.jsonArray, 25) { node ->
                 "${(node["identifier"]?.jsonPrimitive?.content ?: "")} | ${HttpJson.oneLine((node["title"]?.jsonPrimitive?.content ?: ""), 110)} | " +
                     (node["url"]?.jsonPrimitive?.content ?: "")
             }
@@ -1638,7 +1638,7 @@ object ConnectorTools : HarnessGroupTools {
     }
 
     private fun headerMap(args: JsonObject): Map<String, String> {
-        val obj = args.optJSONObject("headers") ?: return emptyMap()
+        val obj = args?.get("headers")?.jsonObject ?: return emptyMap()
         val out = mutableMapOf<String, String>()
         val keys = obj.keys()
         while (keys.hasNext()) {

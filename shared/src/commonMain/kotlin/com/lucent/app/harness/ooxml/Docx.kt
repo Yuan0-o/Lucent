@@ -1,5 +1,7 @@
 package com.lucent.app.harness.ooxml
 
+import okio.Path.Companion.toPath
+
 import kotlinx.serialization.json.*
 import okio.FileSystem
 import okio.Path

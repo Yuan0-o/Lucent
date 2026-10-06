@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 class HarnessError(message: String, val blocked: Boolean = false) : Exception(message)
 
 object Workspace {

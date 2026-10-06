@@ -1,5 +1,7 @@
 package com.lucent.app.harness.ooxml
 
+import okio.Path.Companion.toPath
+
 import kotlinx.serialization.json.*
 import com.lucent.app.harness.ZipWriter
 import okio.FileSystem
@@ -155,29 +157,20 @@ private fun buildZip(entries: List<Pair<String, ByteArray>>): ByteArray {
 
 fun readZip(path: Path): Map<String, ByteArray> {
     if (!FileSystem.SYSTEM.exists(path)) throw IllegalArgumentException("${path.name} does not exist")
-    val out = LinkedHashMap<String, ByteArray>()
-    try {
-        FileSystem.SYSTEM.openZip(path).use { zip ->
-            for (entry in zip.listRecursively(".".toPath())) {
-                val metadata = zip.metadataOrNull(entry)
-                if (metadata?.isDirectory == true) continue
-                val name = entry.toString().replace('\', '/')
-                out[name] = zip.read(entry) { readByteArray() }
-            }
-        }
+    return try {
+        val bytes = FileSystem.SYSTEM.read(path) { readByteArray() }
+        com.lucent.app.harness.ZipReader.readEntries(bytes) { true }
     } catch (e: Exception) {
         throw IllegalArgumentException("${path.name} is not a readable Office package: ${e.message ?: "zip error"}")
     }
-    return out
 }
 
 fun readEntry(path: Path, name: String): ByteArray? {
     if (!FileSystem.SYSTEM.exists(path)) return null
     return try {
-        FileSystem.SYSTEM.openZip(path).use { zip ->
-            val entry = name.toPath()
-            if (!zip.exists(entry)) null else zip.read(entry) { readByteArray() }
-        }
+        val bytes = FileSystem.SYSTEM.read(path) { readByteArray() }
+        val map = com.lucent.app.harness.ZipReader.readEntries(bytes) { it == name }
+        map[name]
     } catch (e: Exception) {
         null
     }
@@ -341,9 +334,9 @@ object Ooxml {
 
     fun zipBytes(entries: List<Pair<String, ByteArray>>): ByteArray = buildZip(entries)
 
-    fun readZip(file: File): Map<String, ByteArray> = openZip(file)
+    fun readZip(path: Path): Map<String, ByteArray> = com.lucent.app.harness.ooxml.readZip(path)
 
-    fun readEntry(file: File, name: String): ByteArray? = openEntry(file, name)
+    fun readEntry(path: Path, name: String): ByteArray? = com.lucent.app.harness.ooxml.readEntry(path, name)
 
     fun parse(bytes: ByteArray): XmlNode = parseXmlDocument(bytes)
 

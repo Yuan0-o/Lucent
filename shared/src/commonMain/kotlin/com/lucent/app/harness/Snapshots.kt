@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 import kotlinx.serialization.json.*
 
 data class SnapshotEntry(

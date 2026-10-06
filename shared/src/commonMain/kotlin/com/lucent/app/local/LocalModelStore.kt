@@ -1,5 +1,7 @@
 package com.lucent.app.local
 import com.lucent.app.platform.filesDir
+import okio.Path.Companion.toPath
+
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.LocalSecrets
@@ -168,7 +170,7 @@ object LocalModelStore {
         if (existing.slots.size >= MAX_MODELS) throw TooManyModelsException()
 
         val dir = dir(context)
-        if (!FileSystem.SYSTEM.exists(dir) && !FileSystem.SYSTEM.createDirectories(dir)) throw IOException("Could not create model directory")
+        if (!FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.createDirectories(dir)
 
         val id = newId()
         val fileName = "model_$id.gguf"
@@ -193,24 +195,18 @@ object LocalModelStore {
                     }
                     try {
                         var found = false
-                        FileSystem.SYSTEM.openZip(zipTemp).use { zipFs ->
-                            fun walk(p: Path) {
-                                if (found) return
-                                zipFs.listOrNull(p)?.forEach { child ->
-                                    if (zipFs.metadataOrNull(child)?.isDirectory == true) walk(child)
-                                    else if (child.name.lowercase().endsWith(".gguf")) {
-                                        pickedName = child.name
-                                        FileSystem.SYSTEM.write(tmp) {
-                                            write(zipFs.read(child) { readByteArray() })
-                                        }
-                                        val head2 = ByteArray(4)
-                                        val n = FileSystem.SYSTEM.read(tmp) { read(head2) }
-                                        if (n < 4 || !head2.contentEquals(GGUF_MAGIC)) throw NotGgufException()
-                                        found = true
-                                    }
-                                }
+                        val bytes = FileSystem.SYSTEM.read(zipTemp) { readByteArray() }
+                        val entries = com.lucent.app.harness.ZipReader.readEntries(bytes) { it.lowercase().endsWith(".gguf") }
+                        for ((childName, data) in entries) {
+                            pickedName = childName.substringAfterLast("/")
+                            FileSystem.SYSTEM.write(tmp) {
+                                write(data)
                             }
-                            walk("/".toPath())
+                            val head2 = ByteArray(4)
+                            val n = FileSystem.SYSTEM.read(tmp) { read(head2) }
+                            if (n < 4 || !head2.contentEquals(GGUF_MAGIC)) throw NotGgufException()
+                            found = true
+                            break
                         }
                         if (!found) throw NoGgufInZipException()
                     } finally {
@@ -364,7 +360,7 @@ object LocalModelStore {
 
     fun importMmproj(context: PlatformContext, id: String, source: ImportSource): Path {
         val dir = dir(context)
-        if (!FileSystem.SYSTEM.exists(dir) && !FileSystem.SYSTEM.createDirectories(dir)) throw IOException("Could not create model directory")
+        if (!FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.createDirectories(dir)
         val target = (dir / mmprojFileName(id))
         val tmp = (dir / "${mmprojFileName(id)}.tmp")
         try {

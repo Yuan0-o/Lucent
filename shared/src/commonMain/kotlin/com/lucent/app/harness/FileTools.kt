@@ -1,5 +1,6 @@
 package com.lucent.app.harness
 
+
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import kotlinx.serialization.json.*
@@ -732,7 +733,7 @@ object FileTools : HarnessGroupTools {
             if (FileSystem.SYSTEM.metadataOrNull(root)?.isDirectory == true) walk(root) else files.add(root)
             
             files.forEach { file ->
-                val entryName = file.toString().removePrefix(base.toString()).removePrefix("/").replace('\', '/')
+                val entryName = file.toString().removePrefix(base.toString()).removePrefix("/").replace('\\', '/')
                 writer.addEntry(entryName, FileSystem.SYSTEM.read(file) { readByteArray() })
                 count++
             }
@@ -747,22 +748,14 @@ object FileTools : HarnessGroupTools {
         val root = Workspace.forWrite(ctx, target.toString()).toPath()
         FileSystem.SYSTEM.createDirectories(root)
         var count = 0
-        FileSystem.SYSTEM.openZip(archive).use { zipFs ->
-            fun walk(dir: Path) {
-                zipFs.list(dir).forEach { path ->
-                    val out = root / path.toString().removePrefix("/")
-                    if (!Workspace.isInside(out.toString(), root.toString())) return@forEach
-                    if (zipFs.metadata(path).isDirectory == true) {
-                        FileSystem.SYSTEM.createDirectories(out)
-                        walk(path)
-                    } else {
-                        out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-                        FileSystem.SYSTEM.write(out) { write(zipFs.read(path) { readByteArray() }) }
-                        count++
-                    }
-                }
-            }
-            walk("/".toPath())
+        val bytes = FileSystem.SYSTEM.read(archive) { readByteArray() }
+        val entries = ZipReader.readEntries(bytes) { true }
+        entries.forEach { (name, data) ->
+            val out = root / name
+            if (!Workspace.isInside(out.toString(), root.toString())) return@forEach
+            out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+            FileSystem.SYSTEM.write(out) { write(data) }
+            count++
         }
         return ToolExecResult("Unpacked $count file(s) into ${Workspace.display(ctx, root.toString())}.")
     }

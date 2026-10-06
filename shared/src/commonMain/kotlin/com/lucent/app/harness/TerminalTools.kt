@@ -53,6 +53,7 @@ object HarnessJobs {
     private val counter = AtomicInt(1)
     private val jobs = mutableMapOf<String, HarnessJobHandle>()
 
+    @OptIn(kotlin.concurrent.atomics.ExperimentalAtomicApi::class)
     fun start(command: String, workdir: Path, timeoutSeconds: Int): HarnessJobHandle {
         val id = "job-${counter.fetchAndIncrement()}"
         val job = HarnessJob(id, command, workdir.toString(), System.currentTimeMillis(), timeoutSeconds)

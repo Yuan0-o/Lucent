@@ -137,7 +137,7 @@ actual object LocalLlm {
         val file = LocalModelStore.activeModelFile(context) ?: return@withContext false
         if (handle != 0L &&
             loadedSlotId == activeSlot.id &&
-            loadedPath == file.absolutePath &&
+            loadedPath == file.toString() &&
             (loadedGpuLayers > 0) == (desiredGpuLayers > 0)
         ) return@withContext true
         if (handle != 0L) {
@@ -150,7 +150,7 @@ actual object LocalLlm {
         val wantGpu = if (desiredGpuLayers > 0) gpuLayersFor(file) else 0
         fun attempt(gpuLayers: Int): Long = try {
             val ctx = if (gpuLayers > 0) N_CTX_GPU else N_CTX
-            nativeLoad(file.absolutePath, ctx, threadCount(), gpuLayers)
+            nativeLoad(file.toString(), ctx, threadCount(), gpuLayers)
         } catch (t: Throwable) {
             PlatformLog.e("LocalLlm", "load failed (gpuLayers=$gpuLayers)", t)
             0L
@@ -166,12 +166,12 @@ actual object LocalLlm {
             }
             if (h != 0L) {
                 handle = h
-                loadedPath = file.absolutePath
+                loadedPath = file.toString()
                 loadedSlotId = activeSlot.id
                 loadedGpuLayers = used
                 visionReady = try {
                     val mmproj = LocalModelStore.activeMmprojFile(context)
-                    mmproj != null && nativeMtmdLoad(h, mmproj.absolutePath, threadCount())
+                    mmproj != null && nativeMtmdLoad(h, mmproj.toString(), threadCount())
                 } catch (t: Throwable) {
                     PlatformLog.e("LocalLlm", "mmproj load failed", t)
                     false

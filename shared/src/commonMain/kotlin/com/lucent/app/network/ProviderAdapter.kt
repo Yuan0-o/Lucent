@@ -1,5 +1,7 @@
 package com.lucent.app.network
 
+import kotlinx.serialization.json.*
+
 import com.lucent.app.data.ReasoningEffort
 import com.lucent.app.data.ReasoningEfforts
 import okhttp3.Request

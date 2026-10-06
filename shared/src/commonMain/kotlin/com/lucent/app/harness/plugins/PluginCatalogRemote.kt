@@ -9,7 +9,7 @@ import okio.FileSystem
 import okio.Path.Companion.toPath
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import kotlin.time.Duration.Companion.seconds
+
 
 object PluginCatalogRemote {
 
@@ -119,8 +119,8 @@ object PluginCatalogRemote {
         return withContext(Dispatchers.IO) {
             try {
                 val client = OkHttpClient.Builder()
-                    .connectTimeout(10.seconds)
-                    .readTimeout(10.seconds)
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
+                    .readTimeout(java.time.Duration.ofSeconds(10))
                     .build()
                 val request = Request.Builder().url(urlStr).build()
                 val json = client.newCall(request).execute().use { response ->

@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage

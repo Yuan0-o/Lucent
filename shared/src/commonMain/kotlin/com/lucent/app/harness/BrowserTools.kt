@@ -10,7 +10,7 @@ import okio.Path
 import okio.Path.Companion.toPath
 import okio.buffer
 import okio.use
-import kotlin.time.Duration.Companion.seconds
+
 
 object HtmlText {
 
@@ -97,8 +97,8 @@ object BrowserTools : HarnessGroupTools {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(30.seconds)
-            .readTimeout(60.seconds)
+            .connectTimeout(java.time.Duration.ofSeconds(30))
+            .readTimeout(java.time.Duration.ofSeconds(60))
             .followRedirects(true)
             .build()
     }
