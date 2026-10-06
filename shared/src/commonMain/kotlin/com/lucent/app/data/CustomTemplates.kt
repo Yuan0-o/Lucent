@@ -1,51 +1,61 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 object CustomTemplates {
 
     const val MAX = 24
 
+    @Serializable
     data class Template(
-        val id: String,
-        val name: String,
-        val title: String = "",
-        val body: String = "",
-        val tags: List<String> = emptyList(),
-        val colorKey: String? = null,
-        val pinned: Boolean = false,
-        val isChecklist: Boolean = false,
-        val checklistTexts: List<String> = emptyList()
+        @SerialName("id") val id: String,
+        @SerialName("name") val name: String,
+        @SerialName("title") val title: String = "",
+        @SerialName("body") val body: String = "",
+        @SerialName("tags") val tags: List<String> = emptyList(),
+        @SerialName("colorKey") val colorKey: String? = null,
+        @SerialName("pinned") val pinned: Boolean = false,
+        @SerialName("isChecklist") val isChecklist: Boolean = false,
+        @SerialName("checklistTexts") val checklistTexts: List<String> = emptyList()
     )
 
+    @Serializable
     data class Draft(
-        val title: String = "",
-        val body: String = "",
-        val tags: List<String> = emptyList(),
-        val colorKey: String? = null,
-        val pinned: Boolean = false,
-        val isChecklist: Boolean = false,
-        val checklistTexts: List<String> = emptyList()
+        @SerialName("title") val title: String = "",
+        @SerialName("body") val body: String = "",
+        @SerialName("tags") val tags: List<String> = emptyList(),
+        @SerialName("colorKey") val colorKey: String? = null,
+        @SerialName("pinned") val pinned: Boolean = false,
+        @SerialName("isChecklist") val isChecklist: Boolean = false,
+        @SerialName("checklistTexts") val checklistTexts: List<String> = emptyList()
     )
+
+    private val jsonConfig = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
     fun parse(json: String?): List<Template> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = o.optString("id", "")
+            val arr = jsonConfig.decodeFromString<JsonArray>(json)
+            arr.indices.mapNotNull { i ->
+                val o = arr[i] as? JsonObject ?: return@mapNotNull null
+                val id = (o["id"] as? JsonPrimitive)?.content ?: ""
                 if (id.isBlank()) null else Template(
                     id = id,
-                    name = o.optString("name", ""),
-                    title = o.optString("title", ""),
-                    body = o.optString("body", ""),
-                    tags = o.optJSONArray("tags").toStringList(),
-                    colorKey = if (o.isNull("colorKey")) null else o.optString("colorKey", "").ifBlank { null },
-                    pinned = o.optBoolean("pinned", false),
-                    isChecklist = o.optBoolean("isChecklist", false),
-                    checklistTexts = o.optJSONArray("checklistTexts").toStringList()
+                    name = (o["name"] as? JsonPrimitive)?.content ?: "",
+                    title = (o["title"] as? JsonPrimitive)?.content ?: "",
+                    body = (o["body"] as? JsonPrimitive)?.content ?: "",
+                    tags = o["tags"].toStringList(),
+                    colorKey = if (o["colorKey"] == null || o["colorKey"] is kotlinx.serialization.json.JsonNull) null else (o["colorKey"] as? JsonPrimitive)?.content?.ifBlank { null },
+                    pinned = (o["pinned"] as? JsonPrimitive)?.booleanOrNull ?: false,
+                    isChecklist = (o["isChecklist"] as? JsonPrimitive)?.booleanOrNull ?: false,
+                    checklistTexts = o["checklistTexts"].toStringList()
                 )
             }
         } catch (t: Throwable) {
@@ -54,31 +64,12 @@ object CustomTemplates {
     }
 
     fun serialize(list: List<Template>): String {
-        val arr = JSONArray()
-        list.forEach { arr.put(toJson(it)) }
-        return arr.toString()
+        return jsonConfig.encodeToString(list)
     }
 
-    private fun JSONObject.putList(key: String, values: List<String>): JSONObject {
-        val a = JSONArray()
-        values.forEach { a.put(it) }
-        return put(key, a)
-    }
-
-    private fun toJson(t: Template): JSONObject = JSONObject()
-        .put("id", t.id)
-        .put("name", t.name)
-        .put("title", t.title)
-        .put("body", t.body)
-        .putList("tags", t.tags)
-        .put("colorKey", t.colorKey ?: JSONObject.NULL)
-        .put("pinned", t.pinned)
-        .put("isChecklist", t.isChecklist)
-        .putList("checklistTexts", t.checklistTexts)
-
-    private fun org.json.JSONArray?.toStringList(): List<String> {
-        val a = this ?: return emptyList()
-        return (0 until a.length()).mapNotNull { i -> a.optString(i, "").ifBlank { null } }
+    private fun kotlinx.serialization.json.JsonElement?.toStringList(): List<String> {
+        val a = this as? JsonArray ?: return emptyList()
+        return a.indices.mapNotNull { i -> (a[i] as? JsonPrimitive)?.content?.ifBlank { null } }
     }
 
     fun upsert(json: String?, t: Template): String {
@@ -89,29 +80,20 @@ object CustomTemplates {
     fun remove(json: String?, id: String): String =
         serialize(parse(json).filterNot { it.id == id })
 
-
-    fun draftToJson(d: Draft): String = JSONObject()
-        .put("title", d.title)
-        .put("body", d.body)
-        .putList("tags", d.tags)
-        .put("colorKey", d.colorKey ?: JSONObject.NULL)
-        .put("pinned", d.pinned)
-        .put("isChecklist", d.isChecklist)
-        .putList("checklistTexts", d.checklistTexts)
-        .toString()
+    fun draftToJson(d: Draft): String = jsonConfig.encodeToString(d)
 
     fun parseDraft(json: String?): Draft {
         if (json.isNullOrBlank()) return Draft()
         return try {
-            val o = JSONObject(json)
+            val o = jsonConfig.decodeFromString<JsonObject>(json)
             Draft(
-                title = o.optString("title", ""),
-                body = o.optString("body", ""),
-                tags = o.optJSONArray("tags").toStringList(),
-                colorKey = if (o.isNull("colorKey")) null else o.optString("colorKey", "").ifBlank { null },
-                pinned = o.optBoolean("pinned", false),
-                isChecklist = o.optBoolean("isChecklist", false),
-                checklistTexts = o.optJSONArray("checklistTexts").toStringList()
+                title = (o["title"] as? JsonPrimitive)?.content ?: "",
+                body = (o["body"] as? JsonPrimitive)?.content ?: "",
+                tags = o["tags"].toStringList(),
+                colorKey = if (o["colorKey"] == null || o["colorKey"] is kotlinx.serialization.json.JsonNull) null else (o["colorKey"] as? JsonPrimitive)?.content?.ifBlank { null },
+                pinned = (o["pinned"] as? JsonPrimitive)?.booleanOrNull ?: false,
+                isChecklist = (o["isChecklist"] as? JsonPrimitive)?.booleanOrNull ?: false,
+                checklistTexts = o["checklistTexts"].toStringList()
             )
         } catch (t: Throwable) {
             Draft()

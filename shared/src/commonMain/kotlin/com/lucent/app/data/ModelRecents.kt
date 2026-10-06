@@ -1,6 +1,9 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 
 object ModelRecents {
 
@@ -9,9 +12,8 @@ object ModelRecents {
     fun parse(json: String?): List<String> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length())
-                .mapNotNull { arr.optString(it, "").takeIf { s -> s.isNotBlank() } }
+            val arr = Json.decodeFromString<JsonArray>(json)
+            arr.mapNotNull { (it as? JsonPrimitive)?.content?.takeIf { s -> s.isNotBlank() } }
                 .distinct()
                 .take(MAX)
         } catch (e: Exception) {
@@ -23,14 +25,12 @@ object ModelRecents {
         val trimmed = model.trim()
         if (trimmed.isBlank()) return json ?: "[]"
         val next = (listOf(trimmed) + parse(json).filter { it != trimmed }).take(MAX)
-        val arr = JSONArray()
-        next.forEach { arr.put(it) }
-        return arr.toString()
+        val arr = JsonArray(next.map { JsonPrimitive(it) })
+        return Json.encodeToString(arr)
     }
 
     fun serialize(models: List<String>): String {
-        val arr = JSONArray()
-        models.distinct().take(MAX).forEach { arr.put(it) }
-        return arr.toString()
+        val arr = JsonArray(models.distinct().take(MAX).map { JsonPrimitive(it) })
+        return Json.encodeToString(arr)
     }
 }

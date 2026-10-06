@@ -1,66 +1,62 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
+@Serializable
 data class ApiProfile(
-    val name: String = "New API",
-    val spec: String = "openai",
-    val baseUrl: String = "",
-    val apiKey: String = "",
-    val model: String = "",
-    val provider: String = ApiProviders.CUSTOM,
-    val selectedModels: List<String> = emptyList()
+    @SerialName("name") val name: String = "New API",
+    @SerialName("spec") val spec: String = "openai",
+    @SerialName("baseUrl") val baseUrl: String = "",
+    @SerialName("keyEnc") val apiKey: String = "",
+    @SerialName("model") val model: String = "",
+    @SerialName("provider") val provider: String = ApiProviders.CUSTOM,
+    @SerialName("selectedModels") val selectedModels: List<String> = emptyList()
 )
 
 object ApiProfiles {
 
     const val MAX = 20
 
+    private val jsonConfig = Json { encodeDefaults = true; ignoreUnknownKeys = true }
+
     fun serialize(profiles: List<ApiProfile>, encryptKeys: Boolean = true): String {
-        val arr = JSONArray()
-        profiles.take(MAX).forEach { p ->
-            val models = JSONArray()
-            p.selectedModels.forEach { models.put(it) }
-            arr.put(
-                JSONObject()
-                    .put("name", p.name)
-                    .put("spec", p.spec)
-                    .put("baseUrl", p.baseUrl)
-                    .put("keyEnc", if (encryptKeys) CryptoUtil.encrypt(p.apiKey) else p.apiKey)
-                    .put("model", p.model)
-                    .put("provider", p.provider)
-                    .put("selectedModels", models)
-            )
+        val toSerialize = profiles.take(MAX).map { p ->
+            if (encryptKeys) p.copy(apiKey = CryptoUtil.encrypt(p.apiKey)) else p
         }
-        return arr.toString()
+        return jsonConfig.encodeToString(toSerialize)
     }
 
-    fun parse(json: String?): List<ApiProfile> {
-        if (json.isNullOrBlank()) return emptyList()
+    fun parse(jsonString: String?): List<ApiProfile> {
+        if (jsonString.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val spec = o.optString("spec", "openai")
-                val baseUrl = o.optString("baseUrl", "")
-                val model = o.optString("model", "")
-                val stored = o.optJSONArray("selectedModels")
+            val arr = jsonConfig.decodeFromString<JsonArray>(jsonString)
+            arr.indices.mapNotNull { i ->
+                val o = arr[i] as? JsonObject ?: return@mapNotNull null
+                val spec = (o["spec"] as? JsonPrimitive)?.content ?: "openai"
+                val baseUrl = (o["baseUrl"] as? JsonPrimitive)?.content ?: ""
+                val model = (o["model"] as? JsonPrimitive)?.content ?: ""
+                val stored = o["selectedModels"] as? JsonArray
                 val selectedModels = if (stored == null) {
                     listOfNotNull(model.trim().takeIf { it.isNotBlank() })
                 } else {
-                    (0 until stored.length())
-                        .map { stored.optString(it) }
+                    stored.indices
+                        .mapNotNull { j -> (stored[j] as? JsonPrimitive)?.content }
                         .filter { it.isNotBlank() }
                         .distinct()
                 }
                 ApiProfile(
-                    name = o.optString("name", "API ${i + 1}"),
+                    name = (o["name"] as? JsonPrimitive)?.content ?: "API ${i + 1}",
                     spec = spec,
                     baseUrl = baseUrl,
-                    apiKey = CryptoUtil.decrypt(o.optString("keyEnc", "")),
+                    apiKey = CryptoUtil.decrypt((o["keyEnc"] as? JsonPrimitive)?.content ?: ""),
                     model = model,
-                    provider = ApiProviders.resolve(o.optString("provider", ""), spec, baseUrl),
+                    provider = ApiProviders.resolve((o["provider"] as? JsonPrimitive)?.content ?: "", spec, baseUrl),
                     selectedModels = selectedModels
                 )
             }.take(MAX)
