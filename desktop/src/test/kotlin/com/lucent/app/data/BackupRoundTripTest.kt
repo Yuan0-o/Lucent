@@ -171,7 +171,7 @@ class BackupRoundTripTest {
 
                 assertTrue(harnessHome.resolve("todos/today.json").exists())
 
-                val payload = ByteArrayOutputStream()
+                val payload = okio.Buffer()
                 BackupManager.exportEncrypted(
                     context, db, settings, payload, null,
                     BackupManager.BackupSelection(modules = BackupManager.DEFAULT_MODULES)
@@ -188,7 +188,7 @@ class BackupRoundTripTest {
                     com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir2)
                     val db2 = DesktopAppDatabase.createForTesting(context2)
                     val settings2 = createSettingsRepository(context2)
-                    val bytes = payload.toByteArray()
+                    val bytes = payload.readByteArray()
 
                     val preview = BackupManager.inspect(context2, bytes, null)
                     assertEquals(3, preview.harnessFiles)
@@ -235,7 +235,7 @@ class BackupRoundTripTest {
                 File(harnessHome, "todos").mkdirs()
                 File(harnessHome, "todos").resolve("today.json").writeText("original")
 
-                val payload = ByteArrayOutputStream()
+                val payload = okio.Buffer()
                 BackupManager.exportEncrypted(
                     context, db, settings, payload, null,
                     BackupManager.BackupSelection(modules = BackupManager.DEFAULT_MODULES)
@@ -249,7 +249,7 @@ class BackupRoundTripTest {
                     com.lucent.app.harness.HarnessRuntime.host = TestHarnessHost(dir2)
                     val db2 = DesktopAppDatabase.createForTesting(context2)
                     val settings2 = createSettingsRepository(context2)
-                    val bytes = payload.toByteArray()
+                    val bytes = payload.readByteArray()
                     val preview = BackupManager.inspect(context2, bytes, null)
 
                     BackupManager.commit(

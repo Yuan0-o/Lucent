@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.json.*
-import java.io.OutputStream
 
 object BackupManager {
 
@@ -98,7 +97,7 @@ object BackupManager {
         context: PlatformContext,
         db: AppDatabase,
         settings: SettingsRepository,
-        out: OutputStream,
+        out: okio.Sink,
         password: String?,
         selection: BackupSelection = BackupSelection()
     ) {
@@ -130,9 +129,32 @@ object BackupManager {
             } else emptyList()
 
         val blobs = modelFiles + fontFiles + harnessFiles
-        BackupCrypto.encryptingStream(out, password).use { cipherOut ->
+        val outAdapter = object : java.io.OutputStream() {
+            override fun write(b: Int) {
+                val buf = okio.Buffer()
+                buf.writeByte(b)
+                out.write(buf, 1)
+            }
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                val buf = okio.Buffer()
+                buf.write(b, off, len)
+                out.write(buf, len.toLong())
+            }
+            override fun flush() = out.flush()
+            override fun close() = out.close()
+        }
+        BackupCrypto.encryptingStream(outAdapter, password).use { cipherOutOs ->
+            val cipherOut = object : okio.Sink {
+                override fun write(source: okio.Buffer, byteCount: Long) {
+                    cipherOutOs.write(source.readByteArray(byteCount))
+                }
+                override fun flush() = cipherOutOs.flush()
+                override fun timeout() = okio.Timeout.NONE
+                override fun close() = cipherOutOs.close()
+            }.buffer()
             if (blobs.isEmpty()) {
                 cipherOut.write(jsonBytes)
+                cipherOut.flush()
                 return@use
             }
             cipherOut.write(byteArrayOf(BackupFrames.FRAME_MAGIC, BackupFrames.FRAME_VERSION))
@@ -154,6 +176,7 @@ object BackupManager {
                     }
                 }
             }
+            cipherOut.flush()
         }
         StartupLog.event(
             context,

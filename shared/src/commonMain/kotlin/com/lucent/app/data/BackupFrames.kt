@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
-import java.io.OutputStream
+
 import kotlinx.coroutines.CancellationException
 
 object BackupFrames {
@@ -12,13 +12,17 @@ object BackupFrames {
         }
     }
 
-    fun writeInt(out: OutputStream, value: Int) {
-        out.write((value ushr 24) and 0xFF); out.write((value ushr 16) and 0xFF)
-        out.write((value ushr 8) and 0xFF); out.write(value and 0xFF)
+    fun writeInt(out: okio.Sink, value: Int) {
+        val buffer = okio.Buffer()
+        buffer.writeByte((value ushr 24) and 0xFF); buffer.writeByte((value ushr 16) and 0xFF)
+        buffer.writeByte((value ushr 8) and 0xFF); buffer.writeByte(value and 0xFF)
+        out.write(buffer, 4)
     }
 
-    fun writeLong(out: OutputStream, value: Long) {
-        for (shift in 56 downTo 0 step 8) out.write(((value ushr shift) and 0xFF).toInt())
+    fun writeLong(out: okio.Sink, value: Long) {
+        val buffer = okio.Buffer()
+        for (shift in 56 downTo 0 step 8) buffer.writeByte(((value ushr shift) and 0xFF).toInt())
+        out.write(buffer, 8)
     }
 
     const val FRAME_MAGIC = 0x4C.toByte()
@@ -217,7 +221,7 @@ object BackupFrames {
             return 0 to 0
         }
         var tmp: java.io.File? = null
-        var out: java.io.OutputStream? = null
+        var out: okio.Sink? = null
         var written = 0L
         try {
             val target = if (isFont) {
@@ -227,15 +231,17 @@ object BackupFrames {
             }
             val tmpFile = java.io.File(target.absolutePath + ".tmp")
             tmp = tmpFile
-            val os = tmpFile.outputStream()
+            val os = okio.FileSystem.SYSTEM.sink(okio.Path.Companion.toPath(tmpFile.absolutePath))
+            val bufferedOs = okio.buffer(os)
             out = os
             while (written < dataLen) {
                 throwIfCancelled(cancelled)
                 val n = data.read(scratch, 0, minOf(dataLen - written, scratch.size.toLong()).toInt())
                 if (n < 0) throw java.io.EOFException("Backup payload ended early")
-                os.write(scratch, 0, n)
+                bufferedOs.write(scratch, 0, n)
                 written += n
             }
+            bufferedOs.flush()
             os.close()
             out = null
             if (target.exists()) target.delete()

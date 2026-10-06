@@ -280,7 +280,7 @@ fun CloudSettingsPage(
                             val r = runCatching {
                                 val buffer = Buffer()
                                 BackupManager.exportEncrypted(
-                                    context, createAppDatabase(context), repo, buffer.outputStream(), null
+                                    context, createAppDatabase(context), repo, buffer, null
                                 )
                                 val bytes = buffer.readByteArray()
                                 CloudSync.upload(cfg, "lucent-backup-${Clock.System.now().toEpochMilliseconds()}.lcb", bytes)

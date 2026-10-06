@@ -873,7 +873,7 @@ fun SettingsScreen(active: Boolean = true) {
                     val result = withContext(Dispatchers.IO) {
                         try {
                             context.contentResolver.openOutputStream(uri)?.use { out ->
-                                BackupManager.exportEncrypted(context, db, repo, out, password, chosenSelection)
+                                BackupManager.exportEncrypted(context, db, repo, okio.sink(out), password, chosenSelection)
                             } ?: return@withContext S.backupWriteFailed
                             if (password.isNullOrEmpty()) {
                                 S.backupSavedBuiltIn
