@@ -1,14 +1,14 @@
 package com.lucent.app.harness
 
-import java.io.File
-import java.util.zip.Inflater
+import okio.FileSystem
+import okio.Path
 
 object SimplePdfText {
 
-    fun extract(file: File): String {
-        if (!file.exists()) return ""
+    fun extract(file: Path): String {
+        if (!FileSystem.SYSTEM.exists(file)) return ""
         val bytes = try {
-            file.readBytes()
+            FileSystem.SYSTEM.read(file) { readByteArray() }
         } catch (e: Exception) {
             return ""
         }
@@ -36,17 +36,7 @@ object SimplePdfText {
         val attempts = listOf(raw, if (raw.size > 2) raw.copyOfRange(2, raw.size) else raw)
         attempts.forEach { candidate ->
             try {
-                val inflater = Inflater()
-                inflater.setInput(candidate)
-                val out = java.io.ByteArrayOutputStream()
-                val buffer = ByteArray(16384)
-                while (!inflater.finished()) {
-                    val read = inflater.inflate(buffer)
-                    if (read == 0 && inflater.needsInput()) break
-                    out.write(buffer, 0, read)
-                }
-                inflater.end()
-                val result = out.toByteArray()
+                val result = zlibInflate(candidate)
                 if (result.isNotEmpty()) return result
             } catch (t: Throwable) {
             }

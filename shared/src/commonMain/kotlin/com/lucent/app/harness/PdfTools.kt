@@ -4,9 +4,9 @@ import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import kotlinx.serialization.json.*
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.util.zip.Inflater
+import okio.Buffer
+import okio.FileSystem
+import okio.Path
 
 private const val PDF_MAX_BYTES = 96L * 1024 * 1024
 private const val PDF_MAX_PAGES = 5000
@@ -197,7 +197,7 @@ private class PdfParser(private val text: String, var pos: Int) {
 
     private fun parseLiteralString(): PdfValue {
         pos++
-        val out = ByteArrayOutputStream()
+        val out = Buffer()
         var depth = 1
         while (pos < text.length) {
             val ch = text[pos]
@@ -208,12 +208,12 @@ private class PdfParser(private val text: String, var pos: Int) {
                     val escaped = text[pos]
                     pos++
                     when (escaped) {
-                        'n' -> out.write('\n'.code)
-                        'r' -> out.write('\r'.code)
-                        't' -> out.write('\t'.code)
-                        'b' -> out.write('\b'.code)
-                        'f' -> out.write('\u000C'.code)
-                        '(', ')', '\\' -> out.write(escaped.code)
+                        'n' -> out.writeByte('\n'.code)
+                        'r' -> out.writeByte('\r'.code)
+                        't' -> out.writeByte('\t'.code)
+                        'b' -> out.writeByte('\b'.code)
+                        'f' -> out.writeByte('\u000C'.code)
+                        '(', ')', '\\' -> out.writeByte(escaped.code)
                         '\r' -> if (pos < text.length && text[pos] == '\n') pos++
                         '\n' -> {
                         }
@@ -225,24 +225,24 @@ private class PdfParser(private val text: String, var pos: Int) {
                                 pos++
                                 count++
                             }
-                            out.write(value and 0xFF)
+                            out.writeByte(value and 0xFF)
                         }
-                        else -> out.write(escaped.code)
+                        else -> out.writeByte(escaped.code)
                     }
                 }
                 ch == '(' -> {
                     depth++
-                    out.write(ch.code)
+                    out.writeByte(ch.code)
                 }
                 ch == ')' -> {
                     depth--
                     if (depth == 0) break
-                    out.write(ch.code)
+                    out.writeByte(ch.code)
                 }
-                else -> out.write(ch.code)
+                else -> out.writeByte(ch.code)
             }
         }
-        return PdfString(out.toByteArray())
+        return PdfString(out.readByteArray())
     }
 
     private fun parseToken(): PdfValue {
@@ -442,7 +442,7 @@ private class PdfFont(
 }
 
 private class PdfDocument(
-    val file: File,
+    val file: Path,
     val objects: Map<Int, PdfValue>,
     val trailer: PdfDict?,
     val pages: List<PdfPageNode>,
@@ -479,14 +479,15 @@ private fun pdfResolve(objects: Map<Int, PdfValue>, value: PdfValue?, depth: Int
 private fun pdfResolveDict(objects: Map<Int, PdfValue>, value: PdfValue?): PdfDict? =
     pdfAsDict(pdfResolve(objects, value))
 
-private fun pdfLoad(file: File): PdfDocument {
-    if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
-    if (file.isDirectory) throw IllegalArgumentException("${file.name} is a directory, not a PDF")
-    val size = file.length()
+private fun pdfLoad(file: Path): PdfDocument {
+    if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("${file.name} does not exist")
+    val metadata = FileSystem.SYSTEM.metadata(file)
+    if (metadata.isDirectory) throw IllegalArgumentException("${file.name} is a directory, not a PDF")
+    val size = metadata.size ?: 0L
     if (size > PDF_MAX_BYTES) {
         throw IllegalArgumentException("${file.name} is ${size / 1048576} MiB; PDFs larger than ${PDF_MAX_BYTES / 1048576} MiB are not read here")
     }
-    val bytes = file.readBytes()
+    val bytes = FileSystem.SYSTEM.read(file) { readByteArray() }
     val head = String(bytes, 0, minOf(bytes.size, 1024), Charsets.ISO_8859_1)
     if (!head.contains("%PDF-")) throw IllegalArgumentException("${file.name} does not look like a PDF file")
     val text = String(bytes, Charsets.ISO_8859_1)
@@ -615,25 +616,12 @@ private fun pdfInflate(data: ByteArray): ByteArray? {
 }
 
 private fun pdfInflateAt(data: ByteArray, offset: Int): ByteArray? {
-    val inflater = Inflater(true)
     return try {
-        inflater.setInput(data, offset, data.size - offset)
-        val out = ByteArrayOutputStream(minOf(1 shl 20, maxOf(256, data.size * 3)))
-        val buffer = ByteArray(32768)
-        while (!inflater.finished()) {
-            val produced = inflater.inflate(buffer)
-            if (produced == 0) {
-                if (inflater.needsInput() || inflater.needsDictionary()) break
-            }
-            out.write(buffer, 0, produced)
-            if (out.size() > PDF_MAX_STREAM) break
-        }
-        val result = out.toByteArray()
+        val compressed = if (offset == 0) data else data.copyOfRange(offset, data.size)
+        val result = zlibInflate(compressed)
         if (result.isEmpty() && data.size > 2) null else result
     } catch (e: Exception) {
         null
-    } finally {
-        inflater.end()
     }
 }
 
@@ -1184,37 +1172,37 @@ private fun pdfSafeText(document: PdfDocument, page: PdfPageNode): String = try 
 
 private const val PDF_PROBLEM = "Cannot read this PDF: "
 
-private fun pdfProblem(file: File, error: Exception): String =
+private fun pdfProblem(file: Path, error: Exception): String =
     PDF_PROBLEM + (error.message ?: "${file.name} is damaged")
 
 object PdfBook {
 
-    fun info(file: File): String = try {
+    fun info(file: Path): String = try {
         pdfInfo(file)
     } catch (e: Exception) {
         pdfProblem(file, e)
     }
 
-    fun text(file: File, pages: String = "", maxChars: Int = 40000): String = try {
+    fun text(file: Path, pages: String = "", maxChars: Int = 40000): String = try {
         pdfText(file, pages, maxChars)
     } catch (e: Exception) {
         pdfProblem(file, e)
     }
 
-    fun search(file: File, query: String, maxHits: Int = 40): String = try {
+    fun search(file: Path, query: String, maxHits: Int = 40): String = try {
         pdfSearch(file, query, maxHits)
     } catch (e: Exception) {
         pdfProblem(file, e)
     }
 
-    fun pageText(file: File, page: Int): String = try {
+    fun pageText(file: Path, page: Int): String = try {
         pdfPage(file, page)
     } catch (e: Exception) {
         pdfProblem(file, e)
     }
 }
 
-private fun pdfInfo(file: File): String {
+private fun pdfInfo(file: Path): String {
     val document = pdfLoad(file)
     val sb = StringBuilder()
     sb.append("File: ").append(file.name).append('\n')
@@ -1238,7 +1226,7 @@ private fun pdfInfo(file: File): String {
     return sb.toString().trimEnd()
 }
 
-private fun pdfText(file: File, pages: String, maxChars: Int): String {
+private fun pdfText(file: Path, pages: String, maxChars: Int): String {
     val document = pdfLoad(file)
     if (document.encrypted) {
         return "${file.name} is encrypted, so its text cannot be extracted without the password."
@@ -1271,7 +1259,7 @@ private fun pdfText(file: File, pages: String, maxChars: Int): String {
     return sb.toString().trimEnd()
 }
 
-private fun pdfSearch(file: File, query: String, maxHits: Int): String {
+private fun pdfSearch(file: Path, query: String, maxHits: Int): String {
     val document = pdfLoad(file)
     if (document.encrypted) {
         return "${file.name} is encrypted, so it cannot be searched without the password."
@@ -1307,7 +1295,7 @@ private fun pdfSearch(file: File, query: String, maxHits: Int): String {
     return sb.toString()
 }
 
-private fun pdfPage(file: File, page: Int): String {
+private fun pdfPage(file: Path, page: Int): String {
     val document = pdfLoad(file)
     if (document.encrypted) return "${file.name} is encrypted, so its text cannot be extracted."
     val total = document.pages.size
@@ -1342,7 +1330,7 @@ private fun pdfDate(value: String): String {
     return "$year-$month-$day $hour:$minute"
 }
 
-private fun pdfPageCount(file: File): Int = pdfLoad(file).pages.size
+private fun pdfPageCount(file: Path): Int = pdfLoad(file).pages.size
 
 private fun pdfPathList(args: JsonObject, key: String): List<String> {
     val value = args[key]
@@ -1362,8 +1350,8 @@ private fun pdfPathList(args: JsonObject, key: String): List<String> {
     return raw
 }
 
-private fun pdfImageName(source: File, page: Int): String =
-    source.nameWithoutExtension + "-p" + page + ".png"
+private fun pdfImageName(source: Path, page: Int): String =
+    source.name.substringBeforeLast(".") + "-p" + page + ".png"
 
 private fun pdfBase64(bytes: ByteArray): String =
     Base64.Default.encode(bytes)
@@ -1481,19 +1469,19 @@ object PdfTools : HarnessGroupTools {
     }
 
     private fun readPdf(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
         val pages = args["pages"]?.jsonPrimitive?.content ?: ""
         val maxChars = args["max_chars"]?.jsonPrimitive?.intOrNull ?: 40000
         return pdfResult(PdfBook.text(file, pages, maxChars))
     }
 
     private fun info(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
         return pdfResult(PdfBook.info(file))
     }
 
     private fun search(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
         val query = args["query"]?.jsonPrimitive?.content ?: ""
         val maxHits = args["max_hits"]?.jsonPrimitive?.intOrNull ?: 40
         return pdfResult(PdfBook.search(file, query, maxHits))
@@ -1503,12 +1491,12 @@ object PdfTools : HarnessGroupTools {
         if (text.startsWith(PDF_PROBLEM)) ToolExecResult(text, success = false) else ToolExecResult(text)
 
     private suspend fun renderPage(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
         val page = (args["page"]?.jsonPrimitive?.intOrNull ?: 1).coerceAtLeast(1)
         val width = (args["width"]?.jsonPrimitive?.intOrNull ?: 1400).coerceIn(120, 4000)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("No platform renderer is available, so the page cannot be drawn.", success = false)
-        val bytes = host.renderPdfPage(file.path, page, width)
+        val bytes = host.renderPdfPage(file.toString(), page, width)
             ?: return ToolExecResult(
                 "This platform cannot draw PDF pages. Install the python-office plugin and use run_command with " +
                     "pdftoppm instead.",
@@ -1518,9 +1506,9 @@ object PdfTools : HarnessGroupTools {
             return ToolExecResult("Page $page of ${file.name} came back empty; it may not exist.", success = false)
         }
         val target = pdfOutputTarget(ctx, args["out"]?.jsonPrimitive?.content ?: "", pdfSibling(ctx, file, pdfImageName(file, page)))
-        target.parentFile?.mkdirs()
-        target.writeBytes(bytes)
-        val shown = Workspace.display(ctx, target)
+        target.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        FileSystem.SYSTEM.write(target) { write(bytes) }
+        val shown = Workspace.display(ctx, target.toString())
         val image = ToolImage(mime = "image/png", data = pdfBase64(bytes), name = target.name)
         return ToolExecResult(
             "Rendered page $page of ${file.name} to $shown (${Workspace.humanSize(bytes.size.toLong())}, " +
@@ -1530,7 +1518,7 @@ object PdfTools : HarnessGroupTools {
     }
 
     private suspend fun toImages(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
         val width = (args["width"]?.jsonPrimitive?.intOrNull ?: 1200).coerceIn(120, 4000)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("No platform renderer is available, so pages cannot be drawn.", success = false)
@@ -1546,17 +1534,17 @@ object PdfTools : HarnessGroupTools {
         var drawn = 0
         var failed = 0
         selected.forEach { page ->
-            val bytes = host.renderPdfPage(file.path, page, width)
+            val bytes = host.renderPdfPage(file.toString(), page, width)
             if (bytes == null || bytes.isEmpty()) {
                 failed++
                 return@forEach
             }
             val target = pdfSibling(ctx, file, pdfImageName(file, page))
             val written = pdfWritableTarget(ctx, target)
-            written.parentFile?.mkdirs()
-            written.writeBytes(bytes)
+            written.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+            FileSystem.SYSTEM.write(written) { write(bytes) }
             drawn++
-            sb.append(Workspace.display(ctx, written)).append(" (").append(Workspace.humanSize(bytes.size.toLong()))
+            sb.append(Workspace.display(ctx, written.toString())).append(" (").append(Workspace.humanSize(bytes.size.toLong()))
                 .append(")\n")
         }
         if (drawn == 0) {
@@ -1573,41 +1561,41 @@ object PdfTools : HarnessGroupTools {
     private suspend fun merge(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val paths = pdfPathList(args, "paths")
         if (paths.size < 2) return ToolExecResult("Give at least two PDFs to merge.", success = false)
-        val inputs = paths.map { Workspace.forReadFile(ctx, it) }
-        val out = Workspace.forWriteFile(ctx, args["out"]?.jsonPrimitive?.content ?: "")
-        out.parentFile?.mkdirs()
-        if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
+        val inputs = paths.map { Workspace.forRead(ctx, it).toPath() }
+        val out = Workspace.forWrite(ctx, args["out"]?.jsonPrimitive?.content ?: "").toPath()
+        out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        if (ctx.config.snapshots && FileSystem.SYSTEM.exists(out)) Snapshots.capture(ctx, out.toString())
         val host = HarnessRuntime.host
             ?: return ToolExecResult(pdfPluginHint("merge"), success = false)
-        val ok = host.pdfMerge(inputs.map { it.path }, out.path)
+        val ok = host.pdfMerge(inputs.map { it.toString() }, out.toString())
         if (!ok) return ToolExecResult(pdfPluginHint("merge"), success = false)
-        if (!out.exists()) return ToolExecResult("The PDF merge produced no file at ${out.path}.", success = false)
+        if (!FileSystem.SYSTEM.exists(out)) return ToolExecResult("The PDF merge produced no file at ${out}.", success = false)
         return ToolExecResult(
-            "Merged ${inputs.size} PDFs into ${Workspace.display(ctx, out)} (${Workspace.humanSize(out.length())}, " +
+            "Merged ${inputs.size} PDFs into ${Workspace.display(ctx, out.toString())} (${Workspace.humanSize(FileSystem.SYSTEM.metadata(out).size ?: 0L)}, " +
                 "${inputs.joinToString(", ") { it.name }} in that order)."
         )
     }
 
     private suspend fun split(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
         val pages = (args["pages"]?.jsonPrimitive?.content ?: "").trim()
         if (pages.isEmpty()) return ToolExecResult("Give the pages to keep, for example \"2-4,9\".", success = false)
         val raw = args["out"]?.jsonPrimitive?.content ?: ""
         val out = if (raw.isBlank()) {
-            pdfWritableTarget(ctx, pdfSibling(ctx, file, file.nameWithoutExtension + "-pages.pdf"))
+            pdfWritableTarget(ctx, pdfSibling(ctx, file, file.name.substringBeforeLast(".") + "-pages.pdf"))
         } else {
-            Workspace.forWriteFile(ctx, raw)
+            Workspace.forWrite(ctx, raw).toPath()
         }
-        out.parentFile?.mkdirs()
-        if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
+        out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        if (ctx.config.snapshots && FileSystem.SYSTEM.exists(out)) Snapshots.capture(ctx, out.toString())
         val host = HarnessRuntime.host
             ?: return ToolExecResult(pdfPluginHint("split"), success = false)
-        val ok = host.pdfSplit(file.path, out.path, pages)
+        val ok = host.pdfSplit(file.toString(), out.toString(), pages)
         if (!ok) return ToolExecResult(pdfPluginHint("split"), success = false)
-        if (!out.exists()) return ToolExecResult("The PDF split produced no file at ${out.path}.", success = false)
+        if (!FileSystem.SYSTEM.exists(out)) return ToolExecResult("The PDF split produced no file at ${out}.", success = false)
         return ToolExecResult(
-            "Wrote pages $pages of ${file.name} to ${Workspace.display(ctx, out)} " +
-                "(${Workspace.humanSize(out.length())})."
+            "Wrote pages $pages of ${file.name} to ${Workspace.display(ctx, out.toString())} " +
+                "(${Workspace.humanSize(FileSystem.SYSTEM.metadata(out).size ?: 0L)})."
         )
     }
 
@@ -1615,15 +1603,15 @@ object PdfTools : HarnessGroupTools {
         "This platform cannot $action PDFs by itself. Install the python-office plugin (install_plugin) and use " +
             "run_command instead, for example: python3 -c \"import pypdf; ...\"."
 
-    private fun pdfOutputTarget(ctx: HarnessCtx, raw: String, fallback: File): File {
-        if (raw.isNotBlank()) return Workspace.forWriteFile(ctx, raw)
+    private fun pdfOutputTarget(ctx: HarnessCtx, raw: String, fallback: Path): Path {
+        if (raw.isNotBlank()) return Workspace.forWrite(ctx, raw).toPath()
         return pdfWritableTarget(ctx, fallback)
     }
 
-    private fun pdfSibling(ctx: HarnessCtx, file: File, name: String): File =
-        File(file.parentFile ?: ctx.workspace, name)
+    private fun pdfSibling(ctx: HarnessCtx, file: Path, name: String): Path =
+        (file.parent ?: ctx.workspace.toPath()).resolve(name)
 
-private fun pdfWritableTarget(ctx: HarnessCtx, target: File): File {
-        return if (Workspace.writable(ctx, target)) target else File(ctx.workspace, target.name)
+    private fun pdfWritableTarget(ctx: HarnessCtx, target: Path): Path {
+        return if (Workspace.writable(ctx, target.toString())) target else ctx.workspace.toPath().resolve(target.name)
     }
 }
