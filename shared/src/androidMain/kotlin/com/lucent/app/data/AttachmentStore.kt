@@ -54,7 +54,7 @@ actual object AttachmentStore {
     }
 
     actual fun openOutputStream(context: PlatformContext, id: String): PlatformOutputStream? = try {
-        val key = DataKeys.attachmentKey(context)
+        val key = javax.crypto.spec.SecretKeySpec(DataKeys.attachmentKey(context), "AES")
         val dest = File(fileFor(context, id).absolutePath)
         PlatformOutputStream(FileCrypto.encryptingStream(dest.outputStream(), key))
     } catch (t: Throwable) {
@@ -66,7 +66,7 @@ actual object AttachmentStore {
         if (!file.exists()) {
             null
         } else if (FileCrypto.isEncrypted(file)) {
-            FileCrypto.decryptingStream(file.inputStream(), DataKeys.attachmentKey(context))
+            FileCrypto.decryptingStream(file.inputStream(), javax.crypto.spec.SecretKeySpec(DataKeys.attachmentKey(context), "AES"))
         } else {
             file.inputStream()
         }
@@ -103,7 +103,7 @@ actual object AttachmentStore {
         if (!file.exists() || FileCrypto.isEncrypted(file)) return false
         val temp = File(file.parentFile, "$id.enc-tmp")
         return try {
-            val key = DataKeys.attachmentKey(context)
+            val key = javax.crypto.spec.SecretKeySpec(DataKeys.attachmentKey(context), "AES")
             file.inputStream().use { input ->
                 FileCrypto.encryptingStream(temp.outputStream(), key).use { output ->
                     copyStream(input, output)

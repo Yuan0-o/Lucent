@@ -5,12 +5,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 object BackupRecovery {
 
@@ -21,8 +15,6 @@ object BackupRecovery {
     private const val GCM_TAG_BITS = 128
 
     private const val ITERATIONS = BackupCrypto.PASSWORD_ITERATIONS
-
-    private val random = SecureRandom()
 
     private val jsonFormat = Json { ignoreUnknownKeys = true }
 
@@ -65,12 +57,10 @@ object BackupRecovery {
 
     fun create(question: String, answer: String, backupPassword: String): Envelope? {
         if (question.isBlank() || answer.isBlank() || backupPassword.isEmpty()) return null
-        val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
-        val iv = ByteArray(IV_LEN).also { random.nextBytes(it) }
+        val salt = secureRandomBytes(SALT_LEN)
+        val iv = secureRandomBytes(IV_LEN)
         val key = deriveKey(normalise(answer), salt, ITERATIONS)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
-        val wrapped = cipher.doFinal(backupPassword.toByteArray(Charsets.UTF_8))
+        val wrapped = aesGcmEncrypt(key, iv, backupPassword.toByteArray(Charsets.UTF_8))
         return Envelope(question.trim(), salt, ITERATIONS, iv, wrapped)
     }
 
@@ -78,9 +68,8 @@ object BackupRecovery {
         if (answer.isBlank()) return null
         return try {
             val key = deriveKey(normalise(answer), envelope.salt, envelope.iterations)
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, envelope.iv))
-            String(cipher.doFinal(envelope.wrapped), Charsets.UTF_8)
+            val decrypted = aesGcmDecrypt(key, envelope.iv, envelope.wrapped)
+            String(decrypted, Charsets.UTF_8)
         } catch (_: Throwable) {
             null
         }
@@ -119,10 +108,8 @@ object BackupRecovery {
 
     private fun normalise(answer: String): String = answer.trim().lowercase()
 
-    private fun deriveKey(answer: String, salt: ByteArray, iterations: Int): SecretKeySpec {
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(answer.toCharArray(), salt, iterations, KEY_BITS)
-        return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
+    private fun deriveKey(answer: String, salt: ByteArray, iterations: Int): ByteArray {
+        return pbkdf2Sha256(answer.toCharArray(), salt, iterations, KEY_BITS)
     }
 
     private fun b64(bytes: ByteArray): String =

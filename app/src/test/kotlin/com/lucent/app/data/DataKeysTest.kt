@@ -4,8 +4,6 @@ import android.content.Context
 import android.content.ContextWrapper
 import java.io.File
 import java.nio.file.Files
-import javax.crypto.SecretKey
-import javax.crypto.spec.SecretKeySpec
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -85,7 +83,7 @@ class DataKeysTest {
 
     @Test
     fun cachedAttachmentKeyShortCircuitsUntilReset() {
-        val sentinel = SecretKeySpec(ByteArray(32), "AES")
+        val sentinel = ByteArray(32)
         setCachedAttachmentKey(sentinel)
         val explodingContext = FakeContext {
             throw AssertionError("filesDir touched while the attachmentKey cache was warm")
@@ -124,7 +122,7 @@ private fun callDecodeKey(base64: String): ByteArray? {
     return method.invoke(DataKeys, base64) as ByteArray?
 }
 
-private fun setCachedAttachmentKey(key: SecretKey) {
+private fun setCachedAttachmentKey(key: ByteArray) {
     val field = DataKeys::class.java.getDeclaredField("attachmentKey")
     field.isAccessible = true
     field.set(DataKeys, key)

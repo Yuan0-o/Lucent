@@ -6,9 +6,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.security.SecureRandom
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
 
 @Serializable
 private data class Credentials(
@@ -28,11 +25,10 @@ object AppLock {
     private const val SALT_LEN = 16
     private const val KEY_BITS = 256
 
-    private val random = SecureRandom()
     private val json = Json { ignoreUnknownKeys = true }
 
     fun createCredentials(password: String, question: String, answer: String): String {
-        val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
+        val salt = secureRandomBytes(SALT_LEN)
         val recovery = question.isNotBlank() && answer.isNotBlank()
         return json.encodeToString(
             Credentials(
@@ -90,9 +86,7 @@ object AppLock {
         com.lucent.app.nativebridge.LucentNative
             .pbkdf2Sha256(password, salt, iterations, KEY_BITS / 8)
             ?.let { return it }
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(password, salt, iterations, KEY_BITS)
-        return factory.generateSecret(spec).encoded
+        return pbkdf2Sha256(password, salt, iterations, KEY_BITS)
     }
 
     private fun normalizeAnswer(answer: String): String = answer.trim().lowercase()

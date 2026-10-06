@@ -13,7 +13,8 @@ object HarnessVault {
     fun write(context: PlatformContext, file: Path, text: String) {
         try {
             file.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-            val key = DataKeys.attachmentKey(context.appContext())
+            val keyBytes = DataKeys.attachmentKey(context.appContext())
+            val key = javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
             val bytes = FileCrypto.encrypt(text.toByteArray(Charsets.UTF_8), key)
             FileSystem.SYSTEM.write(file) { write(bytes) }
         } catch (_: Throwable) {
@@ -25,7 +26,8 @@ object HarnessVault {
         return try {
             val raw = FileSystem.SYSTEM.read(file) { readByteArray() }
             if (!FileCrypto.isEncrypted(java.io.File(file.toString()))) return String(raw, Charsets.UTF_8)
-            val key = DataKeys.attachmentKey(context.appContext())
+            val keyBytes = DataKeys.attachmentKey(context.appContext())
+            val key = javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
             String(FileCrypto.decrypt(raw, key), Charsets.UTF_8)
         } catch (_: Throwable) {
             ""

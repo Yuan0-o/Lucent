@@ -5,8 +5,6 @@ import com.lucent.app.platform.filesDir
 import com.lucent.app.platform.PlatformContext
 import java.io.File
 import java.security.SecureRandom
-import javax.crypto.SecretKey
-import javax.crypto.spec.SecretKeySpec
 
 actual object DataKeys {
 
@@ -17,7 +15,7 @@ actual object DataKeys {
     private const val KEY_BYTES = 32
 
     private val lock = Any()
-    @Volatile private var attachmentKey: SecretKey? = null
+    @Volatile private var attachmentKey: ByteArray? = null
     @Volatile private var databaseKeyHex: String? = null
 
     private fun keyDir(context: PlatformContext): File =
@@ -99,11 +97,11 @@ actual object DataKeys {
         if (wrapped.isNotEmpty()) atomicWrite(recoveryFile, wrapped)
     }
 
-    actual fun attachmentKey(context: PlatformContext): SecretKey {
+    actual fun attachmentKey(context: PlatformContext): ByteArray {
         attachmentKey?.let { return it }
         synchronized(lock) {
             attachmentKey?.let { return it }
-            val key = SecretKeySpec(getOrCreate(context, ATTACHMENT_KEY_FILE), "AES")
+            val key = getOrCreate(context, ATTACHMENT_KEY_FILE)
             attachmentKey = key
             return key
         }

@@ -1,12 +1,6 @@
 package com.lucent.app.data
 
 import kotlin.io.encoding.Base64
-import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 object CryptoUtil {
 
@@ -22,24 +16,19 @@ object CryptoUtil {
         com.lucent.app.nativebridge.LucentNative
             .pbkdf2Sha256(PASSPHRASE, salt, PBKDF2_ITERATIONS, KEY_BITS / 8)
             ?.let { return it }
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(PASSPHRASE, salt, PBKDF2_ITERATIONS, KEY_BITS)
-        return factory.generateSecret(spec).encoded
+        return pbkdf2Sha256(PASSPHRASE, salt, PBKDF2_ITERATIONS, KEY_BITS)
     }
 
     fun encrypt(plainText: String): String {
         if (plainText.isEmpty()) return ""
-        val random = SecureRandom()
-        val salt = ByteArray(SALT_LENGTH).also { random.nextBytes(it) }
-        val iv = ByteArray(IV_LENGTH).also { random.nextBytes(it) }
+        val salt = secureRandomBytes(SALT_LENGTH)
+        val iv = secureRandomBytes(IV_LENGTH)
         val keyBytes = deriveKeyBytes(salt)
         val plain = plainText.toByteArray(Charsets.UTF_8)
         val encrypted = com.lucent.app.nativebridge.LucentNative
             .aesGcmSeal(keyBytes, iv, ByteArray(0), plain)
             ?: run {
-                val cipher = Cipher.getInstance(TRANSFORMATION)
-                cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
-                cipher.doFinal(plain)
+                aesGcmEncrypt(keyBytes, iv, plain)
             }
         return Base64.encode(salt + iv + encrypted)
     }
@@ -56,9 +45,7 @@ object CryptoUtil {
             val plain = com.lucent.app.nativebridge.LucentNative
                 .aesGcmOpen(keyBytes, iv, ByteArray(0), encrypted)
                 ?: run {
-                    val cipher = Cipher.getInstance(TRANSFORMATION)
-                    cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
-                    cipher.doFinal(encrypted)
+                    aesGcmDecrypt(keyBytes, iv, encrypted)
                 }
             String(plain, Charsets.UTF_8)
         } catch (e: Exception) {
