@@ -8,7 +8,9 @@ import kotlinx.serialization.json.*
 import com.lucent.app.harness.terminal.TerminalSessions
 import com.lucent.app.harness.terminal.PtyStartRequest
 import com.lucent.app.harness.terminal.PtySessionState
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
@@ -51,9 +53,9 @@ object HarnessJobs {
     private val counter = AtomicInt(1)
     private val jobs = mutableMapOf<String, HarnessJobHandle>()
 
-    fun start(command: String, workdir: File, timeoutSeconds: Int): HarnessJobHandle {
+    fun start(command: String, workdir: Path, timeoutSeconds: Int): HarnessJobHandle {
         val id = "job-${counter.fetchAndIncrement()}"
-        val job = HarnessJob(id, command, workdir.path, System.currentTimeMillis(), timeoutSeconds)
+        val job = HarnessJob(id, command, workdir.toString(), System.currentTimeMillis(), timeoutSeconds)
         val handle = HarnessJobHandle(job)
         jobs[id] = handle
         handle.task = HarnessRuntime.background().launch {
@@ -325,15 +327,15 @@ object TerminalTools : HarnessGroupTools {
         return ToolExecResult(sb.toString().trimEnd())
     }
 
-    private fun workdirOf(ctx: HarnessCtx, args: JsonObject): File {
+    private fun workdirOf(ctx: HarnessCtx, args: JsonObject): Path {
         val raw = args["workdir"]?.jsonPrimitive?.content ?: ""
-        if (raw.isBlank()) return File(HarnessRuntime.workspacePath())
+        if (raw.isBlank()) return HarnessRuntime.workspacePath().toPath()
         val dir = try {
-            Workspace.resolveFile(raw)
+            Workspace.resolveFile(raw).absolutePath.toPath()
         } catch (e: HarnessError) {
-            File(HarnessRuntime.workspacePath())
+            HarnessRuntime.workspacePath().toPath()
         }
-        if (!dir.exists()) dir.mkdirs()
+        if (!FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.createDirectories(dir)
         return dir
     }
 
@@ -360,7 +362,7 @@ object TerminalTools : HarnessGroupTools {
             }
         }
         val shell = HarnessRuntime.shell
-        val outcome = shell?.run(command, dir.path, timeout, env)
+        val outcome = shell?.run(command, dir.toString(), timeout, env)
             ?: ShellOutcome(false, "", "no shell backend is available", -1)
         val text = ctx.limit(outcome.text)
         val body = buildString {

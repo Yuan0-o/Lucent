@@ -42,7 +42,7 @@ class HarnessSupportTest {
             override fun cacheDirPath(): String { val f = File(root, "cache"); f.mkdirs(); return f.path }
         }
         try {
-            val folder = SubAgentReports.folder()
+            val folder = java.io.File(SubAgentReports.folder().toString())
             assertTrue(Workspace.isInside(folder, File(HarnessRuntime.workspacePath())), folder.path)
         } finally {
             HarnessRuntime.host = previousHost

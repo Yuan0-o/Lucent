@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.Path
+import okio.Path.Companion.toPath
 
 data class TodoItem(val title: String, val status: String)
 
@@ -131,11 +132,11 @@ object TodoBoard {
 
 object TodoFiles {
 
-    fun fileFor(conversationId: Long): File =
-        File(HarnessRuntime.subDirPath("todos"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
+    fun fileFor(conversationId: Long): Path =
+        HarnessRuntime.subDirPath("todos").toPath() / ("conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
     fun read(context: PlatformContext, conversationId: Long): List<TodoItem> {
-        val text = HarnessVault.read(context, okio.Path.Companion.toPath(fileFor(conversationId).absolutePath))
+        val text = HarnessVault.read(context, fileFor(conversationId))
         if (text.isBlank()) return emptyList()
         return try {
             parse(Json.parseToJsonElement(text).jsonArray)
@@ -148,7 +149,7 @@ object TodoFiles {
         val array = JsonArray(list.map { item ->
             JsonObject(mapOf("title" to JsonPrimitive(item.title), "status" to JsonPrimitive(item.status)))
         })
-        HarnessVault.write(context, okio.Path.Companion.toPath(fileFor(conversationId).absolutePath), array.toString())
+        HarnessVault.write(context, fileFor(conversationId), array.toString())
     }
 
     private fun parse(array: JsonArray): List<TodoItem> {

@@ -1,17 +1,23 @@
 package com.lucent.app.harness
 
 import com.lucent.app.platform.PlatformContext
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 
 object SubAgentReports {
 
     const val FOLDER = "sub-agents"
 
-    fun folder(): File = File(HarnessRuntime.workspacePath(), FOLDER).apply { mkdirs() }
+    fun folder(): Path {
+        val p = HarnessRuntime.workspacePath().toPath() / FOLDER
+        FileSystem.SYSTEM.createDirectories(p)
+        return p
+    }
 
-    fun write(context: PlatformContext, agent: SubAgent): File {
-        val file = File(folder(), agent.id + ".md")
-        file.writeText(markdown(agent))
+    fun write(context: PlatformContext, agent: SubAgent): Path {
+        val file = folder() / (agent.id + ".md")
+        FileSystem.SYSTEM.write(file) { writeUtf8(markdown(agent)) }
         AuditTrail.record(
             context,
             AuditEntry(
@@ -22,9 +28,9 @@ object SubAgentReports {
                 approval = "allow",
                 arguments = agent.id,
                 outcome = "saved",
-                detail = file.path,
+                detail = file.toString(),
                 millis = 0L,
-                files = listOf(file.path)
+                files = listOf(file.toString())
             )
         )
         return file
