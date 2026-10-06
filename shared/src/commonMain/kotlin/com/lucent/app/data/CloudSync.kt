@@ -27,7 +27,7 @@ object CloudSync {
     )
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(java.time.Duration.ofSeconds(15).toJavaDuration())
+        .connectTimeout(java.time.Duration.ofSeconds(15))
         .readTimeout(java.time.Duration.ofSeconds(60))
         .writeTimeout(java.time.Duration.ofSeconds(60))
         .build()

@@ -1,6 +1,7 @@
 package com.lucent.app.local
 
 import android.net.Uri
+import okio.source
 import android.provider.OpenableColumns
 import com.lucent.app.platform.PlatformContext
 
@@ -13,6 +14,6 @@ class UriImportSource(val uri: Uri) : ImportSource {
         null
     }
 
-    override fun openStream(context: PlatformContext): java.io.InputStream? =
-        context.contentResolver.openInputStream(uri)
+    override fun openStream(context: PlatformContext): okio.Source? =
+        context.contentResolver.openInputStream(uri)?.let { it.source() }
 }

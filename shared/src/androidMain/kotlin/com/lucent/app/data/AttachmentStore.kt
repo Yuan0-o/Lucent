@@ -11,8 +11,6 @@ import com.lucent.app.platform.PlatformInputStream
 import java.io.File
 import java.io.IOException
 import okio.buffer
-import okio.sink
-import okio.source
 import okio.Path.Companion.toPath
 import okio.FileSystem
 import java.util.UUID
@@ -61,7 +59,7 @@ actual object AttachmentStore {
     actual fun openOutputStream(context: PlatformContext, id: String): PlatformOutputStream? = try {
         val key = DataKeys.attachmentKey(context)
         val dest = File(fileFor(context, id).absolutePath)
-        PlatformOutputStream(FileCrypto.encryptingSink(okio.sink(dest), DataKeys.attachmentKey(context)).buffer().outputStream())
+        PlatformOutputStream(FileCrypto.encryptingSink(FileSystem.SYSTEM.sink(dest.absolutePath.toPath()), DataKeys.attachmentKey(context)).buffer().outputStream())
     } catch (t: Throwable) {
         null
     }
@@ -71,7 +69,7 @@ actual object AttachmentStore {
         if (!file.exists()) {
             null
         } else if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, okio.Path.Companion.toPath(file.absolutePath))) {
-            FileCrypto.decryptingSource(okio.source(file), DataKeys.attachmentKey(context)).buffer().inputStream()
+            FileCrypto.decryptingSource(FileSystem.SYSTEM.source(file.absolutePath.toPath()), DataKeys.attachmentKey(context)).buffer().inputStream()
         } else {
             file.inputStream()
         }
@@ -110,7 +108,7 @@ actual object AttachmentStore {
         return try {
             val key = DataKeys.attachmentKey(context)
             file.inputStream().use { input ->
-                FileCrypto.encryptingSink(okio.sink(temp), DataKeys.attachmentKey(context)).buffer().outputStream().use { output ->
+                FileCrypto.encryptingSink(FileSystem.SYSTEM.sink(temp.absolutePath.toPath()), DataKeys.attachmentKey(context)).buffer().outputStream().use { output ->
                     copyStream(input, output)
                 }
             }

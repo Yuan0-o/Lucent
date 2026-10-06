@@ -63,7 +63,7 @@ object AuditTrail {
             synchronized(lock) {
                 try {
                     val target = file(app)
-                    FileSystem.SYSTEM.write(target, mustExist = false) { }; FileSystem.SYSTEM.appendingSink(target).buffer().use { it.writeUtf8(line + "\n") }
+                    FileSystem.SYSTEM.appendingSink(target).buffer().use { it.writeUtf8(line + "\n") }
                     if ((FileSystem.SYSTEM.metadata(target).size ?: -1) > MAX_BYTES) {
                         val kept = FileSystem.SYSTEM.read(target) { readUtf8() }.takeLast(KEEP_BYTES)
                         FileSystem.SYSTEM.write(target) { writeUtf8(kept.substringAfter("\n", kept)) }

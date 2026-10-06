@@ -5,8 +5,8 @@ import java.io.File
 actual abstract class PlatformContext
 
 actual fun PlatformContext.getApplicationContext(): PlatformContext = (this as DesktopPlatformContext).applicationContext
-actual fun PlatformContext.getFilesDir(): java.io.File = (this as DesktopPlatformContext).filesDir
-actual fun PlatformContext.getCacheDir(): java.io.File = (this as DesktopPlatformContext).cacheDir
+actual fun PlatformContext.getFilesDir(): okio.Path = okio.Path.Companion.toPath((this as DesktopPlatformContext).filesDir.absolutePath)
+actual fun PlatformContext.getCacheDir(): okio.Path = okio.Path.Companion.toPath((this as DesktopPlatformContext).cacheDir.absolutePath)
 
 actual fun PlatformContext.appContext(): PlatformContext = applicationContext
 
