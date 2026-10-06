@@ -91,7 +91,7 @@ private object ActiveConversationStore {
         val app = context.applicationContext
         if (cachedFor === app) return cached
         val stored = runCatching {
-            com.lucent.app.harness.HarnessVault.read(app, file(app)).trim().toLongOrNull()
+            com.lucent.app.harness.HarnessVault.read(app, okio.Path.Companion.toPath(file(app).absolutePath)).trim().toLongOrNull()
         }.getOrNull()
         cached = stored
         cachedFor = app
@@ -104,7 +104,7 @@ private object ActiveConversationStore {
         cachedFor = app
         AppScope.io.launch {
             runCatching {
-                com.lucent.app.harness.HarnessVault.write(app, file(app), id?.toString().orEmpty())
+                com.lucent.app.harness.HarnessVault.write(app, okio.Path.Companion.toPath(file(app).absolutePath), id?.toString().orEmpty())
             }
         }
     }

@@ -3,7 +3,8 @@ import com.lucent.app.platform.filesDir
 
 import com.lucent.app.network.ToolExecResult
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.Path.Companion.toPath
+import okio.FileSystem
 import com.lucent.app.harness.terminal.TerminalSessions
 
 object SandboxTools : HarnessGroupTools {
@@ -163,8 +164,8 @@ object SandboxTools : HarnessGroupTools {
         val proot = prootVersion()
         val route = route(ctx, docker, proot)
         val timeout = (args["timeout"]?.jsonPrimitive?.intOrNull ?: ctx.config.timeoutSeconds).coerceIn(5, 1800)
-        val workdir = if ((args["workdir"]?.jsonPrimitive?.content ?: "").isBlank()) File(HarnessRuntime.workspacePath()) else try {
-            Workspace.resolveFile(args["workdir"]?.jsonPrimitive?.content ?: "")
+        val workdir = if ((args["workdir"]?.jsonPrimitive?.content ?: "").isBlank()) HarnessRuntime.workspacePath().toPath() else try {
+            Workspace.resolveFile(args["workdir"]?.jsonPrimitive?.content ?: "").absolutePath.toPath()
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That working directory cannot be used", success = false)
         }
@@ -180,19 +181,19 @@ object SandboxTools : HarnessGroupTools {
                 val cpus = args["cpus"]?.jsonPrimitive?.content ?: ""
                 if (cpus.isNotBlank()) flags.append(" --cpus ").append(cpus.filter { it.isDigit() || it == '.' })
                 val line = "docker run --rm -i" + flags +
-                    " -v '" + workdir.path.replace("'", "'\\''") + ":/work' -w /work " + image +
+                    " -v '" + workdir.toString().replace("'", "'\\''") + ":/work' -w /work " + image +
                     " sh -lc '" + quoted + "'"
-                HarnessRuntime.runShell(line, workdir.path, timeout)
+                HarnessRuntime.runShell(line, workdir.toString(), timeout)
             }
             "proot" -> {
-                val rootfs = File(HarnessRuntime.filesDirPath(), "home/lucent/ubuntu/rootfs")
-                val line = "proot -0 -r '" + rootfs.path.replace("'", "'\\''") + "' -w /work -b '" +
-                    workdir.path.replace("'", "'\\''") + ":/work' " +
+                val rootfs = HarnessRuntime.filesDirPath().toPath() / "home/lucent/ubuntu/rootfs"
+                val line = "proot -0 -r '" + rootfs.toString().replace("'", "'\\''") + "' -w /work -b '" +
+                    workdir.toString().replace("'", "'\\''") + ":/work' " +
                     "/usr/bin/env -i HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " +
                     "/bin/sh -lc '" + quoted + "'"
-                HarnessRuntime.runShell(line, workdir.path, timeout)
+                HarnessRuntime.runShell(line, workdir.toString(), timeout)
             }
-            else -> HarnessRuntime.runShell(command, workdir.path, timeout)
+            else -> HarnessRuntime.runShell(command, workdir.toString(), timeout)
         }
         val elapsed = System.currentTimeMillis() - started
         val body = buildString {

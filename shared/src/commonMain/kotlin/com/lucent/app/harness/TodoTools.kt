@@ -135,7 +135,7 @@ object TodoFiles {
         File(HarnessRuntime.subDirPath("todos"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
     fun read(context: PlatformContext, conversationId: Long): List<TodoItem> {
-        val text = HarnessVault.read(context, fileFor(conversationId))
+        val text = HarnessVault.read(context, okio.Path.Companion.toPath(fileFor(conversationId).absolutePath))
         if (text.isBlank()) return emptyList()
         return try {
             parse(Json.parseToJsonElement(text).jsonArray)
@@ -148,7 +148,7 @@ object TodoFiles {
         val array = JsonArray(list.map { item ->
             JsonObject(mapOf("title" to JsonPrimitive(item.title), "status" to JsonPrimitive(item.status)))
         })
-        HarnessVault.write(context, fileFor(conversationId), array.toString())
+        HarnessVault.write(context, okio.Path.Companion.toPath(fileFor(conversationId).absolutePath), array.toString())
     }
 
     private fun parse(array: JsonArray): List<TodoItem> {

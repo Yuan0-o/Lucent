@@ -1,0 +1,3 @@
+sed -i 's/import java.io.File/import okio.Path\nimport okio.Path.Companion.toPath\nimport okio.FileSystem/g' shared/src/commonMain/kotlin/com/lucent/app/harness/GoalTools.kt
+sed -i 's/fun fileFor(conversationId: Long): File =/fun fileFor(conversationId: Long): Path =/g' shared/src/commonMain/kotlin/com/lucent/app/harness/GoalTools.kt
+sed -i 's/File(HarnessRuntime.subDirPath("goals"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")/HarnessRuntime.subDirPath("goals").toPath() \/ ("conv-" + conversationId.coerceAtLeast(1L) + ".json")/g' shared/src/commonMain/kotlin/com/lucent/app/harness/GoalTools.kt

@@ -6,7 +6,9 @@ import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.io.File
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.FileSystem
 
 enum class GoalPhase(val key: String) {
     ACTIVE("active"),
@@ -480,8 +482,8 @@ object GoalStore {
 
 object GoalFiles {
 
-    fun fileFor(conversationId: Long): File =
-        File(HarnessRuntime.subDirPath("goals"), "conv-" + conversationId.coerceAtLeast(1L) + ".json")
+    fun fileFor(conversationId: Long): Path =
+        HarnessRuntime.subDirPath("goals").toPath() / ("conv-" + conversationId.coerceAtLeast(1L) + ".json")
 
     fun read(context: PlatformContext, conversationId: Long): GoalState? {
         val text = HarnessVault.read(context, fileFor(conversationId))

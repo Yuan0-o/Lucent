@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > shared/src/commonMain/kotlin/com/lucent/app/harness/HarnessVault.kt
 package com.lucent.app.harness
 
 import com.lucent.app.platform.PlatformContext
@@ -32,3 +33,4 @@ object HarnessVault {
         }
     }
 }
+INNER_EOF

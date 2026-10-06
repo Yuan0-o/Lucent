@@ -2,7 +2,10 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.FileSystem
+import okio.buffer
 
 object PlanTools : HarnessGroupTools {
 
@@ -212,12 +215,12 @@ object MemoryTools : HarnessGroupTools {
         else -> null
     }
 
-    private fun fileFor(ctx: HarnessCtx, scope: String): File {
-        val dir = HarnessRuntime.subDirPath("memory")
+    private fun fileFor(ctx: HarnessCtx, scope: String): Path {
+        val dir = HarnessRuntime.subDirPath("memory").toPath()
         return when (scope.lowercase()) {
-            "user" -> File(dir, "user.json")
-            "project" -> File(dir, "project-" + File(HarnessRuntime.workspacePath()).name.lowercase().replace(Regex("[^a-z0-9]+"), "-") + ".json")
-            else -> File(dir, "session-" + HarnessRuntime.conversationId + ".json")
+            "user" -> dir / "user.json"
+            "project" -> dir / ("project-" + HarnessRuntime.workspacePath().toPath().name.lowercase().replace(Regex("[^a-z0-9]+"), "-") + ".json")
+            else -> dir / ("session-" + HarnessRuntime.conversationId + ".json")
         }
     }
 
@@ -283,16 +286,19 @@ object MemoryTools : HarnessGroupTools {
     }
 
     private fun projectNotes(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = File(HarnessRuntime.workspacePath(), "LUCENT.md")
+        val file = HarnessRuntime.workspacePath().toPath() / "LUCENT.md"
         val action = args["action"]?.jsonPrimitive?.content?.lowercase() ?: "read"
         if (action == "append") {
             val text = args["text"]?.jsonPrimitive?.content?.trim() ?: ""
             if (text.isEmpty()) return ToolExecResult("Nothing to append.", success = false)
-            if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
-            file.appendText((if (file.exists() && file.length() > 0) "\n" else "") + text + "\n")
-            return ToolExecResult("Appended to ${Workspace.display(ctx, file)}.")
+            if (ctx.config.snapshots && FileSystem.SYSTEM.exists(file)) Snapshots.capture(ctx, file.toString())
+            val exists = FileSystem.SYSTEM.exists(file)
+            val len = if (exists) FileSystem.SYSTEM.metadataOrNull(file)?.size ?: -1 else -1
+            val prefix = if (exists && len > 0) "\n" else ""
+            FileSystem.SYSTEM.appendingSink(file).buffer().use { it.writeUtf8(prefix + text + "\n") }
+            return ToolExecResult("Appended to ${Workspace.display(ctx, file.toString())}.")
         }
-        if (!file.exists()) return ToolExecResult("There are no project notes yet (no LUCENT.md in the workspace).")
-        return ToolExecResult(Workspace.readText(file, 64 * 1024))
+        if (!FileSystem.SYSTEM.exists(file)) return ToolExecResult("There are no project notes yet (no LUCENT.md in the workspace).")
+        return ToolExecResult(Workspace.readText(file.toString(), 64 * 1024))
     }
 }

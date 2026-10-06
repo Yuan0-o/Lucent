@@ -4,7 +4,8 @@ import com.lucent.app.platform.filesDir
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.Path.Companion.toPath
+import okio.FileSystem
 
 object HarnessPrompt {
 
@@ -100,14 +101,14 @@ object HarnessPrompt {
 
     fun memoryLine(): String? {
         val context = AppScope.appContext ?: return null
-        val dir = File(HarnessRuntime.filesDirPath(), "harness/memory")
+        val dir = HarnessRuntime.filesDirPath().toPath() / "harness/memory"
         val scopes = listOf(
-            "user" to File(dir, "user.json"),
-            "project" to File(dir, "project-${workspaceSlug()}.json")
+            "user" to dir / "user.json",
+            "project" to dir / "project-${workspaceSlug()}.json"
         )
         val lines = mutableListOf<String>()
         scopes.forEach { (scope, file) ->
-            if (!file.isFile) return@forEach
+            if (FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile != true) return@forEach
             val facts = factsIn(context, file)
             lines.add(if (facts.isEmpty()) "$scope: kept, nothing readable" else "$scope: " + facts.joinToString(", "))
         }
@@ -116,7 +117,7 @@ object HarnessPrompt {
         return if (text.length <= MEMORY_CHARS) text else text.take(MEMORY_CHARS) + "… "
     }
 
-    private fun factsIn(context: PlatformContext, file: File): List<String> {
+    private fun factsIn(context: PlatformContext, file: okio.Path): List<String> {
         val text = HarnessVault.read(context, file)
         if (text.isBlank()) return emptyList()
         val json = try { Json.parseToJsonElement(text).jsonObject } catch (e: Exception) { return emptyList() }
@@ -131,20 +132,20 @@ object HarnessPrompt {
     }
 
     private fun workspaceSlug(): String =
-        File(HarnessRuntime.workspacePath()).name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
+        HarnessRuntime.workspacePath().toPath().name.lowercase().replace(Regex("[^a-z0-9]+"), "-")
 
     fun skillsLine(): String? {
-        val dirs = mutableListOf(File(HarnessRuntime.workspacePath(), ".lucent/skills"))
-        HarnessRuntime.config().skillDirs.forEach { if (it.isNotBlank()) dirs.add(File(it)) }
-        val files = dirs.filter { it.isDirectory }
-            .flatMap { dir -> (dir.listFiles() ?: emptyArray()).filter { it.isFile && it.name.endsWith(".md") } }
+        val dirs = mutableListOf(HarnessRuntime.workspacePath().toPath() / ".lucent/skills")
+        HarnessRuntime.config().skillDirs.forEach { if (it.isNotBlank()) dirs.add(it.toPath()) }
+        val files = dirs.filter { FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory == true }
+            .flatMap { dir -> (try { FileSystem.SYSTEM.list(dir) } catch (e: Exception) { emptyList() }).filter { FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true && it.name.endsWith(".md") } }
             .distinctBy { it.name.lowercase() }
             .sortedBy { it.name.lowercase() }
         if (files.isEmpty()) return null
         val shown = files.take(SKILLS_SHOWN).map { file ->
-            val label = file.nameWithoutExtension
+            val label = file.name.substringBeforeLast('.')
             val description = try {
-                file.useLines { lines -> lines.firstOrNull { it.startsWith("description:") } }
+                FileSystem.SYSTEM.read(file) { readUtf8() }.lines().firstOrNull { it.startsWith("description:") }
                     ?.removePrefix("description:")?.trim()?.take(SKILL_DESCRIPTION) ?: ""
             } catch (e: Exception) {
                 ""
