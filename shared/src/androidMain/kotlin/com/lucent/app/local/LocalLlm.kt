@@ -35,11 +35,11 @@ actual object LocalLlm {
 
     actual fun isGenerating(): Boolean = LocalLlmProxy.isGenerating()
 
-    internal var ensureLoadedOverride: (suspend (Context) -> Boolean)? = null
+    var ensureLoadedOverride: (suspend (Context) -> Boolean)? = null
 
-    internal var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
+    var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
 
-    internal fun resetOverridesForTesting() {
+    fun resetOverridesForTesting() {
         ensureLoadedOverride = null
         generateOverride = null
     }

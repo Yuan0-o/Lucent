@@ -121,11 +121,11 @@ actual object LocalLlm {
         return (if (total > 4) total - 1 else total).coerceIn(2, 8)
     }
 
-    internal var ensureLoadedOverride: (suspend (PlatformContext) -> Boolean)? = null
+    var ensureLoadedOverride: (suspend (PlatformContext) -> Boolean)? = null
 
-    internal var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
+    var generateOverride: (suspend (List<Pair<String, String>>, List<ByteArray>, (String) -> Unit) -> Int)? = null
 
-    internal fun resetOverridesForTesting() {
+    fun resetOverridesForTesting() {
         ensureLoadedOverride = null
         generateOverride = null
     }
