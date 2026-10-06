@@ -353,26 +353,32 @@ class MainActivity : FragmentActivity() {
             )
             LaunchedEffect(autoUpdateOn) {
                 if (!autoUpdateOn) return@LaunchedEffect
-                com.lucent.app.data.AutoUpdate.report(null)
-                if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
-                    com.lucent.app.data.AutoUpdate.downloadOffered()
-                }
+                try {
+                    com.lucent.app.data.AutoUpdate.report(null)
+                    if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                        com.lucent.app.data.AutoUpdate.downloadOffered()
+                    }
+                } catch (t: Throwable) {}
                 while (true) {
                     delay(UPDATE_CHECK_INTERVAL_MS)
                     if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
                     if (com.lucent.app.data.AutoUpdate.offered != null) continue
-                    val found = com.lucent.app.data.AutoUpdate.check(runningVersion)
-                    if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
-                        com.lucent.app.data.AutoUpdate.downloadOffered()
-                    }
+                    try {
+                        val found = com.lucent.app.data.AutoUpdate.check(runningVersion)
+                        if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
+                            com.lucent.app.data.AutoUpdate.downloadOffered()
+                        }
+                    } catch (t: Throwable) {}
                 }
             }
 
             LaunchedEffect(Unit) {
                 if (!autoUpdateOn && com.lucent.app.data.AutoUpdate.pendingVersion != null) {
-                    if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
-                        com.lucent.app.data.AutoUpdate.downloadOffered()
-                    }
+                    try {
+                        if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                            com.lucent.app.data.AutoUpdate.downloadOffered()
+                        }
+                    } catch (t: Throwable) {}
                 }
             }
 

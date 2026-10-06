@@ -86,31 +86,41 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val dynamicColorOn by repo.dynamicColorEnabled.collectAsState(initial = startup.dynamicColor)
 
     val languageKey by repo.appLanguage.collectAsState(initial = startup.appLanguage)
-    LaunchedEffect(languageKey) { com.lucent.app.i18n.L.apply(languageKey) }
+    LaunchedEffect(languageKey) {
+        try {
+            com.lucent.app.i18n.L.apply(languageKey)
+        } catch (t: Throwable) {}
+    }
 
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = startup.autoUpdateEnabled)
     LaunchedEffect(autoUpdateOn) {
         if (!autoUpdateOn) return@LaunchedEffect
-        com.lucent.app.data.AutoUpdate.report(null)
-        if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
-            com.lucent.app.data.AutoUpdate.downloadOffered()
-        }
-        while (true) {
-            kotlinx.coroutines.delay(UPDATE_CHECK_INTERVAL_MS)
-            if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
-            if (com.lucent.app.data.AutoUpdate.offered != null) continue
-            val found = com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
-            if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
+        try {
+            com.lucent.app.data.AutoUpdate.report(null)
+            if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
                 com.lucent.app.data.AutoUpdate.downloadOffered()
             }
+        } catch (t: Throwable) {}
+        while (true) {
+            kotlinx.coroutines.delay(UPDATE_CHECK_INTERVAL_MS)
+            try {
+                if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
+                if (com.lucent.app.data.AutoUpdate.offered != null) continue
+                val found = com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
+                if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
+                    com.lucent.app.data.AutoUpdate.downloadOffered()
+                }
+            } catch (t: Throwable) {}
         }
     }
 
     LaunchedEffect(Unit) {
         if (!autoUpdateOn && com.lucent.app.data.AutoUpdate.pendingVersion != null) {
-            if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
-                com.lucent.app.data.AutoUpdate.downloadOffered()
-            }
+            try {
+                if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
+                    com.lucent.app.data.AutoUpdate.downloadOffered()
+                }
+            } catch (t: Throwable) {}
         }
     }
 
@@ -119,7 +129,9 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
 
     LaunchedEffect(Unit) {
         val shieldWanted = try { repo.crashShieldEnabledOnce() } catch (t: Throwable) { false }
-        if (shieldWanted) com.lucent.app.data.CrashShield.install(context)
+        if (shieldWanted) {
+            try { com.lucent.app.data.CrashShield.install(context) } catch (t: Throwable) {}
+        }
     }
 
     val themeChoice = LucentThemeMode.fromKey(themeMode)
@@ -203,7 +215,13 @@ private fun DesktopShell(
     var current by remember { mutableStateOf(Screen.Tasks) }
     var showTrashChooser by remember { mutableStateOf(false) }
     var trashInitialMode by remember { mutableStateOf<HomeMode?>(null) }
-    val notebooks by remember { createAppDatabase(desktopPlatformContext).notebookDao.getAll() }.collectAsState(initial = emptyList())
+    val notebooks by remember {
+        try {
+            createAppDatabase(desktopPlatformContext).notebookDao.getAll()
+        } catch (t: Throwable) {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }.collectAsState(initial = emptyList())
     val notebookOpensJson by repo.notebookOpens.collectAsState(initial = "{}")
     val recentNotebooks = remember(notebooks, notebookOpensJson) {
         runCatching {
@@ -218,8 +236,10 @@ private fun DesktopShell(
         AppNavigation.consumeScreen()?.let { current = it }
     }
     LaunchedEffect(current) {
-        LastScreen.remember(current)
-        com.lucent.app.data.StartupLog.event(desktopPlatformContext, "nav: showing ${current.name.lowercase()}")
+        try {
+            LastScreen.remember(current)
+            com.lucent.app.data.StartupLog.event(desktopPlatformContext, "nav: showing ${current.name.lowercase()}")
+        } catch (t: Throwable) {}
     }
     LaunchedEffect(HiddenArea.visible) {
         if (!HiddenArea.visible && current == Screen.Hidden) current = LastScreen.homeMode.screen
