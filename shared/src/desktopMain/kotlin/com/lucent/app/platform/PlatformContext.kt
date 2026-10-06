@@ -10,10 +10,10 @@ actual fun PlatformContext.getCacheDir(): java.io.File = (this as DesktopPlatfor
 
 actual fun PlatformContext.appContext(): PlatformContext = applicationContext
 
-class DesktopPlatformContext : PlatformContext() {
+open class DesktopPlatformContext : PlatformContext() {
     val applicationContext: PlatformContext get() = this
 
-    val filesDir: File by lazy {
+    open val filesDir: File by lazy {
         val os = System.getProperty("os.name").lowercase()
         val home = System.getProperty("user.home")
         val base: File = when {
@@ -27,7 +27,7 @@ class DesktopPlatformContext : PlatformContext() {
         File(base, "Lucent").apply { mkdirs() }
     }
 
-    val cacheDir: File by lazy { File(filesDir, "cache").apply { mkdirs() } }
+    open val cacheDir: File by lazy { File(filesDir, "cache").apply { mkdirs() } }
 
     val packageName: String get() = "com.lucent.desktop"
 }
