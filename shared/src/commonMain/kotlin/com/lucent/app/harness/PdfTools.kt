@@ -6,7 +6,6 @@ import com.lucent.app.network.ToolImage
 import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.util.zip.Inflater
 
@@ -42,9 +41,9 @@ private class PdfString(val bytes: ByteArray) : PdfValue() {
 
     fun utf16(): String {
         if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
-            return String(bytes, 2, bytes.size - 2, StandardCharsets.UTF_16BE)
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
         }
-        return String(bytes, StandardCharsets.ISO_8859_1)
+        return String(bytes, Charsets.ISO_8859_1)
     }
 }
 
@@ -364,7 +363,7 @@ private fun pdfScan(text: String): PdfParsed {
     }
     for (pending in streams) {
         val end = pdfStreamEnd(text, pending, objects)
-        val raw = text.substring(pending.start, end).toByteArray(StandardCharsets.ISO_8859_1)
+        val raw = text.substring(pending.start, end).toByteArray(Charsets.ISO_8859_1)
         objects[pending.number] = PdfStream(pending.dict, raw)
     }
     val trailer = pdfFindTrailer(text, objects)
@@ -489,9 +488,9 @@ private fun pdfLoad(file: File): PdfDocument {
         throw IllegalArgumentException("${file.name} is ${size / 1048576} MiB; PDFs larger than ${PDF_MAX_BYTES / 1048576} MiB are not read here")
     }
     val bytes = file.readBytes()
-    val head = String(bytes, 0, minOf(bytes.size, 1024), StandardCharsets.ISO_8859_1)
+    val head = String(bytes, 0, minOf(bytes.size, 1024), Charsets.ISO_8859_1)
     if (!head.contains("%PDF-")) throw IllegalArgumentException("${file.name} does not look like a PDF file")
-    val text = String(bytes, StandardCharsets.ISO_8859_1)
+    val text = String(bytes, Charsets.ISO_8859_1)
     val parsed = pdfScan(text)
     val objects = parsed.objects
     var encrypted = false
@@ -712,7 +711,7 @@ private class PdfCMap(val codes: HashMap<Int, String>, val spaces: MutableList<I
 
 private fun pdfParseCMap(bytes: ByteArray): PdfCMap {
     val map = PdfCMap(HashMap(), mutableListOf())
-    val text = String(bytes, StandardCharsets.ISO_8859_1)
+    val text = String(bytes, Charsets.ISO_8859_1)
     val parser = PdfParser(text, 0)
     var guard = 0
     while (guard < 2000000) {
@@ -863,11 +862,11 @@ private fun pdfPageContent(objects: Map<Int, PdfValue>, page: PdfPageNode): Stri
     when (contents) {
         is PdfArray -> contents.items.forEach { item ->
             val stream = pdfAsStream(pdfResolve(objects, item)) ?: return@forEach
-            chunks.add(String(stream.decoded(), StandardCharsets.ISO_8859_1))
+            chunks.add(String(stream.decoded(), Charsets.ISO_8859_1))
         }
         else -> {
             val stream = pdfAsStream(contents)
-            if (stream != null) chunks.add(String(stream.decoded(), StandardCharsets.ISO_8859_1))
+            if (stream != null) chunks.add(String(stream.decoded(), Charsets.ISO_8859_1))
         }
     }
     return chunks.joinToString("\n")

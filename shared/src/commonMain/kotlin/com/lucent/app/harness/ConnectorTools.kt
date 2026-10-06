@@ -15,7 +15,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 data class HttpReply(
@@ -79,7 +78,7 @@ object HttpJson {
         }
         HttpReply(
             code = outcome.first,
-            body = String(outcome.second, StandardCharsets.UTF_8),
+            body = String(outcome.second, Charsets.UTF_8),
             truncated = outcome.third
         )
     }
@@ -931,7 +930,7 @@ object ConnectorTools : HarnessGroupTools {
                 val file = HttpJson.objectOf(reply.body)
                 ToolExecResult(
                     "Uploaded ${file?.optString("name", name).orEmpty()} " +
-                        "(${content.toByteArray(StandardCharsets.UTF_8).size} bytes) " +
+                        "(${content.toByteArray(Charsets.UTF_8).size} bytes) " +
                         file?.optString("webViewLink", "").orEmpty()
                 )
             }
@@ -1029,7 +1028,7 @@ object ConnectorTools : HarnessGroupTools {
                 val item = HttpJson.objectOf(reply.body)
                 ToolExecResult(
                     "Uploaded ${item?.optString("name", path).orEmpty()} " +
-                        "(${content.toByteArray(StandardCharsets.UTF_8).size} bytes)"
+                        "(${content.toByteArray(Charsets.UTF_8).size} bytes)"
                 )
             }
         }
@@ -1352,7 +1351,7 @@ object ConnectorTools : HarnessGroupTools {
     }
 
     private fun basic(user: String, secret: String): String =
-        Base64.Default.encode("$user:$secret".toByteArray(StandardCharsets.UTF_8))
+        Base64.Default.encode("$user:$secret".toByteArray(Charsets.UTF_8))
 
     private suspend fun linear(args: JsonObject): ToolExecResult {
         val config = lookup(LINEAR_IDS) ?: return absent("Linear")
@@ -1516,7 +1515,7 @@ object ConnectorTools : HarnessGroupTools {
                 headers["Content-Type"] = "text/plain; charset=utf-8"
                 val reply = send("PUT", url, headers, content, 120)
                 problem(reply, "WebDAV")?.let { return it }
-                ToolExecResult("Wrote ${content.toByteArray(StandardCharsets.UTF_8).size} bytes to $path.")
+                ToolExecResult("Wrote ${content.toByteArray(Charsets.UTF_8).size} bytes to $path.")
             }
             "mkcol" -> {
                 val reply = send("MKCOL", url, headers)
@@ -1584,7 +1583,7 @@ object ConnectorTools : HarnessGroupTools {
             if (!reply.ok) {
                 return ToolExecResult(
                     "The request failed with ${HttpJson.describe(reply.code)}, so nothing was saved:\n" +
-                        HttpJson.cut(String(reply.bytes, StandardCharsets.UTF_8), 1200),
+                        HttpJson.cut(String(reply.bytes, Charsets.UTF_8), 1200),
                     success = false
                 )
             }

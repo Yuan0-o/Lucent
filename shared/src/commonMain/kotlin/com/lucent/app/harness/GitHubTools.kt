@@ -4,7 +4,6 @@ import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
-import java.nio.charset.StandardCharsets
 
 object GitHubTools : HarnessGroupTools {
 
@@ -286,7 +285,7 @@ object GitHubTools : HarnessGroupTools {
     private fun decode(content: String): String? = try {
         val clean = content.replace(Regex("\\s+"), "")
         val bytes = Base64.Mime.decode(clean)
-        String(bytes, StandardCharsets.UTF_8)
+        String(bytes, Charsets.UTF_8)
     } catch (t: Throwable) {
         null
     }
@@ -353,7 +352,7 @@ object GitHubTools : HarnessGroupTools {
             return ToolExecResult("$name has no inline text here. Download URL: $download")
         }
         val text = decode(content) ?: return ToolExecResult("$name could not be decoded. Download URL: $download")
-        if (Workspace.looksBinary(text.toByteArray(StandardCharsets.UTF_8))) {
+        if (Workspace.looksBinary(text.toByteArray(Charsets.UTF_8))) {
             return ToolExecResult("$name looks binary (${Workspace.humanSize(size)}). Download URL: $download")
         }
         return ToolExecResult("----- $name (${Workspace.humanSize(size)}) -----\n${HttpJson.cut(text, HttpJson.REPLY_BUDGET)}")

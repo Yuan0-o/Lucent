@@ -5,7 +5,6 @@ import org.w3c.dom.Element
 import kotlinx.serialization.json.*
 import org.w3c.dom.Node
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -2117,7 +2116,7 @@ private fun pptxTimestamp(): String {
     return format.format(Date())
 }
 
-private fun pptxXml(body: String): ByteArray = (PPTX_XML_HEAD + body).toByteArray(StandardCharsets.UTF_8)
+private fun pptxXml(body: String): ByteArray = (PPTX_XML_HEAD + body).toByteArray(Charsets.UTF_8)
 
 private fun pptxEsc(value: String): String = Ooxml.escape(pptxClean(value))
 
