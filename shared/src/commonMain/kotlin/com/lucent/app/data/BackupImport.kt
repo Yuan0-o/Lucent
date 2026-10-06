@@ -591,7 +591,7 @@ object BackupImporter {
     ): HarnessRestoreResult {
         val problems = mutableListOf<String>()
         var restored = 0
-        var plain: java.io.InputStream? = null
+        var plain: okio.Source? = null
         try {
             plain = BackupFrames.openDecrypted(source, password)
             val scratch = ByteArray(1 shl 16)

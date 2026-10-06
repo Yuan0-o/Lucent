@@ -321,9 +321,9 @@ object LocalModelStore {
     }
 
 
-    private fun newId(): String = java.util.UUID.randomUUID().toString().replace("-", "").take(12)
+    private fun newId(): String = kotlin.uuid.Uuid.randomUUID().toString().replace("-", "").take(12)
 
-    private fun readUpTo(input: java.io.InputStream, buffer: ByteArray): Int {
+    private fun readUpTo(input: okio.Source, buffer: ByteArray): Int {
         var read = 0
         while (read < buffer.size) {
             val n = input.read(buffer, read, buffer.size - read)
@@ -333,14 +333,14 @@ object LocalModelStore {
         return read
     }
 
-    private fun copyVerifyingGguf(zipEntry: java.io.InputStream, out: Path) {
+    private fun copyVerifyingGguf(zipEntry: okio.Source, out: Path) {
         val head = ByteArray(4)
         val n = readUpTo(zipEntry, head)
         if (n < 4 || !head.contentEquals(GGUF_MAGIC)) throw NotGgufException()
         copyPrefixed(head, n, zipEntry, out)
     }
 
-    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: java.io.InputStream, out: Path) {
+    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: okio.Source, out: Path) {
         FileSystem.SYSTEM.write(out) {
             write(prefix, 0, prefixLen)
             val buf = ByteArray(1 shl 16)
@@ -387,3 +387,34 @@ object LocalModelStore {
         FileSystem.SYSTEM.delete(dir(context) / "${mmprojFileName(id)}.tmp")
     }
 }
+
+private fun okio.Source.read(b: ByteArray, off: Int, len: Int): Int {
+    val buf = okio.Buffer()
+    val n = this.read(buf, len.toLong())
+    if (n == -1L) return -1
+    buf.read(b, off, n.toInt())
+    return n.toInt()
+}
+
+private fun okio.Source.read(b: ByteArray): Int = read(b, 0, b.size)
+
+private fun okio.Source.read(): Int {
+    val buf = okio.Buffer()
+    val n = this.read(buf, 1)
+    if (n == -1L) return -1
+    return buf.readByte().toInt() and 0xFF
+}
+
+private fun okio.Sink.write(b: Int) {
+    val buf = okio.Buffer()
+    buf.writeByte(b)
+    this.write(buf, 1)
+}
+
+private fun okio.Sink.write(b: ByteArray, off: Int, len: Int) {
+    val buf = okio.Buffer()
+    buf.write(b, off, len)
+    this.write(buf, len.toLong())
+}
+
+private fun okio.Sink.write(b: ByteArray) = write(b, 0, b.size)

@@ -110,7 +110,7 @@ internal object HarnessBackup {
         context: PlatformContext,
         name: String,
         dataLen: Long,
-        data: java.io.InputStream,
+        data: okio.Source,
         scratch: ByteArray,
         cancelled: (() -> Boolean)?
     ): Boolean {
@@ -122,7 +122,7 @@ internal object HarnessBackup {
             return false
         }
         var tmp: Path? = null
-        var out: java.io.OutputStream? = null
+        var out: okio.Sink? = null
         var written = 0L
         try {
             val tmpFile = (target.toString() + ".tmp").toPath()
@@ -132,7 +132,7 @@ internal object HarnessBackup {
             while (written < dataLen) {
                 BackupFrames.throwIfCancelled(cancelled)
                 val n = data.read(scratch, 0, minOf(dataLen - written, scratch.size.toLong()).toInt())
-                if (n < 0) throw java.io.EOFException("Backup payload ended early")
+                if (n < 0) throw okio.EOFException("Backup payload ended early")
                 os.write(scratch, 0, n)
                 written += n
             }
@@ -148,7 +148,7 @@ internal object HarnessBackup {
             }
             tmp?.let { FileSystem.SYSTEM.delete(it) }
             if (t is kotlinx.coroutines.CancellationException) throw t
-            if (t is java.io.EOFException) throw t
+            if (t is okio.EOFException) throw t
             skipRemaining(data, dataLen - written, scratch, cancelled)
             record(context, name, t.message ?: t::class.simpleName ?: "error")
             return false
@@ -164,7 +164,7 @@ internal object HarnessBackup {
     }
 
     private fun skipRemaining(
-        data: java.io.InputStream,
+        data: okio.Source,
         count: Long,
         scratch: ByteArray,
         cancelled: (() -> Boolean)?
@@ -178,3 +178,34 @@ internal object HarnessBackup {
 }
 
 fun harnessBackupSummary(): Pair<Int, Long> = HarnessBackup.summary()
+
+private fun okio.Source.read(b: ByteArray, off: Int, len: Int): Int {
+    val buf = okio.Buffer()
+    val n = this.read(buf, len.toLong())
+    if (n == -1L) return -1
+    buf.read(b, off, n.toInt())
+    return n.toInt()
+}
+
+private fun okio.Source.read(b: ByteArray): Int = read(b, 0, b.size)
+
+private fun okio.Source.read(): Int {
+    val buf = okio.Buffer()
+    val n = this.read(buf, 1)
+    if (n == -1L) return -1
+    return buf.readByte().toInt() and 0xFF
+}
+
+private fun okio.Sink.write(b: Int) {
+    val buf = okio.Buffer()
+    buf.writeByte(b)
+    this.write(buf, 1)
+}
+
+private fun okio.Sink.write(b: ByteArray, off: Int, len: Int) {
+    val buf = okio.Buffer()
+    buf.write(b, off, len)
+    this.write(buf, len.toLong())
+}
+
+private fun okio.Sink.write(b: ByteArray) = write(b, 0, b.size)

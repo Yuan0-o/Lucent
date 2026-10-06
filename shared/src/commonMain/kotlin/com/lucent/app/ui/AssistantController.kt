@@ -84,14 +84,14 @@ private object ActiveConversationStore {
     @Volatile
     private var cachedFor: PlatformContext? = null
 
-    private fun file(context: PlatformContext): java.io.File =
-        java.io.File(context.applicationContext.filesDir, FILE_NAME)
+    private fun file(context: PlatformContext): okio.Path =
+        context.applicationContext.filesDir / FILE_NAME
 
     fun load(context: PlatformContext): Long? {
         val app = context.applicationContext
         if (cachedFor === app) return cached
         val stored = runCatching {
-            com.lucent.app.harness.HarnessVault.read(app, okio.Path.Companion.toPath(file(app).absolutePath)).trim().toLongOrNull()
+            com.lucent.app.harness.HarnessVault.read(app, file(app)).trim().toLongOrNull()
         }.getOrNull()
         cached = stored
         cachedFor = app
@@ -104,7 +104,7 @@ private object ActiveConversationStore {
         cachedFor = app
         AppScope.io.launch {
             runCatching {
-                com.lucent.app.harness.HarnessVault.write(app, okio.Path.Companion.toPath(file(app).absolutePath), id?.toString().orEmpty())
+                com.lucent.app.harness.HarnessVault.write(app, file(app), id?.toString().orEmpty())
             }
         }
     }
@@ -1761,7 +1761,7 @@ class AssistantControllerImpl(
 
 
     private fun fail(turn: Turn, t: Throwable) {
-        if (t is java.io.IOException) {
+        if (t is okio.IOException) {
             lastSend = turn.params
             lastSendConversationId = turn.conversationId
             networkErrorMessage =

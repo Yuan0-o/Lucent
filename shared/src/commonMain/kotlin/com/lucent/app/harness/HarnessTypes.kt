@@ -14,7 +14,7 @@ data class HarnessCtx(
     val workspacePath: String,
     val subAgentId: String? = null
 ) {
-    val workspace: java.io.File get() = java.io.File(workspacePath)
+    val workspace: okio.Path get() = workspacePath.toPath()
 
     fun cap(name: String): Boolean = capabilities.contains(name)
 

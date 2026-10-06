@@ -71,4 +71,4 @@ class ApiHttpException(val code: Int, val bodyText: String) :
     Exception("HTTP $code: ${bodyText.take(500)}")
 
 class ApiNetworkException(message: String, cause: Throwable?) :
-    java.io.IOException(message, cause)
+    okio.IOException(message, cause)

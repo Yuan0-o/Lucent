@@ -43,7 +43,7 @@ object AuditTrail {
 
     private fun baseDir(context: PlatformContext): Path =
         runCatching { HarnessRuntime.filesDirPath().toPath() }.getOrNull()
-            ?: System.getProperty("java.io.tmpdir").toPath() / "lucent-audit"
+            ?: okio.FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "lucent-audit"
 
     fun record(context: PlatformContext?, entry: AuditEntry) {
         val app = context ?: return

@@ -112,10 +112,10 @@ object Snapshots {
     }
 
     fun capture(ctx: HarnessCtx, path: String) = capture(path)
-    fun capture(path: java.io.File) = capture(path.path)
-    fun capture(ctx: HarnessCtx, file: java.io.File) = capture(file.path)
-    fun restoreFile(id: String): java.io.File = java.io.File(restore(id))
-    fun restoreFile(ctx: HarnessCtx, id: String): java.io.File = java.io.File(restore(ctx, id))
+    fun capture(path: okio.Path) = capture(path.toString())
+    fun capture(ctx: HarnessCtx, file: okio.Path) = capture(file.toString())
+    fun restoreFile(id: String): okio.Path = restore(id).toPath()
+    fun restoreFile(ctx: HarnessCtx, id: String): okio.Path = restore(ctx, id).toPath()
 
     fun history(ctx: HarnessCtx, path: String, limit: Int = 20): List<SnapshotEntry> = history(path, limit)
 

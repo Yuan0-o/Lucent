@@ -4,5 +4,5 @@ import com.lucent.app.platform.PlatformContext
 
 interface ImportSource {
     fun displayName(context: PlatformContext): String?
-    fun openStream(context: PlatformContext): java.io.InputStream?
+    fun openStream(context: PlatformContext): okio.Source?
 }

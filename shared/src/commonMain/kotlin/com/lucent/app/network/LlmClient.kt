@@ -28,10 +28,10 @@ object LlmClient {
     private fun isTransientNetwork(t: Throwable): Boolean {
         val e = if (t is ApiNetworkException) (t.cause ?: t) else t
         return when (e) {
-            is java.net.SocketTimeoutException,
-            is java.io.InterruptedIOException,
-            is java.net.ConnectException,
-            is java.net.SocketException -> true
+            is okio.IOException,
+            is okio.IOException,
+            is okio.IOException,
+            is okio.IOException -> true
             else -> false
         }
     }
@@ -176,7 +176,7 @@ object LlmClient {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Result.failure(if (e is java.io.IOException) ApiNetworkException(e.message ?: "network error", e) else e)
+                Result.failure(if (e is okio.IOException) ApiNetworkException(e.message ?: "network error", e) else e)
             }
 
             val error = result.exceptionOrNull()

@@ -16,10 +16,10 @@ object BackupManager {
     val DEFAULT_MODULES: Set<BackupModule> = com.lucent.app.data.DEFAULT_BACKUP_MODULES
 
     fun interface BackupSource {
-        fun open(): java.io.InputStream
+        fun open(): okio.Source
     }
 
-    fun fileSource(file: java.io.File): BackupSource = BackupSource { file.inputStream() }
+    fun fileSource(file: okio.Path): BackupSource = BackupSource { file.inputStream() }
 
     data class BackupSelection(
         val modules: Set<BackupModule> = DEFAULT_MODULES,
@@ -107,7 +107,7 @@ object BackupManager {
         val json = exportJsonFull(context, db, settings, selection)
         val jsonBytes = json.toByteArray(Charsets.UTF_8)
 
-        val modelFiles: List<Pair<String, java.io.File>> =
+        val modelFiles: List<Pair<String, okio.Path>> =
             if (BackupModule.LOCAL_MODEL_FILES in modules) {
                 com.lucent.app.local.LocalModelStore.slots(context).mapNotNull { slot ->
                     com.lucent.app.local.LocalModelStore.modelFileForSlot(context, slot)
@@ -115,7 +115,7 @@ object BackupManager {
                 }
             } else emptyList()
 
-        val fontFiles: List<Pair<String, java.io.File>> =
+        val fontFiles: List<Pair<String, okio.Path>> =
             if (BackupModule.SETTINGS in modules) {
                 FontStore.fonts(context).mapNotNull { slot ->
                     FontStore.fontFileForSlot(context, slot)?.toFile()
@@ -123,9 +123,9 @@ object BackupManager {
                 }
             } else emptyList()
 
-        val harnessFiles: List<Pair<String, java.io.File>> =
+        val harnessFiles: List<Pair<String, okio.Path>> =
             if (BackupModule.HARNESS in modules) {
-                HarnessBackup.useHome { HarnessBackup.listFiles().map { it.first to java.io.File(it.second.toString()) } }
+                HarnessBackup.useHome { HarnessBackup.listFiles().map { it.first to it.second.toString().toPath() } }
             } else emptyList()
 
         val blobs = modelFiles + fontFiles + harnessFiles
@@ -212,17 +212,17 @@ object BackupManager {
         val cancelled: () -> Boolean = { inspectJob?.isActive == false }
         val needsPassword: Boolean
         val scan: BackupFrames.PayloadScan
-        var plain: java.io.InputStream? = null
+        var plain: okio.Source? = null
         try {
             needsPassword = peekPasswordRequirement(source)?.needsPassword
                 ?: throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
             plain = BackupFrames.openDecrypted(source, password)
             scan = try {
                 BackupFrames.scanPayload(plain, cancelled)
-            } catch (t: java.io.IOException) {
+            } catch (t: okio.IOException) {
                 if (t is BackupCrypto.WrongPasswordException) throw t
                 if (needsPassword) throw BackupCrypto.WrongPasswordException()
-                throw java.io.IOException("Backup file is damaged", t)
+                throw okio.IOException("Backup file is damaged", t)
             }
         } finally {
             try { plain?.close() } catch (_: Throwable) {}
@@ -329,7 +329,7 @@ object BackupManager {
             val wantHarness = BackupModule.HARNESS in modules
             if (wantModels || wantFonts) {
                 val scratch = ByteArray(1 shl 16)
-                var plain: java.io.InputStream? = null
+                var plain: okio.Source? = null
                 try {
                     plain = BackupFrames.openDecrypted(source, preview.password)
                     BackupFrames.scanPayload(plain, cancelled) { name, dataLen, data ->
@@ -406,3 +406,34 @@ object BackupManager {
     )
 
 }
+
+private fun okio.Source.read(b: ByteArray, off: Int, len: Int): Int {
+    val buf = okio.Buffer()
+    val n = this.read(buf, len.toLong())
+    if (n == -1L) return -1
+    buf.read(b, off, n.toInt())
+    return n.toInt()
+}
+
+private fun okio.Source.read(b: ByteArray): Int = read(b, 0, b.size)
+
+private fun okio.Source.read(): Int {
+    val buf = okio.Buffer()
+    val n = this.read(buf, 1)
+    if (n == -1L) return -1
+    return buf.readByte().toInt() and 0xFF
+}
+
+private fun okio.Sink.write(b: Int) {
+    val buf = okio.Buffer()
+    buf.writeByte(b)
+    this.write(buf, 1)
+}
+
+private fun okio.Sink.write(b: ByteArray, off: Int, len: Int) {
+    val buf = okio.Buffer()
+    buf.write(b, off, len)
+    this.write(buf, len.toLong())
+}
+
+private fun okio.Sink.write(b: ByteArray) = write(b, 0, b.size)

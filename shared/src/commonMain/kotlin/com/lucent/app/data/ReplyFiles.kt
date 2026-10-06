@@ -91,7 +91,7 @@ object ReplyFiles {
                 if (file.url.substringBefore(',').contains("base64", ignoreCase = true)) {
                     Base64.Mime.decode(payload)
                 } else {
-                    java.net.URLDecoder.decode(payload, "UTF-8").toByteArray()
+                    urlDecode(payload).encodeToByteArray()
                 }
             } else {
                 val request = Request.Builder().url(file.url).build()
@@ -108,8 +108,8 @@ object ReplyFiles {
         }
     }
 
-    private fun java.io.InputStream.readBytesCapped(max: Long): ByteArray? {
-        val out = java.io.ByteArrayOutputStream()
+    private fun okio.Source.readBytesCapped(max: Long): ByteArray? {
+        val out = okio.Buffer()
         val buf = ByteArray(64 * 1024)
         var total = 0L
         while (true) {
@@ -151,4 +151,25 @@ object ReplyFiles {
             false
         }
     }
+}
+private fun urlDecode(s: String): String {
+    val out = mutableListOf<Byte>()
+    var i = 0
+    while (i < s.length) {
+        val c = s[i]
+        when {
+            c == '+' -> { out.add(' '.code.toByte()); i++ }
+            c == '%' && i + 2 < s.length -> {
+                try {
+                    out.add(s.substring(i + 1, i + 3).toInt(16).toByte())
+                    i += 3
+                } catch (e: Exception) {
+                    out.add('%'.code.toByte())
+                    i++
+                }
+            }
+            else -> { out.add(c.code.toByte()); i++ }
+        }
+    }
+    return out.toByteArray().decodeToString()
 }

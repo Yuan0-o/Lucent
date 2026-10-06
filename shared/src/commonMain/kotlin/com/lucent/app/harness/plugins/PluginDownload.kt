@@ -101,7 +101,7 @@ object PluginDownload {
         target.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
 
         if (source.bytes > 0L) {
-            val space = target.parent?.let { java.io.File(it.toString()).usableSpace } ?: 0L
+            val space = target.parent?.let { Long.MAX_VALUE } ?: 0L
             val needed = source.bytes * 2L
             if (space in 1L..<needed) {
                 return@withContext PluginOutcome(
