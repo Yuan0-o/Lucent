@@ -60,9 +60,9 @@ fun AgentSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     }
 }
 
-internal data class ToolkitPage(val title: String, val subtitle: String, val route: SettingsRoute)
+data class ToolkitPage(val title: String, val subtitle: String, val route: SettingsRoute)
 
-internal fun toolkitPages(): List<ToolkitPage> = listOf(
+fun toolkitPages(): List<ToolkitPage> = listOf(
     ToolkitPage(S.agentWorkspaceTitle, S.agentWorkspaceSub, SettingsRoute.Workspace),
     ToolkitPage(S.agentCapabilitiesTitle, S.agentCapabilitiesSub, SettingsRoute.Capabilities),
     ToolkitPage(S.agentPermissionsTitle, S.agentPermissionsSub, SettingsRoute.Permissions),
