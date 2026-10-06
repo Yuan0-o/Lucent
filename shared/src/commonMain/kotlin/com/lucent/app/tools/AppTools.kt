@@ -26,7 +26,7 @@ import com.lucent.app.network.ToolImage
 import com.lucent.app.network.ToolParam
 import com.lucent.app.network.WebSearchClient
 import com.lucent.app.reminders.ReminderScheduler
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object AppTools {
 
@@ -60,9 +60,9 @@ object AppTools {
         else name !in READ_ONLY_TOOLS
 
     fun describeToolCall(name: String, argumentsJson: String): String {
-        val a = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
+        val a = try { Json.parseToJsonElement(argumentsJson).jsonObject } catch (e: Exception) { JsonObject(emptyMap()) }
         fun s(vararg keys: String): String {
-            for (k in keys) { val v = a.optString(k, ""); if (v.isNotBlank()) return v }
+            for (k in keys) { val v = a[k]?.jsonPrimitive?.content ?: ""; if (v.isNotBlank()) return v }
             return ""
         }
         val title = s("title", "note_title", "task_title", "new_title")
@@ -71,8 +71,8 @@ object AppTools {
             "update_note" -> com.lucent.app.i18n.S.ccEditNote(title) + newTitleSuffix(a)
             "delete_note" -> com.lucent.app.i18n.S.ccDeleteNote(title)
             "delete_draft" -> com.lucent.app.i18n.S.ccDeleteDraft(title)
-            "pin_note" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinNote(title) else com.lucent.app.i18n.S.ccUnpinNote(title)
-            "archive_note" -> if (a.optBoolean("archived", true)) com.lucent.app.i18n.S.ccArchiveNote(title) else com.lucent.app.i18n.S.ccUnarchiveNote(title)
+            "pin_note" -> if (a["pinned"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccPinNote(title) else com.lucent.app.i18n.S.ccUnpinNote(title)
+            "archive_note" -> if (a["archived"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccArchiveNote(title) else com.lucent.app.i18n.S.ccUnarchiveNote(title)
             "set_note_color" -> com.lucent.app.i18n.S.ccSetNoteColor(title, s("color", "colour"))
             "add_note_checklist_item" -> com.lucent.app.i18n.S.ccAddNoteItem(s("item"), title)
             "set_note_checklist_item_done" -> com.lucent.app.i18n.S.ccCheckNoteItem(s("item"), title)
@@ -81,15 +81,15 @@ object AppTools {
             "set_note_attachment" -> com.lucent.app.i18n.S.ccSaveFileOnNote(s("file_name"), title)
             "remove_note_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromNote(s("file_name"), title)
             "attach_upload_to_note" -> com.lucent.app.i18n.S.ccAttachUploadToNote(title)
-            "set_note_checklist_mode" -> if (a.optBoolean("checklist", true)) com.lucent.app.i18n.S.ccNoteToChecklist(title) else com.lucent.app.i18n.S.ccNoteToText(title)
-            "restore_note_version" -> com.lucent.app.i18n.S.ccRestoreNoteVersion(title, a.optInt("version", 1).toString())
+            "set_note_checklist_mode" -> if (a["checklist"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccNoteToChecklist(title) else com.lucent.app.i18n.S.ccNoteToText(title)
+            "restore_note_version" -> com.lucent.app.i18n.S.ccRestoreNoteVersion(title, a["version"]?.jsonPrimitive?.intOrNull ?: 1.toString())
             "restore_note_from_trash" -> com.lucent.app.i18n.S.ccRestoreNoteFromTrash(title)
             "create_task" -> com.lucent.app.i18n.S.ccCreateTask(s("title")) + dueSuffix(s("due"))
             "complete_task" -> com.lucent.app.i18n.S.ccCompleteTask(title)
             "reopen_task" -> com.lucent.app.i18n.S.ccReopenTask(title)
             "update_task" -> com.lucent.app.i18n.S.ccEditTask(title) + newTitleSuffix(a)
             "delete_task" -> com.lucent.app.i18n.S.ccDeleteTask(title)
-            "pin_task" -> if (a.optBoolean("pinned", true)) com.lucent.app.i18n.S.ccPinTask(title) else com.lucent.app.i18n.S.ccUnpinTask(title)
+            "pin_task" -> if (a["pinned"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccPinTask(title) else com.lucent.app.i18n.S.ccUnpinTask(title)
             "set_task_priority" -> com.lucent.app.i18n.S.ccSetPriority(title, s("priority"))
             "set_task_due_date" -> com.lucent.app.i18n.S.ccSetDueDate(title, s("due_at"))
             "add_subtask" -> com.lucent.app.i18n.S.ccAddSubtask(s("item"), title)
@@ -117,9 +117,9 @@ object AppTools {
         editableArguments(name, argumentsJson).firstOrNull()
 
     fun editableArguments(name: String, argumentsJson: String): List<EditableArgument> {
-        val a = try { JSONObject(argumentsJson) } catch (e: Exception) { return emptyList() }
+        val a = try { Json.parseToJsonElement(argumentsJson).jsonObject } catch (e: Exception) { return emptyList() }
         fun of(key: String, label: String, multiline: Boolean = false): EditableArgument? =
-            a.optString(key, "").takeIf { it.isNotBlank() }
+            (a[key]?.jsonPrimitive?.content ?: "").takeIf { it.isNotBlank() }
                 ?.let { EditableArgument(key, label, it, multiline) }
 
         return when (name) {
@@ -159,21 +159,25 @@ object AppTools {
     }
 
     fun withArguments(argumentsJson: String, edits: Map<String, String>): String = try {
-        val o = JSONObject(argumentsJson)
-        edits.forEach { (k, v) -> if (v.isNotBlank()) o.put(k, v) }
-        o.toString()
+        val root = Json.parseToJsonElement(argumentsJson).jsonObject
+        val map = root.toMutableMap()
+        edits.forEach { (k, v) -> if (v.isNotBlank()) map[k] = JsonPrimitive(v) }
+        JsonObject(map).toString()
     } catch (e: Exception) {
         argumentsJson
     }
 
     fun withArgument(argumentsJson: String, key: String, value: String): String = try {
-        JSONObject(argumentsJson).put(key, value).toString()
+        val root = Json.parseToJsonElement(argumentsJson).jsonObject
+        val map = root.toMutableMap()
+        map[key] = JsonPrimitive(value)
+        JsonObject(map).toString()
     } catch (e: Exception) {
         argumentsJson
     }
 
-    private fun newTitleSuffix(a: JSONObject): String {
-        val nt = a.optString("new_title", "")
+    private fun newTitleSuffix(a: JsonObject): String {
+        val nt = a["new_title"]?.jsonPrimitive?.content ?: ""
         return if (nt.isNotBlank()) com.lucent.app.i18n.S.ccRenameSuffix(nt) else ""
     }
 
@@ -513,17 +517,17 @@ object AppTools {
     )
 
 
-    private fun JSONObject.firstString(vararg keys: String): String {
+    private fun JsonObject.firstString(vararg keys: String): String {
         for (key in keys) {
-            if (has(key)) {
-                val value = optString(key, "")
+            if (containsKey(key)) {
+                val value = this[key]?.jsonPrimitive?.content ?: ""
                 if (value.isNotBlank()) return value
             }
         }
         return ""
     }
 
-    private fun JSONObject.hasAny(vararg keys: String): Boolean = keys.any { has(it) }
+    private fun JsonObject.hasAny(vararg keys: String): Boolean = keys.any { containsKey(it) }
 
     internal suspend fun activeNotes(db: AppDatabase): List<Note> =
         db.noteDao.getAllOnce().filter { it.trashedAt == null && !it.hidden && !it.isDraft }
@@ -844,16 +848,16 @@ object AppTools {
         uploadName: String? = null
     ): ToolExecResult {
         val appContext = context.applicationContext
-        val args = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
+        val args = try { Json.parseToJsonElement(argumentsJson).jsonObject } catch (e: Exception) { JsonObject(emptyMap()) }
 
         return when (name) {
 
 
             "create_note" -> {
-                val title = args.optString("title", "Untitled")
-                val body = args.optString("body", "")
-                val tags = args.optString("tags", "")
-                val checklistJson = Checklist.addAll("[]", args.optString("checklist", ""))
+                val title = args["title"]?.jsonPrimitive?.content ?: "Untitled"
+                val body = args["body"]?.jsonPrimitive?.content ?: ""
+                val tags = args["tags"]?.jsonPrimitive?.content ?: ""
+                val checklistJson = Checklist.addAll("[]", args["checklist"]?.jsonPrimitive?.content ?: "")
                 val isChecklist = checklistJson != "[]"
                 val newNoteId = db.noteDao.insert(
                     Note(title = title, body = body, tags = tags, isChecklist = isChecklist, checklist = checklistJson)
@@ -872,7 +876,7 @@ object AppTools {
             }
 
             "read_note" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -910,7 +914,7 @@ object AppTools {
             }
 
             "update_note" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -919,11 +923,11 @@ object AppTools {
                 } else if (!args.hasAny("new_title", "new_body", "new_tags")) {
                     ToolExecResult("No changes were provided.", success = false)
                 } else {
-                    val newTitle = args.optString("new_title", "")
+                    val newTitle = args["new_title"]?.jsonPrimitive?.content ?: ""
                     val updated = match.copy(
                         title = if (newTitle.isNotBlank()) newTitle else match.title,
-                        body = if (args.has("new_body")) args.optString("new_body") else match.body,
-                        tags = if (args.has("new_tags")) args.optString("new_tags") else match.tags
+                        body = if (args.containsKey("new_body")) args["new_body"]?.jsonPrimitive?.content ?: "" else match.body,
+                        tags = if (args.containsKey("new_tags")) args["new_tags"]?.jsonPrimitive?.content ?: "" else match.tags
                     )
                     TaskActions.updateNoteWithHistory(db, match, updated)
                     ToolExecResult("Updated note \"${updated.title}\". Its previous version was saved to history.", openNoteId = match.id)
@@ -931,7 +935,7 @@ object AppTools {
             }
 
             "delete_note" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -942,28 +946,28 @@ object AppTools {
             }
 
             "pin_note" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
                 } else if (match.isDoodle) {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
-                    val pinned = args.optBoolean("pinned", true)
+                    val pinned = args["pinned"]?.jsonPrimitive?.booleanOrNull ?: true
                     db.noteDao.update(match.copy(pinned = pinned))
                     ToolExecResult("${if (pinned) "Pinned" else "Unpinned"} note \"${match.title}\".")
                 }
             }
 
             "archive_note" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
                 } else if (match.isDoodle) {
                     ToolExecResult("\"${match.title}\" is a doodle note; the assistant can currently only delete doodle notes.", success = false)
                 } else {
-                    val archived = args.optBoolean("archived", true)
+                    val archived = args["archived"]?.jsonPrimitive?.booleanOrNull ?: true
                     db.noteDao.update(
                         match.copy(archived = archived, archivedAt = if (archived) System.currentTimeMillis() else null)
                     )
@@ -975,7 +979,7 @@ object AppTools {
             }
 
             "set_note_color" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -1026,7 +1030,7 @@ object AppTools {
                         val names = Checklist.parse(match.checklist).joinToString(", ") { it.text }.ifBlank { "none" }
                         ToolExecResult("No checklist item matching \"$itemQuery\" on note \"${match.title}\". It has: $names.", success = false)
                     } else {
-                        val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
+                        val done = if (args.containsKey("done")) args["done"]?.jsonPrimitive?.booleanOrNull ?: true else !item.done
                         db.noteDao.update(match.copy(checklist = Checklist.setDone(match.checklist, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on note \"${match.title}\".")
                     }
@@ -1080,7 +1084,7 @@ object AppTools {
                 if (match == null) {
                     noteNotFound(db, titleQuery)
                 } else {
-                    val toChecklist = args.optBoolean("checklist", !match.isChecklist)
+                    val toChecklist = args["checklist"]?.jsonPrimitive?.booleanOrNull ?: !match.isChecklist
                     if (toChecklist == match.isChecklist) {
                         ToolExecResult("Note \"${match.title}\" is already in ${if (toChecklist) "checklist" else "plain-text"} mode.")
                     } else {
@@ -1095,8 +1099,8 @@ object AppTools {
 
             "set_note_attachment" -> {
                 val titleQuery = args.firstString("note_title", "title")
-                val fileName = args.optString("file_name", "note.txt")
-                val content = args.optString("content", "")
+                val fileName = args["file_name"]?.jsonPrimitive?.content ?: "note.txt"
+                val content = args["content"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -1114,7 +1118,7 @@ object AppTools {
 
             "remove_note_attachment" -> {
                 val titleQuery = args.firstString("note_title", "title")
-                val fileName = args.optString("file_name", "")
+                val fileName = args["file_name"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -1141,7 +1145,7 @@ object AppTools {
 
             "attach_upload_to_note" -> {
                 val titleQuery = args.firstString("note_title", "title")
-                val requestedName = args.optString("file_name", "")
+                val requestedName = args["file_name"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -1155,7 +1159,7 @@ object AppTools {
             }
 
             "list_note_versions" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -1178,8 +1182,8 @@ object AppTools {
             }
 
             "restore_note_version" -> {
-                val titleQuery = args.optString("title", "")
-                val versionIndex = args.optInt("version", 0)
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
+                val versionIndex = args["version"]?.jsonPrimitive?.intOrNull ?: 0
                 val match = matchNote(editableNotes(db), titleQuery)
                 if (match == null) {
                     noteNotFound(db, titleQuery)
@@ -1217,17 +1221,17 @@ object AppTools {
 
 
             "create_task" -> {
-                val title = args.optString("title", "Untitled task")
-                val notes = args.optString("notes", "")
-                val priority = TaskPriority.fromKey(args.optString("priority", "")).value
-                val due = if (args.has("due")) DueParsing.parse(args.optString("due")) else null
-                val repeat = if (due != null && args.has("repeat")) {
-                    RepeatRule.fromKey(args.optString("repeat"))
+                val title = args["title"]?.jsonPrimitive?.content ?: "Untitled task"
+                val notes = args["notes"]?.jsonPrimitive?.content ?: ""
+                val priority = TaskPriority.fromKey(args["priority"]?.jsonPrimitive?.content ?: "").value
+                val due = if (args.containsKey("due")) DueParsing.parse(args["due"]?.jsonPrimitive?.content ?: "") else null
+                val repeat = if (due != null && args.containsKey("repeat")) {
+                    RepeatRule.fromKey(args["repeat"]?.jsonPrimitive?.content ?: "")
                 } else {
                     RepeatRule.NONE
                 }
-                val reminder = args.optBoolean("reminder", false)
-                val subtasks = Checklist.addAll("[]", args.optString("subtasks", ""))
+                val reminder = args["reminder"]?.jsonPrimitive?.booleanOrNull ?: false
+                val subtasks = Checklist.addAll("[]", args["subtasks"]?.jsonPrimitive?.content ?: "")
 
                 val toInsert = Task(
                     title = title,
@@ -1251,7 +1255,7 @@ object AppTools {
                     Checklist.progress(subtasks)?.let { (_, total) -> add("$total checklist item${if (total == 1) "" else "s"}") }
                 }
                 val suffix = if (extras.isEmpty()) "" else " (${extras.joinToString(", ")})"
-                val warning = if (args.has("due") && due == null) {
+                val warning = if (args.containsKey("due") && due == null) {
                     " I couldn't understand the due date you gave, so the task has none — pass an absolute date like 2026-07-15 or 2026-07-15 14:00."
                 } else {
                     ""
@@ -1267,7 +1271,7 @@ object AppTools {
             }
 
             "read_task" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1302,7 +1306,7 @@ object AppTools {
             }
 
             "complete_task" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1314,7 +1318,7 @@ object AppTools {
             }
 
             "reopen_task" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db).filter { it.isDone }, titleQuery)
                 if (match == null) {
                     ToolExecResult("No completed task found matching \"$titleQuery\".", success = false)
@@ -1325,18 +1329,18 @@ object AppTools {
             }
 
             "update_task" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
                 } else if (!args.hasAny("new_title", "new_notes", "new_priority", "new_due", "new_repeat", "new_reminder")) {
                     ToolExecResult("No changes were provided.", success = false)
                 } else {
-                    val newTitle = args.optString("new_title", "")
+                    val newTitle = args["new_title"]?.jsonPrimitive?.content ?: ""
 
                     var dueParseFailed = false
-                    val newDue: Long? = if (args.has("new_due")) {
-                        val raw = args.optString("new_due")
+                    val newDue: Long? = if (args.containsKey("new_due")) {
+                        val raw = args["new_due"]?.jsonPrimitive?.content ?: ""
                         when {
                             DueParsing.isClearRequest(raw) -> null
                             else -> DueParsing.parse(raw) ?: match.dueAt.also { dueParseFailed = true }
@@ -1345,25 +1349,25 @@ object AppTools {
                         match.dueAt
                     }
 
-                    val newPriority = if (args.has("new_priority")) {
-                        TaskPriority.fromKey(args.optString("new_priority")).value
+                    val newPriority = if (args.containsKey("new_priority")) {
+                        TaskPriority.fromKey(args["new_priority"]?.jsonPrimitive?.content ?: "").value
                     } else {
                         match.priority
                     }
-                    val newRepeat = if (args.has("new_repeat")) {
-                        RepeatRule.fromKey(args.optString("new_repeat"))
+                    val newRepeat = if (args.containsKey("new_repeat")) {
+                        RepeatRule.fromKey(args["new_repeat"]?.jsonPrimitive?.content ?: "")
                     } else {
                         RepeatRule.fromKey(match.repeatRule)
                     }
-                    val newReminder = if (args.has("new_reminder")) {
-                        args.optBoolean("new_reminder")
+                    val newReminder = if (args.containsKey("new_reminder")) {
+                        args["new_reminder"]?.jsonPrimitive?.booleanOrNull ?: false
                     } else {
                         match.reminderEnabled
                     }
 
                     val updated = match.copy(
                         title = if (newTitle.isNotBlank()) newTitle else match.title,
-                        notes = if (args.has("new_notes")) args.optString("new_notes") else match.notes,
+                        notes = if (args.containsKey("new_notes")) args["new_notes"]?.jsonPrimitive?.content ?: "" else match.notes,
                         priority = newPriority,
                         dueAt = newDue,
                         repeatRule = if (newDue == null) RepeatRule.NONE.key else newRepeat.key,
@@ -1382,7 +1386,7 @@ object AppTools {
             }
 
             "delete_task" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1393,24 +1397,24 @@ object AppTools {
             }
 
             "pin_task" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
                 } else {
-                    val pinned = args.optBoolean("pinned", true)
+                    val pinned = args["pinned"]?.jsonPrimitive?.booleanOrNull ?: true
                     db.taskDao.update(match.copy(pinned = pinned))
                     ToolExecResult("${if (pinned) "Pinned" else "Unpinned"} task \"${match.title}\".")
                 }
             }
 
             "set_task_priority" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
                 } else {
-                    val priority = TaskPriority.fromKey(args.optString("priority", "none"))
+                    val priority = TaskPriority.fromKey(args["priority"]?.jsonPrimitive?.content ?: "none")
                     db.taskDao.update(match.copy(priority = priority.value))
                     ToolExecResult(
                         if (priority == TaskPriority.NONE) "Cleared the priority on \"${match.title}\"."
@@ -1420,7 +1424,7 @@ object AppTools {
             }
 
             "set_task_due_date" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1437,8 +1441,8 @@ object AppTools {
                                 success = false
                             )
                         } else {
-                            val repeat = if (args.has("repeat")) RepeatRule.fromKey(args.optString("repeat")) else null
-                            val reminder = if (args.has("reminder")) args.optBoolean("reminder") else null
+                            val repeat = if (args.containsKey("repeat")) RepeatRule.fromKey(args["repeat"]?.jsonPrimitive?.content ?: "") else null
+                            val reminder = if (args.containsKey("reminder")) args["reminder"]?.jsonPrimitive?.booleanOrNull ?: false else null
                             val updated = TaskActions.setSchedule(appContext, db, match, parsed, repeat, reminder)
                             val bits = buildList {
                                 add("due ${DueParsing.format(parsed)}")
@@ -1479,7 +1483,7 @@ object AppTools {
                         val names = Checklist.parse(match.subtasks).joinToString(", ") { it.text }.ifBlank { "none" }
                         ToolExecResult("No checklist item matching \"$itemQuery\" on task \"${match.title}\". It has: $names.", success = false)
                     } else {
-                        val done = if (args.has("done")) args.optBoolean("done", true) else !item.done
+                        val done = if (args.containsKey("done")) args["done"]?.jsonPrimitive?.booleanOrNull ?: true else !item.done
                         db.taskDao.update(match.copy(subtasks = Checklist.setDone(match.subtasks, item.id, done)))
                         ToolExecResult("${if (done) "Checked" else "Unchecked"} \"${item.text}\" on task \"${match.title}\".")
                     }
@@ -1527,8 +1531,8 @@ object AppTools {
 
             "set_task_attachment" -> {
                 val titleQuery = args.firstString("task_title", "title")
-                val fileName = args.optString("file_name", "task.txt")
-                val content = args.optString("content", "")
+                val fileName = args["file_name"]?.jsonPrimitive?.content ?: "task.txt"
+                val content = args["content"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1546,7 +1550,7 @@ object AppTools {
 
             "remove_task_attachment" -> {
                 val titleQuery = args.firstString("task_title", "title")
-                val fileName = args.optString("file_name", "")
+                val fileName = args["file_name"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1573,7 +1577,7 @@ object AppTools {
 
             "attach_upload_to_task" -> {
                 val titleQuery = args.firstString("task_title", "title")
-                val requestedName = args.optString("file_name", "")
+                val requestedName = args["file_name"]?.jsonPrimitive?.content ?: ""
                 val match = matchTask(editableTasks(db), titleQuery)
                 if (match == null) {
                     taskNotFound(db, titleQuery)
@@ -1609,8 +1613,8 @@ object AppTools {
             }
 
             "delete_draft" -> {
-                val kind = args.optString("kind", "").lowercase()
-                val titleQuery = args.optString("title", "")
+                val kind = args["kind"]?.jsonPrimitive?.content ?: "".lowercase()
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 when (kind) {
                     "note" -> {
                         val candidates = draftNotes(db)
@@ -1633,7 +1637,7 @@ object AppTools {
             }
 
             "list_trash" -> {
-                val type = args.optString("type", "both").trim().lowercase()
+                val type = args["type"]?.jsonPrimitive?.content ?: "both".trim().lowercase()
                 val wantNotes = type != "tasks"
                 val wantTasks = type != "notes"
                 val notes = if (wantNotes) trashedNotes(db) else emptyList()
@@ -1665,7 +1669,7 @@ object AppTools {
             }
 
             "restore_note_from_trash" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val candidates = trashedNotes(db)
                 val match = matchNote(candidates, titleQuery)
                 if (match == null) {
@@ -1685,7 +1689,7 @@ object AppTools {
             }
 
             "restore_task_from_trash" -> {
-                val titleQuery = args.optString("title", "")
+                val titleQuery = args["title"]?.jsonPrimitive?.content ?: ""
                 val candidates = trashedTasks(db)
                 val match = matchTask(candidates, titleQuery)
                 if (match == null) {
@@ -1703,7 +1707,7 @@ object AppTools {
 
 
             "read_attachment" -> {
-                val itemType = args.optString("item_type", "").trim().lowercase()
+                val itemType = args["item_type"]?.jsonPrimitive?.content ?: "".trim().lowercase()
                 val titleQuery = args.firstString("title", "note_title", "task_title")
                 val fileName = args.firstString("file_name", "name")
                 val note = if (itemType != "task") matchNote(editableNotes(db), titleQuery) else null
@@ -1730,7 +1734,7 @@ object AppTools {
 
             "search_items" -> {
                 val raw = args.firstString("query", "q", "search")
-                val type = args.optString("type", "both").trim().lowercase()
+                val type = args["type"]?.jsonPrimitive?.content ?: "both".trim().lowercase()
                 if (raw.isBlank()) {
                     ToolExecResult("No search query was provided.", success = false)
                 } else {
@@ -1774,7 +1778,7 @@ object AppTools {
             }
 
             "recall_notes" -> {
-                val query = args.optString("query", "")
+                val query = args["query"]?.jsonPrimitive?.content ?: ""
                 if (query.isBlank()) {
                     ToolExecResult("No query was provided.", success = false)
                 } else {

@@ -352,7 +352,7 @@ object BackupImporter {
                 val liveNotes = db.noteDao.getAllOnce()
                 val liveTasks = db.taskDao.getAllOnce()
                 val notebookIdByTitle = HashMap<String, Long>()
-                for (i in 0 until restoredNotebooks.length()) {
+                for (i in 0 until restoredNotebooks.size) {
                     val o = restoredNotebooks[i].jsonObject
                     val title = o["title"]?.jsonPrimitive?.content ?: ""
                     val createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
@@ -377,7 +377,7 @@ object BackupImporter {
                     )
                     notebookIdByTitle[title] = newId
                 }
-                for (i in 0 until restoredItems.length()) {
+                for (i in 0 until restoredItems.size) {
                     val o = restoredItems[i].jsonObject
                     val notebookId = notebookIdByTitle[o["notebookTitle"]?.jsonPrimitive?.content ?: ""] ?: continue
                     val kind = o["itemKind"]?.jsonPrimitive?.content ?: ""
@@ -511,7 +511,7 @@ object BackupImporter {
                 if (restoreGeneral && s.containsKey("cloudUrl")) settings.setCloudUrl(s["cloudUrl"]?.jsonPrimitive?.content ?: "")
                 if (restoreGeneral && s.containsKey("cloudUser")) settings.setCloudUser(s["cloudUser"]?.jsonPrimitive?.content ?: "")
                 if (restoreGeneral && s.containsKey("cloudPasswordEnc")) settings.setCloudPasswordEnc(s["cloudPasswordEnc"]?.jsonPrimitive?.content ?: "")
-                if (restoreGeneral && s.containsKey("terminalFontSize")) settings.setTerminalFontSize(s["terminalFontSize"]?.jsonPrimitive?.doubleOrNull ?: 14.0.toFloat())
+                if (restoreGeneral && s.containsKey("terminalFontSize")) settings.setTerminalFontSize(s["terminalFontSize"]?.jsonPrimitive?.floatOrNull ?: 14.0f)
                 if (restoreGeneral && s.containsKey("terminalKeyBarVisible")) settings.setTerminalKeyBarVisible(s["terminalKeyBarVisible"]?.jsonPrimitive?.booleanOrNull ?: true)
                 if (restoreGeneral && s.containsKey("globalTextSelectionEnabled")) settings.setGlobalTextSelectionEnabled(s["globalTextSelectionEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
                 if (restoreGeneral && s.containsKey("cloudFolder")) settings.setCloudFolder(s["cloudFolder"]?.jsonPrimitive?.content ?: "")
