@@ -1,7 +1,10 @@
 package com.lucent.app.data
 
 import com.lucent.app.platform.platformElapsedRealtime
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 object PasswordAttempts {
 
@@ -20,6 +23,7 @@ object PasswordAttempts {
         3_600_000L
     )
 
+    @Serializable
     data class State(
         val failuresThisRound: Int = 0,
         val round: Int = 0,
@@ -29,15 +33,7 @@ object PasswordAttempts {
         val bootStamp: Long = 0L,
         val startedWall: Long = 0L
     ) {
-        fun toJson(): String = JSONObject()
-            .put("failuresThisRound", failuresThisRound)
-            .put("round", round)
-            .put("lifetimeFailures", lifetimeFailures)
-            .put("untilWall", untilWall)
-            .put("untilElapsed", untilElapsed)
-            .put("bootStamp", bootStamp)
-            .put("startedWall", startedWall)
-            .toString()
+        fun toJson(): String = Json.encodeToString(this)
 
         companion object {
             val EMPTY = State()
@@ -45,16 +41,7 @@ object PasswordAttempts {
             fun fromJson(json: String): State {
                 if (json.isBlank()) return EMPTY
                 return try {
-                    val o = JSONObject(json)
-                    State(
-                        failuresThisRound = o.optInt("failuresThisRound", 0),
-                        round = o.optInt("round", 0),
-                        lifetimeFailures = o.optInt("lifetimeFailures", 0),
-                        untilWall = o.optLong("untilWall", 0L),
-                        untilElapsed = o.optLong("untilElapsed", 0L),
-                        bootStamp = o.optLong("bootStamp", 0L),
-                        startedWall = o.optLong("startedWall", 0L)
-                    )
+                    Json.decodeFromString<State>(json)
                 } catch (_: Throwable) {
                     EMPTY.copy(round = LADDER_MS.size).lockedNow()
                 }

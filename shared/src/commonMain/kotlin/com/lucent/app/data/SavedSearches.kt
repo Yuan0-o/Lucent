@@ -1,33 +1,32 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 object SavedSearches {
 
     const val MAX = 12
 
-    data class Entry(val name: String, val query: String)
+    @Serializable
+    data class Entry(
+        @SerialName("n") val name: String,
+        @SerialName("q") val query: String
+    )
 
     fun parse(json: String?): List<Entry> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val name = o.optString("n", "")
-                val query = o.optString("q", "")
-                if (name.isBlank() || query.isBlank()) null else Entry(name, query)
-            }
+            Json.decodeFromString<List<Entry>>(json)
         } catch (t: Throwable) {
             emptyList()
         }
     }
 
     fun serialize(list: List<Entry>): String {
-        val arr = JSONArray()
-        list.forEach { arr.put(JSONObject().put("n", it.name).put("q", it.query)) }
-        return arr.toString()
+        return Json.encodeToString(list)
     }
 
     fun add(json: String?, name: String, query: String): String {
