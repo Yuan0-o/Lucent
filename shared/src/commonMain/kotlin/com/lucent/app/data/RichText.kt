@@ -1,14 +1,18 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
+@Serializable
 data class RichSpan(
-    val start: Int,
-    val end: Int,
-    val kind: Kind,
-    val color: Int = 0
+    @SerialName("s") val start: Int = 0,
+    @SerialName("e") val end: Int = 0,
+    @SerialName("k") val kind: Kind,
+    @SerialName("c") val color: Int = 0
 ) {
+    @Serializable
     enum class Kind {
         LIGHT,
         BOLD,
@@ -56,28 +60,26 @@ object RichText {
 
     const val EMPTY = ""
 
+    private val jsonParser = Json { 
+        ignoreUnknownKeys = true 
+        encodeDefaults = true 
+    }
 
     fun decode(json: String): List<RichSpan> {
         if (json.isBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            val out = ArrayList<RichSpan>(arr.length())
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val kind = RichSpan.Kind.fromName(o.optString("k")) ?: continue
-                val maxIndex = when (kind) {
+            val list = jsonParser.decodeFromString<List<RichSpan>>(json)
+            val out = ArrayList<RichSpan>(list.size)
+            for (span in list) {
+                val maxIndex = when (span.kind) {
                     RichSpan.Kind.SIZE -> TEXT_SIZES - 1
                     RichSpan.Kind.COLOR -> TEXT_COLORS - 1
                     RichSpan.Kind.HIGHLIGHT -> HIGHLIGHT_COLORS - 1
                     else -> 0
                 }
-                val span = RichSpan(
-                    start = o.optInt("s", 0),
-                    end = o.optInt("e", 0),
-                    kind = kind,
-                    color = o.optInt("c", 0).coerceIn(0, maxIndex)
-                )
-                if (!span.isEmpty) out.add(span)
+                val coercedColor = span.color.coerceIn(0, maxIndex)
+                val finalSpan = if (span.color != coercedColor) span.copy(color = coercedColor) else span
+                if (!finalSpan.isEmpty) out.add(finalSpan)
             }
             out
         } catch (_: Throwable) {
@@ -88,17 +90,7 @@ object RichText {
     fun encode(spans: List<RichSpan>): String {
         val kept = normalise(spans)
         if (kept.isEmpty()) return EMPTY
-        val arr = JSONArray()
-        kept.forEach { s ->
-            arr.put(
-                JSONObject()
-                    .put("s", s.start)
-                    .put("e", s.end)
-                    .put("k", s.kind.name)
-                    .put("c", s.color)
-            )
-        }
-        return arr.toString()
+        return jsonParser.encodeToString(kept)
     }
 
 

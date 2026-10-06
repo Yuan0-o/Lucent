@@ -1,11 +1,13 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
+@Serializable
 data class Attachment(
-    val mime: String,
-    val data: String,
-    val name: String
+    val mime: String = "application/octet-stream",
+    val data: String = "",
+    val name: String = "file"
 ) {
     val isImage: Boolean get() = mime.startsWith("image/")
 
@@ -18,18 +20,12 @@ data class Attachment(
     val isInlineViewable: Boolean get() = isImage || isVideo || isAudio
 
     companion object {
+        private val jsonParser = Json { ignoreUnknownKeys = true }
+
         fun parse(json: String?): List<Attachment> {
             if (json.isNullOrBlank()) return emptyList()
             return try {
-                val arr = JSONArray(json)
-                (0 until arr.length()).mapNotNull { i ->
-                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                    Attachment(
-                        mime = o.optString("mime", "application/octet-stream"),
-                        data = o.optString("data", ""),
-                        name = o.optString("name", "file")
-                    )
-                }
+                jsonParser.decodeFromString(json)
             } catch (e: Exception) {
                 emptyList()
             }

@@ -1,45 +1,36 @@
 package com.lucent.app.data
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.util.UUID
 
+@Serializable
 data class ChecklistItem(
-    val id: String,
-    val text: String,
+    val id: String = "",
+    val text: String = "",
     val done: Boolean = false
 )
 
 object Checklist {
 
+    private val jsonParser = Json { 
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
     fun parse(json: String?): List<ChecklistItem> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                ChecklistItem(
-                    id = o.optString("id", "").ifBlank { UUID.randomUUID().toString() },
-                    text = o.optString("text", ""),
-                    done = o.optBoolean("done", false)
-                )
-            }
+            val list = jsonParser.decodeFromString<List<ChecklistItem>>(json)
+            list.map { if (it.id.isBlank()) it.copy(id = UUID.randomUUID().toString()) else it }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
     fun serialize(list: List<ChecklistItem>): String {
-        val arr = JSONArray()
-        list.forEach {
-            arr.put(
-                JSONObject()
-                    .put("id", it.id)
-                    .put("text", it.text)
-                    .put("done", it.done)
-            )
-        }
-        return arr.toString()
+        return jsonParser.encodeToString(list)
     }
 
     fun newItem(text: String): ChecklistItem =
