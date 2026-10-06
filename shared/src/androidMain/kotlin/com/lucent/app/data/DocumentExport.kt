@@ -21,7 +21,7 @@ actual object DocumentExport {
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(stamp)
 
 
-    fun exportNotes(notes: List<Note>, format: ExportFormat): ByteArray {
+    actual fun exportNotes(notes: List<Note>, format: ExportFormat): ByteArray {
         val live = notes.filter { it.trashedAt == null }
             .sortedWith(compareByDescending<Note> { it.pinned }.thenByDescending { it.updatedAt })
         return when (format) {
@@ -32,7 +32,7 @@ actual object DocumentExport {
         }
     }
 
-    fun exportTasks(tasks: List<Task>, format: ExportFormat): ByteArray {
+    actual fun exportTasks(tasks: List<Task>, format: ExportFormat): ByteArray {
         val live = tasks.filter { it.trashedAt == null }
             .sortedWith(
                 compareByDescending<Task> { it.pinned }.thenBy { it.isDone }.thenByDescending { it.createdAt }
@@ -561,7 +561,7 @@ actual object DocumentExport {
     }
 
 
-    fun zipWithAttachments(
+    actual fun zipWithAttachments(
         context: com.lucent.app.platform.PlatformContext,
         documentName: String,
         documentBytes: ByteArray,
@@ -607,7 +607,7 @@ actual object DocumentExport {
         return baos.toByteArray()
     }
 
-    fun doodlesPdf(canvases: List<DoodleExport.Canvas>, heading: String): ByteArray {
+    actual fun doodlesPdf(canvases: List<DoodleExport.Canvas>, heading: String): ByteArray {
         val doc = PdfDocument()
         val titlePaint = Paint().apply { color = Color.BLACK; textSize = 13f; isFakeBoldText = true; isAntiAlias = true }
         val state = PdfState(doc)
