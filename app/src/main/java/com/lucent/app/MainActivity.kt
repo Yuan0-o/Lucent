@@ -128,11 +128,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
 import com.lucent.app.Screen
 
 private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
+private const val STARTUP_WATCHDOG_MS = 6_000L
+
+private object StartupProbe {
+    @Volatile var step: String = "not started"
+}
 
 class MainActivity : FragmentActivity() {
 
@@ -264,6 +270,28 @@ class MainActivity : FragmentActivity() {
 
 
         AppScope.io.launch {
+            try {
+                StartupProbe.step = "createAppDatabase"
+                val db = com.lucent.app.data.createAppDatabase(applicationContext)
+                StartupProbe.step = "DataCache.warm"
+                com.lucent.app.data.DataCache.warm(db)
+                StartupProbe.step = "AssistantController.ensureMessagesLoaded"
+                AssistantController.ensureMessagesLoaded(applicationContext)
+                StartupProbe.step = "done"
+            } catch (t: CancellationException) {
+                throw t
+            } catch (t: Throwable) {
+                android.util.Log.e("LucentStartup", "database init failed at startup (step=${StartupProbe.step})", t)
+                StartupLog.event(
+                    applicationContext,
+                    "db: startup init failed in ${StartupProbe.step} (${t::class.simpleName}: ${t.message})"
+                )
+            } finally {
+                com.lucent.app.ui.AppReady.databaseReady = true
+            }
+        }
+
+        AppScope.io.launch {
             AttachmentMigration.runIfNeeded(applicationContext)
             AttachmentMigration.encryptExistingAttachments(applicationContext)
         }
@@ -279,21 +307,6 @@ class MainActivity : FragmentActivity() {
         AppScope.io.launch { Notifications.ensureChannel(applicationContext) }
         AppScope.io.launch { ReminderScheduler.rescheduleAll(applicationContext) }
 
-        AppScope.io.launch {
-            try {
-                val db = com.lucent.app.data.createAppDatabase(applicationContext)
-                com.lucent.app.data.DataCache.warm(db)
-                AssistantController.ensureMessagesLoaded(applicationContext)
-                com.lucent.app.ui.AppReady.databaseReady = true
-            } catch (t: Throwable) {
-                com.lucent.app.ui.AppReady.databaseReady = true
-                android.util.Log.e("LucentStartup", "database init failed at startup", t)
-                StartupLog.event(
-                    applicationContext,
-                    "db: startup init failed (${t::class.simpleName}: ${t.message})"
-                )
-            }
-        }
         StartupLog.event(applicationContext, "Startup tasks dispatched; composing UI")
 
         setContent {
@@ -337,7 +350,24 @@ class MainActivity : FragmentActivity() {
                 )
             }
             var splashAnimationFinished by rememberSaveable { mutableStateOf(false) }
-            val appReady = AppReady.databaseReady
+            var appReady by remember { mutableStateOf(AppReady.databaseReady) }
+            LaunchedEffect(Unit) {
+                val startedAt = android.os.SystemClock.elapsedRealtime()
+                while (!appReady) {
+                    if (AppReady.databaseReady) {
+                        appReady = true
+                    } else if (android.os.SystemClock.elapsedRealtime() - startedAt >= STARTUP_WATCHDOG_MS) {
+                        StartupLog.event(
+                            applicationContext,
+                            "startup: db gate still closed after ${STARTUP_WATCHDOG_MS}ms (step=${StartupProbe.step}); opening UI anyway"
+                        )
+                        AppReady.databaseReady = true
+                        appReady = true
+                    } else {
+                        delay(50)
+                    }
+                }
+            }
             val removeSplash = !splashEnabled || (splashAnimationFinished && appReady)
             val appBackgroundAnimated = backgroundAnimated
 
@@ -346,38 +376,53 @@ class MainActivity : FragmentActivity() {
             )
 
             val languageKey by settingsRepo.appLanguage.collectAsState(initial = startup.appLanguage)
-            LaunchedEffect(languageKey) { com.lucent.app.i18n.L.apply(languageKey) }
+            LaunchedEffect(languageKey) {
+                try {
+                    com.lucent.app.i18n.L.apply(languageKey)
+                } catch (t: Throwable) {
+                    StartupLog.event(applicationContext, "i18n: apply($languageKey) failed (${t::class.simpleName}: ${t.message})")
+                }
+            }
 
             val autoUpdateOn by settingsRepo.autoUpdateEnabled.collectAsState(
                 initial = com.lucent.app.data.SettingsCache.autoUpdateEnabled
             )
-            LaunchedEffect(autoUpdateOn) {
-                if (!autoUpdateOn) return@LaunchedEffect
+            LaunchedEffect(autoUpdateOn, appReady) {
+                if (!autoUpdateOn || !appReady) return@LaunchedEffect
                 try {
                     com.lucent.app.data.AutoUpdate.report(null)
-                    if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                    val found = withContext(Dispatchers.IO) { com.lucent.app.data.AutoUpdate.check(runningVersion) }
+                    if (found != null) {
                         com.lucent.app.data.AutoUpdate.downloadOffered()
                     }
+                } catch (t: CancellationException) {
+                    throw t
                 } catch (t: Throwable) {}
                 while (true) {
                     delay(UPDATE_CHECK_INTERVAL_MS)
                     if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
                     if (com.lucent.app.data.AutoUpdate.offered != null) continue
                     try {
-                        val found = com.lucent.app.data.AutoUpdate.check(runningVersion)
+                        val found = withContext(Dispatchers.IO) { com.lucent.app.data.AutoUpdate.check(runningVersion) }
                         if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
                             com.lucent.app.data.AutoUpdate.downloadOffered()
                         }
+                    } catch (t: CancellationException) {
+                        throw t
                     } catch (t: Throwable) {}
                 }
             }
 
-            LaunchedEffect(Unit) {
+            LaunchedEffect(appReady) {
+                if (!appReady) return@LaunchedEffect
                 if (!autoUpdateOn && com.lucent.app.data.AutoUpdate.pendingVersion != null) {
                     try {
-                        if (com.lucent.app.data.AutoUpdate.check(runningVersion) != null) {
+                        val found = withContext(Dispatchers.IO) { com.lucent.app.data.AutoUpdate.check(runningVersion) }
+                        if (found != null) {
                             com.lucent.app.data.AutoUpdate.downloadOffered()
                         }
+                    } catch (t: CancellationException) {
+                        throw t
                     } catch (t: Throwable) {}
                 }
             }
@@ -448,7 +493,7 @@ class MainActivity : FragmentActivity() {
                                         backgroundAnimated = appBackgroundAnimated
                                     )
                                 }
-                            } else if (!splashEnabled) {
+                            } else if (!splashEnabled || splashAnimationFinished) {
                                 FluidGlassBackground(
                                     palette = paletteColors,
                                     backdropColor = backdropColor,
@@ -574,8 +619,14 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     }
     LaunchedEffect(currentScreen) {
         LastScreen.remember(currentScreen)
-        lastScreenRepo.setLastScreen(LastScreen.persistedName())
         StartupLog.event(lastScreenContext, "nav: showing ${currentScreen.name.lowercase()}")
+        try {
+            lastScreenRepo.setLastScreen(LastScreen.persistedName())
+        } catch (t: CancellationException) {
+            throw t
+        } catch (t: Throwable) {
+            StartupLog.event(lastScreenContext, "nav: could not persist last screen (${t::class.simpleName})")
+        }
     }
     LaunchedEffect(currentTab) {
         if (currentTab != HomeTab.Home && drawerState.isOpen) drawerState.close()

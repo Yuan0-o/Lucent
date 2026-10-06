@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,10 +61,14 @@ import com.lucent.app.ui.TasksScreen
 import com.lucent.app.ui.frostedGlass
 import com.lucent.app.ui.lucentTypography
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
 
 private const val UPDATE_CHECK_INTERVAL_MS = 10L * 60L * 1000L
+private const val STARTUP_UPDATE_DELAY_MS = 3_000L
 
 @Composable
 fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
@@ -95,31 +100,47 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = startup.autoUpdateEnabled)
     LaunchedEffect(autoUpdateOn) {
         if (!autoUpdateOn) return@LaunchedEffect
+        kotlinx.coroutines.delay(STARTUP_UPDATE_DELAY_MS)
         try {
             com.lucent.app.data.AutoUpdate.report(null)
-            if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
-                com.lucent.app.data.AutoUpdate.downloadOffered()
+            val found = withContext(Dispatchers.IO) {
+                com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
             }
+            if (found != null) {
+                withContext(Dispatchers.IO) { com.lucent.app.data.AutoUpdate.downloadOffered() }
+            }
+        } catch (t: CancellationException) {
+            throw t
         } catch (t: Throwable) {}
         while (true) {
             kotlinx.coroutines.delay(UPDATE_CHECK_INTERVAL_MS)
             try {
                 if (com.lucent.app.data.AutoUpdate.phase != com.lucent.app.data.AutoUpdate.Phase.IDLE) continue
                 if (com.lucent.app.data.AutoUpdate.offered != null) continue
-                val found = com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
-                if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
-                    com.lucent.app.data.AutoUpdate.downloadOffered()
+                val found = withContext(Dispatchers.IO) {
+                    com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
                 }
+                if (found != null && found.tag != com.lucent.app.data.AutoUpdate.pendingVersion) {
+                    withContext(Dispatchers.IO) { com.lucent.app.data.AutoUpdate.downloadOffered() }
+                }
+            } catch (t: CancellationException) {
+                throw t
             } catch (t: Throwable) {}
         }
     }
 
     LaunchedEffect(Unit) {
         if (!autoUpdateOn && com.lucent.app.data.AutoUpdate.pendingVersion != null) {
+            kotlinx.coroutines.delay(STARTUP_UPDATE_DELAY_MS)
             try {
-                if (com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION) != null) {
-                    com.lucent.app.data.AutoUpdate.downloadOffered()
+                val found = withContext(Dispatchers.IO) {
+                    com.lucent.app.data.AutoUpdate.check(com.lucent.app.LucentBuild.VERSION)
                 }
+                if (found != null) {
+                    withContext(Dispatchers.IO) { com.lucent.app.data.AutoUpdate.downloadOffered() }
+                }
+            } catch (t: CancellationException) {
+                throw t
             } catch (t: Throwable) {}
         }
     }
@@ -215,13 +236,15 @@ private fun DesktopShell(
     var current by remember { mutableStateOf(Screen.Tasks) }
     var showTrashChooser by remember { mutableStateOf(false) }
     var trashInitialMode by remember { mutableStateOf<HomeMode?>(null) }
-    val notebooks by remember {
+    val notebooks by produceState<List<com.lucent.app.data.Notebook>>(initialValue = emptyList()) {
         try {
-            createAppDatabase(desktopPlatformContext).notebookDao.getAll()
+            val dao = withContext(Dispatchers.IO) { createAppDatabase(desktopPlatformContext).notebookDao }
+            dao.getAll().collect { value = it }
+        } catch (t: CancellationException) {
+            throw t
         } catch (t: Throwable) {
-            kotlinx.coroutines.flow.flowOf(emptyList())
         }
-    }.collectAsState(initial = emptyList())
+    }
     val notebookOpensJson by repo.notebookOpens.collectAsState(initial = "{}")
     val recentNotebooks = remember(notebooks, notebookOpensJson) {
         runCatching {

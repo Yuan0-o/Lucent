@@ -48,6 +48,14 @@ fun main() {
 
     val context = desktopPlatformContext
 
+    val focusRequests = MutableStateFlow(0L)
+    if (!com.lucent.desktop.platform.SingleInstance.acquire(context) {
+            focusRequests.value = System.currentTimeMillis()
+        }
+    ) {
+        return
+    }
+
     val startup = try {
         runBlocking { createSettingsRepository(context).startupPrefsOnce() }
             .also { com.lucent.app.data.SettingsCache.seed(it) }
@@ -107,14 +115,7 @@ fun main() {
         AppScope.io.launch { runCatching { createSettingsRepository(context).setHarnessConfig(config.toJson()) } }
     }
 
-    val focusRequests = MutableStateFlow(0L)
-    if (!com.lucent.desktop.platform.SingleInstance.acquire(context) {
-            focusRequests.value = System.currentTimeMillis()
-        }
-    ) {
-        return
-    }
-
+    AppScope.io.launch { runCatching { com.lucent.app.data.createAppDatabase(context) } }
     AppScope.io.launch { runCatching { ReminderScheduler.rescheduleAll(context) } }
     AppScope.io.launch { runCatching { TrashCleanup.purgeExpired(context) } }
     AppScope.io.launch {
@@ -124,7 +125,6 @@ fun main() {
         }
     }
     AppScope.io.launch { runCatching { AttachmentAccess.clearPreviewCache(context) } }
-    AppScope.io.launch { runCatching { com.lucent.app.data.createAppDatabase(context) } }
     AppScope.io.launch { runCatching { com.lucent.app.data.AutoBackupRunner.ensureStarted(context) } }
 
     application {

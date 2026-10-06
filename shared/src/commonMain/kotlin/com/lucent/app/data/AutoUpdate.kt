@@ -3,6 +3,11 @@ package com.lucent.app.data
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+
+private const val CHECK_TIMEOUT_MS = 30_000L
 
 object AutoUpdate {
 
@@ -195,23 +200,18 @@ object AutoUpdate {
     suspend fun check(currentVersion: String, notifyWhenCurrent: Boolean = false): ReleaseInfo? {
         phase = Phase.CHECKING
         lastCheckFailed = false
-        var found = try {
-            UpdateChecker.latest(currentVersion)
+        val found = try {
+            withTimeout(CHECK_TIMEOUT_MS) { UpdateChecker.latest(currentVersion) }
+        } catch (t: TimeoutCancellationException) {
+            lastCheckFailed = true
+            null
+        } catch (t: CancellationException) {
+            phase = Phase.IDLE
+            throw t
         } catch (t: Throwable) {
             lastCheckFailed = true
             null
         }
-        
-        if (found != null) {
-            val fBuildId = found.buildId
-            val cBuildId = com.lucent.app.LucentBuild.BUILD_ID
-            if (fBuildId != null && UpdateChecker.parseBuildId(fBuildId) != null && UpdateChecker.parseBuildId(cBuildId) != null) {
-                if (!UpdateChecker.isNewerBuildId(fBuildId, cBuildId)) {
-                    found = null
-                }
-            }
-        }
-        
         phase = Phase.IDLE
         if (found != null) {
             offer(found)
@@ -259,6 +259,9 @@ object AutoUpdate {
         phase = Phase.INSTALLING
         val ok = try {
             engine.install(info)
+        } catch (t: CancellationException) {
+            phase = Phase.IDLE
+            throw t
         } catch (t: Throwable) {
             false
         }
