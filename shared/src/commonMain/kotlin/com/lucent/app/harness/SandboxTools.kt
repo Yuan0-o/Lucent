@@ -2,7 +2,7 @@ package com.lucent.app.harness
 import com.lucent.app.platform.filesDir
 
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 import com.lucent.app.harness.terminal.TerminalSessions
 
@@ -55,7 +55,7 @@ object SandboxTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "sandbox_status" -> ToolExecResult(status(ctx))
         "sandbox_limits" -> ToolExecResult(limits(ctx))
         "sandbox_run" -> run(ctx, args)
@@ -153,8 +153,8 @@ object SandboxTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun run(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val command = args.optString("command", "")
+    private suspend fun run(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val command = args["command"]?.jsonPrimitive?.content ?: ""
         if (command.isBlank()) return ToolExecResult("There is no command to run.", success = false)
         if (!HarnessRuntime.shellReady()) {
             return ToolExecResult("No shell is available, so nothing can be sandboxed.", success = false)
@@ -162,9 +162,9 @@ object SandboxTools : HarnessGroupTools {
         val docker = dockerVersion()
         val proot = prootVersion()
         val route = route(ctx, docker, proot)
-        val timeout = args.optInt("timeout", ctx.config.timeoutSeconds).coerceIn(5, 1800)
-        val workdir = if (args.optString("workdir", "").isBlank()) File(HarnessRuntime.workspacePath()) else try {
-            Workspace.resolveFile(args.optString("workdir", ""))
+        val timeout = (args["timeout"]?.jsonPrimitive?.intOrNull ?: ctx.config.timeoutSeconds).coerceIn(5, 1800)
+        val workdir = if ((args["workdir"]?.jsonPrimitive?.content ?: "").isBlank()) File(HarnessRuntime.workspacePath()) else try {
+            Workspace.resolveFile(args["workdir"]?.jsonPrimitive?.content ?: "")
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That working directory cannot be used", success = false)
         }
@@ -172,12 +172,12 @@ object SandboxTools : HarnessGroupTools {
         val started = System.currentTimeMillis()
         val outcome = when (route) {
             "docker" -> {
-                val image = args.optString("image", "").ifBlank { "ubuntu:24.04" }
+                val image = (args["image"]?.jsonPrimitive?.content ?: "").ifBlank { "ubuntu:24.04" }
                 val flags = StringBuilder()
-                if (!args.optBoolean("network", false)) flags.append(" --network none")
-                val memory = args.optString("memory", "")
+                if (!(args["network"]?.jsonPrimitive?.booleanOrNull ?: false)) flags.append(" --network none")
+                val memory = args["memory"]?.jsonPrimitive?.content ?: ""
                 if (memory.isNotBlank()) flags.append(" --memory ").append(memory.filter { it.isLetterOrDigit() })
-                val cpus = args.optString("cpus", "")
+                val cpus = args["cpus"]?.jsonPrimitive?.content ?: ""
                 if (cpus.isNotBlank()) flags.append(" --cpus ").append(cpus.filter { it.isDigit() || it == '.' })
                 val line = "docker run --rm -i" + flags +
                     " -v '" + workdir.path.replace("'", "'\\''") + ":/work' -w /work " + image +

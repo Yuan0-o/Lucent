@@ -5,7 +5,7 @@ import com.lucent.app.harness.plugins.PluginPreflight
 import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object PluginTools : HarnessGroupTools {
 
@@ -73,7 +73,7 @@ object PluginTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "plugin_status" -> status(ctx)
         "plugin_list_available" -> list(ctx, args)
         "install_plugin" -> install(ctx, args)
@@ -107,8 +107,8 @@ object PluginTools : HarnessGroupTools {
         return ToolExecResult(sb.toString().trimEnd())
     }
 
-    private fun list(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val query = args.optString("query", "").lowercase()
+    private fun list(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val query = (args["query"]?.jsonPrimitive?.content ?: "").lowercase()
         val matches = PluginCatalog.forPlatform(ctx.android).filter {
             query.isBlank() || it.id.contains(query) || it.name.lowercase().contains(query) ||
                 it.summary.lowercase().contains(query)
@@ -133,21 +133,21 @@ object PluginTools : HarnessGroupTools {
         return ToolExecResult(sb.toString().trimEnd())
     }
 
-    private suspend fun install(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val id = args.optString("id", "").trim()
+    private suspend fun install(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val id = (args["id"]?.jsonPrimitive?.content ?: "").trim()
         val plugin = PluginCatalog.find(id)
             ?: return ToolExecResult("No plugin called \"$id\". Use plugin_status for the list.", success = false)
         if (ctx.android && !plugin.android) return ToolExecResult("${plugin.name} is not for Android.", success = false)
         if (!ctx.android && !plugin.desktop) return ToolExecResult("${plugin.name} is not for this machine.", success = false)
         val host = HarnessRuntime.pluginHost ?: return ToolExecResult("This build cannot install plugins.", success = false)
-        if (plugin.bytes > BIG_DOWNLOAD && args.optLong("confirm_bytes", 0L) != plugin.bytes) {
+        if (plugin.bytes > BIG_DOWNLOAD && (args["confirm_bytes"]?.jsonPrimitive?.longOrNull ?: 0L) != plugin.bytes) {
             return ToolExecResult(
                 "${plugin.name} is ${Workspace.humanSize(plugin.bytes)}. Ask the user whether to download it, then " +
                     "call install_plugin again with confirm_bytes=${plugin.bytes}.",
                 success = false
             )
         }
-        val preferred = args.optString("source", "")
+        val preferred = args["source"]?.jsonPrimitive?.content ?: ""
         val source = plugin.sources.firstOrNull { it.id == preferred } ?: PluginSource("", "", "")
         val preflight = PluginPreflight.inspect(plugin, source, ctx.android)
         if (preflight.blocked) {
@@ -169,10 +169,10 @@ object PluginTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun inspect(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val plugin = PluginCatalog.find(args.optString("id", "").trim())
+    private suspend fun inspect(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val plugin = PluginCatalog.find((args["id"]?.jsonPrimitive?.content ?: "").trim())
             ?: return ToolExecResult("No plugin with that id. Use plugin_status for the list.", success = false)
-        val preferred = args.optString("source", "")
+        val preferred = args["source"]?.jsonPrimitive?.content ?: ""
         val source = plugin.sources.firstOrNull { it.id == preferred } ?: PluginSource("", "", "")
         val report = PluginPreflight.inspect(plugin, source, ctx.android)
         return ToolExecResult(PluginPreflight.render(report), success = !report.blocked)
@@ -223,24 +223,24 @@ object PluginTools : HarnessGroupTools {
         return host.detect(plugin)
     }
 
-    private suspend fun remove(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val plugin = PluginCatalog.find(args.optString("id", "").trim())
+    private suspend fun remove(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val plugin = PluginCatalog.find((args["id"]?.jsonPrimitive?.content ?: "").trim())
             ?: return ToolExecResult("No plugin with that id.", success = false)
         val host = HarnessRuntime.pluginHost ?: return ToolExecResult("This build cannot remove plugins.", success = false)
         val outcome = host.remove(plugin)
         return ToolExecResult(outcome.message, success = outcome.ok)
     }
 
-    private suspend fun run(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val plugin = PluginCatalog.find(args.optString("id", "").trim())
+    private suspend fun run(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val plugin = PluginCatalog.find((args["id"]?.jsonPrimitive?.content ?: "").trim())
             ?: return ToolExecResult("No plugin with that id.", success = false)
-        val command = args.optString("command", "")
+        val command = args["command"]?.jsonPrimitive?.content ?: ""
         if (command.isBlank()) return ToolExecResult("There is no command to run.", success = false)
         val host = HarnessRuntime.pluginHost ?: return ToolExecResult("This build cannot run plugins.", success = false)
         if (!ctx.config.pluginInstalled(plugin.id)) {
             return ToolExecResult("${plugin.name} is not installed yet. Use install_plugin first.", success = false)
         }
-        val timeout = args.optInt("timeout", 600).coerceIn(5, 3600)
+        val timeout = (args["timeout"]?.jsonPrimitive?.intOrNull ?: 600).coerceIn(5, 3600)
         val outcome = host.runPluginCommand(plugin, command, timeout)
         return ToolExecResult(
             "exit code ${outcome.exitCode}${if (outcome.timedOut) " (timed out)" else ""}\n" +
