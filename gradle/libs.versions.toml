@@ -6,6 +6,8 @@ coroutines = "1.8.1"
 haze = "1.7.2"
 orgJson = "20260814"
 kotlinxDatetime = "0.7.0"
+okio = "3.9.0"
+kotlinxIo = "0.3.8"
 
 composeBom = "2026.04.01"
 activityCompose = "1.9.3"
@@ -38,6 +40,9 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
 org-json = { module = "org.json:json", version.ref = "orgJson" }
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+okio-zipfilesystem = { module = "com.squareup.okio:okio-zipfilesystem", version.ref = "okio" }
+kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinxIo" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-ui = { module = "androidx.compose.ui:ui" }

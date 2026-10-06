@@ -57,9 +57,11 @@ kotlin {
         val commonMain by getting {
             kotlin.srcDir(buildIdDir)
             dependencies {
-                implementation(libs.org.json)
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.kotlinx.serialization.json)
+                implementation(libs.okio)
+                implementation(libs.okio.zipfilesystem)
+                implementation(libs.kotlinx.io.core)
             }
         }
         val androidMain by getting {
