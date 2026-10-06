@@ -5,10 +5,33 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+
+@Serializable
+private data class DuckResponse(
+    val Heading: String = "",
+    val AbstractText: String = "",
+    val Abstract: String = "",
+    val Answer: String = "",
+    val Definition: String = "",
+    val AbstractURL: String = ""
+)
+
+@Serializable
+private data class WikiResponse(val query: WikiQuery? = null)
+
+@Serializable
+private data class WikiQuery(val search: List<WikiItem> = emptyList())
+
+@Serializable
+private data class WikiItem(val title: String = "", val snippet: String = "")
+
+private val webJson = Json { ignoreUnknownKeys = true }
 
 object WebSearchClient {
 
@@ -488,13 +511,13 @@ object WebSearchClient {
             if (!response.isSuccessful) return null
             val body = response.body?.string().orEmpty()
             if (body.isBlank()) return null
-            val json = try { JSONObject(body) } catch (e: Exception) { return null }
+            val json = try { webJson.decodeFromString<DuckResponse>(body) } catch (e: Exception) { return null }
             val sb = StringBuilder()
-            val heading = json.optString("Heading", "")
-            val abstract = json.optString("AbstractText", "").ifBlank { json.optString("Abstract", "") }
-            val answer = json.optString("Answer", "")
-            val definition = json.optString("Definition", "")
-            val abstractUrl = json.optString("AbstractURL", "")
+            val heading = json.Heading
+            val abstract = json.AbstractText.ifBlank { json.Abstract }
+            val answer = json.Answer
+            val definition = json.Definition
+            val abstractUrl = json.AbstractURL
             if (answer.isNotBlank()) sb.append(answer).append(" ")
             if (abstract.isNotBlank()) {
                 if (heading.isNotBlank()) sb.append(heading).append(": ")
@@ -518,17 +541,17 @@ object WebSearchClient {
             if (!response.isSuccessful) return null
             val body = response.body?.string().orEmpty()
             if (body.isBlank()) return null
-            val arr = try {
-                JSONObject(body).optJSONObject("query")?.optJSONArray("search")
+            val parsed = try {
+                webJson.decodeFromString<WikiResponse>(body)
             } catch (e: Exception) {
                 null
             } ?: return null
+            val arr = parsed.query?.search ?: return null
             val out = mutableListOf<SearchResult>()
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val title = o.optString("title", "")
+            for (item in arr) {
+                val title = item.title
                 if (title.isBlank()) continue
-                val snippet = cleanText(o.optString("snippet", ""))
+                val snippet = cleanText(item.snippet)
                 val slug = title.replace(' ', '_')
                 val encoded = try { q(slug).replace("+", "%20") } catch (e: Exception) { slug }
                 out += SearchResult("$title (Wikipedia)", "https://$host/wiki/$encoded", snippet)
