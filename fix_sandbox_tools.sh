@@ -1,6 +1,0 @@
-sed -i 's/import java.io.File/import okio.Path.Companion.toPath\nimport okio.FileSystem/g' shared/src/commonMain/kotlin/com/lucent/app/harness/SandboxTools.kt
-sed -i 's/val workdir = if ((args\["workdir"\]?.jsonPrimitive?.content ?: "").isBlank()) File(HarnessRuntime.workspacePath()) else try {/val workdir = if ((args\["workdir"\]?.jsonPrimitive?.content ?: "").isBlank()) HarnessRuntime.workspacePath().toPath() else try {/g' shared/src/commonMain/kotlin/com/lucent/app/harness/SandboxTools.kt
-sed -i 's/Workspace.resolveFile(args\["workdir"\]?.jsonPrimitive?.content ?: "")/Workspace.resolveFile(args\["workdir"\]?.jsonPrimitive?.content ?: "").absolutePath.toPath()/g' shared/src/commonMain/kotlin/com/lucent/app/harness/SandboxTools.kt
-sed -i 's/workdir.path/workdir.toString()/g' shared/src/commonMain/kotlin/com/lucent/app/harness/SandboxTools.kt
-sed -i 's/val rootfs = File(HarnessRuntime.filesDirPath(), "home\/lucent\/ubuntu\/rootfs")/val rootfs = HarnessRuntime.filesDirPath().toPath() \/ "home\/lucent\/ubuntu\/rootfs"/g' shared/src/commonMain/kotlin/com/lucent/app/harness/SandboxTools.kt
-sed -i 's/rootfs.path/rootfs.toString()/g' shared/src/commonMain/kotlin/com/lucent/app/harness/SandboxTools.kt
