@@ -4,8 +4,10 @@ import com.lucent.app.harness.terminal.PtyBackend
 import com.lucent.app.harness.terminal.PtyProcess
 import com.lucent.app.harness.terminal.PtyStartRequest
 import java.io.File
-import java.io.InputStream
-import java.io.OutputStream
+import okio.Sink
+import okio.Source
+import okio.sink
+import okio.source
 
 object DesktopPtyBackend : PtyBackend {
 
@@ -21,7 +23,7 @@ object DesktopPtyBackend : PtyBackend {
             listOf("/bin/bash", "-li")
         }
         val pb = ProcessBuilder(command)
-        val dir = request.workdir ?: File(HarnessRuntime.workspacePath())
+        val dir = request.workdir?.toFile() ?: File(HarnessRuntime.workspacePath())
         if (dir.exists()) pb.directory(dir)
         pb.environment()["TERM"] = "xterm-256color"
         request.env.forEach { (key, value) -> pb.environment()[key] = value }
@@ -31,8 +33,8 @@ object DesktopPtyBackend : PtyBackend {
 }
 
 private class DesktopPtyProcess(private val process: Process) : PtyProcess {
-    override val input: OutputStream get() = process.outputStream
-    override val output: InputStream get() = process.inputStream
+    override val input: Sink get() = process.outputStream.sink()
+    override val output: Source get() = process.inputStream.source()
     override fun isAlive(): Boolean = process.isAlive
     override fun waitFor(): Int = process.waitFor()
     override fun destroy() = process.destroy()

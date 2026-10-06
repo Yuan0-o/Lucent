@@ -6,8 +6,10 @@ import com.lucent.app.harness.terminal.PtyBackend
 import com.lucent.app.harness.terminal.PtyProcess
 import com.lucent.app.harness.terminal.PtyStartRequest
 import java.io.File
-import java.io.InputStream
-import java.io.OutputStream
+import okio.Sink
+import okio.Source
+import okio.sink
+import okio.source
 
 class AndroidPtyBackend(private val context: Context) : PtyBackend {
 
@@ -28,7 +30,7 @@ class AndroidPtyBackend(private val context: Context) : PtyBackend {
         val libDir = File(context.applicationInfo.nativeLibraryDir)
         val proot = File(libDir, "libproot.so")
         val tmpDir = File(context.filesDir, "proot-tmp").apply { mkdirs() }
-        val workspace = request.workdir ?: File(HarnessRuntime.workspacePath())
+        val workspace = request.workdir?.toFile() ?: File(HarnessRuntime.workspacePath())
 
         val args = mutableListOf<String>()
         args.add(proot.absolutePath)
@@ -84,8 +86,8 @@ class AndroidPtyBackend(private val context: Context) : PtyBackend {
 }
 
 private class AndroidPtyProcess(private val process: Process) : PtyProcess {
-    override val input: OutputStream get() = process.outputStream
-    override val output: InputStream get() = process.inputStream
+    override val input: Sink get() = process.outputStream.sink()
+    override val output: Source get() = process.inputStream.source()
     override fun isAlive(): Boolean = process.isAlive
     override fun waitFor(): Int = process.waitFor()
     override fun destroy() = process.destroy()

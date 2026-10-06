@@ -7,9 +7,13 @@ import kotlinx.serialization.json.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.encodeToString
-import java.io.File
-import java.io.IOException
-import java.io.InputStream
+import okio.FileSystem
+import okio.IOException
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.Source
+import okio.buffer
+import okio.source
 
 object FontStore {
 
@@ -33,22 +37,22 @@ object FontStore {
     @Serializable
     data class FontIndex(@SerialName("fonts") val slots: List<FontSlot> = emptyList())
 
-    private fun dir(context: PlatformContext): File = File(context.filesDir, DIR)
+    private fun dir(context: PlatformContext): Path = context.filesDir.toString().toPath() / DIR
 
 
     @Synchronized
     fun index(context: PlatformContext): FontIndex {
         val dir = dir(context)
-        val indexFile = File(dir, INDEX_FILE)
-        if (!indexFile.exists()) return FontIndex(emptyList())
+        val indexFile = dir / INDEX_FILE
+        if (!FileSystem.SYSTEM.exists(indexFile)) return FontIndex(emptyList())
 
         return try {
-            val raw = indexFile.readText()
+            val raw = FileSystem.SYSTEM.source(indexFile).buffer().readUtf8()
             val decrypted = LocalSecrets.decrypt(raw)
             if (decrypted.isEmpty() && raw.isNotEmpty()) return rebuildFromFiles(context)
             val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<FontIndex>(decrypted)
             val validSlots = parsed.slots.filter { 
-                it.id.isNotBlank() && it.fileName.isNotBlank() && File(dir, it.fileName).exists() 
+                it.id.isNotBlank() && it.fileName.isNotBlank() && FileSystem.SYSTEM.exists(dir / it.fileName) 
             }.map {
                 if (it.name.isBlank()) it.copy(name = it.fileName) else it
             }
@@ -61,8 +65,8 @@ object FontStore {
     @Synchronized
     private fun rebuildFromFiles(context: PlatformContext): FontIndex {
         val dir = dir(context)
-        val files = dir.listFiles()?.filter { f ->
-            f.isFile && f.length() > 0L && listOf(".ttf", ".otf", ".ttc").any {
+        val files = runCatching { FileSystem.SYSTEM.list(dir) }.getOrNull()?.filter { f ->
+            FileSystem.SYSTEM.metadataOrNull(f)?.isRegularFile == true && (FileSystem.SYSTEM.metadataOrNull(f)?.size ?: 0L) > 0L && listOf(".ttf", ".otf", ".ttc").any {
                 f.name.lowercase().endsWith(it)
             }
         }.orEmpty().sortedBy { it.name }
@@ -82,18 +86,18 @@ object FontStore {
     @Synchronized
     private fun writeIndex(context: PlatformContext, idx: FontIndex) {
         val dir = dir(context)
-        if (!dir.exists()) dir.mkdirs()
+        try { FileSystem.SYSTEM.createDirectories(dir) } catch (_: Exception) {}
         val jsonStr = Json.encodeToString(idx)
-        File(dir, INDEX_FILE).writeText(LocalSecrets.encrypt(jsonStr))
+        FileSystem.SYSTEM.sink(dir / INDEX_FILE).buffer().use { it.writeUtf8(LocalSecrets.encrypt(jsonStr)) }
     }
 
 
     fun fonts(context: PlatformContext): List<FontSlot> = index(context).slots
 
-    fun fontFile(context: PlatformContext, id: String): File? =
+    fun fontFile(context: PlatformContext, id: String): Path? =
         index(context).slots.firstOrNull { it.id == id }
-            ?.let { File(dir(context), it.fileName) }
-            ?.takeIf { it.exists() && it.length() > 0L }
+            ?.let { dir(context) / it.fileName }
+            ?.takeIf { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadataOrNull(it)?.size ?: 0L) > 0L }
 
     fun canImportMore(context: PlatformContext): Boolean = fonts(context).size < MAX_FONTS
 
@@ -104,24 +108,26 @@ object FontStore {
         if (existing.slots.size >= MAX_FONTS) throw TooManyFontsException()
 
         val dir = dir(context)
-        if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create the font directory")
+        if (!FileSystem.SYSTEM.exists(dir)) {
+            try { FileSystem.SYSTEM.createDirectories(dir) } catch (_: Exception) { throw IOException("Could not create the font directory") }
+        }
 
         val id = newId()
         val pickedName = source.displayName(context) ?: "font"
 
-        source.openStream(context)?.use { raw ->
+        source.openStream(context)?.source()?.buffer()?.use { raw ->
             val head = ByteArray(4)
             val headRead = readUpTo(raw, head)
             val ext = classify(head, headRead) ?: throw NotFontException()
             val fileName = "font_$id.$ext"
-            val tmp = File(dir, "$fileName.tmp")
+            val tmp = dir / "$fileName.tmp"
             try {
                 copyPrefixed(head, headRead, raw, tmp)
-                val target = File(dir, fileName)
-                if (target.exists()) target.delete()
-                if (!tmp.renameTo(target)) throw IOException("Could not finalize the font file")
+                val target = dir / fileName
+                if (FileSystem.SYSTEM.exists(target)) FileSystem.SYSTEM.delete(target)
+                try { FileSystem.SYSTEM.atomicMove(tmp, target) } catch (_: Exception) { throw IOException("Could not finalize the font file") }
             } finally {
-                if (tmp.exists()) tmp.delete()
+                if (FileSystem.SYSTEM.exists(tmp)) FileSystem.SYSTEM.delete(tmp)
             }
             val name = (customName?.trim()?.take(60)).let {
                 if (it.isNullOrBlank()) pickedName.substringBeforeLast('.') else it
@@ -136,8 +142,8 @@ object FontStore {
     fun delete(context: PlatformContext, id: String) {
         val idx = index(context)
         val slot = idx.slots.firstOrNull { it.id == id } ?: return
-        File(dir(context), slot.fileName).delete()
-        File(dir(context), "${slot.fileName}.tmp").delete()
+        try { FileSystem.SYSTEM.delete(dir(context) / slot.fileName) } catch (_: Exception) {}
+        try { FileSystem.SYSTEM.delete(dir(context) / "${slot.fileName}.tmp") } catch (_: Exception) {}
         writeIndex(context, FontIndex(idx.slots.filter { it.id != id }))
     }
 
@@ -145,8 +151,8 @@ object FontStore {
     fun deleteAll(context: PlatformContext) {
         val idx = index(context)
         idx.slots.forEach { s ->
-            File(dir(context), s.fileName).delete()
-            File(dir(context), "${s.fileName}.tmp").delete()
+            try { FileSystem.SYSTEM.delete(dir(context) / s.fileName) } catch (_: Exception) {}
+            try { FileSystem.SYSTEM.delete(dir(context) / "${s.fileName}.tmp") } catch (_: Exception) {}
         }
         writeIndex(context, FontIndex(emptyList()))
     }
@@ -161,7 +167,7 @@ object FontStore {
                     put("id", s.id)
                     put("name", s.name)
                     put("file", s.fileName)
-                    put("size", File(dir(context), s.fileName).length())
+                    put("size", FileSystem.SYSTEM.metadataOrNull(dir(context) / s.fileName)?.size ?: 0L)
                 }
             }
         }
@@ -169,22 +175,22 @@ object FontStore {
     }
 
     fun totalFontBytes(context: PlatformContext): Long =
-        fonts(context).sumOf { File(dir(context), it.fileName).length() }
+        fonts(context).sumOf { FileSystem.SYSTEM.metadataOrNull(dir(context) / it.fileName)?.size ?: 0L }
 
-    fun fontFileForSlot(context: PlatformContext, slot: FontSlot): File? =
-        File(dir(context), slot.fileName).takeIf { it.exists() && it.length() > 0L }
+    fun fontFileForSlot(context: PlatformContext, slot: FontSlot): Path? =
+        (dir(context) / slot.fileName).takeIf { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadataOrNull(it)?.size ?: 0L) > 0L }
 
     @Synchronized
-    fun prepareRestoreTarget(context: PlatformContext, fileName: String): File {
+    fun prepareRestoreTarget(context: PlatformContext, fileName: String): Path {
         val d = dir(context)
-        if (!d.exists()) d.mkdirs()
-        return File(d, File(fileName).name)
+        try { FileSystem.SYSTEM.createDirectories(d) } catch (_: Exception) {}
+        return d / fileName.toPath().name
     }
 
     @Synchronized
     fun restoreFromBackup(context: PlatformContext, manifestJson: String): Int {
         val d = dir(context)
-        if (!d.exists()) d.mkdirs()
+        try { FileSystem.SYSTEM.createDirectories(d) } catch (_: Exception) {}
         val root = try {
             Json.parseToJsonElement(manifestJson).jsonObject
         } catch (_: Throwable) {
@@ -197,8 +203,8 @@ object FontStore {
             val o = arr[i].jsonObject
             val id = o["id"]?.jsonPrimitive?.content ?: ""
             if (id.isBlank()) continue
-            val fileName = File(o["file"]?.jsonPrimitive?.content ?: "").name
-            if (!File(d, fileName).let { it.exists() && it.length() > 0L }) continue
+            val fileName = (o["file"]?.jsonPrimitive?.content ?: "").toPath().name
+            if (!(d / fileName).let { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadataOrNull(it)?.size ?: 0L) > 0L }) continue
             if (existing.slots.any { it.id == id }) continue
             val name = o["name"]?.jsonPrimitive?.content ?: fileName
             kept.add(FontSlot(id = id, name = name, fileName = fileName))
@@ -221,26 +227,20 @@ object FontStore {
         }
     }
 
-    private fun readUpTo(input: InputStream, buffer: ByteArray): Int {
+    private fun readUpTo(source: okio.BufferedSource, buffer: ByteArray): Int {
         var read = 0
         while (read < buffer.size) {
-            val n = input.read(buffer, read, buffer.size - read)
+            val n = source.read(buffer, read, buffer.size - read)
             if (n < 0) break
             read += n
         }
         return read
     }
 
-    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: InputStream, out: File) {
-        out.outputStream().use { os ->
-            os.write(prefix, 0, prefixLen)
-            val buf = ByteArray(1 shl 16)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                os.write(buf, 0, n)
-            }
-            os.flush()
+    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, source: okio.BufferedSource, out: Path) {
+        FileSystem.SYSTEM.sink(out).buffer().use { sink ->
+            sink.write(prefix, 0, prefixLen)
+            sink.writeAll(source)
         }
     }
 }

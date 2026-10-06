@@ -21,7 +21,7 @@ object LucentFontResolver {
         if (fontKey.isNullOrBlank() || fontKey == SYSTEM_FONT_KEY) return null
         return cache.getOrPut(fontKey) {
             try {
-                val file = FontStore.fontFile(context.applicationContext, fontKey)
+                val file = FontStore.fontFile(context.applicationContext, fontKey)?.toFile()
                     ?: return@getOrPut Holder(null)
                 Holder(PlatformFontCompat.fontFamily(fontKey, file.absolutePath))
             } catch (_: Throwable) {

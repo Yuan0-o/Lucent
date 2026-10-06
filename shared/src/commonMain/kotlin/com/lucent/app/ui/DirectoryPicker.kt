@@ -43,7 +43,8 @@ import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.i18n.S
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
+import okio.FileSystem
+import okio.Path.Companion.toPath
 
 data class DirectoryEntry(val name: String, val path: String)
 
@@ -59,19 +60,19 @@ object DirectoryBrowse {
     fun parent(path: String): String? {
         val clean = normalize(path)
         if (clean.isEmpty()) return null
-        val file = File(clean)
-        val up = file.parentFile ?: return null
-        if (up.path == file.path) return null
-        return up.path
+        val p = clean.toPath()
+        val up = p.parent ?: return null
+        if (up.toString() == p.toString()) return null
+        return up.toString()
     }
 
     fun resolve(path: String, base: String): String {
         val clean = normalize(path)
         if (clean.isEmpty()) return normalize(base)
-        val file = File(clean)
-        val absolute = if (file.isAbsolute) file else File(normalize(base), clean)
-        val walked = runCatching { absolute.absoluteFile.toPath().normalize().toString() }.getOrNull()
-        return normalize(walked ?: absolute.absoluteFile.path)
+        val p = clean.toPath()
+        val absolute = if (p.isAbsolute) p else normalize(base).toPath() / clean
+        val walked = runCatching { FileSystem.SYSTEM.canonicalize(absolute).toString() }.getOrNull()
+        return normalize(walked ?: absolute.toString())
     }
 
     fun ancestors(path: String): List<DirectoryEntry> {
@@ -81,7 +82,7 @@ object DirectoryBrowse {
         var cursor: String? = clean
         var guard = 0
         while (cursor != null && guard++ < 64) {
-            val name = File(cursor).name.ifEmpty { cursor }
+            val name = cursor.toPath().name.ifEmpty { cursor }
             chain.add(0, DirectoryEntry(name, cursor))
             cursor = parent(cursor)
         }
@@ -90,31 +91,34 @@ object DirectoryBrowse {
 
     fun isRoot(path: String): Boolean = parent(path) == null
 
-    fun child(path: String, name: String): String = File(normalize(path), name).path
+    fun child(path: String, name: String): String = (normalize(path).toPath() / name).toString()
 
     fun hidden(name: String): Boolean = name.startsWith(".")
 
     fun list(path: String, showHidden: Boolean): List<DirectoryEntry>? {
-        val dir = File(normalize(path))
-        val children = dir.listFiles() ?: return null
+        val dir = normalize(path).toPath()
+        val children = runCatching { FileSystem.SYSTEM.list(dir) }.getOrNull() ?: return null
         return children
             .asSequence()
-            .filter { it.isDirectory && (showHidden || !hidden(it.name)) }
-            .map { DirectoryEntry(it.name, it.path) }
+            .filter { FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory == true && (showHidden || !hidden(it.name)) }
+            .map { DirectoryEntry(it.name, it.toString()) }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             .toList()
     }
 
     fun create(parent: String, name: String): String? {
         if (name.isBlank()) return null
-        val target = File(normalize(parent), name.trim())
-        if (target.exists()) return target.path
-        return if (target.mkdirs()) target.path else null
+        val target = normalize(parent).toPath() / name.trim()
+        if (FileSystem.SYSTEM.exists(target)) return target.toString()
+        return try {
+            FileSystem.SYSTEM.createDirectories(target)
+            target.toString()
+        } catch (_: Exception) {
+            null
+        }
     }
 
-    fun roots(): List<DirectoryEntry> = File.listRoots()
-        .orEmpty()
-        .map { DirectoryEntry(it.path, it.path) }
+    fun roots(): List<DirectoryEntry> = listOf(DirectoryEntry("/", "/"))
 
     fun home(): String = if (HarnessRuntime.android) {
         "/storage/emulated/0"
@@ -124,11 +128,11 @@ object DirectoryBrowse {
 
     fun startingPoint(wanted: String): String {
         val clean = normalize(wanted)
-        if (clean.isNotEmpty() && File(clean).isDirectory) return clean
+        if (clean.isNotEmpty() && FileSystem.SYSTEM.metadataOrNull(clean.toPath())?.isDirectory == true) return clean
         val home = normalize(home())
-        if (home.isNotEmpty() && File(home).isDirectory) return home
-        val readableRoot = roots().firstOrNull { File(it.path).isDirectory }
-        return readableRoot?.path ?: home.ifEmpty { File.separator }
+        if (home.isNotEmpty() && FileSystem.SYSTEM.metadataOrNull(home.toPath())?.isDirectory == true) return home
+        val readableRoot = roots().firstOrNull { FileSystem.SYSTEM.metadataOrNull(it.path.toPath())?.isDirectory == true }
+        return readableRoot?.path ?: home.ifEmpty { okio.Path.DIRECTORY_SEPARATOR }
     }
 }
 

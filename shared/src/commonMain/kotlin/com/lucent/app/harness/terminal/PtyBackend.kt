@@ -1,21 +1,21 @@
 package com.lucent.app.harness.terminal
 
-import java.io.File
-import java.io.InputStream
-import java.io.OutputStream
+import okio.Path
+import okio.Sink
+import okio.Source
 
 class TerminalBackendUnavailable(message: String) : IllegalStateException(message)
 
 data class PtyStartRequest(
     val cols: Int = 80,
     val rows: Int = 24,
-    val workdir: File? = null,
+    val workdir: Path? = null,
     val env: Map<String, String> = emptyMap()
 )
 
 interface PtyProcess {
-    val input: OutputStream
-    val output: InputStream
+    val input: Sink
+    val output: Source
     fun isAlive(): Boolean
     fun waitFor(): Int
     fun destroy()

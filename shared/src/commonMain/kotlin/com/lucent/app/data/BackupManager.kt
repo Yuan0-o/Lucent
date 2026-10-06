@@ -119,7 +119,7 @@ object BackupManager {
         val fontFiles: List<Pair<String, java.io.File>> =
             if (BackupModule.SETTINGS in modules) {
                 FontStore.fonts(context).mapNotNull { slot ->
-                    FontStore.fontFileForSlot(context, slot)
+                    FontStore.fontFileForSlot(context, slot)?.toFile()
                         ?.let { (BackupFrames.FONT_BLOB_PREFIX + slot.fileName) to it }
                 }
             } else emptyList()

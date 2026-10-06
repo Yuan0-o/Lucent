@@ -1,6 +1,7 @@
 package com.lucent.app.harness.terminal
 
 import com.lucent.app.AppScope
+import okio.buffer
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -48,7 +49,7 @@ class PtySession(
     init {
         pumpJob = scope.launch {
             try {
-                val reader = BufferedReader(InputStreamReader(process.output, Charsets.UTF_8))
+                val reader = BufferedReader(InputStreamReader(process.output.buffer().inputStream(), Charsets.UTF_8))
                 val buffer = CharArray(4096)
                 while (true) {
                     val read = reader.read(buffer)
@@ -106,7 +107,8 @@ class PtySession(
         if (state != PtySessionState.RUNNING || text.isEmpty()) return text.isEmpty()
         return try {
             synchronized(writeLock) {
-                process.input.write(text.toByteArray(Charsets.UTF_8))
+                val buf = okio.Buffer().writeUtf8(text)
+                process.input.write(buf, buf.size)
                 process.input.flush()
             }
             true

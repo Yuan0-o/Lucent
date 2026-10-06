@@ -18,32 +18,24 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private class FakePtyProcess : PtyProcess {
-    private val sessionOutput = PipedInputStream(64 * 1024)
-    private val processOutput = PipedOutputStream(sessionOutput)
-    private val capturedInput = ByteArrayOutputStream()
+    private val pipe = okio.Pipe(64 * 1024L)
+    private val processOutput = pipe.sink.buffer()
+    private val capturedInput = okio.Buffer()
     private val exitLatch = CountDownLatch(1)
     @Volatile private var code = 0
     @Volatile var destroyed = false
     @Volatile var forciblyDestroyed = false
     @Volatile var lastResize: Pair<Int, Int>? = null
 
-    override val input: OutputStream = object : OutputStream() {
-        override fun write(b: Int) {
-            capturedInput.write(b)
-        }
-
-        override fun write(b: ByteArray, off: Int, len: Int) {
-            capturedInput.write(b, off, len)
-        }
-    }
-    override val output: InputStream = sessionOutput
+    override val input: okio.Sink = capturedInput
+    override val output: okio.Source = pipe.source
 
     fun feed(text: String) {
-        processOutput.write(text.toByteArray(Charsets.UTF_8))
+        processOutput.writeUtf8(text)
         processOutput.flush()
     }
 
-    fun writtenText(): String = String(capturedInput.toByteArray(), Charsets.UTF_8)
+    fun writtenText(): String = capturedInput.snapshot().utf8()
 
     fun exit(exitCode: Int) {
         terminate(exitCode)

@@ -221,7 +221,7 @@ object BackupFrames {
         var written = 0L
         try {
             val target = if (isFont) {
-                FontStore.prepareRestoreTarget(context, name.removePrefix(FONT_BLOB_PREFIX))
+                FontStore.prepareRestoreTarget(context, name.removePrefix(FONT_BLOB_PREFIX)).toFile()
             } else {
                 com.lucent.app.local.LocalModelStore.prepareRestoreTarget(context, name)
             }
