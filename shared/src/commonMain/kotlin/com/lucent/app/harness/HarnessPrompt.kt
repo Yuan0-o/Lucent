@@ -3,7 +3,7 @@ import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 
 object HarnessPrompt {
@@ -119,13 +119,11 @@ object HarnessPrompt {
     private fun factsIn(context: PlatformContext, file: File): List<String> {
         val text = HarnessVault.read(context, file)
         if (text.isBlank()) return emptyList()
-        val json = try { JSONObject(text) } catch (e: Exception) { return emptyList() }
-        val keys = json.keys()
+        val json = try { Json.parseToJsonElement(text).jsonObject } catch (e: Exception) { return emptyList() }
         val out = mutableListOf<String>()
-        while (keys.hasNext()) {
-            val key = keys.next()
+        for (key in json.keys) {
             if (key.startsWith("__")) continue
-            val value = json.optString(key, "").replace(Regex("\\s+"), " ").trim()
+            val value = (json[key]?.jsonPrimitive?.content ?: "").replace(Regex("\\s+"), " ").trim()
             out.add("$key=" + if (value.length > MEMORY_VALUE) value.take(MEMORY_VALUE) + "…" else value)
             if (out.size >= MEMORY_KEYS) break
         }

@@ -3,7 +3,7 @@ package com.lucent.app.harness
 import com.lucent.app.i18n.S
 import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolParam
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 enum class HarnessGroup(val key: String) {
     FILES("files"),
@@ -142,10 +142,10 @@ data class HarnessEscalation(val sandboxPermissions: String, val justification: 
 
         val MODES = setOf(WORKSPACE_WRITE, FULL_ACCESS)
 
-        fun of(args: JSONObject): HarnessEscalation? {
-            val mode = args.optString(PARAM_PERMISSIONS, "").trim().lowercase()
+        fun of(args: JsonObject): HarnessEscalation? {
+            val mode = (args[PARAM_PERMISSIONS]?.jsonPrimitive?.content ?: "").trim().lowercase()
             if (mode.isEmpty()) return null
-            return HarnessEscalation(mode, args.optString(PARAM_JUSTIFICATION, "").trim())
+            return HarnessEscalation(mode, (args[PARAM_JUSTIFICATION]?.jsonPrimitive?.content ?: "").trim())
         }
     }
 }
