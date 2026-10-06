@@ -3,8 +3,10 @@ import com.lucent.app.platform.filesDir
 import com.lucent.app.local.ImportSource
 
 import com.lucent.app.platform.PlatformContext
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.encodeToString
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -25,9 +27,11 @@ object FontStore {
     class NotFontException : IOException("Not a usable font file")
     class TooManyFontsException : IOException("Font slots are full")
 
-    data class FontSlot(val id: String, val name: String, val fileName: String)
+    @Serializable
+    data class FontSlot(val id: String, val name: String, @SerialName("file") val fileName: String)
 
-    data class FontIndex(val slots: List<FontSlot>)
+    @Serializable
+    data class FontIndex(@SerialName("fonts") val slots: List<FontSlot> = emptyList())
 
     private fun dir(context: PlatformContext): File = File(context.filesDir, DIR)
 
@@ -42,16 +46,13 @@ object FontStore {
             val raw = indexFile.readText()
             val decrypted = LocalSecrets.decrypt(raw)
             if (decrypted.isEmpty() && raw.isNotEmpty()) return rebuildFromFiles(context)
-            val root = JSONObject(decrypted)
-            val arr = root.optJSONArray("fonts") ?: JSONArray()
-            val slots = (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = o.optString("id", "").ifBlank { return@mapNotNull null }
-                val fileName = o.optString("file", "").ifBlank { return@mapNotNull null }
-                if (!File(dir, fileName).exists()) return@mapNotNull null
-                FontSlot(id = id, name = o.optString("name", fileName), fileName = fileName)
+            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<FontIndex>(decrypted)
+            val validSlots = parsed.slots.filter { 
+                it.id.isNotBlank() && it.fileName.isNotBlank() && File(dir, it.fileName).exists() 
+            }.map {
+                if (it.name.isBlank()) it.copy(name = it.fileName) else it
             }
-            FontIndex(slots)
+            FontIndex(validSlots)
         } catch (_: Throwable) {
             rebuildFromFiles(context)
         }
@@ -82,12 +83,8 @@ object FontStore {
     private fun writeIndex(context: PlatformContext, idx: FontIndex) {
         val dir = dir(context)
         if (!dir.exists()) dir.mkdirs()
-        val arr = JSONArray()
-        idx.slots.forEach { s ->
-            arr.put(JSONObject().put("id", s.id).put("name", s.name).put("file", s.fileName))
-        }
-        val root = JSONObject().put("fonts", arr)
-        File(dir, INDEX_FILE).writeText(LocalSecrets.encrypt(root.toString()))
+        val jsonStr = Json.encodeToString(idx)
+        File(dir, INDEX_FILE).writeText(LocalSecrets.encrypt(jsonStr))
     }
 
 
@@ -158,17 +155,17 @@ object FontStore {
     @Synchronized
     fun exportManifestJson(context: PlatformContext): String {
         val idx = index(context)
-        val arr = JSONArray()
-        idx.slots.forEach { s ->
-            arr.put(
-                JSONObject()
-                    .put("id", s.id)
-                    .put("name", s.name)
-                    .put("file", s.fileName)
-                    .put("size", File(dir(context), s.fileName).length())
-            )
+        val arr = buildJsonArray {
+            idx.slots.forEach { s ->
+                addJsonObject {
+                    put("id", s.id)
+                    put("name", s.name)
+                    put("file", s.fileName)
+                    put("size", File(dir(context), s.fileName).length())
+                }
+            }
         }
-        return JSONObject().put("fonts", arr).toString()
+        return buildJsonObject { put("fonts", arr) }.toString()
     }
 
     fun totalFontBytes(context: PlatformContext): Long =
@@ -189,20 +186,22 @@ object FontStore {
         val d = dir(context)
         if (!d.exists()) d.mkdirs()
         val root = try {
-            JSONObject(manifestJson)
+            Json.parseToJsonElement(manifestJson).jsonObject
         } catch (_: Throwable) {
             return 0
         }
-        val arr = root.optJSONArray("fonts") ?: JSONArray()
+        val arr = root["fonts"]?.jsonArray ?: emptyList()
         val existing = index(context)
         val kept = mutableListOf<FontSlot>()
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val id = o.optString("id", "").ifBlank { continue }
-            val fileName = File(o.optString("file", "").ifBlank { continue }).name
+        for (i in arr.indices) {
+            val o = arr[i].jsonObject
+            val id = o["id"]?.jsonPrimitive?.content ?: ""
+            if (id.isBlank()) continue
+            val fileName = File(o["file"]?.jsonPrimitive?.content ?: "").name
             if (!File(d, fileName).let { it.exists() && it.length() > 0L }) continue
             if (existing.slots.any { it.id == id }) continue
-            kept.add(FontSlot(id = id, name = o.optString("name", fileName), fileName = fileName))
+            val name = o["name"]?.jsonPrimitive?.content ?: fileName
+            kept.add(FontSlot(id = id, name = name, fileName = fileName))
         }
         val merged = (existing.slots + kept).take(MAX_FONTS)
         writeIndex(context, FontIndex(merged))

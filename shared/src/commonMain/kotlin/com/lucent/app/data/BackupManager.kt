@@ -86,11 +86,12 @@ object BackupManager {
         val notebookItems = if (notebooks.isNotEmpty()) {
             notebooks.flatMap { db.notebookDao.getItemsOnce(it.id) }
         } else emptyList()
-        return BackupManifestBuilder.build(
+        val jsonObj = BackupManifestBuilder.build(
             context, notes, tasks, noteVersions, taskVersions, chats, conversations, settings,
             notebooks = notebooks, notebookItems = notebookItems,
             inlineAttachments = true, modules = modules, apiProfileNames = selection.apiProfileNames
-        ).toString(2)
+        )
+        return kotlinx.serialization.json.Json { prettyPrint = true }.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObj)
     }
 
     suspend fun exportEncrypted(

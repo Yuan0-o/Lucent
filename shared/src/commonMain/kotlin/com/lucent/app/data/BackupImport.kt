@@ -4,7 +4,7 @@ import com.lucent.app.platform.PlatformContext
 import kotlin.io.encoding.Base64
 import com.lucent.app.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.first
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 private class ImportState {
     var importedNotes = 0
@@ -31,7 +31,7 @@ object BackupImporter {
         apiProfileNames: Set<String>? = null,
         mode: ImportMode = ImportMode.DEFAULT
     ): String {
-        val root = JSONObject(json)
+        val root = Json.parseToJsonElement(json).jsonObject
         val state = ImportState()
         val existingNotes = db.noteDao.getAllOnce()
         val existingTasks = db.taskDao.getAllOnce()
@@ -76,19 +76,19 @@ object BackupImporter {
 
     private suspend fun importConversations(
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantChats: Boolean,
         conversationIds: Set<Long>?,
         state: ImportState
     ) {
-        (if (wantChats) root.optJSONArray("conversations") else null)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val oldId = o.optLong("id", 0)
+        (if (wantChats) root["conversations"]?.jsonArray else null)?.let { arr ->
+            for (i in 0 until arr.size) {
+                val o = arr[i].jsonObject
+                val oldId = o["id"]?.jsonPrimitive?.longOrNull ?: 0
                 if (conversationIds != null && oldId !in conversationIds) continue
-                val title = o.optString("title", "Conversation")
-                val createdAt = o.optLong("createdAt", System.currentTimeMillis())
-                val updatedAt = o.optLong("updatedAt", createdAt)
+                val title = o["title"]?.jsonPrimitive?.content ?: "Conversation"
+                val createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                val updatedAt = o["updatedAt"]?.jsonPrimitive?.longOrNull ?: createdAt
                 val newId = db.chatConversationDao.insert(
                     ChatConversation(title = title, createdAt = createdAt, updatedAt = updatedAt)
                 )
@@ -100,36 +100,36 @@ object BackupImporter {
     private suspend fun importNotes(
         context: PlatformContext,
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantNotes: Boolean,
         mode: ImportMode,
         existingNotes: List<Note>,
         state: ImportState
     ) {
-        (if (wantNotes) root.optJSONArray("notes") else null)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val title = o.optString("title")
-                val body = o.optString("body")
-                val updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
-                val tags = o.optString("tags", "")
-                val rawAttachments = o.optString("attachments", "[]")
+        (if (wantNotes) root["notes"]?.jsonArray else null)?.let { arr ->
+            for (i in 0 until arr.size) {
+                val o = arr[i].jsonObject
+                val title = o["title"]?.jsonPrimitive?.content ?: ""
+                val body = o["body"]?.jsonPrimitive?.content ?: ""
+                val updatedAt = o["updatedAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                val tags = o["tags"]?.jsonPrimitive?.content ?: ""
+                val rawAttachments = o["attachments"]?.jsonPrimitive?.content ?: "[]"
                 val attachments = migrateInlineAttachmentsIfNeeded(context, rawAttachments)
-                val archived = o.optBoolean("archived", false)
-                val archivedAt = if (o.isNull("archivedAt")) null else o.optLong("archivedAt")
-                val pinned = o.optBoolean("pinned", false)
-                val color = o.optString("color", "")
-                val isChecklist = o.optBoolean("isChecklist", false)
-                val checklist = o.optString("checklist", "[]")
-                val trashedAt = if (o.isNull("trashedAt")) null else o.optLong("trashedAt")
-                val manualOrder = o.optInt("manualOrder", 0)
-                val isDraft = o.optBoolean("isDraft", false)
-                val draftSavedAt = if (o.isNull("draftSavedAt")) null else o.optLong("draftSavedAt")
-                val hidden = o.optBoolean("hidden", false)
-                val isDoodle = o.optBoolean("isDoodle", false)
-                val doodle = o.optString("doodle", "")
-                val bodySpans = o.optString("bodySpans", "")
-                val formatOverride = if (o.isNull("formatOverride")) null else o.optString("formatOverride").takeIf { it.isNotBlank() }
+                val archived = o["archived"]?.jsonPrimitive?.booleanOrNull ?: false
+                val archivedAt = if ((o["archivedAt"] == null || o["archivedAt"] is JsonNull)) null else o["archivedAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val pinned = o["pinned"]?.jsonPrimitive?.booleanOrNull ?: false
+                val color = o["color"]?.jsonPrimitive?.content ?: ""
+                val isChecklist = o["isChecklist"]?.jsonPrimitive?.booleanOrNull ?: false
+                val checklist = o["checklist"]?.jsonPrimitive?.content ?: "[]"
+                val trashedAt = if ((o["trashedAt"] == null || o["trashedAt"] is JsonNull)) null else o["trashedAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val manualOrder = o["manualOrder"]?.jsonPrimitive?.intOrNull ?: 0
+                val isDraft = o["isDraft"]?.jsonPrimitive?.booleanOrNull ?: false
+                val draftSavedAt = if ((o["draftSavedAt"] == null || o["draftSavedAt"] is JsonNull)) null else o["draftSavedAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val hidden = o["hidden"]?.jsonPrimitive?.booleanOrNull ?: false
+                val isDoodle = o["isDoodle"]?.jsonPrimitive?.booleanOrNull ?: false
+                val doodle = o["doodle"]?.jsonPrimitive?.content ?: ""
+                val bodySpans = o["bodySpans"]?.jsonPrimitive?.content ?: ""
+                val formatOverride = if ((o["formatOverride"] == null || o["formatOverride"] is JsonNull)) null else o["formatOverride"]?.jsonPrimitive?.content ?: "".takeIf { it.isNotBlank() }
                 val key = ImportDecision.noteKey(title)
                 val local = existingNotes.firstOrNull { ImportDecision.noteKey(it.title) == key }
                 val isDuplicate = existingNotes.any {
@@ -163,35 +163,35 @@ object BackupImporter {
     private suspend fun importTasks(
         context: PlatformContext,
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantTasks: Boolean,
         mode: ImportMode,
         existingTasks: List<Task>,
         state: ImportState
     ) {
-        (if (wantTasks) root.optJSONArray("tasks") else null)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val title = o.optString("title")
-                val isDone = o.optBoolean("isDone", false)
-                val createdAt = o.optLong("createdAt", System.currentTimeMillis())
-                val rawAttachments = o.optString("attachments", "[]")
+        (if (wantTasks) root["tasks"]?.jsonArray else null)?.let { arr ->
+            for (i in 0 until arr.size) {
+                val o = arr[i].jsonObject
+                val title = o["title"]?.jsonPrimitive?.content ?: ""
+                val isDone = o["isDone"]?.jsonPrimitive?.booleanOrNull ?: false
+                val createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                val rawAttachments = o["attachments"]?.jsonPrimitive?.content ?: "[]"
                 val attachments = migrateInlineAttachmentsIfNeeded(context, rawAttachments)
-                val dueAt = if (o.isNull("dueAt")) null else o.optLong("dueAt")
-                val taskNotes = o.optString("notes", "")
-                val completedAt = if (o.isNull("completedAt")) null else o.optLong("completedAt")
-                val priority = o.optInt("priority", 0)
-                val taskPinned = o.optBoolean("pinned", false)
-                val subtasks = o.optString("subtasks", "[]")
-                val repeatRule = o.optString("repeatRule", "NONE")
-                val reminderEnabled = o.optBoolean("reminderEnabled", false)
-                val taskTrashedAt = if (o.isNull("trashedAt")) null else o.optLong("trashedAt")
-                val taskManualOrder = o.optInt("manualOrder", 0)
-                val taskIsDraft = o.optBoolean("isDraft", false)
-                val taskDraftSavedAt = if (o.isNull("draftSavedAt")) null else o.optLong("draftSavedAt")
-                val taskHidden = o.optBoolean("hidden", false)
-                val taskNotesSpans = o.optString("notesSpans", "")
-                val taskFormatOverride = if (o.isNull("formatOverride")) null else o.optString("formatOverride").takeIf { it.isNotBlank() }
+                val dueAt = if ((o["dueAt"] == null || o["dueAt"] is JsonNull)) null else o["dueAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val taskNotes = o["notes"]?.jsonPrimitive?.content ?: ""
+                val completedAt = if ((o["completedAt"] == null || o["completedAt"] is JsonNull)) null else o["completedAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val priority = o["priority"]?.jsonPrimitive?.intOrNull ?: 0
+                val taskPinned = o["pinned"]?.jsonPrimitive?.booleanOrNull ?: false
+                val subtasks = o["subtasks"]?.jsonPrimitive?.content ?: "[]"
+                val repeatRule = o["repeatRule"]?.jsonPrimitive?.content ?: "NONE"
+                val reminderEnabled = o["reminderEnabled"]?.jsonPrimitive?.booleanOrNull ?: false
+                val taskTrashedAt = if ((o["trashedAt"] == null || o["trashedAt"] is JsonNull)) null else o["trashedAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val taskManualOrder = o["manualOrder"]?.jsonPrimitive?.intOrNull ?: 0
+                val taskIsDraft = o["isDraft"]?.jsonPrimitive?.booleanOrNull ?: false
+                val taskDraftSavedAt = if ((o["draftSavedAt"] == null || o["draftSavedAt"] is JsonNull)) null else o["draftSavedAt"]?.jsonPrimitive?.longOrNull ?: 0L
+                val taskHidden = o["hidden"]?.jsonPrimitive?.booleanOrNull ?: false
+                val taskNotesSpans = o["notesSpans"]?.jsonPrimitive?.content ?: ""
+                val taskFormatOverride = if ((o["formatOverride"] == null || o["formatOverride"] is JsonNull)) null else o["formatOverride"]?.jsonPrimitive?.content ?: "".takeIf { it.isNotBlank() }
                 val taskKey = ImportDecision.taskKey(title, createdAt)
                 val localTask = existingTasks.firstOrNull {
                     ImportDecision.taskKey(it.title, it.createdAt) == taskKey
@@ -229,25 +229,25 @@ object BackupImporter {
 
     private suspend fun importTaskVersions(
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantTasks: Boolean,
         state: ImportState
     ) {
-        (if (wantTasks) root.optJSONArray("taskVersions") else null)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val ownerTitle = o.optString("taskTitle", "")
-                val ownerCreatedAt = o.optLong("taskCreatedAt", -1L)
+        (if (wantTasks) root["taskVersions"]?.jsonArray else null)?.let { arr ->
+            for (i in 0 until arr.size) {
+                val o = arr[i].jsonObject
+                val ownerTitle = o["taskTitle"]?.jsonPrimitive?.content ?: ""
+                val ownerCreatedAt = o["taskCreatedAt"]?.jsonPrimitive?.longOrNull ?: -1L
                 val taskId = state.taskIdByKey["$ownerTitle\u0000$ownerCreatedAt"] ?: continue
                 db.taskVersionDao.insert(
                     TaskVersion(
                         taskId = taskId,
-                        title = o.optString("title", ""),
-                        notes = o.optString("notes", ""),
-                        subtasks = o.optString("subtasks", "[]"),
-                        priority = o.optInt("priority", 0),
-                        dueAt = if (o.isNull("dueAt")) null else o.optLong("dueAt"),
-                        savedAt = o.optLong("savedAt", System.currentTimeMillis())
+                        title = o["title"]?.jsonPrimitive?.content ?: "",
+                        notes = o["notes"]?.jsonPrimitive?.content ?: "",
+                        subtasks = o["subtasks"]?.jsonPrimitive?.content ?: "[]",
+                        priority = o["priority"]?.jsonPrimitive?.intOrNull ?: 0,
+                        dueAt = if ((o["dueAt"] == null || o["dueAt"] is JsonNull)) null else o["dueAt"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        savedAt = o["savedAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
                     )
                 )
                 state.importedVersions++
@@ -260,25 +260,25 @@ object BackupImporter {
 
     private suspend fun importNoteVersions(
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantNotes: Boolean,
         state: ImportState
     ) {
-        (if (wantNotes) root.optJSONArray("noteVersions") else null)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val ownerTitle = o.optString("noteTitle", "")
-                val ownerUpdatedAt = o.optLong("noteUpdatedAt", -1L)
+        (if (wantNotes) root["noteVersions"]?.jsonArray else null)?.let { arr ->
+            for (i in 0 until arr.size) {
+                val o = arr[i].jsonObject
+                val ownerTitle = o["noteTitle"]?.jsonPrimitive?.content ?: ""
+                val ownerUpdatedAt = o["noteUpdatedAt"]?.jsonPrimitive?.longOrNull ?: -1L
                 val noteId = state.noteIdByKey["$ownerTitle\u0000$ownerUpdatedAt"] ?: continue
                 db.noteVersionDao.insert(
                     NoteVersion(
                         noteId = noteId,
-                        title = o.optString("title", ""),
-                        body = o.optString("body", ""),
-                        tags = o.optString("tags", ""),
-                        isChecklist = o.optBoolean("isChecklist", false),
-                        checklist = o.optString("checklist", "[]"),
-                        savedAt = o.optLong("savedAt", System.currentTimeMillis())
+                        title = o["title"]?.jsonPrimitive?.content ?: "",
+                        body = o["body"]?.jsonPrimitive?.content ?: "",
+                        tags = o["tags"]?.jsonPrimitive?.content ?: "",
+                        isChecklist = o["isChecklist"]?.jsonPrimitive?.booleanOrNull ?: false,
+                        checklist = o["checklist"]?.jsonPrimitive?.content ?: "[]",
+                        savedAt = o["savedAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
                     )
                 )
                 state.importedVersions++
@@ -291,13 +291,13 @@ object BackupImporter {
 
     private suspend fun importChats(
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantChats: Boolean,
         conversationIds: Set<Long>?,
         existingChats: List<ChatMessage>,
         state: ImportState
     ) {
-        (if (wantChats) root.optJSONArray("chats") else null)?.let { arr ->
+        (if (wantChats) root["chats"]?.jsonArray else null)?.let { arr ->
             var fallbackConvId: Long? = null
             suspend fun fallbackConversation(): Long {
                 fallbackConvId?.let { return it }
@@ -305,12 +305,12 @@ object BackupImporter {
                 fallbackConvId = id
                 return id
             }
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                val role = o.optString("role")
-                val content = o.optString("content")
-                val timestamp = o.optLong("timestamp", System.currentTimeMillis())
-                val oldConvId = if (o.has("conversationId")) o.optLong("conversationId", 1) else 1L
+            for (i in 0 until arr.size) {
+                val o = arr[i].jsonObject
+                val role = o["role"]?.jsonPrimitive?.content ?: ""
+                val content = o["content"]?.jsonPrimitive?.content ?: ""
+                val timestamp = o["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                val oldConvId = if (o.containsKey("conversationId")) o["conversationId"]?.jsonPrimitive?.longOrNull ?: 1 else 1L
                 if (conversationIds != null && oldConvId !in conversationIds) continue
                 val newConvId = state.convIdRemap[oldConvId] ?: fallbackConversation()
                 val isDuplicate = existingChats.any { it.role == role && it.content == content && it.timestamp == timestamp }
@@ -320,17 +320,17 @@ object BackupImporter {
                         role = role,
                         content = content,
                         timestamp = timestamp,
-                        attachmentMime = if (o.isNull("attachmentMime")) null else o.optString("attachmentMime"),
-                        attachmentData = if (o.isNull("attachmentData")) null else o.optString("attachmentData"),
-                        attachmentName = if (o.isNull("attachmentName")) null else o.optString("attachmentName"),
-                        attachmentList = if (o.isNull("attachmentList")) null else o.optString("attachmentList"),
+                        attachmentMime = if ((o["attachmentMime"] == null || o["attachmentMime"] is JsonNull)) null else o["attachmentMime"]?.jsonPrimitive?.content ?: "",
+                        attachmentData = if ((o["attachmentData"] == null || o["attachmentData"] is JsonNull)) null else o["attachmentData"]?.jsonPrimitive?.content ?: "",
+                        attachmentName = if ((o["attachmentName"] == null || o["attachmentName"] is JsonNull)) null else o["attachmentName"]?.jsonPrimitive?.content ?: "",
+                        attachmentList = if ((o["attachmentList"] == null || o["attachmentList"] is JsonNull)) null else o["attachmentList"]?.jsonPrimitive?.content ?: "",
                         conversationId = newConvId,
-                        tokens = o.optInt("tokens", 0),
-                        agentTrace = if (o.isNull("agentTrace")) null else o.optString("agentTrace"),
-                        reasoningBlocks = if (o.isNull("reasoningBlocks")) null else o.optString("reasoningBlocks"),
-                        reasoningText = if (o.isNull("reasoningText")) null else o.optString("reasoningText"),
-                        quotedRole = if (o.isNull("quotedRole")) null else o.optString("quotedRole"),
-                        quotedText = if (o.isNull("quotedText")) null else o.optString("quotedText")
+                        tokens = o["tokens"]?.jsonPrimitive?.intOrNull ?: 0,
+                        agentTrace = if ((o["agentTrace"] == null || o["agentTrace"] is JsonNull)) null else o["agentTrace"]?.jsonPrimitive?.content ?: "",
+                        reasoningBlocks = if ((o["reasoningBlocks"] == null || o["reasoningBlocks"] is JsonNull)) null else o["reasoningBlocks"]?.jsonPrimitive?.content ?: "",
+                        reasoningText = if ((o["reasoningText"] == null || o["reasoningText"] is JsonNull)) null else o["reasoningText"]?.jsonPrimitive?.content ?: "",
+                        quotedRole = if ((o["quotedRole"] == null || o["quotedRole"] is JsonNull)) null else o["quotedRole"]?.jsonPrimitive?.content ?: "",
+                        quotedText = if ((o["quotedText"] == null || o["quotedText"] is JsonNull)) null else o["quotedText"]?.jsonPrimitive?.content ?: ""
                     )
                 )
                 state.importedChats++
@@ -341,24 +341,24 @@ object BackupImporter {
     private suspend fun importNotebooks(
         context: PlatformContext,
         db: AppDatabase,
-        root: JSONObject,
+        root: JsonObject,
         wantNotes: Boolean,
         wantTasks: Boolean
     ) {
         if (wantNotes || wantTasks) {
-            val restoredNotebooks = root.optJSONArray("notebooks")
-            val restoredItems = root.optJSONArray("notebookItems")
+            val restoredNotebooks = root["notebooks"]?.jsonArray
+            val restoredItems = root["notebookItems"]?.jsonArray
             if (restoredNotebooks != null && restoredItems != null) {
                 val liveNotes = db.noteDao.getAllOnce()
                 val liveTasks = db.taskDao.getAllOnce()
                 val notebookIdByTitle = HashMap<String, Long>()
                 for (i in 0 until restoredNotebooks.length()) {
-                    val o = restoredNotebooks.getJSONObject(i)
-                    val title = o.optString("title", "")
-                    val createdAt = o.optLong("createdAt", System.currentTimeMillis())
-                    val updatedAt = o.optLong("updatedAt", createdAt)
-                    val storedColor = o.optString("color", "")
-                    val coverData = o.optString("coverData", "")
+                    val o = restoredNotebooks[i].jsonObject
+                    val title = o["title"]?.jsonPrimitive?.content ?: ""
+                    val createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                    val updatedAt = o["updatedAt"]?.jsonPrimitive?.longOrNull ?: createdAt
+                    val storedColor = o["color"]?.jsonPrimitive?.content ?: ""
+                    val coverData = o["coverData"]?.jsonPrimitive?.content ?: ""
                     val restoredColor = if (storedColor.startsWith("photo:") && coverData.isNotEmpty()) {
                         runCatching {
                             val bytes = Base64.Mime.decode(coverData)
@@ -371,18 +371,18 @@ object BackupImporter {
                             createdAt = createdAt,
                             updatedAt = updatedAt,
                             color = restoredColor,
-                            manualOrder = o.optInt("manualOrder", 0),
-                            pinned = o.optBoolean("pinned", false)
+                            manualOrder = o["manualOrder"]?.jsonPrimitive?.intOrNull ?: 0,
+                            pinned = o["pinned"]?.jsonPrimitive?.booleanOrNull ?: false
                         )
                     )
                     notebookIdByTitle[title] = newId
                 }
                 for (i in 0 until restoredItems.length()) {
-                    val o = restoredItems.getJSONObject(i)
-                    val notebookId = notebookIdByTitle[o.optString("notebookTitle", "")] ?: continue
-                    val kind = o.optString("itemKind", "")
-                    val itemTitle = o.optString("itemTitle", "")
-                    val itemCreatedAt = o.optLong("itemCreatedAt", -1L)
+                    val o = restoredItems[i].jsonObject
+                    val notebookId = notebookIdByTitle[o["notebookTitle"]?.jsonPrimitive?.content ?: ""] ?: continue
+                    val kind = o["itemKind"]?.jsonPrimitive?.content ?: ""
+                    val itemTitle = o["itemTitle"]?.jsonPrimitive?.content ?: ""
+                    val itemCreatedAt = o["itemCreatedAt"]?.jsonPrimitive?.longOrNull ?: -1L
                     val targetId = when (kind) {
                         NotebookItem.KIND_NOTE -> {
                             val key = ImportDecision.noteKey(itemTitle)
@@ -408,48 +408,48 @@ object BackupImporter {
     private suspend fun importSettings(
         context: PlatformContext,
         settings: SettingsRepository,
-        root: JSONObject,
+        root: JsonObject,
         modules: Set<BackupManager.BackupModule>,
         apiProfileNames: Set<String>?
     ): Boolean {
         var settingsRestored = false
-        root.optJSONObject("settings")?.let { s ->
+        root["settings"]?.jsonObject?.let { s ->
             val restoreApi = BackupManager.BackupModule.API in modules
             val restoreGeneral = BackupManager.BackupModule.SETTINGS in modules
             val restoreLocal = BackupManager.BackupModule.LOCAL_ASSISTANT in modules
             settingsRestored = restoreApi || restoreGeneral || restoreLocal
             val wholeApi = restoreApi && apiProfileNames == null
-            if (wholeApi && s.has("baseUrl")) settings.setBaseUrl(s.optString("baseUrl"))
-            if (wholeApi && s.has("apiSpec")) settings.setApiSpec(s.optString("apiSpec"))
-            if (wholeApi && s.has("apiKeyEncrypted")) {
-                val decrypted = CryptoUtil.decrypt(s.optString("apiKeyEncrypted"))
+            if (wholeApi && s.containsKey("baseUrl")) settings.setBaseUrl(s["baseUrl"]?.jsonPrimitive?.content ?: "")
+            if (wholeApi && s.containsKey("apiSpec")) settings.setApiSpec(s["apiSpec"]?.jsonPrimitive?.content ?: "")
+            if (wholeApi && s.containsKey("apiKeyEncrypted")) {
+                val decrypted = CryptoUtil.decrypt(s["apiKeyEncrypted"]?.jsonPrimitive?.content ?: "")
                 if (decrypted.isNotEmpty()) settings.setApiKey(decrypted)
             }
-            if (wholeApi && s.has("model")) settings.setModel(s.optString("model"))
-            if (restoreGeneral && s.has("themeMode")) settings.setThemeMode(s.optString("themeMode"))
-            if (restoreGeneral && s.has("palette")) settings.setPalette(s.optString("palette"))
-            if (restoreGeneral && s.has("dynamicColorEnabled")) {
-                settings.setDynamicColorEnabled(s.optBoolean("dynamicColorEnabled"))
+            if (wholeApi && s.containsKey("model")) settings.setModel(s["model"]?.jsonPrimitive?.content ?: "")
+            if (restoreGeneral && s.containsKey("themeMode")) settings.setThemeMode(s["themeMode"]?.jsonPrimitive?.content ?: "")
+            if (restoreGeneral && s.containsKey("palette")) settings.setPalette(s["palette"]?.jsonPrimitive?.content ?: "")
+            if (restoreGeneral && s.containsKey("dynamicColorEnabled")) {
+                settings.setDynamicColorEnabled(s["dynamicColorEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
             }
-            if (restoreGeneral && s.has("fontLibrary")) {
+            if (restoreGeneral && s.containsKey("fontLibrary")) {
                 try {
-                    FontStore.restoreFromBackup(context, s.optString("fontLibrary"))
+                    FontStore.restoreFromBackup(context, s["fontLibrary"]?.jsonPrimitive?.content ?: "")
                 } catch (_: Throwable) {
                 }
             }
-            if (restoreGeneral && s.has("font")) {
-                val wantFont = s.optString("font")
+            if (restoreGeneral && s.containsKey("font")) {
+                val wantFont = s["font"]?.jsonPrimitive?.content ?: ""
                 val resolvable = wantFont == "system" ||
                     runCatching { FontStore.fontFile(context, wantFont) }.getOrNull() != null
                 settings.setFont(if (resolvable) wantFont else "system")
             }
-            if (restoreGeneral && s.has("assistantName")) settings.setAssistantName(s.optString("assistantName"))
-            if (restoreGeneral && s.has("assistantStyle")) settings.setAssistantStyle(s.optString("assistantStyle"))
-            if (restoreApi && s.has("apiProfiles")) {
-                val parsed = com.lucent.app.data.ApiProfiles.parse(s.optString("apiProfiles"))
+            if (restoreGeneral && s.containsKey("assistantName")) settings.setAssistantName(s["assistantName"]?.jsonPrimitive?.content ?: "")
+            if (restoreGeneral && s.containsKey("assistantStyle")) settings.setAssistantStyle(s["assistantStyle"]?.jsonPrimitive?.content ?: "")
+            if (restoreApi && s.containsKey("apiProfiles")) {
+                val parsed = com.lucent.app.data.ApiProfiles.parse(s["apiProfiles"]?.jsonPrimitive?.content ?: "")
                 if (apiProfileNames == null) {
                     if (parsed.isNotEmpty()) {
-                        settings.saveApiProfiles(parsed, s.optInt("apiProfileSelected", 0))
+                        settings.saveApiProfiles(parsed, s["apiProfileSelected"]?.jsonPrimitive?.intOrNull ?: 0)
                     }
                 } else {
                     val chosen = parsed.filter { it.name in apiProfileNames }
@@ -466,29 +466,29 @@ object BackupImporter {
             }
 
             if (restoreGeneral) {
-                if (s.has("memoryTier")) settings.setMemoryTier(s.optString("memoryTier"))
-                if (s.has("memoryTierLocal")) settings.setMemoryTierLocal(s.optString("memoryTierLocal"))
-                if (s.has("agentMode")) settings.setAgentMode(s.optBoolean("agentMode", true))
-                if (s.has("cloudAgentMode")) settings.setAgentMode(s.optBoolean("cloudAgentMode", true))
-                if (s.has("reasoning")) settings.setReasoning(s.optString("reasoning"))
-                if (s.has("webSearchEngine")) settings.setWebSearchEngine(s.optString("webSearchEngine"))
-                if (s.has("webSearchEnabled")) settings.setWebSearchEnabled(s.optBoolean("webSearchEnabled"))
-                if (s.has("typingHaptics")) settings.setTypingHapticsEnabled(s.optBoolean("typingHaptics", true))
-                if (s.has("markdownEnabled")) settings.setMarkdownEnabled(s.optBoolean("markdownEnabled"))
-                if (s.has("linksEnabled")) settings.setLinksEnabled(s.optBoolean("linksEnabled"))
-                if (s.has("backgroundAnimationEnabled")) {
-                    settings.setBackgroundAnimationEnabled(s.optBoolean("backgroundAnimationEnabled", true))
+                if (s.containsKey("memoryTier")) settings.setMemoryTier(s["memoryTier"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("memoryTierLocal")) settings.setMemoryTierLocal(s["memoryTierLocal"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("agentMode")) settings.setAgentMode(s["agentMode"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("cloudAgentMode")) settings.setAgentMode(s["cloudAgentMode"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("reasoning")) settings.setReasoning(s["reasoning"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("webSearchEngine")) settings.setWebSearchEngine(s["webSearchEngine"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("webSearchEnabled")) settings.setWebSearchEnabled(s["webSearchEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("typingHaptics")) settings.setTypingHapticsEnabled(s["typingHaptics"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("markdownEnabled")) settings.setMarkdownEnabled(s["markdownEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("linksEnabled")) settings.setLinksEnabled(s["linksEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("backgroundAnimationEnabled")) {
+                    settings.setBackgroundAnimationEnabled(s["backgroundAnimationEnabled"]?.jsonPrimitive?.booleanOrNull ?: true)
                 }
-                if (s.has("splashEnabled")) settings.setSplashEnabled(s.optBoolean("splashEnabled", true))
-                if (s.has("splashStyle")) settings.setSplashStyle(s.optString("splashStyle"))
-                if (s.has("appLanguage")) settings.setAppLanguage(s.optString("appLanguage"))
-                if (s.has("notesSort")) settings.setNotesSort(s.optString("notesSort"))
-                if (s.has("tasksSort")) settings.setTasksSort(s.optString("tasksSort"))
-                if (s.has("notebooksSort")) settings.setNotebooksSort(s.optString("notebooksSort"))
-                if (restoreGeneral && s.has("notebookOpens")) settings.setNotebookOpens(s.optString("notebookOpens", "{}"))
-                if (s.has("savedSearches")) settings.setSavedSearches(s.optString("savedSearches"))
-                if (restoreGeneral && s.has("harnessConfig")) {
-                    val incomingHcStr = s.optString("harnessConfig")
+                if (s.containsKey("splashEnabled")) settings.setSplashEnabled(s["splashEnabled"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("splashStyle")) settings.setSplashStyle(s["splashStyle"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("appLanguage")) settings.setAppLanguage(s["appLanguage"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("notesSort")) settings.setNotesSort(s["notesSort"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("tasksSort")) settings.setTasksSort(s["tasksSort"]?.jsonPrimitive?.content ?: "")
+                if (s.containsKey("notebooksSort")) settings.setNotebooksSort(s["notebooksSort"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("notebookOpens")) settings.setNotebookOpens(s["notebookOpens"]?.jsonPrimitive?.content ?: "{}")
+                if (s.containsKey("savedSearches")) settings.setSavedSearches(s["savedSearches"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("harnessConfig")) {
+                    val incomingHcStr = s["harnessConfig"]?.jsonPrimitive?.content ?: ""
                     val incomingHc = com.lucent.app.harness.HarnessConfig.parse(incomingHcStr)
                     val currentHcStr = settings.harnessConfig.first()
                     val currentHc = com.lucent.app.harness.HarnessConfig.parse(currentHcStr)
@@ -503,66 +503,66 @@ object BackupImporter {
                     )
                     settings.setHarnessConfig(finalHc.toJson())
                 }
-                if (restoreGeneral && s.has("customTemplates")) settings.setCustomTemplatesJson(s.optString("customTemplates"))
-                if (restoreGeneral && s.has("templateDraft")) settings.setTemplateDraftJson(s.optString("templateDraft"))
-                if (restoreGeneral && s.has("hiddenTemplates")) settings.setHiddenTemplatesJson(s.optString("hiddenTemplates"))
-                if (restoreGeneral && s.has("cloudEnabled")) settings.setCloudEnabled(s.optBoolean("cloudEnabled"))
-                if (restoreGeneral && s.has("cloudProvider")) settings.setCloudProvider(s.optString("cloudProvider"))
-                if (restoreGeneral && s.has("cloudUrl")) settings.setCloudUrl(s.optString("cloudUrl"))
-                if (restoreGeneral && s.has("cloudUser")) settings.setCloudUser(s.optString("cloudUser"))
-                if (restoreGeneral && s.has("cloudPasswordEnc")) settings.setCloudPasswordEnc(s.optString("cloudPasswordEnc"))
-                if (restoreGeneral && s.has("terminalFontSize")) settings.setTerminalFontSize(s.optDouble("terminalFontSize", 14.0).toFloat())
-                if (restoreGeneral && s.has("terminalKeyBarVisible")) settings.setTerminalKeyBarVisible(s.optBoolean("terminalKeyBarVisible", true))
-                if (restoreGeneral && s.has("globalTextSelectionEnabled")) settings.setGlobalTextSelectionEnabled(s.optBoolean("globalTextSelectionEnabled", false))
-                if (restoreGeneral && s.has("cloudFolder")) settings.setCloudFolder(s.optString("cloudFolder"))
-                if (restoreGeneral && s.has("cloudAutoBackup")) settings.setCloudAutoBackup(s.optBoolean("cloudAutoBackup"))
-                if (s.has("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s.optBoolean("noteHistoryEnabled", true))
-                if (s.has("taskHistoryEnabled")) settings.setTaskHistoryEnabled(s.optBoolean("taskHistoryEnabled", true))
-                if (s.has("pwFirstRoundLimit")) {
-                    settings.setPwFirstRoundLimit(s.optInt("pwFirstRoundLimit", PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT))
+                if (restoreGeneral && s.containsKey("customTemplates")) settings.setCustomTemplatesJson(s["customTemplates"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("templateDraft")) settings.setTemplateDraftJson(s["templateDraft"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("hiddenTemplates")) settings.setHiddenTemplatesJson(s["hiddenTemplates"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("cloudEnabled")) settings.setCloudEnabled(s["cloudEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (restoreGeneral && s.containsKey("cloudProvider")) settings.setCloudProvider(s["cloudProvider"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("cloudUrl")) settings.setCloudUrl(s["cloudUrl"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("cloudUser")) settings.setCloudUser(s["cloudUser"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("cloudPasswordEnc")) settings.setCloudPasswordEnc(s["cloudPasswordEnc"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("terminalFontSize")) settings.setTerminalFontSize(s["terminalFontSize"]?.jsonPrimitive?.doubleOrNull ?: 14.0.toFloat())
+                if (restoreGeneral && s.containsKey("terminalKeyBarVisible")) settings.setTerminalKeyBarVisible(s["terminalKeyBarVisible"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (restoreGeneral && s.containsKey("globalTextSelectionEnabled")) settings.setGlobalTextSelectionEnabled(s["globalTextSelectionEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (restoreGeneral && s.containsKey("cloudFolder")) settings.setCloudFolder(s["cloudFolder"]?.jsonPrimitive?.content ?: "")
+                if (restoreGeneral && s.containsKey("cloudAutoBackup")) settings.setCloudAutoBackup(s["cloudAutoBackup"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("noteHistoryEnabled")) settings.setNoteHistoryEnabled(s["noteHistoryEnabled"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("taskHistoryEnabled")) settings.setTaskHistoryEnabled(s["taskHistoryEnabled"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("pwFirstRoundLimit")) {
+                    settings.setPwFirstRoundLimit(s["pwFirstRoundLimit"]?.jsonPrimitive?.intOrNull ?: PasswordAttempts.DEFAULT_FIRST_ROUND_LIMIT)
                 }
-                if (s.has("pwLaterRoundLimit")) {
-                    settings.setPwLaterRoundLimit(s.optInt("pwLaterRoundLimit", PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT))
+                if (s.containsKey("pwLaterRoundLimit")) {
+                    settings.setPwLaterRoundLimit(s["pwLaterRoundLimit"]?.jsonPrimitive?.intOrNull ?: PasswordAttempts.DEFAULT_LATER_ROUND_LIMIT)
                 }
-                if (s.has("pwSelfDestructEnabled")) settings.setPwSelfDestructEnabled(s.optBoolean("pwSelfDestructEnabled"))
-                if (s.has("pwSelfDestructThreshold")) {
-                    settings.setPwSelfDestructThreshold(s.optInt("pwSelfDestructThreshold", PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD))
+                if (s.containsKey("pwSelfDestructEnabled")) settings.setPwSelfDestructEnabled(s["pwSelfDestructEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("pwSelfDestructThreshold")) {
+                    settings.setPwSelfDestructThreshold(s["pwSelfDestructThreshold"]?.jsonPrimitive?.intOrNull ?: PasswordAttempts.DEFAULT_SELF_DESTRUCT_THRESHOLD)
                 }
-                if (s.has("crashShieldEnabled")) settings.setCrashShieldEnabled(s.optBoolean("crashShieldEnabled"))
-                if (s.has("blackoutEnabled")) settings.setBlackoutEnabled(s.optBoolean("blackoutEnabled"))
-                if (s.has("richTextEnabled")) settings.setRichTextEnabled(s.optBoolean("richTextEnabled"))
-                if (s.has("openLinksExternally")) settings.setOpenLinksExternally(s.optBoolean("openLinksExternally"))
-                if (s.has("assistantConfirmToolsEnabled")) settings.setAssistantConfirmTools(s.optBoolean("assistantConfirmToolsEnabled", true))
-                if (s.has("smallModelModeEnabled")) settings.setSmallModelModeEnabled(s.optBoolean("smallModelModeEnabled"))
-                if (s.has("updateChannel")) settings.setUpdateChannel(s.optString("updateChannel", "stable"))
-                if (s.has("autoUpdateEnabled")) settings.setAutoUpdateEnabled(s.optBoolean("autoUpdateEnabled"))
-                if (s.has("privilegedEnabled")) settings.setPrivilegedEnabled(s.optBoolean("privilegedEnabled"))
+                if (s.containsKey("crashShieldEnabled")) settings.setCrashShieldEnabled(s["crashShieldEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("blackoutEnabled")) settings.setBlackoutEnabled(s["blackoutEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("richTextEnabled")) settings.setRichTextEnabled(s["richTextEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("openLinksExternally")) settings.setOpenLinksExternally(s["openLinksExternally"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("assistantConfirmToolsEnabled")) settings.setAssistantConfirmTools(s["assistantConfirmToolsEnabled"]?.jsonPrimitive?.booleanOrNull ?: true)
+                if (s.containsKey("smallModelModeEnabled")) settings.setSmallModelModeEnabled(s["smallModelModeEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("updateChannel")) settings.setUpdateChannel(s["updateChannel"]?.jsonPrimitive?.content ?: "stable")
+                if (s.containsKey("autoUpdateEnabled")) settings.setAutoUpdateEnabled(s["autoUpdateEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                if (s.containsKey("privilegedEnabled")) settings.setPrivilegedEnabled(s["privilegedEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
             }
-            if (restoreLocal && s.has("localBackgroundReply")) {
-                settings.setLocalBackgroundReplyEnabled(s.optBoolean("localBackgroundReply"))
+            if (restoreLocal && s.containsKey("localBackgroundReply")) {
+                settings.setLocalBackgroundReplyEnabled(s["localBackgroundReply"]?.jsonPrimitive?.booleanOrNull ?: false)
             }
 
-            if (restoreGeneral && s.has("systemIntegrationEnabled")) {
-                val shareOn = s.optBoolean("systemIntegrationEnabled")
+            if (restoreGeneral && s.containsKey("systemIntegrationEnabled")) {
+                val shareOn = s["systemIntegrationEnabled"]?.jsonPrimitive?.booleanOrNull ?: false
                 settings.setSystemIntegrationEnabled(shareOn)
                 ShareIntegration.setEnabled(context, shareOn)
             }
-            if (restoreGeneral && s.has("startupLoggingEnabled")) {
-                val loggingOn = s.optBoolean("startupLoggingEnabled")
+            if (restoreGeneral && s.containsKey("startupLoggingEnabled")) {
+                val loggingOn = s["startupLoggingEnabled"]?.jsonPrimitive?.booleanOrNull ?: false
                 settings.setStartupLoggingEnabled(loggingOn)
                 StartupLog.setEnabled(loggingOn)
             }
 
-            if (restoreLocal && s.has("localModelManifest")) {
+            if (restoreLocal && s.containsKey("localModelManifest")) {
                 try {
                     com.lucent.app.local.LocalModelStore.restoreFromBackup(
-                        context, s.optString("localModelManifest")
+                        context, s["localModelManifest"]?.jsonPrimitive?.content ?: ""
                     )
                 } catch (_: Throwable) {
                 }
             }
-            if (restoreLocal && s.has("localModelEnabled")) {
-                val wantLocal = s.optBoolean("localModelEnabled")
+            if (restoreLocal && s.containsKey("localModelEnabled")) {
+                val wantLocal = s["localModelEnabled"]?.jsonPrimitive?.booleanOrNull ?: false
                 val hasModel = try {
                     com.lucent.app.local.LocalModelStore.hasModel(context)
                 } catch (t: Throwable) {
@@ -570,8 +570,8 @@ object BackupImporter {
                 }
                 settings.setLocalModelEnabled(wantLocal && hasModel)
                 if (wantLocal && hasModel) {
-                    if (s.has("localToolsEnabled")) settings.setLocalToolsEnabled(s.optBoolean("localToolsEnabled"))
-                    if (s.has("localGpuEnabled")) settings.setLocalGpuEnabled(s.optBoolean("localGpuEnabled"))
+                    if (s.containsKey("localToolsEnabled")) settings.setLocalToolsEnabled(s["localToolsEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
+                    if (s.containsKey("localGpuEnabled")) settings.setLocalGpuEnabled(s["localGpuEnabled"]?.jsonPrimitive?.booleanOrNull ?: false)
                 }
             }
         }
