@@ -53,13 +53,13 @@ actual object LocalLlm {
 
     private const val KV_BYTES_PER_LAYER_PER_TOKEN = 512L
 
-    private fun gpuLayersFor(modelFile: java.io.File): Int {
+    private fun gpuLayersFor(modelFile: okio.Path): Int {
         val vram = detectVramBytes()
         if (vram <= 0L) {
             PlatformLog.w("LocalLlm", "VRAM unknown; capping GPU offload at $GPU_LAYERS_BLIND_CAP layers")
             return GPU_LAYERS_BLIND_CAP
         }
-        val weights = modelFile.length()
+        val weights = okio.FileSystem.SYSTEM.metadata(modelFile).size ?: 0L
         if (weights <= 0L) return GPU_LAYERS_BLIND_CAP
         val budget = vram - VRAM_HEADROOM_BYTES
         if (budget <= 0L) {

@@ -115,7 +115,7 @@ object FontStore {
         val id = newId()
         val pickedName = source.displayName(context) ?: "font"
 
-        source.openStream(context)?.source()?.buffer()?.use { raw ->
+        source.openStream(context)?.let { okio.buffer(it) }?.use { raw ->
             val head = ByteArray(4)
             val headRead = readUpTo(raw, head)
             val ext = classify(head, headRead) ?: throw NotFontException()
@@ -215,7 +215,7 @@ object FontStore {
     }
 
 
-    private fun newId(): String = java.util.UUID.randomUUID().toString().replace("-", "").take(12)
+    private fun newId(): String = kotlin.uuid.Uuid.random().toString().replace("-", "").take(12)
 
     private fun classify(head: ByteArray, headLen: Int): String? {
         if (headLen < 4) return null

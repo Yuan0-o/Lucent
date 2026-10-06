@@ -294,10 +294,10 @@ object FileTools : HarnessGroupTools {
 
     private fun listDirectory(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val raw = (args["path"]?.jsonPrimitive?.content ?: "").ifBlank { "." }
-        val dir = Workspace.forRead(ctx, raw).toPath()
+        val dir = Workspace.forReadFile(ctx, raw)
         if (!dir.isDirectory) return ToolExecResult("${Workspace.display(ctx, dir)} is a file, not a directory.", success = false)
         val depth = (args["depth"]?.jsonPrimitive?.intOrNull ?: 1).coerceIn(1, 3)
-        val max = args.optInt("max_entries", MAX_LIST).coerceIn(1, 2000)
+        val max = (args["max_entries"]?.jsonPrimitive?.intOrNull ?: MAX_LIST).coerceIn(1, 2000)
         val out = StringBuilder()
         var count = 0
         fun walk(current: Path, level: Int, prefix: String) {
@@ -325,7 +325,7 @@ object FileTools : HarnessGroupTools {
         val root = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath().ifBlank { "." })
         val regex = (args["regex"]?.jsonPrimitive?.booleanOrNull ?: false)
         val glob = (args["glob"]?.jsonPrimitive?.content ?: "")
-        val max = args.optInt("max_results", MAX_SEARCH).coerceIn(1, 500)
+        val max = (args["max_results"]?.jsonPrimitive?.intOrNull ?: MAX_SEARCH).coerceIn(1, 500)
         val pattern = if (regex) Regex(query) else null
         val namePattern = if (glob.isNotBlank()) globToRegex(glob) else null
         val matches = mutableListOf<String>()
@@ -387,7 +387,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun readFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) return listDirectory(ctx, buildJsonObject { put("path", (args["path"]?.jsonPrimitive?.content ?: "")) })
         val text = Workspace.readText(file.toString())
         FileObservations.note(file.toString())
@@ -401,7 +401,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun readImage(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val shown = Workspace.display(ctx, file.toString())
         if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) return ToolExecResult("$shown is a directory, not an image.", success = false)
         val extension = file.name.substringAfterLast(".", "").lowercase()
@@ -410,7 +410,7 @@ object FileTools : HarnessGroupTools {
                 "$shown is not an image. I can look at ${IMAGE_TYPES.keys.joinToString(", ")} files.",
                 success = false
             )
-        val ceiling = args.optLong("max_bytes", MAX_IMAGE_BYTES).coerceIn(1024L, MAX_IMAGE_CEILING)
+        val ceiling = (args["max_bytes"]?.jsonPrimitive?.longOrNull ?: MAX_IMAGE_BYTES).coerceIn(1024L, MAX_IMAGE_CEILING)
         if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > ceiling) {
             return ToolExecResult(
                 "$shown is ${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: 0L))}, above the ${Workspace.humanSize(ceiling)} limit.",
@@ -453,7 +453,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun writeFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val content = (args["content"]?.jsonPrimitive?.content ?: "")
         val append = (args["append"]?.jsonPrimitive?.booleanOrNull ?: false)
         if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) return ToolExecResult("${Workspace.display(ctx, file.toString())} is a directory.", success = false)
@@ -476,7 +476,7 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun editFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         if (!FileSystem.SYSTEM.exists(file)) return ToolExecResult("${Workspace.display(ctx, file.toString())} does not exist.", success = false)
         if (!FileObservations.seen(file.toString())) {
             return ToolExecResult(
@@ -508,15 +508,15 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun createDirectory(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val dir = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val dir = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val ok = try { FileSystem.SYSTEM.createDirectories(dir); true } catch(e:Exception){false}
         return if (ok) ToolExecResult("Directory ${Workspace.display(ctx, dir)} is ready.") else
             ToolExecResult("Could not create ${Workspace.display(ctx, dir)}.", success = false)
     }
 
     private fun movePath(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val from = Workspace.forWrite(ctx, (args["from"]?.jsonPrimitive?.content ?: "").toPath())
-        val to = Workspace.forWrite(ctx, (args["to"]?.jsonPrimitive?.content ?: "").toPath())
+        val from = Workspace.forWriteFile(ctx, args["from"]?.jsonPrimitive?.content ?: "")
+        val to = Workspace.forWriteFile(ctx, args["to"]?.jsonPrimitive?.content ?: "")
         if (!FileSystem.SYSTEM.exists(from)) return ToolExecResult("${Workspace.display(ctx, from.toString())} does not exist.", success = false)
         if (FileSystem.SYSTEM.exists(to) && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
             return ToolExecResult("${Workspace.display(ctx, to.toString())} already exists.", success = false)
@@ -524,16 +524,16 @@ object FileTools : HarnessGroupTools {
         if ((FileSystem.SYSTEM.metadataOrNull(from)?.isRegularFile == true) && ctx.config.snapshots) Snapshots.capture(ctx, from.toString())
         to.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
         val ok = if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && FileSystem.SYSTEM.exists(to)) {
-            to.deleteRecursively() && from.renameTo(to)
-        } else from.renameTo(to)
+            try { okio.FileSystem.SYSTEM.deleteRecursively(to); okio.FileSystem.SYSTEM.atomicMove(from, to); true } catch (e: Exception) { false }
+        } else try { okio.FileSystem.SYSTEM.atomicMove(from, to); true } catch (e: Exception) { false }
         return if (ok) {
             ToolExecResult("Moved ${Workspace.display(ctx, from.toString())} to ${Workspace.display(ctx, to.toString())}.")
         } else ToolExecResult("Could not move ${Workspace.display(ctx, from.toString())}.", success = false)
     }
 
     private fun copyPath(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val from = Workspace.forRead(ctx, (args["from"]?.jsonPrimitive?.content ?: "").toPath())
-        val to = Workspace.forWrite(ctx, (args["to"]?.jsonPrimitive?.content ?: "").toPath())
+        val from = Workspace.forReadFile(ctx, args["from"]?.jsonPrimitive?.content ?: "")
+        val to = Workspace.forWriteFile(ctx, args["to"]?.jsonPrimitive?.content ?: "")
         if (FileSystem.SYSTEM.exists(to) && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
             return ToolExecResult("${Workspace.display(ctx, to.toString())} already exists.", success = false)
         }
@@ -555,17 +555,15 @@ object FileTools : HarnessGroupTools {
             }
         } else {
             to.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-            run { if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && FileSystem.SYSTEM.exists(to)) FileSystem.SYSTEM.delete(to); FileSystem.SYSTEM.copy(from, to) }
+            run { if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && FileSystem.SYSTEM.exists(to)) FileSystem.SYSTEM.delete(to); okio.FileSystem.SYSTEM.source(from).use { s -> okio.FileSystem.SYSTEM.sink(to).use { it.writeAll(s) } } }
         }
-        val bytes = writer.close()
-        FileSystem.SYSTEM.write(archive) { write(bytes) }
         return ToolExecResult("Copied ${Workspace.display(ctx, from.toString())} to ${Workspace.display(ctx, to.toString())}.")
     }
 
     private fun deletePath(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val path = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val path = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         if (!FileSystem.SYSTEM.exists(path)) return ToolExecResult("${Workspace.display(ctx, path.toString())} does not exist.", success = false)
-        if (path.isDirectory && !(args["recursive"]?.jsonPrimitive?.booleanOrNull ?: false)) {
+        if ((okio.FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true) && !(args["recursive"]?.jsonPrimitive?.booleanOrNull ?: false)) {
             val children = FileSystem.SYSTEM.listOrNull(path)?.size ?: 0
             if (children > 0) {
                 return ToolExecResult(
@@ -575,7 +573,7 @@ object FileTools : HarnessGroupTools {
                 )
             }
         }
-        if (!path.isDirectory && ctx.config.snapshots) Snapshots.capture(ctx, path.toString())
+        if (!(okio.FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true) && ctx.config.snapshots) Snapshots.capture(ctx, path.toString())
         val ok = try { FileSystem.SYSTEM.deleteRecursively(path); true } catch(e:Exception){false}
         return if (ok) ToolExecResult("Deleted ${Workspace.display(ctx, path.toString())}.")
         else ToolExecResult("Could not delete ${Workspace.display(ctx, path.toString())}.", success = false)
@@ -588,10 +586,10 @@ object FileTools : HarnessGroupTools {
         val snapshots = Snapshots.history(ctx, path.toString(), 5)
         val sb = StringBuilder()
         sb.append("${Workspace.display(ctx, path.toString())}\n")
-        sb.append("Absolute: ${path.path}\n")
-        sb.append("Kind: ${if (path.isDirectory) "directory" else "file"}\n")
-        if (path.isFile) {
-            sb.append("Size: ${Workspace.humanSize(path.size)} (${path.size} bytes)\n")
+        sb.append("Absolute: ${path.toString()}\n")
+        sb.append("Kind: ${if ((okio.FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true)) "directory" else "file"}\n")
+        if ((okio.FileSystem.SYSTEM.metadataOrNull(path)?.isRegularFile == true)) {
+            sb.append("Size: ${Workspace.humanSize((okio.FileSystem.SYSTEM.metadataOrNull(path)?.size ?: 0L))} (${(okio.FileSystem.SYSTEM.metadataOrNull(path)?.size ?: 0L)} bytes)\n")
             sb.append("Lines: ${Workspace.countLines(path)}\n")
         }
         sb.append("Modified: ${java.util.Date(FileSystem.SYSTEM.metadataOrNull(path)?.lastModifiedAtMillis ?: 0L)}\n")
@@ -611,7 +609,7 @@ object FileTools : HarnessGroupTools {
         val target = (args["target_dir"]?.jsonPrimitive?.content ?: "")
         val done = mutableListOf<String>()
         for (i in 0 until paths.size) {
-            val raw = paths.optString(i, "")
+            val raw = (paths[i].jsonPrimitive.content)
             if (raw.isBlank()) continue
             try {
                 when (action) {
@@ -625,15 +623,15 @@ object FileTools : HarnessGroupTools {
                     }
                     "copy", "move" -> {
                         if (target.isBlank()) return ToolExecResult("Copy and move need target_dir.", success = false)
-                        val file = Workspace.forRead(ctx, raw).toPath()
+                        val file = Workspace.forReadFile(ctx, raw)
                         val destination = Workspace.forWrite(ctx, "$target/${file.name}").toPath()
                         destination.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
                         if (action == "copy") {
                             if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) file.copyRecursively(destination, overwrite = true)
-                            else file.copyTo(destination, overwrite = true)
+                            else okio.FileSystem.SYSTEM.source(file).use { s -> okio.FileSystem.SYSTEM.sink(destination).use { it.writeAll(s) } }
                             done.add("${file.name} copied")
                         } else {
-                            if (file.renameTo(destination)) done.add("${file.name} moved")
+                            if (try { okio.FileSystem.SYSTEM.atomicMove(file, destination); true } catch (e: Exception) { false }) done.add("${file.name} moved")
                             else done.add("${file.name} (failed)")
                         }
                     }
@@ -650,18 +648,16 @@ object FileTools : HarnessGroupTools {
                 done.add("$raw (${e.message})")
             }
         }
-        val bytes = writer.close()
-        FileSystem.SYSTEM.write(archive) { write(bytes) }
         return ToolExecResult("$action on ${done.size} path(s):\n" + done.joinToString("\n"))
     }
 
     private fun diffFiles(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val path = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
-        if (path.isDirectory) return ToolExecResult("Point me at a file, not a directory.", success = false)
+        val path = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        if ((okio.FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true)) return ToolExecResult("Point me at a file, not a directory.", success = false)
         val before = FileSystem.SYSTEM.read(path) { readUtf8() }
         val after = when {
             args.containsKey("content") -> (args["content"]?.jsonPrimitive?.content ?: "")
-            (args["other"]?.jsonPrimitive?.content ?: "").isNotBlank() -> Workspace.readText(Workspace.forRead(ctx, (args["other"]?.jsonPrimitive?.content ?: "").toPath()))
+            (args["other"]?.jsonPrimitive?.content ?: "").isNotBlank() -> Workspace.readText(Workspace.forReadFile(ctx, args["other"]?.jsonPrimitive?.content ?: ""))
             else -> return ToolExecResult("Give me either other (a file) or content (text) to compare against.", success = false)
         }
         val diff = Diffs.unified(before, after)
@@ -680,7 +676,7 @@ object FileTools : HarnessGroupTools {
         if (entries.isEmpty()) return ToolExecResult("No snapshots yet.")
         val sb = StringBuilder("Snapshots (${entries.size}):\n")
         entries.forEach { entry ->
-            sb.append(entry.id).append("  ").append(java.util.Date(entry.at)).append("  ")
+            sb.append(entry.id).append("  ").append(com.lucent.app.data.DueParsing.format(entry.at)).append("  ")
                 .append(Workspace.humanSize(entry.bytes)).append("  ").append(entry.path).append('\n')
         }
         sb.append("Total kept: ${Workspace.humanSize(Snapshots.totalBytes(ctx))}")
@@ -698,13 +694,13 @@ object FileTools : HarnessGroupTools {
                 ?: return ToolExecResult("No snapshots for ${Workspace.display(ctx, path.toString())}.", success = false)
         }
         val restored = Snapshots.restore(ctx, entry.id)
-        return ToolExecResult("Restored ${Workspace.display(ctx, restored)} from snapshot ${entry.id} (${java.util.Date(entry.at)}).")
+        return ToolExecResult("Restored ${Workspace.display(ctx, restored)} from snapshot ${entry.id} (${com.lucent.app.data.DueParsing.format(entry.at)}).")
     }
 
     private fun zipPaths(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = (args["action"]?.jsonPrimitive?.content ?: "zip").lowercase()
-        val archive = if (action == "unzip") Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toPath()
-        else Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toPath()
+        val archive = if (action == "unzip") Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        else Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         return if (action == "unzip") unzip(ctx, archive) else zip(ctx, archive, args["paths"]?.jsonArray)
     }
 
@@ -712,8 +708,8 @@ object FileTools : HarnessGroupTools {
         val roots = mutableListOf<Path>()
         if (paths != null) {
             for (i in 0 until paths.size) {
-                val raw = paths.optString(i, "")
-                if (raw.isNotBlank()) roots.add(Workspace.forRead(ctx, raw).toPath())
+                val raw = (paths[i].jsonPrimitive.content)
+                if (raw.isNotBlank()) roots.add(Workspace.forReadFile(ctx, raw))
             }
         }
         if (roots.isEmpty()) return ToolExecResult("Give me the paths to pack.", success = false)

@@ -78,8 +78,8 @@ object ReplyFiles {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(java.time.Duration.ofSeconds(20))
-            .readTimeout(java.time.Duration.ofSeconds(60))
+            .connectTimeout(kotlin.time.Duration.Companion.seconds(20))
+            .readTimeout(kotlin.time.Duration.Companion.seconds(60))
             .build()
     }
 
@@ -99,7 +99,7 @@ object ReplyFiles {
                     if (!response.isSuccessful) return null
                     val body = response.body ?: return null
                     if (body.contentLength() > MAX_FETCH_BYTES) return null
-                    val bytes = body.byteStream().readBytesCapped(MAX_FETCH_BYTES)
+                    val bytes = body.source().readBytesCapped(MAX_FETCH_BYTES)
                     bytes
                 }
             }
