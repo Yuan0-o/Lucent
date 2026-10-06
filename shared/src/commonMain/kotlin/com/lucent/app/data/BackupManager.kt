@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.json.*
+import okio.Path.Companion.toPath
+import okio.buffer
 
 object BackupManager {
 
@@ -19,7 +21,7 @@ object BackupManager {
         fun open(): okio.Source
     }
 
-    fun fileSource(file: okio.Path): BackupSource = BackupSource { file.inputStream() }
+    fun fileSource(file: okio.Path): BackupSource = BackupSource { okio.FileSystem.SYSTEM.source(file) }
 
     data class BackupSelection(
         val modules: Set<BackupModule> = DEFAULT_MODULES,
@@ -118,7 +120,7 @@ object BackupManager {
         val fontFiles: List<Pair<String, okio.Path>> =
             if (BackupModule.SETTINGS in modules) {
                 FontStore.fonts(context).mapNotNull { slot ->
-                    FontStore.fontFileForSlot(context, slot)?.toFile()
+                    FontStore.fontFileForSlot(context, slot)
                         ?.let { (BackupFrames.FONT_BLOB_PREFIX + slot.fileName) to it }
                 }
             } else emptyList()
@@ -144,8 +146,8 @@ object BackupManager {
                 val nameBytes = name.toByteArray(Charsets.UTF_8)
                 BackupFrames.writeInt(cipherOut, nameBytes.size)
                 cipherOut.write(nameBytes)
-                BackupFrames.writeLong(cipherOut, file.length())
-                file.inputStream().use { input ->
+                BackupFrames.writeLong(cipherOut, okio.FileSystem.SYSTEM.metadata(file).size ?: 0L)
+                okio.FileSystem.SYSTEM.source(file).use { input ->
                     while (true) {
                         BackupFrames.throwIfCancelled(cancelled)
                         val n = input.read(buffer)
@@ -305,7 +307,7 @@ object BackupManager {
     }
 
     suspend fun inspect(context: PlatformContext, bytes: ByteArray, password: String? = null): BackupPreview =
-        inspect(context, BackupSource { bytes.inputStream() }, password)
+        inspect(context, BackupSource { okio.Buffer().write(bytes) }, password)
 
     suspend fun commit(
         context: PlatformContext,

@@ -1,7 +1,7 @@
 package com.lucent.app.data
 
+import okio.Path.Companion.toPath
 import okio.buffer
-import okio.source
 
 import com.lucent.app.platform.PlatformContext
 
@@ -111,7 +111,7 @@ object BackupFrames {
             }
             val header = BackupCrypto.readHeader(head)
                 ?: throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
-            return BackupCrypto.decryptingSource(okio.source(raw), header, password).buffer().inputStream()
+            return BackupCrypto.decryptingSource(raw, header, password)
         } catch (t: Throwable) {
             try { raw.close() } catch (_: Throwable) {}
             throw t
@@ -228,14 +228,14 @@ object BackupFrames {
         var written = 0L
         try {
             val target = if (isFont) {
-                FontStore.prepareRestoreTarget(context, name.removePrefix(FONT_BLOB_PREFIX)).toFile()
+                FontStore.prepareRestoreTarget(context, name.removePrefix(FONT_BLOB_PREFIX))
             } else {
                 com.lucent.app.local.LocalModelStore.prepareRestoreTarget(context, name)
             }
-            val tmpFile = okio.Path.Companion.toPath(target.toString() + ".tmp")
+            val tmpFile = (target.toString() + ".tmp").toPath()
             tmp = tmpFile
             val os = okio.FileSystem.SYSTEM.sink(tmpFile)
-            val bufferedOs = okio.buffer(os)
+            val bufferedOs = os.buffer()
             out = os
             while (written < dataLen) {
                 throwIfCancelled(cancelled)
@@ -247,25 +247,21 @@ object BackupFrames {
             bufferedOs.flush()
             os.close()
             out = null
-            if (target.exists()) target.delete()
-            return if (tmpFile.renameTo(target)) {
-                if (isFont) 0 to 1 else 1 to 0
-            } else {
-                tmpFile.delete()
-                0 to 0
-            }
+            if (okio.FileSystem.SYSTEM.exists(target)) okio.FileSystem.SYSTEM.delete(target)
+            okio.FileSystem.SYSTEM.atomicMove(tmpFile, target)
+            return if (isFont) 0 to 1 else 1 to 0
         } catch (eof: okio.EOFException) {
             try { out?.close() } catch (_: Throwable) {}
-            tmp?.delete()
+            tmp?.let { okio.FileSystem.SYSTEM.delete(it) }
             throw eof
         } catch (t: Throwable) {
             if (t is CancellationException) {
                 try { out?.close() } catch (_: Throwable) {}
-                tmp?.delete()
+                tmp?.let { okio.FileSystem.SYSTEM.delete(it) }
                 throw t
             }
             try { out?.close() } catch (_: Throwable) {}
-            tmp?.delete()
+            tmp?.let { okio.FileSystem.SYSTEM.delete(it) }
             skipFully(data, dataLen - written, scratch)
             return 0 to 0
         }
