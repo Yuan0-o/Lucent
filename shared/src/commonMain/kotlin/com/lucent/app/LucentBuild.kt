@@ -5,6 +5,14 @@ object LucentBuild {
     const val VERSION = "3.1.0"
 
     const val BUILD_NUMBER = "310"
+    
+    val BUILD_ID: String = GeneratedBuildId.BUILD_ID
+    
+    val BUILD_TRACK: String = when (BUILD_ID.firstOrNull()) {
+        'P' -> "preview"
+        'R' -> "official"
+        else -> "dev"
+    }
 
     const val PRODUCT_NAME = "Lucent"
 

@@ -8,6 +8,28 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val buildIdDir = layout.buildDirectory.dir("generated/buildId")
+
+val generateBuildId = tasks.register("generateBuildId") {
+    val buildIdProp = (project.findProperty("buildId") as String?).orEmpty()
+    val buildId = if (buildIdProp.matches(Regex("^[RP]\\d{12}\$"))) buildIdProp else "R000000000000"
+    val outDir = buildIdDir.get().asFile.resolve("com/lucent/app")
+    outputs.dir(buildIdDir)
+    doLast {
+        outDir.mkdirs()
+        outDir.resolve("GeneratedBuildId.kt").writeText(
+            """
+            package com.lucent.app
+            object GeneratedBuildId { const val BUILD_ID = "$buildId" }
+            """.trimIndent()
+        )
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    dependsOn(generateBuildId)
+}
+
 kotlin {
     android {
         namespace = "com.lucent.shared"
@@ -33,6 +55,7 @@ kotlin {
             }
         }
         val commonMain by getting {
+            kotlin.srcDir(buildIdDir)
             dependencies {
                 implementation(libs.org.json)
                 implementation(libs.kotlinx.datetime)
