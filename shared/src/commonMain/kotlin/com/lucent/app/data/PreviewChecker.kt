@@ -87,6 +87,11 @@ object PreviewChecker {
                 when (run.optString("name")) {
                     "Build APK only" -> if (newestApkSha == null) newestApkSha = run.optString("head_sha").ifBlank { null }
                     "Build EXE only" -> if (newestExeSha == null) newestExeSha = run.optString("head_sha").ifBlank { null }
+                    "Build Internal (APK+EXE)" -> {
+                        val sha = run.optString("head_sha").ifBlank { null }
+                        if (newestApkSha == null) newestApkSha = sha
+                        if (newestExeSha == null) newestExeSha = sha
+                    }
                 }
             }
         }
