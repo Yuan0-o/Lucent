@@ -3,8 +3,7 @@ package com.lucent.app.harness
 import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -1347,15 +1346,15 @@ private fun pdfDate(value: String): String {
 
 private fun pdfPageCount(file: File): Int = pdfLoad(file).pages.size
 
-private fun pdfPathList(args: JSONObject, key: String): List<String> {
-    val value = args.opt(key)
+private fun pdfPathList(args: JsonObject, key: String): List<String> {
+    val value = args[key]
     val raw = mutableListOf<String>()
     when (value) {
-        is JSONArray -> for (i in 0 until value.length()) {
-            val item = value.optString(i, "").trim()
+        is JsonArray -> for (i in 0 until value.size) {
+            val item = (value[i].jsonPrimitive.content).trim()
             if (item.isNotEmpty()) raw.add(item)
         }
-        is String -> value.split(',', '\n', ';').forEach { item ->
+        is JsonPrimitive -> if (value.isString) value.content.split(',', '\n', ';').forEach { item ->
             val clean = item.trim()
             if (clean.isNotEmpty()) raw.add(clean)
         }
@@ -1466,7 +1465,7 @@ object PdfTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = try {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = try {
         when (name) {
             "read_pdf" -> readPdf(ctx, args)
             "pdf_info" -> info(ctx, args)
@@ -1483,32 +1482,32 @@ object PdfTools : HarnessGroupTools {
         ToolExecResult("$name failed: ${e.message ?: e::class.simpleName}", success = false)
     }
 
-    private fun readPdf(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
-        val pages = args.optString("pages", "")
-        val maxChars = args.optInt("max_chars", 40000)
+    private fun readPdf(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val pages = args["pages"]?.jsonPrimitive?.content ?: ""
+        val maxChars = args["max_chars"]?.jsonPrimitive?.intOrNull ?: 40000
         return pdfResult(PdfBook.text(file, pages, maxChars))
     }
 
-    private fun info(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
+    private fun info(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         return pdfResult(PdfBook.info(file))
     }
 
-    private fun search(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
-        val query = args.optString("query", "")
-        val maxHits = args.optInt("max_hits", 40)
+    private fun search(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val query = args["query"]?.jsonPrimitive?.content ?: ""
+        val maxHits = args["max_hits"]?.jsonPrimitive?.intOrNull ?: 40
         return pdfResult(PdfBook.search(file, query, maxHits))
     }
 
     private fun pdfResult(text: String): ToolExecResult =
         if (text.startsWith(PDF_PROBLEM)) ToolExecResult(text, success = false) else ToolExecResult(text)
 
-    private suspend fun renderPage(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
-        val page = args.optInt("page", 1).coerceAtLeast(1)
-        val width = args.optInt("width", 1400).coerceIn(120, 4000)
+    private suspend fun renderPage(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val page = (args["page"]?.jsonPrimitive?.intOrNull ?: 1).coerceAtLeast(1)
+        val width = (args["width"]?.jsonPrimitive?.intOrNull ?: 1400).coerceIn(120, 4000)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("No platform renderer is available, so the page cannot be drawn.", success = false)
         val bytes = host.renderPdfPage(file.path, page, width)
@@ -1520,7 +1519,7 @@ object PdfTools : HarnessGroupTools {
         if (bytes.isEmpty()) {
             return ToolExecResult("Page $page of ${file.name} came back empty; it may not exist.", success = false)
         }
-        val target = pdfOutputTarget(ctx, args.optString("out", ""), pdfSibling(ctx, file, pdfImageName(file, page)))
+        val target = pdfOutputTarget(ctx, args["out"]?.jsonPrimitive?.content ?: "", pdfSibling(ctx, file, pdfImageName(file, page)))
         target.parentFile?.mkdirs()
         target.writeBytes(bytes)
         val shown = Workspace.display(ctx, target)
@@ -1532,9 +1531,9 @@ object PdfTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun toImages(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
-        val width = args.optInt("width", 1200).coerceIn(120, 4000)
+    private suspend fun toImages(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val width = (args["width"]?.jsonPrimitive?.intOrNull ?: 1200).coerceIn(120, 4000)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("No platform renderer is available, so pages cannot be drawn.", success = false)
         val total = try {
@@ -1542,7 +1541,7 @@ object PdfTools : HarnessGroupTools {
         } catch (e: Exception) {
             0
         }
-        val requested = pdfParsePages(args.optString("pages", ""), if (total > 0) total else 20)
+        val requested = pdfParsePages(args["pages"]?.jsonPrimitive?.content ?: "", if (total > 0) total else 20)
         val selected = requested.take(20)
         if (selected.isEmpty()) return ToolExecResult("No pages were selected to draw.", success = false)
         val sb = StringBuilder()
@@ -1573,11 +1572,11 @@ object PdfTools : HarnessGroupTools {
         return ToolExecResult("Drew $drawn page(s) of ${file.name} at ${width}px:\n" + sb.toString().trimEnd() + note)
     }
 
-    private suspend fun merge(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun merge(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val paths = pdfPathList(args, "paths")
         if (paths.size < 2) return ToolExecResult("Give at least two PDFs to merge.", success = false)
         val inputs = paths.map { Workspace.forReadFile(ctx, it) }
-        val out = Workspace.forWriteFile(ctx, args.optString("out", ""))
+        val out = Workspace.forWriteFile(ctx, args["out"]?.jsonPrimitive?.content ?: "")
         out.parentFile?.mkdirs()
         if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
         val host = HarnessRuntime.host
@@ -1591,11 +1590,11 @@ object PdfTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun split(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
-        val pages = args.optString("pages", "").trim()
+    private suspend fun split(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val pages = (args["pages"]?.jsonPrimitive?.content ?: "").trim()
         if (pages.isEmpty()) return ToolExecResult("Give the pages to keep, for example \"2-4,9\".", success = false)
-        val raw = args.optString("out", "")
+        val raw = args["out"]?.jsonPrimitive?.content ?: ""
         val out = if (raw.isBlank()) {
             pdfWritableTarget(ctx, pdfSibling(ctx, file, file.nameWithoutExtension + "-pages.pdf"))
         } else {
