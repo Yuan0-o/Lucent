@@ -13,6 +13,8 @@ actual suspend fun clearCacheDir(context: PlatformContext) {
 }
 
 actual suspend fun wipeLocalModels(context: PlatformContext) {
+    com.lucent.app.local.LocalLlm.shutdown()
+    com.lucent.app.local.LocalModelStore.deleteAll(context)
 }
 
 actual suspend fun purgeDatabaseEncryptionLeftovers(context: PlatformContext) {
@@ -25,4 +27,5 @@ actual suspend fun disableShareIntegration(context: PlatformContext) {
 }
 
 actual suspend fun refreshWidgets(context: PlatformContext) {
+    com.lucent.app.widget.WidgetUpdater.refreshContent(context)
 }
