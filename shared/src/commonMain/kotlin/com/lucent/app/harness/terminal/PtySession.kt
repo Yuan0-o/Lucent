@@ -3,7 +3,8 @@ package com.lucent.app.harness.terminal
 import com.lucent.app.AppScope
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,6 +17,7 @@ interface PtySessionListener {
     fun onExit(session: PtySession, exitCode: Int)
 }
 
+@OptIn(ExperimentalAtomicApi::class)
 class PtySession(
     val process: PtyProcess,
     cols: Int,
@@ -55,7 +57,7 @@ class PtySession(
                     append(String(buffer, 0, read))
                 }
             } catch (t: Throwable) {
-                if (state == PtySessionState.RUNNING && !closedByUser.get()) {
+                if (state == PtySessionState.RUNNING && !closedByUser.load()) {
                     failure = t.message ?: t.toString()
                 }
             }
@@ -68,7 +70,7 @@ class PtySession(
                 -1
             }
             exitCode = code
-            if (!closedByUser.get()) {
+            if (!closedByUser.load()) {
                 state = if (failure.isNotEmpty() && code == -1) PtySessionState.FAILED else PtySessionState.EXITED
             }
             fireExit(code)

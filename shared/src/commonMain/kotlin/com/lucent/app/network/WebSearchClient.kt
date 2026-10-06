@@ -8,8 +8,7 @@ import okhttp3.Request
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import java.net.URLDecoder
-import java.net.URLEncoder
+import java.io.ByteArrayOutputStream
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
@@ -201,7 +200,45 @@ object WebSearchClient {
         }
     }
 
-    private fun q(value: String): String = URLEncoder.encode(value, "UTF-8")
+    private fun urlEncode(s: String): String = buildString {
+        for (c in s.toCharArray()) {
+            when {
+                c == ' ' -> append('+')
+                c.isLetterOrDigit() || c in "-_.~" -> append(c)
+                else -> {
+                    val bytes = c.toString().toByteArray(Charsets.UTF_8)
+                    for (b in bytes) append('%').append((b.toInt() and 0xFF).toString(16).padStart(2, '0').uppercase())
+                }
+            }
+        }
+    }
+
+    private fun urlDecode(s: String): String {
+        val out = mutableListOf<Byte>()
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            when {
+                c == '+' -> { out.add(' '.code.toByte()); i++ }
+                c == '%' && i + 2 < s.length -> {
+                    try {
+                        out.add(s.substring(i + 1, i + 3).toInt(16).toByte())
+                        i += 3
+                    } catch (e: Exception) {
+                        out.add('%'.code.toByte())
+                        i++
+                    }
+                }
+                else -> {
+                    for (b in c.toString().toByteArray(Charsets.UTF_8)) out.add(b)
+                    i++
+                }
+            }
+        }
+        return out.toByteArray().toString(Charsets.UTF_8)
+    }
+
+    private fun q(value: String): String = urlEncode(value)
 
     private val BLOCKED = listOf(
         "anomaly-modal", "captcha", "unusual traffic", "are you a robot",
@@ -486,7 +523,7 @@ object WebSearchClient {
             val start = idx + marker.length
             val end = h.indexOf('&', start).let { if (it < 0) h.length else it }
             val enc = h.substring(start, end)
-            return try { URLDecoder.decode(enc, "UTF-8") } catch (e: Exception) { enc }
+            return try { urlDecode(enc) } catch (e: Exception) { enc }
         }
         return when {
             h.startsWith("http") -> h
@@ -495,7 +532,7 @@ object WebSearchClient {
                 val rest = h.removePrefix("/url?q=")
                 val end = rest.indexOf('&').let { if (it < 0) rest.length else it }
                 try {
-                    URLDecoder.decode(rest.substring(0, end), "UTF-8")
+                    urlDecode(rest.substring(0, end))
                 } catch (e: Exception) {
                     rest.substring(0, end)
                 }

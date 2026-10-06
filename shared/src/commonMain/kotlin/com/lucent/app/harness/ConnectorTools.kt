@@ -13,8 +13,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
-import java.net.URLDecoder
-import java.net.URLEncoder
 import kotlin.time.Duration.Companion.seconds
 
 data class HttpReply(
@@ -292,14 +290,52 @@ object HttpJson {
             }.joinToString(" | ")
         }
 
+    private fun urlEncode(s: String): String = buildString {
+        for (c in s.toCharArray()) {
+            when {
+                c == ' ' -> append('+')
+                c.isLetterOrDigit() || c in "-_.~" -> append(c)
+                else -> {
+                    val bytes = c.toString().toByteArray(Charsets.UTF_8)
+                    for (b in bytes) append('%').append((b.toInt() and 0xFF).toString(16).padStart(2, '0').uppercase())
+                }
+            }
+        }
+    }
+
+    private fun urlDecode(s: String): String {
+        val out = mutableListOf<Byte>()
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            when {
+                c == '+' -> { out.add(' '.code.toByte()); i++ }
+                c == '%' && i + 2 < s.length -> {
+                    try {
+                        out.add(s.substring(i + 1, i + 3).toInt(16).toByte())
+                        i += 3
+                    } catch (e: Exception) {
+                        out.add('%'.code.toByte())
+                        i++
+                    }
+                }
+                else -> {
+                    for (b in c.toString().toByteArray(Charsets.UTF_8)) out.add(b)
+                    i++
+                }
+            }
+        }
+        return out.toByteArray().toString(Charsets.UTF_8)
+    }
+
     fun enc(value: String): String = try {
-        URLEncoder.encode(value.trim(), "UTF-8").replace("+", "%20")
+        urlEncode(value.trim()).replace("+", "%20")
     } catch (e: Exception) {
         value.trim()
     }
 
     fun encRaw(value: String): String = try {
-        URLEncoder.encode(value.trim(), "UTF-8")
+        urlEncode(value.trim())
     } catch (e: Exception) {
         value.trim()
     }
@@ -308,7 +344,7 @@ object HttpJson {
         value.trim().trim('/').split('/').filter { it.isNotBlank() }.joinToString("/") { enc(it) }
 
     fun decode(value: String): String = try {
-        URLDecoder.decode(value, "UTF-8")
+        urlDecode(value)
     } catch (e: Exception) {
         value
     }

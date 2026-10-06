@@ -7,7 +7,6 @@ import com.lucent.app.harness.mcp.McpTool
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import kotlinx.serialization.json.*
-import java.util.concurrent.ConcurrentHashMap
 
 object McpTools : HarnessGroupTools {
 
@@ -15,7 +14,7 @@ object McpTools : HarnessGroupTools {
 
     private const val NAME_LIMIT = 64
 
-    private val dynamicNames = ConcurrentHashMap<String, Pair<String, String>>()
+    private val dynamicNames = mutableMapOf<String, Pair<String, String>>()
 
     override val group = HarnessGroup.MCP
 

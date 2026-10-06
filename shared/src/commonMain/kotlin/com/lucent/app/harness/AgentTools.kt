@@ -4,8 +4,8 @@ import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 class SubAgent internal constructor(
     val id: String,
@@ -54,8 +54,9 @@ class SubAgent internal constructor(
 object SubAgents {
 
     private const val MAX_ROUNDS = 12
-    private val counter = AtomicInteger(1)
-    private val agents = ConcurrentHashMap<String, SubAgent>()
+    @OptIn(ExperimentalAtomicApi::class)
+    private val counter = AtomicInt(1)
+    private val agents = mutableMapOf<String, SubAgent>()
 
     fun list(): List<SubAgent> = agents.values.sortedByDescending { it.startedAt }
 
@@ -69,7 +70,7 @@ object SubAgents {
     }
 
     fun start(parent: HarnessCtx, task: String, toolNames: Set<String>, model: String): SubAgent {
-        val id = "sub-${counter.getAndIncrement()}"
+        val id = "sub-${counter.fetchAndIncrement()}"
         val agent = SubAgent(id, task, toolNames, System.currentTimeMillis(), parent.subAgentId)
         agents[id] = agent
         prune()

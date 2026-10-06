@@ -9,8 +9,8 @@ import com.lucent.app.harness.terminal.TerminalSessions
 import com.lucent.app.harness.terminal.PtyStartRequest
 import com.lucent.app.harness.terminal.PtySessionState
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 data class HarnessJob(
     val id: String,
@@ -47,11 +47,12 @@ class HarnessJobHandle internal constructor(val job: HarnessJob) {
 
 object HarnessJobs {
 
-    private val counter = AtomicInteger(1)
-    private val jobs = ConcurrentHashMap<String, HarnessJobHandle>()
+    @OptIn(ExperimentalAtomicApi::class)
+    private val counter = AtomicInt(1)
+    private val jobs = mutableMapOf<String, HarnessJobHandle>()
 
     fun start(command: String, workdir: File, timeoutSeconds: Int): HarnessJobHandle {
-        val id = "job-${counter.getAndIncrement()}"
+        val id = "job-${counter.fetchAndIncrement()}"
         val job = HarnessJob(id, command, workdir.path, System.currentTimeMillis(), timeoutSeconds)
         val handle = HarnessJobHandle(job)
         jobs[id] = handle
