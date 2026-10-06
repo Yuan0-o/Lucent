@@ -94,7 +94,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     LaunchedEffect(languageKey) {
         try {
             com.lucent.app.i18n.L.apply(languageKey)
-        } catch (t: Throwable) {}
+        } catch (_: Throwable) {}
     }
 
     val autoUpdateOn by repo.autoUpdateEnabled.collectAsState(initial = startup.autoUpdateEnabled)
@@ -111,7 +111,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
             }
         } catch (t: CancellationException) {
             throw t
-        } catch (t: Throwable) {}
+        } catch (_: Throwable) {}
         while (true) {
             kotlinx.coroutines.delay(UPDATE_CHECK_INTERVAL_MS)
             try {
@@ -125,7 +125,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
                 }
             } catch (t: CancellationException) {
                 throw t
-            } catch (t: Throwable) {}
+            } catch (_: Throwable) {}
         }
     }
 
@@ -141,7 +141,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
                 }
             } catch (t: CancellationException) {
                 throw t
-            } catch (t: Throwable) {}
+            } catch (_: Throwable) {}
         }
     }
 
@@ -151,7 +151,7 @@ fun DesktopApp(startup: SettingsRepository.StartupPrefs, active: Boolean) {
     LaunchedEffect(Unit) {
         val shieldWanted = try { repo.crashShieldEnabledOnce() } catch (t: Throwable) { false }
         if (shieldWanted) {
-            try { com.lucent.app.data.CrashShield.install(context) } catch (t: Throwable) {}
+            try { com.lucent.app.data.CrashShield.install(context) } catch (_: Throwable) {}
         }
     }
 
@@ -242,7 +242,7 @@ private fun DesktopShell(
             dao.getAll().collect { value = it }
         } catch (t: CancellationException) {
             throw t
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
         }
     }
     val notebookOpensJson by repo.notebookOpens.collectAsState(initial = "{}")
@@ -262,7 +262,7 @@ private fun DesktopShell(
         try {
             LastScreen.remember(current)
             com.lucent.app.data.StartupLog.event(desktopPlatformContext, "nav: showing ${current.name.lowercase()}")
-        } catch (t: Throwable) {}
+        } catch (_: Throwable) {}
     }
     LaunchedEffect(HiddenArea.visible) {
         if (!HiddenArea.visible && current == Screen.Hidden) current = LastScreen.homeMode.screen
