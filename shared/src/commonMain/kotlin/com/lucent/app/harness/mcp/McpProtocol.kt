@@ -2,9 +2,10 @@ package com.lucent.app.harness.mcp
 
 import com.lucent.app.LucentBuild
 import com.lucent.app.network.ToolParam
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
 
+@Serializable
 data class McpTool(
     val serverId: String,
     val name: String,
@@ -12,12 +13,14 @@ data class McpTool(
     val schemaJson: String
 )
 
+@Serializable
 data class McpResult(
     val text: String,
     val images: List<Pair<String, String>> = emptyList(),
     val isError: Boolean = false
 )
 
+@Serializable
 data class McpResourceInfo(
     val uri: String,
     val name: String,
@@ -25,6 +28,7 @@ data class McpResourceInfo(
     val description: String
 )
 
+@Serializable
 data class McpPromptInfo(
     val name: String,
     val description: String,
@@ -51,69 +55,69 @@ object McpProtocol {
 
     private const val SCHEMA_LIMIT = 900
 
-    private val EMPTY_SCHEMA: String = JSONObject().apply {
+    private val EMPTY_SCHEMA: String = buildJsonObject {
         put("type", "object")
-        put("properties", JSONObject())
+        put("properties", buildJsonObject {})
     }.toString()
 
-    fun capabilities(): JSONObject {
-        val capabilities = JSONObject()
-        capabilities.put("roots", JSONObject().put("listChanged", false))
-        capabilities.put("sampling", JSONObject())
-        return capabilities
+    fun capabilities(): JsonObject {
+        return buildJsonObject {
+            put("roots", buildJsonObject { put("listChanged", false) })
+            put("sampling", buildJsonObject {})
+        }
     }
 
-    fun initializeParams(): JSONObject {
-        val params = JSONObject()
-        params.put("protocolVersion", VERSION)
-        params.put("capabilities", capabilities())
-        val client = JSONObject()
-        client.put("name", CLIENT_NAME)
-        client.put("version", LucentBuild.VERSION)
-        params.put("clientInfo", client)
-        return params
+    fun initializeParams(): JsonObject {
+        return buildJsonObject {
+            put("protocolVersion", VERSION)
+            put("capabilities", capabilities())
+            put("clientInfo", buildJsonObject {
+                put("name", CLIENT_NAME)
+                put("version", LucentBuild.VERSION)
+            })
+        }
     }
 
-    fun request(id: Long, method: String, params: JSONObject? = null): String {
-        val message = JSONObject()
-        message.put("jsonrpc", JSONRPC)
-        message.put("id", id)
-        message.put("method", method)
-        if (params != null) message.put("params", params)
-        return message.toString()
+    fun request(id: Long, method: String, params: JsonObject? = null): String {
+        return buildJsonObject {
+            put("jsonrpc", JSONRPC)
+            put("id", id)
+            put("method", method)
+            if (params != null) put("params", params)
+        }.toString()
     }
 
-    fun notification(method: String, params: JSONObject? = null): String {
-        val message = JSONObject()
-        message.put("jsonrpc", JSONRPC)
-        message.put("method", method)
-        if (params != null) message.put("params", params)
-        return message.toString()
+    fun notification(method: String, params: JsonObject? = null): String {
+        return buildJsonObject {
+            put("jsonrpc", JSONRPC)
+            put("method", method)
+            if (params != null) put("params", params)
+        }.toString()
     }
 
-    fun listParams(cursor: String): JSONObject? =
-        if (cursor.isBlank()) null else JSONObject().put("cursor", cursor)
+    fun listParams(cursor: String): JsonObject? =
+        if (cursor.isBlank()) null else buildJsonObject { put("cursor", cursor) }
 
-    fun callParams(name: String, arguments: JSONObject): JSONObject {
-        val params = JSONObject()
-        params.put("name", name)
-        params.put("arguments", arguments)
-        return params
+    fun callParams(name: String, arguments: JsonObject): JsonObject {
+        return buildJsonObject {
+            put("name", name)
+            put("arguments", arguments)
+        }
     }
 
-    fun readParams(uri: String): JSONObject = JSONObject().put("uri", uri)
+    fun readParams(uri: String): JsonObject = buildJsonObject { put("uri", uri) }
 
-    fun parse(raw: String): JSONObject? {
+    fun parse(raw: String): JsonObject? {
         val text = raw.trim()
         if (text.isEmpty()) return null
         return try {
-            JSONObject(text)
+            Json.parseToJsonElement(text).jsonObject
         } catch (e: Exception) {
             null
         }
     }
 
-    fun messages(body: String, contentType: String): List<JSONObject> {
+    fun messages(body: String, contentType: String): List<JsonObject> {
         val trimmed = body.trim()
         if (trimmed.isEmpty()) return emptyList()
         val streamed = contentType.contains(CONTENT_SSE, ignoreCase = true) ||
@@ -123,8 +127,8 @@ object McpProtocol {
         return sseMessages(trimmed)
     }
 
-    fun sseMessages(body: String): List<JSONObject> {
-        val out = mutableListOf<JSONObject>()
+    fun sseMessages(body: String): List<JsonObject> {
+        val out = mutableListOf<JsonObject>()
         val data = StringBuilder()
         for (line in body.split('\n')) {
             val text = line.trimEnd('\r')
@@ -144,7 +148,7 @@ object McpProtocol {
         return out
     }
 
-    private fun drain(data: StringBuilder, out: MutableList<JSONObject>) {
+    private fun drain(data: StringBuilder, out: MutableList<JsonObject>) {
         if (data.isEmpty()) return
         val payload = data.toString().trim()
         data.setLength(0)
@@ -152,35 +156,31 @@ object McpProtocol {
         parse(payload)?.let { out.add(it) }
     }
 
-    fun pick(messages: List<JSONObject>, id: Long): JSONObject? {
+    fun pick(messages: List<JsonObject>, id: Long): JsonObject? {
         for (message in messages) {
             if (idOf(message) != id) continue
-            if (message.has("result") || message.has("error")) return message
+            if (message.containsKey("result") || message.containsKey("error")) return message
         }
         return null
     }
 
-    fun idOf(message: JSONObject): Long? {
-        if (!message.has("id")) return null
-        return when (val raw = message.opt("id")) {
-            is Number -> raw.toLong()
-            is String -> raw.toLongOrNull()
-            else -> null
-        }
+    fun idOf(message: JsonObject): Long? {
+        if (!message.containsKey("id")) return null
+        return message["id"]?.jsonPrimitive?.content?.toLongOrNull()
     }
 
-    fun isNotification(message: JSONObject): Boolean = !message.has("id") && message.has("method")
+    fun isNotification(message: JsonObject): Boolean = !message.containsKey("id") && message.containsKey("method")
 
-    fun resultOf(message: JSONObject): JSONObject? = message.optJSONObject("result")
+    fun resultOf(message: JsonObject): JsonObject? = message["result"]?.jsonObject
 
-    fun errorOf(message: JSONObject): String {
-        val error = message.optJSONObject("error") ?: return ""
-        val code = error.optInt("code", 0)
-        val text = error.optString("message", "")
-        return errorText(code, text, error.opt("data"))
+    fun errorOf(message: JsonObject): String {
+        val error = message["error"]?.jsonObject ?: return ""
+        val code = error["code"]?.jsonPrimitive?.intOrNull ?: 0
+        val text = error["message"]?.jsonPrimitive?.content ?: ""
+        return errorText(code, text, error["data"])
     }
 
-    fun errorText(code: Int, message: String, data: Any? = null): String {
+    fun errorText(code: Int, message: String, data: JsonElement? = null): String {
         val label = when (code) {
             -32700 -> "parse error"
             -32600 -> "invalid request"
@@ -196,29 +196,29 @@ object McpProtocol {
         return if (detail.isBlank()) "$head (code $code)" else "$head (code $code) — $detail"
     }
 
-    private fun renderData(data: Any?): String = when (data) {
-        null -> ""
-        is String -> data.trim().replace(Regex("\\s+"), " ").take(200)
+    private fun renderData(data: JsonElement?): String = when {
+        data == null -> ""
+        data is JsonPrimitive && data.isString -> data.content.trim().replace(Regex("\\s+"), " ").take(200)
         else -> data.toString().replace(Regex("\\s+"), " ").take(200)
     }
 
-    fun schemaJson(tool: JSONObject): String {
-        val schema = tool.optJSONObject("inputSchema") ?: tool.optJSONObject("input_schema")
+    fun schemaJson(tool: JsonObject): String {
+        val schema = tool["inputSchema"]?.jsonObject ?: tool["input_schema"]?.jsonObject
         return schema?.toString() ?: EMPTY_SCHEMA
     }
 
-    fun decodeTools(serverId: String, result: JSONObject): List<McpTool> {
-        val array = result.optJSONArray("tools") ?: return emptyList()
+    fun decodeTools(serverId: String, result: JsonObject): List<McpTool> {
+        val array = result["tools"]?.jsonArray ?: return emptyList()
         val out = mutableListOf<McpTool>()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val name = item.optString("name", "").trim()
+        for (i in 0 until array.size) {
+            val item = array[i] as? JsonObject ?: continue
+            val name = (item["name"]?.jsonPrimitive?.content ?: "").trim()
             if (name.isEmpty()) continue
             out.add(
                 McpTool(
                     serverId = serverId,
                     name = name,
-                    description = item.optString("description", "").trim(),
+                    description = (item["description"]?.jsonPrimitive?.content ?: "").trim(),
                     schemaJson = schemaJson(item)
                 )
             )
@@ -226,60 +226,60 @@ object McpProtocol {
         return out
     }
 
-    fun nextCursor(result: JSONObject): String = result.optString("nextCursor", "").trim()
+    fun nextCursor(result: JsonObject): String = (result["nextCursor"]?.jsonPrimitive?.content ?: "").trim()
 
-    fun decodeResult(result: JSONObject): McpResult {
+    fun decodeResult(result: JsonObject): McpResult {
         val parts = mutableListOf<String>()
         val images = mutableListOf<Pair<String, String>>()
-        val content = result.optJSONArray("content")
+        val content = result["content"]?.jsonArray
         if (content != null) {
-            for (i in 0 until content.length()) {
-                val item = content.optJSONObject(i) ?: continue
-                when (item.optString("type", "")) {
+            for (i in 0 until content.size) {
+                val item = content[i] as? JsonObject ?: continue
+                when (item["type"]?.jsonPrimitive?.content ?: "") {
                     "text" -> {
-                        val text = item.optString("text", "")
+                        val text = item["text"]?.jsonPrimitive?.content ?: ""
                         if (text.isNotEmpty()) parts.add(text)
                     }
                     "image" -> {
-                        val data = item.optString("data", "")
-                        val mime = item.optString("mimeType", "").ifBlank { "image/png" }
+                        val data = item["data"]?.jsonPrimitive?.content ?: ""
+                        val mime = (item["mimeType"]?.jsonPrimitive?.content ?: "").ifBlank { "image/png" }
                         if (data.isNotEmpty()) {
                             images.add(mime to data)
                             parts.add("[image $mime — shown to you]")
                         }
                     }
-                    "resource" -> parts.add(renderResource(item.optJSONObject("resource")))
+                    "resource" -> parts.add(renderResource(item["resource"] as? JsonObject))
                     "resource_link" -> {
-                        val uri = item.optString("uri", "")
-                        val name = item.optString("name", "").ifBlank { uri }
+                        val uri = item["uri"]?.jsonPrimitive?.content ?: ""
+                        val name = (item["name"]?.jsonPrimitive?.content ?: "").ifBlank { uri }
                         parts.add("[resource link $name — $uri]")
                     }
                     "audio" -> parts.add("[audio content from the server is not supported]")
                     else -> {
-                        val text = item.optString("text", "")
+                        val text = item["text"]?.jsonPrimitive?.content ?: ""
                         if (text.isNotEmpty()) parts.add(text)
                     }
                 }
             }
         }
         if (parts.isEmpty()) {
-            val structured = result.optJSONObject("structuredContent")
+            val structured = result["structuredContent"] as? JsonObject
             if (structured != null) parts.add(structured.toString())
         }
         return McpResult(
             text = parts.joinToString("\n").trim(),
             images = images,
-            isError = result.optBoolean("isError", false)
+            isError = result["isError"]?.jsonPrimitive?.booleanOrNull ?: false
         )
     }
 
-    private fun renderResource(resource: JSONObject?): String {
+    private fun renderResource(resource: JsonObject?): String {
         if (resource == null) return "[resource without contents]"
-        val uri = resource.optString("uri", "")
-        val mime = resource.optString("mimeType", "")
-        val text = resource.optString("text", "")
+        val uri = resource["uri"]?.jsonPrimitive?.content ?: ""
+        val mime = resource["mimeType"]?.jsonPrimitive?.content ?: ""
+        val text = resource["text"]?.jsonPrimitive?.content ?: ""
         if (text.isNotEmpty()) return text
-        val blob = resource.optString("blob", "")
+        val blob = resource["blob"]?.jsonPrimitive?.content ?: ""
         if (blob.isNotEmpty()) {
             val label = if (mime.isBlank()) uri else "$uri ($mime)"
             return "[binary resource $label — ${blob.length} base64 characters]"
@@ -287,39 +287,39 @@ object McpProtocol {
         return "[empty resource $uri]"
     }
 
-    fun decodeResources(result: JSONObject): List<McpResourceInfo> {
-        val array = result.optJSONArray("resources") ?: return emptyList()
+    fun decodeResources(result: JsonObject): List<McpResourceInfo> {
+        val array = result["resources"]?.jsonArray ?: return emptyList()
         val out = mutableListOf<McpResourceInfo>()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val uri = item.optString("uri", "").trim()
+        for (i in 0 until array.size) {
+            val item = array[i] as? JsonObject ?: continue
+            val uri = (item["uri"]?.jsonPrimitive?.content ?: "").trim()
             if (uri.isEmpty()) continue
             out.add(
                 McpResourceInfo(
                     uri = uri,
-                    name = item.optString("name", "").trim(),
-                    mimeType = item.optString("mimeType", "").trim(),
-                    description = item.optString("description", "").trim()
+                    name = (item["name"]?.jsonPrimitive?.content ?: "").trim(),
+                    mimeType = (item["mimeType"]?.jsonPrimitive?.content ?: "").trim(),
+                    description = (item["description"]?.jsonPrimitive?.content ?: "").trim()
                 )
             )
         }
         return out
     }
 
-    fun decodeResourceContents(result: JSONObject): String {
-        val array = result.optJSONArray("contents") ?: return ""
+    fun decodeResourceContents(result: JsonObject): String {
+        val array = result["contents"]?.jsonArray ?: return ""
         val parts = mutableListOf<String>()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val uri = item.optString("uri", "")
-            val mime = item.optString("mimeType", "")
+        for (i in 0 until array.size) {
+            val item = array[i] as? JsonObject ?: continue
+            val uri = item["uri"]?.jsonPrimitive?.content ?: ""
+            val mime = item["mimeType"]?.jsonPrimitive?.content ?: ""
             val label = if (mime.isBlank()) uri else "$uri ($mime)"
-            val text = item.optString("text", "")
+            val text = item["text"]?.jsonPrimitive?.content ?: ""
             if (text.isNotEmpty()) {
                 parts.add("----- $label -----\n$text")
                 continue
             }
-            val blob = item.optString("blob", "")
+            val blob = item["blob"]?.jsonPrimitive?.content ?: ""
             if (blob.isNotEmpty()) {
                 parts.add("[binary resource $label — ${blob.length} base64 characters, contents not shown]")
             } else {
@@ -329,33 +329,33 @@ object McpProtocol {
         return parts.joinToString("\n\n")
     }
 
-    fun decodePrompts(result: JSONObject): List<McpPromptInfo> {
-        val array = result.optJSONArray("prompts") ?: return emptyList()
+    fun decodePrompts(result: JsonObject): List<McpPromptInfo> {
+        val array = result["prompts"]?.jsonArray ?: return emptyList()
         val out = mutableListOf<McpPromptInfo>()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val name = item.optString("name", "").trim()
+        for (i in 0 until array.size) {
+            val item = array[i] as? JsonObject ?: continue
+            val name = (item["name"]?.jsonPrimitive?.content ?: "").trim()
             if (name.isEmpty()) continue
             out.add(
                 McpPromptInfo(
                     name = name,
-                    description = item.optString("description", "").trim(),
-                    arguments = promptArguments(item.optJSONArray("arguments"))
+                    description = (item["description"]?.jsonPrimitive?.content ?: "").trim(),
+                    arguments = promptArguments(item["arguments"]?.jsonArray)
                 )
             )
         }
         return out
     }
 
-    private fun promptArguments(array: JSONArray?): String {
-        if (array == null || array.length() == 0) return ""
+    private fun promptArguments(array: JsonArray?): String {
+        if (array == null || array.size == 0) return ""
         val parts = mutableListOf<String>()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val name = item.optString("name", "").trim()
+        for (i in 0 until array.size) {
+            val item = array[i] as? JsonObject ?: continue
+            val name = (item["name"]?.jsonPrimitive?.content ?: "").trim()
             if (name.isEmpty()) continue
-            val flag = if (item.optBoolean("required", false)) " (required)" else ""
-            val description = item.optString("description", "").trim()
+            val flag = if (item["required"]?.jsonPrimitive?.booleanOrNull == true) " (required)" else ""
+            val description = (item["description"]?.jsonPrimitive?.content ?: "").trim()
             val note = if (description.isBlank()) "" else " — $description"
             parts.add(name + flag + note)
         }
@@ -364,13 +364,12 @@ object McpProtocol {
 
     fun params(schemaJson: String): List<ToolParam> {
         val schema = parse(schemaJson) ?: return emptyList()
-        val properties = schema.optJSONObject("properties") ?: return emptyList()
-        val required = stringSet(schema.optJSONArray("required"))
+        val properties = schema["properties"]?.jsonObject ?: return emptyList()
+        val required = stringSet(schema["required"]?.jsonArray)
         val out = mutableListOf<ToolParam>()
-        val keys = properties.keys()
-        while (keys.hasNext()) {
-            val name = keys.next()
-            val spec = properties.optJSONObject(name) ?: JSONObject()
+        val keys = properties.keys
+        for (name in keys) {
+            val spec = properties[name] as? JsonObject ?: buildJsonObject {}
             out.add(
                 ToolParam(
                     name = name,
@@ -385,34 +384,34 @@ object McpProtocol {
 
     fun compactSchema(schemaJson: String): String {
         val schema = parse(schemaJson) ?: return "unknown"
-        val properties = schema.optJSONObject("properties")
-        if (properties == null || properties.length() == 0) {
-            val type = schema.optString("type", "").trim()
+        val properties = schema["properties"]?.jsonObject
+        if (properties == null || properties.isEmpty()) {
+            val type = (schema["type"]?.jsonPrimitive?.content ?: "").trim()
             return if (type.isBlank() || type == "object") "no arguments" else type
         }
-        val required = stringSet(schema.optJSONArray("required"))
+        val required = stringSet(schema["required"]?.jsonArray)
         val parts = mutableListOf<String>()
-        val keys = properties.keys()
-        while (keys.hasNext()) {
-            val name = keys.next()
-            val spec = properties.optJSONObject(name) ?: JSONObject()
+        val keys = properties.keys
+        for (name in keys) {
+            val spec = properties[name] as? JsonObject ?: buildJsonObject {}
             val flag = if (required.contains(name)) "required" else "optional"
-            val description = spec.optString("description", "").trim().replace(Regex("\\s+"), " ")
+            val description = (spec["description"]?.jsonPrimitive?.content ?: "").trim().replace(Regex("\\s+"), " ")
             val note = if (description.isEmpty()) "" else " — ${description.take(120)}"
             parts.add("$name: ${paramType(spec)} ($flag)$note")
         }
         return parts.joinToString("; ").take(SCHEMA_LIMIT)
     }
 
-    private fun paramType(spec: JSONObject): String {
-        val raw = spec.optString("type", "").trim().lowercase()
+    private fun paramType(spec: JsonObject): String {
+        val raw = (spec["type"]?.jsonPrimitive?.content ?: "").trim().lowercase()
         if (raw.isNotEmpty()) return mappedType(raw)
-        if (spec.has("properties")) return "object"
-        if (spec.has("items")) return "array"
-        val union = spec.optJSONArray("anyOf") ?: spec.optJSONArray("oneOf")
+        if (spec.containsKey("properties")) return "object"
+        if (spec.containsKey("items")) return "array"
+        val union = spec["anyOf"]?.jsonArray ?: spec["oneOf"]?.jsonArray
         if (union != null) {
-            for (i in 0 until union.length()) {
-                val nested = union.optJSONObject(i)?.optString("type", "").orEmpty().trim().lowercase()
+            for (i in 0 until union.size) {
+                val nestedItem = union[i] as? JsonObject
+                val nested = (nestedItem?.get("type")?.jsonPrimitive?.content ?: "").trim().lowercase()
                 if (nested.isNotEmpty()) return mappedType(nested)
             }
         }
@@ -429,10 +428,10 @@ object McpProtocol {
         else -> "string"
     }
 
-    private fun paramDescription(name: String, spec: JSONObject): String {
+    private fun paramDescription(name: String, spec: JsonObject): String {
         val parts = mutableListOf<String>()
-        val description = spec.optString("description", "").trim()
-        val title = spec.optString("title", "").trim()
+        val description = (spec["description"]?.jsonPrimitive?.content ?: "").trim()
+        val title = (spec["title"]?.jsonPrimitive?.content ?: "").trim()
         when {
             description.isNotEmpty() -> parts.add(description)
             title.isNotEmpty() -> parts.add(title)
@@ -441,41 +440,40 @@ object McpProtocol {
         enumValues(spec)?.let { parts.add("One of: $it") }
         val nested = nestedProperties(spec)
         if (nested.isNotEmpty()) parts.add("Object with: $nested")
-        val items = spec.optJSONObject("items")
+        val items = spec["items"] as? JsonObject
         if (items != null) {
-            val itemType = items.optString("type", "").trim()
+            val itemType = (items["type"]?.jsonPrimitive?.content ?: "").trim()
             if (itemType.isNotEmpty()) parts.add("Array of $itemType")
         }
         return parts.joinToString(" ").take(400)
     }
 
-    private fun enumValues(spec: JSONObject): String? {
-        val array = spec.optJSONArray("enum") ?: return null
+    private fun enumValues(spec: JsonObject): String? {
+        val array = spec["enum"]?.jsonArray ?: return null
         val values = mutableListOf<String>()
-        for (i in 0 until array.length()) {
-            val value = array.optString(i, "").trim()
+        for (i in 0 until array.size) {
+            val value = (array[i] as? JsonPrimitive)?.content?.trim() ?: ""
             if (value.isNotEmpty()) values.add(value)
         }
         return if (values.isEmpty()) null else values.joinToString(", ")
     }
 
-    private fun nestedProperties(spec: JSONObject): String {
-        val properties = spec.optJSONObject("properties") ?: return ""
+    private fun nestedProperties(spec: JsonObject): String {
+        val properties = spec["properties"] as? JsonObject ?: return ""
         val parts = mutableListOf<String>()
-        val keys = properties.keys()
-        while (keys.hasNext()) {
-            val name = keys.next()
-            val nested = properties.optJSONObject(name) ?: continue
+        val keys = properties.keys
+        for (name in keys) {
+            val nested = properties[name] as? JsonObject ?: continue
             parts.add("$name: ${paramType(nested)}")
         }
         return parts.joinToString(", ")
     }
 
-    private fun stringSet(array: JSONArray?): Set<String> {
+    private fun stringSet(array: JsonArray?): Set<String> {
         if (array == null) return emptySet()
         val out = mutableSetOf<String>()
-        for (i in 0 until array.length()) {
-            val value = array.optString(i, "").trim()
+        for (i in 0 until array.size) {
+            val value = (array[i] as? JsonPrimitive)?.content?.trim() ?: ""
             if (value.isNotEmpty()) out.add(value)
         }
         return out
