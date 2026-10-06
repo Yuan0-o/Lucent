@@ -292,9 +292,9 @@ class BackupRoundTripTest {
             "baseUrl", "apiSpec", "apiKeyEncrypted", "model", "apiProfiles", "apiProfileSelected"
         )
         val manifestSource = listOf(
-            File("shared/src/platformMain/kotlin/com/lucent/app/data/BackupManifest.kt"),
-            File("../shared/src/platformMain/kotlin/com/lucent/app/data/BackupManifest.kt"),
-            File("${System.getProperty("user.dir")}/../shared/src/platformMain/kotlin/com/lucent/app/data/BackupManifest.kt"),
+            File("shared/src/commonMain/kotlin/com/lucent/app/data/BackupManifest.kt"),
+            File("../shared/src/commonMain/kotlin/com/lucent/app/data/BackupManifest.kt"),
+            File("${System.getProperty("user.dir")}/../shared/src/commonMain/kotlin/com/lucent/app/data/BackupManifest.kt"),
             File("shared/src/main/kotlin/com/lucent/app/data/BackupManifest.kt"),
             File("../shared/src/main/kotlin/com/lucent/app/data/BackupManifest.kt"),
             File("${System.getProperty("user.dir")}/../shared/src/main/kotlin/com/lucent/app/data/BackupManifest.kt")
