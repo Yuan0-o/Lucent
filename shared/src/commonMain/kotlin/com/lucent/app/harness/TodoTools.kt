@@ -5,8 +5,7 @@ import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 
 data class TodoItem(val title: String, val status: String)
@@ -37,19 +36,19 @@ object TodoTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "todo_write" -> write(ctx, args)
         "todo_read" -> read(ctx)
         else -> null
     }
 
-    private fun write(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val array = args.optJSONArray("todos") ?: JSONArray()
+    private fun write(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val array = args["todos"]?.jsonArray ?: JsonArray(emptyList())
         val items = mutableListOf<TodoItem>()
-        for (i in 0 until array.length()) {
-            when (val entry = array.opt(i)) {
-                is String -> if (entry.isNotBlank()) items.add(TodoItem(entry.trim(), "pending"))
-                is JSONObject -> parse(entry, items)
+        for (i in 0 until array.size) {
+            when (val entry = array[i]) {
+                is JsonPrimitive -> if (entry.isString && entry.content.isNotBlank()) items.add(TodoItem(entry.content.trim(), "pending"))
+                is JsonObject -> parse(entry, items)
                 else -> {
                 }
             }
@@ -62,10 +61,10 @@ object TodoTools : HarnessGroupTools {
         return ToolExecResult("Todo list (${items.size}):\n${TodoBoard.render(items)}")
     }
 
-    private fun parse(entry: JSONObject, items: MutableList<TodoItem>) {
-        val title = entry.optString("title", entry.optString("task", "")).trim()
+    private fun parse(entry: JsonObject, items: MutableList<TodoItem>) {
+        val title = (entry["title"]?.jsonPrimitive?.content ?: entry["task"]?.jsonPrimitive?.content ?: "").trim()
         if (title.isEmpty()) return
-        items.add(TodoItem(title, todoStatus(entry.optString("status", "pending"))))
+        items.add(TodoItem(title, todoStatus(entry["status"]?.jsonPrimitive?.content ?: "pending")))
     }
 
     private fun read(ctx: HarnessCtx): ToolExecResult {
@@ -75,8 +74,8 @@ object TodoTools : HarnessGroupTools {
         return ToolExecResult("Todo list ($done/${items.size} done):\n${TodoBoard.render(items)}")
     }
 
-    private fun conversationOf(args: JSONObject): Long {
-        val stated = args.optLong("conversation_id", 0L)
+    private fun conversationOf(args: JsonObject): Long {
+        val stated = args["conversation_id"]?.jsonPrimitive?.longOrNull ?: 0L
         if (stated > 0L) return stated
         val current = HarnessRuntime.conversationId
         return if (current > 0L) current else 1L
@@ -139,27 +138,26 @@ object TodoFiles {
         val text = HarnessVault.read(context, fileFor(conversationId))
         if (text.isBlank()) return emptyList()
         return try {
-            parse(JSONArray(text))
+            parse(Json.parseToJsonElement(text).jsonArray)
         } catch (t: Throwable) {
             emptyList()
         }
     }
 
     fun write(context: PlatformContext, conversationId: Long, list: List<TodoItem>) {
-        val array = JSONArray()
-        list.forEach { item ->
-            array.put(JSONObject().put("title", item.title).put("status", item.status))
-        }
+        val array = JsonArray(list.map { item ->
+            JsonObject(mapOf("title" to JsonPrimitive(item.title), "status" to JsonPrimitive(item.status)))
+        })
         HarnessVault.write(context, fileFor(conversationId), array.toString())
     }
 
-    private fun parse(array: JSONArray): List<TodoItem> {
+    private fun parse(array: JsonArray): List<TodoItem> {
         val out = mutableListOf<TodoItem>()
-        for (i in 0 until array.length()) {
-            val entry = array.optJSONObject(i) ?: continue
-            val title = entry.optString("title", "").trim()
+        for (i in 0 until array.size) {
+            val entry = array[i] as? JsonObject ?: continue
+            val title = (entry["title"]?.jsonPrimitive?.content ?: "").trim()
             if (title.isEmpty()) continue
-            out.add(TodoItem(title, todoStatus(entry.optString("status", "pending"))))
+            out.add(TodoItem(title, todoStatus(entry["status"]?.jsonPrimitive?.content ?: "pending")))
         }
         return out
     }

@@ -4,7 +4,7 @@ import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import com.lucent.app.harness.terminal.TerminalSessions
 import com.lucent.app.harness.terminal.PtyStartRequest
 import com.lucent.app.harness.terminal.PtySessionState
@@ -215,7 +215,7 @@ object TerminalTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "terminal_open_session" -> terminalOpenSession(ctx, args)
         "terminal_write" -> terminalWrite(ctx, args)
         "terminal_read" -> terminalRead(ctx, args)
@@ -232,7 +232,7 @@ object TerminalTools : HarnessGroupTools {
     }
 
 
-    private fun terminalOpenSession(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private fun terminalOpenSession(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         if (!TerminalSessions.manager.isAvailable()) {
             return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
         }
@@ -247,13 +247,13 @@ object TerminalTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun terminalWrite(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun terminalWrite(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         if (!TerminalSessions.manager.isAvailable()) {
             return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
         }
-        val id = args.optLong("session_id", -1L)
-        val input = args.optString("input", "")
-        val waitMs = args.optInt("wait_ms", 0).coerceIn(0, 120000).toLong()
+        val id = args["session_id"]?.jsonPrimitive?.longOrNull ?: -1L
+        val input = args["input"]?.jsonPrimitive?.content ?: ""
+        val waitMs = (args["wait_ms"]?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, 120000).toLong()
 
         val tab = TerminalSessions.manager.find(id) ?: return ToolExecResult("No terminal session found with id $id", success = false)
         if (tab.value.state != PtySessionState.RUNNING) {
@@ -276,13 +276,13 @@ object TerminalTools : HarnessGroupTools {
         return ToolExecResult("Wrote to session $id. Current state: $state.\nTranscript tail:\n${ctx.limit(tail)}")
     }
 
-    private suspend fun terminalRead(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun terminalRead(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         if (!TerminalSessions.manager.isAvailable()) {
             return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
         }
-        val id = args.optLong("session_id", -1L)
-        val waitMs = args.optInt("wait_ms", 0).coerceIn(0, 120000).toLong()
-        val tailChars = args.optInt("tail_chars", 8000).coerceAtLeast(1)
+        val id = args["session_id"]?.jsonPrimitive?.longOrNull ?: -1L
+        val waitMs = (args["wait_ms"]?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, 120000).toLong()
+        val tailChars = (args["tail_chars"]?.jsonPrimitive?.intOrNull ?: 8000).coerceAtLeast(1)
 
         val tab = TerminalSessions.manager.find(id) ?: return ToolExecResult("No terminal session found with id $id", success = false)
 
@@ -301,11 +301,11 @@ object TerminalTools : HarnessGroupTools {
         return ToolExecResult("Session $id state: $state (exit code: $exitCode)\nTranscript tail:\n${ctx.limit(tail)}")
     }
 
-    private fun terminalCloseSession(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private fun terminalCloseSession(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         if (!TerminalSessions.manager.isAvailable()) {
             return ToolExecResult("The terminal backend is not available on this platform yet.", success = false)
         }
-        val id = args.optLong("session_id", -1L)
+        val id = args["session_id"]?.jsonPrimitive?.longOrNull ?: -1L
         val ok = TerminalSessions.manager.closeSession(id)
         return if (ok) ToolExecResult("Closed session $id.") else ToolExecResult("No terminal session found with id $id", success = false)
     }
@@ -324,8 +324,8 @@ object TerminalTools : HarnessGroupTools {
         return ToolExecResult(sb.toString().trimEnd())
     }
 
-    private fun workdirOf(ctx: HarnessCtx, args: JSONObject): File {
-        val raw = args.optString("workdir", "")
+    private fun workdirOf(ctx: HarnessCtx, args: JsonObject): File {
+        val raw = args["workdir"]?.jsonPrimitive?.content ?: ""
         if (raw.isBlank()) return File(HarnessRuntime.workspacePath())
         val dir = try {
             Workspace.resolveFile(raw)
@@ -336,13 +336,13 @@ object TerminalTools : HarnessGroupTools {
         return dir
     }
 
-    private fun timeoutOf(ctx: HarnessCtx, args: JSONObject): Int {
-        val requested = args.optInt("timeout", ctx.config.timeoutSeconds)
+    private fun timeoutOf(ctx: HarnessCtx, args: JsonObject): Int {
+        val requested = args["timeout"]?.jsonPrimitive?.intOrNull ?: ctx.config.timeoutSeconds
         return requested.coerceIn(5, 3600)
     }
 
-    private suspend fun runCommand(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val command = args.optString("command", "")
+    private suspend fun runCommand(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val command = args["command"]?.jsonPrimitive?.content ?: ""
         if (command.isBlank()) return ToolExecResult("There is no command to run.", success = false)
         if (!HarnessRuntime.shellReady()) {
             return ToolExecResult(noShellMessage(ctx), success = false)
@@ -350,12 +350,12 @@ object TerminalTools : HarnessGroupTools {
         val dir = workdirOf(ctx, args)
         val timeout = timeoutOf(ctx, args)
         val env = mutableMapOf<String, String>()
-        val envJson = args.optJSONObject("env")
+        val envJson = args["env"]?.jsonObject
         if (envJson != null) {
-            val keys = envJson.keys()
+            val keys = envJson.keys.iterator()
             while (keys.hasNext()) {
                 val key = keys.next()
-                if (key.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) env[key] = envJson.optString(key, "")
+                if (key.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) env[key] = envJson[key]?.jsonPrimitive?.content ?: ""
             }
         }
         val shell = HarnessRuntime.shell
@@ -374,8 +374,8 @@ object TerminalTools : HarnessGroupTools {
         return ToolExecResult(body, success = shell != null)
     }
 
-    private fun startJob(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val command = args.optString("command", "")
+    private fun startJob(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val command = args["command"]?.jsonPrimitive?.content ?: ""
         if (command.isBlank()) return ToolExecResult("There is no command to run.", success = false)
         if (!HarnessRuntime.shellReady()) return ToolExecResult(noShellMessage(ctx), success = false)
         val handle = HarnessJobs.start(command, workdirOf(ctx, args), timeoutOf(ctx, args))
@@ -384,16 +384,16 @@ object TerminalTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun jobOutput(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val id = args.optString("job_id", "")
+    private suspend fun jobOutput(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val id = args["job_id"]?.jsonPrimitive?.content ?: ""
         val handle = HarnessJobs.get(id) ?: return ToolExecResult("No job called $id.", success = false)
-        val wait = args.optInt("wait_seconds", 0)
+        val wait = args["wait_seconds"]?.jsonPrimitive?.intOrNull ?: 0
         if (wait > 0) HarnessJobs.waitFor(handle, wait)
         return ToolExecResult(ctx.limit(handle.render(withOutput = true)), success = handle.finished && handle.failure.isEmpty())
     }
 
-    private fun jobKill(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val id = args.optString("job_id", "")
+    private fun jobKill(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val id = args["job_id"]?.jsonPrimitive?.content ?: ""
         if (id.isBlank()) return ToolExecResult("Which job?", success = false)
         val ok = HarnessJobs.kill(id)
         return if (ok) ToolExecResult("Asked ${id} to stop.") else ToolExecResult("No job called $id.", success = false)
@@ -405,8 +405,8 @@ object TerminalTools : HarnessGroupTools {
         return ToolExecResult(all.joinToString("\n") { it.render(withOutput = false) })
     }
 
-    private suspend fun whichTool(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val names = args.optString("name", "").split(Regex("[,\\s]+")).filter { it.isNotBlank() }
+    private suspend fun whichTool(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val names = (args["name"]?.jsonPrimitive?.content ?: "").split(Regex("[,\\s]+")).filter { it.isNotBlank() }
         if (names.isEmpty()) return ToolExecResult("Name a command to look for.", success = false)
         if (!HarnessRuntime.shellReady()) {
             val installed = HarnessRuntime.config().installedPlugins()
