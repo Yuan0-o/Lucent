@@ -6,7 +6,7 @@ import com.lucent.app.harness.mcp.McpSessions
 import com.lucent.app.harness.mcp.McpTool
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.util.concurrent.ConcurrentHashMap
 
 object McpTools : HarnessGroupTools {
@@ -94,7 +94,7 @@ object McpTools : HarnessGroupTools {
     override fun canHandle(name: String): Boolean =
         super<HarnessGroupTools>.canHandle(name) || dynamicNames.containsKey(name) || parseDynamic(name) != null
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "mcp_servers" -> listServers(ctx)
         "mcp_tools" -> listTools(ctx, args)
         "mcp_call" -> callTool(ctx, args)
@@ -174,7 +174,7 @@ object McpTools : HarnessGroupTools {
         return ToolExecResult(ctx.limit("MCP servers:\n" + lines.joinToString("\n")))
     }
 
-    private suspend fun listTools(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun listTools(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val servers = selectServers(args)
         if (servers.isEmpty()) return ToolExecResult(noServers(args, "mcp_tools"), success = false)
         val lines = mutableListOf<String>()
@@ -205,26 +205,26 @@ object McpTools : HarnessGroupTools {
         return ToolExecResult(ctx.limit(lines.joinToString("\n") + hint), success = found)
     }
 
-    private suspend fun callTool(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val tool = args.optString("tool", "").trim()
+    private suspend fun callTool(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val tool = (args["tool"]?.jsonPrimitive?.content ?: "").trim()
         if (tool.isEmpty()) {
             return ToolExecResult(
                 "mcp_call needs the tool name from mcp_tools, in the tool field.",
                 success = false
             )
         }
-        val server = findServer(args.optString("server", "").trim())
+        val server = findServer((args["server"]?.jsonPrimitive?.content ?: "").trim())
             ?: return ToolExecResult(noServers(args, "mcp_call"), success = false)
         val result = McpSessions.call(server, tool, argumentText(args))
         return outcome(ctx, server, tool, result)
     }
 
-    private suspend fun readResourceTool(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val uri = args.optString("uri", "").trim()
+    private suspend fun readResourceTool(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val uri = (args["uri"]?.jsonPrimitive?.content ?: "").trim()
         if (uri.isEmpty()) {
             return ToolExecResult("mcp_read_resource needs the resource uri.", success = false)
         }
-        val server = findServer(args.optString("server", "").trim())
+        val server = findServer((args["server"]?.jsonPrimitive?.content ?: "").trim())
             ?: return ToolExecResult(noServers(args, "mcp_read_resource"), success = false)
         val read = McpSessions.readResource(server, uri)
         if (read.error.isNotBlank()) {
@@ -238,7 +238,7 @@ object McpTools : HarnessGroupTools {
         return ToolExecResult(ctx.limit(read.text))
     }
 
-    private suspend fun listPrompts(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun listPrompts(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val servers = selectServers(args)
         if (servers.isEmpty()) return ToolExecResult(noServers(args, "mcp_prompts"), success = false)
         val lines = mutableListOf<String>()
@@ -265,8 +265,8 @@ object McpTools : HarnessGroupTools {
         return ToolExecResult(ctx.limit(lines.joinToString("\n")), success = found)
     }
 
-    private suspend fun manageSession(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val action = args.optString("action", "").trim().lowercase()
+    private suspend fun manageSession(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val action = (args["action"]?.jsonPrimitive?.content ?: "").trim().lowercase()
         return when (action) {
             "close" -> {
                 McpSessions.close()
@@ -297,7 +297,7 @@ object McpTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun dynamicToolCall(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? {
+    private suspend fun dynamicToolCall(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? {
         val target = dynamicNames[name] ?: parseDynamic(name) ?: return null
         val server = HarnessRuntime.config().mcpServers.firstOrNull { it.id == target.first }
             ?: return null
@@ -323,8 +323,8 @@ object McpTools : HarnessGroupTools {
         return bestId to (real?.name ?: bestTool)
     }
 
-    private fun selectServers(args: JSONObject): List<McpServer> {
-        val wanted = args.optString("server", "").trim()
+    private fun selectServers(args: JsonObject): List<McpServer> {
+        val wanted = (args["server"]?.jsonPrimitive?.content ?: "").trim()
         val configured = HarnessRuntime.config().mcpServers
         if (wanted.isEmpty()) return configured.filter { it.enabled }
         val server = configured.firstOrNull { it.id == wanted }
@@ -341,8 +341,8 @@ object McpTools : HarnessGroupTools {
             ?: configured.firstOrNull { it.id.equals(id, ignoreCase = true) }
     }
 
-    private fun noServers(args: JSONObject, tool: String): String {
-        val wanted = args.optString("server", "").trim()
+    private fun noServers(args: JsonObject, tool: String): String {
+        val wanted = (args["server"]?.jsonPrimitive?.content ?: "").trim()
         val configured = HarnessRuntime.config().mcpServers
         if (configured.isEmpty()) {
             return "No MCP servers are configured yet, so $tool has nothing to work with. Add one in Settings, " +
@@ -355,10 +355,10 @@ object McpTools : HarnessGroupTools {
         return "Every configured MCP server is switched off in Settings. Known ids: $ids."
     }
 
-    private fun argumentText(args: JSONObject): String = when (val raw = args.opt("arguments")) {
+    private fun argumentText(args: JsonObject): String = when (val raw = args["arguments"]) {
         null -> "{}"
-        is JSONObject -> raw.toString()
-        is String -> raw.trim().ifBlank { "{}" }
+        is JsonObject -> raw.toString()
+        is JsonPrimitive -> if (raw.isString) raw.content.trim().ifBlank { "{}" } else raw.content
         else -> raw.toString()
     }
 

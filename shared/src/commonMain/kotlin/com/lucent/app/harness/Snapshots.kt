@@ -1,6 +1,6 @@
 package com.lucent.app.harness
 
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 data class SnapshotEntry(
     val id: String,
@@ -28,12 +28,12 @@ object Snapshots {
             fs.mkdirs(store)
             val copy = fs.join(store, fs.nameOf(path))
             fs.copy(path, copy, overwrite = true)
-            val line = JSONObject().apply {
-                put("id", id)
-                put("at", harnessCurrentTimeMillis())
-                put("path", fs.canonicalize(path))
-                put("store", fs.canonicalize(copy))
-                put("bytes", fs.length(copy))
+            val line = buildJsonObject {
+                put("id", JsonPrimitive(id))
+                put("at", JsonPrimitive(harnessCurrentTimeMillis()))
+                put("path", JsonPrimitive(fs.canonicalize(path)))
+                put("store", JsonPrimitive(fs.canonicalize(copy)))
+                put("bytes", JsonPrimitive(fs.length(copy)))
             }.toString()
             fs.appendText(index(), line + "\n")
             prune()
@@ -50,13 +50,13 @@ object Snapshots {
         return try {
             fs.readLines(target).mapNotNull { line ->
                 if (line.isBlank()) null else {
-                    val o = try { JSONObject(line) } catch (e: Exception) { return@mapNotNull null }
+                    val o = try { Json.parseToJsonElement(line).jsonObject } catch (e: Exception) { return@mapNotNull null }
                     SnapshotEntry(
-                        id = o.optString("id", ""),
-                        at = o.optLong("at", 0L),
-                        path = o.optString("path", ""),
-                        store = o.optString("store", ""),
-                        bytes = o.optLong("bytes", 0L)
+                        id = o["id"]?.jsonPrimitive?.content ?: "",
+                        at = o["at"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        path = o["path"]?.jsonPrimitive?.content ?: "",
+                        store = o["store"]?.jsonPrimitive?.content ?: "",
+                        bytes = o["bytes"]?.jsonPrimitive?.longOrNull ?: 0L
                     )
                 }
             }
@@ -101,7 +101,7 @@ object Snapshots {
         val keep = entries.drop(entries.size - limit).map { it.id }.toSet()
         val kept = try {
             fs.readLines(index()).filter { line ->
-                val id = try { JSONObject(line).optString("id", "") } catch (e: Exception) { "" }
+                val id = try { Json.parseToJsonElement(line).jsonObject["id"]?.jsonPrimitive?.content ?: "" } catch (e: Exception) { "" }
                 keep.contains(id)
             }
         } catch (e: Exception) {
