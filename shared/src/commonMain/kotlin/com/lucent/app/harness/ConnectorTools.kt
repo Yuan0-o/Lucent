@@ -15,7 +15,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 data class HttpReply(
     val code: Int,
@@ -48,9 +48,9 @@ object HttpJson {
     private val jsonMedia: MediaType = JSON_TYPE.toMediaType()
 
     private val plain = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(60.seconds)
+        .readTimeout(60.seconds)
+        .writeTimeout(60.seconds)
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(true)
@@ -123,7 +123,7 @@ object HttpJson {
         val request = builder.method(verb, payload).build()
         val seconds = timeoutSeconds.coerceIn(5, 300).toLong()
         val client = (if (followRedirects) following else plain).newBuilder()
-            .callTimeout(seconds, TimeUnit.SECONDS)
+            .callTimeout(seconds.seconds)
             .build()
         client.newCall(request).execute().use { response ->
             val store = ByteArrayOutputStream()

@@ -8,7 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 object CloudSync {
 
@@ -27,9 +27,9 @@ object CloudSync {
     )
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(15.seconds)
+        .readTimeout(60.seconds)
+        .writeTimeout(60.seconds)
         .build()
 
     fun folderUrl(config: Config, extra: String = ""): String {

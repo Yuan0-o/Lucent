@@ -6,8 +6,9 @@ import com.lucent.app.AppScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 data class AuditEntry(
     val at: Long,
@@ -29,7 +30,6 @@ object AuditTrail {
     private const val KEEP_BYTES = 256 * 1024
 
     private val lock = Any()
-    private val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
     fun file(context: PlatformContext): File {
         val dir = File(baseDir(context), "harness")
@@ -87,7 +87,8 @@ object AuditTrail {
     }
 
     fun format(entry: AuditEntry): String {
-        val time = synchronized(lock) { stamp.format(Date(entry.at)) }
+        val dt = Instant.fromEpochMilliseconds(entry.at).toLocalDateTime(TimeZone.UTC)
+        val time = "${dt.year}-${dt.monthNumber.toString().padStart(2, '0')}-${dt.dayOfMonth.toString().padStart(2, '0')} ${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}:${dt.second.toString().padStart(2, '0')}"
         return "$time  ${entry.tool}  ${entry.outcome}  ${entry.millis}ms"
     }
 

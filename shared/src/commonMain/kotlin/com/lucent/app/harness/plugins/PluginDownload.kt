@@ -12,7 +12,8 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 object PluginDownload {
 
@@ -20,8 +21,8 @@ object PluginDownload {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(20.seconds)
+            .readTimeout(60.seconds)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -29,9 +30,9 @@ object PluginDownload {
 
     private val slowClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.MINUTES)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(20.seconds)
+            .readTimeout(30.minutes)
+            .writeTimeout(60.seconds)
             .followRedirects(true)
             .build()
     }
