@@ -1,5 +1,6 @@
 package com.lucent.app.data
 import com.lucent.app.platform.filesDir
+import com.lucent.app.local.ImportSource
 
 import com.lucent.app.platform.PlatformContext
 import org.json.JSONArray
@@ -101,7 +102,7 @@ object FontStore {
 
 
     @Throws(IOException::class)
-    fun import(context: PlatformContext, source: Any, customName: String? = null): FontSlot {
+    fun import(context: PlatformContext, source: ImportSource, customName: String? = null): FontSlot {
         val existing = index(context)
         if (existing.slots.size >= MAX_FONTS) throw TooManyFontsException()
 
@@ -109,9 +110,9 @@ object FontStore {
         if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create the font directory")
 
         val id = newId()
-        val pickedName = fontSourceDisplayName(context, source) ?: "font"
+        val pickedName = source.displayName(context) ?: "font"
 
-        openFontSource(context, source)?.use { raw ->
+        source.openStream(context)?.use { raw ->
             val head = ByteArray(4)
             val headRead = readUpTo(raw, head)
             val ext = classify(head, headRead) ?: throw NotFontException()

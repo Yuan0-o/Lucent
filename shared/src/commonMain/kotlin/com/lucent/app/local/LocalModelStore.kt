@@ -155,7 +155,7 @@ object LocalModelStore {
     }
 
     @Throws(IOException::class)
-    fun import(context: PlatformContext, source: Any, customName: String? = null): ModelSlot {
+    fun import(context: PlatformContext, source: ImportSource, customName: String? = null): ModelSlot {
         val existing = index(context)
         if (existing.slots.size >= MAX_MODELS) throw TooManyModelsException()
 
@@ -165,10 +165,10 @@ object LocalModelStore {
         val id = newId()
         val fileName = "model_$id.gguf"
         val tmp = File(dir, "$fileName.tmp")
-        var pickedName = modelSourceDisplayName(context, source) ?: "model.gguf"
+        var pickedName = source.displayName(context) ?: "model.gguf"
 
         try {
-            openModelSource(context, source)?.use { raw ->
+            source.openStream(context)?.use { raw ->
                 val head = ByteArray(4)
                 val headRead = readUpTo(raw, head)
 
@@ -352,13 +352,13 @@ object LocalModelStore {
     fun activeMmprojFile(context: PlatformContext): File? =
         activeSlot(context)?.let { mmprojFile(context, it.id) }
 
-    fun importMmproj(context: PlatformContext, id: String, source: Any): File {
+    fun importMmproj(context: PlatformContext, id: String, source: ImportSource): File {
         val dir = dir(context)
         if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create model directory")
         val target = File(dir, mmprojFileName(id))
         val tmp = File(dir, "${mmprojFileName(id)}.tmp")
         try {
-            openModelSource(context, source)?.use { raw ->
+            source.openStream(context)?.use { raw ->
                 val head = ByteArray(4)
                 val headRead = readUpTo(raw, head)
                 if (headRead < 4 || !head.contentEquals(GGUF_MAGIC)) throw NotGgufException()

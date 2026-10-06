@@ -78,6 +78,7 @@ import com.lucent.app.data.StartupLog
 import com.lucent.app.i18n.S
 import com.lucent.app.local.LocalLlm
 import com.lucent.app.local.LocalModelStore
+import com.lucent.app.local.UriImportSource
 import com.lucent.app.ui.settings.CloudModelSettingsPage
 import com.lucent.app.ui.settings.AppearanceSettingsPage
 import com.lucent.app.ui.settings.AssistantSettingsPage
@@ -488,7 +489,7 @@ fun SettingsScreen(active: Boolean = true) {
                 val error = withContext(Dispatchers.IO) {
                     try {
                         LocalLlm.shutdown()
-                        LocalModelStore.importMmproj(context, mmprojSlotId, uri)
+                        LocalModelStore.importMmproj(context, mmprojSlotId, UriImportSource(uri))
                         null
                     } catch (e: LocalModelStore.NotGgufException) {
                         S.lmImportFailedNotGguf
@@ -525,7 +526,7 @@ fun SettingsScreen(active: Boolean = true) {
             val error = withContext(Dispatchers.IO) {
                 try {
                     LocalLlm.shutdown()
-                    LocalModelStore.import(context, uri, name)
+                    LocalModelStore.import(context, UriImportSource(uri), name)
                     null
                 } catch (e: LocalModelStore.TooManyModelsException) {
                     S.lmImportFailedTooMany(LocalModelStore.MAX_MODELS)
@@ -601,7 +602,7 @@ fun SettingsScreen(active: Boolean = true) {
             var importedId: String? = null
             val error = withContext(Dispatchers.IO) {
                 try {
-                    importedId = FontStore.import(context, uri, name).id
+                    importedId = FontStore.import(context, UriImportSource(uri), name).id
                     null
                 } catch (e: FontStore.TooManyFontsException) {
                     S.fontImportFailedTooMany(FontStore.MAX_FONTS)
