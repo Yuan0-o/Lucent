@@ -3,10 +3,11 @@ package com.lucent.app.harness
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
 import kotlinx.serialization.json.*
-import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.use
+import okio.buffer
 
 object FileTools : HarnessGroupTools {
 
@@ -252,14 +253,22 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun workspaceInfo(ctx: HarnessCtx): ToolExecResult {
-        val root = File(HarnessRuntime.workspacePath())
-        val files = root.walkTopDown().filter { it.isFile }.take(20000).toList()
-        val bytes = files.sumOf { it.size }
+        val root = HarnessRuntime.workspacePath().toPath()
+        val files = mutableListOf<Path>()
+        fun walkSpace(p: Path) {
+            if (files.size >= 20000) return
+            FileSystem.SYSTEM.listOrNull(p)?.forEach { 
+                if (FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory == true) walkSpace(it)
+                else if (FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true) files.add(it)
+            }
+        }
+        if (FileSystem.SYSTEM.metadataOrNull(root)?.isDirectory == true) walkSpace(root)
+        val bytes = files.sumOf { FileSystem.SYSTEM.metadata(it).size ?: 0L }
         val groups = HarnessGroup.entries.filter { ctx.config.groupEnabled(it) }.joinToString(", ") { it.key }
         val sb = StringBuilder()
         sb.append("Workspace: ${root.path}\n")
         sb.append("Files: ${files.size}${if (files.size >= 20000) "+" else ""}, ${Workspace.humanSize(bytes)}\n")
-        sb.append("Free space: ${Workspace.humanSize(root.usableSpace)}\n")
+        sb.append("Free space: ${Workspace.humanSize(0L)}\n")
         sb.append("Platform: ${if (ctx.android) "Android" else "Windows"}\n")
         sb.append("Shell: ${pluginShellLabel()}\n")
         sb.append("Tool groups on: $groups\n")
@@ -284,20 +293,20 @@ object FileTools : HarnessGroupTools {
 
     private fun listDirectory(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val raw = (args["path"]?.jsonPrimitive?.content ?: "").ifBlank { "." }
-        val dir = Workspace.forReadFile(ctx, raw)
+        val dir = Workspace.forRead(ctx, raw).toPath()
         if (!dir.isDirectory) return ToolExecResult("${Workspace.display(ctx, dir)} is a file, not a directory.", success = false)
         val depth = (args["depth"]?.jsonPrimitive?.intOrNull ?: 1).coerceIn(1, 3)
         val max = args.optInt("max_entries", MAX_LIST).coerceIn(1, 2000)
         val out = StringBuilder()
         var count = 0
-        fun walk(current: File, level: Int, prefix: String) {
-            val children = current.listFiles()?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: return
+        fun walk(current: Path, level: Int, prefix: String) {
+            val children = FileSystem.SYSTEM.listOrNull(current)?.sortedWith(compareBy({ FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory != true }, { it.name.lowercase() })) ?: return
             for (child in children) {
                 if (count >= max) return
                 count++
-                val marker = if (child.isDirectory) "/" else ""
+                val marker = if (FileSystem.SYSTEM.metadataOrNull(child)?.isDirectory == true) "/" else ""
                 out.append(prefix).append(child.name).append(marker)
-                if (child.isFile) out.append("  ").append(Workspace.humanSize(child.length()))
+                if (FileSystem.SYSTEM.metadataOrNull(child)?.isRegularFile == true) out.append("  ").append(Workspace.humanSize(FileSystem.SYSTEM.metadata(child).size ?: 0L))
                 out.append('\n')
                 if (child.isDirectory && level < depth) walk(child, level + 1, "$prefix  ")
             }
@@ -312,7 +321,7 @@ object FileTools : HarnessGroupTools {
     private fun searchFiles(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val query = (args["query"]?.jsonPrimitive?.content ?: "")
         if (query.isBlank()) return ToolExecResult("Give me something to search for.", success = false)
-        val root = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: "").ifBlank { "." })
+        val root = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath().ifBlank { "." })
         val regex = (args["regex"]?.jsonPrimitive?.booleanOrNull ?: false)
         val glob = (args["glob"]?.jsonPrimitive?.content ?: "")
         val max = args.optInt("max_results", MAX_SEARCH).coerceIn(1, 500)
@@ -320,21 +329,30 @@ object FileTools : HarnessGroupTools {
         val namePattern = if (glob.isNotBlank()) globToRegex(glob) else null
         val matches = mutableListOf<String>()
         var scanned = 0
-        val files = if (root.isFile) listOf(root) else root.walkTopDown().filter { it.isFile }.toList()
+        val files = mutableListOf<Path>()
+        if (FileSystem.SYSTEM.metadataOrNull(root)?.isRegularFile == true) files.add(root) else {
+            fun walk(p: Path) {
+                FileSystem.SYSTEM.listOrNull(p)?.forEach {
+                    if (FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory == true) walk(it)
+                    else if (FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true) files.add(it)
+                }
+            }
+            walk(root)
+        }
         for (file in files) {
             if (matches.size >= max) break
-            val relative = file.relativeToOrSelf(root)
-            if (namePattern != null && !namePattern.matches(relative.path.replace('\\', '/'))) continue
+            val relativePath = file.toString().removePrefix(root.toString()).removePrefix("/")
+            if (namePattern != null && !namePattern.matches(relativePath.replace('\\', '/'))) continue
             val nameHit = file.name.contains(query, ignoreCase = !regex)
-            if (nameHit) matches.add("${file.path}  (name match)")
-            if (file.length() > 2L * 1024 * 1024) continue
+            if (nameHit) matches.add("${file.toString()}  (name match)")
+            if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > 2L * 1024 * 1024) continue
             scanned++
-            val text = try { file.readText() } catch (e: Exception) { continue }
+            val text = try { FileSystem.SYSTEM.read(file) { readUtf8() } } catch (e: Exception) { continue }
             if (Workspace.looksBinary(text.toByteArray())) continue
             text.lineSequence().forEachIndexed { index, line ->
                 if (matches.size >= max) return@forEachIndexed
                 val hit = if (pattern != null) pattern.containsMatchIn(line) else line.contains(query, ignoreCase = true)
-                if (hit) matches.add("${file.path}:${index + 1}  ${line.trim().take(200)}")
+                if (hit) matches.add("${file.toString()}:${index + 1}  ${line.trim().take(200)}")
             }
         }
         return if (matches.isEmpty()) {
@@ -368,39 +386,39 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun readFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        if (file.isDirectory) return listDirectory(ctx, buildJsonObject { put("path", (args["path"]?.jsonPrimitive?.content ?: "")) })
-        val text = Workspace.readText(file)
-        FileObservations.note(file.path)
+        val file = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) return listDirectory(ctx, buildJsonObject { put("path", (args["path"]?.jsonPrimitive?.content ?: "")) })
+        val text = Workspace.readText(file.toString())
+        FileObservations.note(file.toString())
         val lines = text.split("\n")
         val start = (args["start_line"]?.jsonPrimitive?.intOrNull ?: 1).coerceAtLeast(1)
         val max = (args["max_lines"]?.jsonPrimitive?.intOrNull ?: 400).coerceIn(1, 5000)
         val slice = lines.drop(start - 1).take(max)
-        val header = "${Workspace.display(ctx, file)} — ${lines.size} lines, ${Workspace.humanSize(file.length())}" +
+        val header = "${Workspace.display(ctx, file.toString())} — ${lines.size} lines, ${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: 0L))}" +
             if (start > 1 || start - 1 + slice.size < lines.size) " (showing ${start}-${start + slice.size - 1})" else ""
         return ToolExecResult("$header\n" + slice.joinToString("\n"))
     }
 
     private fun readImage(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val shown = Workspace.display(ctx, file)
-        if (file.isDirectory) return ToolExecResult("$shown is a directory, not an image.", success = false)
-        val extension = file.extension.lowercase()
+        val file = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val shown = Workspace.display(ctx, file.toString())
+        if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) return ToolExecResult("$shown is a directory, not an image.", success = false)
+        val extension = file.name.substringAfterLast(".", "").lowercase()
         val claimed = IMAGE_TYPES[extension]
             ?: return ToolExecResult(
                 "$shown is not an image. I can look at ${IMAGE_TYPES.keys.joinToString(", ")} files.",
                 success = false
             )
         val ceiling = args.optLong("max_bytes", MAX_IMAGE_BYTES).coerceIn(1024L, MAX_IMAGE_CEILING)
-        if (file.length() > ceiling) {
+        if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > ceiling) {
             return ToolExecResult(
-                "$shown is ${Workspace.humanSize(file.length())}, above the ${Workspace.humanSize(ceiling)} limit.",
+                "$shown is ${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: 0L))}, above the ${Workspace.humanSize(ceiling)} limit.",
                 success = false
             )
         }
         val head = ByteArray(16)
         val read = try {
-            file.inputStream().use { it.read(head) }
+            FileSystem.SYSTEM.read(file) { read(head) }
         } catch (e: Exception) {
             return ToolExecResult("$shown could not be read: ${e.message ?: e::class.simpleName}", success = false)
         }
@@ -409,11 +427,11 @@ object FileTools : HarnessGroupTools {
         if (sniffed != claimed) {
             return ToolExecResult("$shown is named .$extension but the bytes are $sniffed.", success = false)
         }
-        val bytes = Workspace.readBytes(file, ceiling)
+        val bytes = Workspace.readBytes(file.toString(), ceiling)
         val encoded = java.util.Base64.getEncoder().encodeToString(bytes)
-        FileObservations.note(file.path)
+        FileObservations.note(file.toString())
         return ToolExecResult(
-            "$shown ($sniffed, ${Workspace.humanSize(file.length())}).",
+            "$shown ($sniffed, ${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: 0L))}).",
             images = listOf(ToolImage(sniffed, encoded, file.name))
         )
     }
@@ -434,34 +452,34 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun writeFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+        val file = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
         val content = (args["content"]?.jsonPrimitive?.content ?: "")
         val append = (args["append"]?.jsonPrimitive?.booleanOrNull ?: false)
-        if (file.isDirectory) return ToolExecResult("${Workspace.display(ctx, file)} is a directory.", success = false)
-        if (!append && file.isFile && file.length() > 0 && !FileObservations.seen(file.path)) {
+        if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) return ToolExecResult("${Workspace.display(ctx, file.toString())} is a directory.", success = false)
+        if (!append && (FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile == true) && (FileSystem.SYSTEM.metadata(file).size ?: 0L) > 0 && !FileObservations.seen(file.toString())) {
             return ToolExecResult(
-                "${Workspace.display(ctx, file)} already exists and has not been read. Read it first, then write.",
+                "${Workspace.display(ctx, file.toString())} already exists and has not been read. Read it first, then write.",
                 success = false
             )
         }
         if (append) {
-            if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
-            file.parentFile?.mkdirs()
-            file.appendText(if (file.length() > 0 && !file.readText().endsWith("\n")) "\n$content" else content)
+            if (ctx.config.snapshots && FileSystem.SYSTEM.exists(file)) Snapshots.capture(ctx, file.toString())
+            file.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+            file.appendText(if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > 0 && !FileSystem.SYSTEM.read(file) { readUtf8() }.endsWith("\n")) "\n$content" else content)
         } else {
-            Workspace.writeText(ctx, file, content)
+            Workspace.writeText(ctx, file.toString(), content)
         }
         val verb = if (append) "Appended to" else "Wrote"
-        FileObservations.note(file.path)
-        return ToolExecResult("$verb ${Workspace.display(ctx, file)} (${Workspace.humanSize(file.length())}, ${Workspace.countLines(file)} lines).")
+        FileObservations.note(file.toString())
+        return ToolExecResult("$verb ${Workspace.display(ctx, file.toString())} (${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: 0L))}, ${Workspace.countLines(file.toString())} lines).")
     }
 
     private fun editFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        if (!file.exists()) return ToolExecResult("${Workspace.display(ctx, file)} does not exist.", success = false)
-        if (!FileObservations.seen(file.path)) {
+        val file = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        if (!FileSystem.SYSTEM.exists(file)) return ToolExecResult("${Workspace.display(ctx, file.toString())} does not exist.", success = false)
+        if (!FileObservations.seen(file.toString())) {
             return ToolExecResult(
-                "${Workspace.display(ctx, file)} has not been read. Read it first, then edit it.",
+                "${Workspace.display(ctx, file.toString())} has not been read. Read it first, then edit it.",
                 success = false
             )
         }
@@ -469,99 +487,115 @@ object FileTools : HarnessGroupTools {
         if (find.isEmpty()) return ToolExecResult("Give me the exact text to find.", success = false)
         val replace = (args["replace"]?.jsonPrimitive?.content ?: "")
         val all = (args["all"]?.jsonPrimitive?.booleanOrNull ?: false)
-        val before = file.readText()
+        val before = FileSystem.SYSTEM.read(file) { readUtf8() }
         val occurrences = Regex(Regex.escape(find)).findAll(before).count()
-        if (occurrences == 0) return ToolExecResult("That text is not in ${Workspace.display(ctx, file)}.", success = false)
+        if (occurrences == 0) return ToolExecResult("That text is not in ${Workspace.display(ctx, file.toString())}.", success = false)
         if (occurrences > 1 && !all) {
             return ToolExecResult(
-                "That text appears $occurrences times in ${Workspace.display(ctx, file)}. Add more context or set all=true.",
+                "That text appears $occurrences times in ${Workspace.display(ctx, file.toString())}. Add more context or set all=true.",
                 success = false
             )
         }
         val after = if (all) before.replace(find, replace) else before.replaceFirst(find, replace)
-        Workspace.writeText(ctx, file, after)
-        FileObservations.note(file.path)
+        Workspace.writeText(ctx, file.toString(), after)
+        FileObservations.note(file.toString())
         val diff = Diffs.unified(before, after)
         return ToolExecResult(
-            "Edited ${Workspace.display(ctx, file)} ($occurrences replacement${if (occurrences == 1) "" else "s"}).\n" +
+            "Edited ${Workspace.display(ctx, file.toString())} ($occurrences replacement${if (occurrences == 1) "" else "s"}).\n" +
                 diff.take(4000)
         )
     }
 
     private fun createDirectory(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val dir = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val ok = dir.exists() || dir.mkdirs()
+        val dir = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        val ok = try { FileSystem.SYSTEM.createDirectories(dir); true } catch(e:Exception){false}
         return if (ok) ToolExecResult("Directory ${Workspace.display(ctx, dir)} is ready.") else
             ToolExecResult("Could not create ${Workspace.display(ctx, dir)}.", success = false)
     }
 
     private fun movePath(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val from = Workspace.forWriteFile(ctx, (args["from"]?.jsonPrimitive?.content ?: ""))
-        val to = Workspace.forWriteFile(ctx, (args["to"]?.jsonPrimitive?.content ?: ""))
-        if (!from.exists()) return ToolExecResult("${Workspace.display(ctx, from)} does not exist.", success = false)
-        if (to.exists() && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
-            return ToolExecResult("${Workspace.display(ctx, to)} already exists.", success = false)
+        val from = Workspace.forWrite(ctx, (args["from"]?.jsonPrimitive?.content ?: "").toPath())
+        val to = Workspace.forWrite(ctx, (args["to"]?.jsonPrimitive?.content ?: "").toPath())
+        if (!FileSystem.SYSTEM.exists(from)) return ToolExecResult("${Workspace.display(ctx, from.toString())} does not exist.", success = false)
+        if (FileSystem.SYSTEM.exists(to) && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
+            return ToolExecResult("${Workspace.display(ctx, to.toString())} already exists.", success = false)
         }
-        if (from.isFile && ctx.config.snapshots) Snapshots.capture(ctx, from)
-        to.parentFile?.mkdirs()
-        val ok = if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && to.exists()) {
+        if ((FileSystem.SYSTEM.metadataOrNull(from)?.isRegularFile == true) && ctx.config.snapshots) Snapshots.capture(ctx, from.toString())
+        to.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        val ok = if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && FileSystem.SYSTEM.exists(to)) {
             to.deleteRecursively() && from.renameTo(to)
         } else from.renameTo(to)
         return if (ok) {
-            ToolExecResult("Moved ${Workspace.display(ctx, from)} to ${Workspace.display(ctx, to)}.")
-        } else ToolExecResult("Could not move ${Workspace.display(ctx, from)}.", success = false)
+            ToolExecResult("Moved ${Workspace.display(ctx, from.toString())} to ${Workspace.display(ctx, to.toString())}.")
+        } else ToolExecResult("Could not move ${Workspace.display(ctx, from.toString())}.", success = false)
     }
 
     private fun copyPath(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val from = Workspace.forReadFile(ctx, (args["from"]?.jsonPrimitive?.content ?: ""))
-        val to = Workspace.forWriteFile(ctx, (args["to"]?.jsonPrimitive?.content ?: ""))
-        if (to.exists() && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
-            return ToolExecResult("${Workspace.display(ctx, to)} already exists.", success = false)
+        val from = Workspace.forRead(ctx, (args["from"]?.jsonPrimitive?.content ?: "").toPath())
+        val to = Workspace.forWrite(ctx, (args["to"]?.jsonPrimitive?.content ?: "").toPath())
+        if (FileSystem.SYSTEM.exists(to) && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
+            return ToolExecResult("${Workspace.display(ctx, to.toString())} already exists.", success = false)
         }
-        if (from.isDirectory) {
-            from.copyRecursively(to, overwrite = (args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false))
+        if ((FileSystem.SYSTEM.metadataOrNull(from)?.isDirectory == true)) {
+            run {
+                fun copyWalk(src: Path, dst: Path) {
+                    FileSystem.SYSTEM.createDirectories(dst)
+                    FileSystem.SYSTEM.list(src).forEach { p ->
+                        val childDst = dst / p.name
+                        if (FileSystem.SYSTEM.metadata(p).isDirectory == true) {
+                            copyWalk(p, childDst)
+                        } else {
+                            FileSystem.SYSTEM.copy(p, childDst)
+                        }
+                    }
+                }
+                if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && FileSystem.SYSTEM.exists(to)) FileSystem.SYSTEM.deleteRecursively(to)
+                copyWalk(from, to)
+            }
         } else {
-            to.parentFile?.mkdirs()
-            from.copyTo(to, overwrite = (args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false))
+            to.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+            run { if ((args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false) && FileSystem.SYSTEM.exists(to)) FileSystem.SYSTEM.delete(to); FileSystem.SYSTEM.copy(from, to) }
         }
-        return ToolExecResult("Copied ${Workspace.display(ctx, from)} to ${Workspace.display(ctx, to)}.")
+        val bytes = writer.close()
+        FileSystem.SYSTEM.write(archive) { write(bytes) }
+        return ToolExecResult("Copied ${Workspace.display(ctx, from.toString())} to ${Workspace.display(ctx, to.toString())}.")
     }
 
     private fun deletePath(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val path = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        if (!path.exists()) return ToolExecResult("${Workspace.display(ctx, path)} does not exist.", success = false)
+        val path = Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+        if (!FileSystem.SYSTEM.exists(path)) return ToolExecResult("${Workspace.display(ctx, path.toString())} does not exist.", success = false)
         if (path.isDirectory && !(args["recursive"]?.jsonPrimitive?.booleanOrNull ?: false)) {
-            val children = path.listFiles()?.size ?: 0
+            val children = FileSystem.SYSTEM.listOrNull(path)?.size ?: 0
             if (children > 0) {
                 return ToolExecResult(
-                    "${Workspace.display(ctx, path)} holds $children entr${if (children == 1) "y" else "ies"}. " +
+                    "${Workspace.display(ctx, path.toString())} holds $children entr${if (children == 1) "y" else "ies"}. " +
                         "Set recursive=true to delete it all.",
                     success = false
                 )
             }
         }
-        if (!path.isDirectory && ctx.config.snapshots) Snapshots.capture(ctx, path)
-        val ok = if (path.isDirectory) path.deleteRecursively() else path.delete()
-        return if (ok) ToolExecResult("Deleted ${Workspace.display(ctx, path)}.")
-        else ToolExecResult("Could not delete ${Workspace.display(ctx, path)}.", success = false)
+        if (!path.isDirectory && ctx.config.snapshots) Snapshots.capture(ctx, path.toString())
+        val ok = try { FileSystem.SYSTEM.deleteRecursively(path); true } catch(e:Exception){false}
+        return if (ok) ToolExecResult("Deleted ${Workspace.display(ctx, path.toString())}.")
+        else ToolExecResult("Could not delete ${Workspace.display(ctx, path.toString())}.", success = false)
     }
 
     private fun fileInfo(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val path = Workspace.resolveFile((args["path"]?.jsonPrimitive?.content ?: ""))
-        if (!path.exists()) return ToolExecResult("${Workspace.display(ctx, path)} does not exist.", success = false)
-        val inside = Workspace.isInside(path, File(HarnessRuntime.workspacePath()))
-        val snapshots = Snapshots.history(ctx, path.canonicalPath, 5)
+        val path = Workspace.resolveFile((args["path"]?.jsonPrimitive?.content ?: "")).toString().toPath()
+        if (!FileSystem.SYSTEM.exists(path)) return ToolExecResult("${Workspace.display(ctx, path.toString())} does not exist.", success = false)
+        val inside = Workspace.isInside(path.toString(), HarnessRuntime.workspacePath())
+        val snapshots = Snapshots.history(ctx, path.toString(), 5)
         val sb = StringBuilder()
-        sb.append("${Workspace.display(ctx, path)}\n")
+        sb.append("${Workspace.display(ctx, path.toString())}\n")
         sb.append("Absolute: ${path.path}\n")
         sb.append("Kind: ${if (path.isDirectory) "directory" else "file"}\n")
         if (path.isFile) {
             sb.append("Size: ${Workspace.humanSize(path.size)} (${path.size} bytes)\n")
             sb.append("Lines: ${Workspace.countLines(path)}\n")
         }
-        sb.append("Modified: ${java.util.Date(path.lastModified())}\n")
+        sb.append("Modified: ${java.util.Date(FileSystem.SYSTEM.metadataOrNull(path)?.lastModifiedAtMillis ?: 0L)}\n")
         sb.append("Inside workspace: $inside\n")
-        sb.append("Readable: ${Workspace.readable(ctx, path)}, writable: ${Workspace.writable(ctx, path)}\n")
+        sb.append("Readable: ${Workspace.readable(ctx, path.toString())}, writable: ${Workspace.writable(ctx, path.toString())}\n")
         sb.append("Snapshots: ${snapshots.size}${if (snapshots.isNotEmpty()) " (latest ${snapshots.first().id})" else ""}")
         return ToolExecResult(sb.toString())
     }
@@ -582,19 +616,19 @@ object FileTools : HarnessGroupTools {
                 when (action) {
                     "rename" -> {
                         if (find.isEmpty()) return ToolExecResult("Renaming needs find and replace.", success = false)
-                        val file = Workspace.forWriteFile(ctx, raw)
+                        val file = Workspace.forWrite(ctx, raw).toPath()
                         val newName = if (regex) file.name.replace(Regex(find), replace) else file.name.replace(find, replace)
-                        val to = File(file.parentFile, newName)
-                        if (file.isFile && ctx.config.snapshots) Snapshots.capture(ctx, file)
-                        if (file.renameTo(to)) done.add("${file.name} → $newName") else done.add("${file.name} (failed)")
+                        val to = (file.parent!! / newName)
+                        if ((FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile == true) && ctx.config.snapshots) Snapshots.capture(ctx, file.toString())
+                        if (try { FileSystem.SYSTEM.atomicMove(file, to); true } catch(e:Exception){false}) done.add("${file.name} → $newName") else done.add("${file.name} (failed)")
                     }
                     "copy", "move" -> {
                         if (target.isBlank()) return ToolExecResult("Copy and move need target_dir.", success = false)
-                        val file = Workspace.forReadFile(ctx, raw)
-                        val destination = Workspace.forWriteFile(ctx, "$target/${file.name}")
-                        destination.parentFile?.mkdirs()
+                        val file = Workspace.forRead(ctx, raw).toPath()
+                        val destination = Workspace.forWrite(ctx, "$target/${file.name}").toPath()
+                        destination.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
                         if (action == "copy") {
-                            if (file.isDirectory) file.copyRecursively(destination, overwrite = true)
+                            if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) file.copyRecursively(destination, overwrite = true)
                             else file.copyTo(destination, overwrite = true)
                             done.add("${file.name} copied")
                         } else {
@@ -603,9 +637,9 @@ object FileTools : HarnessGroupTools {
                         }
                     }
                     "delete" -> {
-                        val file = Workspace.forWriteFile(ctx, raw)
-                        if (file.isFile && ctx.config.snapshots) Snapshots.capture(ctx, file)
-                        val ok = if (file.isDirectory) file.deleteRecursively() else file.delete()
+                        val file = Workspace.forWrite(ctx, raw).toPath()
+                        if ((FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile == true) && ctx.config.snapshots) Snapshots.capture(ctx, file.toString())
+                        val ok = if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) FileSystem.SYSTEM.deleteRecursively(file) else FileSystem.SYSTEM.delete(file)
                         done.add("${file.name} ${if (ok) "deleted" else "(failed)"}")
                     }
                     else -> return ToolExecResult("action must be rename, copy, move or delete.", success = false)
@@ -615,21 +649,23 @@ object FileTools : HarnessGroupTools {
                 done.add("$raw (${e.message})")
             }
         }
+        val bytes = writer.close()
+        FileSystem.SYSTEM.write(archive) { write(bytes) }
         return ToolExecResult("$action on ${done.size} path(s):\n" + done.joinToString("\n"))
     }
 
     private fun diffFiles(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val path = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+        val path = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
         if (path.isDirectory) return ToolExecResult("Point me at a file, not a directory.", success = false)
-        val before = path.readText()
+        val before = FileSystem.SYSTEM.read(path) { readUtf8() }
         val after = when {
             args.containsKey("content") -> (args["content"]?.jsonPrimitive?.content ?: "")
-            (args["other"]?.jsonPrimitive?.content ?: "").isNotBlank() -> Workspace.readText(Workspace.forReadFile(ctx, (args["other"]?.jsonPrimitive?.content ?: "")))
+            (args["other"]?.jsonPrimitive?.content ?: "").isNotBlank() -> Workspace.readText(Workspace.forRead(ctx, (args["other"]?.jsonPrimitive?.content ?: "").toPath()))
             else -> return ToolExecResult("Give me either other (a file) or content (text) to compare against.", success = false)
         }
         val diff = Diffs.unified(before, after)
-        return if (diff.isBlank()) ToolExecResult("${Workspace.display(ctx, path)} is identical to what you passed.")
-        else ToolExecResult("Diff for ${Workspace.display(ctx, path)}:\n" + diff.take(8000))
+        return if (diff.isBlank()) ToolExecResult("${Workspace.display(ctx, path.toString())} is identical to what you passed.")
+        else ToolExecResult("Diff for ${Workspace.display(ctx, path.toString())}:\n" + diff.take(8000))
     }
 
     private fun fileHistory(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
@@ -638,7 +674,7 @@ object FileTools : HarnessGroupTools {
         val entries = if (raw.isBlank()) {
             Snapshots.all(ctx).takeLast(limit).reversed()
         } else {
-            Workspace.resolveFile(raw).let { Snapshots.history(ctx, it.canonicalPath, limit) }
+            Workspace.resolveFile(raw).let { Snapshots.history(ctx, it.toString(), limit) }
         }
         if (entries.isEmpty()) return ToolExecResult("No snapshots yet.")
         val sb = StringBuilder("Snapshots (${entries.size}):\n")
@@ -651,14 +687,14 @@ object FileTools : HarnessGroupTools {
     }
 
     private fun restoreFile(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val path = Workspace.resolveFile((args["path"]?.jsonPrimitive?.content ?: ""))
+        val path = Workspace.resolveFile((args["path"]?.jsonPrimitive?.content ?: "")).toString().toPath()
         val id = (args["snapshot_id"]?.jsonPrimitive?.content ?: "")
         val entry = if (id.isNotBlank()) {
             Snapshots.all(ctx).firstOrNull { it.id == id }
                 ?: return ToolExecResult("No snapshot with id $id.", success = false)
         } else {
-            Snapshots.latest(ctx, path.canonicalPath)
-                ?: return ToolExecResult("No snapshots for ${Workspace.display(ctx, path)}.", success = false)
+            Snapshots.latest(ctx, path.toString())
+                ?: return ToolExecResult("No snapshots for ${Workspace.display(ctx, path.toString())}.", success = false)
         }
         val restored = Snapshots.restore(ctx, entry.id)
         return ToolExecResult("Restored ${Workspace.display(ctx, restored)} from snapshot ${entry.id} (${java.util.Date(entry.at)}).")
@@ -666,59 +702,69 @@ object FileTools : HarnessGroupTools {
 
     private fun zipPaths(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = (args["action"]?.jsonPrimitive?.content ?: "zip").lowercase()
-        val archive = if (action == "unzip") Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        else Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+        val archive = if (action == "unzip") Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toPath()
+        else Workspace.forWrite(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toPath()
         return if (action == "unzip") unzip(ctx, archive) else zip(ctx, archive, args["paths"]?.jsonArray)
     }
 
-    private fun zip(ctx: HarnessCtx, archive: File, paths: JsonArray?): ToolExecResult {
-        val roots = mutableListOf<File>()
+    private fun zip(ctx: HarnessCtx, archive: Path, paths: JsonArray?): ToolExecResult {
+        val roots = mutableListOf<Path>()
         if (paths != null) {
             for (i in 0 until paths.size) {
                 val raw = paths.optString(i, "")
-                if (raw.isNotBlank()) roots.add(Workspace.forReadFile(ctx, raw))
+                if (raw.isNotBlank()) roots.add(Workspace.forRead(ctx, raw).toPath())
             }
         }
         if (roots.isEmpty()) return ToolExecResult("Give me the paths to pack.", success = false)
-        archive.parentFile?.mkdirs()
-        if (ctx.config.snapshots && archive.exists()) Snapshots.capture(ctx, archive)
+        archive.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        if (ctx.config.snapshots && FileSystem.SYSTEM.exists(archive)) Snapshots.capture(ctx, archive.toString())
         var count = 0
-        ZipOutputStream(archive.outputStream().buffered()).use { zip ->
-            roots.forEach { root ->
-                val base = if (root.isDirectory) root else root.parentFile
-                val files = if (root.isDirectory) root.walkTopDown().filter { it.isFile }.toList() else listOf(root)
-                files.forEach { file ->
-                    val entryName = base.toPath().relativize(file.toPath()).toString().replace('\\', '/')
-                    zip.putNextEntry(ZipEntry(entryName))
-                    file.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
-                    count++
+        val writer = ZipWriter()
+        roots.forEach { root ->
+            val base = if (FileSystem.SYSTEM.metadataOrNull(root)?.isDirectory == true) root else root.parent!!
+            val files = mutableListOf<Path>()
+            fun walk(p: Path) {
+                FileSystem.SYSTEM.listOrNull(p)?.forEach {
+                    if (FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory == true) walk(it)
+                    else if (FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true) files.add(it)
                 }
             }
+            if (FileSystem.SYSTEM.metadataOrNull(root)?.isDirectory == true) walk(root) else files.add(root)
+            
+            files.forEach { file ->
+                val entryName = file.toString().removePrefix(base.toString()).removePrefix("/").replace('\', '/')
+                writer.addEntry(entryName, FileSystem.SYSTEM.read(file) { readByteArray() })
+                count++
+            }
         }
-        return ToolExecResult("Packed $count file(s) into ${Workspace.display(ctx, archive)} (${Workspace.humanSize(archive.length())}).")
+        val bytes = writer.close()
+        FileSystem.SYSTEM.write(archive) { write(bytes) }
+        return ToolExecResult("Packed $count file(s) into ${Workspace.display(ctx, archive.toString())} (${Workspace.humanSize(FileSystem.SYSTEM.metadata(archive).size ?: 0L)}).")
     }
 
-    private fun unzip(ctx: HarnessCtx, archive: File): ToolExecResult {
-        val target = File(archive.parentFile, archive.nameWithoutExtension)
-        val root = Workspace.forWriteFile(ctx, target.path)
-        root.mkdirs()
+    private fun unzip(ctx: HarnessCtx, archive: Path): ToolExecResult {
+        val target = archive.parent!! / archive.name.substringBeforeLast('.')
+        val root = Workspace.forWrite(ctx, target.toString()).toPath()
+        FileSystem.SYSTEM.createDirectories(root)
         var count = 0
-        ZipInputStream(archive.inputStream().buffered()).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null) {
-                val out = File(root, entry.name)
-                if (!Workspace.isInside(out, root)) return ToolExecResult("That archive tries to escape the folder.", success = false)
-                if (entry.isDirectory) out.mkdirs() else {
-                    out.parentFile?.mkdirs()
-                    out.outputStream().use { zip.copyTo(it) }
-                    count++
+        FileSystem.SYSTEM.openZip(archive).use { zipFs ->
+            fun walk(dir: Path) {
+                zipFs.list(dir).forEach { path ->
+                    val out = root / path.toString().removePrefix("/")
+                    if (!Workspace.isInside(out.toString(), root.toString())) return@forEach
+                    if (zipFs.metadata(path).isDirectory == true) {
+                        FileSystem.SYSTEM.createDirectories(out)
+                        walk(path)
+                    } else {
+                        out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+                        FileSystem.SYSTEM.write(out) { write(zipFs.read(path) { readByteArray() }) }
+                        count++
+                    }
                 }
-                zip.closeEntry()
-                entry = zip.nextEntry
             }
+            walk("/".toPath())
         }
-        return ToolExecResult("Unpacked $count file(s) into ${Workspace.display(ctx, root)}.")
+        return ToolExecResult("Unpacked $count file(s) into ${Workspace.display(ctx, root.toString())}.")
     }
 }
 
@@ -739,5 +785,5 @@ internal object FileObservations {
 
     fun seen(path: String): Boolean = seen.contains(key(path))
 
-    private fun key(path: String): String = runCatching { File(path).canonicalPath }.getOrDefault(path)
+    private fun key(path: String): String = path
 }

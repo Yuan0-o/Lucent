@@ -4,8 +4,10 @@ import kotlin.io.encoding.Base64
 import kotlinx.serialization.json.*
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
-import java.io.File
-import java.util.zip.ZipInputStream
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.use
 
 object OfficeConvertTools : HarnessGroupTools {
 
@@ -66,21 +68,21 @@ object OfficeConvertTools : HarnessGroupTools {
         else -> null
     }
 
-    private fun sofficeCall(ctx: HarnessCtx, input: File, target: String, outDir: File): ShellOutcome {
+    private fun sofficeCall(ctx: HarnessCtx, input: Path, target: String, outDir: Path): ShellOutcome {
         val command = buildString {
             append(SOFFICE)
             append(" --headless --norestore --nolockcheck --nodefault --nofirststartwizard")
             append(" --convert-to ").append(target)
-            append(" --outdir '").append(outDir.path.replace("'", "'\\''")).append("'")
-            append(" '").append(input.path.replace("'", "'\\''")).append("'")
+            append(" --outdir '").append(outDir.toString().replace("'", "'\\''")).append("'")
+            append(" '").append(input.toString().replace("'", "'\\''")).append("'")
             append(" 2>&1")
         }
-        return HarnessRuntime.runShell(command, outDir.path, 600, HarnessRuntime.builtinOnlyEnv())
+        return HarnessRuntime.runShell(command, outDir.toString(), 600, HarnessRuntime.builtinOnlyEnv())
     }
 
     private fun convert(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val input = try {
-            Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -89,12 +91,12 @@ object OfficeConvertTools : HarnessGroupTools {
         if (!HarnessRuntime.shellReady()) {
             return ToolExecResult("Converting needs a shell: install the libreoffice plugin first.", success = false)
         }
-        val outDir = if ((args["out"]?.jsonPrimitive?.content ?: "").isBlank()) input.parentFile
-        else Workspace.forWriteFile(ctx, (args["out"]?.jsonPrimitive?.content ?: "")).parentFile ?: input.parentFile
-        outDir.mkdirs()
+        val outDir = if ((args["out"]?.jsonPrimitive?.content ?: "").isBlank()) input.parent!!
+        else Workspace.forWrite(ctx, (args["out"]?.jsonPrimitive?.content ?: "").toPath()).parentFile ?: input.parent!!
+        FileSystem.SYSTEM.createDirectories(outDir)
         val outcome = sofficeCall(ctx, input, target, outDir)
-        val produced = outDir.listFiles()?.firstOrNull {
-            it.name.startsWith(input.nameWithoutExtension + ".") && it.extension.equals(target, ignoreCase = true)
+        val produced = FileSystem.SYSTEM.listOrNull(outDir)?.firstOrNull {
+            it.name.startsWith(input.name.substringBeforeLast(".") + ".") && it.name.substringAfterLast(".", "").equals(target, ignoreCase = true)
         }
         if (produced == null) {
             return ToolExecResult(
@@ -104,33 +106,33 @@ object OfficeConvertTools : HarnessGroupTools {
         }
         val asked = (args["out"]?.jsonPrimitive?.content ?: "")
         val finalFile = if (asked.isNotBlank()) {
-            val wanted = Workspace.forWriteFile(ctx, asked)
+            val wanted = Workspace.forWrite(ctx, asked).toPath()
             wanted.parentFile?.mkdirs()
-            produced.copyTo(wanted, overwrite = true)
+            FileSystem.SYSTEM.copy(produced, wanted)
             wanted
         } else produced
         return ToolExecResult(
-            "Converted ${Workspace.display(ctx, input)} to ${Workspace.display(ctx, finalFile)} " +
-                "(${Workspace.humanSize(finalFile.length())})."
+            "Converted ${Workspace.display(ctx, input.toString())} to ${Workspace.display(ctx, finalFile.toString())} " +
+                "(${Workspace.humanSize((FileSystem.SYSTEM.metadata(finalFile).size ?: 0L))})."
         )
     }
 
     private suspend fun render(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val input = try {
-            Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
         if (!HarnessRuntime.shellReady()) {
             return ToolExecResult("Rendering needs a shell: install the libreoffice plugin first.", success = false)
         }
-        val work = File(HarnessRuntime.subDirPath("render"), input.nameWithoutExtension)
-        work.mkdirs()
-        val pdf = if (input.extension.equals("pdf", true)) input else {
+        val work = HarnessRuntime.subDirPath("render").toPath() / input.name.substringBeforeLast(".")
+        FileSystem.SYSTEM.createDirectories(work)
+        val pdf = if (input.name.substringAfterLast(".", "").equals("pdf", true)) input else {
             val outcome = sofficeCall(ctx, input, "pdf", work)
-            work.listFiles()?.firstOrNull { it.extension.equals("pdf", true) }
+            FileSystem.SYSTEM.listOrNull(work)?.firstOrNull { it.extension.equals("pdf", true) }
                 ?: return ToolExecResult(
-                    "Could not render ${Workspace.display(ctx, input)}.\n" + ctx.limit(outcome.text).take(2000),
+                    "Could not render ${Workspace.display(ctx, input.toString())}.\n" + ctx.limit(outcome.text).take(2000),
                     success = false
                 )
         }
@@ -142,9 +144,9 @@ object OfficeConvertTools : HarnessGroupTools {
         for (page in pages.take(4)) {
             val bytes = host?.renderPdfPage(pdf.path, page, width)
             if (bytes == null || bytes.isEmpty()) break
-            val file = File(work, "${input.nameWithoutExtension}-p$page.png")
-            file.writeBytes(bytes)
-            written.add(Workspace.display(ctx, file))
+            val file = work / "${input.name.substringBeforeLast(".")}-p$page.png"
+            FileSystem.SYSTEM.write(file) { write(bytes) }
+            written.add(Workspace.display(ctx, file.toString()))
             images.add(
                 ToolImage(
                     "image/png",
@@ -155,7 +157,7 @@ object OfficeConvertTools : HarnessGroupTools {
         }
         if (images.isEmpty()) {
             return ToolExecResult(
-                "Converted to PDF (${Workspace.display(ctx, pdf)}) but this build cannot draw PDF pages to images.",
+                "Converted to PDF (${Workspace.display(ctx, pdf.toString())}) but this build cannot draw PDF pages to images.",
                 success = false
             )
         }
@@ -185,12 +187,12 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun doctor(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = try {
-            Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
-        if (!file.extension.lowercase().let { it == "docx" || it == "xlsx" || it == "pptx" || it == "odt" || it == "zip" }) {
-            return ToolExecResult("${Workspace.display(ctx, file)} is not an Office package.", success = false)
+        if (!file.name.substringAfterLast(".", "").lowercase().let { it == "docx" || it == "xlsx" || it == "pptx" || it == "odt" || it == "zip" }) {
+            return ToolExecResult("${Workspace.display(ctx, file.toString())} is not an Office package.", success = false)
         }
         val parts = mutableListOf<String>()
         val bad = mutableListOf<String>()
@@ -213,10 +215,10 @@ object OfficeConvertTools : HarnessGroupTools {
                 }
             }
         } catch (e: Exception) {
-            return ToolExecResult("${Workspace.display(ctx, file)} could not be opened: ${e.message}", success = false)
+            return ToolExecResult("${Workspace.display(ctx, file.toString())} could not be opened: ${e.message}", success = false)
         }
         val sb = StringBuilder()
-        sb.append("${Workspace.display(ctx, file)} — ${parts.size} parts, ${Workspace.humanSize(file.length())}\n")
+        sb.append("${Workspace.display(ctx, file.toString())} — ${parts.size} parts, ${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: 0L))}\n")
         sb.append("Required parts: ")
         val required = listOf("[Content_Types].xml", "_rels/.rels")
         sb.append(required.joinToString(", ") { "$it=${if (parts.contains(it)) "ok" else "missing"}" }).append('\n')
@@ -230,18 +232,18 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun documentText(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = try {
-            Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
-        return when (file.extension.lowercase()) {
+        return when (file.name.substringAfterLast(".", "").lowercase()) {
             "pdf" -> {
                 val text = HarnessRuntime.host?.let { host -> kotlinx.coroutines.runBlocking { host.readPdfText(file.path) } }.orEmpty()
                 if (text.isBlank()) ToolExecResult("No text could be pulled out of that PDF here.", success = false)
                 else ToolExecResult(ctx.limit(text))
             }
             else -> try {
-                ToolExecResult(ctx.limit(Workspace.readText(file, 512 * 1024)))
+                ToolExecResult(ctx.limit(Workspace.readText(file.toString(), 512 * 1024)))
             } catch (e: HarnessError) {
                 ToolExecResult(e.message ?: "That file is not text", success = false)
             }

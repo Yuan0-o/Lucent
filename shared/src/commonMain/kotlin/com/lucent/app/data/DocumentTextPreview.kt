@@ -1,8 +1,7 @@
 package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
-import java.io.ByteArrayInputStream
-import java.util.zip.ZipInputStream
+import okio.Path.Companion.toPath
 
 object DocumentText {
 
@@ -79,14 +78,26 @@ object DocumentText {
     private fun zipEntries(bytes: ByteArray, wanted: (String) -> Boolean): Map<String, ByteArray> {
         val out = LinkedHashMap<String, ByteArray>()
         try {
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                while (true) {
-                    val entry = zip.nextEntry ?: break
-                    if (!entry.isDirectory && wanted(entry.name)) {
-                        out[entry.name] = zip.readBytes()
+            val tempPath = okio.Path.Companion.toPath("temp_zip_${kotlin.random.Random.nextInt()}.zip")
+            okio.FileSystem.SYSTEM.write(tempPath) { write(bytes) }
+            try {
+                okio.FileSystem.SYSTEM.openZip(tempPath).use { zipFs ->
+                    fun walk(dir: okio.Path) {
+                        zipFs.list(dir).forEach { path ->
+                            if (zipFs.metadata(path).isDirectory == true) {
+                                walk(path)
+                            } else {
+                                val name = path.toString().removePrefix("/")
+                                if (wanted(name)) {
+                                    out[name] = zipFs.read(path) { readByteArray() }
+                                }
+                            }
+                        }
                     }
-                    zip.closeEntry()
+                    walk("/".toPath())
                 }
+            } finally {
+                okio.FileSystem.SYSTEM.delete(tempPath)
             }
         } catch (t: Throwable) {
         }

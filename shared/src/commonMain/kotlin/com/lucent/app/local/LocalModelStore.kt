@@ -4,10 +4,12 @@ import com.lucent.app.platform.filesDir
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.LocalSecrets
 import kotlinx.serialization.json.*
-import java.io.File
-import java.io.IOException
-import java.io.InputStream
-import java.util.zip.ZipInputStream
+import okio.Path
+import okio.FileSystem
+import okio.Path.Companion.toPath
+import okio.use
+import okio.buffer
+import okio.IOException
 
 object LocalModelStore {
 
@@ -30,31 +32,31 @@ object LocalModelStore {
 
     data class ModelIndex(val slots: List<ModelSlot>, val activeId: String?)
 
-    private fun dir(context: PlatformContext): File = File(context.filesDir, DIR)
+    private fun dir(context: PlatformContext): Path = context.filesDir.toPath() / DIR
 
 
     @Synchronized
     fun index(context: PlatformContext): ModelIndex {
         val dir = dir(context)
-        val indexFile = File(dir, INDEX_FILE)
+        val indexFile = (dir / INDEX_FILE)
 
-        if (!indexFile.exists()) {
-            val legacy = File(dir, LEGACY_FILE_NAME)
-            if (legacy.exists() && legacy.length() > 0L) {
-                val legacyName = File(dir, LEGACY_NAME_FILE).let {
-                    if (it.exists()) it.readText().trim().ifBlank { null } else null
+        if (!FileSystem.SYSTEM.exists(indexFile)) {
+            val legacy = (dir / LEGACY_FILE_NAME)
+            if (FileSystem.SYSTEM.exists(legacy) && (FileSystem.SYSTEM.metadata(legacy).size ?: 0L) > 0L) {
+                val legacyName = (dir / LEGACY_NAME_FILE).let {
+                    if (FileSystem.SYSTEM.exists(it)) FileSystem.SYSTEM.read(it) { readUtf8() }.trim().ifBlank { null } else null
                 } ?: "model.gguf"
                 val slot = ModelSlot(id = newId(), name = legacyName, fileName = LEGACY_FILE_NAME)
                 val migrated = ModelIndex(listOf(slot), slot.id)
                 writeIndex(context, migrated)
-                File(dir, LEGACY_NAME_FILE).delete()
+                (dir / LEGACY_NAME_FILE).delete()
                 return migrated
             }
             return ModelIndex(emptyList(), null)
         }
 
         return try {
-            val raw = indexFile.readText()
+            val raw = FileSystem.SYSTEM.read(indexFile) { readUtf8() }
             val decrypted = LocalSecrets.decrypt(raw)
             if (decrypted.isEmpty() && raw.isNotEmpty()) return rebuildFromFiles(context)
             val root = Json.parseToJsonElement(decrypted).jsonObject
@@ -63,7 +65,7 @@ object LocalModelStore {
                 val o = arr[i].jsonObject
                 val id = (o["id"]?.jsonPrimitive?.content ?: "").ifBlank { return@mapNotNull null }
                 val fileName = (o["file"]?.jsonPrimitive?.content ?: "").ifBlank { return@mapNotNull null }
-                if (!File(dir, fileName).exists()) return@mapNotNull null
+                if (!(dir / fileName).exists()) return@mapNotNull null
                 ModelSlot(id = id, name = o["name"]?.jsonPrimitive?.content ?: "model.gguf", fileName = fileName)
             }
             val active = (root["active"]?.jsonPrimitive?.content ?: "").ifBlank { null }
@@ -78,8 +80,8 @@ object LocalModelStore {
     @Synchronized
     private fun rebuildFromFiles(context: PlatformContext): ModelIndex {
         val dir = dir(context)
-        val files = dir.listFiles()?.filter {
-            it.isFile && it.name.lowercase().endsWith(".gguf") && it.length() > 0L
+        val files = FileSystem.SYSTEM.listOrNull(dir)?.filter {
+            (FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true) && it.name.lowercase().endsWith(".gguf") && (FileSystem.SYSTEM.metadata(it).size ?: 0L) > 0L
         }.orEmpty().sortedBy { it.name }
         if (files.isEmpty()) return ModelIndex(emptyList(), null)
         val slots = files.take(MAX_MODELS).map { f ->
@@ -97,7 +99,7 @@ object LocalModelStore {
     @Synchronized
     private fun writeIndex(context: PlatformContext, idx: ModelIndex) {
         val dir = dir(context)
-        if (!dir.exists()) dir.mkdirs()
+        if (!FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.createDirectories(dir)
         val arr = buildJsonArray {
             idx.slots.forEach { s ->
                 add(buildJsonObject {
@@ -111,7 +113,7 @@ object LocalModelStore {
             put("slots", arr)
             idx.activeId?.let { put("active", it) }
         }
-        File(dir, INDEX_FILE).writeText(LocalSecrets.encrypt(Json.encodeToString(JsonElement.serializer(), root)))
+        (dir / INDEX_FILE).writeText(LocalSecrets.encrypt(Json.encodeToString(JsonElement.serializer(), root)))
     }
 
 
@@ -122,23 +124,23 @@ object LocalModelStore {
         return idx.slots.firstOrNull { it.id == idx.activeId }
     }
 
-    fun modelFile(context: PlatformContext, id: String): File? =
-        index(context).slots.firstOrNull { it.id == id }?.let { File(dir(context), it.fileName) }
+    fun modelFile(context: PlatformContext, id: String): Path? =
+        index(context).slots.firstOrNull { it.id == id }?.let { (dir(context) / it.fileName) }
 
-    fun activeModelFile(context: PlatformContext): File? {
+    fun activeModelFile(context: PlatformContext): Path? {
         val slot = activeSlot(context) ?: return null
-        val f = File(dir(context), slot.fileName)
-        return if (f.exists() && f.length() > 0L) f else null
+        val f = (dir(context) / slot.fileName)
+        return if (FileSystem.SYSTEM.exists(f) && (FileSystem.SYSTEM.metadata(f).size ?: 0L) > 0L) f else null
     }
 
     fun hasModel(context: PlatformContext): Boolean = activeModelFile(context) != null
 
     fun displayName(context: PlatformContext): String? = activeSlot(context)?.name
 
-    fun modelSizeBytes(context: PlatformContext): Long = activeModelFile(context)?.length() ?: 0L
+    fun modelSizeBytes(context: PlatformContext): Long = activeModelFile(context)?.let { FileSystem.SYSTEM.metadataOrNull(it)?.size } ?: 0L
 
     fun modelSizeBytes(context: PlatformContext, id: String): Long =
-        modelFile(context, id)?.takeIf { it.exists() }?.length() ?: 0L
+        modelFile(context, id)?.takeIf { FileSystem.SYSTEM.exists(it) }?.let { FileSystem.SYSTEM.metadataOrNull(it)?.size } ?: 0L
 
     fun canImportMore(context: PlatformContext): Boolean = slots(context).size < MAX_MODELS
 
@@ -166,11 +168,11 @@ object LocalModelStore {
         if (existing.slots.size >= MAX_MODELS) throw TooManyModelsException()
 
         val dir = dir(context)
-        if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create model directory")
+        if (!FileSystem.SYSTEM.exists(dir) && !FileSystem.SYSTEM.createDirectories(dir)) throw IOException("Could not create model directory")
 
         val id = newId()
         val fileName = "model_$id.gguf"
-        val tmp = File(dir, "$fileName.tmp")
+        val tmp = (dir / "$fileName.tmp")
         var pickedName = source.displayName(context) ?: "model.gguf"
 
         try {
@@ -179,37 +181,57 @@ object LocalModelStore {
                 val headRead = readUpTo(raw, head)
 
                 if (headRead == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()) {
-                    val stitched = StitchedInputStream(head, headRead, raw)
-                    val zip = ZipInputStream(stitched)
-                    var entry = zip.nextEntry
-                    var found = false
-                    while (entry != null) {
-                        if (!entry.isDirectory && entry.name.lowercase().endsWith(".gguf")) {
-                            pickedName = entry.name.substringAfterLast('/')
-                            copyVerifyingGguf(zip, tmp)
-                            found = true
-                            break
+                    val zipTemp = dir / "temp_zip_${kotlin.random.Random.nextInt()}.zip"
+                    FileSystem.SYSTEM.write(zipTemp) {
+                        write(head, 0, headRead)
+                        val buf = ByteArray(1 shl 16)
+                        while (true) {
+                            val n = raw.read(buf)
+                            if (n < 0) break
+                            write(buf, 0, n)
                         }
-                        zip.closeEntry()
-                        entry = zip.nextEntry
                     }
-                    if (!found) throw NoGgufInZipException()
+                    try {
+                        var found = false
+                        FileSystem.SYSTEM.openZip(zipTemp).use { zipFs ->
+                            fun walk(p: Path) {
+                                if (found) return
+                                zipFs.listOrNull(p)?.forEach { child ->
+                                    if (zipFs.metadataOrNull(child)?.isDirectory == true) walk(child)
+                                    else if (child.name.lowercase().endsWith(".gguf")) {
+                                        pickedName = child.name
+                                        FileSystem.SYSTEM.write(tmp) {
+                                            write(zipFs.read(child) { readByteArray() })
+                                        }
+                                        val head2 = ByteArray(4)
+                                        val n = FileSystem.SYSTEM.read(tmp) { read(head2) }
+                                        if (n < 4 || !head2.contentEquals(GGUF_MAGIC)) throw NotGgufException()
+                                        found = true
+                                    }
+                                }
+                            }
+                            walk("/".toPath())
+                        }
+                        if (!found) throw NoGgufInZipException()
+                    } finally {
+                        FileSystem.SYSTEM.delete(zipTemp)
+                    }
                 } else {
                     if (headRead < 4 || !head.contentEquals(GGUF_MAGIC)) throw NotGgufException()
                     copyPrefixed(head, headRead, raw, tmp)
                 }
             } ?: throw IOException("Could not open the selected file")
 
-            val target = File(dir, fileName)
-            if (target.exists()) target.delete()
-            if (!tmp.renameTo(target)) throw IOException("Could not finalize the model file")
+            val target = (dir / fileName)
+            if (FileSystem.SYSTEM.exists(target)) FileSystem.SYSTEM.delete(target)
+            if (!(try { FileSystem.SYSTEM.atomicMove(tmp, target); true } catch (e: Exception) { false })) throw IOException("Could not finalize the model file")
 
             val name = (customName?.trim()?.take(60)).let { if (it.isNullOrBlank()) pickedName else it }
             val slot = ModelSlot(id = id, name = name, fileName = fileName)
             writeIndex(context, ModelIndex(existing.slots + slot, slot.id))
             return slot
         } finally {
-            if (tmp.exists()) tmp.delete()
+            if (FileSystem.SYSTEM.exists(tmp)) FileSystem.SYSTEM.delete(tmp)
         }
     }
 
@@ -217,8 +239,8 @@ object LocalModelStore {
     fun delete(context: PlatformContext, id: String) {
         val idx = index(context)
         val slot = idx.slots.firstOrNull { it.id == id } ?: return
-        File(dir(context), slot.fileName).delete()
-        File(dir(context), "${slot.fileName}.tmp").delete()
+        (dir(context) / slot.fileName).delete()
+        (dir(context) / "${slot.fileName}.tmp").delete()
         deleteMmproj(context, id)
         val remaining = idx.slots.filter { it.id != id }
         val newActive = if (idx.activeId == id) remaining.firstOrNull()?.id else idx.activeId
@@ -235,7 +257,7 @@ object LocalModelStore {
                     put("id", s.id)
                     put("name", s.name)
                     put("file", s.fileName)
-                    put("size", File(dir(context), s.fileName).length())
+                    put("size", (dir(context) / s.fileName).length())
                 })
             }
         }
@@ -247,22 +269,22 @@ object LocalModelStore {
     }
 
     fun totalModelBytes(context: PlatformContext): Long =
-        slots(context).sumOf { File(dir(context), it.fileName).length() }
+        slots(context).sumOf { (dir(context) / it.fileName).length() }
 
-    fun modelFileForSlot(context: PlatformContext, slot: ModelSlot): File? =
-        File(dir(context), slot.fileName).takeIf { it.exists() && it.length() > 0L }
+    fun modelFileForSlot(context: PlatformContext, slot: ModelSlot): Path? =
+        (dir(context) / slot.fileName).takeIf { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadata(it).size ?: 0L) > 0L }
 
     @Synchronized
-    fun prepareRestoreTarget(context: PlatformContext, fileName: String): File {
+    fun prepareRestoreTarget(context: PlatformContext, fileName: String): Path {
         val d = dir(context)
-        if (!d.exists()) d.mkdirs()
-        return File(d, File(fileName).name)
+        if (!FileSystem.SYSTEM.exists(d)) FileSystem.SYSTEM.createDirectories(d)
+        return d / fileName.toPath().name
     }
 
     @Synchronized
     fun restoreFromBackup(context: PlatformContext, manifestJson: String): Int {
         val d = dir(context)
-        if (!d.exists()) d.mkdirs()
+        if (!FileSystem.SYSTEM.exists(d)) FileSystem.SYSTEM.createDirectories(d)
         val root = try {
             Json.parseToJsonElement(manifestJson).jsonObject
         } catch (_: Throwable) {
@@ -274,8 +296,8 @@ object LocalModelStore {
         for (i in 0 until arr.size) {
             val o = arr[i].jsonObject
             val id = (o["id"]?.jsonPrimitive?.content ?: "").ifBlank { continue }
-            val fileName = File((o["file"]?.jsonPrimitive?.content ?: "").ifBlank { continue }).name
-            if (!File(d, fileName).let { it.exists() && it.length() > 0L }) continue
+            val fileName = (o["file"]?.jsonPrimitive?.content ?: "").ifBlank { continue }.toPath().name
+            if (!(d / fileName).let { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadata(it).size ?: 0L) > 0L }) continue
             if (existing.slots.any { it.id == id }) continue
             kept.add(ModelSlot(id = id, name = o["name"]?.jsonPrimitive?.content ?: fileName, fileName = fileName))
         }
@@ -292,8 +314,8 @@ object LocalModelStore {
     fun deleteAll(context: PlatformContext) {
         val idx = index(context)
         idx.slots.forEach { s ->
-            File(dir(context), s.fileName).delete()
-            File(dir(context), "${s.fileName}.tmp").delete()
+            FileSystem.SYSTEM.delete(dir(context) / s.fileName)
+            FileSystem.SYSTEM.delete(dir(context) / "${s.fileName}.tmp")
         }
         writeIndex(context, ModelIndex(emptyList(), null))
     }
@@ -301,7 +323,7 @@ object LocalModelStore {
 
     private fun newId(): String = java.util.UUID.randomUUID().toString().replace("-", "").take(12)
 
-    private fun readUpTo(input: InputStream, buffer: ByteArray): Int {
+    private fun readUpTo(input: java.io.InputStream, buffer: ByteArray): Int {
         var read = 0
         while (read < buffer.size) {
             val n = input.read(buffer, read, buffer.size - read)
@@ -311,60 +333,40 @@ object LocalModelStore {
         return read
     }
 
-    private fun copyVerifyingGguf(zipEntry: InputStream, out: File) {
+    private fun copyVerifyingGguf(zipEntry: java.io.InputStream, out: Path) {
         val head = ByteArray(4)
         val n = readUpTo(zipEntry, head)
         if (n < 4 || !head.contentEquals(GGUF_MAGIC)) throw NotGgufException()
         copyPrefixed(head, n, zipEntry, out)
     }
 
-    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: InputStream, out: File) {
-        out.outputStream().use { os ->
-            os.write(prefix, 0, prefixLen)
+    private fun copyPrefixed(prefix: ByteArray, prefixLen: Int, input: java.io.InputStream, out: Path) {
+        FileSystem.SYSTEM.write(out) {
+            write(prefix, 0, prefixLen)
             val buf = ByteArray(1 shl 16)
             while (true) {
                 val n = input.read(buf)
                 if (n < 0) break
-                os.write(buf, 0, n)
+                write(buf, 0, n)
             }
-            os.flush()
-        }
-    }
-
-    private class StitchedInputStream(
-        private val head: ByteArray,
-        private val headLen: Int,
-        private val rest: InputStream
-    ) : InputStream() {
-        private var pos = 0
-        override fun read(): Int =
-            if (pos < headLen) head[pos++].toInt() and 0xFF else rest.read()
-
-        override fun read(b: ByteArray, off: Int, len: Int): Int {
-            if (pos < headLen) {
-                val take = minOf(len, headLen - pos)
-                System.arraycopy(head, pos, b, off, take)
-                pos += take
-                return take
-            }
-            return rest.read(b, off, len)
+            flush()
         }
     }
 
 
     private fun mmprojFileName(id: String) = "mmproj_$id.gguf"
 
-    fun mmprojFile(context: PlatformContext, id: String): File? =
-        File(dir(context), mmprojFileName(id)).takeIf { it.exists() && it.length() > 0L }
+    fun mmprojFile(context: PlatformContext, id: String): Path? =
+        (dir(context) / mmprojFileName(id)).takeIf { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadata(it).size ?: 0L) > 0L }
 
-    fun activeMmprojFile(context: PlatformContext): File? =
+    fun activeMmprojFile(context: PlatformContext): Path? =
         activeSlot(context)?.let { mmprojFile(context, it.id) }
 
-    fun importMmproj(context: PlatformContext, id: String, source: ImportSource): File {
+    fun importMmproj(context: PlatformContext, id: String, source: ImportSource): Path {
         val dir = dir(context)
-        if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create model directory")
-        val target = File(dir, mmprojFileName(id))
-        val tmp = File(dir, "${mmprojFileName(id)}.tmp")
+        if (!FileSystem.SYSTEM.exists(dir) && !FileSystem.SYSTEM.createDirectories(dir)) throw IOException("Could not create model directory")
+        val target = (dir / mmprojFileName(id))
+        val tmp = (dir / "${mmprojFileName(id)}.tmp")
         try {
             source.openStream(context)?.use { raw ->
                 val head = ByteArray(4)
@@ -372,16 +374,16 @@ object LocalModelStore {
                 if (headRead < 4 || !head.contentEquals(GGUF_MAGIC)) throw NotGgufException()
                 copyPrefixed(head, headRead, raw, tmp)
             } ?: throw IOException("Could not open the selected file")
-            if (target.exists()) target.delete()
-            if (!tmp.renameTo(target)) throw IOException("Could not finalize the projector file")
+            if (FileSystem.SYSTEM.exists(target)) FileSystem.SYSTEM.delete(target)
+            if (!(try { FileSystem.SYSTEM.atomicMove(tmp, target); true } catch (e: Exception) { false })) throw IOException("Could not finalize the projector file")
             return target
         } finally {
-            if (tmp.exists()) tmp.delete()
+            if (FileSystem.SYSTEM.exists(tmp)) FileSystem.SYSTEM.delete(tmp)
         }
     }
 
     fun deleteMmproj(context: PlatformContext, id: String) {
-        File(dir(context), mmprojFileName(id)).delete()
-        File(dir(context), "${mmprojFileName(id)}.tmp").delete()
+        FileSystem.SYSTEM.delete(dir(context) / mmprojFileName(id))
+        FileSystem.SYSTEM.delete(dir(context) / "${mmprojFileName(id)}.tmp")
     }
 }
