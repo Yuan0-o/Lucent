@@ -4,7 +4,7 @@ import com.lucent.app.platform.filesDir
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import kotlinx.coroutines.launch
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,7 +44,7 @@ object AuditTrail {
 
     fun record(context: PlatformContext?, entry: AuditEntry) {
         val app = context ?: return
-        val line = JSONObject().apply {
+        val line = buildJsonObject {
             put("at", entry.at)
             put("tool", entry.tool)
             put("group", entry.group)
@@ -103,18 +103,18 @@ object AuditTrail {
 
     private fun parse(line: String): AuditEntry? {
         if (line.isBlank()) return null
-        val o = try { JSONObject(line) } catch (e: Exception) { return null }
+        val o = try { Json.parseToJsonElement(line).jsonObject } catch (e: Exception) { return null }
         return AuditEntry(
-            at = o.optLong("at", 0L),
-            tool = o.optString("tool", ""),
-            group = o.optString("group", ""),
-            permission = o.optString("permission", ""),
-            approval = o.optString("approval", ""),
-            arguments = o.optString("arguments", ""),
-            outcome = o.optString("outcome", ""),
-            detail = o.optString("detail", ""),
-            millis = o.optLong("millis", 0L),
-            files = o.optString("files", "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            at = o["at"]?.jsonPrimitive?.longOrNull ?: 0L,
+            tool = o["tool"]?.jsonPrimitive?.content ?: "",
+            group = o["group"]?.jsonPrimitive?.content ?: "",
+            permission = o["permission"]?.jsonPrimitive?.content ?: "",
+            approval = o["approval"]?.jsonPrimitive?.content ?: "",
+            arguments = o["arguments"]?.jsonPrimitive?.content ?: "",
+            outcome = o["outcome"]?.jsonPrimitive?.content ?: "",
+            detail = o["detail"]?.jsonPrimitive?.content ?: "",
+            millis = o["millis"]?.jsonPrimitive?.longOrNull ?: 0L,
+            files = (o["files"]?.jsonPrimitive?.content ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         )
     }
 }

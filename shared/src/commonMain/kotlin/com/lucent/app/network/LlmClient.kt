@@ -6,8 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.util.concurrent.TimeUnit
 
 data class ToolAcc(var id: String = "", var name: String = "", val args: StringBuilder = StringBuilder(), var thoughtSignature: String? = null)
@@ -46,12 +45,12 @@ object LlmClient {
             val response = client.newCall(requestBuilder.build()).execute()
             val bodyStr = response.body?.string() ?: ""
             if (!response.isSuccessful) return@withContext Result.failure(Exception("HTTP ${response.code}: $bodyStr"))
-            val json = JSONObject(bodyStr)
-            val dataArray = json.optJSONArray("data") ?: json.optJSONArray("models") ?: JSONArray()
+            val json = Json.parseToJsonElement(bodyStr).jsonObject
+            val dataArray = json["data"]?.jsonArray ?: json["models"]?.jsonArray ?: buildJsonArray {}
             val ids = mutableListOf<String>()
-            for (i in 0 until dataArray.length()) {
-                val item = dataArray.getJSONObject(i)
-                var id = item.optString("id", item.optString("name", ""))
+            for (i in 0 until dataArray.size) {
+                val item = dataArray[i].jsonObject
+                var id = item["id"]?.jsonPrimitive?.content ?: item["name"]?.jsonPrimitive?.content ?: ""
                 if (spec == ApiSpec.GOOGLE) id = id.removePrefix("models/")
                 if (id.isNotBlank()) ids.add(id)
             }
@@ -75,15 +74,15 @@ object LlmClient {
         }
         try {
             val url = baseUrl.trimEnd('/') + "/embeddings"
-            val body = JSONObject().put("model", model).put("input", text)
-            val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
+            val body = buildJsonObject { put("model", model); put("input", text) }
+            val requestBuilder = Request.Builder().url(url).post(Json.encodeToString(JsonElement.serializer(), body).toRequestBody(JSON))
             adapterFor(spec).addAuthHeaders(requestBuilder, apiKey)
             val response = client.newCall(requestBuilder.build()).execute()
             val bodyStr = response.body?.string() ?: ""
             if (!response.isSuccessful) return@withContext Result.failure(Exception("HTTP ${response.code}: $bodyStr"))
-            val json = JSONObject(bodyStr)
-            val embeddingJson = json.getJSONArray("data").getJSONObject(0).getJSONArray("embedding")
-            val vec = FloatArray(embeddingJson.length()) { i -> embeddingJson.getDouble(i).toFloat() }
+            val json = Json.parseToJsonElement(bodyStr).jsonObject
+            val embeddingJson = json["data"]!!.jsonArray[0].jsonObject["embedding"]!!.jsonArray
+            val vec = FloatArray(embeddingJson.size) { i -> embeddingJson[i].jsonPrimitive.float }
             Result.success(vec)
         } catch (e: Exception) {
             Result.failure(e)
@@ -104,7 +103,7 @@ object LlmClient {
                 model, history, systemPrompt, tools, streaming = false, reasoning = reasoning,
                 provider = providerOf(spec, baseUrl), cacheKey = cacheKey, context = context
             )
-            val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
+            val requestBuilder = Request.Builder().url(url).post(Json.encodeToString(JsonElement.serializer(), body).toRequestBody(JSON))
             adapter.addAuthHeaders(requestBuilder, apiKey)
             val response = client.newCall(requestBuilder.build()).execute()
             val bodyStr = response.body?.string() ?: ""
@@ -138,13 +137,15 @@ object LlmClient {
 
             val result: Result<RawModelReply> = try {
                 val url = adapter.chatUrl(baseUrl, model, streaming = true)
-                val body = adapter.buildBody(
+                val bodyObj = adapter.buildBody(
                     model, history, systemPrompt, tools, streaming = true, reasoning = reasoning,
                     provider = provider, cacheKey = cacheKey, context = context
                 )
-                if (spec != ApiSpec.GOOGLE) body.put("stream", true)
+                val body = if (spec != ApiSpec.GOOGLE) {
+                    JsonObject(bodyObj + mapOf("stream" to JsonPrimitive(true)))
+                } else bodyObj
 
-                val requestBuilder = Request.Builder().url(url).post(body.toString().toRequestBody(JSON))
+                val requestBuilder = Request.Builder().url(url).post(Json.encodeToString(JsonElement.serializer(), body).toRequestBody(JSON))
                 adapter.addAuthHeaders(requestBuilder, apiKey)
 
                 val response = client.newCall(requestBuilder.build()).execute()
@@ -212,7 +213,7 @@ object LlmClient {
             if (!line.startsWith("data:")) continue
             val payload = line.removePrefix("data:").trim()
             if (payload.isEmpty() || payload == "[DONE]") continue
-            val json = try { JSONObject(payload) } catch (e: Exception) { null } ?: continue
+            val json = try { Json.parseToJsonElement(payload).jsonObject } catch (e: Exception) { null } ?: continue
             adapter.parseStreamEvent(json, acc, onDelta, onReasoning)
         }
         flushContentRouting(acc, onDelta, onReasoning)

@@ -6,8 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.lucent.app.i18n.S
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 enum class AgentStepKind { REASONING, TOOL, NOTE }
 
@@ -97,10 +96,10 @@ object AgentTraceLabels {
     }
 
     fun detailFor(toolName: String, argumentsJson: String): String {
-        val args = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
+        val args = try { Json.parseToJsonElement(argumentsJson).jsonObject } catch (e: Exception) { buildJsonObject {} }
         fun value(vararg keys: String): String {
             for (k in keys) {
-                val v = args.optString(k, "")
+                val v = args[k]?.jsonPrimitive?.content ?: ""
                 if (v.isNotBlank()) return oneLine(v)
             }
             return ""
@@ -128,7 +127,7 @@ object AgentTraceLabels {
     private val WHITESPACE = Regex("\\s+")
 
     private fun readBool(argumentsJson: String, key: String, fallback: Boolean): Boolean = try {
-        JSONObject(argumentsJson).optBoolean(key, fallback)
+        Json.parseToJsonElement(argumentsJson).jsonObject[key]?.jsonPrimitive?.booleanOrNull ?: fallback
     } catch (e: Exception) {
         fallback
     }
@@ -142,54 +141,56 @@ object AgentTraceCodec {
 
     fun encode(trace: AgentTrace?): String? {
         if (trace == null || !trace.hasContent) return null
-        val steps = JSONArray()
-        trace.steps.forEach { step ->
-            steps.put(
-                JSONObject()
-                    .put("k", step.kind.name)
-                    .put("s", step.status.name)
-                    .put("t", step.toolName)
-                    .put("d", step.detail)
-                    .put("v", step.variant)
-                    .put("x", step.text)
-                    .put("e", step.errorText)
-                    .put("m", step.millis)
-            )
+        val steps = buildJsonArray {
+            trace.steps.forEach { step ->
+                add(
+                    buildJsonObject {
+                        put("k", step.kind.name)
+                        put("s", step.status.name)
+                        put("t", step.toolName)
+                        put("d", step.detail)
+                        put("v", step.variant)
+                        put("x", step.text)
+                        put("e", step.errorText)
+                        put("m", step.millis)
+                    }
+                )
+            }
         }
-        return JSONObject()
-            .put("v", VERSION)
-            .put("status", trace.status.name)
-            .put("reasoning", trace.reasoning.take(MAX_REASONING_CHARS))
-            .put("budget", trace.budgetLabel)
-            .put("steps", steps)
-            .toString()
+        return Json.encodeToString(JsonElement.serializer(), buildJsonObject {
+            put("v", VERSION)
+            put("status", trace.status.name)
+            put("reasoning", trace.reasoning.take(MAX_REASONING_CHARS))
+            put("budget", trace.budgetLabel)
+            put("steps", steps)
+        })
     }
 
     fun decode(text: String?): AgentTrace? {
         if (text.isNullOrBlank()) return null
-        val root = try { JSONObject(text) } catch (e: Exception) { return null }
-        val array = root.optJSONArray("steps") ?: JSONArray()
-        val steps = ArrayList<AgentStep>(array.length())
-        for (i in 0 until array.length()) {
-            val o = array.optJSONObject(i) ?: continue
+        val root = try { Json.parseToJsonElement(text).jsonObject } catch (e: Exception) { return null }
+        val array = root["steps"]?.jsonArray ?: buildJsonArray {}
+        val steps = ArrayList<AgentStep>(array.size)
+        for (i in 0 until array.size) {
+            val o = try { array[i].jsonObject } catch (e: Exception) { continue }
             steps.add(
                 AgentStep(
-                    kind = kindOf(o.optString("k")),
-                    status = statusOf(o.optString("s")),
-                    toolName = o.optString("t"),
-                    detail = o.optString("d"),
-                    variant = o.optString("v"),
-                    text = o.optString("x"),
-                    errorText = o.optString("e"),
-                    millis = o.optLong("m", 0L)
+                    kind = kindOf(o["k"]?.jsonPrimitive?.content ?: ""),
+                    status = statusOf(o["s"]?.jsonPrimitive?.content ?: ""),
+                    toolName = o["t"]?.jsonPrimitive?.content ?: "",
+                    detail = o["d"]?.jsonPrimitive?.content ?: "",
+                    variant = o["v"]?.jsonPrimitive?.content ?: "",
+                    text = o["x"]?.jsonPrimitive?.content ?: "",
+                    errorText = o["e"]?.jsonPrimitive?.content ?: "",
+                    millis = o["m"]?.jsonPrimitive?.longOrNull ?: 0L
                 )
             )
         }
         val trace = AgentTrace(
             steps = steps,
-            reasoning = root.optString("reasoning"),
-            status = statusOf(root.optString("status")),
-            budgetLabel = root.optString("budget")
+            reasoning = root["reasoning"]?.jsonPrimitive?.content ?: "",
+            status = statusOf(root["status"]?.jsonPrimitive?.content ?: ""),
+            budgetLabel = root["budget"]?.jsonPrimitive?.content ?: ""
         )
         return if (trace.hasContent) trace else null
     }

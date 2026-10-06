@@ -3,7 +3,7 @@ package com.lucent.app.harness
 import com.lucent.app.data.AppDatabase
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.platform.PlatformContext
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonObject
 
 data class HarnessCtx(
     val context: PlatformContext,
@@ -29,6 +29,6 @@ data class HarnessCtx(
 interface HarnessGroupTools {
     val group: HarnessGroup
     val tools: List<HarnessTool>
-    suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult?
+    suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult?
     fun canHandle(name: String): Boolean = tools.any { it.name == name }
 }

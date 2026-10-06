@@ -6,7 +6,7 @@ import com.lucent.app.data.StartupLog
 import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolExecResult
 import kotlin.concurrent.Volatile
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object HarnessGate {
 
@@ -109,7 +109,7 @@ object HarnessGate {
     }
 
     fun widenedConfig(config: HarnessConfig, argsJson: String, escalation: HarnessEscalation): HarnessConfig {
-        val args = try { JSONObject(argsJson) } catch (e: Exception) { JSONObject() }
+        val args = try { Json.parseToJsonElement(argsJson).jsonObject } catch (e: Exception) { JsonObject(emptyMap()) }
         val fs = systemHarnessFs()
         val roots = mutableListOf<String>()
         HarnessDescribe.files(args.toString()).forEach { raw ->
@@ -122,7 +122,7 @@ object HarnessGate {
         return config.copy(writeRoots = (config.writeRoots + extra).distinct())
     }
 
-    private suspend fun run(name: String, ctx: HarnessCtx, args: JSONObject): Attempt = try {
+    private suspend fun run(name: String, ctx: HarnessCtx, args: JsonObject): Attempt = try {
         val module = groups.firstOrNull { module -> module.canHandle(name) }
         val result = module?.execute(ctx, name, args)
             ?: ToolExecResult("Nothing here can run $name.", success = false)
@@ -186,7 +186,7 @@ object HarnessGate {
                 success = false
             )
         }
-        val args = try { JSONObject(argumentsJson) } catch (e: Exception) { JSONObject() }
+        val args = try { Json.parseToJsonElement(argumentsJson).jsonObject } catch (e: Exception) { JsonObject(emptyMap()) }
         val escalation = HarnessEscalation.of(args)
         val started = harnessCurrentTimeMillis()
         if (escalation != null) {

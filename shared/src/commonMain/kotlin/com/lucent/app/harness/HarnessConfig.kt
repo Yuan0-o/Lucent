@@ -1,7 +1,6 @@
 package com.lucent.app.harness
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 data class McpServer(
     val id: String,
@@ -116,13 +115,13 @@ data class HarnessConfig(
 
     fun toJson(): String = toJsonObject().toString()
 
-    fun toJsonObject(): JSONObject = JSONObject().apply {
+    fun toJsonObject(): JsonObject = buildJsonObject {
         put("enabled", enabled)
         put("workspace", workspace)
-        put("writeRoots", JSONArray(writeRoots))
-        put("readOnlyRoots", JSONArray(readOnlyRoots))
-        put("groups", JSONArray(groups.toList().sorted()))
-        put("approvals", JSONObject(approvals as Map<*, *>))
+        put("writeRoots", JsonArray(writeRoots.map { JsonPrimitive(it) }))
+        put("readOnlyRoots", JsonArray(readOnlyRoots.map { JsonPrimitive(it) }))
+        put("groups", JsonArray(groups.toList().sorted().map { JsonPrimitive(it) }))
+        put("approvals", JsonObject(approvals.mapValues { JsonPrimitive(it.value) }))
         put("shellEnabled", shellEnabled)
         put("sandboxMode", sandboxMode)
         put("timeoutSeconds", timeoutSeconds)
@@ -133,11 +132,11 @@ data class HarnessConfig(
         put("deviceEnabled", deviceEnabled)
         put("subAgents", subAgents)
         put("maxSubAgents", maxSubAgents)
-        put("skillDirs", JSONArray(skillDirs))
+        put("skillDirs", JsonArray(skillDirs.map { JsonPrimitive(it) }))
         put("githubToken", githubToken)
-        put("githubTokens", JSONArray().apply {
+        put("githubTokens", buildJsonArray {
             githubTokens.forEach { entry ->
-                put(JSONObject().apply {
+                add(buildJsonObject {
                     put("id", entry.id)
                     put("name", entry.name)
                     put("token", entry.token)
@@ -147,9 +146,9 @@ data class HarnessConfig(
         put("githubActiveId", githubActiveId)
         put("githubApi", githubApi)
         put("shizukuForAssistant", shizukuForAssistant)
-        put("mcpServers", JSONArray().apply {
+        put("mcpServers", buildJsonArray {
             mcpServers.forEach { server ->
-                put(JSONObject().apply {
+                add(buildJsonObject {
                     put("id", server.id)
                     put("name", server.name)
                     put("url", server.url)
@@ -160,9 +159,9 @@ data class HarnessConfig(
                 })
             }
         })
-        put("connectors", JSONArray().apply {
+        put("connectors", buildJsonArray {
             connectors.forEach { connector ->
-                put(JSONObject().apply {
+                add(buildJsonObject {
                     put("id", connector.id)
                     put("token", connector.token)
                     put("baseUrl", connector.baseUrl)
@@ -170,9 +169,9 @@ data class HarnessConfig(
                 })
             }
         })
-        put("plugins", JSONArray().apply {
+        put("plugins", buildJsonArray {
             plugins.forEach { plugin ->
-                put(JSONObject().apply {
+                add(buildJsonObject {
                     put("id", plugin.id)
                     put("installed", plugin.installed)
                     put("source", plugin.source)
@@ -192,7 +191,7 @@ data class HarnessConfig(
         put("pluginBackupScope", pluginBackupScope)
         put("pluginCatalogUrl", pluginCatalogUrl)
         put("pluginCatalogCacheEpoch", pluginCatalogCacheEpoch)
-        put("pluginPendingReinstall", JSONArray(pluginPendingReinstall))
+        put("pluginPendingReinstall", JsonArray(pluginPendingReinstall.map { JsonPrimitive(it) }))
     }
 
     companion object {
@@ -203,80 +202,78 @@ data class HarnessConfig(
 
         fun parse(raw: String): HarnessConfig {
             if (raw.isBlank()) return DEFAULT
-            val o = try { JSONObject(raw) } catch (e: Exception) { return DEFAULT }
+            val o = try { Json.parseToJsonElement(raw).jsonObject } catch (e: Exception) { return DEFAULT }
             val defaults = DEFAULT
             return HarnessConfig(
-                enabled = o.optBoolean("enabled", defaults.enabled),
-                workspace = o.optString("workspace", defaults.workspace),
-                writeRoots = strings(o.optJSONArray("writeRoots")),
-                readOnlyRoots = strings(o.optJSONArray("readOnlyRoots")),
-                groups = strings(o.optJSONArray("groups")).toSet().ifEmpty { defaults.groups },
-                approvals = map(o.optJSONObject("approvals")),
-                shellEnabled = o.optBoolean("shellEnabled", defaults.shellEnabled),
-                sandboxMode = o.optString("sandboxMode", defaults.sandboxMode),
-                timeoutSeconds = o.optInt("timeoutSeconds", defaults.timeoutSeconds),
-                maxOutputChars = o.optInt("maxOutputChars", defaults.maxOutputChars),
-                snapshots = o.optBoolean("snapshots", defaults.snapshots),
-                snapshotLimit = o.optInt("snapshotLimit", defaults.snapshotLimit),
-                auditEnabled = o.optBoolean("auditEnabled", defaults.auditEnabled),
-                deviceEnabled = o.optBoolean("deviceEnabled", defaults.deviceEnabled),
-                subAgents = o.optBoolean("subAgents", defaults.subAgents),
-                maxSubAgents = o.optInt("maxSubAgents", defaults.maxSubAgents),
-                skillDirs = strings(o.optJSONArray("skillDirs")),
-                githubToken = o.optString("githubToken", ""),
-                githubTokens = githubTokens(o.optJSONArray("githubTokens"), o.optString("githubToken", "")),
-                githubActiveId = o.optString("githubActiveId", ""),
-                githubApi = o.optString("githubApi", defaults.githubApi).ifBlank { defaults.githubApi },
-                shizukuForAssistant = o.optBoolean("shizukuForAssistant", defaults.shizukuForAssistant),
-                mcpServers = servers(o.optJSONArray("mcpServers")),
-                connectors = connectors(o.optJSONArray("connectors")),
-                plugins = plugins(o.optJSONArray("plugins")),
-                fastMirror = o.optBoolean("fastMirror", defaults.fastMirror),
-                contextBudgetTokens = o.optInt("contextBudgetTokens", defaults.contextBudgetTokens),
-                pluginMirrorRegion = o.optString("pluginMirrorRegion", defaults.pluginMirrorRegion),
-                runtimeMode = o.optString("runtimeMode", defaults.runtimeMode),
-                builtinRootfsVersion = o.optInt("builtinRootfsVersion", defaults.builtinRootfsVersion),
-                setupComplete = o.optBoolean("setupComplete", defaults.setupComplete),
-                setupCompletedAt = o.optLong("setupCompletedAt", defaults.setupCompletedAt),
-                pluginBackupScope = o.optString("pluginBackupScope", defaults.pluginBackupScope),
-                pluginCatalogUrl = o.optString("pluginCatalogUrl", defaults.pluginCatalogUrl),
-                pluginCatalogCacheEpoch = o.optLong("pluginCatalogCacheEpoch", defaults.pluginCatalogCacheEpoch),
-                pluginPendingReinstall = strings(o.optJSONArray("pluginPendingReinstall"))
+                enabled = o["enabled"]?.jsonPrimitive?.booleanOrNull ?: defaults.enabled,
+                workspace = o["workspace"]?.jsonPrimitive?.content ?: defaults.workspace,
+                writeRoots = strings(o["writeRoots"]?.jsonArray),
+                readOnlyRoots = strings(o["readOnlyRoots"]?.jsonArray),
+                groups = strings(o["groups"]?.jsonArray).toSet().ifEmpty { defaults.groups },
+                approvals = map(o["approvals"]?.jsonObject),
+                shellEnabled = o["shellEnabled"]?.jsonPrimitive?.booleanOrNull ?: defaults.shellEnabled,
+                sandboxMode = o["sandboxMode"]?.jsonPrimitive?.content ?: defaults.sandboxMode,
+                timeoutSeconds = o["timeoutSeconds"]?.jsonPrimitive?.intOrNull ?: defaults.timeoutSeconds,
+                maxOutputChars = o["maxOutputChars"]?.jsonPrimitive?.intOrNull ?: defaults.maxOutputChars,
+                snapshots = o["snapshots"]?.jsonPrimitive?.booleanOrNull ?: defaults.snapshots,
+                snapshotLimit = o["snapshotLimit"]?.jsonPrimitive?.intOrNull ?: defaults.snapshotLimit,
+                auditEnabled = o["auditEnabled"]?.jsonPrimitive?.booleanOrNull ?: defaults.auditEnabled,
+                deviceEnabled = o["deviceEnabled"]?.jsonPrimitive?.booleanOrNull ?: defaults.deviceEnabled,
+                subAgents = o["subAgents"]?.jsonPrimitive?.booleanOrNull ?: defaults.subAgents,
+                maxSubAgents = o["maxSubAgents"]?.jsonPrimitive?.intOrNull ?: defaults.maxSubAgents,
+                skillDirs = strings(o["skillDirs"]?.jsonArray),
+                githubToken = o["githubToken"]?.jsonPrimitive?.content ?: "",
+                githubTokens = githubTokens(o["githubTokens"]?.jsonArray, o["githubToken"]?.jsonPrimitive?.content ?: ""),
+                githubActiveId = o["githubActiveId"]?.jsonPrimitive?.content ?: "",
+                githubApi = (o["githubApi"]?.jsonPrimitive?.content ?: defaults.githubApi).ifBlank { defaults.githubApi },
+                shizukuForAssistant = o["shizukuForAssistant"]?.jsonPrimitive?.booleanOrNull ?: defaults.shizukuForAssistant,
+                mcpServers = servers(o["mcpServers"]?.jsonArray),
+                connectors = connectors(o["connectors"]?.jsonArray),
+                plugins = plugins(o["plugins"]?.jsonArray),
+                fastMirror = o["fastMirror"]?.jsonPrimitive?.booleanOrNull ?: defaults.fastMirror,
+                contextBudgetTokens = o["contextBudgetTokens"]?.jsonPrimitive?.intOrNull ?: defaults.contextBudgetTokens,
+                pluginMirrorRegion = o["pluginMirrorRegion"]?.jsonPrimitive?.content ?: defaults.pluginMirrorRegion,
+                runtimeMode = o["runtimeMode"]?.jsonPrimitive?.content ?: defaults.runtimeMode,
+                builtinRootfsVersion = o["builtinRootfsVersion"]?.jsonPrimitive?.intOrNull ?: defaults.builtinRootfsVersion,
+                setupComplete = o["setupComplete"]?.jsonPrimitive?.booleanOrNull ?: defaults.setupComplete,
+                setupCompletedAt = o["setupCompletedAt"]?.jsonPrimitive?.longOrNull ?: defaults.setupCompletedAt,
+                pluginBackupScope = o["pluginBackupScope"]?.jsonPrimitive?.content ?: defaults.pluginBackupScope,
+                pluginCatalogUrl = o["pluginCatalogUrl"]?.jsonPrimitive?.content ?: defaults.pluginCatalogUrl,
+                pluginCatalogCacheEpoch = o["pluginCatalogCacheEpoch"]?.jsonPrimitive?.longOrNull ?: defaults.pluginCatalogCacheEpoch,
+                pluginPendingReinstall = strings(o["pluginPendingReinstall"]?.jsonArray)
             )
         }
 
-        private fun strings(array: JSONArray?): List<String> {
+        private fun strings(array: JsonArray?): List<String> {
             if (array == null) return emptyList()
             val out = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                val value = array.optString(i, "")
+            for (i in 0 until array.size) {
+                val value = array[i].jsonPrimitive.content
                 if (value.isNotBlank()) out.add(value)
             }
             return out
         }
 
-        private fun map(obj: JSONObject?): Map<String, String> {
+        private fun map(obj: JsonObject?): Map<String, String> {
             if (obj == null) return emptyMap()
             val out = mutableMapOf<String, String>()
-            val keys = obj.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                out[key] = obj.optString(key, "")
+            for ((key, value) in obj) {
+                out[key] = value.jsonPrimitive.content
             }
             return out
         }
 
-        private fun githubTokens(array: JSONArray?, legacy: String): List<GithubToken> {
+        private fun githubTokens(array: JsonArray?, legacy: String): List<GithubToken> {
             val out = mutableListOf<GithubToken>()
             if (array != null) {
-                for (i in 0 until array.length()) {
-                    val o = array.optJSONObject(i) ?: continue
-                    val token = o.optString("token", "")
+                for (i in 0 until array.size) {
+                    val o = runCatching { array[i].jsonObject }.getOrNull() ?: continue
+                    val token = o["token"]?.jsonPrimitive?.content ?: ""
                     if (token.isBlank()) continue
                     out.add(
                         GithubToken(
-                            id = o.optString("id", "").ifBlank { "gh-${out.size + 1}" },
-                            name = o.optString("name", ""),
+                            id = (o["id"]?.jsonPrimitive?.content ?: "").ifBlank { "gh-${out.size + 1}" },
+                            name = o["name"]?.jsonPrimitive?.content ?: "",
                             token = token
                         )
                     )
@@ -286,62 +283,62 @@ data class HarnessConfig(
             return out.take(MAX_GITHUB_TOKENS)
         }
 
-        private fun servers(array: JSONArray?): List<McpServer> {
+        private fun servers(array: JsonArray?): List<McpServer> {
             if (array == null) return emptyList()
             val out = mutableListOf<McpServer>()
-            for (i in 0 until array.length()) {
-                val o = array.optJSONObject(i) ?: continue
-                val id = o.optString("id", "")
+            for (i in 0 until array.size) {
+                val o = runCatching { array[i].jsonObject }.getOrNull() ?: continue
+                val id = o["id"]?.jsonPrimitive?.content ?: ""
                 if (id.isBlank()) continue
                 out.add(
                     McpServer(
                         id = id,
-                        name = o.optString("name", id),
-                        url = o.optString("url", ""),
-                        command = o.optString("command", ""),
-                        arguments = o.optString("arguments", ""),
-                        token = o.optString("token", ""),
-                        enabled = o.optBoolean("enabled", true)
+                        name = o["name"]?.jsonPrimitive?.content ?: id,
+                        url = o["url"]?.jsonPrimitive?.content ?: "",
+                        command = o["command"]?.jsonPrimitive?.content ?: "",
+                        arguments = o["arguments"]?.jsonPrimitive?.content ?: "",
+                        token = o["token"]?.jsonPrimitive?.content ?: "",
+                        enabled = o["enabled"]?.jsonPrimitive?.booleanOrNull ?: true
                     )
                 )
             }
             return out
         }
 
-        private fun connectors(array: JSONArray?): List<ConnectorConfig> {
+        private fun connectors(array: JsonArray?): List<ConnectorConfig> {
             if (array == null) return emptyList()
             val out = mutableListOf<ConnectorConfig>()
-            for (i in 0 until array.length()) {
-                val o = array.optJSONObject(i) ?: continue
-                val id = o.optString("id", "")
+            for (i in 0 until array.size) {
+                val o = runCatching { array[i].jsonObject }.getOrNull() ?: continue
+                val id = o["id"]?.jsonPrimitive?.content ?: ""
                 if (id.isBlank()) continue
                 out.add(
                     ConnectorConfig(
                         id = id,
-                        token = o.optString("token", ""),
-                        baseUrl = o.optString("baseUrl", ""),
-                        account = o.optString("account", "")
+                        token = o["token"]?.jsonPrimitive?.content ?: "",
+                        baseUrl = o["baseUrl"]?.jsonPrimitive?.content ?: "",
+                        account = o["account"]?.jsonPrimitive?.content ?: ""
                     )
                 )
             }
             return out
         }
 
-        private fun plugins(array: JSONArray?): List<PluginState> {
+        private fun plugins(array: JsonArray?): List<PluginState> {
             if (array == null) return emptyList()
             val out = mutableListOf<PluginState>()
-            for (i in 0 until array.length()) {
-                val o = array.optJSONObject(i) ?: continue
-                val id = o.optString("id", "")
+            for (i in 0 until array.size) {
+                val o = runCatching { array[i].jsonObject }.getOrNull() ?: continue
+                val id = o["id"]?.jsonPrimitive?.content ?: ""
                 if (id.isBlank()) continue
                 out.add(
                     PluginState(
                         id = id,
-                        installed = o.optBoolean("installed", false),
-                        source = o.optString("source", ""),
-                        version = o.optString("version", ""),
-                        sizeBytes = o.optLong("sizeBytes", 0L),
-                        installedAt = o.optLong("installedAt", 0L)
+                        installed = o["installed"]?.jsonPrimitive?.booleanOrNull ?: false,
+                        source = o["source"]?.jsonPrimitive?.content ?: "",
+                        version = o["version"]?.jsonPrimitive?.content ?: "",
+                        sizeBytes = o["sizeBytes"]?.jsonPrimitive?.longOrNull ?: 0L,
+                        installedAt = o["installedAt"]?.jsonPrimitive?.longOrNull ?: 0L
                     )
                 )
             }

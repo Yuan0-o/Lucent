@@ -7,7 +7,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.OutputStream
 
 object BackupManager {
@@ -229,65 +229,65 @@ object BackupManager {
         val manifestJson = scan.manifestJson
 
         val root = try {
-            JSONObject(manifestJson)
+            Json.parseToJsonElement(manifestJson).jsonObject
         } catch (t: Throwable) {
             throw IllegalArgumentException("That backup couldn't be read — the file may be damaged.")
         }
 
-        val notesArr = root.optJSONArray("notes")
-        val tasksArr = root.optJSONArray("tasks")
+        val notesArr = root["notes"]?.jsonArray
+        val tasksArr = root["tasks"]?.jsonArray
 
         var archived = 0
         var trashedNotes = 0
         var attachments = 0
-        for (i in 0 until (notesArr?.length() ?: 0)) {
-            val o = notesArr!!.getJSONObject(i)
-            if (o.optBoolean("archived", false)) archived++
-            if (!o.isNull("trashedAt")) trashedNotes++
-            attachments += Attachments.parse(o.optString("attachments", "[]")).size
+        for (i in 0 until (notesArr?.size ?: 0)) {
+            val o = notesArr!![i].jsonObject
+            if (o["archived"]?.jsonPrimitive?.booleanOrNull == true) archived++
+            if (o.containsKey("trashedAt") && o["trashedAt"] !is JsonNull) trashedNotes++
+            attachments += Attachments.parse(o["attachments"]?.jsonPrimitive?.content ?: "[]").size
         }
 
         var completed = 0
         var trashedTasks = 0
-        for (i in 0 until (tasksArr?.length() ?: 0)) {
-            val o = tasksArr!!.getJSONObject(i)
-            if (o.optBoolean("isDone", false)) completed++
-            if (!o.isNull("trashedAt")) trashedTasks++
-            attachments += Attachments.parse(o.optString("attachments", "[]")).size
+        for (i in 0 until (tasksArr?.size ?: 0)) {
+            val o = tasksArr!![i].jsonObject
+            if (o["isDone"]?.jsonPrimitive?.booleanOrNull == true) completed++
+            if (o.containsKey("trashedAt") && o["trashedAt"] !is JsonNull) trashedTasks++
+            attachments += Attachments.parse(o["attachments"]?.jsonPrimitive?.content ?: "[]").size
         }
 
 
-        val convList = root.optJSONArray("conversations")?.let { arr ->
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = o.optLong("id", 0L)
-                if (id == 0L) null else id to o.optString("title", "")
+        val convList = root["conversations"]?.jsonArray?.let { arr ->
+            (0 until arr.size).mapNotNull { i ->
+                val o = arr[i].jsonObject
+                val id = o["id"]?.jsonPrimitive?.longOrNull ?: 0L
+                if (id == 0L) null else id to (o["title"]?.jsonPrimitive?.content ?: "")
             }
         } ?: emptyList()
-        val profileNames = root.optJSONObject("settings")?.optString("apiProfiles")?.let { pj ->
+        val profileNames = root["settings"]?.jsonObject?.get("apiProfiles")?.jsonPrimitive?.content?.let { pj ->
             if (pj.isBlank()) emptyList() else ApiProfiles.parse(pj).map { it.name }
         } ?: emptyList()
 
         return BackupPreview(
             manifestJson = manifestJson,
-            formatVersion = root.optInt("version", 0),
-            exportedAt = root.optLong("exportedAt", 0L).takeIf { it > 0 },
+            formatVersion = root["version"]?.jsonPrimitive?.intOrNull ?: 0,
+            exportedAt = (root["exportedAt"]?.jsonPrimitive?.longOrNull ?: 0L).takeIf { it > 0 },
             encrypted = true,
             passwordProtected = needsPassword,
-            notes = notesArr?.length() ?: 0,
+            notes = notesArr?.size ?: 0,
             archivedNotes = archived,
             trashedNotes = trashedNotes,
-            tasks = tasksArr?.length() ?: 0,
+            tasks = tasksArr?.size ?: 0,
             completedTasks = completed,
             trashedTasks = trashedTasks,
-            noteVersions = root.optJSONArray("noteVersions")?.length() ?: 0,
-            conversations = root.optJSONArray("conversations")?.length() ?: 0,
-            chatMessages = root.optJSONArray("chats")?.length() ?: 0,
+            noteVersions = root["noteVersions"]?.jsonArray?.size ?: 0,
+            conversations = root["conversations"]?.jsonArray?.size ?: 0,
+            chatMessages = root["chats"]?.jsonArray?.size ?: 0,
             attachments = attachments,
-            hasSettings = root.optJSONObject("settings") != null,
-            modules = root.optJSONArray("modules")?.let { arr ->
-                (0 until arr.length()).mapNotNull { i ->
-                    runCatching { BackupModule.valueOf(arr.optString(i)) }.getOrNull()
+            hasSettings = root["settings"]?.jsonObject != null,
+            modules = root["modules"]?.jsonArray?.let { arr ->
+                (0 until arr.size).mapNotNull { i ->
+                    runCatching { BackupModule.valueOf(arr[i].jsonPrimitive.content) }.getOrNull()
                 }.toSet()
             } ?: emptySet(),
             modelFiles = scan.modelCount,

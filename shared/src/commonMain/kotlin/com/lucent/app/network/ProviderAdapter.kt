@@ -3,8 +3,6 @@ package com.lucent.app.network
 import com.lucent.app.data.ReasoningEffort
 import com.lucent.app.data.ReasoningEfforts
 import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
 
 sealed interface ProviderAdapter {
     val spec: ApiSpec
@@ -25,12 +23,12 @@ sealed interface ProviderAdapter {
         provider: String = "",
         cacheKey: String = "",
         context: String = ""
-    ): JSONObject
+    ): JsonObject
 
     fun parseReply(bodyStr: String): RawModelReply
 
     fun parseStreamEvent(
-        json: JSONObject,
+        json: JsonObject,
         acc: StreamAccumulator,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit = {}
@@ -40,42 +38,44 @@ sealed interface ProviderAdapter {
 class StreamAccumulator {
     val fullText = StringBuilder()
     val fullReasoning = StringBuilder()
-    val anthropicThinking = JSONArray()
+    val anthropicThinking = mutableListOf<MutableMap<String, String>>()
     var usage: TokenUsage = TokenUsage.NONE
-    private val anthropicThinkingIndex = HashMap<Int, JSONObject>()
+    private val anthropicThinkingIndex = HashMap<Int, MutableMap<String, String>>()
     private val anthropicThinkingSignature = HashMap<Int, String>()
 
     fun beginThinkingBlock(index: Int, type: String, data: String?) {
-        val block = JSONObject().put("type", type)
-        if (type == "thinking") block.put("thinking", "") else if (data != null) block.put("data", data)
+        val block = mutableMapOf("type" to type)
+        if (type == "thinking") block["thinking"] = "" else if (data != null) block["data"] = data
         anthropicThinkingIndex[index] = block
-        anthropicThinking.put(block)
+        anthropicThinking.add(block)
     }
 
     fun appendThinkingText(index: Int, text: String) {
         val block = anthropicThinkingIndex[index] ?: return
-        block.put("thinking", block.optString("thinking", "") + text)
+        block["thinking"] = block.getOrElse("thinking") { "" } + text
     }
 
     fun appendThinkingSignature(index: Int, signature: String) {
         val block = anthropicThinkingIndex[index] ?: return
         anthropicThinkingSignature[index] = (anthropicThinkingSignature[index] ?: "") + signature
-        block.put("signature", anthropicThinkingSignature[index])
+        block["signature"] = anthropicThinkingSignature[index]!!
     }
 
     fun thinkingBlocksJson(): String {
-        if (anthropicThinking.length() == 0) return ""
-        val kept = JSONArray()
-        for (i in 0 until anthropicThinking.length()) {
-            val block = anthropicThinking.optJSONObject(i) ?: continue
-            when (block.optString("type")) {
-                "thinking" -> if (block.optString("thinking").isNotEmpty() && block.optString("signature").isNotEmpty()) {
-                    kept.put(block)
+        if (anthropicThinking.isEmpty()) return ""
+        val kept = buildJsonArray {
+            for (block in anthropicThinking) {
+                when (block["type"]) {
+                    "thinking" -> if (!block["thinking"].isNullOrEmpty() && !block["signature"].isNullOrEmpty()) {
+                        add(buildJsonObject { block.forEach { (k, v) -> put(k, v) } })
+                    }
+                    "redacted_thinking" -> if (!block["data"].isNullOrEmpty()) {
+                        add(buildJsonObject { block.forEach { (k, v) -> put(k, v) } })
+                    }
                 }
-                "redacted_thinking" -> if (block.optString("data").isNotEmpty()) kept.put(block)
             }
         }
-        return if (kept.length() == 0) "" else kept.toString()
+        return if (kept.isEmpty()) "" else Json.encodeToString(JsonElement.serializer(), kept)
     }
     val openAiToolAcc = LinkedHashMap<Int, ToolAcc>()
     val anthropicToolAcc = LinkedHashMap<Int, ToolAcc>()
@@ -172,19 +172,19 @@ private fun thinkTailLength(text: String): Int {
     return 0
 }
 
-private fun reasoningChannel(delta: JSONObject?): String {
+private fun reasoningChannel(delta: JsonObject?): String {
     if (delta == null) return ""
     for (key in arrayOf("reasoning_content", "reasoning")) {
-        if (delta.isNull(key)) continue
-        val value = delta.optString(key, "")
+        if (!delta.containsKey(key)) continue
+        val value = delta[key]?.jsonPrimitive?.content ?: ""
         if (value.isNotEmpty()) return value
     }
-    val details = delta.optJSONArray("reasoning_details") ?: return ""
+    val details = delta["reasoning_details"]?.jsonArray ?: return ""
     val sb = StringBuilder()
-    for (i in 0 until details.length()) {
-        val part = details.optJSONObject(i) ?: continue
-        if (part.isNull("text")) continue
-        sb.append(part.optString("text", ""))
+    for (i in 0 until details.size) {
+        val part = details[i].jsonObject
+        if (!part.containsKey("text")) continue
+        sb.append(part["text"]?.jsonPrimitive?.content ?: "")
     }
     return sb.toString()
 }
@@ -193,50 +193,36 @@ internal const val TEMPERATURE = 0.6
 internal const val TOP_P = 0.9
 internal const val MAX_TOKENS = 2048
 
-internal fun openAiUsage(usage: JSONObject?): TokenUsage {
-    if (usage == null || usage.length() == 0) return TokenUsage.NONE
-    val prompt = usage.optInt("prompt_tokens", usage.optInt("input_tokens", 0))
-    val details = usage.optJSONObject("prompt_tokens_details")?.optInt("cached_tokens", 0)
-        ?: usage.optJSONObject("input_tokens_details")?.optInt("cached_tokens", 0)
+internal fun openAiUsage(usage: JsonObject?): TokenUsage {
+    if (usage == null || usage.isEmpty()) return TokenUsage.NONE
+    val prompt = usage["prompt_tokens"]?.jsonPrimitive?.intOrNull ?: usage["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+    val details = usage["prompt_tokens_details"]?.jsonObject?.get("cached_tokens")?.jsonPrimitive?.intOrNull
+        ?: usage["input_tokens_details"]?.jsonObject?.get("cached_tokens")?.jsonPrimitive?.intOrNull
         ?: 0
-    val cached = maxOf(details, usage.optInt("prompt_cache_hit_tokens", 0), usage.optInt("cached_tokens", 0))
-    val output = usage.optInt("completion_tokens", usage.optInt("output_tokens", 0))
+    val cached = maxOf(details, usage["prompt_cache_hit_tokens"]?.jsonPrimitive?.intOrNull ?: 0, usage["cached_tokens"]?.jsonPrimitive?.intOrNull ?: 0)
+    val output = usage["completion_tokens"]?.jsonPrimitive?.intOrNull ?: usage["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0
     return TokenUsage(prompt.coerceAtLeast(0), cached.coerceAtLeast(0), output.coerceAtLeast(0))
 }
 
-internal fun googleUsage(meta: JSONObject?): TokenUsage {
+internal fun googleUsage(meta: JsonObject?): TokenUsage {
     if (meta == null) return TokenUsage.NONE
-    val prompt = meta.optInt("promptTokenCount", 0)
-    val cached = meta.optInt("cachedContentTokenCount", 0)
-    val output = meta.optInt("candidatesTokenCount", 0) + meta.optInt("thoughtsTokenCount", 0)
+    val prompt = meta["promptTokenCount"]?.jsonPrimitive?.intOrNull ?: 0
+    val cached = meta["cachedContentTokenCount"]?.jsonPrimitive?.intOrNull ?: 0
+    val output = (meta["candidatesTokenCount"]?.jsonPrimitive?.intOrNull ?: 0) + (meta["thoughtsTokenCount"]?.jsonPrimitive?.intOrNull ?: 0)
     return TokenUsage(prompt.coerceAtLeast(0), cached.coerceAtLeast(0), output.coerceAtLeast(0))
 }
 
-internal fun anthropicUsage(usage: JSONObject?): TokenUsage {
-    if (usage == null || usage.length() == 0) return TokenUsage.NONE
-    val fresh = usage.optInt("input_tokens", 0)
-    val created = usage.optInt("cache_creation_input_tokens", 0)
-    val read = usage.optInt("cache_read_input_tokens", 0)
-    val output = usage.optInt("output_tokens", 0)
+internal fun anthropicUsage(usage: JsonObject?): TokenUsage {
+    if (usage == null || usage.isEmpty()) return TokenUsage.NONE
+    val fresh = usage["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+    val created = usage["cache_creation_input_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+    val read = usage["cache_read_input_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+    val output = usage["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0
     return TokenUsage(
         promptTokens = (fresh + created + read).coerceAtLeast(0),
         cachedTokens = read.coerceAtLeast(0),
         outputTokens = output.coerceAtLeast(0)
     )
-}
-
-private fun markMessageBreakpoint(message: JSONObject?) {
-    val target = message ?: return
-    val breakpoint = JSONObject().put("type", "ephemeral")
-    when (val content = target.opt("content")) {
-        is JSONArray -> content.optJSONObject(content.length() - 1)?.put("cache_control", breakpoint)
-        is String -> {
-            target.put(
-                "content",
-                JSONArray().put(JSONObject().put("type", "text").put("text", content).put("cache_control", breakpoint))
-            )
-        }
-    }
 }
 
 internal fun mergeUsage(current: TokenUsage, fresh: TokenUsage): TokenUsage = TokenUsage(
@@ -245,20 +231,27 @@ internal fun mergeUsage(current: TokenUsage, fresh: TokenUsage): TokenUsage = To
     outputTokens = if (fresh.outputTokens > 0) fresh.outputTokens else current.outputTokens
 )
 
-private fun toolSchema(tools: List<ToolDefinition>): List<JSONObject> {
+private fun toolSchema(tools: List<ToolDefinition>): List<JsonObject> {
     return tools.map { t ->
-        val props = JSONObject()
-        val required = JSONArray()
-        for (p in t.params) {
-            val schema = JSONObject().put("type", p.type).put("description", p.description)
-            if (p.type == "array") schema.put("items", JSONObject().put("type", p.itemType))
-            props.put(p.name, schema)
-            if (p.required) required.put(p.name)
+        val props = buildJsonObject {
+            for (p in t.params) {
+                put(p.name, buildJsonObject {
+                    put("type", p.type)
+                    put("description", p.description)
+                    if (p.type == "array") put("items", buildJsonObject { put("type", p.itemType) })
+                })
+            }
         }
-        JSONObject()
-            .put("_name", t.name)
-            .put("_description", t.description)
-            .put("_schema", JSONObject().put("type", "object").put("properties", props).put("required", required))
+        val required = buildJsonArray {
+            for (p in t.params) {
+                if (p.required) add(p.name)
+            }
+        }
+        buildJsonObject {
+            put("_name", t.name)
+            put("_description", t.description)
+            put("_schema", buildJsonObject { put("type", "object"); put("properties", props); put("required", required) })
+        }
     }
 }
 
@@ -273,11 +266,11 @@ private fun parseDataUrl(url: String): Pair<String, String>? {
     return mime to data
 }
 
-private fun imageFromOpenAiImages(images: JSONArray?): Pair<String, String>? {
+private fun imageFromOpenAiImages(images: JsonArray?): Pair<String, String>? {
     if (images == null) return null
     var found: Pair<String, String>? = null
-    for (i in 0 until images.length()) {
-        val url = images.optJSONObject(i)?.optJSONObject("image_url")?.optString("url", "") ?: ""
+    for (i in 0 until images.size) {
+        val url = images[i].jsonObject["image_url"]?.jsonObject?.get("url")?.jsonPrimitive?.content ?: ""
         parseDataUrl(url)?.let { found = it }
     }
     return found
@@ -306,169 +299,178 @@ object OpenAiAdapter : ProviderAdapter {
         provider: String,
         cacheKey: String,
         context: String
-    ): JSONObject {
+    ): JsonObject {
         val echoReasoning = provider == com.lucent.app.data.ApiProviders.DEEPSEEK ||
             provider == com.lucent.app.data.ApiProviders.KIMI
-        val messages = JSONArray()
-        messages.put(JSONObject().put("role", "system").put("content", systemPrompt))
-        for (turn in history) {
-            when {
-                turn.toolCalls.isNotEmpty() -> {
-                    val msg = JSONObject().put("role", "assistant")
-                    msg.put("content", if (turn.content.isBlank()) JSONObject.NULL else turn.content)
-                    val calls = JSONArray()
-                    for (c in turn.toolCalls) {
-                        calls.put(
-                            JSONObject().put("id", c.id).put("type", "function").put(
-                                "function",
-                                JSONObject().put("name", c.name).put("arguments", c.argumentsJson)
-                            )
-                        )
+        val messages = buildJsonArray {
+            add(buildJsonObject { put("role", "system"); put("content", systemPrompt) })
+            for (turn in history) {
+                when {
+                    turn.toolCalls.isNotEmpty() -> {
+                        add(buildJsonObject {
+                            put("role", "assistant")
+                            if (turn.content.isBlank()) put("content", JsonNull) else put("content", turn.content)
+                            val calls = buildJsonArray {
+                                for (c in turn.toolCalls) {
+                                    add(buildJsonObject {
+                                        put("id", c.id)
+                                        put("type", "function")
+                                        put("function", buildJsonObject {
+                                            put("name", c.name)
+                                            put("arguments", c.argumentsJson)
+                                        })
+                                    })
+                                }
+                            }
+                            put("tool_calls", calls)
+                            if (echoReasoning && turn.reasoningContent.isNotBlank()) {
+                                put("reasoning_content", turn.reasoningContent)
+                            }
+                        })
                     }
-                    msg.put("tool_calls", calls)
-                    if (echoReasoning && turn.reasoningContent.isNotBlank()) {
-                        msg.put("reasoning_content", turn.reasoningContent)
+                    turn.toolResults.isNotEmpty() -> {
+                        for (r in turn.toolResults) {
+                            add(buildJsonObject {
+                                put("role", "tool")
+                                put("tool_call_id", r.id)
+                                put("content", r.content)
+                            })
+                        }
+                        if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
+                            add(buildJsonObject {
+                                put("role", "user")
+                                put("content", openAiContent(turn.copy(toolResults = emptyList())))
+                            })
+                        }
                     }
-                    messages.put(msg)
+                    else -> {
+                        add(buildJsonObject {
+                            put("role", turn.role)
+                            put("content", openAiContent(turn))
+                            if (echoReasoning && turn.role == "assistant" && turn.reasoningContent.isNotBlank()) {
+                                put("reasoning_content", turn.reasoningContent)
+                            }
+                        })
+                    }
                 }
-                turn.toolResults.isNotEmpty() -> {
-                    for (r in turn.toolResults) {
-                        messages.put(
-                            JSONObject().put("role", "tool").put("tool_call_id", r.id).put("content", r.content)
-                        )
-                    }
-                    if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
-                        messages.put(JSONObject().put("role", "user").put("content", openAiContent(turn.copy(toolResults = emptyList()))))
-                    }
-                }
-                else -> {
-                    val msg = JSONObject().put("role", turn.role).put("content", openAiContent(turn))
-                    if (echoReasoning && turn.role == "assistant" && turn.reasoningContent.isNotBlank()) {
-                        msg.put("reasoning_content", turn.reasoningContent)
-                    }
-                    messages.put(msg)
-                }
+            }
+            if (context.isNotBlank()) {
+                add(buildJsonObject { put("role", "system"); put("content", context) })
             }
         }
 
         val plan = ReasoningEfforts.planFor(provider, model, reasoning)
-        val root = JSONObject()
-            .put("model", model)
-            .put("messages", messages)
-            .put("max_tokens", MAX_TOKENS)
-        if (context.isNotBlank()) {
-            messages.put(JSONObject().put("role", "system").put("content", context))
-        }
-        if (plan.empty) {
-            root.put("temperature", TEMPERATURE).put("top_p", TOP_P)
-        } else {
-            plan.effort?.let { root.put("reasoning_effort", it) }
-            if (plan.thinkingOff) root.put("thinking", JSONObject().put("type", "disabled"))
-        }
-        if (streaming && (provider == com.lucent.app.data.ApiProviders.CHATGPT ||
-                provider == com.lucent.app.data.ApiProviders.KIMI)
-        ) {
-            root.put("stream_options", JSONObject().put("include_usage", true))
-        }
-        val cacheTtls = ReasoningEfforts.cacheOptionsFor(provider, model)
-        if (cacheTtls.isNotEmpty()) {
-            root.put("prompt_cache_options", JSONObject().put("mode", "implicit").put("ttl", cacheTtls.first()))
-        }
-        if (cacheKey.isNotBlank() &&
-            (provider == com.lucent.app.data.ApiProviders.KIMI ||
-                provider == com.lucent.app.data.ApiProviders.CHATGPT)
-        ) {
-            root.put("prompt_cache_key", cacheKey)
-        }
-        if (tools.isNotEmpty()) {
-            val toolsArray = JSONArray()
-            for (t in toolSchema(tools)) {
-                toolsArray.put(
-                    JSONObject().put("type", "function").put(
-                        "function",
-                        JSONObject()
-                            .put("name", t.getString("_name"))
-                            .put("description", t.getString("_description"))
-                            .put("parameters", t.getJSONObject("_schema"))
-                    )
-                )
+        return buildJsonObject {
+            put("model", model)
+            put("messages", messages)
+            put("max_tokens", MAX_TOKENS)
+            if (plan.empty) {
+                put("temperature", TEMPERATURE)
+                put("top_p", TOP_P)
+            } else {
+                plan.effort?.let { put("reasoning_effort", it) }
+                if (plan.thinkingOff) put("thinking", buildJsonObject { put("type", "disabled") })
             }
-            root.put("tools", toolsArray)
+            if (streaming && (provider == com.lucent.app.data.ApiProviders.CHATGPT ||
+                    provider == com.lucent.app.data.ApiProviders.KIMI)
+            ) {
+                put("stream_options", buildJsonObject { put("include_usage", true) })
+            }
+            val cacheTtls = ReasoningEfforts.cacheOptionsFor(provider, model)
+            if (cacheTtls.isNotEmpty()) {
+                put("prompt_cache_options", buildJsonObject { put("mode", "implicit"); put("ttl", cacheTtls.first()) })
+            }
+            if (cacheKey.isNotBlank() &&
+                (provider == com.lucent.app.data.ApiProviders.KIMI || provider == com.lucent.app.data.ApiProviders.CHATGPT)
+            ) {
+                put("prompt_cache_key", cacheKey)
+            }
+            if (tools.isNotEmpty()) {
+                put("tools", buildJsonArray {
+                    for (t in toolSchema(tools)) {
+                        add(buildJsonObject {
+                            put("type", "function")
+                            put("function", buildJsonObject {
+                                put("name", t["_name"]!!)
+                                put("description", t["_description"]!!)
+                                put("parameters", t["_schema"]!!)
+                            })
+                        })
+                    }
+                })
+            }
         }
-        return root
     }
 
     override fun parseReply(bodyStr: String): RawModelReply {
-        val json = JSONObject(bodyStr)
-        val message = json.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
-        val text = if (message.isNull("content")) null else message.optString("content")
+        val json = Json.parseToJsonElement(bodyStr).jsonObject
+        val message = json["choices"]!!.jsonArray[0].jsonObject["message"]!!.jsonObject
+        val text = message["content"]?.jsonPrimitive?.contentOrNull
         val toolCalls = mutableListOf<ToolCallRequest>()
-        val toolCallsArray = message.optJSONArray("tool_calls")
+        val toolCallsArray = message["tool_calls"]?.jsonArray
         if (toolCallsArray != null) {
-            for (i in 0 until toolCallsArray.length()) {
-                val tc = toolCallsArray.getJSONObject(i)
-                val fn = tc.getJSONObject("function")
-                toolCalls.add(ToolCallRequest(tc.optString("id", "call_$i"), fn.getString("name"), fn.optString("arguments", "{}")))
+            for (i in 0 until toolCallsArray.size) {
+                val tc = toolCallsArray[i].jsonObject
+                val fn = tc["function"]!!.jsonObject
+                toolCalls.add(ToolCallRequest(tc["id"]?.jsonPrimitive?.content ?: "call_$i", fn["name"]!!.jsonPrimitive.content, fn["arguments"]?.jsonPrimitive?.content ?: "{}"))
             }
         }
-        val image = imageFromOpenAiImages(message.optJSONArray("images"))
+        val image = imageFromOpenAiImages(message["images"]?.jsonArray)
         return RawModelReply(
             text,
             toolCalls,
             image?.first,
             image?.second,
-            reasoningContent = message.optString("reasoning_content", ""),
-            usage = openAiUsage(json.optJSONObject("usage"))
+            reasoningContent = message["reasoning_content"]?.jsonPrimitive?.content ?: "",
+            usage = openAiUsage(json["usage"]?.jsonObject)
         )
     }
 
     override fun parseStreamEvent(
-        json: JSONObject,
+        json: JsonObject,
         acc: StreamAccumulator,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
-        json.optJSONObject("usage")?.let { reported ->
-            if (reported.length() > 0) acc.usage = openAiUsage(reported)
+        json["usage"]?.jsonObject?.let { reported ->
+            if (reported.isNotEmpty()) acc.usage = openAiUsage(reported)
         }
-        val delta = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta")
+        val delta = json["choices"]?.jsonArray?.let { if (it.isEmpty()) null else it[0].jsonObject["delta"]?.jsonObject }
         val reasoning = reasoningChannel(delta)
         if (reasoning.isNotEmpty()) {
             acc.fullReasoning.append(reasoning)
             onReasoning(reasoning)
         }
-        val piece = delta?.let { if (it.isNull("content")) "" else it.optString("content", "") } ?: ""
+        val piece = delta?.get("content")?.jsonPrimitive?.contentOrNull ?: ""
         if (piece.isNotEmpty()) routeContent(piece, acc, onDelta, onReasoning)
-        delta?.optJSONArray("tool_calls")?.let { tcArr ->
-            for (i in 0 until tcArr.length()) {
-                val tc = tcArr.getJSONObject(i)
-                val idx = tc.optInt("index", 0)
+        delta?.get("tool_calls")?.jsonArray?.let { tcArr ->
+            for (i in 0 until tcArr.size) {
+                val tc = tcArr[i].jsonObject
+                val idx = tc["index"]?.jsonPrimitive?.intOrNull ?: 0
                 val a = acc.openAiToolAcc.getOrPut(idx) { ToolAcc() }
-                tc.optString("id", "").takeIf { it.isNotEmpty() }?.let { a.id = it }
-                tc.optJSONObject("function")?.let { fn ->
-                    fn.optString("name", "").takeIf { it.isNotEmpty() }?.let { a.name = it }
-                    a.args.append(if (fn.isNull("arguments")) "" else fn.optString("arguments", ""))
+                tc["id"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }?.let { a.id = it }
+                tc["function"]?.jsonObject?.let { fn ->
+                    fn["name"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }?.let { a.name = it }
+                    a.args.append(fn["arguments"]?.jsonPrimitive?.contentOrNull ?: "")
                 }
             }
         }
-        imageFromOpenAiImages(delta?.optJSONArray("images"))?.let {
+        imageFromOpenAiImages(delta?.get("images")?.jsonArray)?.let {
             acc.returnedImageMime = it.first; acc.returnedImageData = it.second
         }
     }
 
-    private fun openAiContent(turn: ChatTurn): Any {
+    private fun openAiContent(turn: ChatTurn): JsonElement {
         if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
-            val arr = JSONArray()
-            arr.put(JSONObject().put("type", "text").put("text", turn.content))
-            arr.put(
-                JSONObject().put("type", "image_url").put(
-                    "image_url",
-                    JSONObject().put("url", "data:${turn.attachmentMime};base64,${turn.attachmentData}")
-                )
-            )
-            return arr
+            return buildJsonArray {
+                add(buildJsonObject { put("type", "text"); put("text", turn.content) })
+                add(buildJsonObject {
+                    put("type", "image_url")
+                    put("image_url", buildJsonObject { put("url", "data:${turn.attachmentMime};base64,${turn.attachmentData}") })
+                })
+            }
         }
-        return turn.content
+        return JsonPrimitive(turn.content)
     }
 }
 
@@ -496,191 +498,239 @@ object AnthropicAdapter : ProviderAdapter {
         provider: String,
         cacheKey: String,
         context: String
-    ): JSONObject {
-        val messages = JSONArray()
+    ): JsonObject {
+        val messagesData = mutableListOf<JsonObject>()
         for (turn in history) {
             when {
                 turn.toolCalls.isNotEmpty() -> {
-                    val content = JSONArray()
-                    if (turn.thinkingBlocksJson.isNotBlank()) {
-                        try {
-                            val blocks = JSONArray(turn.thinkingBlocksJson)
-                            for (i in 0 until blocks.length()) {
-                                blocks.optJSONObject(i)?.let { content.put(it) }
+                    val contentArr = buildJsonArray {
+                        if (turn.thinkingBlocksJson.isNotBlank()) {
+                            try {
+                                val blocks = Json.parseToJsonElement(turn.thinkingBlocksJson).jsonArray
+                                for (i in 0 until blocks.size) {
+                                    add(blocks[i].jsonObject)
+                                }
+                            } catch (e: Exception) {
                             }
-                        } catch (e: Exception) {
+                        }
+                        if (turn.content.isNotBlank()) {
+                            add(buildJsonObject { put("type", "text"); put("text", turn.content) })
+                        }
+                        for (c in turn.toolCalls) {
+                            val input = try { Json.parseToJsonElement(c.argumentsJson).jsonObject } catch (e: Exception) { buildJsonObject {} }
+                            add(buildJsonObject {
+                                put("type", "tool_use")
+                                put("id", c.id)
+                                put("name", c.name)
+                                put("input", input)
+                            })
                         }
                     }
-                    if (turn.content.isNotBlank()) {
-                        content.put(JSONObject().put("type", "text").put("text", turn.content))
-                    }
-                    for (c in turn.toolCalls) {
-                        val input = try { JSONObject(c.argumentsJson) } catch (e: Exception) { JSONObject() }
-                        content.put(
-                            JSONObject().put("type", "tool_use").put("id", c.id).put("name", c.name).put("input", input)
-                        )
-                    }
-                    messages.put(JSONObject().put("role", "assistant").put("content", content))
+                    messagesData.add(buildJsonObject { put("role", "assistant"); put("content", contentArr) })
                 }
                 turn.toolResults.isNotEmpty() -> {
-                    val content = JSONArray()
-                    for (r in turn.toolResults) {
-                        content.put(
-                            JSONObject().put("type", "tool_result").put("tool_use_id", r.id).put("content", r.content)
-                        )
+                    val contentArr = buildJsonArray {
+                        for (r in turn.toolResults) {
+                            add(buildJsonObject {
+                                put("type", "tool_result")
+                                put("tool_use_id", r.id)
+                                put("content", r.content)
+                            })
+                        }
+                        if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
+                            add(buildJsonObject {
+                                put("type", "image")
+                                put("source", buildJsonObject {
+                                    put("type", "base64")
+                                    put("media_type", turn.attachmentMime)
+                                    put("data", turn.attachmentData)
+                                })
+                            })
+                        }
                     }
-                    if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
-                        content.put(
-                            JSONObject().put("type", "image").put(
-                                "source",
-                                JSONObject().put("type", "base64").put("media_type", turn.attachmentMime).put("data", turn.attachmentData)
-                            )
-                        )
-                    }
-                    messages.put(JSONObject().put("role", "user").put("content", content))
+                    messagesData.add(buildJsonObject { put("role", "user"); put("content", contentArr) })
                 }
                 else -> {
                     val role = if (turn.role == "assistant") "assistant" else "user"
-                    messages.put(JSONObject().put("role", role).put("content", anthropicContent(turn)))
+                    messagesData.add(buildJsonObject { put("role", role); put("content", anthropicContent(turn)) })
                 }
+            }
+        }
+
+        if (messagesData.isNotEmpty()) {
+            val lastIdx = messagesData.lastIndex
+            val lastMsg = messagesData[lastIdx]
+            val breakpoint = buildJsonObject { put("type", "ephemeral") }
+            val newContent = when (val c = lastMsg["content"]!!) {
+                is JsonArray -> {
+                    val arr = c.toMutableList()
+                    if (arr.isNotEmpty()) {
+                        val lastBlock = arr.last().jsonObject
+                        arr[arr.lastIndex] = buildJsonObject {
+                            lastBlock.forEach { (k, v) -> put(k, v) }
+                            put("cache_control", breakpoint)
+                        }
+                    }
+                    JsonArray(arr)
+                }
+                is JsonPrimitive -> {
+                    buildJsonArray {
+                        add(buildJsonObject {
+                            put("type", "text")
+                            put("text", c.content)
+                            put("cache_control", breakpoint)
+                        })
+                    }
+                }
+                else -> c
+            }
+            messagesData[lastIdx] = buildJsonObject {
+                lastMsg.forEach { (k, v) -> put(k, v) }
+                put("content", newContent)
             }
         }
 
         val plan = ReasoningEfforts.planFor(provider, model, reasoning)
-        val systemBlocks = JSONArray()
-        systemBlocks.put(
-            JSONObject()
-                .put("type", "text")
-                .put("text", systemPrompt)
-                .put("cache_control", JSONObject().put("type", "ephemeral"))
-        )
-        if (context.isNotBlank()) {
-            systemBlocks.put(JSONObject().put("type", "text").put("text", context))
-        }
-        val root = JSONObject()
-            .put("model", model)
-            .put("system", systemBlocks)
-            .put("messages", messages)
-        val budgetTokens = plan.claudeBudgetTokens
-        when {
-            budgetTokens != null -> {
-                root.put("max_tokens", budgetTokens + 4096)
-                root.put("thinking", JSONObject().put("type", "enabled").put("budget_tokens", budgetTokens))
-            }
-            plan.claudeAdaptive -> {
-                root.put("max_tokens", MAX_TOKENS)
-                root.put("thinking", JSONObject().put("type", "adaptive"))
-                plan.claudeEffort?.let { root.put("output_config", JSONObject().put("effort", it)) }
-            }
-            else -> {
-                root.put("max_tokens", MAX_TOKENS).put("temperature", TEMPERATURE).put("top_p", TOP_P)
+        val systemBlocks = buildJsonArray {
+            add(buildJsonObject {
+                put("type", "text")
+                put("text", systemPrompt)
+                put("cache_control", buildJsonObject { put("type", "ephemeral") })
+            })
+            if (context.isNotBlank()) {
+                add(buildJsonObject { put("type", "text"); put("text", context) })
             }
         }
-        if (tools.isNotEmpty()) {
-            val toolsArray = JSONArray()
-            for (t in toolSchema(tools)) {
-                toolsArray.put(
-                    JSONObject()
-                        .put("name", t.getString("_name"))
-                        .put("description", t.getString("_description"))
-                        .put("input_schema", t.getJSONObject("_schema"))
-                )
+        return buildJsonObject {
+            put("model", model)
+            put("system", systemBlocks)
+            put("messages", JsonArray(messagesData))
+            val budgetTokens = plan.claudeBudgetTokens
+            when {
+                budgetTokens != null -> {
+                    put("max_tokens", budgetTokens + 4096)
+                    put("thinking", buildJsonObject { put("type", "enabled"); put("budget_tokens", budgetTokens) })
+                }
+                plan.claudeAdaptive -> {
+                    put("max_tokens", MAX_TOKENS)
+                    put("thinking", buildJsonObject { put("type", "adaptive") })
+                    plan.claudeEffort?.let { put("output_config", buildJsonObject { put("effort", it) }) }
+                }
+                else -> {
+                    put("max_tokens", MAX_TOKENS)
+                    put("temperature", TEMPERATURE)
+                    put("top_p", TOP_P)
+                }
             }
-            toolsArray.optJSONObject(toolsArray.length() - 1)
-                ?.put("cache_control", JSONObject().put("type", "ephemeral"))
-            root.put("tools", toolsArray)
+            if (tools.isNotEmpty()) {
+                val toolsArrayData = mutableListOf<JsonElement>()
+                for (t in toolSchema(tools)) {
+                    toolsArrayData.add(buildJsonObject {
+                        put("name", t["_name"]!!)
+                        put("description", t["_description"]!!)
+                        put("input_schema", t["_schema"]!!)
+                    })
+                }
+                if (toolsArrayData.isNotEmpty()) {
+                    val lastIdx = toolsArrayData.lastIndex
+                    val lastBlock = toolsArrayData[lastIdx].jsonObject
+                    toolsArrayData[lastIdx] = buildJsonObject {
+                        lastBlock.forEach { (k, v) -> put(k, v) }
+                        put("cache_control", buildJsonObject { put("type", "ephemeral") })
+                    }
+                }
+                put("tools", JsonArray(toolsArrayData))
+            }
         }
-        if (messages.length() > 0) {
-            markMessageBreakpoint(messages.optJSONObject(messages.length() - 1))
-        }
-        return root
     }
 
     override fun parseReply(bodyStr: String): RawModelReply {
-        val json = JSONObject(bodyStr)
-        val contentArray = json.getJSONArray("content")
+        val json = Json.parseToJsonElement(bodyStr).jsonObject
+        val contentArray = json["content"]?.jsonArray ?: buildJsonArray {}
         var text: String? = null
         val toolCalls = mutableListOf<ToolCallRequest>()
-        for (i in 0 until contentArray.length()) {
-            val block = contentArray.getJSONObject(i)
-            when (block.optString("type")) {
-                "text" -> text = (text ?: "") + block.optString("text")
+        for (i in 0 until contentArray.size) {
+            val block = contentArray[i].jsonObject
+            when (block["type"]?.jsonPrimitive?.content) {
+                "text" -> text = (text ?: "") + (block["text"]?.jsonPrimitive?.content ?: "")
                 "tool_use" -> {
-                    val input = block.optJSONObject("input") ?: JSONObject()
-                    toolCalls.add(ToolCallRequest(block.optString("id"), block.optString("name"), input.toString()))
+                    val input = block["input"]?.jsonObject ?: buildJsonObject {}
+                    toolCalls.add(ToolCallRequest(block["id"]?.jsonPrimitive?.content ?: "", block["name"]?.jsonPrimitive?.content ?: "", Json.encodeToString(JsonElement.serializer(), input)))
                 }
             }
         }
-        return RawModelReply(text, toolCalls, usage = anthropicUsage(json.optJSONObject("usage")))
+        return RawModelReply(text, toolCalls, usage = anthropicUsage(json["usage"]?.jsonObject))
     }
 
     override fun parseStreamEvent(
-        json: JSONObject,
+        json: JsonObject,
         acc: StreamAccumulator,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
-        when (json.optString("type")) {
+        when (json["type"]?.jsonPrimitive?.content) {
             "message_start" -> {
-                json.optJSONObject("message")?.optJSONObject("usage")?.let {
+                json["message"]?.jsonObject?.get("usage")?.jsonObject?.let {
                     acc.usage = mergeUsage(acc.usage, anthropicUsage(it))
                 }
             }
             "message_delta" -> {
-                json.optJSONObject("usage")?.let {
+                json["usage"]?.jsonObject?.let {
                     acc.usage = mergeUsage(acc.usage, anthropicUsage(it))
                 }
             }
             "content_block_start" -> {
-                val block = json.optJSONObject("content_block")
-                val idx = json.optInt("index", 0)
-                when (block?.optString("type")) {
-                    "tool_use" -> acc.anthropicToolAcc[idx] = ToolAcc(id = block.optString("id"), name = block.optString("name"))
+                val block = json["content_block"]?.jsonObject
+                val idx = json["index"]?.jsonPrimitive?.intOrNull ?: 0
+                when (block?.get("type")?.jsonPrimitive?.content) {
+                    "tool_use" -> acc.anthropicToolAcc[idx] = ToolAcc(id = block["id"]?.jsonPrimitive?.content ?: "", name = block["name"]?.jsonPrimitive?.content ?: "")
                     "thinking" -> acc.beginThinkingBlock(idx, "thinking", null)
-                    "redacted_thinking" -> acc.beginThinkingBlock(idx, "redacted_thinking", block.optString("data"))
+                    "redacted_thinking" -> acc.beginThinkingBlock(idx, "redacted_thinking", block["data"]?.jsonPrimitive?.content)
                 }
             }
             "content_block_delta" -> {
-                val delta = json.optJSONObject("delta")
-                when (delta?.optString("type")) {
+                val delta = json["delta"]?.jsonObject
+                when (delta?.get("type")?.jsonPrimitive?.content) {
                     "text_delta" -> {
-                        val piece = if (delta.isNull("text")) "" else delta.optString("text", "")
+                        val piece = delta["text"]?.jsonPrimitive?.contentOrNull ?: ""
                         if (piece.isNotEmpty()) routeContent(piece, acc, onDelta, onReasoning)
                     }
                     "thinking_delta" -> {
-                        val piece = if (delta.isNull("thinking")) "" else delta.optString("thinking", "")
+                        val piece = delta["thinking"]?.jsonPrimitive?.contentOrNull ?: ""
                         if (piece.isNotEmpty()) {
                             acc.fullReasoning.append(piece)
-                            acc.appendThinkingText(json.optInt("index", 0), piece)
+                            acc.appendThinkingText(json["index"]?.jsonPrimitive?.intOrNull ?: 0, piece)
                             onReasoning(piece)
                         }
                     }
                     "signature_delta" -> {
-                        val signature = if (delta.isNull("signature")) "" else delta.optString("signature", "")
-                        if (signature.isNotEmpty()) acc.appendThinkingSignature(json.optInt("index", 0), signature)
+                        val signature = delta["signature"]?.jsonPrimitive?.contentOrNull ?: ""
+                        if (signature.isNotEmpty()) acc.appendThinkingSignature(json["index"]?.jsonPrimitive?.intOrNull ?: 0, signature)
                     }
                     "input_json_delta" -> {
-                        val idx = json.optInt("index", 0)
-                        acc.anthropicToolAcc[idx]?.args?.append(if (delta.isNull("partial_json")) "" else delta.optString("partial_json", ""))
+                        val idx = json["index"]?.jsonPrimitive?.intOrNull ?: 0
+                        acc.anthropicToolAcc[idx]?.args?.append(delta["partial_json"]?.jsonPrimitive?.contentOrNull ?: "")
                     }
                 }
             }
         }
     }
 
-    private fun anthropicContent(turn: ChatTurn): Any {
+    private fun anthropicContent(turn: ChatTurn): JsonElement {
         if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
-            val arr = JSONArray()
-            arr.put(
-                JSONObject().put("type", "image").put(
-                    "source",
-                    JSONObject().put("type", "base64").put("media_type", turn.attachmentMime).put("data", turn.attachmentData)
-                )
-            )
-            arr.put(JSONObject().put("type", "text").put("text", turn.content))
-            return arr
+            return buildJsonArray {
+                add(buildJsonObject {
+                    put("type", "image")
+                    put("source", buildJsonObject {
+                        put("type", "base64")
+                        put("media_type", turn.attachmentMime)
+                        put("data", turn.attachmentData)
+                    })
+                })
+                add(buildJsonObject { put("type", "text"); put("text", turn.content) })
+            }
         }
-        return turn.content
+        return JsonPrimitive(turn.content)
     }
 }
 
@@ -708,148 +758,179 @@ object GoogleAdapter : ProviderAdapter {
         provider: String,
         cacheKey: String,
         context: String
-    ): JSONObject {
-        val contents = JSONArray()
+    ): JsonObject {
+        val contentsData = mutableListOf<JsonObject>()
         for (turn in history) {
             when {
                 turn.toolCalls.isNotEmpty() -> {
-                    val parts = JSONArray()
-                    if (turn.content.isNotBlank()) parts.put(JSONObject().put("text", turn.content))
-                    for (c in turn.toolCalls) {
-                        val args = try { JSONObject(c.argumentsJson) } catch (e: Exception) { JSONObject() }
-                        val part = JSONObject().put("functionCall", JSONObject().put("name", c.name).put("args", args))
-                        c.thoughtSignature?.takeIf { it.isNotBlank() }?.let { part.put("thoughtSignature", it) }
-                        parts.put(part)
+                    val parts = buildJsonArray {
+                        if (turn.content.isNotBlank()) add(buildJsonObject { put("text", turn.content) })
+                        for (c in turn.toolCalls) {
+                            val args = try { Json.parseToJsonElement(c.argumentsJson).jsonObject } catch (e: Exception) { buildJsonObject {} }
+                            val part = buildJsonObject {
+                                put("functionCall", buildJsonObject {
+                                    put("name", c.name)
+                                    put("args", args)
+                                })
+                                c.thoughtSignature?.takeIf { it.isNotBlank() }?.let { put("thoughtSignature", it) }
+                            }
+                            add(part)
+                        }
                     }
-                    contents.put(JSONObject().put("role", "model").put("parts", parts))
+                    contentsData.add(buildJsonObject { put("role", "model"); put("parts", parts) })
                 }
                 turn.toolResults.isNotEmpty() -> {
-                    val parts = JSONArray()
-                    for (r in turn.toolResults) {
-                        parts.put(
-                            JSONObject().put(
-                                "functionResponse",
-                                JSONObject().put("name", r.name).put("response", JSONObject().put("result", r.content))
-                            )
-                        )
+                    val parts = buildJsonArray {
+                        for (r in turn.toolResults) {
+                            add(buildJsonObject {
+                                put("functionResponse", buildJsonObject {
+                                    put("name", r.name)
+                                    put("response", buildJsonObject { put("result", r.content) })
+                                })
+                            })
+                        }
+                        if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
+                            add(buildJsonObject {
+                                put("inlineData", buildJsonObject {
+                                    put("mimeType", turn.attachmentMime)
+                                    put("data", turn.attachmentData)
+                                })
+                            })
+                        }
                     }
-                    if (turn.attachmentData != null && turn.attachmentMime?.startsWith("image/") == true) {
-                        parts.put(JSONObject().put("inlineData", JSONObject().put("mimeType", turn.attachmentMime).put("data", turn.attachmentData)))
-                    }
-                    contents.put(JSONObject().put("role", "user").put("parts", parts))
+                    contentsData.add(buildJsonObject { put("role", "user"); put("parts", parts) })
                 }
                 else -> {
                     val role = if (turn.role == "assistant") "model" else "user"
-                    val parts = JSONArray()
-                    parts.put(JSONObject().put("text", turn.content))
-                    if (turn.attachmentMime?.startsWith("image/") == true && turn.attachmentData != null) {
-                        parts.put(JSONObject().put("inlineData", JSONObject().put("mimeType", turn.attachmentMime).put("data", turn.attachmentData)))
+                    val parts = buildJsonArray {
+                        add(buildJsonObject { put("text", turn.content) })
+                        if (turn.attachmentMime?.startsWith("image/") == true && turn.attachmentData != null) {
+                            add(buildJsonObject {
+                                put("inlineData", buildJsonObject {
+                                    put("mimeType", turn.attachmentMime)
+                                    put("data", turn.attachmentData)
+                                })
+                            })
+                        }
                     }
-                    contents.put(JSONObject().put("role", role).put("parts", parts))
+                    contentsData.add(buildJsonObject { put("role", role); put("parts", parts) })
                 }
             }
         }
 
-        val root = JSONObject().put("contents", contents)
+        if (context.isNotBlank()) {
+            if (contentsData.isNotEmpty() && contentsData.last()["role"]?.jsonPrimitive?.content == "user") {
+                val lastIdx = contentsData.lastIndex
+                val lastMsg = contentsData[lastIdx]
+                val parts = lastMsg["parts"]?.jsonArray?.toMutableList() ?: mutableListOf()
+                parts.add(buildJsonObject { put("text", context) })
+                contentsData[lastIdx] = buildJsonObject {
+                    lastMsg.forEach { (k, v) -> put(k, v) }
+                    put("parts", JsonArray(parts))
+                }
+            } else {
+                contentsData.add(buildJsonObject {
+                    put("role", "user")
+                    put("parts", buildJsonArray { add(buildJsonObject { put("text", context) }) })
+                })
+            }
+        }
+
         val plan = ReasoningEfforts.planFor(provider, model, reasoning)
         val budget = plan.googleThinkingBudget
-        val generation = JSONObject()
-            .put("temperature", TEMPERATURE)
-            .put("topP", TOP_P)
-            .put("maxOutputTokens", if (budget != null && budget > 0) budget + 2048 else MAX_TOKENS)
-        when {
-            plan.googleThinkingLevel != null ->
-                generation.put("thinkingConfig", JSONObject().put("thinkingLevel", plan.googleThinkingLevel))
-            budget != null ->
-                generation.put("thinkingConfig", JSONObject().put("thinkingBudget", budget))
-        }
-        root.put("generationConfig", generation)
-        if (context.isNotBlank()) {
-            val last = contents.optJSONObject(contents.length() - 1)
-            val parts = last?.optJSONArray("parts")
-            if (last != null && parts != null && last.optString("role") == "user") {
-                parts.put(JSONObject().put("text", context))
-            } else {
-                contents.put(
-                    JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", context)))
-                )
+        val generation = buildJsonObject {
+            put("temperature", TEMPERATURE)
+            put("topP", TOP_P)
+            put("maxOutputTokens", if (budget != null && budget > 0) budget + 2048 else MAX_TOKENS)
+            when {
+                plan.googleThinkingLevel != null ->
+                    put("thinkingConfig", buildJsonObject { put("thinkingLevel", plan.googleThinkingLevel) })
+                budget != null ->
+                    put("thinkingConfig", buildJsonObject { put("thinkingBudget", budget) })
             }
         }
-        if (systemPrompt.isNotBlank()) {
-            root.put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
-        }
-        if (tools.isNotEmpty()) {
-            val declarations = JSONArray()
-            for (t in toolSchema(tools)) {
-                declarations.put(
-                    JSONObject()
-                        .put("name", t.getString("_name"))
-                        .put("description", t.getString("_description"))
-                        .put("parameters", t.getJSONObject("_schema"))
-                )
+
+        return buildJsonObject {
+            put("contents", JsonArray(contentsData))
+            put("generationConfig", generation)
+            if (systemPrompt.isNotBlank()) {
+                put("systemInstruction", buildJsonObject {
+                    put("parts", buildJsonArray { add(buildJsonObject { put("text", systemPrompt) }) })
+                })
             }
-            root.put("tools", JSONArray().put(JSONObject().put("functionDeclarations", declarations)))
+            if (tools.isNotEmpty()) {
+                val declarations = buildJsonArray {
+                    for (t in toolSchema(tools)) {
+                        add(buildJsonObject {
+                            put("name", t["_name"]!!)
+                            put("description", t["_description"]!!)
+                            put("parameters", t["_schema"]!!)
+                        })
+                    }
+                }
+                put("tools", buildJsonArray { add(buildJsonObject { put("functionDeclarations", declarations) }) })
+            }
         }
-        return root
     }
 
     override fun parseReply(bodyStr: String): RawModelReply {
-        val json = JSONObject(bodyStr)
-        val candidates = json.optJSONArray("candidates")
-        if (candidates == null || candidates.length() == 0) return RawModelReply(null, emptyList())
-        val content = candidates.getJSONObject(0).optJSONObject("content") ?: JSONObject()
-        val parts = content.optJSONArray("parts") ?: JSONArray()
+        val json = Json.parseToJsonElement(bodyStr).jsonObject
+        val candidates = json["candidates"]?.jsonArray
+        if (candidates == null || candidates.isEmpty()) return RawModelReply(null, emptyList())
+        val content = candidates[0].jsonObject["content"]?.jsonObject ?: buildJsonObject {}
+        val parts = content["parts"]?.jsonArray ?: buildJsonArray {}
         var text: String? = null
         val toolCalls = mutableListOf<ToolCallRequest>()
         var imageMime: String? = null
         var imageData: String? = null
 
-        for (i in 0 until parts.length()) {
-            val part = parts.getJSONObject(i)
-            if (part.has("text")) text = (text ?: "") + part.optString("text")
-            part.optJSONObject("functionCall")?.let { fc ->
-                val args = fc.optJSONObject("args") ?: JSONObject()
-                val sig = part.optString("thoughtSignature").takeIf { it.isNotEmpty() }
-                toolCalls.add(ToolCallRequest("call_$i", fc.optString("name"), args.toString(), sig))
+        for (i in 0 until parts.size) {
+            val part = parts[i].jsonObject
+            if (part.containsKey("text")) text = (text ?: "") + (part["text"]?.jsonPrimitive?.content ?: "")
+            part["functionCall"]?.jsonObject?.let { fc ->
+                val args = fc["args"]?.jsonObject ?: buildJsonObject {}
+                val sig = part["thoughtSignature"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }
+                toolCalls.add(ToolCallRequest("call_$i", fc["name"]?.jsonPrimitive?.content ?: "", Json.encodeToString(JsonElement.serializer(), args), sig))
             }
-            part.optJSONObject("inlineData")?.let { inlineData ->
-                imageMime = inlineData.optString("mimeType")
-                imageData = inlineData.optString("data")
+            part["inlineData"]?.jsonObject?.let { inlineData ->
+                imageMime = inlineData["mimeType"]?.jsonPrimitive?.content
+                imageData = inlineData["data"]?.jsonPrimitive?.content
             }
         }
-        return RawModelReply(text, toolCalls, imageMime, imageData, usage = googleUsage(json.optJSONObject("usageMetadata")))
+        return RawModelReply(text, toolCalls, imageMime, imageData, usage = googleUsage(json["usageMetadata"]?.jsonObject))
     }
 
     override fun parseStreamEvent(
-        json: JSONObject,
+        json: JsonObject,
         acc: StreamAccumulator,
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
-        json.optJSONObject("usageMetadata")?.let { acc.usage = googleUsage(it) }
-        val parts = json.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+        json["usageMetadata"]?.jsonObject?.let { acc.usage = googleUsage(it) }
+        val candidates = json["candidates"]?.jsonArray
+        val parts = if (candidates != null && candidates.isNotEmpty()) candidates[0].jsonObject["content"]?.jsonObject?.get("parts")?.jsonArray else null
         if (parts != null) {
-            for (i in 0 until parts.length()) {
-                val part = parts.getJSONObject(i)
-                val piece = if (part.isNull("text")) "" else part.optString("text", "")
+            for (i in 0 until parts.size) {
+                val part = parts[i].jsonObject
+                val piece = part["text"]?.jsonPrimitive?.contentOrNull ?: ""
                 if (piece.isNotEmpty()) {
-                    if (part.optBoolean("thought", false)) {
+                    if (part["thought"]?.jsonPrimitive?.booleanOrNull == true) {
                         acc.fullReasoning.append(piece)
                         onReasoning(piece)
                     } else {
                         routeContent(piece, acc, onDelta, onReasoning)
                     }
                 }
-                part.optJSONObject("functionCall")?.let { fc ->
-                    val args = fc.optJSONObject("args") ?: JSONObject()
+                part["functionCall"]?.jsonObject?.let { fc ->
+                    val args = fc["args"]?.jsonObject ?: buildJsonObject {}
                     val a = acc.openAiToolAcc.getOrPut(i) { ToolAcc() }
-                    a.name = fc.optString("name")
-                    a.args.append(args.toString())
-                    part.optString("thoughtSignature").takeIf { it.isNotEmpty() }?.let { a.thoughtSignature = it }
+                    a.name = fc["name"]?.jsonPrimitive?.content ?: ""
+                    a.args.append(Json.encodeToString(JsonElement.serializer(), args))
+                    part["thoughtSignature"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }?.let { a.thoughtSignature = it }
                 }
-                part.optJSONObject("inlineData")?.let { inlineData ->
-                    acc.returnedImageMime = inlineData.optString("mimeType")
-                    acc.returnedImageData = inlineData.optString("data")
+                part["inlineData"]?.jsonObject?.let { inlineData ->
+                    acc.returnedImageMime = inlineData["mimeType"]?.jsonPrimitive?.content
+                    acc.returnedImageData = inlineData["data"]?.jsonPrimitive?.content
                 }
             }
         }

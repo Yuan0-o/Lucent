@@ -3,8 +3,7 @@ import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.data.LocalSecrets
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -58,16 +57,16 @@ object LocalModelStore {
             val raw = indexFile.readText()
             val decrypted = LocalSecrets.decrypt(raw)
             if (decrypted.isEmpty() && raw.isNotEmpty()) return rebuildFromFiles(context)
-            val root = JSONObject(decrypted)
-            val arr = root.optJSONArray("slots") ?: JSONArray()
-            val slots = (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val id = o.optString("id", "").ifBlank { return@mapNotNull null }
-                val fileName = o.optString("file", "").ifBlank { return@mapNotNull null }
+            val root = Json.parseToJsonElement(decrypted).jsonObject
+            val arr = root["slots"]?.jsonArray ?: buildJsonArray {}
+            val slots = (0 until arr.size).mapNotNull { i ->
+                val o = arr[i].jsonObject
+                val id = (o["id"]?.jsonPrimitive?.content ?: "").ifBlank { return@mapNotNull null }
+                val fileName = (o["file"]?.jsonPrimitive?.content ?: "").ifBlank { return@mapNotNull null }
                 if (!File(dir, fileName).exists()) return@mapNotNull null
-                ModelSlot(id = id, name = o.optString("name", "model.gguf"), fileName = fileName)
+                ModelSlot(id = id, name = o["name"]?.jsonPrimitive?.content ?: "model.gguf", fileName = fileName)
             }
-            val active = root.optString("active", "").ifBlank { null }
+            val active = (root["active"]?.jsonPrimitive?.content ?: "").ifBlank { null }
                 ?.takeIf { a -> slots.any { it.id == a } }
                 ?: slots.firstOrNull()?.id
             ModelIndex(slots, active)
@@ -99,13 +98,20 @@ object LocalModelStore {
     private fun writeIndex(context: PlatformContext, idx: ModelIndex) {
         val dir = dir(context)
         if (!dir.exists()) dir.mkdirs()
-        val arr = JSONArray()
-        idx.slots.forEach { s ->
-            arr.put(JSONObject().put("id", s.id).put("name", s.name).put("file", s.fileName))
+        val arr = buildJsonArray {
+            idx.slots.forEach { s ->
+                add(buildJsonObject {
+                    put("id", s.id)
+                    put("name", s.name)
+                    put("file", s.fileName)
+                })
+            }
         }
-        val root = JSONObject().put("slots", arr)
-        idx.activeId?.let { root.put("active", it) }
-        File(dir, INDEX_FILE).writeText(LocalSecrets.encrypt(root.toString()))
+        val root = buildJsonObject {
+            put("slots", arr)
+            idx.activeId?.let { put("active", it) }
+        }
+        File(dir, INDEX_FILE).writeText(LocalSecrets.encrypt(Json.encodeToString(JsonElement.serializer(), root)))
     }
 
 
@@ -223,19 +229,21 @@ object LocalModelStore {
     @Synchronized
     fun exportManifestJson(context: PlatformContext): String {
         val idx = index(context)
-        val arr = JSONArray()
-        idx.slots.forEach { s ->
-            arr.put(
-                JSONObject()
-                    .put("id", s.id)
-                    .put("name", s.name)
-                    .put("file", s.fileName)
-                    .put("size", File(dir(context), s.fileName).length())
-            )
+        val arr = buildJsonArray {
+            idx.slots.forEach { s ->
+                add(buildJsonObject {
+                    put("id", s.id)
+                    put("name", s.name)
+                    put("file", s.fileName)
+                    put("size", File(dir(context), s.fileName).length())
+                })
+            }
         }
-        val root = JSONObject().put("slots", arr)
-        idx.activeId?.let { root.put("active", it) }
-        return root.toString()
+        val root = buildJsonObject {
+            put("slots", arr)
+            idx.activeId?.let { put("active", it) }
+        }
+        return Json.encodeToString(JsonElement.serializer(), root)
     }
 
     fun totalModelBytes(context: PlatformContext): Long =
@@ -256,23 +264,23 @@ object LocalModelStore {
         val d = dir(context)
         if (!d.exists()) d.mkdirs()
         val root = try {
-            JSONObject(manifestJson)
+            Json.parseToJsonElement(manifestJson).jsonObject
         } catch (_: Throwable) {
             return 0
         }
-        val arr = root.optJSONArray("slots") ?: JSONArray()
+        val arr = root["slots"]?.jsonArray ?: buildJsonArray {}
         val existing = index(context)
         val kept = mutableListOf<ModelSlot>()
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val id = o.optString("id", "").ifBlank { continue }
-            val fileName = File(o.optString("file", "").ifBlank { continue }).name
+        for (i in 0 until arr.size) {
+            val o = arr[i].jsonObject
+            val id = (o["id"]?.jsonPrimitive?.content ?: "").ifBlank { continue }
+            val fileName = File((o["file"]?.jsonPrimitive?.content ?: "").ifBlank { continue }).name
             if (!File(d, fileName).let { it.exists() && it.length() > 0L }) continue
             if (existing.slots.any { it.id == id }) continue
-            kept.add(ModelSlot(id = id, name = o.optString("name", fileName), fileName = fileName))
+            kept.add(ModelSlot(id = id, name = o["name"]?.jsonPrimitive?.content ?: fileName, fileName = fileName))
         }
         val merged = (existing.slots + kept).take(MAX_MODELS)
-        val restoredActive = root.optString("active", "").ifBlank { null }
+        val restoredActive = (root["active"]?.jsonPrimitive?.content ?: "").ifBlank { null }
         val active = restoredActive?.takeIf { a -> merged.any { it.id == a } }
             ?: existing.activeId?.takeIf { a -> merged.any { it.id == a } }
             ?: merged.firstOrNull()?.id

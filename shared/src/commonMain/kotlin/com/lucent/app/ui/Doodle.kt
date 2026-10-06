@@ -2,8 +2,7 @@ package com.lucent.app.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object Doodle {
 
@@ -26,18 +25,18 @@ object Doodle {
     fun parse(json: String?): List<Stroke> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val pts = o.optJSONArray("p") ?: return@mapNotNull null
-                val points = ArrayList<Offset>(pts.length() / 2)
+            val arr = Json.parseToJsonElement(json).jsonArray
+            (0 until arr.size).mapNotNull { i ->
+                val o = try { arr[i].jsonObject } catch (e: Exception) { return@mapNotNull null }
+                val pts = try { o["p"]?.jsonArray } catch (e: Exception) { return@mapNotNull null } ?: return@mapNotNull null
+                val points = ArrayList<Offset>(pts.size / 2)
                 var k = 0
-                while (k + 1 < pts.length()) {
-                    points.add(Offset(pts.optDouble(k).toFloat(), pts.optDouble(k + 1).toFloat()))
+                while (k + 1 < pts.size) {
+                    points.add(Offset((pts[k].jsonPrimitive.doubleOrNull ?: 0.0).toFloat(), (pts[k + 1].jsonPrimitive.doubleOrNull ?: 0.0).toFloat()))
                     k += 2
                 }
                 if (points.isEmpty()) null
-                else Stroke(o.optInt("c", 0xFF1B1B1F.toInt()), o.optDouble("w", 0.01).toFloat(), points)
+                else Stroke(o["c"]?.jsonPrimitive?.intOrNull ?: 0xFF1B1B1F.toInt(), (o["w"]?.jsonPrimitive?.doubleOrNull ?: 0.01).toFloat(), points)
             }
         } catch (t: Throwable) {
             emptyList()

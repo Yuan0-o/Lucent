@@ -1,7 +1,7 @@
 package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 
 object SkillTools : HarnessGroupTools {
@@ -39,7 +39,7 @@ object SkillTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "list_skills" -> list(ctx)
         "read_skill" -> read(ctx, args)
         "save_skill" -> save(ctx, args)
@@ -75,8 +75,8 @@ object SkillTools : HarnessGroupTools {
         return ToolExecResult(sb.toString().trimEnd())
     }
 
-    private fun read(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val wanted = args.optString("name", "").trim()
+    private fun read(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val wanted = args["name"]?.jsonPrimitive?.content?.trim() ?: ""
         if (wanted.isEmpty()) return ToolExecResult("Which skill?", success = false)
         val normalised = wanted.removeSuffix(".md").lowercase()
         val file = discover(ctx).firstOrNull { it.nameWithoutExtension.lowercase() == normalised }
@@ -84,16 +84,16 @@ object SkillTools : HarnessGroupTools {
         return ToolExecResult(Workspace.readText(file, 128 * 1024))
     }
 
-    private fun save(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val raw = args.optString("name", "").trim().removeSuffix(".md")
+    private fun save(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val raw = args["name"]?.jsonPrimitive?.content?.trim()?.removeSuffix(".md") ?: ""
         if (raw.isEmpty()) return ToolExecResult("Name the skill.", success = false)
         val slug = raw.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
         if (slug.isEmpty()) return ToolExecResult("That name has no usable characters.", success = false)
         val dir = File(HarnessRuntime.workspacePath(), ".lucent/skills")
         dir.mkdirs()
         val file = File(dir, "$slug.md")
-        val description = args.optString("description", "").replace("\n", " ").trim()
-        val body = args.optString("body", "").trim()
+        val description = args["description"]?.jsonPrimitive?.content?.replace("\n", " ")?.trim() ?: ""
+        val body = args["body"]?.jsonPrimitive?.content?.trim() ?: ""
         val text = "---\nname: $slug\ndescription: $description\n---\n\n$body\n"
         if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
         file.writeText(text)
