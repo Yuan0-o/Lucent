@@ -4,7 +4,9 @@ import kotlinx.serialization.json.*
 import org.w3c.dom.Element
 import kotlinx.serialization.json.*
 import org.w3c.dom.Node
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -284,7 +286,7 @@ private class PptxBuilder(val deck: PptxDeck, val existingMedia: Map<String, Byt
 
 object Pptx {
 
-    fun create(specJson: String, out: File): String {
+    fun create(specJson: String, out: Path): String {
         val spec = try {
             Json.parseToJsonElement(specJson).jsonObject
         } catch (e: Exception) {
@@ -293,12 +295,12 @@ object Pptx {
         val deck = pptxDeckFromSpec(spec)
         if (deck.slides.isEmpty()) throw IllegalArgumentException("The deck needs at least one slide")
         val bytes = PptxBuilder(deck, emptyMap()).build()
-        out.parentFile?.mkdirs()
-        out.writeBytes(bytes)
+        out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        FileSystem.SYSTEM.write(out) { write(bytes) }
         return "${out.name}: ${deck.slides.size} slide(s), ${pptxSizeLabel(deck.cx, deck.cy)}, ${pptxHuman(bytes.size.toLong())}"
     }
 
-    fun read(file: File, maxChars: Int = 20000): String {
+    fun read(file: Path, maxChars: Int = 20000): String {
         val entries = pptxEntries(file)
         val deck = pptxDeckFromEntries(entries, file)
         val limit = maxChars.coerceIn(500, 400000)
@@ -315,7 +317,7 @@ object Pptx {
         return if (text.length <= limit) text else text.take(limit) + "\n... truncated at $limit characters"
     }
 
-    fun edit(file: File, opsJson: String): String {
+    fun edit(file: Path, opsJson: String): String {
         val entries = pptxEntries(file)
         val deck = pptxDeckFromEntries(entries, file)
         val media = LinkedHashMap<String, ByteArray>()
@@ -331,17 +333,17 @@ object Pptx {
         }
         if (deck.slides.isEmpty()) throw IllegalArgumentException("The deck would end up with no slides")
         val bytes = PptxBuilder(deck, media).build()
-        file.writeBytes(bytes)
+        FileSystem.SYSTEM.write(file) { write(bytes) }
         return "${file.name}: ${deck.slides.size} slide(s), ${pptxHuman(bytes.size.toLong())}\n" + log.joinToString("\n")
     }
 }
 
-private fun pptxEntries(file: File): Map<String, ByteArray> {
-    if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
-    if (file.isDirectory) throw IllegalArgumentException("${file.name} is a directory, not a presentation")
-    if (file.size > 256L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to read")
+private fun pptxEntries(file: Path): Map<String, ByteArray> {
+    if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("${file.name} does not exist")
+    if (FileSystem.SYSTEM.metadata(file).isDirectory == true) throw IllegalArgumentException("${file.name} is a directory, not a presentation")
+    if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > 256L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to read")
     val entries = try {
-        Ooxml.readZip(file)
+        Ooxml.readZip(java.io.File(file.toString()))
     } catch (e: Exception) {
         throw IllegalArgumentException("${file.name} is not a readable .pptx package: ${e.message}")
     }
@@ -709,10 +711,10 @@ private fun pptxImagePart(builder: PptxBuilder, image: PptxImage): String {
     val bytes = if (image.media.isNotEmpty()) {
         builder.media(image.media) ?: throw IllegalArgumentException("The image part ${image.media} is missing from the presentation")
     } else {
-        val file = File(image.path)
-        if (!file.exists() || file.isDirectory) throw IllegalArgumentException("Image not found: ${image.path}")
-        if (file.size > 64L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to embed")
-        file.readBytes()
+        val file = image.path.toPath()
+        if (!FileSystem.SYSTEM.exists(file) || FileSystem.SYSTEM.metadata(file).isDirectory == true) throw IllegalArgumentException("Image not found: ${image.path}")
+        if ((FileSystem.SYSTEM.metadata(file).size ?: 0L) > 64L * 1024 * 1024) throw IllegalArgumentException("${file.name} is too large to embed")
+        FileSystem.SYSTEM.read(file) { readByteArray() }
     }
     val extension = pptxImageExtension(bytes, image.path)
     val number = builder.nextImage()
@@ -1525,7 +1527,7 @@ private fun pptxAppXml(deck: PptxDeck, notesCount: Int): String {
     return sb.toString()
 }
 
-private fun pptxDeckFromEntries(entries: Map<String, ByteArray>, file: File): PptxDeck {
+private fun pptxDeckFromEntries(entries: Map<String, ByteArray>, file: Path): PptxDeck {
     val deck = PptxDeck()
     val presentation = entries["ppt/presentation.xml"]?.let { pptxParse(it, file.name) }
         ?: throw IllegalArgumentException("${file.name} has no ppt/presentation.xml")

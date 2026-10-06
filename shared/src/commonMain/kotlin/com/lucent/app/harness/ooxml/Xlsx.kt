@@ -4,7 +4,9 @@ import kotlinx.serialization.json.*
 import org.w3c.dom.Document
 import kotlinx.serialization.json.*
 import org.w3c.dom.Element
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 
 private const val XL_WORKBOOK_PART = "xl/workbook.xml"
 private const val XL_WORKBOOK_RELS_PART = "xl/_rels/workbook.xml.rels"
@@ -96,7 +98,7 @@ private class SpreadsheetNs(private val prefix: String) {
 
 object Xlsx {
 
-    fun create(specJson: String, out: File): String {
+    fun create(specJson: String, out: Path): String {
         val spec = jsonObject(specJson, "spreadsheet spec")
         val sheets = spec["sheets"]?.jsonArray
             ?: throw IllegalArgumentException("The spreadsheet spec needs a \"sheets\" array")
@@ -182,12 +184,12 @@ object Xlsx {
         parts[XL_WORKBOOK_PART] = serialize(workbook)
         parts[XL_WORKBOOK_RELS_PART] = serialize(workbookRels)
         parts[XL_STYLES_PART] = serialize(styles)
-        writZip(out, parts.entries.map { it.key to it.value })
+        writZip(java.io.File(out.toString()), parts.entries.map { it.key to it.value })
         return "${names.size} ${word(names.size, "sheet")}: ${names.joinToString(", ")}"
     }
 
-    fun read(file: File, sheet: String = "", range: String = "", maxRows: Int = 200): String {
-        val parts = readZip(file)
+    fun read(file: Path, sheet: String = "", range: String = "", maxRows: Int = 200): String {
+        val parts = readZip(java.io.File(file.toString()))
         val reader = WorkbookReader(parts)
         val name = reader.pick(sheet)
         val clipped = if (range.isBlank()) {
@@ -221,11 +223,11 @@ object Xlsx {
         return result.trimEnd() + "\n"
     }
 
-    fun edit(file: File, opsJson: String): String {
-        if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
+    fun edit(file: Path, opsJson: String): String {
+        if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("${file.name} does not exist")
         val ops = jsonArray(opsJson, "spreadsheet edit operations")
         if (ops.size == 0) throw IllegalArgumentException("Give at least one edit operation")
-        val parts = readZip(file).toMutableMap()
+        val parts = readZip(java.io.File(file.toString())).toMutableMap()
         val book = MutableBook(parts)
         val shared: ((String) -> Int)? = if (book.useSharedStrings()) {
             { text -> book.sharedId(text) }
@@ -295,24 +297,24 @@ object Xlsx {
             applied.add(kind)
         }
         book.save()
-        writZip(file, parts.entries.map { it.key to it.value })
+        writZip(java.io.File(file.toString()), parts.entries.map { it.key to it.value })
         return "Applied ${ops.size} operation(s): ${applied.joinToString(", ")}"
     }
 
-    fun csvOut(file: File, sheet: String = ""): String {
-        val parts = readZip(file)
+    fun csvOut(file: Path, sheet: String = ""): String {
+        val parts = readZip(java.io.File(file.toString()))
         val reader = WorkbookReader(parts)
         val grid = reader.grid(reader.pick(sheet), null, 0)
         return grid.rows.joinToString("\n") { line -> line.joinToString(",") { csvField(it) } }
     }
 
-    fun csvIn(file: File, csv: String, sheet: String = "", startCell: String = "A1"): String {
+    fun csvIn(file: Path, csv: String, sheet: String = "", startCell: String = "A1"): String {
         if (csv.isBlank()) throw IllegalArgumentException("The CSV text is empty")
-        if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
+        if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("${file.name} does not exist")
         val rows = parseCsv(csv)
         if (rows.isEmpty()) throw IllegalArgumentException("The CSV text has no rows")
         val start = parseRef(startCell)
-        val parts = readZip(file).toMutableMap()
+        val parts = readZip(java.io.File(file.toString())).toMutableMap()
         val book = MutableBook(parts)
         val shared: ((String) -> Int)? = if (book.useSharedStrings()) {
             { text -> book.sharedId(text) }
@@ -332,7 +334,7 @@ object Xlsx {
         }
         updateDimension(sheetDoc)
         book.save()
-        writZip(file, parts.entries.map { it.key to it.value })
+        writZip(java.io.File(file.toString()), parts.entries.map { it.key to it.value })
         return "Imported ${rows.size} ${word(rows.size, "row")} into sheet $name at ${columnName(start.col)}${start.row}"
     }
 

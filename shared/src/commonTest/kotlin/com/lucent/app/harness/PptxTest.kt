@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 import com.lucent.app.harness.ooxml.Pptx
 import org.json.JSONArray
 import org.json.JSONObject
@@ -106,7 +108,7 @@ class PptxTest {
     fun readShowsTitlesBulletsTablesChartsAndNotes() {
         val dir = tempDir()
         val deck = buildSample(dir)
-        val text = Pptx.read(deck)
+        val text = Pptx.read(deck.absolutePath.toPath())
         assertTrue(text.contains("Slides: 5"), "the header does not report the slide count")
         assertTrue(text.contains("16:9"), "the header does not report the slide size")
         assertTrue(text.contains("# Slide 1"), "slide 1 is missing")
@@ -127,8 +129,8 @@ class PptxTest {
         val out = File(dir, "reading.pptx")
         val spec = "{\"title\":\"Reading list\",\"content\":\"# Reading list\\n\\n- One\\n- Two\\n\\n" +
             "## Part two\\n\\n- Three\\n\"}"
-        Pptx.create(spec, out)
-        val text = Pptx.read(out)
+        Pptx.create(spec, out.absolutePath.toPath())
+        val text = Pptx.read(out.absolutePath.toPath())
         assertTrue(text.contains("Reading list"), "the deck title is missing")
         assertTrue(text.contains("- One"), "the first bullet is missing")
         assertTrue(text.contains("- Two"), "the second bullet is missing")
@@ -166,11 +168,11 @@ class PptxTest {
                 }
             )
         }
-        val summary = Pptx.edit(deck, ops.toString())
+        val summary = Pptx.edit(deck.absolutePath.toPath(), ops.toString())
         assertTrue(summary.contains("6 slide"), "the summary does not report the new slide count")
         assertTrue(summary.contains("appended slide 6"), "the append was not reported")
         assertTrue(summary.contains("replaced 1 occurrence"), "the replacement was not reported")
-        val text = Pptx.read(deck)
+        val text = Pptx.read(deck.absolutePath.toPath())
         assertTrue(text.contains("# Slide 6"), "the appended slide is missing")
         assertTrue(text.contains("- Ship it"), "the appended bullet is missing")
         assertTrue(text.contains("Notes: Owner: Sam"), "the appended notes are missing")
@@ -184,7 +186,7 @@ class PptxTest {
         val dir = tempDir()
         val deck = buildSample(dir)
         val failure = try {
-            Pptx.edit(deck, "[{\"op\":\"teleport_slide\",\"slide\":1}]")
+            Pptx.edit(deck.absolutePath.toPath(), "[{\"op\":\"teleport_slide\",\"slide\":1}]")
             null
         } catch (e: Exception) {
             e
@@ -292,7 +294,7 @@ class PptxTest {
                 }
             )
         }
-        Pptx.create(spec.toString(), deck)
+        Pptx.create(spec.toString(), deck.absolutePath.toPath())
         return deck
     }
 

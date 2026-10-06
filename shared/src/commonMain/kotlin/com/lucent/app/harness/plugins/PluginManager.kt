@@ -10,7 +10,9 @@ import com.lucent.app.harness.PluginHost
 import com.lucent.app.harness.PluginOutcome
 import com.lucent.app.harness.PluginState
 import com.lucent.app.harness.ShellOutcome
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 
 class PluginManager private constructor(private val context: PlatformContext?, private val android: Boolean) : PluginHost {
 
@@ -96,7 +98,7 @@ class PluginManager private constructor(private val context: PlatformContext?, p
                 .replace("{pipFallback}", PluginCatalog.pipFallbackIndex(region))
         }
         var sourceId = source.id.ifBlank { "built-in" }
-        var staged: File? = null
+        var staged: Path? = null
         if (script.contains("{file}")) {
             val usable = plugin.sources.filter { it.url.startsWith("http") }
             if (usable.isEmpty()) {
@@ -115,7 +117,7 @@ class PluginManager private constructor(private val context: PlatformContext?, p
             val reused = PluginPreflight.reusableStaged(plugin, chosen)
             if (reused != null) {
                 staged = reused
-                script = script.replace("{file}", reused.path)
+                script = script.replace("{file}", reused.toString())
                 onProgress(0.55f, "reusing the download from last time")
                 PluginJournal.write(plugin.id, "download", "reused ${reused.name}", true)
             } else {
@@ -127,9 +129,9 @@ class PluginManager private constructor(private val context: PlatformContext?, p
                         onProgress(0.05f + fraction * 0.5f, "${chosen.label}: $note")
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
-                    target.delete()
+                    FileSystem.SYSTEM.delete(target)
                     PluginJournal.write(plugin.id, "download", "cancelled", false)
-                    record(plugin, "download cancelled", target.path)
+                    record(plugin, "download cancelled", target.toString())
                     return PluginOutcome(
                         false,
                         "${plugin.name}: the download was cancelled and the partial file was removed",
@@ -151,11 +153,11 @@ class PluginManager private constructor(private val context: PlatformContext?, p
                 }
                 staged = target
                 PluginJournal.write(plugin.id, "download", "ok", true)
-                script = script.replace("{file}", target.path)
+                script = script.replace("{file}", target.toString())
             }
         }
         if (!isReady()) {
-            val kept = staged?.path.orEmpty()
+            val kept = staged?.toString().orEmpty()
             val action = if (staged != null) "downloaded only" else "no shell"
             record(plugin, action, kept.ifBlank { "nothing staged" })
             val message = if (staged != null) {
@@ -181,11 +183,11 @@ class PluginManager private constructor(private val context: PlatformContext?, p
         val outcome = try {
             run(plugin, script, 3600, trackingOutput)
         } catch (e: kotlinx.coroutines.CancellationException) {
-            record(plugin, "install cancelled", staged?.path.orEmpty())
+            record(plugin, "install cancelled", staged?.toString().orEmpty())
             return PluginOutcome(
                 false,
                 "${plugin.name}: the install was cancelled, but any downloaded files were kept",
-                staged?.path.orEmpty(),
+                staged?.toString().orEmpty(),
                 PluginFailure.CANCELLED,
                 ""
             )
@@ -198,7 +200,7 @@ class PluginManager private constructor(private val context: PlatformContext?, p
                 false,
                 "${plugin.name}: the install command exited ${outcome.exitCode}" +
                     if (outcome.timedOut) " after the time limit" else "",
-                staged?.path.orEmpty(),
+                staged?.toString().orEmpty(),
                 PluginFailure.INSTALL,
                 detail
             )
@@ -211,7 +213,7 @@ class PluginManager private constructor(private val context: PlatformContext?, p
             return PluginOutcome(
                 false,
                 "${plugin.name} was installed but the check still fails: ${plugin.probeFor(android)}",
-                staged?.path.orEmpty(),
+                staged?.toString().orEmpty(),
                 PluginFailure.DETECT,
                 detail
             )
@@ -222,12 +224,12 @@ class PluginManager private constructor(private val context: PlatformContext?, p
             installed = true,
             source = sourceId,
             version = System.currentTimeMillis().toString(),
-            sizeBytes = if (kept != null && kept.exists()) kept.length() else plugin.bytes,
+            sizeBytes = if (kept != null && FileSystem.SYSTEM.exists(kept)) (FileSystem.SYSTEM.metadata(kept).size ?: 0L) else plugin.bytes,
             installedAt = System.currentTimeMillis()
         )
         HarnessRuntime.update(HarnessRuntime.config().withPlugin(state))
         kotlinx.coroutines.delay(1000)
-        kept?.delete()
+        kept?.let { FileSystem.SYSTEM.delete(it) }
         PluginJournal.clear(plugin.id)
         onProgress(1f, "installed")
         record(plugin, "installed", outcome.text.take(600))

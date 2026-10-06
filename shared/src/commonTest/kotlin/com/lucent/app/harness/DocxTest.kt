@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 import com.lucent.app.harness.ooxml.Docx
 import com.lucent.app.harness.ooxml.parse
 import com.lucent.app.harness.ooxml.readZip
@@ -24,7 +26,7 @@ class DocxTest {
         val dir = tempDir()
         val out = File(dir, "report.docx")
         File(dir, "chart.png").writeBytes(tinyPng())
-        val detail = Docx.create(reportSpec(), out)
+        val detail = Docx.create(reportSpec(), out.absolutePath.toPath())
         assertTrue(out.length() > 0L)
         assertTrue(detail.contains("paragraph"), "unexpected summary: $detail")
         val parts = readZip(out)
@@ -53,8 +55,8 @@ class DocxTest {
         val dir = tempDir()
         val out = File(dir, "report.docx")
         File(dir, "chart.png").writeBytes(tinyPng())
-        Docx.create(reportSpec(), out)
-        val text = Docx.read(out)
+        Docx.create(reportSpec(), out.absolutePath.toPath())
+        val text = Docx.read(out.absolutePath.toPath())
         assertTrue(text.contains("Word document:"), "no summary line: $text")
         assertTrue(text.contains("# Quarterly Report"), "no heading: $text")
         assertTrue(text.contains("- First bullet"), "no bullet: $text")
@@ -70,8 +72,8 @@ class DocxTest {
     fun truncatesLongReads() {
         val dir = tempDir()
         val out = File(dir, "long.docx")
-        Docx.create("""{"title":"Long","content":"${"word ".repeat(400)}"}""", out)
-        val text = Docx.read(out, 200)
+        Docx.create("""{"title":"Long","content":"${"word ".repeat(400)}"}""", out.absolutePath.toPath())
+        val text = Docx.read(out.absolutePath.toPath(), 200)
         assertTrue(text.length < 400, "read was not truncated")
         assertTrue(text.contains("truncated"))
     }
@@ -81,7 +83,7 @@ class DocxTest {
         val dir = tempDir()
         val out = File(dir, "report.docx")
         File(dir, "chart.png").writeBytes(tinyPng())
-        Docx.create(reportSpec(), out)
+        Docx.create(reportSpec(), out.absolutePath.toPath())
         val ops = """
             [
               {"op":"replace","find":"Ada","replace":"Grace","all":true},
@@ -91,9 +93,9 @@ class DocxTest {
               {"op":"delete_paragraph","find":"Second bullet"}
             ]
         """.trimIndent()
-        val summary = Docx.edit(out, ops)
+        val summary = Docx.edit(out.absolutePath.toPath(), ops)
         assertTrue(summary.contains("5"), "unexpected summary: $summary")
-        val text = Docx.read(out)
+        val text = Docx.read(out.absolutePath.toPath())
         assertTrue(text.contains("Grace"), "replace did not apply: $text")
         assertFalse(text.contains("| Ada |"), "old text is still there: $text")
         assertTrue(text.contains("## Added Section"), "append did not apply: $text")
@@ -114,8 +116,8 @@ class DocxTest {
         val dir = tempDir()
         val out = File(dir, "note.docx")
         val markdown = "# Top\n\nSome **bold** text.\n\n- one\n- two\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n"
-        Docx.create("""{"title":"Note","content":${quote(markdown)}}""", out)
-        val text = Docx.read(out)
+        Docx.create("""{"title":"Note","content":${quote(markdown)}}""", out.absolutePath.toPath())
+        val text = Docx.read(out.absolutePath.toPath())
         assertTrue(text.contains("# Note"), "no title: $text")
         assertTrue(text.contains("# Top"), "no markdown heading: $text")
         assertTrue(text.contains("- one"), "no markdown bullet: $text")
@@ -126,29 +128,29 @@ class DocxTest {
     fun addsMissingHeaderAndFooterParts() {
         val dir = tempDir()
         val out = File(dir, "plain.docx")
-        Docx.create("""{"title":"Plain","content":"Body text."}""", out)
+        Docx.create("""{"title":"Plain","content":"Body text."}""", out.absolutePath.toPath())
         assertFalse(readZip(out).containsKey("word/header1.xml"))
-        Docx.edit(out, """[{"op":"set_header","text":"Added later"},{"op":"set_title","text":"Renamed"}]""")
+        Docx.edit(out.absolutePath.toPath(), """[{"op":"set_header","text":"Added later"},{"op":"set_title","text":"Renamed"}]""")
         val parts = readZip(out)
         assertTrue(parts.containsKey("word/header1.xml"), "header part was not created")
         assertEquals("Added later", headerText(out, "word/header1.xml"))
-        assertTrue(Docx.read(out).contains("# Renamed"), "title was not replaced")
+        assertTrue(Docx.read(out.absolutePath.toPath()).contains("# Renamed"), "title was not replaced")
         parts.forEach { entry -> parseXmlPart(entry.key, entry.value) }
     }
 
     @Test
     fun rejectsBadInput() {
         val dir = tempDir()
-        assertFailsWith<IllegalArgumentException> { Docx.create("{not json", File(dir, "bad.docx")) }
+        assertFailsWith<IllegalArgumentException> { Docx.create("{not json", File(dir, "bad.docx").absolutePath.toPath()) }
         assertFailsWith<IllegalArgumentException> {
-            Docx.create("""{"blocks":[{"type":"nope","text":"x"}]}""", File(dir, "bad.docx"))
+            Docx.create("""{"blocks":[{"type":"nope","text":"x"}]}""", File(dir, "bad.docx").absolutePath.toPath())
         }
-        assertFailsWith<IllegalArgumentException> { Docx.create("""{"blocks":[{"type":"image"}]}""", File(dir, "bad.docx")) }
+        assertFailsWith<IllegalArgumentException> { Docx.create("""{"blocks":[{"type":"image"}]}""", File(dir, "bad.docx").absolutePath.toPath()) }
         val plain = File(dir, "notes.txt")
         plain.writeText("not a package")
-        assertFailsWith<IllegalArgumentException> { Docx.read(plain) }
-        assertFailsWith<IllegalArgumentException> { Docx.edit(File(dir, "missing.docx"), """[{"op":"append","content":"x"}]""") }
-        assertFailsWith<IllegalArgumentException> { Docx.edit(plain, "[]") }
+        assertFailsWith<IllegalArgumentException> { Docx.read(plain.absolutePath.toPath()) }
+        assertFailsWith<IllegalArgumentException> { Docx.edit(File(dir, "missing.docx").absolutePath.toPath(), """[{"op":"append","content":"x"}]""") }
+        assertFailsWith<IllegalArgumentException> { Docx.edit(plain.absolutePath.toPath(), "[]") }
     }
 
     private fun reportSpec(): String = """

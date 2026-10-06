@@ -5,7 +5,9 @@ import com.lucent.app.harness.HarnessRuntime
 import com.lucent.app.harness.PluginFailure
 import com.lucent.app.harness.Workspace
 import com.lucent.app.i18n.S
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 
 data class PreflightProblem(
     val code: String,
@@ -25,19 +27,19 @@ data class PreflightReport(
 
 object PluginPreflight {
 
-    fun targetFile(plugin: PluginSpec, source: PluginSource): File {
+    fun targetFile(plugin: PluginSpec, source: PluginSource): Path {
         val fromUrl = source.url.substringAfterLast('/').substringBefore('?')
         val name = if (fromUrl.contains('.')) fromUrl else "${plugin.id}.download"
-        return File(HarnessRuntime.downloadsDirPath(), name)
+        return (HarnessRuntime.downloadsDirPath().toPath() / name)
     }
 
-    fun reusableStaged(plugin: PluginSpec, source: PluginSource): File? {
+    fun reusableStaged(plugin: PluginSpec, source: PluginSource): Path? {
         if (!plugin.installFor(true).contains("{file}") && !plugin.installFor(false).contains("{file}")) {
             return null
         }
         val target = targetFile(plugin, source)
-        if (!target.isFile) return null
-        val size = target.length()
+        if (FileSystem.SYSTEM.metadataOrNull(target)?.isRegularFile != true) return null
+        val size = (FileSystem.SYSTEM.metadata(target).size ?: 0L)
         if (source.bytes > 0 && size != source.bytes) return null
         if (source.bytes <= 0 && size < 1024) return null
         return target
@@ -81,7 +83,7 @@ object PluginPreflight {
             return PreflightReport(plugin, problems, notes, mirrorResults)
         }
         if (plugin.bytes > 0L) {
-            val space = File(HarnessRuntime.downloadsDirPath()).usableSpace
+            val space = java.io.File(HarnessRuntime.downloadsDirPath()).usableSpace
             val needed = plugin.bytes * 2L
             if (space in 1L..<needed) {
                 problems.add(
@@ -130,7 +132,7 @@ object PluginPreflight {
                         notes.add(S.pluginJournalNote(journal.stage, journal.message))
                     }
                 }
-                if (!File(HarnessRuntime.downloadsDirPath()).canWrite()) {
+                if (!java.io.File(HarnessRuntime.downloadsDirPath()).canWrite()) {
                     problems.add(
                         PreflightProblem(
                             "storage",
@@ -141,7 +143,7 @@ object PluginPreflight {
                 }
             }
         }
-        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(File(HarnessRuntime.workspacePath()))) {
+        if (android && plugin.needsShell && backend != RuntimeBackend.BUILTIN && !sharedStorage(HarnessRuntime.workspacePath().toPath())) {
             problems.add(
                 PreflightProblem(
                     "workspace_not_shared",
@@ -173,8 +175,8 @@ object PluginPreflight {
         return PreflightReport(plugin, problems, notes, mirrorResults)
     }
 
-    fun sharedStorage(dir: File): Boolean {
-        val path = dir.canonicalPath
+    fun sharedStorage(dir: Path): Boolean {
+        val path = java.io.File(dir.toString()).canonicalPath
         return path.startsWith("/storage/") || path.startsWith("/sdcard") ||
             path.contains("/storage/emulated/")
     }
@@ -218,9 +220,9 @@ data class PluginJournalEntry(val stage: String, val message: String, val ok: Bo
 
 object PluginJournal {
 
-    private fun dir(): File? {
+    private fun dir(): Path? {
         val files = HarnessRuntime.host?.filesDirPath() ?: return null
-        return File(files, "harness/plugin-journal").apply { mkdirs() }
+        return (files.toPath() / "harness/plugin-journal").apply { FileSystem.SYSTEM.createDirectories(this) }
     }
 
     fun write(pluginId: String, stage: String, message: String, ok: Boolean) {
@@ -233,7 +235,7 @@ object PluginJournal {
                 put("ok", ok)
                 put("at", System.currentTimeMillis())
             }.toString()
-            File(dir, "$safe.json").writeText(line)
+            FileSystem.SYSTEM.write(dir / "$safe.json") { writeUtf8(line) }
         } catch (_: Throwable) {
         }
     }
@@ -242,9 +244,9 @@ object PluginJournal {
         val dir = dir() ?: return null
         return try {
             val safe = pluginId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-            val file = File(dir, "$safe.json")
-            if (!file.isFile) return null
-            val o = org.json.JSONObject(file.readText())
+            val file = dir / "$safe.json"
+            if (FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile != true) return null
+            val o = org.json.JSONObject(FileSystem.SYSTEM.read(file) { readUtf8() })
             PluginJournalEntry(o.optString("stage", ""), o.optString("message", ""), o.optBoolean("ok", false))
         } catch (_: Throwable) {
             null
@@ -255,7 +257,7 @@ object PluginJournal {
         val dir = dir() ?: return
         try {
             val safe = pluginId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-            File(dir, "$safe.json").delete()
+            FileSystem.SYSTEM.delete(dir / "$safe.json")
         } catch (_: Throwable) {
         }
     }

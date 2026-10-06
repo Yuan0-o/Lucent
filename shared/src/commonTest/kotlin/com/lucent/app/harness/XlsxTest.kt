@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 import com.lucent.app.harness.ooxml.Xlsx
 import com.lucent.app.harness.ooxml.parse
 import com.lucent.app.harness.ooxml.readZip
@@ -17,7 +19,7 @@ class XlsxTest {
     fun createsTwoSheetsWithFormulasFormattingAndAChart() {
         val dir = tempDir()
         val out = File(dir, "scores.xlsx")
-        val detail = Xlsx.create(workbookSpec(), out)
+        val detail = Xlsx.create(workbookSpec(), out.absolutePath.toPath())
         assertTrue(detail.contains("Scores"), "unexpected summary: $detail")
         val parts = readZip(out)
         val required = listOf(
@@ -51,20 +53,20 @@ class XlsxTest {
     fun readsValuesAndFormulas() {
         val dir = tempDir()
         val out = File(dir, "scores.xlsx")
-        Xlsx.create(workbookSpec(), out)
-        val text = Xlsx.read(out, "Scores")
+        Xlsx.create(workbookSpec(), out.absolutePath.toPath())
+        val text = Xlsx.read(out.absolutePath.toPath(), "Scores")
         assertTrue(text.contains("Workbook: 2 sheets (Scores, Notes)"), "no workbook header: $text")
         assertTrue(text.contains("Sheet: Scores: rows 1-9, columns A-B"), "no sheet header: $text")
         assertTrue(text.contains("Formulas: B9=SUM(B3:B8)"), "no formula list: $text")
         assertTrue(text.contains("Ada,9"), "no row values: $text")
         assertTrue(text.contains("Grace,10"), "no row values: $text")
         assertTrue(text.contains("Total,=SUM(B3:B8)"), "no formula placeholder: $text")
-        val notes = Xlsx.read(out, "Notes")
+        val notes = Xlsx.read(out.absolutePath.toPath(), "Notes")
         assertTrue(notes.contains("Remember the review"), "the second sheet was not read: $notes")
-        val clipped = Xlsx.read(out, "Scores", "A3:B4")
+        val clipped = Xlsx.read(out.absolutePath.toPath(), "Scores", "A3:B4")
         assertTrue(clipped.contains("Ada,9"), "no clipped values: $clipped")
         assertTrue(clipped.contains("rows 3-4"), "the range was not applied: $clipped")
-        val limited = Xlsx.read(out, "Scores", "", 2)
+        val limited = Xlsx.read(out.absolutePath.toPath(), "Scores", "", 2)
         assertTrue(limited.contains("more rows"), "maxRows was not reported: $limited")
     }
 
@@ -72,7 +74,7 @@ class XlsxTest {
     fun csvOutWritesTheSheetAsCsv() {
         val dir = tempDir()
         val out = File(dir, "scores.xlsx")
-        Xlsx.create(workbookSpec(), out)
+        Xlsx.create(workbookSpec(), out.absolutePath.toPath())
         val csv = Xlsx.csvOut(out, "Scores")
         assertEquals(
             "Scores,\nName,Score\nAda,9\nGrace,10\nAlan,7\n,\n,\n,\nTotal,=SUM(B3:B8)",
@@ -85,7 +87,7 @@ class XlsxTest {
     fun editAppendsRowsAndAddsASheet() {
         val dir = tempDir()
         val out = File(dir, "scores.xlsx")
-        Xlsx.create(workbookSpec(), out)
+        Xlsx.create(workbookSpec(), out.absolutePath.toPath())
         val ops = """
             [
               {"op":"append_rows","sheet":"Scores","rows":[["Linus",8]]},
@@ -98,14 +100,14 @@ class XlsxTest {
               {"op":"rename_sheet","from":"Data","to":"Extra"}
             ]
         """.trimIndent()
-        val summary = Xlsx.edit(out, ops)
+        val summary = Xlsx.edit(out.absolutePath.toPath(), ops)
         assertTrue(summary.contains("append_rows"), "unexpected summary: $summary")
         val parts = readZip(out)
         parts.forEach { entry -> parseXmlPart(entry.key, entry.value) }
         assertTrue(parts.containsKey("xl/worksheets/sheet3.xml"), "the new sheet part was not written")
-        val scores = Xlsx.read(out, "Scores")
+        val scores = Xlsx.read(out.absolutePath.toPath(), "Scores")
         assertTrue(scores.contains("Linus,8"), "the appended row is missing: $scores")
-        assertTrue(Xlsx.read(out, "Extra").contains("Sheet: Extra"), "the new sheet was not renamed")
+        assertTrue(Xlsx.read(out.absolutePath.toPath(), "Extra").contains("Sheet: Extra"), "the new sheet was not renamed")
         val notes = Xlsx.csvOut(out, "Notes")
         assertTrue(notes.contains("ok"), "the set op did not apply: $notes")
         assertFalse(parts.getValue("xl/worksheets/sheet1.xml").toString(Charsets.UTF_8).contains("Extra"))
@@ -116,7 +118,7 @@ class XlsxTest {
     fun csvInCreatesTheSheetAndWritesNumbers() {
         val dir = tempDir()
         val out = File(dir, "data.xlsx")
-        Xlsx.create("""{"sheets":[{"name":"Sheet1","rows":[["a"]]}]}""", out)
+        Xlsx.create("""{"sheets":[{"name":"Sheet1","rows":[["a"]]}]}""", out.absolutePath.toPath())
         val detail = Xlsx.csvIn(out, "name,score\nAda,9\n\"Grace, Hopper\",10", "Imported", "B2")
         assertTrue(detail.contains("Imported"), "unexpected summary: $detail")
         assertEquals(
@@ -124,26 +126,26 @@ class XlsxTest {
             Xlsx.csvOut(out, "Imported")
         )
         readZip(out).forEach { entry -> parseXmlPart(entry.key, entry.value) }
-        assertTrue(Xlsx.read(out).contains("Sheet1"), "the original sheet was lost")
+        assertTrue(Xlsx.read(out.absolutePath.toPath()).contains("Sheet1"), "the original sheet was lost")
     }
 
     @Test
     fun rejectsBadInput() {
         val dir = tempDir()
-        assertFailsWith<IllegalArgumentException> { Xlsx.create("{oops", File(dir, "bad.xlsx")) }
-        assertFailsWith<IllegalArgumentException> { Xlsx.create("""{"sheets":[]}""", File(dir, "bad.xlsx")) }
+        assertFailsWith<IllegalArgumentException> { Xlsx.create("{oops", File(dir, "bad.xlsx").absolutePath.toPath()) }
+        assertFailsWith<IllegalArgumentException> { Xlsx.create("""{"sheets":[]}""", File(dir, "bad.xlsx").absolutePath.toPath()) }
         assertFailsWith<IllegalArgumentException> {
-            Xlsx.create("""{"sheets":[{"cells":[{"ref":"A1","value":1},{"value":2}]}]}""", File(dir, "bad.xlsx"))
+            Xlsx.create("""{"sheets":[{"cells":[{"ref":"A1","value":1},{"value":2}]}]}""", File(dir, "bad.xlsx").absolutePath.toPath())
         }
         val plain = File(dir, "notes.txt")
         plain.writeText("not a package")
-        assertFailsWith<IllegalArgumentException> { Xlsx.read(plain) }
+        assertFailsWith<IllegalArgumentException> { Xlsx.read(plain.absolutePath.toPath()) }
         assertFailsWith<IllegalArgumentException> { Xlsx.csvOut(plain) }
         val out = File(dir, "ok.xlsx")
-        Xlsx.create("""{"sheets":[{"name":"One","rows":[[1]]}]}""", out)
-        assertFailsWith<IllegalArgumentException> { Xlsx.read(out, "Missing") }
-        assertFailsWith<IllegalArgumentException> { Xlsx.edit(out, """[{"op":"nope"}]""") }
-        assertFailsWith<IllegalArgumentException> { Xlsx.edit(out, """[{"op":"delete_sheet","name":"One"}]""") }
+        Xlsx.create("""{"sheets":[{"name":"One","rows":[[1]]}]}""", out.absolutePath.toPath())
+        assertFailsWith<IllegalArgumentException> { Xlsx.read(out.absolutePath.toPath(), "Missing") }
+        assertFailsWith<IllegalArgumentException> { Xlsx.edit(out.absolutePath.toPath(), """[{"op":"nope"}]""") }
+        assertFailsWith<IllegalArgumentException> { Xlsx.edit(out.absolutePath.toPath(), """[{"op":"delete_sheet","name":"One"}]""") }
         assertFailsWith<IllegalArgumentException> { Xlsx.csvIn(out, "") }
     }
 

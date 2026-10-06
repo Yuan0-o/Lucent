@@ -100,7 +100,7 @@ object OfficeSheetTools : HarnessGroupTools {
         val spec = spreadsheetSpec(args)
         if (ctx.config.snapshots && FileSystem.SYSTEM.exists(path)) Snapshots.capture(ctx, file)
         path.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-        val detail = Xlsx.create(spec, file)
+        val detail = Xlsx.create(spec, file.absolutePath.toPath())
         return ToolExecResult(
             "Created ${Workspace.display(ctx, file)} (${Workspace.humanSize(FileSystem.SYSTEM.metadataOrNull(path)?.size ?: -1)}): $detail."
         )
@@ -113,7 +113,7 @@ object OfficeSheetTools : HarnessGroupTools {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
         val maxRows = (args["max_rows"]?.jsonPrimitive?.intOrNull ?: 200).coerceIn(1, 5000)
-        val text = Xlsx.read(file, (args["sheet"]?.jsonPrimitive?.content ?: ""), (args["range"]?.jsonPrimitive?.content ?: ""), maxRows)
+        val text = Xlsx.read(file.absolutePath.toPath(), (args["sheet"]?.jsonPrimitive?.content ?: ""), (args["range"]?.jsonPrimitive?.content ?: ""), maxRows)
         return ToolExecResult(text)
     }
 
@@ -128,7 +128,7 @@ object OfficeSheetTools : HarnessGroupTools {
         }
         val ops = operations(args)
         if (ctx.config.snapshots) Snapshots.capture(ctx, file)
-        val detail = Xlsx.edit(file, ops)
+        val detail = Xlsx.edit(file.absolutePath.toPath(), ops)
         return ToolExecResult(
             "Edited ${Workspace.display(ctx, file)} (${Workspace.humanSize(FileSystem.SYSTEM.metadataOrNull(path)?.size ?: -1)}): $detail."
         )

@@ -1,5 +1,7 @@
 package com.lucent.app.harness
 
+import okio.Path.Companion.toPath
+
 import com.lucent.app.harness.ooxml.Docx
 import com.lucent.app.network.ToolExecResult
 import kotlinx.serialization.json.*
@@ -71,7 +73,7 @@ object OfficeDocTools : HarnessGroupTools {
         val spec = documentSpec(args)
         if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
         file.parentFile?.mkdirs()
-        val detail = Docx.create(spec, file)
+        val detail = Docx.create(spec, file.absolutePath.toPath())
         return ToolExecResult(
             "Created ${Workspace.display(ctx, file)} (${Workspace.humanSize(file.length())}): $detail."
         )
@@ -83,7 +85,7 @@ object OfficeDocTools : HarnessGroupTools {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
         val maxChars = (args["max_chars"]?.jsonPrimitive?.intOrNull ?: 20000).coerceIn(500, 400000)
-        return ToolExecResult(Docx.read(file, maxChars))
+        return ToolExecResult(Docx.read(file.absolutePath.toPath(), maxChars))
     }
 
     private fun editDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
@@ -96,7 +98,7 @@ object OfficeDocTools : HarnessGroupTools {
         }
         val ops = operations(args)
         if (ctx.config.snapshots) Snapshots.capture(ctx, file)
-        val detail = Docx.edit(file, ops)
+        val detail = Docx.edit(file.absolutePath.toPath(), ops)
         return ToolExecResult(
             "Edited ${Workspace.display(ctx, file)} (${Workspace.humanSize(file.length())}): $detail."
         )

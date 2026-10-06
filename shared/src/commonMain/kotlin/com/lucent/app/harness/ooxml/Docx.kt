@@ -4,7 +4,9 @@ import kotlinx.serialization.json.*
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 
 private const val DOCUMENT_PART = "word/document.xml"
 private const val DOCUMENT_RELS_PART = "word/_rels/document.xml.rels"
@@ -39,7 +41,7 @@ private const val BODY_NAMESPACES =
 
 object Docx {
 
-    fun create(specJson: String, out: File): String {
+    fun create(specJson: String, out: Path): String {
         val spec = jsonObject(specJson, "document spec")
         val title = stringOf(spec, "title").trim()
         val author = stringOf(spec, "author").trim()
@@ -52,7 +54,7 @@ object Docx {
             throw IllegalArgumentException("The document spec needs a title, a content string or a blocks array")
         }
         val sink = CreateSink()
-        val writer = DocBlocks(sink, out.parentFile ?: File("."))
+        val writer = DocBlocks(sink, out.parent ?: ".".toPath())
         val body = mutableListOf<XmlBuilder>()
         if (title.isNotEmpty()) body.add(writer.title(title))
         if (toc) {
@@ -80,12 +82,12 @@ object Docx {
         if (hasFooter) entries.add(FOOTER_PART to headerFooterPart(true, footer, pageNumbers))
         entries.add(DOCUMENT_RELS_PART to documentBytes(documentRelationships(sink.rels.values)))
         sink.media.forEach { item -> entries.add("word/${item.key}" to item.value) }
-        writZip(out, entries)
+        writZip(java.io.File(out.toString()), entries)
         return describe(blocks)
     }
 
-    fun read(file: File, maxChars: Int = 20000): String {
-        val parts = readZip(file)
+    fun read(file: Path, maxChars: Int = 20000): String {
+        val parts = readZip(java.io.File(file.toString()))
         val bytes = parts[DOCUMENT_PART]
             ?: throw IllegalArgumentException("${file.name} is not a Word document: word/document.xml is missing")
         val document = parse(bytes)
@@ -147,17 +149,17 @@ object Docx {
         return result
     }
 
-    fun edit(file: File, opsJson: String): String {
-        if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
+    fun edit(file: Path, opsJson: String): String {
+        if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("${file.name} does not exist")
         val ops = jsonArray(opsJson, "document edit operations")
         if (ops.size == 0) throw IllegalArgumentException("Give at least one edit operation")
-        val parts = readZip(file).toMutableMap()
+        val parts = readZip(java.io.File(file.toString())).toMutableMap()
         val bytes = parts[DOCUMENT_PART]
             ?: throw IllegalArgumentException("${file.name} is not a Word document: word/document.xml is missing")
         val document = parse(bytes)
         val rels = parse(parts[DOCUMENT_RELS_PART] ?: emptyRelationships())
         val sink = EditSink(parts, rels)
-        val writer = DocBlocks(sink, file.parentFile ?: File("."))
+        val writer = DocBlocks(sink, file.parent ?: ".".toPath())
         val body = children(document.documentElement, "body").firstOrNull()
             ?: throw IllegalArgumentException("word/document.xml has no body")
         val applied = LinkedHashSet<String>()
@@ -193,7 +195,7 @@ object Docx {
         parts[DOCUMENT_PART] = serialize(document)
         parts[DOCUMENT_RELS_PART] = serialize(rels)
         if (sink.addedMedia) ensureImageDefaults(parts)
-        writZip(file, parts.entries.map { it.key to it.value })
+        writZip(java.io.File(file.toString()), parts.entries.map { it.key to it.value })
         return "Applied ${ops.size} operation(s): ${applied.joinToString(", ")}"
     }
 
@@ -928,7 +930,7 @@ private class EditSink(private val parts: MutableMap<String, ByteArray>, private
     }
 }
 
-private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
+private class DocBlocks(private val sink: DocxRelSink, private val base: Path) {
 
     private var drawingId = 0
 
@@ -981,7 +983,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
     fun image(path: String, width: Int, caption: String): List<XmlBuilder> {
         if (path.isBlank()) throw IllegalArgumentException("The image block needs a \"path\"")
         val file = resolve(path)
-        if (!file.exists()) throw IllegalArgumentException("Image ${file.name} was not found")
+        if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("Image ${file.name} was not found")
         val bytes = try {
             file.readBytes()
         } catch (e: Exception) {
@@ -1284,9 +1286,9 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
         return clean
     }
 
-    private fun resolve(path: String): File {
-        val file = File(path)
-        return if (file.isAbsolute) file else File(base, path)
+    private fun resolve(path: String): Path {
+        val file = path.toPath()
+        return if (file.isAbsolute) file else base / path
     }
 }
 
