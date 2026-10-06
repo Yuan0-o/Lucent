@@ -42,6 +42,7 @@ class UpdateDownloadService : Service() {
         const val ACTION_CANCEL = "com.lucent.app.action.UPDATE_DOWNLOAD_CANCEL"
         const val EXTRA_URL = "url"
         const val EXTRA_NAME = "name"
+        const val EXTRA_SHOW_UPDATE = "com.lucent.app.extra.SHOW_UPDATE"
 
         private const val CHANNEL_ID = "update_download"
         private const val NOTIFICATION_ID = 7102
@@ -317,7 +318,7 @@ class UpdateDownloadService : Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(com.lucent.app.i18n.S.updateNotifTitle)
             .setContentText(text)
-            .setContentIntent(openAppIntent())
+            .setContentIntent(updateIntent())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -334,7 +335,7 @@ class UpdateDownloadService : Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(com.lucent.app.i18n.S.updateNotifTitle)
             .setContentText(text)
-            .setContentIntent(openAppIntent())
+            .setContentIntent(updateIntent())
             .setOngoing(false)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -354,6 +355,15 @@ class UpdateDownloadService : Service() {
         this,
         2,
         Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    private fun updateIntent(): PendingIntent = PendingIntent.getActivity(
+        this,
+        3,
+        Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_SHOW_UPDATE, true),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 

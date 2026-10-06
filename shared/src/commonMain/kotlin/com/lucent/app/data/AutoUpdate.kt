@@ -83,6 +83,7 @@ object AutoUpdate {
         stagedFiles = emptyList()
         onStagedChange?.invoke(null, emptyList())
         SettingsCache.stagedUpdateIdentity = ""
+        SettingsCache.stagedUpdateVersion = ""
         onStagedIdentityChange?.invoke("")
     }
 
@@ -118,6 +119,10 @@ object AutoUpdate {
         hidden = true
     }
 
+    fun unhide() {
+        hidden = false
+    }
+
     fun report(text: String?) {
         message = text
     }
@@ -135,6 +140,7 @@ object AutoUpdate {
             if (files.isNotEmpty()) {
                 val identity = installer?.identityOf(info) ?: info.identity
                 SettingsCache.stagedUpdateIdentity = identity
+                SettingsCache.stagedUpdateVersion = info.version
                 onStagedIdentityChange?.invoke(identity)
                 recordStaged(info.tag, files)
             }
@@ -210,7 +216,13 @@ object AutoUpdate {
         if (engine.isDownloaded(info)) {
             val stagedIdentity = SettingsCache.stagedUpdateIdentity
             if (stagedIdentity.isNotBlank() && stagedIdentity != engine.identityOf(info)) {
-                engine.discard(info)
+                val stagedVersion = SettingsCache.stagedUpdateVersion
+                if (stagedVersion.isNotBlank() && stagedVersion != info.version) {
+                    engine.discard(info)
+                } else {
+                    readyForInstall = true
+                    return true
+                }
             } else {
                 readyForInstall = true
                 return true

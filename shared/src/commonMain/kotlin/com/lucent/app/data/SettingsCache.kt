@@ -192,6 +192,9 @@ object SettingsCache {
     var stagedUpdateIdentity: String = ""
 
     @Volatile
+    var stagedUpdateVersion: String = ""
+
+    @Volatile
     var autoUpdateEnabled: Boolean = false
 
     @Volatile

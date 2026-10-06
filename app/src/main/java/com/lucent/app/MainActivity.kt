@@ -144,6 +144,10 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        
+        if (intent?.getBooleanExtra(UpdateDownloadService.EXTRA_SHOW_UPDATE, false) == true) {
+            handleShowUpdate()
+        }
 
         val settingsRepo = createSettingsRepository(applicationContext)
         val startup = try {
@@ -490,6 +494,9 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (intent.getBooleanExtra(UpdateDownloadService.EXTRA_SHOW_UPDATE, false)) {
+            handleShowUpdate()
+        }
         handleShareIntent(intent)
         handleWidgetIntent(intent)
     }
@@ -529,6 +536,10 @@ class MainActivity : FragmentActivity() {
                 if (id > 0) AppNavigation.openNote(id) else AppNavigation.requestScreen(Screen.Notes)
             }
         }
+    }
+
+    private fun handleShowUpdate() {
+        com.lucent.app.data.AutoUpdate.unhide()
     }
 }
 
