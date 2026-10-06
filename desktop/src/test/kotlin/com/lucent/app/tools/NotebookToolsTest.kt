@@ -18,7 +18,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 class NotebookToolsTest {
 
@@ -46,7 +47,7 @@ class NotebookToolsTest {
 
     private suspend fun exec(db: AppDatabase, name: String, json: String): ToolExecResult =
         assertNotNull(
-            NotebookTools.execute(db, name, JSONObject(json)),
+            NotebookTools.execute(db, name, Json.parseToJsonElement(json).jsonObject),
             "$name should be handled by NotebookTools"
         )
 

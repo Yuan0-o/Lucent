@@ -45,6 +45,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(compose.desktop.uiTestJUnit4)
+    testImplementation(libs.kotlinx.serialization.json)
     tasks.withType<Test> { useJUnitPlatform() }
 
     implementation(libs.sqlite.jdbc)
