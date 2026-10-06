@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import kotlinx.serialization.json.*
 import com.lucent.app.platform.applicationContext
 
 import com.lucent.app.data.createSettingsRepository
@@ -558,18 +559,18 @@ fun TasksScreen(active: Boolean = true) {
         val id = snap.itemId
         resetComposer()
         editingTask = if (id != null) db.taskDao.getByIdOnce(id) else null
-        newTitle = androidx.compose.ui.text.input.TextFieldValue(p.optString("title"))
-        newNotes = p.optString("notes")
-        pendingAttachments = Attachments.parse(p.optString("attachments", "[]"))
-        dueAt = if (p.isNull("dueAt")) null else p.optLong("dueAt")
-        priority = TaskPriority.fromValue(p.optInt("priority"))
-        pinned = p.optBoolean("pinned")
-        subtasks = Checklist.parse(p.optString("subtasks", "[]"))
-        newSubtaskText = p.optString("subtaskText")
-        subtasksEnabled = p.optBoolean("subtasksEnabled")
-        repeatRule = RepeatRule.fromKey(p.optString("repeatRule"))
-        reminderEnabled = p.optBoolean("reminderEnabled")
-        bodySpans = com.lucent.app.data.RichText.load(p.optString("notesSpans"), newNotes)
+        newTitle = androidx.compose.ui.text.input.TextFieldValue(p["title"]?.jsonPrimitive?.contentOrNull ?: "")
+        newNotes = p["notes"]?.jsonPrimitive?.contentOrNull ?: ""
+        pendingAttachments = Attachments.parse(p["attachments"]?.jsonPrimitive?.contentOrNull ?: "[]")
+        dueAt = if (p["dueAt"] == null || p["dueAt"] is JsonNull) null else p["dueAt"]?.jsonPrimitive?.longOrNull
+        priority = TaskPriority.fromValue(p["priority"]?.jsonPrimitive?.intOrNull ?: 0)
+        pinned = p["pinned"]?.jsonPrimitive?.booleanOrNull ?: false
+        subtasks = Checklist.parse(p["subtasks"]?.jsonPrimitive?.contentOrNull ?: "[]")
+        newSubtaskText = p["subtaskText"]?.jsonPrimitive?.contentOrNull ?: ""
+        subtasksEnabled = p["subtasksEnabled"]?.jsonPrimitive?.booleanOrNull ?: false
+        repeatRule = RepeatRule.fromKey(p["repeatRule"]?.jsonPrimitive?.contentOrNull ?: "")
+        reminderEnabled = p["reminderEnabled"]?.jsonPrimitive?.booleanOrNull ?: false
+        bodySpans = com.lucent.app.data.RichText.load(p["notesSpans"]?.jsonPrimitive?.contentOrNull ?: "", newNotes)
         viewingId = null
         showingHistory = false
         historyForTaskId = null

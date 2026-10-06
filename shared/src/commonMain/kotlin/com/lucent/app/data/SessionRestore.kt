@@ -6,13 +6,21 @@ import com.lucent.app.data.createSettingsRepository
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import org.json.JSONObject
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 object SessionRestore {
 
     const val KIND_NOTE = "note"
     const val KIND_TASK = "task"
 
+    @Serializable
     data class Snapshot(
         val kind: String,
         val itemId: Long?,
@@ -64,39 +72,34 @@ object SessionRestore {
     }
 
 
-    fun serialize(s: Snapshot): String = JSONObject()
-        .put("kind", s.kind)
-        .put("itemId", s.itemId ?: JSONObject.NULL)
-        .put("title", s.title)
-        .put("payload", s.payload)
-        .put("savedAt", s.savedAt)
-        .toString()
+    fun serialize(s: Snapshot): String = Json.encodeToString(s)
 
     fun parse(json: String): Snapshot? = try {
-        val o = JSONObject(json)
-        val kind = o.optString("kind")
-        if (kind != KIND_NOTE && kind != KIND_TASK) null
-        else Snapshot(
-            kind = kind,
-            itemId = if (o.isNull("itemId")) null else o.optLong("itemId"),
-            title = o.optString("title"),
-            payload = o.optString("payload"),
-            savedAt = o.optLong("savedAt")
-        )
+        val s = Json.decodeFromString<Snapshot>(json)
+        if (s.kind != KIND_NOTE && s.kind != KIND_TASK) null else s
     } catch (_: Throwable) {
         null
     }
 
 
     fun put(vararg pairs: Pair<String, Any?>): String {
-        val o = JSONObject()
-        pairs.forEach { (k, v) -> o.put(k, v ?: JSONObject.NULL) }
-        return o.toString()
+        return buildJsonObject {
+            pairs.forEach { (k, v) ->
+                val element = when (v) {
+                    null -> JsonNull
+                    is String -> JsonPrimitive(v)
+                    is Number -> JsonPrimitive(v)
+                    is Boolean -> JsonPrimitive(v)
+                    else -> JsonPrimitive(v.toString())
+                }
+                put(k, element)
+            }
+        }.toString()
     }
 
-    fun read(payload: String): JSONObject = try {
-        JSONObject(payload)
+    fun read(payload: String): JsonObject = try {
+        Json.parseToJsonElement(payload) as? JsonObject ?: buildJsonObject {}
     } catch (_: Throwable) {
-        JSONObject()
+        buildJsonObject {}
     }
 }

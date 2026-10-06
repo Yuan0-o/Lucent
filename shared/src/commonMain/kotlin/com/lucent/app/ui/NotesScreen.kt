@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import kotlinx.serialization.json.*
 import com.lucent.app.platform.applicationContext
 
 import com.lucent.app.data.createSettingsRepository
@@ -755,18 +756,18 @@ fun NotesScreen(active: Boolean = true) {
         val p = com.lucent.app.data.SessionRestore.read(snap.payload)
         resetComposer()
         editingId = snap.itemId
-        newTitle = p.optString("title")
-        newBody = p.optString("body")
-        selectedTags = p.optString("tags").split(",").filter { it.isNotBlank() }.toSet()
-        pendingAttachments = Attachments.parse(p.optString("attachments", "[]"))
-        pinned = p.optBoolean("pinned")
-        selectedColor = NoteColor.fromKey(p.optString("color"))
-        isChecklistMode = p.optBoolean("isChecklist")
-        checklistItems = Checklist.parse(p.optString("checklist", "[]"))
-        newChecklistItemText = p.optString("checklistText")
-        isDoodleMode = p.optBoolean("isDoodle")
-        doodleData = p.optString("doodle")
-        bodySpans = com.lucent.app.data.RichText.load(p.optString("bodySpans"), newBody)
+        newTitle = p["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        newBody = p["body"]?.jsonPrimitive?.contentOrNull ?: ""
+        selectedTags = (p["tags"]?.jsonPrimitive?.contentOrNull ?: "").split(",").filter { it.isNotBlank() }.toSet()
+        pendingAttachments = Attachments.parse(p["attachments"]?.jsonPrimitive?.contentOrNull ?: "[]")
+        pinned = p["pinned"]?.jsonPrimitive?.booleanOrNull ?: false
+        selectedColor = NoteColor.fromKey(p["color"]?.jsonPrimitive?.contentOrNull ?: "")
+        isChecklistMode = p["isChecklist"]?.jsonPrimitive?.booleanOrNull ?: false
+        checklistItems = Checklist.parse(p["checklist"]?.jsonPrimitive?.contentOrNull ?: "[]")
+        newChecklistItemText = p["checklistText"]?.jsonPrimitive?.contentOrNull ?: ""
+        isDoodleMode = p["isDoodle"]?.jsonPrimitive?.booleanOrNull ?: false
+        doodleData = p["doodle"]?.jsonPrimitive?.contentOrNull ?: ""
+        bodySpans = com.lucent.app.data.RichText.load(p["bodySpans"]?.jsonPrimitive?.contentOrNull ?: "", newBody)
         viewingId = null
         historyForId = null
         showArchive = false

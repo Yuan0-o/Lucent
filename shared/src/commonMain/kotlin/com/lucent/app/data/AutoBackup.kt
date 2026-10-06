@@ -1,6 +1,9 @@
 package com.lucent.app.data
 
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 object AutoBackup {
 
@@ -19,6 +22,7 @@ object AutoBackup {
     val MODULES: Set<BackupModule>
         get() = DEFAULT_BACKUP_MODULES
 
+    @Serializable
     data class State(
         val enabled: Boolean = false,
         val folderUri: String = "",
@@ -29,14 +33,7 @@ object AutoBackup {
     ) {
         val runnable: Boolean get() = enabled && folderUri.isNotBlank()
 
-        fun toJson(): String = JSONObject()
-            .put("enabled", enabled)
-            .put("folderUri", folderUri)
-            .put("intervalHours", intervalHours)
-            .put("keep", keep)
-            .put("lastRunAt", lastRunAt)
-            .put("lastError", lastError)
-            .toString()
+        fun toJson(): String = Json.encodeToString(this)
 
         companion object {
             val EMPTY = State()
@@ -44,15 +41,10 @@ object AutoBackup {
             fun fromJson(json: String): State {
                 if (json.isBlank()) return EMPTY
                 return try {
-                    val o = JSONObject(json)
-                    State(
-                        enabled = o.optBoolean("enabled", false),
-                        folderUri = o.optString("folderUri", ""),
-                        intervalHours = o.optInt("intervalHours", DEFAULT_INTERVAL_HOURS)
-                            .coerceAtLeast(MIN_INTERVAL_HOURS),
-                        keep = o.optInt("keep", DEFAULT_KEEP).coerceIn(KEEP_RANGE),
-                        lastRunAt = o.optLong("lastRunAt", 0L),
-                        lastError = o.optString("lastError", "")
+                    val decoded = Json.decodeFromString<State>(json)
+                    decoded.copy(
+                        intervalHours = decoded.intervalHours.coerceAtLeast(MIN_INTERVAL_HOURS),
+                        keep = decoded.keep.coerceIn(KEEP_RANGE)
                     )
                 } catch (_: Throwable) {
                     EMPTY
