@@ -32,7 +32,9 @@ jobs:
           CODE=$(( DIGITS * 10000 + GITHUB_RUN_NUMBER ))
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "version_code=$CODE" >> "$GITHUB_OUTPUT"
-          echo "Building APK for version $VER (versionCode $CODE)"
+          BUILD_ID="R$(date -u +%Y%m%d%H%M)"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Building APK for version $VER (versionCode $CODE, buildId $BUILD_ID)"
 
       - name: Check signing secrets
         env:
@@ -178,7 +180,8 @@ jobs:
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace \
             -PversionCode=${{ steps.resolve-version.outputs.version_code }} \
-            -PversionName='${{ steps.resolve-version.outputs.version }}'
+            -PversionName='${{ steps.resolve-version.outputs.version }}' \
+            -PbuildId='${{ steps.resolve-version.outputs.build_id }}'
 
       - name: Verify APK
         run: |
@@ -192,7 +195,8 @@ jobs:
         run: |
           VER="${{ steps.resolve-version.outputs.version }}"
           APK=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)
-          mv "$APK" "app/build/outputs/apk/release/Lucent.for.Android-$VER.apk"
+          BID="${{ steps.resolve-version.outputs.build_id }}"
+          mv "$APK" "app/build/outputs/apk/release/Lucent.for.Android-$VER-$BID.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v6

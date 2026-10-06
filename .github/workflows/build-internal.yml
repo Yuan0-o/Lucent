@@ -7,12 +7,46 @@ on:
         description: 'Version name, e.g. 2.9.0. Leave blank to use default.'
         required: false
         default: ''
+  workflow_call:
+    inputs:
+      version_name:
+        description: 'Version name'
+        required: false
+        type: string
+        default: ''
+      build_id:
+        description: 'Build ID (e.g. R202610061243)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      apk_version:
+        description: "Version of APK"
+        value: ${{ jobs.build-apk.outputs.version }}
+      exe_version:
+        description: "Version of EXE"
+        value: ${{ jobs.build-exe.outputs.version }}
 
 permissions:
   contents: read
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      build_id: ${{ steps.gen.outputs.build_id }}
+    steps:
+      - id: gen
+        run: |
+          BID="${{ inputs.build_id }}"
+          if [ -z "$BID" ]; then
+            BID="P$(date -u +%Y%m%d%H%M)"
+          fi
+          echo "build_id=$BID" >> "$GITHUB_OUTPUT"
+          echo "Build ID: $BID"
+
   build-apk:
+    needs: prepare
     runs-on: ubuntu-latest
 
     steps:
@@ -179,7 +213,8 @@ jobs:
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace \
             -PversionCode=${{ steps.resolve-version.outputs.version_code }} \
-            -PversionName='${{ steps.resolve-version.outputs.version }}'
+            -PversionName='${{ steps.resolve-version.outputs.version }}' \
+            -PbuildId='${{ needs.prepare.outputs.build_id }}'
 
       - name: Verify APK
         run: |
@@ -192,8 +227,9 @@ jobs:
       - name: Rename APK
         run: |
           VER="${{ steps.resolve-version.outputs.version }}"
+          BID="${{ needs.prepare.outputs.build_id }}"
           APK=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)
-          mv "$APK" "app/build/outputs/apk/release/Lucent.for.Android-$VER.apk"
+          mv "$APK" "app/build/outputs/apk/release/Lucent.for.Android-$VER-$BID.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v6
@@ -211,6 +247,7 @@ jobs:
           if-no-files-found: ignore
 
   build-exe:
+    needs: prepare
     runs-on: windows-latest
     outputs:
       version: ${{ steps.resolve-version.outputs.version }}
@@ -391,8 +428,8 @@ jobs:
       - name: Package EXE
         shell: pwsh
         run: |
-          ./gradlew :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
-          if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 30; ./gradlew :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace }
+          ./gradlew :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace -PbuildId='${{ needs.prepare.outputs.build_id }}'
+          if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 30; ./gradlew :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace -PbuildId='${{ needs.prepare.outputs.build_id }}' }
           exit $LASTEXITCODE
 
       - name: Sign installer
@@ -420,8 +457,9 @@ jobs:
         shell: pwsh
         run: |
           $ver = "${{ steps.resolve-version.outputs.version }}"
+          $bid = "${{ needs.prepare.outputs.build_id }}"
           $exe = Get-ChildItem desktop/build/compose/binaries/main/exe/*.exe | Select-Object -First 1
-          $target = "Lucent.for.Windows-$ver.exe"
+          $target = "Lucent.for.Windows-$ver-$bid.exe"
           if ($exe.Name -ne $target) { Move-Item -Force $exe.FullName (Join-Path $exe.DirectoryName $target) }
 
       - name: Upload installer
@@ -432,7 +470,7 @@ jobs:
           if-no-files-found: error
 
   publish-preview:
-    needs: [build-apk, build-exe]
+    needs: [prepare, build-apk, build-exe]
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -443,21 +481,33 @@ jobs:
         with:
           name: lucent-windows-exe
           path: exe
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: lucent-release-apk
+          path: apk
       - name: Publish preview release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_ID: ${{ needs.prepare.outputs.build_id }}
         run: |
           set -eu
           EXE=$(find exe -name '*.exe' | head -n 1)
+          APK=$(find apk -name '*.apk' | head -n 1)
           [ -n "$EXE" ] || { echo "::error::No EXE found."; exit 1; }
+          [ -n "$APK" ] || { echo "::error::No APK found."; exit 1; }
           if ! gh release view preview --repo "${{ github.repository }}" >/dev/null 2>&1; then
             gh release create preview --prerelease --title "Preview Build" --notes "Initial preview" --repo "${{ github.repository }}"
           fi
           EXISTING=$(gh release view preview --repo "${{ github.repository }}" --json body -q .body 2>/dev/null || true)
-          KEPT=$(printf '%s\n' "$EXISTING" | grep -v -e '^EXE-' -e '^Commit:' -e '^Version:' -e '^Run:' || true)
+          KEPT=$(printf '%s\n' "$EXISTING" | grep -v -e '^Build-ID:' -e '^EXE-' -e '^APK-' -e '^Commit:' -e '^Version:' -e '^Run:' || true)
           NOTES="$KEPT
+          Build-ID: $BUILD_ID
           EXE-Commit: ${{ github.sha }}
           EXE-Version: ${{ needs.build-exe.outputs.version }}
-          EXE-Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          gh release upload preview "$EXE" --clobber --repo "${{ github.repository }}"
+          EXE-Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          APK-Commit: ${{ github.sha }}
+          APK-Version: ${{ needs.build-apk.outputs.version }}
+          APK-Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh release upload preview "$EXE" "$APK" --clobber --repo "${{ github.repository }}"
           gh release edit preview --notes "$NOTES" --repo "${{ github.repository }}"

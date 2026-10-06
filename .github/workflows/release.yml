@@ -36,6 +36,7 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       tag: ${{ steps.resolve.outputs.tag }}
+      build_id: ${{ steps.gen-build-id.outputs.build_id }}
 
     steps:
       - name: Checkout repo
@@ -63,6 +64,14 @@ jobs:
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "Releasing tag $TAG as version $VER"
 
+      - name: Generate build ID
+        id: gen-build-id
+        run: |
+          set -eu
+          BUILD_ID="R$(date -u +%Y%m%d%H%M)"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Generated build ID: $BUILD_ID"
+
       - name: Check the notes match the house format
         if: ${{ inputs.release_notes != '' }}
         env:
@@ -77,23 +86,17 @@ jobs:
           python3 tools/compose_scroll_check.py --self-test
           python3 tools/compose_scroll_check.py
 
-  apk:
+  build:
     needs: prepare
-    uses: ./.github/workflows/build-apk.yml
+    uses: ./.github/workflows/build-internal.yml
     secrets: inherit
     with:
       version_name: ${{ needs.prepare.outputs.version }}
-
-  exe:
-    needs: prepare
-    uses: ./.github/workflows/build-exe.yml
-    secrets: inherit
-    with:
-      version_name: ${{ needs.prepare.outputs.version }}
+      build_id: ${{ needs.prepare.outputs.build_id }}
 
   create-release:
     runs-on: ubuntu-latest
-    needs: [prepare, apk, exe]
+    needs: [prepare, build]
     permissions:
       contents: write
       actions: read
@@ -138,6 +141,7 @@ jobs:
       - name: Compose the release body
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_ID: ${{ needs.prepare.outputs.build_id }}
           NOTES_INPUT: ${{ inputs.release_notes }}
         run: |
           set -eu
@@ -149,6 +153,7 @@ jobs:
           {
             printf '\n---\n\n'
             printf '**Build info**\n\n'
+            printf -- '- Build-ID: %s\n' "$BUILD_ID"
             printf -- '- Android APK: %s MiB\n' "$APK_SIZE_MB"
             printf -- '- Windows installer: %s MiB\n' "$EXE_SIZE_MB"
             printf -- '- Built from commit `%s`\n' "${{ github.sha }}"
