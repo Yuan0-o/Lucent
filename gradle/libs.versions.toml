@@ -41,8 +41,6 @@ haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
 org-json = { module = "org.json:json", version.ref = "orgJson" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
-okio-zipfilesystem = { module = "com.squareup.okio:okio-zipfilesystem", version.ref = "okio" }
-kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinxIo" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-ui = { module = "androidx.compose.ui:ui" }

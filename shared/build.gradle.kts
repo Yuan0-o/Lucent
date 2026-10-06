@@ -60,8 +60,6 @@ kotlin {
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.okio)
-                implementation(libs.okio.zipfilesystem)
-                implementation(libs.kotlinx.io.core)
             }
         }
         val androidMain by getting {
