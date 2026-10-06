@@ -9,9 +9,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.File
-import java.io.FileOutputStream
-import java.security.MessageDigest
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import com.lucent.app.data.CryptoPlatform
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -53,7 +54,7 @@ object PluginDownload {
                 var read = 0L
                 val limit = PROBE_BYTES.toLong()
                 val deadline = started + timeoutSeconds * 1000L
-                body.byteStream().use { input ->
+                body.source().use { input ->
                     while (read < limit && System.currentTimeMillis() < deadline) {
                         val chunk = input.read(buffer)
                         if (chunk <= 0) break
@@ -91,16 +92,16 @@ object PluginDownload {
 
     suspend fun fetch(
         source: PluginSource,
-        target: File,
+        target: Path,
         onProgress: (Float, String) -> Unit
     ): PluginOutcome = withContext(Dispatchers.IO) {
         if (!source.url.startsWith("http")) {
             return@withContext PluginOutcome(false, "${source.label} has no direct download; ${source.url}")
         }
-        target.parentFile?.mkdirs()
+        target.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
 
         if (source.bytes > 0L) {
-            val space = target.parentFile?.usableSpace ?: 0L
+            val space = target.parent?.let { java.io.File(it.toString()).usableSpace } ?: 0L
             val needed = source.bytes * 2L
             if (space in 1L..<needed) {
                 return@withContext PluginOutcome(
@@ -110,8 +111,8 @@ object PluginDownload {
             }
         }
 
-        val partFile = File(target.path + ".part")
-        var existingLen = if (partFile.exists()) partFile.length() else 0L
+        val partFile = "$target.part".toPath()
+        var existingLen = FileSystem.SYSTEM.metadataOrNull(partFile)?.size ?: 0L
 
         try {
             val reqBuilder = Request.Builder().url(source.url).header("User-Agent", "Lucent/3.0")
@@ -121,7 +122,7 @@ object PluginDownload {
 
             slowClient.newCall(reqBuilder.build()).execute().use { response ->
                 if (response.code == 416) {
-                    partFile.delete()
+                    FileSystem.SYSTEM.delete(partFile)
                     return@withContext PluginOutcome(false, "${source.label} rejected the resume offset; the partial download was removed, retry to start again")
                 }
                 if (!response.isSuccessful) {
@@ -131,7 +132,7 @@ object PluginDownload {
                 val append = response.code == 206 && existingLen > 0L
                 if (!append && existingLen > 0L) {
                     existingLen = 0L
-                    partFile.writeBytes(ByteArray(0))
+                    FileSystem.SYSTEM.sink(partFile).use { }
                 }
 
                 val body = response.body ?: return@withContext PluginOutcome(false, "${source.label} sent nothing")
@@ -140,8 +141,9 @@ object PluginDownload {
                 var written = existingLen
                 val buffer = ByteArray(1024 * 1024)
 
-                body.byteStream().use { input ->
-                    FileOutputStream(partFile, append).use { output ->
+                body.source().use { input ->
+                    val sink = if (append) FileSystem.SYSTEM.appendingSink(partFile) else FileSystem.SYSTEM.sink(partFile)
+                    sink.buffer().use { output ->
                         while (isActive) {
                             val read = input.read(buffer)
                             if (read <= 0) break
@@ -161,8 +163,8 @@ object PluginDownload {
                 if (!isActive) throw kotlinx.coroutines.CancellationException()
 
                 if (source.bytes > 0L && written != source.bytes) {
-                    partFile.delete()
-                    target.delete()
+                    FileSystem.SYSTEM.delete(partFile)
+                    FileSystem.SYSTEM.delete(target)
                     return@withContext PluginOutcome(
                         false,
                         "${source.label} sent ${Workspace.humanSize(written)} but ${Workspace.humanSize(source.bytes)} was expected"
@@ -170,33 +172,33 @@ object PluginDownload {
                 }
 
                 if (written < 1024L) {
-                    partFile.delete()
-                    target.delete()
+                    FileSystem.SYSTEM.delete(partFile)
+                    FileSystem.SYSTEM.delete(target)
                     return@withContext PluginOutcome(false, "${source.label} sent something far too small to be the real file")
                 }
 
-                val digest = MessageDigest.getInstance("SHA-256")
-                partFile.inputStream().use { input ->
-                    val mdBuf = ByteArray(1024 * 1024)
-                    while (true) {
-                        val read = input.read(mdBuf)
-                        if (read <= 0) break
-                        digest.update(mdBuf, 0, read)
-                    }
+                val bytes = FileSystem.SYSTEM.read(partFile) { readByteArray() }
+                val hex = CryptoPlatform.sha256(bytes).joinToString("") {
+                    it.toUByte().toString(16).padStart(2, '0')
                 }
-                val hex = digest.digest().joinToString("") { "%02x".format(it) }
                 if (source.sha256.isNotEmpty() && !hex.equals(source.sha256, ignoreCase = true)) {
-                    partFile.delete()
-                    target.delete()
+                    FileSystem.SYSTEM.delete(partFile)
+                    FileSystem.SYSTEM.delete(target)
                     return@withContext PluginOutcome(false, "The download from ${source.label} does not match its checksum")
                 }
 
-                if (!partFile.renameTo(target)) {
-                    partFile.copyTo(target, overwrite = true)
-                    partFile.delete()
+                try {
+                    FileSystem.SYSTEM.atomicMove(partFile, target)
+                } catch (_: Exception) {
+                    FileSystem.SYSTEM.read(partFile) {
+                        FileSystem.SYSTEM.write(target) {
+                            writeAll(this@read)
+                        }
+                    }
+                    FileSystem.SYSTEM.delete(partFile)
                 }
 
-                PluginOutcome(true, "downloaded ${Workspace.humanSize(written)} from ${source.label}", target.path)
+                PluginOutcome(true, "downloaded ${Workspace.humanSize(written)} from ${source.label}", target.toString())
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

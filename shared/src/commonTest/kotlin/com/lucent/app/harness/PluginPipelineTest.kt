@@ -7,6 +7,8 @@ import com.lucent.app.harness.plugins.PluginSource
 import com.lucent.app.harness.plugins.PluginSpec
 import com.sun.net.httpserver.HttpServer
 import java.io.File
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import java.net.InetSocketAddress
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -196,10 +198,10 @@ class PluginPipelineTest {
         val (server, url) = serve(bytes)
         try {
             val source = PluginSource("test", "Test mirror", url, official = true, bytes = 9999L)
-            val target = File(HarnessRuntime.downloadsDirPath(), "short.bin")
+            val target = HarnessRuntime.downloadsDirPath().toPath() / "short.bin"
             val outcome = runBlocking { PluginDownload.fetch(source, target) { _, _ -> } }
             assertFalse(outcome.ok)
-            assertFalse(target.exists())
+            assertFalse(FileSystem.SYSTEM.exists(target))
         } finally {
             server.stop(0)
         }
@@ -218,10 +220,10 @@ class PluginPipelineTest {
                 sha256 = "00",
                 bytes = bytes.size.toLong()
             )
-            val target = File(HarnessRuntime.downloadsDirPath(), "checksum.bin")
+            val target = HarnessRuntime.downloadsDirPath().toPath() / "checksum.bin"
             val outcome = runBlocking { PluginDownload.fetch(source, target) { _, _ -> } }
             assertFalse(outcome.ok)
-            assertFalse(target.exists())
+            assertFalse(FileSystem.SYSTEM.exists(target))
         } finally {
             server.stop(0)
         }

@@ -5,9 +5,11 @@ import com.lucent.app.harness.HarnessRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import java.io.File
-import java.net.URL
-import javax.net.ssl.HttpsURLConnection
+import okio.FileSystem
+import okio.Path.Companion.toPath
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import kotlin.time.Duration.Companion.seconds
 
 object PluginCatalogRemote {
 
@@ -94,14 +96,14 @@ object PluginCatalogRemote {
 
         if (memoryCacheUrl == urlStr) memoryCache?.let { return it }
 
-        val cacheFile = File(HarnessRuntime.downloadsDirPath(), "catalog-cache.json")
+        val cacheFile = HarnessRuntime.downloadsDirPath().toPath() / "catalog-cache.json"
         val now = System.currentTimeMillis()
         val epoch = config.pluginCatalogCacheEpoch
 
-        if (epoch > 0 && (now - epoch) < 6 * 60 * 60 * 1000L && cacheFile.exists()) {
+        if (epoch > 0 && (now - epoch) < 6 * 60 * 60 * 1000L && FileSystem.SYSTEM.exists(cacheFile)) {
             val cachedJson = withContext(Dispatchers.IO) {
                 try {
-                    cacheFile.readText()
+                    FileSystem.SYSTEM.read(cacheFile) { readUtf8() }
                 } catch (_: Exception) {
                     ""
                 }
@@ -116,12 +118,17 @@ object PluginCatalogRemote {
 
         return withContext(Dispatchers.IO) {
             try {
-                val connection = URL(urlStr).openConnection() as HttpsURLConnection
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-                val json = connection.inputStream.bufferedReader().use { it.readText() }
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(10.seconds)
+                    .readTimeout(10.seconds)
+                    .build()
+                val request = Request.Builder().url(urlStr).build()
+                val json = client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+                    response.body?.string() ?: throw Exception("Empty body")
+                }
                 
-                cacheFile.writeText(json)
+                FileSystem.SYSTEM.write(cacheFile) { writeUtf8(json) }
                 val newEpoch = System.currentTimeMillis()
 
                 val nextConfig = HarnessRuntime.config().copy(pluginCatalogCacheEpoch = newEpoch)
