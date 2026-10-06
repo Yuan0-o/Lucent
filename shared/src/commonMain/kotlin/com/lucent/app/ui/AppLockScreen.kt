@@ -38,3 +38,6 @@ object AppLockController {
 
     fun unlock() { locked = false }
 }
+
+@androidx.compose.runtime.Composable
+expect fun LockScreen(paletteColors: List<androidx.compose.ui.graphics.Color>, backdropColor: androidx.compose.ui.graphics.Color, backgroundAnimated: Boolean = true)

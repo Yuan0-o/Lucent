@@ -45,7 +45,7 @@ import com.lucent.app.data.createSettingsRepository
 private enum class LockStage { ENTER_PASSWORD, ANSWER_QUESTION, SET_NEW_PASSWORD }
 
 @Composable
-fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
+actual fun LockScreen(paletteColors: List<Color>, backdropColor: Color, backgroundAnimated: Boolean = true) {
     val context = LocalContext.current
     val repo = remember { createSettingsRepository(context) }
     val scope = rememberCoroutineScope()

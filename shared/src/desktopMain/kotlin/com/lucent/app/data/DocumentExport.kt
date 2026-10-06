@@ -1,10 +1,16 @@
 package com.lucent.app.data
 
 
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.pdf.PdfDocument
+import com.lucent.app.platform.PlatformContext
+import com.lucent.app.platform.desktopPlatformContext
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDPage
+import org.apache.pdfbox.pdmodel.PDPageContentStream
+import org.apache.pdfbox.pdmodel.common.PDRectangle
+import org.apache.pdfbox.pdmodel.font.PDFont
+import org.apache.pdfbox.pdmodel.font.PDType0Font
+import org.apache.pdfbox.pdmodel.font.PDType1Font
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.ZoneId
@@ -14,7 +20,7 @@ import java.util.zip.ZipOutputStream
 import kotlin.math.roundToInt
 
 
-object DocumentExport {
+actual object DocumentExport {
 
     private val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private fun formatTime(millis: Long): String =
@@ -336,104 +342,158 @@ object DocumentExport {
     private fun tasksPdf(tasks: List<Task>): ByteArray =
         pdf(com.lucent.app.i18n.S.exportDocTasksTitle, tasks.size, "task", tasks.map { taskBlock(it) })
 
-    private const val PAGE_W = 595
-    private const val PAGE_H = 842
+    private const val PAGE_W = 595f
+    private const val PAGE_H = 842f
     private const val MARGIN = 42f
     private const val DOCX_RICH_BASE_PT = 12f
 
+    private data class PdfStyle(val size: Float, val bold: Boolean, val gray: Boolean = false)
+
     private fun pdf(heading: String, count: Int, noun: String, blocks: List<Block>): ByteArray {
-        val doc = PdfDocument()
+        PDDocument().use { doc ->
+            val fonts = loadPdfFonts(doc)
+            val state = PdfState(doc, fonts)
+            state.newPage()
 
-        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 20f; isFakeBoldText = true; isAntiAlias = true }
-        val itemTitlePaint = Paint().apply { color = Color.BLACK; textSize = 15f; isFakeBoldText = true; isAntiAlias = true }
-        val metaPaint = Paint().apply { color = Color.DKGRAY; textSize = 10f; isAntiAlias = true }
-        val bodyPaint = Paint().apply { color = Color.BLACK; textSize = 11f; isAntiAlias = true }
-        val labelPaint = Paint().apply { color = Color.BLACK; textSize = 11f; isFakeBoldText = true; isAntiAlias = true }
+            val titleStyle = PdfStyle(20f, bold = true)
+            val itemTitleStyle = PdfStyle(15f, bold = true)
+            val metaStyle = PdfStyle(10f, bold = false, gray = true)
+            val bodyStyle = PdfStyle(11f, bold = false)
+            val labelStyle = PdfStyle(11f, bold = true)
 
-        val state = PdfState(doc)
-        state.newPage()
+            state.drawWrapped(heading, titleStyle, 26f)
+            state.drawWrapped(((if (noun == "note") com.lucent.app.i18n.S.exportDocNoteCount(count) else com.lucent.app.i18n.S.exportDocTaskCount(count)) + ", " + com.lucent.app.i18n.S.exportDocExportedAt(formatTime(System.currentTimeMillis()))), metaStyle, 14f)
+            state.drawWrapped(com.lucent.app.i18n.S.exportDocAttachmentsNote, metaStyle, 16f)
 
-        state.drawWrapped(heading, titlePaint, 26f)
-        state.drawWrapped(((if (noun == "note") com.lucent.app.i18n.S.exportDocNoteCount(count) else com.lucent.app.i18n.S.exportDocTaskCount(count)) + ", " + com.lucent.app.i18n.S.exportDocExportedAt(formatTime(System.currentTimeMillis()))), metaPaint, 14f)
-        state.drawWrapped(com.lucent.app.i18n.S.exportDocAttachmentsNote, metaPaint, 16f)
-
-        if (blocks.isEmpty()) {
-            state.drawWrapped((if (noun == "note") com.lucent.app.i18n.S.exportDocNoNotes else com.lucent.app.i18n.S.exportDocNoTasks), metaPaint, 14f)
-        } else {
-            for (b in blocks) {
-                state.space(10f)
-                state.drawWrapped(b.title, itemTitlePaint, 20f)
-                if (b.meta.isNotBlank()) state.drawWrapped(b.meta, metaPaint, 14f)
-                if (b.body.isNotBlank()) {
-                    if (b.bodySpans.isBlank()) {
-                        for (line in b.body.split("\n")) state.drawWrapped(line, bodyPaint, 15f)
-                    } else {
-                        for (runs in RichText.lineRuns(b.body, b.bodySpans)) {
-                            state.drawWrappedRich(runs, bodyPaint, 15f) { run -> richPaintFor(run, bodyPaint) }
+            if (blocks.isEmpty()) {
+                state.drawWrapped((if (noun == "note") com.lucent.app.i18n.S.exportDocNoNotes else com.lucent.app.i18n.S.exportDocNoTasks), metaStyle, 14f)
+            } else {
+                for (b in blocks) {
+                    state.space(10f)
+                    state.drawWrapped(b.title, itemTitleStyle, 20f)
+                    if (b.meta.isNotBlank()) state.drawWrapped(b.meta, metaStyle, 14f)
+                    if (b.body.isNotBlank()) {
+                        if (b.bodySpans.isBlank()) {
+                            for (line in b.body.split("\n")) state.drawWrapped(line, bodyStyle, 15f)
+                        } else {
+                            for (runs in RichText.lineRuns(b.body, b.bodySpans)) {
+                                state.drawWrappedRich(runs, bodyStyle, 15f)
+                            }
                         }
                     }
+                    b.doodlePages.forEach { state.drawDoodle(it) }
+                    if (b.doodleNames.isNotEmpty()) {
+                        state.drawWrapped(com.lucent.app.i18n.S.exportDocDoodleLine(b.doodleNames.joinToString(", ")), metaStyle, 14f)
+                    }
+                    if (b.checklist.isNotEmpty()) {
+                        state.drawWrapped("${b.checklistLabel}:", labelStyle, 15f)
+                        for ((done, text) in b.checklist) state.drawWrapped("${if (done) "\u2611" else "\u2610"} $text", bodyStyle, 15f)
+                    }
+                    if (b.attachments.isNotEmpty()) state.drawWrapped(com.lucent.app.i18n.S.exportDocAttachmentsLine(b.attachments.joinToString(", ")), metaStyle, 15f)
                 }
-                b.doodlePages.forEach { state.drawDoodle(it) }
-                if (b.doodleNames.isNotEmpty()) {
-                    state.drawWrapped(com.lucent.app.i18n.S.exportDocDoodleLine(b.doodleNames.joinToString(", ")), metaPaint, 15f)
-                }
-                if (b.checklist.isNotEmpty()) {
-                    state.drawWrapped("${b.checklistLabel}:", labelPaint, 15f)
-                    for ((done, text) in b.checklist) state.drawWrapped("${if (done) "\u2611" else "\u2610"} $text", bodyPaint, 15f)
-                }
-                if (b.attachments.isNotEmpty()) state.drawWrapped(com.lucent.app.i18n.S.exportDocAttachmentsLine(b.attachments.joinToString(", ")), metaPaint, 15f)
             }
-        }
 
-        state.finish()
-        val baos = ByteArrayOutputStream()
-        doc.writeTo(baos)
-        doc.close()
-        return baos.toByteArray()
+            state.finish()
+            val baos = ByteArrayOutputStream()
+            doc.save(baos)
+            return baos.toByteArray()
+        }
     }
 
-    private class PdfState(val doc: PdfDocument) {
-        private var page: PdfDocument.Page? = null
+    private const val BUNDLED_CJK_FONT = "/fonts/LucentCJK.otf"
+
+    @Volatile var cjkFontMissing: Boolean = false
+        private set
+
+    private fun loadPdfFonts(doc: PDDocument): List<PDFont> {
+        cjkFontMissing = false
+        val faces = mutableListOf<PDFont>()
+        val context = desktopPlatformContext
+        for (slot in FontStore.fonts(context)) {
+            try {
+                FontStore.fontFile(context, slot.id)?.inputStream()?.use { stream ->
+                    faces.add(PDType0Font.load(doc, stream, true))
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        var haveCjk = false
+        try {
+            DocumentExport::class.java.getResourceAsStream(BUNDLED_CJK_FONT)?.use { stream ->
+                faces.add(PDType0Font.load(doc, stream, true))
+                haveCjk = true
+            }
+        } catch (_: Throwable) {
+        }
+        if (!haveCjk) cjkFontMissing = true
+        faces.add(PDType1Font(Standard14Fonts.FontName.HELVETICA))
+        return faces
+    }
+
+    private class PdfState(val doc: PDDocument, val fonts: List<PDFont>) {
+        private var content: PDPageContentStream? = null
         private var y = MARGIN
-        private var pageNum = 0
 
         fun newPage() {
-            page?.let { doc.finishPage(it) }
-            pageNum++
-            page = doc.startPage(PdfDocument.PageInfo.Builder(PAGE_W, PAGE_H, pageNum).create())
+            content?.close()
+            val page = PDPage(PDRectangle(PAGE_W, PAGE_H))
+            doc.addPage(page)
+            content = PDPageContentStream(doc, page)
             y = MARGIN
         }
 
         fun space(dy: Float) { y += dy }
 
-        fun drawWrapped(text: String, paint: Paint, lineAdvance: Float) {
-            val maxWidth = PAGE_W - 2 * MARGIN
-            val words = if (text.isEmpty()) listOf("") else text.split(" ")
-            var line = StringBuilder()
-            fun flush() {
-                if (y + lineAdvance > PAGE_H - MARGIN) newPage()
-                page?.canvas?.drawText(line.toString(), MARGIN, y, paint)
-                y += lineAdvance
-            }
-            for (w in words) {
-                val candidate = if (line.isEmpty()) w else "$line $w"
-                if (paint.measureText(candidate) > maxWidth && line.isNotEmpty()) {
-                    flush()
-                    line = StringBuilder(w)
-                } else {
-                    line = StringBuilder(candidate)
+        private fun fontFor(text: String): PDFont {
+            for (f in fonts) {
+                try {
+                    f.encode(text)
+                    return f
+                } catch (_: Throwable) {
                 }
             }
-            flush()
+            return fonts.last()
+        }
+
+        private fun width(font: PDFont, text: String, size: Float): Float = try {
+            font.getStringWidth(text) / 1000f * size
+        } catch (_: Throwable) {
+            text.length * size * 0.6f
+        }
+
+        private fun encodable(font: PDFont, text: String): String {
+            return buildString {
+                for (ch in text) {
+                    val s = ch.toString()
+                    val ok = try { font.encode(s); true } catch (_: Throwable) { false }
+                    append(if (ok) s else "\u00B7")
+                }
+            }
+        }
+
+        private fun drawLine(text: String, style: PdfStyle) {
+            val stream = content ?: return
+            val font = fontFor(text)
+            val safe = if (font === fonts.last()) encodable(font, text) else text
+            try {
+                stream.beginText()
+                if (style.gray) stream.setNonStrokingColor(0.33f, 0.33f, 0.33f)
+                else stream.setNonStrokingColor(0f, 0f, 0f)
+                stream.setFont(font, style.size)
+                stream.newLineAtOffset(MARGIN, PAGE_H - y)
+                stream.showText(safe)
+                if (style.bold) {
+                    stream.newLineAtOffset(0.35f, 0f)
+                    stream.showText(safe)
+                }
+                stream.endText()
+            } catch (_: Throwable) {
+                try { stream.endText() } catch (_: Throwable) {}
+            }
         }
 
 
-        fun drawWrappedRich(
-            runs: List<RichText.StyledRun>,
-            base: Paint,
-            lineAdvance: Float,
-            paintFor: (RichText.StyledRun) -> Paint
-        ) {
+        fun drawWrappedRich(runs: List<RichText.StyledRun>, base: PdfStyle, lineAdvance: Float) {
             val maxWidth = PAGE_W - 2 * MARGIN
 
             data class Piece(val text: String, val run: RichText.StyledRun)
@@ -447,33 +507,66 @@ object DocumentExport {
             }
             if (pieces.isEmpty()) { y += lineAdvance; return }
 
+            fun sizeOf(run: RichText.StyledRun) = (if (run.light) base.size * 0.94f else base.size) * run.sizeScale
+            fun widthOf(p: Piece) = width(fontFor(p.text), p.text, sizeOf(p.run))
+
             var line = ArrayList<Piece>()
-            fun lineWidth(extra: Piece?): Float {
-                var w = 0f
-                line.forEach { w += paintFor(it.run).measureText(it.text) }
-                if (extra != null) w += paintFor(extra.run).measureText(extra.text)
-                return w
-            }
             fun flush() {
                 if (line.isEmpty()) { y += lineAdvance; return }
                 if (y + lineAdvance > PAGE_H - MARGIN) newPage()
-                var x = MARGIN
-                val canvas = page?.canvas
-                line.forEach { piece ->
-                    val paint = paintFor(piece.run)
-                    val w = paint.measureText(piece.text)
-                    if (piece.run.highlight >= 0 && canvas != null) {
-                        val fm = paint.fontMetrics
-                        val hl = Paint().apply {
-                            color = RichText.HIGHLIGHT_ARGB[
+                val stream = content
+                if (stream != null) {
+                    var x = MARGIN
+                    line.forEach { piece ->
+                        val w = widthOf(piece)
+                        if (piece.run.highlight >= 0) {
+                            val argb = RichText.HIGHLIGHT_ARGB[
                                 piece.run.highlight.coerceIn(0, RichText.HIGHLIGHT_ARGB.size - 1)]
-                            alpha = 110
-                            isAntiAlias = true
+                            val r = ((argb shr 16) and 0xFF) / 255f
+                            val g = ((argb shr 8) and 0xFF) / 255f
+                            val b = (argb and 0xFF) / 255f
+                            try {
+                                stream.setNonStrokingColor(
+                                    r + (1f - r) * 0.55f, g + (1f - g) * 0.55f, b + (1f - b) * 0.55f
+                                )
+                                val size = sizeOf(piece.run)
+                                stream.addRect(x, PAGE_H - y - size * 0.22f, w, size * 1.02f)
+                                stream.fill()
+                            } catch (_: Throwable) {
+                            }
                         }
-                        canvas.drawRect(x, y + fm.ascent, x + w, y + fm.descent, hl)
+                        x += w
                     }
-                    canvas?.drawText(piece.text, x, y, paint)
-                    x += w
+                    x = MARGIN
+                    line.forEach { piece ->
+                        val font = fontFor(piece.text)
+                        val safe = if (font === fonts.last()) encodable(font, piece.text) else piece.text
+                        val size = sizeOf(piece.run)
+                        try {
+                            stream.beginText()
+                            val rgb = RichText.textColorArgb(piece.run.color)
+                            if (rgb != null) {
+                                stream.setNonStrokingColor(
+                                    ((rgb shr 16) and 0xFF) / 255f,
+                                    ((rgb shr 8) and 0xFF) / 255f,
+                                    (rgb and 0xFF) / 255f
+                                )
+                            } else {
+                                stream.setNonStrokingColor(0f, 0f, 0f)
+                            }
+                            stream.setFont(font, size)
+                            stream.newLineAtOffset(x, PAGE_H - y)
+                            stream.showText(safe)
+                            if (piece.run.bold) {
+                                stream.newLineAtOffset(0.35f, 0f)
+                                stream.showText(safe)
+                            }
+                            stream.endText()
+                        } catch (_: Throwable) {
+                            try { stream.endText() } catch (_: Throwable) {}
+                        }
+                        x += widthOf(piece)
+                    }
                 }
                 y += lineAdvance
                 line = ArrayList()
@@ -481,7 +574,7 @@ object DocumentExport {
 
             pieces.forEach { p ->
                 if (line.isEmpty() && p.text == " ") return@forEach
-                if (line.isNotEmpty() && lineWidth(p) > maxWidth) flush()
+                if (line.isNotEmpty() && line.sumOf { widthOf(it).toDouble() }.toFloat() + widthOf(p) > maxWidth) flush()
                 line.add(p)
             }
             flush()
@@ -494,42 +587,79 @@ object DocumentExport {
             val boxW = PAGE_W - 2 * MARGIN
             val boxH = boxW * 0.6f
             if (y + boxH > PAGE_H - MARGIN) newPage()
-            val canvas = page?.canvas ?: return
+            val stream = content ?: return
             val top = y
             strokes.forEach { stroke ->
                 if (stroke.points.isEmpty()) return@forEach
-                val paint = Paint().apply {
-                    color = stroke.color
-                    style = Paint.Style.STROKE
-                    strokeWidth = (stroke.width * boxW).coerceAtLeast(0.5f)
-                    strokeCap = Paint.Cap.ROUND
-                    strokeJoin = Paint.Join.ROUND
-                    isAntiAlias = true
+                try {
+                    val argb = stroke.color
+                    stream.setStrokingColor(
+                        ((argb shr 16) and 0xFF) / 255f,
+                        ((argb shr 8) and 0xFF) / 255f,
+                        (argb and 0xFF) / 255f
+                    )
+                    stream.setLineWidth((stroke.width * boxW).coerceAtLeast(0.5f))
+                    stream.setLineCapStyle(1)
+                    stream.setLineJoinStyle(1)
+                    stroke.points.forEachIndexed { i, pt ->
+                        val px = MARGIN + pt.x * boxW
+                        val py = PAGE_H - (top + pt.y * boxH)
+                        if (i == 0) stream.moveTo(px, py) else stream.lineTo(px, py)
+                    }
+                    if (stroke.points.size == 1) {
+                        val pt = stroke.points.first()
+                        stream.lineTo(MARGIN + pt.x * boxW + 0.1f, PAGE_H - (top + pt.y * boxH))
+                    }
+                    stream.stroke()
+                } catch (_: Throwable) {
                 }
-                val path = Path()
-                stroke.points.forEachIndexed { i, pt ->
-                    val px = MARGIN + pt.x * boxW
-                    val py = top + pt.y * boxH
-                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-                }
-                if (stroke.points.size == 1) {
-                    val pt = stroke.points.first()
-                    path.lineTo(MARGIN + pt.x * boxW + 0.1f, top + pt.y * boxH)
-                }
-                canvas.drawPath(path, paint)
             }
             y = top + boxH + 10f
         }
 
-        fun finish() { page?.let { doc.finishPage(it) }; page = null }
-    }
+        fun drawWrapped(text: String, style: PdfStyle, lineAdvance: Float) {
+            val maxWidth = PAGE_W - 2 * MARGIN
+            val font = fontFor(text)
 
+            fun flushLine(line: String) {
+                if (y + lineAdvance > PAGE_H - MARGIN) newPage()
+                drawLine(line, style)
+                y += lineAdvance
+            }
 
-    private fun richPaintFor(run: RichText.StyledRun, base: Paint): Paint = Paint(base).apply {
-        isFakeBoldText = run.bold
-        if (run.italic) textSkewX = -0.25f
-        textSize = (if (run.light) base.textSize * 0.94f else base.textSize) * run.sizeScale
-        RichText.textColorArgb(run.color)?.let { color = it }
+            fun emitLong(word: String) {
+                var current = StringBuilder()
+                for (ch in word) {
+                    val candidate = current.toString() + ch
+                    if (width(font, candidate, style.size) > maxWidth && current.isNotEmpty()) {
+                        flushLine(current.toString())
+                        current = StringBuilder().append(ch)
+                    } else {
+                        current = StringBuilder(candidate)
+                    }
+                }
+                if (current.isNotEmpty()) flushLine(current.toString())
+            }
+
+            val words = if (text.isEmpty()) listOf("") else text.split(" ")
+            var line = StringBuilder()
+            for (w in words) {
+                val candidate = if (line.isEmpty()) w else "$line $w"
+                if (width(font, candidate, style.size) > maxWidth && line.isNotEmpty()) {
+                    flushLine(line.toString())
+                    line = StringBuilder(w)
+                } else {
+                    line = StringBuilder(candidate)
+                }
+                if (width(font, line.toString(), style.size) > maxWidth) {
+                    emitLong(line.toString())
+                    line = StringBuilder()
+                }
+            }
+            flushLine(line.toString())
+        }
+
+        fun finish() { content?.close(); content = null }
     }
 
 
@@ -562,11 +692,11 @@ object DocumentExport {
 
 
     fun zipWithAttachments(
-        context: android.content.Context,
+        context: PlatformContext,
         documentName: String,
         documentBytes: ByteArray,
         attachments: List<Attachment>,
-        extraFiles: List<Pair<String, ByteArray>> = emptyList()
+        extraFiles: List<Pair<String, ByteArray>>
     ): ByteArray {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zos ->
@@ -592,36 +722,36 @@ object DocumentExport {
         return baos.toByteArray()
     }
 
-    fun doodlePdf(canvas: DoodleExport.Canvas, heading: String = ""): ByteArray {
-        val doc = PdfDocument()
-        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 13f; isFakeBoldText = true; isAntiAlias = true }
-        val state = PdfState(doc)
-        state.newPage()
-        if (heading.isNotBlank()) state.drawWrapped(heading, titlePaint, 20f)
-        state.space(4f)
-        state.drawDoodle(canvas.strokesJson)
-        state.finish()
-        val baos = ByteArrayOutputStream()
-        doc.writeTo(baos)
-        doc.close()
-        return baos.toByteArray()
-    }
-
-    fun doodlesPdf(canvases: List<DoodleExport.Canvas>, heading: String = ""): ByteArray {
-        val doc = PdfDocument()
-        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 13f; isFakeBoldText = true; isAntiAlias = true }
-        val state = PdfState(doc)
-        canvases.forEachIndexed { i, canvas ->
-            if (i > 0) state.newPage()
-            if (heading.isNotBlank()) state.drawWrapped(heading, titlePaint, 20f)
+    fun doodlePdf(canvas: DoodleExport.Canvas, heading: String): ByteArray {
+        PDDocument().use { doc ->
+            val fonts = loadPdfFonts(doc)
+            val state = PdfState(doc, fonts)
+            state.newPage()
+            if (heading.isNotBlank()) state.drawWrapped(heading, PdfStyle(13f, bold = true), 20f)
             state.space(4f)
             state.drawDoodle(canvas.strokesJson)
+            state.finish()
+            val baos = ByteArrayOutputStream()
+            doc.save(baos)
+            return baos.toByteArray()
         }
-        state.finish()
-        val baos = ByteArrayOutputStream()
-        doc.writeTo(baos)
-        doc.close()
-        return baos.toByteArray()
+    }
+
+    fun doodlesPdf(canvases: List<DoodleExport.Canvas>, heading: String): ByteArray {
+        PDDocument().use { doc ->
+            val fonts = loadPdfFonts(doc)
+            val state = PdfState(doc, fonts)
+            canvases.forEachIndexed { i, canvas ->
+                if (i > 0) state.newPage()
+                if (heading.isNotBlank()) state.drawWrapped(heading, PdfStyle(13f, bold = true), 20f)
+                state.space(4f)
+                state.drawDoodle(canvas.strokesJson)
+            }
+            state.finish()
+            val baos = ByteArrayOutputStream()
+            doc.save(baos)
+            return baos.toByteArray()
+        }
     }
 
     private fun uniqueEntryName(name: String, used: MutableSet<String>): String {
