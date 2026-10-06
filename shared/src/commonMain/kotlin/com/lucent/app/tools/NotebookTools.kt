@@ -11,7 +11,10 @@ import com.lucent.app.i18n.S
 import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolParam
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 object NotebookTools {
 
@@ -139,10 +142,10 @@ object NotebookTools {
         )
     )
 
-    fun describeToolCall(name: String, a: JSONObject): String? {
+    fun describeToolCall(name: String, a: JsonObject): String? {
         fun s(vararg keys: String): String {
             for (k in keys) {
-                val v = a.optString(k, "")
+                val v = a[k]?.jsonPrimitive?.contentOrNull ?: ""
                 if (v.isNotBlank()) return v
             }
             return ""
@@ -151,7 +154,7 @@ object NotebookTools {
             "create_notebook" -> S.ccCreateNotebook(s("title", "name"))
             "set_notebook_cover" -> S.ccSetNotebookCover(s("notebook"), s("cover", "colour", "color"))
             "pin_notebook" ->
-                if (a.optBoolean("pinned", true)) S.ccPinNotebook(s("notebook", "title", "name"))
+                if (a["pinned"]?.jsonPrimitive?.booleanOrNull ?: true) S.ccPinNotebook(s("notebook", "title", "name"))
                 else S.ccUnpinNotebook(s("notebook", "title", "name"))
             "move_notebook" -> S.ccMoveNotebook(s("notebook"), s("position"))
             "read_notebook" -> S.ccReadNotebook(s("notebook", "title", "name"))
@@ -166,7 +169,7 @@ object NotebookTools {
         }
     }
 
-    fun editableArguments(name: String, a: JSONObject): List<AppTools.EditableArgument> = when (name) {
+    fun editableArguments(name: String, a: JsonObject): List<AppTools.EditableArgument> = when (name) {
         "create_notebook" -> listOfNotNull(argOf(a, "title", S.confirmEditTitleLabel))
         "set_notebook_cover" -> listOfNotNull(argOf(a, "cover", S.notebookCoverTitle))
         "move_notebook" -> listOfNotNull(
@@ -177,10 +180,10 @@ object NotebookTools {
         else -> emptyList()
     }
 
-    private fun argOf(a: JSONObject, key: String, label: String): AppTools.EditableArgument? =
-        a.optString(key, "").takeIf { it.isNotBlank() }?.let { AppTools.EditableArgument(key, label, it) }
+    private fun argOf(a: JsonObject, key: String, label: String): AppTools.EditableArgument? =
+        (a[key]?.jsonPrimitive?.contentOrNull ?: "").takeIf { it.isNotBlank() }?.let { AppTools.EditableArgument(key, label, it) }
 
-    suspend fun execute(db: AppDatabase, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    suspend fun execute(db: AppDatabase, name: String, args: JsonObject): ToolExecResult? = when (name) {
 
         "list_notebooks" -> {
             val all = db.notebookDao.getAllOnce()
@@ -220,7 +223,7 @@ object NotebookTools {
             if (notebook == null) {
                 notFoundNotebook(query, all)
             } else {
-                val pinned = args.optBoolean("pinned", true)
+                val pinned = args["pinned"]?.jsonPrimitive?.booleanOrNull ?: true
                 db.notebookDao.update(
                     notebook.copy(pinned = pinned, updatedAt = System.currentTimeMillis())
                 )
@@ -452,7 +455,7 @@ object NotebookTools {
             val notebook = matchNotebook(all, query)
             val newTitle = args.firstString("new_title", "new_name").trim()
             val coverRaw = args.firstString("cover", "colour", "color").trim().lowercase()
-            val pinned = if (args.has("pinned")) args.optBoolean("pinned") else null
+            val pinned = if (args.containsKey("pinned")) args["pinned"]?.jsonPrimitive?.booleanOrNull else null
             val cover = if (coverRaw.isBlank()) {
                 null
             } else {
@@ -592,12 +595,12 @@ object NotebookTools {
         else -> ItemFilter.BOTH
     }
 
-    private fun itemQuery(args: JSONObject): String =
+    private fun itemQuery(args: JsonObject): String =
         args.firstString("title", "item", "note_title", "task_title")
 
-    private fun JSONObject.firstString(vararg keys: String): String {
+    private fun JsonObject.firstString(vararg keys: String): String {
         for (key in keys) {
-            val value = optString(key, "")
+            val value = this[key]?.jsonPrimitive?.contentOrNull ?: ""
             if (value.isNotBlank()) return value
         }
         return ""

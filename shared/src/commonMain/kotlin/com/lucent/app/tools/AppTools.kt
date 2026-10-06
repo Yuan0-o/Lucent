@@ -82,7 +82,7 @@ object AppTools {
             "remove_note_attachment" -> com.lucent.app.i18n.S.ccRemoveFileFromNote(s("file_name"), title)
             "attach_upload_to_note" -> com.lucent.app.i18n.S.ccAttachUploadToNote(title)
             "set_note_checklist_mode" -> if (a["checklist"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccNoteToChecklist(title) else com.lucent.app.i18n.S.ccNoteToText(title)
-            "restore_note_version" -> com.lucent.app.i18n.S.ccRestoreNoteVersion(title, a["version"]?.jsonPrimitive?.intOrNull ?: 1.toString())
+            "restore_note_version" -> com.lucent.app.i18n.S.ccRestoreNoteVersion(title, (a["version"]?.jsonPrimitive?.intOrNull ?: 1).toString())
             "restore_note_from_trash" -> com.lucent.app.i18n.S.ccRestoreNoteFromTrash(title)
             "create_task" -> com.lucent.app.i18n.S.ccCreateTask(s("title")) + dueSuffix(s("due"))
             "complete_task" -> com.lucent.app.i18n.S.ccCompleteTask(title)
