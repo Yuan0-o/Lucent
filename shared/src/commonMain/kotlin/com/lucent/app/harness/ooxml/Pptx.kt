@@ -5,10 +5,9 @@ import org.w3c.dom.Element
 import kotlinx.serialization.json.*
 import org.w3c.dom.Node
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 private const val PPTX_EMU_PER_INCH = 914400.0
 private const val PPTX_WIDE_CX = 12192000L
@@ -1584,12 +1583,12 @@ private fun pptxColourOf(node: Element?): String? {
     val srgb = pptxDescend(node, "srgbClr").firstOrNull()
     if (srgb != null) {
         val value = pptxAttr(srgb, "val").trim()
-        if (value.length == 6) return value.uppercase(Locale.US)
+        if (value.length == 6) return value.uppercase()
     }
     val sys = pptxDescend(node, "sysClr").firstOrNull()
     if (sys != null) {
         val value = pptxAttr(sys, "lastClr").trim()
-        if (value.length == 6) return value.uppercase(Locale.US)
+        if (value.length == 6) return value.uppercase()
     }
     return null
 }
@@ -1843,7 +1842,7 @@ private fun pptxDescribeSlide(sb: StringBuilder, slide: PptxSlide) {
 }
 
 private fun pptxApplyOp(deck: PptxDeck, op: JsonObject): String {
-    val name = (op["op"]?.jsonPrimitive?.content ?: "").trim().lowercase(Locale.US)
+    val name = (op["op"]?.jsonPrimitive?.content ?: "").trim().lowercase()
     return when (name) {
         "append_slide" -> {
             val slide = pptxSlideFromJson(op, "bullets")
@@ -2046,7 +2045,7 @@ private fun pptxLayoutName(index: Int): String = when (index) {
     else -> "bullets"
 }
 
-private fun pptxLayoutKey(value: String): String = when (value.trim().lowercase(Locale.US).replace('-', '_')) {
+private fun pptxLayoutKey(value: String): String = when (value.trim().lowercase().replace('-', '_')) {
     "title", "title_slide" -> "title"
     "section", "section_header" -> "section"
     "blank" -> "blank"
@@ -2057,7 +2056,7 @@ private fun pptxLayoutKey(value: String): String = when (value.trim().lowercase(
     else -> "bullets"
 }
 
-private fun pptxChartType(value: String): String = when (value.trim().lowercase(Locale.US)) {
+private fun pptxChartType(value: String): String = when (value.trim().lowercase()) {
     "line" -> "line"
     "pie" -> "pie"
     "area" -> "area"
@@ -2066,7 +2065,7 @@ private fun pptxChartType(value: String): String = when (value.trim().lowercase(
 }
 
 private fun pptxSizeKey(value: String): String {
-    val clean = value.trim().lowercase(Locale.US).replace(" ", "")
+    val clean = value.trim().lowercase().replace(" ", "")
     return if (clean.startsWith("4") || clean == "standard" || clean == "narrow") "4:3" else "16:9"
 }
 
@@ -2077,7 +2076,7 @@ private fun pptxSizeLabel(cx: Long, cy: Long): String = when {
 }
 
 private fun pptxColour(value: String, fallback: String): String {
-    val clean = value.trim().removePrefix("#").uppercase(Locale.US)
+    val clean = value.trim().removePrefix("#").uppercase()
     if (clean.length == 6 && clean.all { it in "0123456789ABCDEF" }) return clean
     if (clean.length == 3 && clean.all { it in "0123456789ABCDEF" }) {
         return "" + clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2]
@@ -2091,7 +2090,7 @@ private fun pptxNum(value: Double): String {
     if (value.isNaN() || value.isInfinite()) return "0"
     val rounded = Math.round(value * 10000.0) / 10000.0
     if (rounded == Math.floor(rounded)) return rounded.toLong().toString()
-    return String.format(Locale.US, "%.4f", rounded).trimEnd('0').trimEnd('.')
+    return String.format("%.4f", rounded).trimEnd('0').trimEnd('.')
 }
 
 private fun pptxNumText(value: String): String {
@@ -2111,9 +2110,11 @@ private fun pptxColumn(index: Int): String {
 }
 
 private fun pptxTimestamp(): String {
-    val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-    format.timeZone = TimeZone.getTimeZone("UTC")
-    return format.format(Date())
+    val now = kotlinx.datetime.Clock.System.now()
+    val local = now.toLocalDateTime(TimeZone.UTC)
+    val string = local.toString()
+    val dot = string.indexOf('.')
+    return (if (dot > 0) string.substring(0, dot) else string) + "Z"
 }
 
 private fun pptxXml(body: String): ByteArray = (PPTX_XML_HEAD + body).toByteArray(Charsets.UTF_8)
@@ -2145,8 +2146,8 @@ private fun pptxClean(value: String): String {
 }
 
 private fun pptxHuman(bytes: Long): String = when {
-    bytes >= 1048576 -> String.format(Locale.US, "%.1f MiB", bytes / 1048576.0)
-    bytes >= 1024 -> String.format(Locale.US, "%.1f KiB", bytes / 1024.0)
+    bytes >= 1048576 -> String.format("%.1f MiB", bytes / 1048576.0)
+    bytes >= 1024 -> String.format("%.1f KiB", bytes / 1024.0)
     else -> "$bytes B"
 }
 
@@ -2154,7 +2155,7 @@ private fun pptxImageExtension(bytes: ByteArray, path: String): String {
     if (bytes.size > 8 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte()) return "png"
     if (bytes.size > 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) return "jpeg"
     if (bytes.size > 3 && bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte()) return "gif"
-    val extension = path.substringAfterLast('.', "").lowercase(Locale.US)
+    val extension = path.substringAfterLast('.', "").lowercase()
     return when (extension) {
         "png" -> "png"
         "jpg", "jpeg" -> "jpeg"

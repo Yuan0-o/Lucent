@@ -1,6 +1,7 @@
 package com.lucent.app.data
 
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.encodeToString
@@ -19,6 +20,7 @@ private data class Credentials(
     @SerialName("ansHash") val ansHash: String = ""
 )
 
+@OptIn(ExperimentalEncodingApi::class)
 object AppLock {
 
     private const val VERSION = 1
@@ -98,9 +100,12 @@ object AppLock {
     private fun parse(jsonStr: String): Credentials? =
         if (jsonStr.isBlank()) null else try { json.decodeFromString<Credentials>(jsonStr) } catch (t: Throwable) { null }
 
-    private fun b64(bytes: ByteArray): String = Base64.getEncoder().withoutPadding().encodeToString(bytes)
-    private fun b64ToBytes(s: String): ByteArray? =
-        if (s.isEmpty()) null else try { Base64.getDecoder().decode(s) } catch (t: Throwable) { null }
+    private fun b64(bytes: ByteArray): String = Base64.encode(bytes).trimEnd('=')
+    private fun b64ToBytes(s: String): ByteArray? {
+        if (s.isEmpty()) return null
+        val padded = s.padEnd(s.length + (4 - s.length % 4) % 4, '=')
+        return try { Base64.decode(padded) } catch (t: Throwable) { null }
+    }
 
     private fun constantTimeEquals(a: ByteArray, b: ByteArray): Boolean {
         if (a.size != b.size) return false

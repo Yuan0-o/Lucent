@@ -8,7 +8,6 @@ import kotlinx.serialization.json.*
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 data class AuditEntry(
     val at: Long,
@@ -30,7 +29,7 @@ object AuditTrail {
     private const val KEEP_BYTES = 256 * 1024
 
     private val lock = Any()
-    private val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    private val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
     fun file(context: PlatformContext): File {
         val dir = File(baseDir(context), "harness")

@@ -3,7 +3,8 @@ package com.lucent.app.data
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.util.UUID
+import kotlin.uuid.Uuid
+import kotlin.uuid.ExperimentalUuidApi
 
 @Serializable
 data class ChecklistItem(
@@ -12,6 +13,7 @@ data class ChecklistItem(
     val done: Boolean = false
 )
 
+@OptIn(ExperimentalUuidApi::class)
 object Checklist {
 
     private val jsonParser = Json { 
@@ -23,7 +25,7 @@ object Checklist {
         if (json.isNullOrBlank()) return emptyList()
         return try {
             val list = jsonParser.decodeFromString<List<ChecklistItem>>(json)
-            list.map { if (it.id.isBlank()) it.copy(id = UUID.randomUUID().toString()) else it }
+            list.map { if (it.id.isBlank()) it.copy(id = Uuid.random().toString()) else it }
         } catch (e: Exception) {
             emptyList()
         }
@@ -34,7 +36,7 @@ object Checklist {
     }
 
     fun newItem(text: String): ChecklistItem =
-        ChecklistItem(id = UUID.randomUUID().toString(), text = text.trim())
+        ChecklistItem(id = Uuid.random().toString(), text = text.trim())
 
     fun add(json: String, text: String): String {
         if (text.isBlank()) return json

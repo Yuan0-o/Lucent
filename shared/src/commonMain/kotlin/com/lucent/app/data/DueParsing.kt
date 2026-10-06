@@ -5,7 +5,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 object DueParsing {
 
@@ -19,7 +18,7 @@ object DueParsing {
 
     private const val DEFAULT_HOUR = 9
 
-    private val OUT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.US)
+    private val OUT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
     fun parse(input: String?): Long? {
         val s = input?.trim().orEmpty()
@@ -32,7 +31,7 @@ object DueParsing {
 
         for (pattern in LOCAL_PATTERNS) {
             try {
-                val formatter = DateTimeFormatter.ofPattern(pattern, Locale.US)
+                val formatter = DateTimeFormatter.ofPattern(pattern)
                 return LocalDateTime.parse(s, formatter)
                     .atZone(ZoneId.systemDefault())
                     .toInstant()
@@ -42,7 +41,7 @@ object DueParsing {
         }
 
         return try {
-            LocalDate.parse(s, DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US))
+            LocalDate.parse(s, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
                 .atTime(DEFAULT_HOUR, 0)
                 .atZone(ZoneId.systemDefault())
                 .toInstant()

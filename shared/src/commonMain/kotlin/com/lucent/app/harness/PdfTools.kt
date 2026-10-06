@@ -6,7 +6,6 @@ import com.lucent.app.network.ToolImage
 import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.Locale
 import java.util.zip.Inflater
 
 private const val PDF_MAX_BYTES = 96L * 1024 * 1024
@@ -1289,8 +1288,8 @@ private fun pdfSearch(file: File, query: String, maxHits: Int): String {
         if (hits >= limit) return@forEachIndexed
         val pageText = pdfSafeText(document, page).replace(Regex("\\s+"), " ")
         if (pageText.isEmpty()) return@forEachIndexed
-        val lower = pageText.lowercase(Locale.US)
-        val target = needle.lowercase(Locale.US)
+        val lower = pageText.lowercase()
+        val target = needle.lowercase()
         var from = lower.indexOf(target)
         if (from < 0) return@forEachIndexed
         pagesHit++
@@ -1329,7 +1328,7 @@ private fun pdfSnippet(text: String, at: Int, length: Int): String {
 private fun pdfNumber(value: Double): String {
     val rounded = Math.round(value * 100.0) / 100.0
     if (rounded == Math.floor(rounded)) return rounded.toLong().toString()
-    return String.format(Locale.US, "%.2f", rounded)
+    return String.format("%.2f", rounded)
 }
 
 private fun pdfDate(value: String): String {
