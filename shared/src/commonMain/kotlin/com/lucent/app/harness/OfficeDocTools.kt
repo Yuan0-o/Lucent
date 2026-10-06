@@ -1,10 +1,8 @@
 package com.lucent.app.harness
 
 import com.lucent.app.harness.ooxml.Docx
-import com.lucent.app.harness.ooxml.stringOf
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object OfficeDocTools : HarnessGroupTools {
 
@@ -46,7 +44,7 @@ object OfficeDocTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? {
         return try {
             when (name) {
                 "create_document" -> createDocument(ctx, args)
@@ -65,8 +63,8 @@ object OfficeDocTools : HarnessGroupTools {
         }
     }
 
-    private fun createDocument(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
+    private fun createDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
@@ -79,17 +77,17 @@ object OfficeDocTools : HarnessGroupTools {
         )
     }
 
-    private fun readDocument(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, stringOf(args, "path"))
+    private fun readDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
-        val maxChars = args.optInt("max_chars", 20000).coerceIn(500, 400000)
+        val maxChars = (args["max_chars"]?.jsonPrimitive?.intOrNull ?: 20000).coerceIn(500, 400000)
         return ToolExecResult(Docx.read(file, maxChars))
     }
 
-    private fun editDocument(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
+    private fun editDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
@@ -104,57 +102,74 @@ object OfficeDocTools : HarnessGroupTools {
         )
     }
 
-    private fun documentSpec(args: JSONObject): String {
-        val explicit = jsonObject(args.opt("spec"), "spec")
-        val root = if (explicit == null) JSONObject() else JSONObject(explicit.toString())
-        val title = stringOf(args, "title")
-        if (title.isNotBlank() && !root.has("title")) root.put("title", title)
-        val author = stringOf(args, "author")
-        if (author.isNotBlank() && !root.has("author")) root.put("author", author)
-        val content = stringOf(args, "content")
-        if (content.isNotBlank() && !root.has("content") && !root.has("blocks")) root.put("content", content)
-        if (!root.has("content") && !root.has("blocks") && !root.has("title")) {
+    private fun documentSpec(args: JsonObject): String {
+        val explicit = jsonObject(args["spec"], "spec")
+        val root = explicit ?: JsonObject(emptyMap())
+        val title = args["title"]?.jsonPrimitive?.content ?: ""
+        val author = args["author"]?.jsonPrimitive?.content ?: ""
+        val content = args["content"]?.jsonPrimitive?.content ?: ""
+
+        if (!root.containsKey("content") && !root.containsKey("blocks") && !root.containsKey("title") && title.isBlank() && content.isBlank()) {
             throw IllegalArgumentException(
                 "Give the document some text with \"content\", or a full \"spec\" with a title or a blocks array."
             )
         }
+        
+        if ((title.isNotBlank() && !root.containsKey("title")) || 
+            (author.isNotBlank() && !root.containsKey("author")) ||
+            (content.isNotBlank() && !root.containsKey("content") && !root.containsKey("blocks"))) {
+            return buildJsonObject {
+                root.forEach { k, v -> put(k, v) }
+                if (title.isNotBlank() && !root.containsKey("title")) put("title", title)
+                if (author.isNotBlank() && !root.containsKey("author")) put("author", author)
+                if (content.isNotBlank() && !root.containsKey("content") && !root.containsKey("blocks")) put("content", content)
+            }.toString()
+        }
         return root.toString()
     }
 
-    private fun operations(args: JSONObject): String {
-        val raw = args.opt("ops")
+    private fun operations(args: JsonObject): String {
+        val raw = args["ops"]
         val array = when (raw) {
-            is JSONArray -> raw
-            is JSONObject -> JSONArray().put(raw)
-            is String -> if (raw.isBlank()) JSONArray() else operationsFromText(raw)
-            else -> JSONArray()
+            is JsonArray -> raw
+            is JsonObject -> buildJsonArray { add(raw) }
+            is JsonPrimitive -> if (raw.isString) {
+                if (raw.content.isBlank()) buildJsonArray {} else operationsFromText(raw.content)
+            } else {
+                buildJsonArray {}
+            }
+            else -> buildJsonArray {}
         }
-        if (array.length() == 0) throw IllegalArgumentException("Give at least one edit operation in \"ops\".")
+        if (array.size == 0) throw IllegalArgumentException("Give at least one edit operation in \"ops\".")
         return array.toString()
     }
 
-    private fun operationsFromText(text: String): JSONArray = try {
-        JSONArray(text)
+    private fun operationsFromText(text: String): JsonArray = try {
+        Json.parseToJsonElement(text).jsonArray
     } catch (e: Exception) {
         try {
-            JSONArray().put(JSONObject(text))
+            buildJsonArray { add(Json.parseToJsonElement(text).jsonObject) }
         } catch (e2: Exception) {
             throw IllegalArgumentException("The \"ops\" argument is not valid JSON: ${e.message ?: "parse error"}")
         }
     }
 
-    private fun jsonObject(value: Any?, label: String): JSONObject? = when (value) {
+    private fun jsonObject(value: JsonElement?, label: String): JsonObject? = when (value) {
         null -> null
-        JSONObject.NULL -> null
-        is JSONObject -> value
-        is String -> if (value.isBlank()) {
-            null
-        } else {
-            try {
-                JSONObject(value)
-            } catch (e: Exception) {
-                throw IllegalArgumentException("The \"$label\" argument is not valid JSON: ${e.message ?: "parse error"}")
+        is JsonNull -> null
+        is JsonObject -> value
+        is JsonPrimitive -> if (value.isString) {
+            if (value.content.isBlank()) {
+                null
+            } else {
+                try {
+                    Json.parseToJsonElement(value.content).jsonObject
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("The \"$label\" argument is not valid JSON: ${e.message ?: "parse error"}")
+                }
             }
+        } else {
+            throw IllegalArgumentException("The \"$label\" argument must be a JSON object.")
         }
         else -> throw IllegalArgumentException("The \"$label\" argument must be a JSON object.")
     }

@@ -2,8 +2,7 @@ package com.lucent.app.harness
 
 import com.lucent.app.harness.ooxml.Pptx
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object OfficeDeckTools : HarnessGroupTools {
 
@@ -55,7 +54,7 @@ object OfficeDeckTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = try {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = try {
         when (name) {
             "create_presentation" -> create(ctx, args)
             "read_presentation" -> read(ctx, args)
@@ -68,17 +67,17 @@ object OfficeDeckTools : HarnessGroupTools {
         ToolExecResult("$name failed: ${e.message ?: e::class.simpleName}", success = false)
     }
 
-    private fun create(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val out = Workspace.forWriteFile(ctx, args.optString("path", ""))
+    private fun create(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val out = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val spec = deckSpec(args)
-        if (spec.length() == 0) {
+        if (spec.size == 0) {
             return ToolExecResult(
                 "Give a spec object (title, slides) or markdown content to turn into slides.",
                 success = false
             )
         }
-        val hasSlides = (spec.optJSONArray("slides")?.length() ?: 0) > 0
-        val hasContent = spec.optString("content", "").isNotBlank()
+        val hasSlides = (spec["slides"]?.jsonArray?.size ?: 0) > 0
+        val hasContent = (spec["content"]?.jsonPrimitive?.content ?: "").isNotBlank()
         if (!hasSlides && !hasContent) {
             return ToolExecResult(
                 "The spec has neither slides nor content, so there is nothing to build.",
@@ -91,55 +90,66 @@ object OfficeDeckTools : HarnessGroupTools {
         return ToolExecResult("Wrote ${Workspace.display(ctx, out)}: $summary")
     }
 
-    private fun deckSpec(args: JSONObject): JSONObject {
-        val raw = args.opt("spec")
+    private fun deckSpec(args: JsonObject): JsonObject {
+        val raw = args["spec"]
         val spec = when (raw) {
-            is JSONObject -> JSONObject(raw.toString())
-            is JSONArray -> JSONObject().put("slides", raw)
-            is String -> {
-                val text = raw.trim()
-                if (text.startsWith("{")) {
-                    try {
-                        JSONObject(text)
-                    } catch (e: Exception) {
-                        JSONObject().put("content", text)
+            is JsonObject -> raw
+            is JsonArray -> buildJsonObject { put("slides", raw) }
+            is JsonPrimitive -> {
+                if (raw.isString) {
+                    val text = raw.content.trim()
+                    if (text.startsWith("{")) {
+                        try {
+                            Json.parseToJsonElement(text).jsonObject
+                        } catch (e: Exception) {
+                            buildJsonObject { put("content", text) }
+                        }
+                    } else if (text.isNotEmpty()) {
+                        buildJsonObject { put("content", text) }
+                    } else {
+                        JsonObject(emptyMap())
                     }
-                } else if (text.isNotEmpty()) {
-                    JSONObject().put("content", text)
                 } else {
-                    JSONObject()
+                    JsonObject(emptyMap())
                 }
             }
-            else -> JSONObject()
+            else -> JsonObject(emptyMap())
         }
-        val content = args.optString("content", "").trim()
-        if (content.isNotEmpty() && spec.optString("content", "").isBlank()) spec.put("content", content)
-        val title = args.optString("title", "").trim()
-        if (title.isNotEmpty() && spec.optString("title", "").isBlank()) spec.put("title", title)
+        val content = (args["content"]?.jsonPrimitive?.content ?: "").trim()
+        val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
+        
+        if ((content.isNotEmpty() && (spec["content"]?.jsonPrimitive?.content ?: "").isBlank()) ||
+            (title.isNotEmpty() && (spec["title"]?.jsonPrimitive?.content ?: "").isBlank())) {
+            return buildJsonObject {
+                spec.forEach { k, v -> put(k, v) }
+                if (content.isNotEmpty() && (spec["content"]?.jsonPrimitive?.content ?: "").isBlank()) put("content", content)
+                if (title.isNotEmpty() && (spec["title"]?.jsonPrimitive?.content ?: "").isBlank()) put("title", title)
+            }
+        }
         return spec
     }
 
-    private fun read(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, args.optString("path", ""))
-        val maxChars = args.optInt("max_chars", 20000)
+    private fun read(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val maxChars = args["max_chars"]?.jsonPrimitive?.intOrNull ?: 20000
         val shown = Workspace.display(ctx, file)
         val text = Pptx.read(file, maxChars)
         return ToolExecResult("$shown (${Workspace.humanSize(file.length())})\n$text")
     }
 
-    private fun edit(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, args.optString("path", ""))
-        val ops = opsJson(args.opt("ops"))
+    private fun edit(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
+        val ops = opsJson(args["ops"])
         if (ops.isBlank()) return ToolExecResult("Give at least one operation in ops.", success = false)
         if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
         val summary = Pptx.edit(file, ops)
         return ToolExecResult("Edited ${Workspace.display(ctx, file)}\n$summary")
     }
 
-    private fun opsJson(value: Any?): String = when (value) {
-        is JSONArray -> value.toString()
-        is JSONObject -> value.toString()
-        is String -> value.trim()
+    private fun opsJson(value: JsonElement?): String = when (value) {
+        is JsonArray -> value.toString()
+        is JsonObject -> value.toString()
+        is JsonPrimitive -> if (value.isString) value.content.trim() else value.toString()
         else -> ""
     }
 }
