@@ -65,7 +65,7 @@ import java.io.File
 
 private const val MAX_IMAGE_DIM = 1600
 
-fun decodeSampledBitmap(bytes: ByteArray, maxDim: Int = MAX_IMAGE_DIM): ImageBitmap? = try {
+private fun decodeSampledBitmap(bytes: ByteArray, maxDim: Int = MAX_IMAGE_DIM): ImageBitmap? = try {
     val image = org.jetbrains.skia.Image.makeFromEncoded(bytes)
     val w = image.width
     val h = image.height
