@@ -1,8 +1,7 @@
 package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 
 object PlanTools : HarnessGroupTools {
@@ -48,7 +47,7 @@ object PlanTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "update_plan" -> updatePlan(args)
         "plan_status" -> planStatus()
         "task_note" -> note(args)
@@ -56,16 +55,16 @@ object PlanTools : HarnessGroupTools {
         else -> null
     }
 
-    private suspend fun ask(args: JSONObject): ToolExecResult {
-        val question = args.optString("question", "").trim()
+    private suspend fun ask(args: JsonObject): ToolExecResult {
+        val question = args["question"]?.jsonPrimitive?.content?.trim() ?: ""
         if (question.isEmpty()) return ToolExecResult("What should I ask?", success = false)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("This build cannot ask the user anything.", success = false)
         val options = mutableListOf<String>()
-        val array = args.optJSONArray("options")
+        val array = args["options"]?.jsonArray
         if (array != null) {
-            for (i in 0 until array.length()) {
-                val value = array.optString(i, "")
+            for (i in 0 until array.size) {
+                val value = (array[i] as? JsonPrimitive)?.content ?: ""
                 if (value.isNotBlank()) options.add(value)
             }
         }
@@ -74,18 +73,18 @@ object PlanTools : HarnessGroupTools {
         else ToolExecResult(answer)
     }
 
-    private fun updatePlan(args: JSONObject): ToolExecResult {
-        val array = args.optJSONArray("steps") ?: JSONArray()
-        if (array.length() == 0) return ToolExecResult("Give me the steps.", success = false)
+    private fun updatePlan(args: JsonObject): ToolExecResult {
+        val array = args["steps"]?.jsonArray ?: JsonArray(emptyList())
+        if (array.size == 0) return ToolExecResult("Give me the steps.", success = false)
         val steps = mutableListOf<PlanStep>()
-        for (i in 0 until array.length()) {
-            val item = array.opt(i)
+        for (i in 0 until array.size) {
+            val item = array[i]
             when (item) {
-                is String -> steps.add(PlanStep(item, "pending"))
-                is JSONObject -> steps.add(
+                is JsonPrimitive -> if (item.isString) steps.add(PlanStep(item.content, "pending"))
+                is JsonObject -> steps.add(
                     PlanStep(
-                        item.optString("title", item.optString("step", "step ${i + 1}")),
-                        item.optString("status", "pending").lowercase()
+                        item["title"]?.jsonPrimitive?.content ?: item["step"]?.jsonPrimitive?.content ?: "step ${i + 1}",
+                        item["status"]?.jsonPrimitive?.content?.lowercase() ?: "pending"
                     )
                 )
                 else -> {
@@ -116,8 +115,8 @@ object PlanTools : HarnessGroupTools {
         )
     }
 
-    private fun note(args: JSONObject): ToolExecResult {
-        val text = args.optString("text", "").trim()
+    private fun note(args: JsonObject): ToolExecResult {
+        val text = args["text"]?.jsonPrimitive?.content?.trim() ?: ""
         if (text.isEmpty()) return ToolExecResult("Nothing to note.", success = false)
         HarnessRuntime.note(text)
         return ToolExecResult("Noted.")
@@ -205,7 +204,7 @@ object MemoryTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "remember" -> remember(ctx, args)
         "recall" -> recall(ctx, args)
         "forget" -> forget(ctx, args)
@@ -222,40 +221,43 @@ object MemoryTools : HarnessGroupTools {
         }
     }
 
-    private fun load(ctx: HarnessCtx, scope: String): JSONObject {
+    private fun load(ctx: HarnessCtx, scope: String): JsonObject {
         val text = HarnessVault.read(ctx.context, fileFor(ctx, scope))
-        return try { JSONObject(text) } catch (e: Exception) { JSONObject() }
+        return try { Json.parseToJsonElement(text).jsonObject } catch (e: Exception) { JsonObject(emptyMap()) }
     }
 
-    private fun save(ctx: HarnessCtx, scope: String, json: JSONObject) {
+    private fun save(ctx: HarnessCtx, scope: String, json: JsonObject) {
         HarnessVault.write(ctx.context, fileFor(ctx, scope), json.toString())
     }
 
-    private fun remember(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val scope = args.optString("scope", "project").lowercase()
-        val key = args.optString("key", "").trim()
-        val value = args.optString("value", "").trim()
+    private fun remember(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val scope = args["scope"]?.jsonPrimitive?.content?.lowercase() ?: "project"
+        val key = args["key"]?.jsonPrimitive?.content?.trim() ?: ""
+        val value = args["value"]?.jsonPrimitive?.content?.trim() ?: ""
         if (key.isEmpty() || value.isEmpty()) return ToolExecResult("Give me both a key and a value.", success = false)
         val json = load(ctx, scope)
-        json.put(key, value)
-        json.put("__updated", System.currentTimeMillis())
-        save(ctx, scope, json)
+        val newJson = buildJsonObject {
+            json.forEach { entry -> put(entry.key, entry.value) }
+            put(key, value)
+            put("__updated", System.currentTimeMillis())
+        }
+        save(ctx, scope, newJson)
         return ToolExecResult("Remembered ($scope) $key = $value")
     }
 
-    private fun recall(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val scope = args.optString("scope", "").lowercase()
-        val query = args.optString("query", "").lowercase()
+    private fun recall(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val scope = args["scope"]?.jsonPrimitive?.content?.lowercase() ?: ""
+        val query = args["query"]?.jsonPrimitive?.content?.lowercase() ?: ""
         val scopes = if (scope.isBlank()) listOf("user", "project", "session") else listOf(scope)
         val sb = StringBuilder()
         scopes.forEach { name ->
             val json = load(ctx, name)
-            val keys = json.keys()
+            val keys = json.keys.iterator()
             val lines = mutableListOf<String>()
             while (keys.hasNext()) {
                 val key = keys.next()
                 if (key.startsWith("__")) continue
-                val value = json.optString(key, "")
+                val value = json[key]?.jsonPrimitive?.content ?: ""
                 if (query.isNotEmpty() && !key.lowercase().contains(query) && !value.lowercase().contains(query)) continue
                 lines.add("- $key: $value")
             }
@@ -265,22 +267,26 @@ object MemoryTools : HarnessGroupTools {
         else ToolExecResult(sb.toString().trimEnd())
     }
 
-    private fun forget(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val scope = args.optString("scope", "project").lowercase()
-        val key = args.optString("key", "").trim()
+    private fun forget(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val scope = args["scope"]?.jsonPrimitive?.content?.lowercase() ?: "project"
+        val key = args["key"]?.jsonPrimitive?.content?.trim() ?: ""
         if (key.isEmpty()) return ToolExecResult("Which key?", success = false)
         val json = load(ctx, scope)
-        if (!json.has(key)) return ToolExecResult("Nothing stored under $key in $scope.", success = false)
-        json.remove(key)
-        save(ctx, scope, json)
+        if (!json.containsKey(key)) return ToolExecResult("Nothing stored under $key in $scope.", success = false)
+        val newJson = buildJsonObject {
+            json.forEach { entry ->
+                if (entry.key != key) put(entry.key, entry.value)
+            }
+        }
+        save(ctx, scope, newJson)
         return ToolExecResult("Forgot ($scope) $key.")
     }
 
-    private fun projectNotes(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private fun projectNotes(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = File(HarnessRuntime.workspacePath(), "LUCENT.md")
-        val action = args.optString("action", "read").lowercase()
+        val action = args["action"]?.jsonPrimitive?.content?.lowercase() ?: "read"
         if (action == "append") {
-            val text = args.optString("text", "").trim()
+            val text = args["text"]?.jsonPrimitive?.content?.trim() ?: ""
             if (text.isEmpty()) return ToolExecResult("Nothing to append.", success = false)
             if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
             file.appendText((if (file.exists() && file.length() > 0) "\n" else "") + text + "\n")
