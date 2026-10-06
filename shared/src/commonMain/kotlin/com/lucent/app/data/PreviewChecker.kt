@@ -64,6 +64,8 @@ object PreviewChecker {
         val genericVersion = field(body, "Version")
         val apkVersion = field(body, "APK-Version") ?: genericVersion
         val exeVersion = field(body, "EXE-Version") ?: genericVersion
+        val genericBuildId = field(body, "Build-ID")
+        val buildId = genericBuildId ?: field(body, "APK-Build-ID") ?: field(body, "EXE-Build-ID") ?: field(body, "APK-Commit") ?: field(body, "EXE-Commit") ?: genericSha
         return ReleaseInfo(
             tag = "preview",
             version = newestVersion(apkVersion, exeVersion),
@@ -75,7 +77,8 @@ object PreviewChecker {
             apkSha = field(body, "APK-Commit") ?: genericSha,
             exeSha = field(body, "EXE-Commit") ?: genericSha,
             apkVersion = apkVersion,
-            exeVersion = exeVersion
+            exeVersion = exeVersion,
+            buildId = buildId
         )
     }
 
