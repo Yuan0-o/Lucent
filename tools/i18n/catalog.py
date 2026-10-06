@@ -1889,6 +1889,12 @@ ENTRIES = [
     ("setupBundledReady", "Built-in environment is ready", "内置环境已就绪", "組み込み環境の準備が完了しました", "내장 환경이 준비되었습니다"),
     ("setupBundledUnavailable", "The built-in environment is not available on this device.", "此设备无法使用内置环境。", "この端末では組み込み環境を利用できません。", "이 기기에서는 내장 환경을 사용할 수 없습니다."),
     ("setupExtracting", "Preparing the built-in environment", "正在准备内置环境", "組み込み環境を準備中", "내장 환경 준비 중"),
+    ("trackSwitchTitlePreview", "Switch to Preview Channel?", "切换到预览通道？", "プレビュー版に切り替えますか？", "미리보기 채널로 전환하시겠습니까?"),
+    ("trackSwitchTitleOfficial", "Switch to Official Channel?", "切换到正式通道？", "公式版に切り替えますか？", "공식 채널로 전환하시겠습니까?"),
+    ("trackSwitchBodyPreview", "Every build carries an ID like P202610061243 (P = preview, R = official) plus a UTC timestamp. The app compares these to decide on updates.\n\nPreview builds are for testing and may be unstable.\n\nThe app stays on this track and will only move to the other track if that track has a strictly newer build ID.", "每个构建都有一个 ID，如 P202610061243（P = 预览版，R = 正式版）以及 UTC 时间戳，应用比较这些 ID 来决定是否更新。\n\n预览版用于测试，可能不稳定。\n\n应用会保持在此通道，且只有在另一个通道出现更新的 ID 时才会切换过去。", "各ビルドにはP202610061243（P = プレビュー、R = 公式）のようなIDとUTCタイムスタンプが付与され、アプリはこれらを比較して更新を決定します。\n\nプレビュー版はテスト用であり、不安定な場合があります。\n\nアプリはこのチャネルに留まり、別のチャネルに厳密に新しいIDがある場合にのみ切り替わります。", "모든 빌드에는 P202610061243(P = 미리보기, R = 공식)과 같은 ID와 UTC 타임스탬프가 포함되며, 앱은 이를 비교하여 업데이트를 결정합니다.\n\n미리보기 빌드는 테스트용이며 불안정할 수 있습니다.\n\n앱은 선택한 채널을 유지하며 다른 채널에 더 새로운 ID의 빌드가 있을 때만 해당 채널로 이동합니다."),
+    ("trackSwitchBodyOfficial", "Every build carries an ID like P202610061243 (P = preview, R = official) plus a UTC timestamp. The app compares these to decide on updates.\n\nOfficial builds are stable releases.\n\nThe app stays on this track and will only move to the other track if that track has a strictly newer build ID.", "每个构建都有一个 ID，如 P202610061243（P = 预览版，R = 正式版）以及 UTC 时间戳，应用比较这些 ID 来决定是否更新。\n\n正式版是稳定版本。\n\n应用会保持在此通道，且只有在另一个通道出现更新的 ID 时才会切换过去。", "各ビルドにはP202610061243（P = プレビュー、R = 公式）のようなIDとUTCタイムスタンプが付与され、アプリはこれらを比較して更新を決定します。\n\n公式版は安定したリリースです。\n\nアプリはこのチャネルに留まり、別のチャネルに厳密に新しいIDがある場合にのみ切り替わります。", "모든 빌드에는 P202610061243(P = 미리보기, R = 공식)과 같은 ID와 UTC 타임스탬프가 포함되며, 앱은 이를 비교하여 업데이트를 결정합니다.\n\n공식 빌드는 안정적인 릴리스입니다.\n\n앱은 선택한 채널을 유지하며 다른 채널에 더 새로운 ID의 빌드가 있을 때만 해당 채널로 이동합니다."),
+    ("trackSwitchConfirm", "Confirm", "确认", "確認", "확인"),
+    ("trackSwitchCancel", "Cancel", "取消", "キャンセル", "취소"),
 ]
 
 CONDITIONAL_ENTRIES = {
