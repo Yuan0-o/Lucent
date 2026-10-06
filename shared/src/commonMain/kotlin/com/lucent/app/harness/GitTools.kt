@@ -1,7 +1,7 @@
 package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 
 fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
@@ -369,7 +369,7 @@ object GitTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "git_status" -> status(ctx, args)
         "git_diff" -> diff(ctx, args)
         "git_log" -> log(ctx, args)
@@ -432,11 +432,11 @@ object GitTools : HarnessGroupTools {
         return if (readOnlyArguments(arguments)) Workspace.forReadFile(ctx, clean) else Workspace.forWriteFile(ctx, clean)
     }
 
-    private fun repoOf(args: JSONObject): String = args.optString("repo", "").trim()
+    private fun repoOf(args: JsonObject): String = (args["repo"]?.jsonPrimitive?.content ?: "").trim()
 
-    private fun textOf(args: JSONObject, key: String): String = args.optString(key, "").trim()
+    private fun textOf(args: JsonObject, key: String): String = (args[key]?.jsonPrimitive?.content ?: "").trim()
 
-    private suspend fun status(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun status(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val result = git(ctx, repoOf(args), "status --porcelain=v1 -b")
         if (!result.success) return result
         return ToolExecResult(statusSummary(result.summary) + "\n\n" + result.summary)
@@ -471,11 +471,11 @@ object GitTools : HarnessGroupTools {
         return "$head\nStaged: $staged  Modified: $modified  Untracked: $untracked  Conflicts: $conflicts"
     }
 
-    private suspend fun diff(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun diff(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val paths = splitPathList(textOf(args, "path"))
         val command = StringBuilder("diff")
-        if (args.optBoolean("stat", false)) command.append(" --stat")
-        if (args.optBoolean("staged", false)) command.append(" --staged")
+        if ((args["stat"]?.jsonPrimitive?.booleanOrNull ?: false)) command.append(" --stat")
+        if ((args["staged"]?.jsonPrimitive?.booleanOrNull ?: false)) command.append(" --staged")
         if (paths.isNotEmpty()) {
             pathListProblem(paths)?.let { return ToolExecResult(it, success = false) }
             command.append(" -- ").append(quotedPaths(paths))
@@ -483,8 +483,8 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), command.toString())
     }
 
-    private suspend fun log(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val limit = args.optInt("limit", 20).coerceIn(1, 500)
+    private suspend fun log(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: 20).coerceIn(1, 500)
         val paths = splitPathList(textOf(args, "path"))
         val command = StringBuilder("log --oneline --decorate -n $limit")
         if (paths.isNotEmpty()) {
@@ -494,13 +494,13 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), command.toString())
     }
 
-    private suspend fun show(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun show(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val ref = textOf(args, "ref")
         revisionProblem(ref, "ref")?.let { return ToolExecResult(it, success = false) }
         return git(ctx, repoOf(args), "show --stat --patch ${quote(ref)}")
     }
 
-    private suspend fun branch(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun branch(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = textOf(args, "action").lowercase().ifEmpty { "list" }
         val name = textOf(args, "name")
         return when (action) {
@@ -518,9 +518,9 @@ object GitTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun deleteBranch(ctx: HarnessCtx, args: JSONObject, name: String): ToolExecResult {
+    private suspend fun deleteBranch(ctx: HarnessCtx, args: JsonObject, name: String): ToolExecResult {
         revisionProblem(name, "branch name")?.let { return ToolExecResult(it, success = false) }
-        val force = args.optBoolean("force", false)
+        val force = (args["force"]?.jsonPrimitive?.booleanOrNull ?: false)
         if (!force) return git(ctx, repoOf(args), "branch -d ${quote(name)}")
         if (ctx.config.approvalFor(HarnessPermission.DELETE) != Approval.ALLOW) {
             return ToolExecResult(
@@ -531,7 +531,7 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), "branch -D ${quote(name)}")
     }
 
-    private suspend fun checkout(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun checkout(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val ref = textOf(args, "ref")
         revisionProblem(ref, "ref")?.let { return ToolExecResult(it, success = false) }
         val paths = splitPathList(textOf(args, "paths"))
@@ -540,31 +540,31 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), "checkout ${quote(ref)} -- " + quotedPaths(paths))
     }
 
-    private suspend fun add(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun add(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val paths = splitPathList(textOf(args, "paths"))
         pathListProblem(paths)?.let { return ToolExecResult(it, success = false) }
         return git(ctx, repoOf(args), "add -- " + quotedPaths(paths))
     }
 
-    private suspend fun commit(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val message = args.optString("message", "").trim()
+    private suspend fun commit(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val message = (args["message"]?.jsonPrimitive?.content ?: "").trim()
         if (message.isEmpty()) return ToolExecResult("A commit message is required.", success = false)
-        val all = if (args.optBoolean("all", false)) "-a " else ""
+        val all = if ((args["all"]?.jsonPrimitive?.booleanOrNull ?: false)) "-a " else ""
         return git(ctx, repoOf(args), "commit $all-m ${quote(message)}")
     }
 
-    private suspend fun restore(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun restore(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val paths = splitPathList(textOf(args, "paths"))
-        val staged = args.optBoolean("staged", false)
+        val staged = (args["staged"]?.jsonPrimitive?.booleanOrNull ?: false)
         val target = if (paths.isEmpty()) "." else quotedPaths(paths)
         if (paths.isNotEmpty()) pathListProblem(paths)?.let { return ToolExecResult(it, success = false) }
         val prefix = if (staged) "restore --staged -- " else "restore -- "
         return git(ctx, repoOf(args), prefix + target)
     }
 
-    private suspend fun stash(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun stash(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = textOf(args, "action").lowercase().ifEmpty { "push" }
-        val message = args.optString("message", "").trim()
+        val message = (args["message"]?.jsonPrimitive?.content ?: "").trim()
         return when (action) {
             "push" -> {
                 val label = if (message.isEmpty()) "" else " -m ${quote(message)}"
@@ -577,7 +577,7 @@ object GitTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun merge(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun merge(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val ref = textOf(args, "ref")
         revisionProblem(ref, "ref")?.let { return ToolExecResult(it, success = false) }
         val repo = repoOf(args)
@@ -590,7 +590,7 @@ object GitTools : HarnessGroupTools {
                 success = false
             )
         }
-        val noFf = if (args.optBoolean("no_ff", false)) " --no-ff" else ""
+        val noFf = if ((args["no_ff"]?.jsonPrimitive?.booleanOrNull ?: false)) " --no-ff" else ""
         val result = git(ctx, repo, "merge$noFf ${quote(ref)}")
         if (result.success) return result
         val conflict = result.summary.contains("CONFLICT") || result.summary.contains("Automatic merge failed")
@@ -602,7 +602,7 @@ object GitTools : HarnessGroupTools {
         return ToolExecResult("$head\n\n${result.summary}", success = false)
     }
 
-    private suspend fun rebase(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun rebase(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = textOf(args, "action").lowercase().ifEmpty { "start" }
         val onto = textOf(args, "onto")
         return when (action) {
@@ -625,7 +625,7 @@ object GitTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun remote(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun remote(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = textOf(args, "action").lowercase().ifEmpty { "list" }
         val name = textOf(args, "name")
         val url = textOf(args, "url")
@@ -649,7 +649,7 @@ object GitTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun cloneRepo(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun cloneRepo(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val url = textOf(args, "url")
         urlProblem(url)?.let { return ToolExecResult(it, success = false) }
         val raw = textOf(args, "directory")
@@ -662,25 +662,25 @@ object GitTools : HarnessGroupTools {
         return git(ctx, "", "clone ${quote(url)}$target", CLONE_TIMEOUT)
     }
 
-    private suspend fun fetch(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun fetch(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val remote = textOf(args, "remote")
         if (remote.isEmpty()) return git(ctx, repoOf(args), "fetch --all --prune", NETWORK_TIMEOUT)
         revisionProblem(remote, "remote name")?.let { return ToolExecResult(it, success = false) }
         return git(ctx, repoOf(args), "fetch --prune ${quote(remote)}", NETWORK_TIMEOUT)
     }
 
-    private suspend fun pull(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun pull(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val remote = textOf(args, "remote")
-        val mode = if (args.optBoolean("rebase", false)) "--rebase" else "--ff-only"
+        val mode = if ((args["rebase"]?.jsonPrimitive?.booleanOrNull ?: false)) "--rebase" else "--ff-only"
         if (remote.isEmpty()) return git(ctx, repoOf(args), "pull $mode", NETWORK_TIMEOUT)
         revisionProblem(remote, "remote name")?.let { return ToolExecResult(it, success = false) }
         return git(ctx, repoOf(args), "pull $mode ${quote(remote)}", NETWORK_TIMEOUT)
     }
 
-    private suspend fun push(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun push(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val remote = textOf(args, "remote")
         val branch = textOf(args, "branch")
-        val upstream = args.optBoolean("set_upstream", false)
+        val upstream = (args["set_upstream"]?.jsonPrimitive?.booleanOrNull ?: false)
         if (remote.isEmpty() && branch.isEmpty()) return git(ctx, repoOf(args), "push", NETWORK_TIMEOUT)
         if (remote.isEmpty()) return ToolExecResult("A remote is required when a branch is given.", success = false)
         revisionProblem(remote, "remote name")?.let { return ToolExecResult(it, success = false) }
@@ -693,7 +693,7 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), "push $flag${quote(remote)} ${quote(branch)}", NETWORK_TIMEOUT)
     }
 
-    private suspend fun blame(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun blame(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val path = textOf(args, "path")
         relativePathProblem(path)?.let { return ToolExecResult(it, success = false) }
         val lines = textOf(args, "lines")
@@ -711,7 +711,7 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), "blame -L $lines -- ${quote(path)}")
     }
 
-    private suspend fun reset(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun reset(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val mode = textOf(args, "mode").lowercase().ifEmpty { "mixed" }
         if (mode == "hard" || mode == "--hard") {
             return ToolExecResult(
@@ -729,7 +729,7 @@ object GitTools : HarnessGroupTools {
         return git(ctx, repoOf(args), "reset --$mode ${quote(ref)}")
     }
 
-    private suspend fun initRepo(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun initRepo(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val raw = repoOf(args)
         val directory = try {
             if (raw.isEmpty()) File(HarnessRuntime.workspacePath()) else Workspace.forWriteFile(ctx, raw)
@@ -743,14 +743,14 @@ object GitTools : HarnessGroupTools {
         return git(ctx, directory.path, "init")
     }
 
-    private suspend fun applyPatch(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val patch = args.optString("patch", "")
+    private suspend fun applyPatch(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val patch = (args["patch"]?.jsonPrimitive?.content ?: "")
         if (patch.isBlank()) return ToolExecResult("There is no patch text to apply.", success = false)
         if (!HarnessRuntime.shellReady()) return ToolExecResult(SHELL_MESSAGE, success = false)
         val file = File(HarnessRuntime.subDirPath("tmp"), "lucent-patch-${System.currentTimeMillis()}.patch")
         return try {
             file.writeText(patch)
-            val reverse = if (args.optBoolean("reverse", false)) "-R " else ""
+            val reverse = if ((args["reverse"]?.jsonPrimitive?.booleanOrNull ?: false)) "-R " else ""
             git(ctx, repoOf(args), "apply $reverse${quote(file.path)}")
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

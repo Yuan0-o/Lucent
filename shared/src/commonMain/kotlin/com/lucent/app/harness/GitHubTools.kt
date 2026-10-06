@@ -3,8 +3,7 @@ package com.lucent.app.harness
 import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.CancellationException
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.nio.charset.StandardCharsets
 
 object GitHubTools : HarnessGroupTools {
@@ -187,7 +186,7 @@ object GitHubTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? {
         if (tools.none { it.name == name }) return null
         if (token().isEmpty()) return ToolExecResult(NO_TOKEN, success = false)
         return try {
@@ -227,7 +226,7 @@ object GitHubTools : HarnessGroupTools {
     private suspend fun call(
         method: String,
         path: String,
-        body: JSONObject? = null,
+        body: JsonObject? = null,
         accept: String = JSON_ACCEPT,
         follow: Boolean = false,
         timeoutSeconds: Int = 60
@@ -247,9 +246,9 @@ object GitHubTools : HarnessGroupTools {
         success = false
     )
 
-    private fun repoBase(args: JSONObject): String? {
-        val owner = args.optString("owner", "").trim()
-        val repo = args.optString("repo", "").trim()
+    private fun repoBase(args: JsonObject): String? {
+        val owner = (args["owner"]?.jsonPrimitive?.content ?: "").trim()
+        val repo = (args["repo"]?.jsonPrimitive?.content ?: "").trim()
         if (owner.isEmpty() || repo.isEmpty()) return null
         return "/repos/${HttpJson.enc(owner)}/${HttpJson.enc(repo)}"
     }
@@ -268,17 +267,17 @@ object GitHubTools : HarnessGroupTools {
         return ToolExecResult("$head Use one of: ${allowed.joinToString(", ")}.", success = false)
     }
 
-    private fun splitList(raw: String): JSONArray {
+    private fun splitList(raw: String): JsonArray {
         val out = JSONArray()
         raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { out.put(it) }
         return out
     }
 
-    private fun labelNames(array: JSONArray?): String {
-        if (array == null || array.length() == 0) return "none"
+    private fun labelNames(array: JsonArray?): String {
+        if (array == null || array.size == 0) return "none"
         val out = mutableListOf<String>()
-        for (i in 0 until array.length()) {
-            val name = array.optJSONObject(i)?.optString("name", "").orEmpty()
+        for (i in 0 until array.size) {
+            val name = (array[i] as? JsonObject)?["name"]?.jsonPrimitive?.content ?: "".orEmpty()
             if (name.isNotBlank()) out.add(name)
         }
         return if (out.isEmpty()) "none" else out.joinToString(", ")
@@ -292,30 +291,30 @@ object GitHubTools : HarnessGroupTools {
         null
     }
 
-    private suspend fun repo(args: JSONObject): ToolExecResult {
+    private suspend fun repo(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
         val reply = call("GET", root)
         problem(reply)?.let { return it }
         val o = HttpJson.objectOf(reply.body) ?: return notJson(reply)
         val sb = StringBuilder()
-        sb.append(o.optString("full_name", "")).append(" — ")
-        sb.append(HttpJson.oneLine(o.optString("description", "").ifBlank { "no description" }, 200)).append('\n')
-        sb.append("stars: ").append(o.optInt("stargazers_count", 0))
-        sb.append(" | forks: ").append(o.optInt("forks_count", 0))
-        sb.append(" | open issues: ").append(o.optInt("open_issues_count", 0)).append('\n')
-        sb.append("language: ").append(o.optString("language", "").ifBlank { "unknown" })
-        sb.append(" | default branch: ").append(o.optString("default_branch", ""))
-        sb.append(" | size: ").append(Workspace.humanSize(o.optLong("size", 0L) * 1024L)).append('\n')
-        sb.append("pushed: ").append(o.optString("pushed_at", ""))
-        sb.append(" | private: ").append(if (o.optBoolean("private", false)) "yes" else "no").append('\n')
-        sb.append(o.optString("html_url", ""))
+        sb.append((o["full_name"]?.jsonPrimitive?.content ?: "")).append(" — ")
+        sb.append(HttpJson.oneLine((o["description"]?.jsonPrimitive?.content ?: "").ifBlank { "no description" }, 200)).append('\n')
+        sb.append("stars: ").append((o["stargazers_count"]?.jsonPrimitive?.intOrNull ?: 0))
+        sb.append(" | forks: ").append((o["forks_count"]?.jsonPrimitive?.intOrNull ?: 0))
+        sb.append(" | open issues: ").append((o["open_issues_count"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')
+        sb.append("language: ").append((o["language"]?.jsonPrimitive?.content ?: "").ifBlank { "unknown" })
+        sb.append(" | default branch: ").append((o["default_branch"]?.jsonPrimitive?.content ?: ""))
+        sb.append(" | size: ").append(Workspace.humanSize((o["size"]?.jsonPrimitive?.longOrNull ?: 0L) * 1024L)).append('\n')
+        sb.append("pushed: ").append((o["pushed_at"]?.jsonPrimitive?.content ?: ""))
+        sb.append(" | private: ").append(if ((o["private"]?.jsonPrimitive?.booleanOrNull ?: false)) "yes" else "no").append('\n')
+        sb.append((o["html_url"]?.jsonPrimitive?.content ?: ""))
         return ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
     }
 
-    private suspend fun contents(args: JSONObject): ToolExecResult {
+    private suspend fun contents(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val path = args.optString("path", "").trim().trim('/')
-        val ref = args.optString("ref", "").trim()
+        val path = (args["path"]?.jsonPrimitive?.content ?: "").trim().trim('/')
+        val ref = (args["ref"]?.jsonPrimitive?.content ?: "").trim()
         val url = StringBuilder("$root/contents")
         if (path.isNotEmpty()) url.append('/').append(HttpJson.encPath(path))
         if (ref.isNotEmpty()) url.append("?ref=").append(HttpJson.enc(ref))
@@ -326,31 +325,31 @@ object GitHubTools : HarnessGroupTools {
             val array = HttpJson.arrayOf(body) ?: return notJson(reply)
             return ToolExecResult(
                 HttpJson.rows(array, 50) { item ->
-                    val type = item.optString("type", "file")
-                    val size = if (type == "file") " | ${item.optLong("size", 0L)} bytes" else ""
-                    "$type ${item.optString("name", "")}$size"
+                    val type = (item["type"]?.jsonPrimitive?.content ?: "file")
+                    val size = if (type == "file") " | ${(item["size"]?.jsonPrimitive?.longOrNull ?: 0L)} bytes" else ""
+                    "$type ${(item["name"]?.jsonPrimitive?.content ?: "")}$size"
                 }
             )
         }
         val file = HttpJson.objectOf(body) ?: return notJson(reply)
-        val type = file.optString("type", "file")
-        val name = file.optString("name", path)
-        val download = file.optString("download_url", "")
+        val type = (file["type"]?.jsonPrimitive?.content ?: "file")
+        val name = file["name"]?.jsonPrimitive?.content ?: path
+        val download = (file["download_url"]?.jsonPrimitive?.content ?: "")
         if (type == "dir") {
             return ToolExecResult("$name is a folder. Call github_contents again with path \"$name\" to list it.")
         }
         if (type == "symlink") {
-            return ToolExecResult("$name is a symlink to ${file.optString("target", "")}.")
+            return ToolExecResult("$name is a symlink to ${(file["target"]?.jsonPrimitive?.content ?: "")}.")
         }
-        val size = file.optLong("size", 0L)
+        val size = (file["size"]?.jsonPrimitive?.longOrNull ?: 0L)
         if (size > MAX_TEXT_FILE) {
             return ToolExecResult(
                 "$name is ${Workspace.humanSize(size)}, too large to decode here. Its download URL is " +
                     "$download — fetch it with http_request if you need the contents."
             )
         }
-        val content = file.optString("content", "")
-        if (file.optString("encoding", "") != "base64" || content.isEmpty()) {
+        val content = (file["content"]?.jsonPrimitive?.content ?: "")
+        if ((file["encoding"]?.jsonPrimitive?.content ?: "") != "base64" || content.isEmpty()) {
             return ToolExecResult("$name has no inline text here. Download URL: $download")
         }
         val text = decode(content) ?: return ToolExecResult("$name could not be decoded. Download URL: $download")
@@ -360,31 +359,31 @@ object GitHubTools : HarnessGroupTools {
         return ToolExecResult("----- $name (${Workspace.humanSize(size)}) -----\n${HttpJson.cut(text, HttpJson.REPLY_BUDGET)}")
     }
 
-    private suspend fun issues(args: JSONObject): ToolExecResult {
+    private suspend fun issues(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val raw = args.optString("action", "")
+        val raw = (args["action"]?.jsonPrimitive?.content ?: "")
         val action = HttpJson.action(raw, ISSUE_ACTIONS)
         if (action.isEmpty()) return unknown("Issues", raw, ISSUE_ACTIONS)
-        val number = args.optInt("number", 0)
+        val number = (args["number"]?.jsonPrimitive?.intOrNull ?: 0)
         return when (action) {
             "list" -> {
-                val state = args.optString("state", "open").trim().ifBlank { "open" }
-                val labels = args.optString("labels", "").trim()
+                val state = (args["state"]?.jsonPrimitive?.content ?: "open").trim().ifBlank { "open" }
+                val labels = (args["labels"]?.jsonPrimitive?.content ?: "").trim()
                 val url = StringBuilder("$root/issues?state=").append(HttpJson.enc(state)).append("&per_page=25")
                 if (labels.isNotEmpty()) url.append("&labels=").append(HttpJson.enc(labels))
                 val reply = call("GET", url.toString())
                 problem(reply)?.let { return it }
                 val array = HttpJson.arrayOf(reply.body) ?: return notJson(reply)
                 val plain = JSONArray()
-                for (i in 0 until array.length()) {
-                    val item = array.optJSONObject(i) ?: continue
-                    if (item.has("pull_request")) continue
+                for (i in 0 until array.size) {
+                    val item = (array[i] as? JsonObject) ?: continue
+                    if (item.containsKey("pull_request")) continue
                     plain.put(item)
                 }
                 ToolExecResult(
                     HttpJson.rows(plain, 25) { item ->
-                        "#${item.optInt("number", 0)} | ${item.optString("state", "")} | " +
-                            "${HttpJson.oneLine(item.optString("title", ""), 110)} | " +
+                        "#${(item["number"]?.jsonPrimitive?.intOrNull ?: 0)} | ${(item["state"]?.jsonPrimitive?.content ?: "")} | " +
+                            "${HttpJson.oneLine((item["title"]?.jsonPrimitive?.content ?: ""), 110)} | " +
                             HttpJson.field(item, "user.login")
                     }
                 )
@@ -395,23 +394,23 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body) ?: return notJson(reply)
                 val sb = StringBuilder()
-                sb.append('#').append(issue.optInt("number", number)).append(' ')
-                sb.append(issue.optString("title", "")).append('\n')
-                sb.append("state: ").append(issue.optString("state", ""))
+                sb.append('#').append(issue["number"]?.jsonPrimitive?.intOrNull ?: number).append(' ')
+                sb.append((issue["title"]?.jsonPrimitive?.content ?: "")).append('\n')
+                sb.append("state: ").append((issue["state"]?.jsonPrimitive?.content ?: ""))
                 sb.append(" | by: ").append(HttpJson.field(issue, "user.login"))
-                sb.append(" | comments: ").append(issue.optInt("comments", 0))
-                sb.append(" | labels: ").append(labelNames(issue.optJSONArray("labels"))).append('\n')
-                sb.append(issue.optString("html_url", "")).append("\n\n")
-                sb.append(issue.optString("body", "").ifBlank { "(no body)" })
+                sb.append(" | comments: ").append((issue["comments"]?.jsonPrimitive?.intOrNull ?: 0))
+                sb.append(" | labels: ").append(labelNames(issue["labels"]?.jsonArray)).append('\n')
+                sb.append((issue["html_url"]?.jsonPrimitive?.content ?: "")).append("\n\n")
+                sb.append((issue["body"]?.jsonPrimitive?.content ?: "").ifBlank { "(no body)" })
                 val comments = call("GET", "$root/issues/$number/comments?per_page=20")
                 if (comments.ok) {
                     val array = HttpJson.arrayOf(comments.body)
-                    if (array != null && array.length() > 0) {
+                    if (array != null && array.size > 0) {
                         sb.append("\n\nComments:\n")
                         sb.append(
                             HttpJson.rows(array, 20) { comment ->
                                 "${HttpJson.field(comment, "user.login")}: " +
-                                    HttpJson.oneLine(comment.optString("body", ""), 300)
+                                    HttpJson.oneLine((comment["body"]?.jsonPrimitive?.content ?: ""), 300)
                             }
                         )
                     }
@@ -419,18 +418,18 @@ object GitHubTools : HarnessGroupTools {
                 ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
             }
             "create" -> {
-                val title = args.optString("title", "").trim()
+                val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isEmpty()) return ToolExecResult("create needs a title.", success = false)
                 val payload = JSONObject().put("title", title)
-                val body = args.optString("body", "")
+                val body = (args["body"]?.jsonPrimitive?.content ?: "")
                 if (body.isNotEmpty()) payload.put("body", body)
-                val labels = splitList(args.optString("labels", ""))
-                if (labels.length() > 0) payload.put("labels", labels)
+                val labels = splitList((args["labels"]?.jsonPrimitive?.content ?: ""))
+                if (labels.size > 0) payload.put("labels", labels)
                 val reply = call("POST", "$root/issues", payload)
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
-                val created = issue?.optString("html_url", "").orEmpty()
-                val createdNumber = issue?.optInt("number", 0) ?: 0
+                val created = (issue?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()
+                val createdNumber = (issue?["number"]?.jsonPrimitive?.intOrNull ?: 0) ?: 0
                 if (createdNumber > 0) {
                     ToolExecResult("Created #$createdNumber $created".trim())
                 } else {
@@ -440,14 +439,14 @@ object GitHubTools : HarnessGroupTools {
             "update" -> {
                 if (number <= 0) return numberNeeded("issue")
                 val payload = JSONObject()
-                val title = args.optString("title", "").trim()
+                val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isNotEmpty()) payload.put("title", title)
-                if (args.has("body")) payload.put("body", args.optString("body", ""))
-                val state = args.optString("state", "").trim()
+                if (args.containsKey("body")) payload.put("body", (args["body"]?.jsonPrimitive?.content ?: ""))
+                val state = (args["state"]?.jsonPrimitive?.content ?: "").trim()
                 if (state.isNotEmpty()) payload.put("state", state)
-                val labels = splitList(args.optString("labels", ""))
-                if (labels.length() > 0) payload.put("labels", labels)
-                if (payload.length() == 0) {
+                val labels = splitList((args["labels"]?.jsonPrimitive?.content ?: ""))
+                if (labels.size > 0) payload.put("labels", labels)
+                if (payload.size == 0) {
                     return ToolExecResult("update needs title, body, state or labels to change.", success = false)
                 }
                 val reply = call("PATCH", "$root/issues/$number", payload)
@@ -456,7 +455,7 @@ object GitHubTools : HarnessGroupTools {
             }
             "comment" -> {
                 if (number <= 0) return numberNeeded("issue")
-                val body = args.optString("comment", "").trim().ifBlank { args.optString("body", "").trim() }
+                val body = (args["comment"]?.jsonPrimitive?.content ?: "").trim().ifBlank { (args["body"]?.jsonPrimitive?.content ?: "").trim() }
                 if (body.isEmpty()) return ToolExecResult("comment needs the text in comment.", success = false)
                 val reply = call("POST", "$root/issues/$number/comments", JSONObject().put("body", body))
                 problem(reply)?.let { return it }
@@ -471,22 +470,22 @@ object GitHubTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun pulls(args: JSONObject): ToolExecResult {
+    private suspend fun pulls(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val raw = args.optString("action", "")
+        val raw = (args["action"]?.jsonPrimitive?.content ?: "")
         val action = HttpJson.action(raw, PULL_ACTIONS)
         if (action.isEmpty()) return unknown("Pull requests", raw, PULL_ACTIONS)
-        val number = args.optInt("number", 0)
+        val number = (args["number"]?.jsonPrimitive?.intOrNull ?: 0)
         return when (action) {
             "list" -> {
-                val state = args.optString("state", "open").trim().ifBlank { "open" }
+                val state = (args["state"]?.jsonPrimitive?.content ?: "open").trim().ifBlank { "open" }
                 val reply = call("GET", "$root/pulls?state=${HttpJson.enc(state)}&per_page=25")
                 problem(reply)?.let { return it }
                 val array = HttpJson.arrayOf(reply.body) ?: return notJson(reply)
                 ToolExecResult(
                     HttpJson.rows(array, 25) { item ->
-                        "#${item.optInt("number", 0)} | ${item.optString("state", "")} | " +
-                            "${HttpJson.oneLine(item.optString("title", ""), 100)} | " +
+                        "#${(item["number"]?.jsonPrimitive?.intOrNull ?: 0)} | ${(item["state"]?.jsonPrimitive?.content ?: "")} | " +
+                            "${HttpJson.oneLine((item["title"]?.jsonPrimitive?.content ?: ""), 100)} | " +
                             "${HttpJson.field(item, "head.ref")} -> ${HttpJson.field(item, "base.ref")}"
                     }
                 )
@@ -497,34 +496,34 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val pull = HttpJson.objectOf(reply.body) ?: return notJson(reply)
                 val sb = StringBuilder()
-                sb.append('#').append(pull.optInt("number", number)).append(' ')
-                sb.append(pull.optString("title", "")).append('\n')
-                sb.append("state: ").append(pull.optString("state", ""))
-                sb.append(" | merged: ").append(if (pull.optBoolean("merged", false)) "yes" else "no")
+                sb.append('#').append(pull["number"]?.jsonPrimitive?.intOrNull ?: number).append(' ')
+                sb.append((pull["title"]?.jsonPrimitive?.content ?: "")).append('\n')
+                sb.append("state: ").append((pull["state"]?.jsonPrimitive?.content ?: ""))
+                sb.append(" | merged: ").append(if ((pull["merged"]?.jsonPrimitive?.booleanOrNull ?: false)) "yes" else "no")
                 sb.append(" | by: ").append(HttpJson.field(pull, "user.login")).append('\n')
                 sb.append(HttpJson.field(pull, "head.ref")).append(" -> ").append(HttpJson.field(pull, "base.ref"))
-                sb.append(" | files: ").append(pull.optInt("changed_files", 0))
-                sb.append(" | +").append(pull.optInt("additions", 0))
-                sb.append(" -").append(pull.optInt("deletions", 0)).append('\n')
-                sb.append(pull.optString("html_url", "")).append("\n\n")
-                sb.append(pull.optString("body", "").ifBlank { "(no body)" })
+                sb.append(" | files: ").append((pull["changed_files"]?.jsonPrimitive?.intOrNull ?: 0))
+                sb.append(" | +").append((pull["additions"]?.jsonPrimitive?.intOrNull ?: 0))
+                sb.append(" -").append((pull["deletions"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')
+                sb.append((pull["html_url"]?.jsonPrimitive?.content ?: "")).append("\n\n")
+                sb.append((pull["body"]?.jsonPrimitive?.content ?: "").ifBlank { "(no body)" })
                 ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
             }
             "create" -> {
-                val title = args.optString("title", "").trim()
-                val head = args.optString("head", "").trim()
-                val target = args.optString("base", "").trim()
+                val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
+                val head = (args["head"]?.jsonPrimitive?.content ?: "").trim()
+                val target = (args["base"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isEmpty() || head.isEmpty() || target.isEmpty()) {
                     return ToolExecResult("create needs title, head and base.", success = false)
                 }
                 val payload = JSONObject().put("title", title).put("head", head).put("base", target)
-                val body = args.optString("body", "")
+                val body = (args["body"]?.jsonPrimitive?.content ?: "")
                 if (body.isNotEmpty()) payload.put("body", body)
                 val reply = call("POST", "$root/pulls", payload)
                 problem(reply)?.let { return it }
                 val pull = HttpJson.objectOf(reply.body)
-                val created = pull?.optString("html_url", "").orEmpty()
-                val createdNumber = pull?.optInt("number", 0) ?: 0
+                val created = (pull?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()
+                val createdNumber = (pull?["number"]?.jsonPrimitive?.intOrNull ?: 0) ?: 0
                 if (createdNumber > 0) {
                     ToolExecResult("Created #$createdNumber $created".trim())
                 } else {
@@ -534,12 +533,12 @@ object GitHubTools : HarnessGroupTools {
             "update" -> {
                 if (number <= 0) return numberNeeded("pull request")
                 val payload = JSONObject()
-                val title = args.optString("title", "").trim()
+                val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isNotEmpty()) payload.put("title", title)
-                if (args.has("body")) payload.put("body", args.optString("body", ""))
-                val state = args.optString("state", "").trim()
+                if (args.containsKey("body")) payload.put("body", (args["body"]?.jsonPrimitive?.content ?: ""))
+                val state = (args["state"]?.jsonPrimitive?.content ?: "").trim()
                 if (state.isNotEmpty()) payload.put("state", state)
-                if (payload.length() == 0) {
+                if (payload.size == 0) {
                     return ToolExecResult("update needs title, body or state to change.", success = false)
                 }
                 val reply = call("PATCH", "$root/pulls/$number", payload)
@@ -548,7 +547,7 @@ object GitHubTools : HarnessGroupTools {
             }
             "comment" -> {
                 if (number <= 0) return numberNeeded("pull request")
-                val body = args.optString("comment", "").trim().ifBlank { args.optString("body", "").trim() }
+                val body = (args["comment"]?.jsonPrimitive?.content ?: "").trim().ifBlank { (args["body"]?.jsonPrimitive?.content ?: "").trim() }
                 if (body.isEmpty()) return ToolExecResult("comment needs the text in comment.", success = false)
                 val reply = call("POST", "$root/issues/$number/comments", JSONObject().put("body", body))
                 problem(reply)?.let { return it }
@@ -570,8 +569,8 @@ object GitHubTools : HarnessGroupTools {
                 val array = HttpJson.arrayOf(reply.body) ?: return notJson(reply)
                 ToolExecResult(
                     HttpJson.rows(array, 50) { item ->
-                        "${item.optString("status", "")} ${item.optString("filename", "")} | " +
-                            "+${item.optInt("additions", 0)} -${item.optInt("deletions", 0)}"
+                        "${(item["status"]?.jsonPrimitive?.content ?: "")} ${(item["filename"]?.jsonPrimitive?.content ?: "")} | " +
+                            "+${(item["additions"]?.jsonPrimitive?.intOrNull ?: 0)} -${(item["deletions"]?.jsonPrimitive?.intOrNull ?: 0)}"
                     }
                 )
             }
@@ -580,8 +579,8 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("PUT", "$root/pulls/$number/merge", JSONObject().put("merge_method", "merge"))
                 problem(reply)?.let { return it }
                 val outcome = HttpJson.objectOf(reply.body)
-                val message = outcome?.optString("message", "").orEmpty()
-                if (outcome?.optBoolean("merged", false) == true) {
+                val message = (outcome?["message"]?.jsonPrimitive?.content ?: "").orEmpty()
+                if ((outcome?["merged"]?.jsonPrimitive?.booleanOrNull ?: false) == true) {
                     ToolExecResult("Merged #$number. $message".trim())
                 } else {
                     ToolExecResult("GitHub did not merge #$number: $message", success = false)
@@ -590,12 +589,12 @@ object GitHubTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun branches(args: JSONObject): ToolExecResult {
+    private suspend fun branches(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val raw = args.optString("action", "")
+        val raw = (args["action"]?.jsonPrimitive?.content ?: "")
         val action = HttpJson.action(raw, BRANCH_ACTIONS)
         if (action.isEmpty()) return unknown("Branches", raw, BRANCH_ACTIONS)
-        val name = args.optString("name", "").trim()
+        val name = (args["name"]?.jsonPrimitive?.content ?: "").trim()
         return when (action) {
             "list" -> {
                 val reply = call("GET", "$root/branches?per_page=50")
@@ -604,8 +603,8 @@ object GitHubTools : HarnessGroupTools {
                 ToolExecResult(
                     HttpJson.rows(array, 50) { item ->
                         val sha = HttpJson.field(item, "commit.sha")
-                        "${item.optString("name", "")} | ${sha.take(9)} | " +
-                            (if (item.optBoolean("protected", false)) "protected" else "open")
+                        "${(item["name"]?.jsonPrimitive?.content ?: "")} | ${sha.take(9)} | " +
+                            (if ((item["protected"]?.jsonPrimitive?.booleanOrNull ?: false)) "protected" else "open")
                     }
                 )
             }
@@ -615,13 +614,13 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val branch = HttpJson.objectOf(reply.body) ?: return notJson(reply)
                 ToolExecResult(
-                    "branch: ${branch.optString("name", name)}\n" +
+                    "branch: ${branch["name"]?.jsonPrimitive?.content ?: name}\n" +
                         "sha: ${HttpJson.field(branch, "commit.sha")}\n" +
-                        "protected: ${if (branch.optBoolean("protected", false)) "yes" else "no"}"
+                        "protected: ${if ((branch["protected"]?.jsonPrimitive?.booleanOrNull ?: false)) "yes" else "no"}"
                 )
             }
             "create" -> {
-                val from = args.optString("from", "").trim()
+                val from = (args["from"]?.jsonPrimitive?.content ?: "").trim()
                 if (name.isEmpty() || from.isEmpty()) {
                     return ToolExecResult(
                         "create needs name and from (the sha, tag or branch to start from).",
@@ -649,11 +648,11 @@ object GitHubTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun commits(args: JSONObject): ToolExecResult {
+    private suspend fun commits(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val limit = args.optInt("limit", 20).coerceIn(1, 100)
-        val path = args.optString("path", "").trim()
-        val branch = args.optString("branch", "").trim()
+        val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: 20).coerceIn(1, 100)
+        val path = (args["path"]?.jsonPrimitive?.content ?: "").trim()
+        val branch = (args["branch"]?.jsonPrimitive?.content ?: "").trim()
         val url = StringBuilder("$root/commits?per_page=$limit")
         if (path.isNotEmpty()) url.append("&path=").append(HttpJson.enc(path))
         if (branch.isNotEmpty()) url.append("&sha=").append(HttpJson.enc(branch))
@@ -662,7 +661,7 @@ object GitHubTools : HarnessGroupTools {
         val array = HttpJson.arrayOf(reply.body) ?: return notJson(reply)
         return ToolExecResult(
             HttpJson.rows(array, limit) { item ->
-                val sha = item.optString("sha", "").take(9)
+                val sha = (item["sha"]?.jsonPrimitive?.content ?: "").take(9)
                 val message = HttpJson.firstLine(HttpJson.field(item, "commit.message"), 120)
                 val author = HttpJson.field(item, "commit.author.name")
                 val date = HttpJson.field(item, "commit.author.date")
@@ -671,9 +670,9 @@ object GitHubTools : HarnessGroupTools {
         )
     }
 
-    private suspend fun search(args: JSONObject): ToolExecResult {
-        val kind = HttpJson.action(args.optString("kind", "code"), SEARCH_KINDS).ifBlank { "code" }
-        val query = args.optString("query", "").trim()
+    private suspend fun search(args: JsonObject): ToolExecResult {
+        val kind = HttpJson.action((args["kind"]?.jsonPrimitive?.content ?: "code"), SEARCH_KINDS).ifBlank { "code" }
+        val query = (args["query"]?.jsonPrimitive?.content ?: "").trim()
         if (query.isEmpty()) return ToolExecResult("search needs query.", success = false)
         val endpoint = when (kind) {
             "repos" -> "repositories"
@@ -685,46 +684,46 @@ object GitHubTools : HarnessGroupTools {
         val reply = call("GET", "/search/$endpoint?q=${HttpJson.enc(query)}&per_page=20", null, accept)
         problem(reply)?.let { return it }
         val payload = HttpJson.objectOf(reply.body) ?: return notJson(reply)
-        val items = payload.optJSONArray("items")
-        val total = "total_count: ${payload.optInt("total_count", 0)}"
+        val items = payload["items"]?.jsonArray
+        val total = "total_count: ${(payload["total_count"]?.jsonPrimitive?.intOrNull ?: 0)}"
         val text = when (kind) {
             "repos" -> HttpJson.rows(items, 20) { item ->
-                "${item.optString("full_name", "")} | ${item.optInt("stargazers_count", 0)} stars | " +
-                    HttpJson.oneLine(item.optString("description", ""), 90)
+                "${(item["full_name"]?.jsonPrimitive?.content ?: "")} | ${(item["stargazers_count"]?.jsonPrimitive?.intOrNull ?: 0)} stars | " +
+                    HttpJson.oneLine((item["description"]?.jsonPrimitive?.content ?: ""), 90)
             }
             "issues" -> HttpJson.rows(items, 20) { item ->
-                "${item.optString("state", "")} | ${HttpJson.oneLine(item.optString("title", ""), 110)} | " +
-                    item.optString("html_url", "")
+                "${(item["state"]?.jsonPrimitive?.content ?: "")} | ${HttpJson.oneLine((item["title"]?.jsonPrimitive?.content ?: ""), 110)} | " +
+                    (item["html_url"]?.jsonPrimitive?.content ?: "")
             }
             "commits" -> HttpJson.rows(items, 20) { item ->
-                "${item.optString("sha", "").take(9)} | ${HttpJson.field(item, "repository.full_name")} | " +
+                "${(item["sha"]?.jsonPrimitive?.content ?: "").take(9)} | ${HttpJson.field(item, "repository.full_name")} | " +
                     HttpJson.firstLine(HttpJson.field(item, "commit.message"), 100)
             }
             else -> HttpJson.rows(items, 20) { item ->
-                "${HttpJson.field(item, "repository.full_name")} | ${item.optString("path", "")} | " +
-                    item.optString("html_url", "")
+                "${HttpJson.field(item, "repository.full_name")} | ${(item["path"]?.jsonPrimitive?.content ?: "")} | " +
+                    (item["html_url"]?.jsonPrimitive?.content ?: "")
             }
         }
         return ToolExecResult("$total\n$text")
     }
 
-    private suspend fun actions(args: JSONObject): ToolExecResult {
+    private suspend fun actions(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val raw = args.optString("action", "")
+        val raw = (args["action"]?.jsonPrimitive?.content ?: "")
         val action = HttpJson.action(raw, RUN_ACTIONS)
         if (action.isEmpty()) return unknown("Actions", raw, RUN_ACTIONS)
-        val runId = args.optLong("run_id", 0L)
-        val jobId = args.optLong("job_id", 0L)
+        val runId = (args["run_id"]?.jsonPrimitive?.longOrNull ?: 0L)
+        val jobId = (args["job_id"]?.jsonPrimitive?.longOrNull ?: 0L)
         return when (action) {
             "runs" -> {
                 val reply = call("GET", "$root/actions/runs?per_page=15")
                 problem(reply)?.let { return it }
-                val runs = HttpJson.objectOf(reply.body)?.optJSONArray("workflow_runs")
+                val runs = HttpJson.objectOf(reply.body)?["workflow_runs"]?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(runs, 15) { run ->
-                        "${run.optLong("id", 0L)} | ${run.optString("name", "")} | " +
-                            "${run.optString("status", "")}/${run.optString("conclusion", "")} | " +
-                            "${run.optString("head_branch", "")} | ${run.optString("created_at", "")}"
+                        "${(run["id"]?.jsonPrimitive?.longOrNull ?: 0L)} | ${(run["name"]?.jsonPrimitive?.content ?: "")} | " +
+                            "${(run["status"]?.jsonPrimitive?.content ?: "")}/${(run["conclusion"]?.jsonPrimitive?.content ?: "")} | " +
+                            "${(run["head_branch"]?.jsonPrimitive?.content ?: "")} | ${(run["created_at"]?.jsonPrimitive?.content ?: "")}"
                     }
                 )
             }
@@ -734,24 +733,24 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val run = HttpJson.objectOf(reply.body) ?: return notJson(reply)
                 val sb = StringBuilder()
-                sb.append(run.optString("name", "")).append(" #").append(run.optInt("run_number", 0)).append('\n')
-                sb.append("status: ").append(run.optString("status", ""))
-                sb.append(" | conclusion: ").append(run.optString("conclusion", "").ifBlank { "pending" }).append('\n')
-                sb.append("branch: ").append(run.optString("head_branch", ""))
-                sb.append(" | event: ").append(run.optString("event", ""))
-                sb.append(" | started: ").append(run.optString("run_started_at", "")).append('\n')
-                sb.append(run.optString("html_url", ""))
+                sb.append((run["name"]?.jsonPrimitive?.content ?: "")).append(" #").append((run["run_number"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')
+                sb.append("status: ").append((run["status"]?.jsonPrimitive?.content ?: ""))
+                sb.append(" | conclusion: ").append((run["conclusion"]?.jsonPrimitive?.content ?: "").ifBlank { "pending" }).append('\n')
+                sb.append("branch: ").append((run["head_branch"]?.jsonPrimitive?.content ?: ""))
+                sb.append(" | event: ").append((run["event"]?.jsonPrimitive?.content ?: ""))
+                sb.append(" | started: ").append((run["run_started_at"]?.jsonPrimitive?.content ?: "")).append('\n')
+                sb.append((run["html_url"]?.jsonPrimitive?.content ?: ""))
                 ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
             }
             "jobs" -> {
                 if (runId <= 0) return ToolExecResult("jobs needs run_id.", success = false)
                 val reply = call("GET", "$root/actions/runs/$runId/jobs?per_page=30")
                 problem(reply)?.let { return it }
-                val jobs = HttpJson.objectOf(reply.body)?.optJSONArray("jobs")
+                val jobs = HttpJson.objectOf(reply.body)?["jobs"]?.jsonArray
                 ToolExecResult(
                     HttpJson.rows(jobs, 30) { job ->
-                        "${job.optLong("id", 0L)} | ${job.optString("name", "")} | " +
-                            "${job.optString("status", "")}/${job.optString("conclusion", "")}"
+                        "${(job["id"]?.jsonPrimitive?.longOrNull ?: 0L)} | ${(job["name"]?.jsonPrimitive?.content ?: "")} | " +
+                            "${(job["status"]?.jsonPrimitive?.content ?: "")}/${(job["conclusion"]?.jsonPrimitive?.content ?: "")}"
                     }
                 )
             }
@@ -767,8 +766,8 @@ object GitHubTools : HarnessGroupTools {
                 )
             }
             "dispatch" -> {
-                val workflow = args.optString("workflow", "").trim()
-                val ref = args.optString("ref", "").trim()
+                val workflow = (args["workflow"]?.jsonPrimitive?.content ?: "").trim()
+                val ref = (args["ref"]?.jsonPrimitive?.content ?: "").trim()
                 if (workflow.isEmpty() || ref.isEmpty()) {
                     return ToolExecResult("dispatch needs workflow (file name or id) and ref (branch).", success = false)
                 }
@@ -789,12 +788,12 @@ object GitHubTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun releases(args: JSONObject): ToolExecResult {
+    private suspend fun releases(args: JsonObject): ToolExecResult {
         val root = repoBase(args) ?: return repoNeeded()
-        val raw = args.optString("action", "")
+        val raw = (args["action"]?.jsonPrimitive?.content ?: "")
         val action = HttpJson.action(raw, RELEASE_ACTIONS)
         if (action.isEmpty()) return unknown("Releases", raw, RELEASE_ACTIONS)
-        val tag = args.optString("tag", "").trim()
+        val tag = (args["tag"]?.jsonPrimitive?.content ?: "").trim()
         return when (action) {
             "list" -> {
                 val reply = call("GET", "$root/releases?per_page=20")
@@ -802,9 +801,9 @@ object GitHubTools : HarnessGroupTools {
                 val array = HttpJson.arrayOf(reply.body) ?: return notJson(reply)
                 ToolExecResult(
                     HttpJson.rows(array, 20) { item ->
-                        "${item.optString("tag_name", "")} | ${item.optString("name", "")} | " +
-                            "${if (item.optBoolean("draft", false)) "draft" else "published"} | " +
-                            item.optString("published_at", "")
+                        "${(item["tag_name"]?.jsonPrimitive?.content ?: "")} | ${(item["name"]?.jsonPrimitive?.content ?: "")} | " +
+                            "${if ((item["draft"]?.jsonPrimitive?.booleanOrNull ?: false)) "draft" else "published"} | " +
+                            (item["published_at"]?.jsonPrimitive?.content ?: "")
                     }
                 )
             }
@@ -814,26 +813,26 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val release = HttpJson.objectOf(reply.body)
                 val sb = StringBuilder()
-                sb.append(release?.optString("name", tag).orEmpty()).append(" (").append(tag).append(")\n")
-                sb.append("draft: ").append(if (release?.optBoolean("draft", false) == true) "yes" else "no")
-                sb.append(" | published: ").append(release?.optString("published_at", "").orEmpty()).append('\n')
-                sb.append(release?.optString("html_url", "").orEmpty()).append("\n\n")
-                sb.append(release?.optString("body", "").orEmpty().ifBlank { "(no notes)" })
+                sb.append(release?["name"]?.jsonPrimitive?.content ?: tag.orEmpty()).append(" (").append(tag).append(")\n")
+                sb.append("draft: ").append(if ((release?["draft"]?.jsonPrimitive?.booleanOrNull ?: false) == true) "yes" else "no")
+                sb.append(" | published: ").append((release?["published_at"]?.jsonPrimitive?.content ?: "").orEmpty()).append('\n')
+                sb.append((release?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()).append("\n\n")
+                sb.append((release?["body"]?.jsonPrimitive?.content ?: "").orEmpty().ifBlank { "(no notes)" })
                 ToolExecResult(HttpJson.cut(sb.toString().trimEnd()))
             }
             else -> {
                 if (tag.isEmpty()) return ToolExecResult("create needs tag.", success = false)
                 val payload = JSONObject().put("tag_name", tag)
-                val name = args.optString("name", "").trim()
+                val name = (args["name"]?.jsonPrimitive?.content ?: "").trim()
                 if (name.isNotEmpty()) payload.put("name", name)
-                if (args.has("body")) payload.put("body", args.optString("body", ""))
-                payload.put("draft", args.optBoolean("draft", false))
+                if (args.containsKey("body")) payload.put("body", (args["body"]?.jsonPrimitive?.content ?: ""))
+                payload.put("draft", (args["draft"]?.jsonPrimitive?.booleanOrNull ?: false))
                 val reply = call("POST", "$root/releases", payload)
                 problem(reply)?.let { return it }
                 val release = HttpJson.objectOf(reply.body)
                 ToolExecResult(
-                    "Created release ${release?.optString("tag_name", tag).orEmpty()} " +
-                        release?.optString("html_url", "").orEmpty()
+                    "Created release ${release?["tag_name"]?.jsonPrimitive?.content ?: tag.orEmpty()} " +
+                        (release?["html_url"]?.jsonPrimitive?.content ?: "").orEmpty()
                 )
             }
         }
@@ -844,23 +843,23 @@ object GitHubTools : HarnessGroupTools {
         problem(reply)?.let { return it }
         val account = HttpJson.objectOf(reply.body) ?: return notJson(reply)
         val sb = StringBuilder()
-        sb.append("login: ").append(account.optString("login", "")).append('\n')
-        sb.append("name: ").append(account.optString("name", "").ifBlank { "(none)" })
-        sb.append(" | public repos: ").append(account.optInt("public_repos", 0))
-        sb.append(" | followers: ").append(account.optInt("followers", 0)).append('\n')
-        sb.append("profile: ").append(account.optString("html_url", "")).append('\n')
+        sb.append("login: ").append((account["login"]?.jsonPrimitive?.content ?: "")).append('\n')
+        sb.append("name: ").append((account["name"]?.jsonPrimitive?.content ?: "").ifBlank { "(none)" })
+        sb.append(" | public repos: ").append((account["public_repos"]?.jsonPrimitive?.intOrNull ?: 0))
+        sb.append(" | followers: ").append((account["followers"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')
+        sb.append("profile: ").append((account["html_url"]?.jsonPrimitive?.content ?: "")).append('\n')
         val limits = call("GET", "/rate_limit")
         if (limits.ok) {
-            val resources = HttpJson.objectOf(limits.body)?.optJSONObject("resources")
-            val core = resources?.optJSONObject("core")
-            val search = resources?.optJSONObject("search")
+            val resources = HttpJson.objectOf(limits.body)?["resources"]?.jsonObject
+            val core = resources?["core"]?.jsonObject
+            val search = resources?["search"]?.jsonObject
             if (core != null) {
-                sb.append("core requests left: ").append(core.optInt("remaining", 0))
-                sb.append(" of ").append(core.optInt("limit", 0)).append('\n')
+                sb.append("core requests left: ").append((core["remaining"]?.jsonPrimitive?.intOrNull ?: 0))
+                sb.append(" of ").append((core["limit"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')
             }
             if (search != null) {
-                sb.append("search requests left: ").append(search.optInt("remaining", 0))
-                sb.append(" of ").append(search.optInt("limit", 0)).append('\n')
+                sb.append("search requests left: ").append((search["remaining"]?.jsonPrimitive?.intOrNull ?: 0))
+                sb.append(" of ").append((search["limit"]?.jsonPrimitive?.intOrNull ?: 0)).append('\n')
             }
         } else {
             sb.append("rate limit: could not be read (${HttpJson.describe(limits.code)})\n")
