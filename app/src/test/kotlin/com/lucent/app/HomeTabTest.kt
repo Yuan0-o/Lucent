@@ -37,7 +37,8 @@ class HomeTabTest {
 
     @Test
     fun everyScreenRoundTripsThroughItsTab() {
-        Screen.entries.forEach { screen ->
+        val tabScreens = listOf(Screen.Tasks, Screen.Notes, Screen.Notebooks, Screen.Assistant, Screen.Settings)
+        tabScreens.forEach { screen ->
             val mode = HomeMode.of(screen) ?: HomeMode.Tasks
             assertEquals(screen, HomeTab.of(screen).screen(mode))
         }

@@ -7,13 +7,13 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private val harnessFsPlatformSources = listOf(
-    "shared/src/platformMain/kotlin/com/lucent/app/harness/HarnessFs.platform.kt",
-    "../shared/src/platformMain/kotlin/com/lucent/app/harness/HarnessFs.platform.kt",
+    "shared/src/jvmMain/kotlin/com/lucent/app/harness/HarnessFs.platform.kt",
+    "../shared/src/jvmMain/kotlin/com/lucent/app/harness/HarnessFs.platform.kt",
 )
 
 private val harnessPlatformPlatformSources = listOf(
-    "shared/src/platformMain/kotlin/com/lucent/app/harness/HarnessPlatform.platform.kt",
-    "../shared/src/platformMain/kotlin/com/lucent/app/harness/HarnessPlatform.platform.kt",
+    "shared/src/jvmMain/kotlin/com/lucent/app/harness/HarnessPlatform.platform.kt",
+    "../shared/src/jvmMain/kotlin/com/lucent/app/harness/HarnessPlatform.platform.kt",
 )
 
 private fun locate(candidates: List<String>): File =
