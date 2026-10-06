@@ -1,10 +1,23 @@
 package com.lucent.app.data
 
 import java.util.Base64
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
+
+@Serializable
+private data class Credentials(
+    @SerialName("v") val v: Int = 0,
+    @SerialName("iter") val iter: Int = 120_000,
+    @SerialName("salt") val salt: String = "",
+    @SerialName("pwHash") val pwHash: String = "",
+    @SerialName("question") val question: String = "",
+    @SerialName("ansHash") val ansHash: String = ""
+)
 
 object AppLock {
 
@@ -14,61 +27,59 @@ object AppLock {
     private const val KEY_BITS = 256
 
     private val random = SecureRandom()
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun createCredentials(password: String, question: String, answer: String): String {
         val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
         val recovery = question.isNotBlank() && answer.isNotBlank()
-        return JSONObject()
-            .put("v", VERSION)
-            .put("iter", ITERATIONS)
-            .put("salt", b64(salt))
-            .put("pwHash", b64(hash(password.toCharArray(), salt, ITERATIONS)))
-            .put("question", if (recovery) question.trim() else "")
-            .put(
-                "ansHash",
-                if (recovery) b64(hash(normalizeAnswer(answer).toCharArray(), salt, ITERATIONS)) else ""
+        return json.encodeToString(
+            Credentials(
+                v = VERSION,
+                iter = ITERATIONS,
+                salt = b64(salt),
+                pwHash = b64(hash(password.toCharArray(), salt, ITERATIONS)),
+                question = if (recovery) question.trim() else "",
+                ansHash = if (recovery) b64(hash(normalizeAnswer(answer).toCharArray(), salt, ITERATIONS)) else ""
             )
-            .toString()
+        )
     }
 
     fun hasRecovery(credentialsJson: String): Boolean {
         val o = parse(credentialsJson) ?: return false
-        return o.optString("question", "").isNotBlank() && o.optString("ansHash", "").isNotEmpty()
+        return o.question.isNotBlank() && o.ansHash.isNotEmpty()
     }
 
-    fun question(credentialsJson: String): String = parse(credentialsJson)?.optString("question", "") ?: ""
+    fun question(credentialsJson: String): String = parse(credentialsJson)?.question ?: ""
 
     fun verifyPassword(credentialsJson: String, password: String): Boolean {
         val o = parse(credentialsJson) ?: return false
-        return verify(password.toCharArray(), o, "pwHash")
+        return verify(password.toCharArray(), o.salt, o.iter, o.pwHash)
     }
 
     fun verifyAnswer(credentialsJson: String, answer: String): Boolean {
         if (!hasRecovery(credentialsJson)) return false
         val o = parse(credentialsJson) ?: return false
-        return verify(normalizeAnswer(answer).toCharArray(), o, "ansHash")
+        return verify(normalizeAnswer(answer).toCharArray(), o.salt, o.iter, o.ansHash)
     }
 
     fun changePassword(credentialsJson: String, newPassword: String): String? {
         val o = parse(credentialsJson) ?: return null
-        val question = o.optString("question", "")
-        val salt = b64ToBytes(o.optString("salt", "")) ?: return null
-        val iter = o.optInt("iter", ITERATIONS)
-        return JSONObject()
-            .put("v", VERSION)
-            .put("iter", iter)
-            .put("salt", o.optString("salt", ""))
-            .put("pwHash", b64(hash(newPassword.toCharArray(), salt, iter)))
-            .put("question", question)
-            .put("ansHash", o.optString("ansHash", ""))
-            .toString()
+        val saltBytes = b64ToBytes(o.salt) ?: return null
+        return json.encodeToString(
+            Credentials(
+                v = VERSION,
+                iter = o.iter,
+                salt = o.salt,
+                pwHash = b64(hash(newPassword.toCharArray(), saltBytes, o.iter)),
+                question = o.question,
+                ansHash = o.ansHash
+            )
+        )
     }
 
-
-    private fun verify(input: CharArray, o: JSONObject, hashField: String): Boolean {
-        val salt = b64ToBytes(o.optString("salt", "")) ?: return false
-        val iter = o.optInt("iter", ITERATIONS)
-        val expected = b64ToBytes(o.optString(hashField, "")) ?: return false
+    private fun verify(input: CharArray, saltStr: String, iter: Int, expectedHashStr: String): Boolean {
+        val salt = b64ToBytes(saltStr) ?: return false
+        val expected = b64ToBytes(expectedHashStr) ?: return false
         val actual = hash(input, salt, iter)
         return constantTimeEquals(expected, actual)
     }
@@ -84,8 +95,8 @@ object AppLock {
 
     private fun normalizeAnswer(answer: String): String = answer.trim().lowercase()
 
-    private fun parse(json: String): JSONObject? =
-        if (json.isBlank()) null else try { JSONObject(json) } catch (t: Throwable) { null }
+    private fun parse(jsonStr: String): Credentials? =
+        if (jsonStr.isBlank()) null else try { json.decodeFromString<Credentials>(jsonStr) } catch (t: Throwable) { null }
 
     private fun b64(bytes: ByteArray): String = Base64.getEncoder().withoutPadding().encodeToString(bytes)
     private fun b64ToBytes(s: String): ByteArray? =

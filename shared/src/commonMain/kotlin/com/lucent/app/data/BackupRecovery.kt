@@ -1,6 +1,10 @@
 package com.lucent.app.data
 
-import org.json.JSONObject
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -19,6 +23,18 @@ object BackupRecovery {
     private const val ITERATIONS = BackupCrypto.PASSWORD_ITERATIONS
 
     private val random = SecureRandom()
+
+    private val jsonFormat = Json { ignoreUnknownKeys = true }
+
+    @Serializable
+    data class EnvelopeJson(
+        @SerialName("v") val v: Int = 0,
+        @SerialName("question") val question: String = "",
+        @SerialName("salt") val salt: String = "",
+        @SerialName("iter") val iter: Int = ITERATIONS,
+        @SerialName("iv") val iv: String = "",
+        @SerialName("wrapped") val wrapped: String = ""
+    )
 
     data class Envelope(
         val question: String,
@@ -70,26 +86,29 @@ object BackupRecovery {
         }
     }
 
-    fun toJson(envelope: Envelope): String = JSONObject()
-        .put("v", VERSION)
-        .put("question", envelope.question)
-        .put("salt", b64(envelope.salt))
-        .put("iter", envelope.iterations)
-        .put("iv", b64(envelope.iv))
-        .put("wrapped", b64(envelope.wrapped))
-        .toString()
+    fun toJson(envelope: Envelope): String {
+        val ej = EnvelopeJson(
+            v = VERSION,
+            question = envelope.question,
+            salt = b64(envelope.salt),
+            iter = envelope.iterations,
+            iv = b64(envelope.iv),
+            wrapped = b64(envelope.wrapped)
+        )
+        return jsonFormat.encodeToString(ej)
+    }
 
     fun fromJson(json: String): Envelope? {
         if (json.isBlank()) return null
         return try {
-            val o = JSONObject(json)
-            if (o.optInt("v", 0) != VERSION) return null
-            val question = o.optString("question", "")
+            val o = jsonFormat.decodeFromString<EnvelopeJson>(json)
+            if (o.v != VERSION) return null
+            val question = o.question
             if (question.isBlank()) return null
-            val salt = b64d(o.optString("salt", "")) ?: return null
-            val iv = b64d(o.optString("iv", "")) ?: return null
-            val wrapped = b64d(o.optString("wrapped", "")) ?: return null
-            val iter = o.optInt("iter", ITERATIONS)
+            val salt = b64d(o.salt) ?: return null
+            val iv = b64d(o.iv) ?: return null
+            val wrapped = b64d(o.wrapped) ?: return null
+            val iter = o.iter
             if (iter <= 0) return null
             Envelope(question, salt, iter, iv, wrapped)
         } catch (_: Throwable) {
