@@ -8,7 +8,15 @@ import com.lucent.app.data.Task
 import com.lucent.app.network.ToolDefinition
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolParam
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 
 object FormattingTools {
 
@@ -131,10 +139,10 @@ object FormattingTools {
         )
     )
 
-    fun describeToolCall(name: String, args: JSONObject): String? {
+    fun describeToolCall(name: String, args: JsonObject): String? {
         fun s(vararg keys: String): String {
             for (key in keys) {
-                val value = args.optString(key, "")
+                val value = args[key]?.jsonPrimitive?.contentOrNull ?: ""
                 if (value.isNotBlank()) return value
             }
             return ""
@@ -147,10 +155,10 @@ object FormattingTools {
             "set_note_format" -> com.lucent.app.i18n.S.ccSetNoteFormat(s("title"), s("format"))
             "set_task_format" -> com.lucent.app.i18n.S.ccSetTaskFormat(s("title"), s("format"))
             "set_note_hidden" ->
-                if (args.optBoolean("hidden", true)) com.lucent.app.i18n.S.ccHideNote(s("title"))
+                if (args["hidden"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccHideNote(s("title"))
                 else com.lucent.app.i18n.S.ccShowNote(s("title"))
             "set_task_hidden" ->
-                if (args.optBoolean("hidden", true)) com.lucent.app.i18n.S.ccHideTask(s("title"))
+                if (args["hidden"]?.jsonPrimitive?.booleanOrNull ?: true) com.lucent.app.i18n.S.ccHideTask(s("title"))
                 else com.lucent.app.i18n.S.ccShowTask(s("title"))
             "read_note_formatting" -> com.lucent.app.i18n.S.ccReadFormatting(s("title"))
             "move_note" -> com.lucent.app.i18n.S.ccMoveNote(s("title"), s("position"))
@@ -159,9 +167,9 @@ object FormattingTools {
         }
     }
 
-    fun editableArguments(name: String, args: JSONObject): List<AppTools.EditableArgument> {
+    fun editableArguments(name: String, args: JsonObject): List<AppTools.EditableArgument> {
         fun of(key: String, label: String, multiline: Boolean = false): AppTools.EditableArgument? =
-            args.optString(key, "").takeIf { it.isNotBlank() }
+            (args[key]?.jsonPrimitive?.contentOrNull ?: "").takeIf { it.isNotBlank() }
                 ?.let { AppTools.EditableArgument(key, label, it, multiline) }
         return when (name) {
             "format_note_text", "format_task_notes" -> listOfNotNull(
@@ -178,7 +186,7 @@ object FormattingTools {
         }
     }
 
-    suspend fun execute(db: AppDatabase, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    suspend fun execute(db: AppDatabase, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "format_note_text" -> formatNote(db, args)
         "format_task_notes" -> formatTaskNotes(db, args)
         "append_to_note" -> appendToNote(db, args)
@@ -209,13 +217,13 @@ object FormattingTools {
 
     private data class StyleRead(val error: ToolExecResult?, val styles: Styles?)
 
-    private fun readStyles(args: JSONObject): StyleRead {
-        val bold = if (args.has("bold")) args.optBoolean("bold") else null
-        val italic = if (args.has("italic")) args.optBoolean("italic") else null
-        val light = if (args.has("light")) args.optBoolean("light") else null
+    private fun readStyles(args: JsonObject): StyleRead {
+        val bold = if (args.containsKey("bold")) args["bold"]?.jsonPrimitive?.booleanOrNull ?: false else null
+        val italic = if (args.containsKey("italic")) args["italic"]?.jsonPrimitive?.booleanOrNull ?: false else null
+        val light = if (args.containsKey("light")) args["light"]?.jsonPrimitive?.booleanOrNull ?: false else null
         var highlight: Int? = null
-        if (args.has("highlight")) {
-            val raw = args.optString("highlight").trim().lowercase()
+        if (args.containsKey("highlight")) {
+            val raw = args["highlight"]?.jsonPrimitive?.contentOrNull.orEmpty().trim().lowercase()
             if (raw.isEmpty() || raw == "none") {
                 highlight = -1
             } else {
@@ -234,8 +242,8 @@ object FormattingTools {
             }
         }
         var size: Int? = null
-        if (args.has("size")) {
-            val raw = args.optString("size").trim().lowercase()
+        if (args.containsKey("size")) {
+            val raw = args["size"]?.jsonPrimitive?.contentOrNull.orEmpty().trim().lowercase()
             val index = SIZE_NAMES.indexOf(raw)
             if (index < 0) {
                 return StyleRead(
@@ -250,9 +258,9 @@ object FormattingTools {
             size = index
         }
         var colour: Int? = null
-        if (args.has("colour") || args.has("color")) {
-            val key = if (args.has("colour")) "colour" else "color"
-            val raw = args.optString(key).trim().lowercase()
+        if (args.containsKey("colour") || args.containsKey("color")) {
+            val key = if (args.containsKey("colour")) "colour" else "color"
+            val raw = args[key]?.jsonPrimitive?.contentOrNull.orEmpty().trim().lowercase()
             val index = TEXT_COLOUR_NAMES.indexOf(raw)
             if (index < 0) {
                 return StyleRead(
@@ -266,7 +274,7 @@ object FormattingTools {
             }
             colour = index
         }
-        val all = if (args.has("all")) args.optBoolean("all", true) else true
+        val all = if (args.containsKey("all")) args["all"]?.jsonPrimitive?.booleanOrNull ?: true else true
         return StyleRead(null, Styles(bold, italic, light, size, highlight, colour, all))
     }
 
@@ -334,9 +342,9 @@ object FormattingTools {
         return parts.joinToString(", ")
     }
 
-    private suspend fun formatNote(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val find = args.optString("find", "")
+    private suspend fun formatNote(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val find = args["find"]?.jsonPrimitive?.contentOrNull ?: ""
         val read = readStyles(args)
         read.error?.let { return it }
         val styles = read.styles ?: return ToolExecResult("No formatting was asked for.", success = false)
@@ -390,9 +398,9 @@ object FormattingTools {
         )
     }
 
-    private suspend fun formatTaskNotes(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val find = args.optString("find", "")
+    private suspend fun formatTaskNotes(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val find = args["find"]?.jsonPrimitive?.contentOrNull ?: ""
         val read = readStyles(args)
         read.error?.let { return it }
         val styles = read.styles ?: return ToolExecResult("No formatting was asked for.", success = false)
@@ -454,9 +462,9 @@ object FormattingTools {
         return "Styled parts (" + lines.size + "):\n" + lines.joinToString("\n")
     }
 
-    private suspend fun readFormatting(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val type = args.optString("item_type", args.optString("kind", args.optString("type", "")))
+    private suspend fun readFormatting(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val type = (args["item_type"]?.jsonPrimitive?.contentOrNull ?: (args["kind"]?.jsonPrimitive?.contentOrNull ?: (args["type"]?.jsonPrimitive?.contentOrNull ?: "")))
             .trim().lowercase()
         val wantNote = type != "task" && type != "tasks"
         val wantTask = type != "note" && type != "notes"
@@ -498,9 +506,9 @@ object FormattingTools {
         )
     }
 
-    private suspend fun appendToNote(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val text = args.optString("text", "")
+    private suspend fun appendToNote(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val text = args["text"]?.jsonPrimitive?.contentOrNull ?: ""
         if (text.isBlank()) {
             return ToolExecResult("There was no text to add, so the note is unchanged.", success = false)
         }
@@ -527,9 +535,9 @@ object FormattingTools {
         )
     }
 
-    private suspend fun appendToTaskNotes(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val text = args.optString("text", "")
+    private suspend fun appendToTaskNotes(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val text = args["text"]?.jsonPrimitive?.contentOrNull ?: ""
         if (text.isBlank()) {
             return ToolExecResult("There was no text to add, so the task is unchanged.", success = false)
         }
@@ -555,9 +563,9 @@ object FormattingTools {
         else -> "?"
     }
 
-    private suspend fun setNoteFormat(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val key = formatKey(args.optString("format", ""))
+    private suspend fun setNoteFormat(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val key = formatKey(args["format"]?.jsonPrimitive?.contentOrNull ?: "")
         if (key == "?") {
             return ToolExecResult(
                 "That isn't a format this app has. Use one of: auto, markdown, rich.",
@@ -575,9 +583,9 @@ object FormattingTools {
         return ToolExecResult("The note \"${note.title}\" now displays as $label.", openNoteId = note.id)
     }
 
-    private suspend fun setTaskFormat(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val key = formatKey(args.optString("format", ""))
+    private suspend fun setTaskFormat(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val key = formatKey(args["format"]?.jsonPrimitive?.contentOrNull ?: "")
         if (key == "?") {
             return ToolExecResult(
                 "That isn't a format this app has. Use one of: auto, markdown, rich.",
@@ -595,9 +603,9 @@ object FormattingTools {
         return ToolExecResult("The task \"${task.title}\" now displays its notes as $label.", openTaskId = task.id)
     }
 
-    private suspend fun setNoteHidden(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val hidden = args.optBoolean("hidden", true)
+    private suspend fun setNoteHidden(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val hidden = args["hidden"]?.jsonPrimitive?.booleanOrNull ?: true
         if (hidden) {
             val note = AppTools.resolveNote(AppTools.editableNotes(db), titleQuery)
                 ?: return AppTools.noteNotFound(db, titleQuery)
@@ -622,9 +630,9 @@ object FormattingTools {
         return ToolExecResult("The note \"${note.title}\" is back in the normal notes list.", openNoteId = note.id)
     }
 
-    private suspend fun setTaskHidden(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val hidden = args.optBoolean("hidden", true)
+    private suspend fun setTaskHidden(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val hidden = args["hidden"]?.jsonPrimitive?.booleanOrNull ?: true
         if (hidden) {
             val task = AppTools.resolveTask(AppTools.editableTasks(db), titleQuery)
                 ?: return AppTools.taskNotFound(db, titleQuery)
@@ -664,15 +672,15 @@ object FormattingTools {
         }
     }
 
-    private suspend fun moveNote(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val position = args.optString("position", "").trim().lowercase()
+    private suspend fun moveNote(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val position = (args["position"]?.jsonPrimitive?.contentOrNull ?: "").trim().lowercase()
         val note = AppTools.resolveNote(AppTools.editableNotes(db), titleQuery)
             ?: return AppTools.noteNotFound(db, titleQuery)
         val others = AppTools.activeNotes(db)
         val ordered = others.sortedBy { it.manualOrder }.map { it.id }
         val relative = if (position == "before" || position == "after") {
-            val query = args.optString("relative_to", "")
+            val query = args["relative_to"]?.jsonPrimitive?.contentOrNull ?: ""
             if (query.isBlank()) {
                 return ToolExecResult(
                     "\"$position\" needs relative_to — the title of the note it should sit next to.",
@@ -698,8 +706,8 @@ object FormattingTools {
         val where = when (position) {
             "top" -> "at the top"
             "bottom" -> "at the bottom"
-            "before" -> "just before \"${args.optString("relative_to")}\""
-            else -> "just after \"${args.optString("relative_to")}\""
+            "before" -> "just before \"${args["relative_to"]?.jsonPrimitive?.contentOrNull.orEmpty()}\""
+            else -> "just after \"${args["relative_to"]?.jsonPrimitive?.contentOrNull.orEmpty()}\""
         }
         return ToolExecResult(
             "Moved the note \"${note.title}\" $where of the manually ordered list. The order is used " +
@@ -708,15 +716,15 @@ object FormattingTools {
         )
     }
 
-    private suspend fun moveTask(db: AppDatabase, args: JSONObject): ToolExecResult {
-        val titleQuery = args.optString("title", "")
-        val position = args.optString("position", "").trim().lowercase()
+    private suspend fun moveTask(db: AppDatabase, args: JsonObject): ToolExecResult {
+        val titleQuery = args["title"]?.jsonPrimitive?.contentOrNull ?: ""
+        val position = (args["position"]?.jsonPrimitive?.contentOrNull ?: "").trim().lowercase()
         val task = AppTools.resolveTask(AppTools.editableTasks(db), titleQuery)
             ?: return AppTools.taskNotFound(db, titleQuery)
         val others = AppTools.activeTasks(db)
         val ordered = others.sortedBy { it.manualOrder }.map { it.id }
         val relative = if (position == "before" || position == "after") {
-            val query = args.optString("relative_to", "")
+            val query = args["relative_to"]?.jsonPrimitive?.contentOrNull ?: ""
             if (query.isBlank()) {
                 return ToolExecResult(
                     "\"$position\" needs relative_to — the title of the task it should sit next to.",
@@ -742,8 +750,8 @@ object FormattingTools {
         val where = when (position) {
             "top" -> "at the top"
             "bottom" -> "at the bottom"
-            "before" -> "just before \"${args.optString("relative_to")}\""
-            else -> "just after \"${args.optString("relative_to")}\""
+            "before" -> "just before \"${args["relative_to"]?.jsonPrimitive?.contentOrNull.orEmpty()}\""
+            else -> "just after \"${args["relative_to"]?.jsonPrimitive?.contentOrNull.orEmpty()}\""
         }
         return ToolExecResult(
             "Moved the task \"${task.title}\" $where of the manually ordered list. The order is used " +
