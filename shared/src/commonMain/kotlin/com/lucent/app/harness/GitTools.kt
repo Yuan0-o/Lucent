@@ -2,7 +2,11 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.buffer
+import okio.use
 
 fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
@@ -407,9 +411,9 @@ object GitTools : HarnessGroupTools {
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That repository is not reachable.", success = false)
         }
-        val command = "git -C ${quote(directory.path)} $arguments"
+        val command = "git -C ${quote(directory.toString())} $arguments"
         val outcome = try {
-            HarnessRuntime.runShell(command, directory.path, timeoutSeconds, HarnessRuntime.builtinOnlyEnv())
+            HarnessRuntime.runShell(command, directory.toString(), timeoutSeconds, HarnessRuntime.builtinOnlyEnv())
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (t: Throwable) {
@@ -426,10 +430,10 @@ object GitTools : HarnessGroupTools {
         return ToolExecResult(ctx.limit(body), success = outcome.ok && !outcome.timedOut)
     }
 
-    private fun repository(ctx: HarnessCtx, repo: String, arguments: String): File {
+    private fun repository(ctx: HarnessCtx, repo: String, arguments: String): Path {
         val clean = repo.trim()
-        if (clean.isEmpty()) return File(HarnessRuntime.workspacePath())
-        return if (readOnlyArguments(arguments)) Workspace.forReadFile(ctx, clean) else Workspace.forWriteFile(ctx, clean)
+        if (clean.isEmpty()) return HarnessRuntime.workspacePath().toPath()
+        return if (readOnlyArguments(arguments)) Workspace.forReadFile(ctx, clean).toString().toPath() else Workspace.forWriteFile(ctx, clean).toString().toPath()
     }
 
     private fun repoOf(args: JsonObject): String = (args["repo"]?.jsonPrimitive?.content ?: "").trim()
@@ -654,7 +658,7 @@ object GitTools : HarnessGroupTools {
         urlProblem(url)?.let { return ToolExecResult(it, success = false) }
         val raw = textOf(args, "directory")
         val directory = try {
-            if (raw.isEmpty()) "" else Workspace.forWriteFile(ctx, raw).path
+            if (raw.isEmpty()) "" else Workspace.forWriteFile(ctx, raw).toString()
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That directory is outside the workspace.", success = false)
         }
@@ -732,32 +736,32 @@ object GitTools : HarnessGroupTools {
     private suspend fun initRepo(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val raw = repoOf(args)
         val directory = try {
-            if (raw.isEmpty()) File(HarnessRuntime.workspacePath()) else Workspace.forWriteFile(ctx, raw)
+            if (raw.isEmpty()) HarnessRuntime.workspacePath().toPath() else Workspace.forWriteFile(ctx, raw).toString().toPath()
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That directory is outside the workspace.", success = false)
         }
-        if (!directory.exists()) directory.mkdirs()
-        if (File(directory, ".git").exists()) {
-            return ToolExecResult("${directory.path} is already a git repository.")
+        if (!FileSystem.SYSTEM.exists(directory)) FileSystem.SYSTEM.createDirectories(directory)
+        if (FileSystem.SYSTEM.exists(directory / ".git")) {
+            return ToolExecResult("${directory.toString()} is already a git repository.")
         }
-        return git(ctx, directory.path, "init")
+        return git(ctx, directory.toString(), "init")
     }
 
     private suspend fun applyPatch(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val patch = (args["patch"]?.jsonPrimitive?.content ?: "")
         if (patch.isBlank()) return ToolExecResult("There is no patch text to apply.", success = false)
         if (!HarnessRuntime.shellReady()) return ToolExecResult(SHELL_MESSAGE, success = false)
-        val file = File(HarnessRuntime.subDirPath("tmp"), "lucent-patch-${System.currentTimeMillis()}.patch")
+        val file = HarnessRuntime.subDirPath("tmp").toPath() / "lucent-patch-${System.currentTimeMillis()}.patch"
         return try {
-            file.writeText(patch)
+            FileSystem.SYSTEM.write(file) { writeUtf8(patch) }
             val reverse = if ((args["reverse"]?.jsonPrimitive?.booleanOrNull ?: false)) "-R " else ""
-            git(ctx, repoOf(args), "apply $reverse${quote(file.path)}")
+            git(ctx, repoOf(args), "apply $reverse${quote(file.toString())}")
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (t: Throwable) {
             ToolExecResult("The patch could not be applied: ${t.message ?: t::class.simpleName}", success = false)
         } finally {
-            file.delete()
+            FileSystem.SYSTEM.delete(file)
         }
     }
 }

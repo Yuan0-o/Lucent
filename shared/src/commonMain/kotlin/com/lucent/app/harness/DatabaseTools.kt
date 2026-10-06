@@ -2,7 +2,11 @@ package com.lucent.app.harness
 
 import com.lucent.app.network.ToolExecResult
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.buffer
+import okio.use
 
 object Csv {
 
@@ -145,9 +149,9 @@ object DatabaseTools : HarnessGroupTools {
         return null
     }
 
-    private fun database(ctx: HarnessCtx, args: JsonObject): File? =
+    private fun database(ctx: HarnessCtx, args: JsonObject): Path? =
         try {
-            Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+            Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toString().toPath()
         } catch (e: HarnessError) {
             null
         }
@@ -157,17 +161,17 @@ object DatabaseTools : HarnessGroupTools {
         if (sql.isEmpty()) return ToolExecResult("There is no query.", success = false)
         blocked(sql)?.let { return ToolExecResult(it, success = false) }
         val file = database(ctx, args) ?: return ToolExecResult("That database path cannot be used.", success = false)
-        if (!file.exists()) return ToolExecResult("${Workspace.display(ctx, file)} does not exist.", success = false)
+        if (!FileSystem.SYSTEM.exists(file)) return ToolExecResult("${Workspace.display(ctx, file.toString())} does not exist.", success = false)
         val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: 200).coerceIn(1, 5000)
         val host = HarnessRuntime.host
         if (host != null && host.availableSqlite()) {
-            return ToolExecResult(ctx.limit(host.sqliteQuery(file.path, sql, limit)))
+            return ToolExecResult(ctx.limit(host.sqliteQuery(file.toString(), sql, limit)))
         }
         if (!HarnessRuntime.shellReady()) {
             return ToolExecResult("No SQLite engine is available on this build.", success = false)
         }
         val outcome = HarnessRuntime.runShell(
-            "sqlite3 -readonly -header -csv " + Csv.quote(file.path) + " " + Csv.quote(sql),
+            "sqlite3 -readonly -header -csv " + Csv.quote(file.toString()) + " " + Csv.quote(sql),
             null,
             120,
             HarnessRuntime.builtinOnlyEnv()
@@ -180,18 +184,18 @@ object DatabaseTools : HarnessGroupTools {
         if (sql.isEmpty()) return ToolExecResult("There is no statement.", success = false)
         blocked(sql)?.let { return ToolExecResult(it, success = false) }
         val file = database(ctx, args) ?: return ToolExecResult("That database path cannot be used.", success = false)
-        if (file.exists() && ctx.config.snapshots) Snapshots.capture(ctx, file)
+        if (FileSystem.SYSTEM.exists(file) && ctx.config.snapshots) Snapshots.capture(ctx, file.toString())
         val host = HarnessRuntime.host
         val answer = if (host != null && host.availableSqlite()) {
-            host.sqliteExec(file.path, sql)
+            host.sqliteExec(file.toString(), sql)
         } else if (HarnessRuntime.shellReady()) {
-            HarnessRuntime.runShell("sqlite3 " + Csv.quote(file.path) + " " + Csv.quote(sql), null, 120, HarnessRuntime.builtinOnlyEnv()).text
+            HarnessRuntime.runShell("sqlite3 " + Csv.quote(file.toString()) + " " + Csv.quote(sql), null, 120, HarnessRuntime.builtinOnlyEnv()).text
         } else {
             return ToolExecResult("No SQLite engine is available on this build.", success = false)
         }
         val failed = answer.startsWith("sqlite error") || answer.startsWith("Error")
         return ToolExecResult(
-            "$answer\n${Workspace.display(ctx, file)} is now ${Workspace.humanSize(file.size)}.",
+            "$answer\n${Workspace.display(ctx, file.toString())} is now ${Workspace.humanSize((FileSystem.SYSTEM.metadata(file).size ?: -1))}.",
             success = !failed
         )
     }
@@ -210,11 +214,11 @@ object DatabaseTools : HarnessGroupTools {
             (args["csv_text"]?.jsonPrimitive?.content ?: "").isNotBlank() -> (args["csv_text"]?.jsonPrimitive?.content ?: "")
             (args["csv_path"]?.jsonPrimitive?.content ?: "").isNotBlank() -> {
                 val source = try {
-                    Workspace.forReadFile(ctx, (args["csv_path"]?.jsonPrimitive?.content ?: ""))
+                    Workspace.forReadFile(ctx, (args["csv_path"]?.jsonPrimitive?.content ?: "")).toString().toPath()
                 } catch (e: HarnessError) {
                     return ToolExecResult(e.message ?: "That CSV cannot be read", success = false)
                 }
-                source.readText()
+                FileSystem.SYSTEM.read(source) { readUtf8() }
             }
             else -> return ToolExecResult("Give me csv_path or csv_text.", success = false)
         }
@@ -266,18 +270,18 @@ object DatabaseTools : HarnessGroupTools {
         val result = query(ctx, buildJsonObject { put("path", JsonPrimitive((args["path"]?.jsonPrimitive?.content ?: ""))); put("sql", JsonPrimitive(sql)); put("limit", JsonPrimitive(100000)) })
         if (!result.success) return result
         val dbFile = database(ctx, args) ?: return ToolExecResult("That path cannot be used.", success = false)
-        val out = if ((args["out"]?.jsonPrimitive?.content ?: "").isNotBlank()) File((args["out"]?.jsonPrimitive?.content ?: ""))
-        else File(dbFile.parentFile, dbFile.nameWithoutExtension + "-export.csv")
-        out.parentFile?.mkdirs()
-        out.writeText(result.summary)
-        return ToolExecResult("Wrote ${out.name} (${Workspace.humanSize(out.size)}).")
+        val out = if ((args["out"]?.jsonPrimitive?.content ?: "").isNotBlank()) (args["out"]?.jsonPrimitive?.content ?: "").toPath()
+        else dbFile.parent!! / (dbFile.name.substringBeforeLast(".") + "-export.csv")
+        out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+        FileSystem.SYSTEM.write(out) { writeUtf8(result.summary) }
+        return ToolExecResult("Wrote ${out.name} (${Workspace.humanSize((FileSystem.SYSTEM.metadata(out).size ?: -1))}).")
     }
 
     private fun analyse(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val csvText = when {
             (args["csv_text"]?.jsonPrimitive?.content ?: "").isNotBlank() -> (args["csv_text"]?.jsonPrimitive?.content ?: "")
             (args["path"]?.jsonPrimitive?.content ?: "").isNotBlank() -> try {
-                Workspace.readText(Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: "")))
+                Workspace.readText(Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toString())
             } catch (e: HarnessError) {
                 return ToolExecResult(e.message ?: "That file cannot be read", success = false)
             }

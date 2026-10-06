@@ -5,7 +5,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.buffer
+import okio.use
 import kotlin.time.Duration.Companion.seconds
 
 object HtmlText {
@@ -220,16 +224,16 @@ object BrowserTools : HarnessGroupTools {
         if (!valid(url)) return ToolExecResult("Give me an http or https url.", success = false)
         val target = if ((args["path"]?.jsonPrimitive?.content ?: "").isBlank()) {
             val name = url.substringAfterLast('/').substringBefore('?').ifBlank { "download.bin" }
-            Workspace.forWriteFile(ctx, name)
+            Workspace.forWriteFile(ctx, name).toString().toPath()
         } else {
             try {
-                Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
+                Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: "")).toString().toPath()
             } catch (e: HarnessError) {
                 return ToolExecResult(e.message ?: "That path cannot be written", success = false)
             }
         }
-        if (target.exists() && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
-            return ToolExecResult("${Workspace.display(ctx, target)} already exists.", success = false)
+        if (FileSystem.SYSTEM.exists(target) && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
+            return ToolExecResult("${Workspace.display(ctx, target.toString())} already exists.", success = false)
         }
         return try {
             val request = Request.Builder().url(url).header("User-Agent", AGENT).build()
@@ -239,10 +243,10 @@ object BrowserTools : HarnessGroupTools {
                 if (length > 512L * 1024 * 1024) {
                     return ToolExecResult("That file is larger than 512 MiB; not downloading it.", success = false)
                 }
-                target.parentFile?.mkdirs()
-                body.byteStream().use { input -> target.outputStream().use { output -> input.copyTo(output) } }
+                target.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
+                body.byteStream().use { input -> FileSystem.SYSTEM.sink(target).buffer().outputStream().use { output -> input.copyTo(output) } }
                 ToolExecResult(
-                    "Downloaded ${Workspace.display(ctx, target)} (${Workspace.humanSize(target.size)}, " +
+                    "Downloaded ${Workspace.display(ctx, target.toString())} (${Workspace.humanSize(FileSystem.SYSTEM.metadata(target).size ?: -1)}, " +
                         "${response.header("Content-Type", "unknown type")})."
                 )
             }

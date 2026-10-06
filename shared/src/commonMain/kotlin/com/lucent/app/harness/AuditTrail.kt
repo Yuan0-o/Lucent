@@ -5,7 +5,11 @@ import com.lucent.app.platform.PlatformContext
 import com.lucent.app.AppScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.buffer
+import okio.use
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -31,15 +35,15 @@ object AuditTrail {
 
     private val lock = Any()
 
-    fun file(context: PlatformContext): File {
-        val dir = File(baseDir(context), "harness")
-        if (!dir.exists()) dir.mkdirs()
-        return File(dir, FILE_NAME)
+    fun file(context: PlatformContext): Path {
+        val dir = baseDir(context) / "harness"
+        if (!FileSystem.SYSTEM.exists(dir)) FileSystem.SYSTEM.createDirectories(dir)
+        return dir / FILE_NAME
     }
 
-    private fun baseDir(context: PlatformContext): File =
-        runCatching { File(HarnessRuntime.filesDirPath()) }.getOrNull()
-            ?: File(System.getProperty("java.io.tmpdir"), "lucent-audit")
+    private fun baseDir(context: PlatformContext): Path =
+        runCatching { HarnessRuntime.filesDirPath().toPath() }.getOrNull()
+            ?: System.getProperty("java.io.tmpdir").toPath() / "lucent-audit"
 
     fun record(context: PlatformContext?, entry: AuditEntry) {
         val app = context ?: return
@@ -59,10 +63,10 @@ object AuditTrail {
             synchronized(lock) {
                 try {
                     val target = file(app)
-                    target.appendText(line + "\n")
-                    if (target.length() > MAX_BYTES) {
-                        val kept = target.readText().takeLast(KEEP_BYTES)
-                        target.writeText(kept.substringAfter("\n", kept))
+                    FileSystem.SYSTEM.write(target, mustExist = false) { }; FileSystem.SYSTEM.appendingSink(target).buffer().use { it.writeUtf8(line + "\n") }
+                    if ((FileSystem.SYSTEM.metadata(target).size ?: -1) > MAX_BYTES) {
+                        val kept = FileSystem.SYSTEM.read(target) { readUtf8() }.takeLast(KEEP_BYTES)
+                        FileSystem.SYSTEM.write(target) { writeUtf8(kept.substringAfter("\n", kept)) }
                     }
                 } catch (_: Throwable) {
                 }
@@ -72,16 +76,16 @@ object AuditTrail {
 
     fun entries(context: PlatformContext, limit: Int = 200): List<AuditEntry> {
         val target = file(context)
-        if (!target.exists()) return emptyList()
+        if (!FileSystem.SYSTEM.exists(target)) return emptyList()
         val lines = synchronized(lock) {
-            try { target.readLines() } catch (e: Exception) { emptyList() }
+            try { FileSystem.SYSTEM.read(target) { readUtf8() }.lines() } catch (e: Exception) { emptyList() }
         }
         return lines.asReversed().take(limit).mapNotNull { parse(it) }
     }
 
     fun clear(context: PlatformContext) {
         synchronized(lock) {
-            try { file(context).writeText("") } catch (_: Throwable) {
+            try { FileSystem.SYSTEM.write(file(context)) { writeUtf8("") } } catch (_: Throwable) {
             }
         }
     }

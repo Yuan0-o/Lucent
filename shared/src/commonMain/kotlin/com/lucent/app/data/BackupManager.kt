@@ -126,7 +126,7 @@ object BackupManager {
 
         val harnessFiles: List<Pair<String, java.io.File>> =
             if (BackupModule.HARNESS in modules) {
-                HarnessBackup.useHome { HarnessBackup.listFiles() }
+                HarnessBackup.useHome { HarnessBackup.listFiles().map { it.first to java.io.File(it.second.toString()) } }
             } else emptyList()
 
         val blobs = modelFiles + fontFiles + harnessFiles

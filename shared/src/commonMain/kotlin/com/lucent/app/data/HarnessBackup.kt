@@ -2,19 +2,23 @@ package com.lucent.app.data
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.harness.HarnessRuntime
-import java.io.File
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.buffer
+import okio.use
 import kotlin.concurrent.Volatile
 
 internal object HarnessBackup {
 
     const val MAX_NAME_BYTES = BackupFrames.MAX_BLOB_NAME_BYTES
 
-    @Volatile private var activeHome: File? = null
+    @Volatile private var activeHome: Path? = null
 
-    fun home(): File = activeHome ?: File(HarnessRuntime.homePath())
+    fun home(): Path = activeHome ?: HarnessRuntime.homePath().toPath()
 
-    fun begin(): File {
-        val dir = File(HarnessRuntime.homePath())
+    fun begin(): Path {
+        val dir = HarnessRuntime.homePath().toPath()
         activeHome = dir
         return dir
     }
@@ -32,11 +36,11 @@ internal object HarnessBackup {
         }
     }
 
-    fun listFiles(): List<Pair<String, File>> {
+    fun listFiles(): List<Pair<String, Path>> {
         begin()
         try {
             val base = home()
-            val files = mutableListOf<Pair<File, String>>()
+            val files = mutableListOf<Pair<Path, String>>()
             collect(base, base, files)
             files.sortBy { it.second }
             return files.map { (file, rel) -> blobName(rel) to file }
@@ -52,7 +56,7 @@ internal object HarnessBackup {
         var total = 0L
         for ((_, file) in files) {
             total += try {
-                file.length()
+                (FileSystem.SYSTEM.metadata(file).size ?: -1)
             } catch (_: Throwable) {
                 0L
             }
@@ -60,18 +64,18 @@ internal object HarnessBackup {
         return files.size to total
     }
 
-    private fun collect(root: File, dir: File, out: MutableList<Pair<File, String>>) {
+    private fun collect(root: Path, dir: Path, out: MutableList<Pair<Path, String>>) {
         val children = try {
-            dir.listFiles() ?: return
+            FileSystem.SYSTEM.list(dir)
         } catch (_: Throwable) {
             return
         }
-        children.sortBy { it.name }
-        for (child in children) {
-            if (child.isDirectory) {
+        val sorted = children.sortedBy { it.name }
+        for (child in sorted) {
+            if (FileSystem.SYSTEM.metadata(child).isDirectory == true) {
                 collect(root, child, out)
-            } else if (child.isFile) {
-                val rel = child.absolutePath.removePrefix(root.absolutePath).replace(File.separatorChar, '/')
+            } else if (FileSystem.SYSTEM.metadata(child).isRegularFile == true) {
+                val rel = child.toString().removePrefix(root.toString()).replace('\\', '/')
                     .trimStart('/')
                 if (rel.isNotEmpty()) out.add(child to rel)
             }
@@ -90,15 +94,15 @@ internal object HarnessBackup {
         return trimmed
     }
 
-    fun prepareRestoreTarget(name: String): File {
+    fun prepareRestoreTarget(name: String): Path {
         val rel = relativePath(name) ?: throw IllegalArgumentException("Unsafe harness entry: $name")
         val base = home()
-        val target = File(base, rel)
-        val rootPath = base.absolutePath.trimEnd(File.separatorChar) + File.separator
-        if (!target.absolutePath.startsWith(rootPath)) {
+        val target = base / rel
+        val rootPath = base.toString().trimEnd('/', '\\') + okio.Path.DIRECTORY_SEPARATOR
+        if (!target.toString().startsWith(rootPath)) {
             throw IllegalArgumentException("Unsafe harness entry: $name")
         }
-        target.parentFile?.let { if (!it.exists()) it.mkdirs() }
+        target.parent?.let { if (!FileSystem.SYSTEM.exists(it)) FileSystem.SYSTEM.createDirectories(it) }
         return target
     }
 
@@ -117,13 +121,13 @@ internal object HarnessBackup {
             record(context, name, "unsafe entry name")
             return false
         }
-        var tmp: File? = null
+        var tmp: Path? = null
         var out: java.io.OutputStream? = null
         var written = 0L
         try {
-            val tmpFile = File(target.absolutePath + ".tmp")
+            val tmpFile = (target.toString() + ".tmp").toPath()
             tmp = tmpFile
-            val os = tmpFile.outputStream()
+            val os = FileSystem.SYSTEM.sink(tmpFile).buffer().outputStream()
             out = os
             while (written < dataLen) {
                 BackupFrames.throwIfCancelled(cancelled)
@@ -134,15 +138,15 @@ internal object HarnessBackup {
             }
             os.close()
             out = null
-            if (target.exists()) target.delete()
-            if (tmpFile.renameTo(target)) return true
-            tmpFile.delete()
+            if (FileSystem.SYSTEM.exists(target)) FileSystem.SYSTEM.delete(target)
+            try { FileSystem.SYSTEM.atomicMove(tmpFile, target); return true } catch (_: Throwable) {}
+            FileSystem.SYSTEM.delete(tmpFile)
             record(context, name, "file could not be placed")
             return false
         } catch (t: Throwable) {
             try { out?.close() } catch (_: Throwable) {
             }
-            tmp?.delete()
+            tmp?.let { FileSystem.SYSTEM.delete(it) }
             if (t is kotlinx.coroutines.CancellationException) throw t
             if (t is java.io.EOFException) throw t
             skipRemaining(data, dataLen - written, scratch, cancelled)
