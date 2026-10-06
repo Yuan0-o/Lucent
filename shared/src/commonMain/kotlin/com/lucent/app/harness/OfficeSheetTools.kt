@@ -1,10 +1,8 @@
 package com.lucent.app.harness
 
 import com.lucent.app.harness.ooxml.Xlsx
-import com.lucent.app.harness.ooxml.stringOf
 import com.lucent.app.network.ToolExecResult
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 
 object OfficeSheetTools : HarnessGroupTools {
@@ -70,7 +68,7 @@ object OfficeSheetTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? {
         return try {
             when (name) {
                 "create_spreadsheet" -> createSpreadsheet(ctx, args)
@@ -91,8 +89,8 @@ object OfficeSheetTools : HarnessGroupTools {
         }
     }
 
-    private fun createSpreadsheet(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
+    private fun createSpreadsheet(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -105,18 +103,18 @@ object OfficeSheetTools : HarnessGroupTools {
         )
     }
 
-    private fun readSpreadsheet(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forReadFile(ctx, stringOf(args, "path"))
+    private fun readSpreadsheet(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
-        val maxRows = args.optInt("max_rows", 200).coerceIn(1, 5000)
-        val text = Xlsx.read(file, stringOf(args, "sheet"), stringOf(args, "range"), maxRows)
+        val maxRows = (args["max_rows"]?.jsonPrimitive?.intOrNull ?: 200).coerceIn(1, 5000)
+        val text = Xlsx.read(file, (args["sheet"]?.jsonPrimitive?.content ?: ""), (args["range"]?.jsonPrimitive?.content ?: ""), maxRows)
         return ToolExecResult(text)
     }
 
-    private fun editSpreadsheet(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
+    private fun editSpreadsheet(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -131,19 +129,19 @@ object OfficeSheetTools : HarnessGroupTools {
         )
     }
 
-    private fun exportCsv(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val source = Workspace.forReadFile(ctx, stringOf(args, "path"))
+    private fun exportCsv(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val source = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
         if (source.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, source)} is a directory, not an .xlsx file.", success = false)
         }
-        val declared = stringOf(args, "out")
+        val declared = (args["out"]?.jsonPrimitive?.content ?: "")
         val target = if (declared.isBlank()) {
             val sibling = File(source.parentFile ?: ctx.workspace, source.nameWithoutExtension + ".csv")
             Workspace.forWriteFile(ctx, sibling.path)
         } else {
             Workspace.forWriteFile(ctx, declared)
         }
-        val csv = Xlsx.csvOut(source, stringOf(args, "sheet"))
+        val csv = Xlsx.csvOut(source, (args["sheet"]?.jsonPrimitive?.content ?: ""))
         Workspace.writeText(ctx, target, csv)
         val rows = if (csv.isEmpty()) 0 else csv.count { it == '\n' } + 1
         return ToolExecResult(
@@ -152,16 +150,16 @@ object OfficeSheetTools : HarnessGroupTools {
         )
     }
 
-    private fun importCsv(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val file = Workspace.forWriteFile(ctx, stringOf(args, "path"))
+    private fun importCsv(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
         if (file.isDirectory) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
-        val text = stringOf(args, "csv_text")
+        val text = (args["csv_text"]?.jsonPrimitive?.content ?: "")
         val csv = if (text.isNotBlank()) {
             text
         } else {
-            val declared = stringOf(args, "csv_path")
+            val declared = (args["csv_path"]?.jsonPrimitive?.content ?: "")
             if (declared.isBlank()) {
                 throw IllegalArgumentException("Give the CSV either as \"csv_text\" or as a file in \"csv_path\".")
             }
@@ -170,28 +168,28 @@ object OfficeSheetTools : HarnessGroupTools {
             Workspace.readText(source, 4 * 1024 * 1024)
         }
         if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
-        val detail = Xlsx.csvIn(file, csv, stringOf(args, "sheet"), stringOf(args, "start_cell", "A1"))
+        val detail = Xlsx.csvIn(file, csv, (args["sheet"]?.jsonPrimitive?.content ?: ""), (args["start_cell"]?.jsonPrimitive?.content ?: "A1"))
         return ToolExecResult(
             "Updated ${Workspace.display(ctx, file)} (${Workspace.humanSize(file.length())}): $detail."
         )
     }
 
-    private fun spreadsheetSpec(args: JSONObject): String {
-        val raw = args.opt("spec")
+    private fun spreadsheetSpec(args: JsonObject): String {
+        val raw = args["spec"]
         val spec = when (raw) {
-            is JSONObject -> raw
-            is String -> if (raw.isBlank()) {
+            is JsonObject -> raw
+            is JsonPrimitive -> if (raw.content.isBlank()) {
                 null
             } else {
                 try {
-                    JSONObject(raw)
+                    Json.parseToJsonElement(raw.content).jsonObject
                 } catch (e: Exception) {
                     throw IllegalArgumentException("The \"spec\" argument is not valid JSON: ${e.message ?: "parse error"}")
                 }
             }
             else -> null
         } ?: throw IllegalArgumentException("Give the workbook spec in \"spec\" with a \"sheets\" array.")
-        if (!spec.has("sheets")) {
+        if (!spec.containsKey("sheets")) {
             throw IllegalArgumentException(
                 "The \"spec\" needs a \"sheets\" array, for example {\"sheets\":[{\"name\":\"Sheet1\",\"rows\":[[1,2]]}]}."
             )
@@ -199,23 +197,23 @@ object OfficeSheetTools : HarnessGroupTools {
         return spec.toString()
     }
 
-    private fun operations(args: JSONObject): String {
-        val raw = args.opt("ops")
+    private fun operations(args: JsonObject): String {
+        val raw = args["ops"]
         val array = when (raw) {
-            is JSONArray -> raw
-            is JSONObject -> JSONArray().put(raw)
-            is String -> if (raw.isBlank()) JSONArray() else operationsFromText(raw)
-            else -> JSONArray()
+            is JsonArray -> raw
+            is JsonObject -> buildJsonArray { add(raw) }
+            is JsonPrimitive -> if (raw.content.isBlank()) buildJsonArray {} else operationsFromText(raw.content)
+            else -> buildJsonArray {}
         }
-        if (array.length() == 0) throw IllegalArgumentException("Give at least one edit operation in \"ops\".")
+        if (array.size == 0) throw IllegalArgumentException("Give at least one edit operation in \"ops\".")
         return array.toString()
     }
 
-    private fun operationsFromText(text: String): JSONArray = try {
-        JSONArray(text)
+    private fun operationsFromText(text: String): JsonArray = try {
+        Json.parseToJsonElement(text).jsonArray
     } catch (e: Exception) {
         try {
-            JSONArray().put(JSONObject(text))
+            buildJsonArray { add(Json.parseToJsonElement(text).jsonObject) }
         } catch (e2: Exception) {
             throw IllegalArgumentException("The \"ops\" argument is not valid JSON: ${e.message ?: "parse error"}")
         }
