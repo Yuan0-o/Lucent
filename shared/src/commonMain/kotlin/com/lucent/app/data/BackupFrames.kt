@@ -1,5 +1,8 @@
 package com.lucent.app.data
 
+import okio.buffer
+import okio.source
+
 import com.lucent.app.platform.PlatformContext
 
 import kotlinx.coroutines.CancellationException
@@ -108,7 +111,7 @@ object BackupFrames {
             }
             val header = BackupCrypto.readHeader(head)
                 ?: throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
-            return BackupCrypto.decryptingStream(raw, header, password)
+            return BackupCrypto.decryptingSource(okio.source(raw), header, password).buffer().inputStream()
         } catch (t: Throwable) {
             try { raw.close() } catch (_: Throwable) {}
             throw t

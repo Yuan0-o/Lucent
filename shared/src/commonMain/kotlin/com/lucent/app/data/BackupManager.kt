@@ -129,29 +129,7 @@ object BackupManager {
             } else emptyList()
 
         val blobs = modelFiles + fontFiles + harnessFiles
-        val outAdapter = object : java.io.OutputStream() {
-            override fun write(b: Int) {
-                val buf = okio.Buffer()
-                buf.writeByte(b)
-                out.write(buf, 1)
-            }
-            override fun write(b: ByteArray, off: Int, len: Int) {
-                val buf = okio.Buffer()
-                buf.write(b, off, len)
-                out.write(buf, len.toLong())
-            }
-            override fun flush() = out.flush()
-            override fun close() = out.close()
-        }
-        BackupCrypto.encryptingStream(outAdapter, password).use { cipherOutOs ->
-            val cipherOut = object : okio.Sink {
-                override fun write(source: okio.Buffer, byteCount: Long) {
-                    cipherOutOs.write(source.readByteArray(byteCount))
-                }
-                override fun flush() = cipherOutOs.flush()
-                override fun timeout() = okio.Timeout.NONE
-                override fun close() = cipherOutOs.close()
-            }.buffer()
+        BackupCrypto.encryptingSink(out, password).buffer().use { cipherOut ->
             if (blobs.isEmpty()) {
                 cipherOut.write(jsonBytes)
                 cipherOut.flush()

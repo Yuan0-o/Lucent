@@ -1,18 +1,14 @@
 package com.lucent.app.data
 
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.io.InputStream
-import java.io.OutputStream
-import java.security.SecureRandom
-import javax.crypto.SecretKey
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
+import okio.Buffer
+import okio.IOException
+import okio.Sink
+import okio.Source
+import okio.buffer
 
 object BackupCrypto {
 
-    private val MAGIC = "LCNTBAK1".toByteArray(Charsets.US_ASCII)
+    private val MAGIC = "LCNTBAK1".encodeToByteArray()
 
     private const val VERSION: Byte = 1
     private const val VERSION_WITH_RECOVERY: Byte = 2
@@ -26,8 +22,6 @@ object BackupCrypto {
     private const val APP_KEY_ITERATIONS = 10_000
 
     private val APP_PASSPHRASE = "Lucent-backup-passphrase-v2".toCharArray()
-
-    private val random = SecureRandom()
 
     enum class Mode(val id: Byte) {
         APP_KEY(0),
@@ -93,22 +87,16 @@ object BackupCrypto {
         p += 4
         if (envLen < 0 || bytes.size < p + envLen) return null
         val envelope = if (envLen == 0) null else BackupRecovery.fromJson(
-            String(bytes.copyOfRange(p, p + envLen), Charsets.UTF_8)
+            bytes.copyOfRange(p, p + envLen).decodeToString()
         )
         return Header(mode, iterations, salt, envelope, p + envLen)
     }
 
-
-    private fun deriveKey(passphrase: CharArray, salt: ByteArray, iterations: Int): SecretKey {
-        com.lucent.app.nativebridge.LucentNative
-            .pbkdf2Sha256(passphrase, salt, iterations, KEY_BITS / 8)
-            ?.let { return SecretKeySpec(it, "AES") }
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(passphrase, salt, iterations, KEY_BITS)
-        return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
+    private fun deriveKey(passphrase: CharArray, salt: ByteArray, iterations: Int): ByteArray {
+        return pbkdf2Sha256(passphrase, salt, iterations, KEY_BITS)
     }
 
-    private fun keyFor(header: Header, password: String?): SecretKey = when (header.mode) {
+    private fun keyFor(header: Header, password: String?): ByteArray = when (header.mode) {
         Mode.APP_KEY -> deriveKey(APP_PASSPHRASE, header.salt, header.iterations)
         Mode.PASSWORD -> {
             require(!password.isNullOrEmpty()) { "This backup needs a password" }
@@ -117,35 +105,33 @@ object BackupCrypto {
     }
 
 
-    fun encryptingStream(
-        out: OutputStream,
+    fun encryptingSink(
+        sink: Sink,
         password: String?,
         recovery: BackupRecovery.Envelope? = null
-    ): OutputStream {
+    ): Sink {
         val usePassword = !password.isNullOrEmpty()
         val mode = if (usePassword) Mode.PASSWORD else Mode.APP_KEY
         val iterations = if (usePassword) PASSWORD_ITERATIONS else APP_KEY_ITERATIONS
-        val salt = ByteArray(SALT_LEN).also { random.nextBytes(it) }
+        val salt = secureRandomBytes(SALT_LEN)
         val envelope = if (usePassword) recovery else null
         val envelopeBytes = envelope
-            ?.let { BackupRecovery.toJson(it).toByteArray(Charsets.UTF_8) }
+            ?.let { BackupRecovery.toJson(it).encodeToByteArray() }
 
-        out.write(MAGIC)
-        out.write(if (envelopeBytes != null) VERSION_WITH_RECOVERY.toInt() else VERSION.toInt())
-        out.write(mode.id.toInt())
-        out.write(iterations ushr 24)
-        out.write(iterations ushr 16)
-        out.write(iterations ushr 8)
-        out.write(iterations)
-        out.write(salt)
+        val buffered = sink.buffer()
+        buffered.write(MAGIC)
+        buffered.writeByte(if (envelopeBytes != null) VERSION_WITH_RECOVERY.toInt() else VERSION.toInt())
+        buffered.writeByte(mode.id.toInt())
+        buffered.writeInt(iterations)
+        buffered.write(salt)
         if (envelopeBytes != null) {
-            val n = envelopeBytes.size
-            out.write(n ushr 24); out.write(n ushr 16); out.write(n ushr 8); out.write(n)
-            out.write(envelopeBytes)
+            buffered.writeInt(envelopeBytes.size)
+            buffered.write(envelopeBytes)
         }
+        buffered.flush()
 
         val key = keyFor(Header(mode, iterations, salt), password)
-        return FileCrypto.encryptingStream(out, key)
+        return FileCrypto.encryptingSink(sink, key)
     }
 
     fun encrypt(
@@ -153,9 +139,9 @@ object BackupCrypto {
         password: String?,
         recovery: BackupRecovery.Envelope? = null
     ): ByteArray {
-        val buffer = ByteArrayOutputStream(payload.size + 128)
-        encryptingStream(buffer, password, recovery).use { it.write(payload) }
-        return buffer.toByteArray()
+        val buffer = Buffer()
+        encryptingSink(buffer, password, recovery).buffer().use { it.write(payload) }
+        return buffer.readByteArray()
     }
 
 
@@ -164,24 +150,19 @@ object BackupCrypto {
         if (header.needsPassword && password.isNullOrEmpty()) throw WrongPasswordException()
 
         val key = keyFor(header, password)
-        val body = bytes.inputStream()
-        var skipped = 0L
-        while (skipped < header.byteLength) {
-            val n = body.skip(header.byteLength - skipped)
-            if (n <= 0) throw IOException("Backup file is truncated")
-            skipped += n
-        }
+        val sourceBuffer = Buffer().write(bytes)
+        sourceBuffer.skip(header.byteLength.toLong())
 
         return try {
-            FileCrypto.decryptingStream(body, key).use { it.readBytes() }
+            FileCrypto.decryptingSource(sourceBuffer, key).buffer().use { it.readByteArray() }
         } catch (t: Throwable) {
             if (header.needsPassword) throw WrongPasswordException() else throw IOException("Backup file is damaged", t)
         }
     }
 
-    fun decryptingStream(input: InputStream, header: Header, password: String?): InputStream {
+    fun decryptingSource(source: Source, header: Header, password: String?): Source {
         if (header.needsPassword && password.isNullOrEmpty()) throw WrongPasswordException()
-        return FileCrypto.decryptingStream(input, keyFor(header, password))
+        return FileCrypto.decryptingSource(source, keyFor(header, password))
     }
 
     class WrongPasswordException : IOException("Wrong backup password")
