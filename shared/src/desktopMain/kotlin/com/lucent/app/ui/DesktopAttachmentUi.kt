@@ -181,7 +181,7 @@ fun iconForAttachment(att: Attachment) = when {
 }
 
 @Composable
-fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
+actual fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
     val context = desktopPlatformContext
     return remember {
         { att ->
