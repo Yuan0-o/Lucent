@@ -127,16 +127,16 @@ internal object HarnessBackup {
         try {
             val tmpFile = (target.toString() + ".tmp").toPath()
             tmp = tmpFile
-            val os = FileSystem.SYSTEM.sink(tmpFile).buffer().outputStream()
-            out = os
+            out = FileSystem.SYSTEM.sink(tmpFile)
+            
             while (written < dataLen) {
                 BackupFrames.throwIfCancelled(cancelled)
                 val n = data.read(scratch, 0, minOf(dataLen - written, scratch.size.toLong()).toInt())
                 if (n < 0) throw okio.EOFException("Backup payload ended early")
-                os.write(scratch, 0, n)
+                out.write(scratch, 0, n)
                 written += n
             }
-            os.close()
+            out.close()
             out = null
             if (FileSystem.SYSTEM.exists(target)) FileSystem.SYSTEM.delete(target)
             try { FileSystem.SYSTEM.atomicMove(tmpFile, target); return true } catch (_: Throwable) {}

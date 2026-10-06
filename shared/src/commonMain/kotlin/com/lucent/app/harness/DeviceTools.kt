@@ -172,7 +172,7 @@ object DeviceTools : HarnessGroupTools {
         val array = args["options"]?.jsonArray
         if (array != null) {
             for (i in 0 until array.size) {
-                val value = array.optString(i, "")
+                val value = array[i].jsonPrimitive.content
                 if (value.isNotBlank()) options.add(value)
             }
         }
@@ -187,7 +187,7 @@ object DeviceTools : HarnessGroupTools {
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That path cannot be read", success = false)
         }
-        return if (host.exportFile(file.path)) ToolExecResult("Exported ${Workspace.display(ctx, file)} to Downloads.")
+        return if (host.exportFile(file.toString())) ToolExecResult("Exported ${Workspace.display(ctx, file)} to Downloads.")
         else ToolExecResult("The file could not be exported.", success = false)
     }
 

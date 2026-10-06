@@ -106,7 +106,7 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
         const val GLOBAL_TEXT_SELECTION_ENABLED_ENC = "global_text_selection_enabled_enc"
     }
 
-    private val file: File get() = File(context.applicationContext.filesDir, "lucent_settings.json")
+    private val file: File get() = (context.applicationContext.filesDir / "lucent_settings.json")
 
     companion object {
         private val state = MutableStateFlow<Map<String, Any>>(emptyMap())
@@ -119,7 +119,7 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
     }
 
     private fun ensureLoaded() {
-        val path = file.absolutePath
+        val path = file.toString()
         if (loadedFrom == path) return
         synchronized(DesktopSettingsRepository::class.java) {
             if (loadedFrom == path) return
@@ -129,7 +129,7 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
     }
 
     private fun readFile(): Map<String, Any> = try {
-        if (!file.exists()) emptyMap() else {
+        if (!okio.FileSystem.SYSTEM.exists(file)) emptyMap() else {
             val obj = JSONObject(file.readText())
             buildMap {
                 obj.keys().forEach { k ->
@@ -148,11 +148,11 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
         try {
             val obj = JSONObject()
             values.forEach { (k, v) -> obj.put(k, v) }
-            file.parentFile?.mkdirs()
-            val tmp = File(file.parentFile, file.name + ".tmp")
+            file.parent?.mkdirs()
+            val tmp = File(file.parent, file.name + ".tmp")
             tmp.writeText(obj.toString(2))
             if (!tmp.renameTo(file)) {
-                file.delete()
+                okio.FileSystem.SYSTEM.delete(file)
                 tmp.renameTo(file)
             }
         } catch (t: Throwable) {

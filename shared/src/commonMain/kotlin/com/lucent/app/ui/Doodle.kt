@@ -44,13 +44,14 @@ object Doodle {
     }
 
     fun serialize(strokes: List<Stroke>): String {
-        val arr = JSONArray()
-        strokes.forEach { s ->
-            val pts = JSONArray()
-            s.points.forEach { pts.put(it.x.toDouble()); pts.put(it.y.toDouble()) }
-            arr.put(JSONObject().put("c", s.color).put("w", s.width.toDouble()).put("p", pts))
-        }
-        return arr.toString()
+        return buildJsonArray {
+            strokes.forEach { s ->
+                val pts = buildJsonArray {
+                    s.points.forEach { add(it.x.toDouble()); add(it.y.toDouble()) }
+                }
+                add(buildJsonObject { put("c", s.color); put("w", s.width.toDouble()); put("p", pts) })
+            }
+        }.toString()
     }
 
     fun isEmpty(json: String?): Boolean = parse(json).isEmpty()
@@ -63,9 +64,9 @@ object DoodlePages {
         if (raw.isEmpty()) return listOf("")
         if (raw.startsWith("[")) return listOf(raw)
         return try {
-            val arr = JSONObject(raw).optJSONArray("pages") ?: return listOf("")
-            val out = ArrayList<String>(arr.length())
-            for (i in 0 until arr.length()) out.add(arr.optString(i, ""))
+            val arr = Json.parseToJsonElement(raw).jsonObject["pages"]?.jsonArray ?: return listOf("")
+            val out = ArrayList<String>(arr.size)
+            for (i in 0 until arr.size) out.add(arr[i].jsonPrimitive.content)
             if (out.isEmpty()) listOf("") else out
         } catch (_: Throwable) {
             listOf(raw)
@@ -76,9 +77,8 @@ object DoodlePages {
         val kept = if (pages.isEmpty()) listOf("") else pages
         if (kept.size == 1 && Doodle.isEmpty(kept.first())) return ""
         if (kept.size == 1) return kept.first()
-        val arr = JSONArray()
-        kept.forEach { arr.put(it) }
-        return JSONObject().put("pages", arr).toString()
+        val arr = buildJsonArray { kept.forEach { add(it) } }
+        return buildJsonObject { put("pages", arr) }.toString()
     }
 
     fun drawnCount(pages: List<String>): Int = pages.count { !Doodle.isEmpty(it) }

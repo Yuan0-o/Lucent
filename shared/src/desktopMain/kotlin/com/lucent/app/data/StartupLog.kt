@@ -34,7 +34,7 @@ actual object StartupLog {
                 try {
                     val f = logFile(app)
                     f.appendText("$stamp  $message\n")
-                    if (f.length() > MAX_BYTES) {
+                    if ((okio.FileSystem.SYSTEM.metadataOrNull(f)?.size ?: 0L) > MAX_BYTES) {
                         val kept = f.readText().takeLast(MAX_BYTES / 2)
                         f.writeText(kept)
                     }
@@ -46,7 +46,7 @@ actual object StartupLog {
 
     actual fun readAll(context: PlatformContext): String = synchronized(lock) {
         val f = logFile(context)
-        if (!f.exists()) "" else try { f.readText() } catch (_: Throwable) { "" }
+        if (!okio.FileSystem.SYSTEM.exists(f)) "" else try { f.readText() } catch (_: Throwable) { "" }
     }
 
     actual fun buildExport(context: PlatformContext): String {
@@ -64,7 +64,7 @@ actual object StartupLog {
 
     actual fun hasEntries(context: PlatformContext): Boolean = synchronized(lock) {
         val f = logFile(context)
-        f.exists() && f.length() > 0
+        okio.FileSystem.SYSTEM.exists(f) && (okio.FileSystem.SYSTEM.metadataOrNull(f)?.size ?: 0L) > 0
     }
 
     actual fun clear(context: PlatformContext) {

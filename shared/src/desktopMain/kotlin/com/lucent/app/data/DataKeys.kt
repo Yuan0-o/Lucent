@@ -30,23 +30,23 @@ actual object DataKeys {
     }
 
     private fun atomicWrite(file: File, contents: String): Boolean {
-        val temp = File(file.parentFile, "${file.name}.tmp")
+        val temp = File(file.parent, "${file.name}.tmp")
         return try {
             java.io.FileOutputStream(temp).use { out ->
                 out.write(contents.toByteArray(Charsets.UTF_8))
                 out.flush()
                 out.fd.sync()
             }
-            if (AtomicFiles.replace(temp, file)) true else { temp.delete(); false }
+            if (AtomicFiles.replace(temp, file)) true else { okio.FileSystem.SYSTEM.delete(temp); false }
         } catch (t: Throwable) {
-            temp.delete()
+            okio.FileSystem.SYSTEM.delete(temp)
             false
         }
     }
 
     private fun getOrCreate(context: PlatformContext, fileName: String): ByteArray {
         val file = File(keyDir(context), fileName)
-        if (file.exists()) {
+        if (okio.FileSystem.SYSTEM.exists(file)) {
             val stored = try { file.readText() } catch (t: Throwable) { "" }
             decodeKey(LocalSecrets.decrypt(stored))?.let { return it }
             throw IllegalStateException(

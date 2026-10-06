@@ -51,7 +51,7 @@ object LocalModelStore {
                 val slot = ModelSlot(id = newId(), name = legacyName, fileName = LEGACY_FILE_NAME)
                 val migrated = ModelIndex(listOf(slot), slot.id)
                 writeIndex(context, migrated)
-                (dir / LEGACY_NAME_FILE).delete()
+                okio.FileSystem.SYSTEM.delete(dir / LEGACY_NAME_FILE)
                 return migrated
             }
             return ModelIndex(emptyList(), null)
@@ -67,7 +67,7 @@ object LocalModelStore {
                 val o = arr[i].jsonObject
                 val id = (o["id"]?.jsonPrimitive?.content ?: "").ifBlank { return@mapNotNull null }
                 val fileName = (o["file"]?.jsonPrimitive?.content ?: "").ifBlank { return@mapNotNull null }
-                if (!(dir / fileName).exists()) return@mapNotNull null
+                if (!okio.FileSystem.SYSTEM.exists(dir / fileName)) return@mapNotNull null
                 ModelSlot(id = id, name = o["name"]?.jsonPrimitive?.content ?: "model.gguf", fileName = fileName)
             }
             val active = (root["active"]?.jsonPrimitive?.content ?: "").ifBlank { null }
@@ -235,8 +235,8 @@ object LocalModelStore {
     fun delete(context: PlatformContext, id: String) {
         val idx = index(context)
         val slot = idx.slots.firstOrNull { it.id == id } ?: return
-        (dir(context) / slot.fileName).delete()
-        (dir(context) / "${slot.fileName}.tmp").delete()
+        okio.FileSystem.SYSTEM.delete(dir(context) / slot.fileName)
+        okio.FileSystem.SYSTEM.delete(dir(context) / "${slot.fileName}.tmp")
         deleteMmproj(context, id)
         val remaining = idx.slots.filter { it.id != id }
         val newActive = if (idx.activeId == id) remaining.firstOrNull()?.id else idx.activeId
@@ -253,7 +253,7 @@ object LocalModelStore {
                     put("id", s.id)
                     put("name", s.name)
                     put("file", s.fileName)
-                    put("size", (dir(context) / s.fileName).length())
+                    put("size", okio.FileSystem.SYSTEM.metadataOrNull(dir(context) / s.fileName)?.size ?: 0L)
                 })
             }
         }
@@ -317,7 +317,7 @@ object LocalModelStore {
     }
 
 
-    private fun newId(): String = kotlin.uuid.Uuid.randomUUID().toString().replace("-", "").take(12)
+    private fun newId(): String = kotlin.uuid.Uuid.random().toString().replace("-", "").take(12)
 
     private fun readUpTo(input: okio.Source, buffer: ByteArray): Int {
         var read = 0

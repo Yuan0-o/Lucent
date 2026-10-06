@@ -23,7 +23,7 @@ actual object UsageTracker {
     private val mutex = Mutex()
     @Volatile private var loaded = false
 
-    private fun file(context: PlatformContext) = File(context.applicationContext.filesDir, "lucent_usage.json")
+    private fun file(context: PlatformContext) = (context.applicationContext.filesDir / "lucent_usage.json")
 
     private fun ensureLoaded(context: PlatformContext) {
         if (loaded) return
@@ -31,7 +31,7 @@ actual object UsageTracker {
             if (loaded) return
             state.value = try {
                 val f = file(context)
-                if (!f.exists()) emptyMap() else {
+                if (!okio.FileSystem.SYSTEM.exists(f)) emptyMap() else {
                     val obj = JSONObject(f.readText())
                     buildMap { obj.keys().forEach { k -> put(k, obj.optString(k, "")) } }
                 }
@@ -47,9 +47,9 @@ actual object UsageTracker {
             val obj = JSONObject()
             values.forEach { (k, v) -> obj.put(k, v) }
             val f = file(context)
-            val tmp = File(f.parentFile, f.name + ".tmp")
+            val tmp = File(f.parent, f.name + ".tmp")
             tmp.writeText(obj.toString())
-            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            if (!tmp.renameTo(f)) { okio.FileSystem.SYSTEM.delete(f); tmp.renameTo(f) }
         } catch (_: Throwable) {
         }
     }

@@ -288,7 +288,7 @@ object Pptx {
 
     fun create(specJson: String, out: Path): String {
         val spec = try {
-            Json.parseToJsonXmlNode(specJson).jsonObject
+            Json.parseToJsonElement(specJson).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The deck specification is not valid JSON: ${e.message}")
         }
@@ -357,7 +357,7 @@ private fun pptxOps(opsJson: String): List<JsonObject> {
     val trimmed = opsJson.trim()
     if (trimmed.isEmpty()) return emptyList()
     val parsed = try {
-        if (trimmed.startsWith("[")) Json.parseToJsonXmlNode(trimmed).jsonArray else Json.parseToJsonXmlNode(trimmed).jsonObject
+        if (trimmed.startsWith("[")) Json.parseToJsonElement(trimmed).jsonArray else Json.parseToJsonElement(trimmed).jsonObject
     } catch (e: Exception) {
         throw IllegalArgumentException("The operations are not valid JSON: ${e.message}")
     }
@@ -1613,12 +1613,12 @@ private fun pptxReadSlide(entries: Map<String, ByteArray>, part: String, bytes: 
         }
     }
     pptxDirectChildren(tree).forEach { shape ->
-        when (pptxLocal(shape.nodeName)) {
+        when (pptxLocal(shape.name)) {
             "sp" -> pptxReadShape(shape, slide)
             "pic" -> pptxReadPicture(shape, slide, rels)
             "graphicFrame" -> pptxReadFrame(shape, slide, rels, entries)
             "grpSp" -> pptxDirectChildren(shape).forEach { inner ->
-                when (pptxLocal(inner.nodeName)) {
+                when (pptxLocal(inner.name)) {
                     "sp" -> pptxReadShape(inner, slide)
                     "pic" -> pptxReadPicture(inner, slide, rels)
                     "graphicFrame" -> pptxReadFrame(inner, slide, rels, entries)
@@ -1697,7 +1697,7 @@ private fun pptxReadTable(table: XmlNode): PptxTable {
     val model = PptxTable()
     val rows = pptxDescend(table, "tr")
     rows.forEachIndexed { index, row ->
-        val cells = pptxDirectChildren(row).filter { pptxLocal(it.nodeName) == "tc" }.map { cell ->
+        val cells = pptxDirectChildren(row).filter { pptxLocal(it.name) == "tc" }.map { cell ->
             pptxParagraphTexts(cell).joinToString(" ").trim()
         }
         if (index == 0) model.header = cells.toMutableList() else model.rows.add(cells.toMutableList())
@@ -1751,7 +1751,7 @@ private fun pptxShapeText(shape: XmlNode): String {
 
 private fun pptxParagraphTexts(node: XmlNode): List<String> {
     val body = pptxChild(node, "txBody") ?: return emptyList()
-    return pptxDirectChildren(body).filter { pptxLocal(it.nodeName) == "p" }.map { paragraph ->
+    return pptxDirectChildren(body).filter { pptxLocal(it.name) == "p" }.map { paragraph ->
         pptxFlatten(paragraph).trim()
     }
 }
@@ -2173,33 +2173,27 @@ private fun pptxLocal(tag: String): String {
 
 private fun pptxChild(node: XmlNode?, tag: String): XmlNode? {
     if (node == null) return null
-    var child = node.firstChild
-    while (child != null) {
+    for (child in node.children) {
         if (child is XmlNode && pptxLocal(child.name) == tag) return child
-        child = child.nextSibling
-    }
+}
     return null
 }
 
 private fun pptxChildren(node: XmlNode?, tag: String): List<XmlNode> {
     if (node == null) return emptyList()
     val out = mutableListOf<XmlNode>()
-    var child = node.firstChild
-    while (child != null) {
+    for (child in node.children) {
         if (child is XmlNode && pptxLocal(child.name) == tag) out.add(child)
-        child = child.nextSibling
-    }
+}
     return out
 }
 
 private fun pptxDirectChildren(node: XmlNode?): List<XmlNode> {
     if (node == null) return emptyList()
     val out = mutableListOf<XmlNode>()
-    var child = node.firstChild
-    while (child != null) {
+    for (child in node.children) {
         if (child is XmlNode) out.add(child)
-        child = child.nextSibling
-    }
+}
     return out
 }
 
@@ -2211,29 +2205,24 @@ private fun pptxDescend(node: XmlNode?, tag: String): List<XmlNode> {
 }
 
 private fun pptxCollect(node: XmlNode, tag: String, out: MutableList<XmlNode>) {
-    var child = node.firstChild
-    while (child != null) {
+    for (child in node.children) {
         if (child is XmlNode) {
             if (pptxLocal(child.name) == tag) out.add(child)
             pptxCollect(child, tag, out)
         }
-        child = child.nextSibling
-    }
+}
 }
 
 private fun pptxAttr(node: XmlNode?, name: String): String {
     if (node == null) return ""
-    val attribute = node.attributes?.getNamedItem(name) ?: return ""
+    val attribute = node.attributes[name] ?: return ""
     return attribute.value ?: ""
 }
 
 private fun pptxNsAttr(node: XmlNode?, name: String): String {
     if (node == null) return ""
-    val attributes = node.attributes ?: return ""
-    for (i in 0 until attributes.length) {
-        val attribute = attributes.item(i) ?: continue
-        val local = pptxLocal(attribute.key)
-        if (local == name) return attribute.value ?: ""
+    for ((key, value) in node.attributes) {
+        if (pptxLocal(key) == name) return value
     }
     return ""
 }

@@ -82,7 +82,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun convert(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val input = try {
-            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+            Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -92,7 +92,7 @@ object OfficeConvertTools : HarnessGroupTools {
             return ToolExecResult("Converting needs a shell: install the libreoffice plugin first.", success = false)
         }
         val outDir = if ((args["out"]?.jsonPrimitive?.content ?: "").isBlank()) input.parent!!
-        else Workspace.forWrite(ctx, (args["out"]?.jsonPrimitive?.content ?: "").toPath()).parentFile ?: input.parent!!
+        else Workspace.forWriteFile(ctx, args["out"]?.jsonPrimitive?.content ?: "").parent ?: input.parent!!
         FileSystem.SYSTEM.createDirectories(outDir)
         val outcome = sofficeCall(ctx, input, target, outDir)
         val produced = FileSystem.SYSTEM.listOrNull(outDir)?.firstOrNull {
@@ -106,8 +106,8 @@ object OfficeConvertTools : HarnessGroupTools {
         }
         val asked = (args["out"]?.jsonPrimitive?.content ?: "")
         val finalFile = if (asked.isNotBlank()) {
-            val wanted = Workspace.forWrite(ctx, asked).toPath()
-            wanted.parentFile?.mkdirs()
+            val wanted = Workspace.forWriteFile(ctx, asked)
+            wanted.parent?.let { okio.FileSystem.SYSTEM.createDirectories(it) }
             FileSystem.SYSTEM.copy(produced, wanted)
             wanted
         } else produced
@@ -119,7 +119,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private suspend fun render(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val input = try {
-            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+            Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -187,7 +187,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun doctor(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = try {
-            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+            Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }
@@ -197,21 +197,16 @@ object OfficeConvertTools : HarnessGroupTools {
         val parts = mutableListOf<String>()
         val bad = mutableListOf<String>()
         try {
-            ZipInputStream(file.inputStream().buffered()).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    parts.add(entry.name)
-                    if (entry.name.endsWith(".xml") || entry.name.endsWith(".rels")) {
-                        val bytes = zip.readBytes()
-                        try {
-                            javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                                .parse(bytes.inputStream())
-                        } catch (e: Exception) {
-                            bad.add("${entry.name}: ${e.message ?: "unreadable"}")
-                        }
+            val fileBytes = okio.FileSystem.SYSTEM.read(file) { readByteArray() }
+            val entries = com.lucent.app.harness.ZipReader.readEntries(fileBytes)
+            for ((name, bytes) in entries) {
+                parts.add(name)
+                if (name.endsWith(".xml") || name.endsWith(".rels")) {
+                    try {
+                        com.lucent.app.harness.ooxml.parse(bytes)
+                    } catch (e: Exception) {
+                        bad.add("${name}: ${e.message ?: "unreadable"}")
                     }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
                 }
             }
         } catch (e: Exception) {
@@ -232,7 +227,7 @@ object OfficeConvertTools : HarnessGroupTools {
 
     private fun documentText(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = try {
-            Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").toPath())
+            Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That file cannot be read", success = false)
         }

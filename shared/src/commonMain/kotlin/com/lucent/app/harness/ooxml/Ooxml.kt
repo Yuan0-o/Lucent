@@ -288,30 +288,28 @@ fun orderedIndex(tag: String, order: List<String>): Int {
     return if (index < 0) order.size else index
 }
 
-fun insertOrdered(parent: Element, child: Element, tag: String, order: List<String>) {
+fun insertOrdered(parent: XmlNode, child: XmlNode, tag: String, order: List<String>) {
     val index = orderedIndex(tag, order)
-    var reference: Node? = null
-    var node = parent.firstChild
-    while (node != null) {
-        if (node is Element && orderedIndex(localName(node), order) > index) {
+    var reference: XmlNode? = null
+    for (node in parent.children) {
+        if (orderedIndex(localName(node), order) > index) {
             reference = node
             break
         }
-        node = node.nextSibling
     }
     if (reference != null) parent.insertBefore(child, reference) else parent.appendChild(child)
 }
 
-fun ensureOrdered(document: Document, parent: Element, tag: String, order: List<String>): Element {
+fun ensureOrdered(document: XmlNode, parent: XmlNode, tag: String, order: List<String>): XmlNode {
     val existing = children(parent, tag).firstOrNull()
     if (existing != null) return existing
-    val created = document.createElement(tag)
+    val created = document.createXmlNode(tag)
     insertOrdered(parent, created, tag, order)
     return created
 }
 
-fun removeChildren(parent: Element, tag: String) {
-    children(parent, tag).forEach { parent.removeChild(it) }
+fun removeChildren(parent: XmlNode, tag: String) {
+    children(parent, tag).forEach { parent.children.remove(it) }
 }
 
 fun stringOf(json: JsonObject?, key: String, fallback: String = ""): String {
@@ -344,11 +342,11 @@ object Ooxml {
 
     fun escape(value: String): String = escapeXml(value)
 
-    fun textOf(node: Node?): String = xmlText(node)
+    fun textOf(node: XmlNode?): String = textOf(node)
 
-    fun children(node: Node?, tag: String): List<Element> = elementChildren(node, tag)
+    fun children(node: XmlNode?, tag: String): List<XmlNode> = children(node, tag)
 
-    fun attr(node: Node?, name: String): String = attributeOf(node, name)
+    fun attr(node: XmlNode?, name: String): String = attr(node, name)
 }
 
 data class MdSpan(
@@ -597,6 +595,16 @@ fun parentOf(root: XmlNode, target: XmlNode): XmlNode? {
     for (c in root.children) {
         val p = parentOf(c, target)
         if (p != null) return p
+    }
+    return null
+}
+
+fun parentOf(root: XmlNode?, target: XmlNode): XmlNode? {
+    if (root == null) return null
+    if (root.children.contains(target)) return root
+    for (child in root.children) {
+        val found = parentOf(child, target)
+        if (found != null) return found
     }
     return null
 }

@@ -47,16 +47,16 @@ object NativeLoader {
             val target = File(dir, mapped)
             resource.use { input ->
                 val bytes = input.readBytes()
-                if (!target.exists() || target.length() != bytes.size.toLong()) {
+                if (!okio.FileSystem.SYSTEM.exists(target) || (okio.FileSystem.SYSTEM.metadataOrNull(target)?.size ?: 0L) != bytes.size.toLong()) {
                     val tmp = File(dir, "$mapped.tmp")
                     tmp.writeBytes(bytes)
                     if (!tmp.renameTo(target)) {
-                        target.delete()
+                        okio.FileSystem.SYSTEM.delete(target)
                         if (!tmp.renameTo(target)) return false
                     }
                 }
             }
-            System.load(target.absolutePath)
+            System.load(target.toString())
             true
         } catch (_: Throwable) {
             false

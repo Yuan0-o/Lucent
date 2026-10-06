@@ -93,14 +93,14 @@ object OfficeSheetTools : HarnessGroupTools {
 
     private fun createSpreadsheet(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val path = file.absolutePath.toPath()
+        val path = file
         if (FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
         val spec = spreadsheetSpec(args)
         if (ctx.config.snapshots && FileSystem.SYSTEM.exists(path)) Snapshots.capture(ctx, file)
         path.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-        val detail = Xlsx.create(spec, file.absolutePath.toPath())
+        val detail = Xlsx.create(spec, file)
         return ToolExecResult(
             "Created ${Workspace.display(ctx, file)} (${Workspace.humanSize(FileSystem.SYSTEM.metadataOrNull(path)?.size ?: -1)}): $detail."
         )
@@ -108,18 +108,18 @@ object OfficeSheetTools : HarnessGroupTools {
 
     private fun readSpreadsheet(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val path = file.absolutePath.toPath()
+        val path = file
         if (FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
         val maxRows = (args["max_rows"]?.jsonPrimitive?.intOrNull ?: 200).coerceIn(1, 5000)
-        val text = Xlsx.read(file.absolutePath.toPath(), (args["sheet"]?.jsonPrimitive?.content ?: ""), (args["range"]?.jsonPrimitive?.content ?: ""), maxRows)
+        val text = Xlsx.read(file, (args["sheet"]?.jsonPrimitive?.content ?: ""), (args["range"]?.jsonPrimitive?.content ?: ""), maxRows)
         return ToolExecResult(text)
     }
 
     private fun editSpreadsheet(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val path = file.absolutePath.toPath()
+        val path = file
         if (FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -128,7 +128,7 @@ object OfficeSheetTools : HarnessGroupTools {
         }
         val ops = operations(args)
         if (ctx.config.snapshots) Snapshots.capture(ctx, file)
-        val detail = Xlsx.edit(file.absolutePath.toPath(), ops)
+        val detail = Xlsx.edit(file, ops)
         return ToolExecResult(
             "Edited ${Workspace.display(ctx, file)} (${Workspace.humanSize(FileSystem.SYSTEM.metadataOrNull(path)?.size ?: -1)}): $detail."
         )
@@ -136,18 +136,18 @@ object OfficeSheetTools : HarnessGroupTools {
 
     private fun exportCsv(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val source = Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val sourcePath = source.absolutePath.toPath()
+        val sourcePath = source
         if (FileSystem.SYSTEM.metadataOrNull(sourcePath)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, source)} is a directory, not an .xlsx file.", success = false)
         }
         val declared = (args["out"]?.jsonPrimitive?.content ?: "")
         val target = if (declared.isBlank()) {
-            val sibling = (sourcePath.parent ?: ctx.workspace.absolutePath.toPath()) / (sourcePath.name.removeSuffix(".xlsx") + ".csv")
+            val sibling = (sourcePath.parent ?: ctx.workspace.toPath()) / (sourcePath.name.removeSuffix(".xlsx") + ".csv")
             Workspace.forWriteFile(ctx, sibling.toString())
         } else {
             Workspace.forWriteFile(ctx, declared)
         }
-        val targetPath = target.absolutePath.toPath()
+        val targetPath = target
         val csv = Xlsx.csvOut(source, (args["sheet"]?.jsonPrimitive?.content ?: ""))
         Workspace.writeText(ctx, target, csv)
         val rows = if (csv.isEmpty()) 0 else csv.count { it == '\n' } + 1
@@ -159,7 +159,7 @@ object OfficeSheetTools : HarnessGroupTools {
 
     private fun importCsv(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
-        val path = file.absolutePath.toPath()
+        val path = file
         if (FileSystem.SYSTEM.metadataOrNull(path)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not an .xlsx file.", success = false)
         }
@@ -172,7 +172,7 @@ object OfficeSheetTools : HarnessGroupTools {
                 throw IllegalArgumentException("Give the CSV either as \"csv_text\" or as a file in \"csv_path\".")
             }
             val source = Workspace.forReadFile(ctx, declared)
-            val sourcePath = source.absolutePath.toPath()
+            val sourcePath = source
             if (FileSystem.SYSTEM.metadataOrNull(sourcePath)?.isDirectory == true) throw IllegalArgumentException("${Workspace.display(ctx, source)} is a directory.")
             Workspace.readText(source, 4 * 1024 * 1024)
         }

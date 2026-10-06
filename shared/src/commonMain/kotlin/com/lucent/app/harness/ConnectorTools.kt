@@ -187,8 +187,8 @@ object HttpJson {
         if (text.isEmpty()) return ""
         val formatted = try {
             when (text.first()) {
-                '{' -> Json.parseToJsonElement(text).jsonObject.toString(2)
-                '[' -> Json.parseToJsonElement(text).jsonArray.toString(2)
+                '{' -> Json.parseToJsonElement(text).jsonObject.toString()
+                '[' -> Json.parseToJsonElement(text).jsonArray.toString()
                 else -> text
             }
         } catch (e: Exception) {
@@ -620,7 +620,7 @@ object ConnectorTools : HarnessGroupTools {
         )
         return when (action) {
             "search" -> {
-                val payload = JsonObject().put("page_size", 20)
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("page_size", 20)
                 val query = (args["query"]?.jsonPrimitive?.content ?: "").trim()
                 if (query.isNotEmpty()) payload.put("query", query)
                 val reply = send("POST", "$base/search", headers, payload.toString())
@@ -653,7 +653,7 @@ object ConnectorTools : HarnessGroupTools {
             "page_create" -> {
                 val databaseId = (args["database_id"]?.jsonPrimitive?.content ?: "").trim()
                 val pageId = (args["page_id"]?.jsonPrimitive?.content ?: "").trim()
-                val parent = JsonObject()
+                var parent = kotlinx.serialization.json.JsonObject(emptyMap())
                 when {
                     databaseId.isNotEmpty() -> parent.put("database_id", databaseId)
                     pageId.isNotEmpty() -> parent.put("page_id", pageId)
@@ -662,18 +662,18 @@ object ConnectorTools : HarnessGroupTools {
                         success = false
                     )
                 }
-                val properties = args?.get("properties")?.jsonObject ?: JsonObject()
+                val properties = args?.get("properties")?.jsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
                 val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isNotEmpty() && !properties.containsKey("title")) {
-                    properties.put(
+                    properties = properties.put(
                         "title",
-                        JsonObject().put(
+                        kotlinx.serialization.json.JsonObject(emptyMap()).put(
                             "title",
-                            JsonArray().put(JsonObject().put("text", JsonObject().put("content", title)))
+                            kotlinx.serialization.json.JsonArray(emptyList()).put(kotlinx.serialization.json.JsonObject(emptyMap()).put("text", kotlinx.serialization.json.JsonObject(emptyMap()).put("content", title)))
                         )
                     )
                 }
-                val payload = JsonObject().put("parent", parent).put("properties", properties)
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("parent", parent).put("properties", properties)
                 val blocks = args?.get("blocks")?.jsonArray
                 if (blocks != null && blocks.size > 0) payload.put("children", blocks)
                 val reply = send("POST", "$base/pages", headers, payload.toString())
@@ -693,7 +693,7 @@ object ConnectorTools : HarnessGroupTools {
                     "PATCH",
                     "$base/pages/${HttpJson.enc(id)}",
                     headers,
-                    JsonObject().put("properties", properties).toString()
+                    kotlinx.serialization.json.JsonObject(emptyMap()).put("properties", properties).toString()
                 )
                 problem(reply, "Notion")?.let { return it }
                 val page = HttpJson.objectOf(reply.body)
@@ -716,7 +716,7 @@ object ConnectorTools : HarnessGroupTools {
             else -> {
                 val id = (args["database_id"]?.jsonPrimitive?.content ?: "").trim().ifBlank { notionId(args) }
                 if (id.isEmpty()) return ToolExecResult("database_query needs database_id.", success = false)
-                val payload = JsonObject().put("page_size", 20)
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("page_size", 20)
                 val reply = send("POST", "$base/databases/${HttpJson.enc(id)}/query", headers, payload.toString())
                 problem(reply, "Notion")?.let { return it }
                 val results = HttpJson.objectOf(reply.body)?.get("results")?.jsonArray
@@ -737,9 +737,8 @@ object ConnectorTools : HarnessGroupTools {
         val direct = item?.get("title")?.jsonArray
         if (direct != null) return notionRichText(direct)
         val properties = item?.get("properties")?.jsonObject ?: return ""
-        val keys = properties.keys()
-        while (keys.hasNext()) {
-            val node = properties?.getOrNull(keys.next()?.jsonObject) ?: continue
+        for (key in properties.keys) {
+            val node = properties[key]?.jsonObject ?: continue
             if ((node["type"]?.jsonPrimitive?.content ?: "") == "title") return notionRichText(node?.get("title")?.jsonArray)
         }
         return ""
@@ -767,10 +766,8 @@ object ConnectorTools : HarnessGroupTools {
     private fun notionProperties(page: JsonObject): String {
         val properties = page?.get("properties")?.jsonObject ?: return ""
         val sb = StringBuilder()
-        val keys = properties.keys()
-        while (keys.hasNext()) {
-            val name = keys.next()
-            val node = properties?.getOrNull(name)?.jsonObject ?: continue
+        for (name in properties.keys) {
+            val node = properties[name]?.jsonObject ?: continue
             val value = notionValue(node)
             if (value.isBlank()) continue
             sb.append("- ").append(name).append(": ").append(HttpJson.oneLine(value, 120)).append('\n')
@@ -781,7 +778,7 @@ object ConnectorTools : HarnessGroupTools {
     private fun notionValue(node: JsonObject): String = when ((node["type"]?.jsonPrimitive?.content ?: "")) {
         "title" -> notionRichText(node?.get("title")?.jsonArray)
         "rich_text" -> notionRichText(node?.get("rich_text")?.jsonArray)
-        "number" -> if (node.isNull("number")) "" else HttpJson.text(node["number"])
+        "number" -> if ((node["number"] is kotlinx.serialization.json.JsonNull)) "" else HttpJson.text(node["number"])
         "select" -> node?.get("select")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()
         "status" -> node?.get("status")?.jsonObject?.get("name")?.jsonPrimitive?.content.orEmpty()
         "multi_select" -> {
@@ -829,7 +826,7 @@ object ConnectorTools : HarnessGroupTools {
                 if (channel.isEmpty() || text.isEmpty()) {
                     return ToolExecResult("post_message needs channel and text.", success = false)
                 }
-                val payload = JsonObject().put("channel", channel).put("text", text)
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("channel", channel).put("text", text)
                 val ts = (args["ts"]?.jsonPrimitive?.content ?: "").trim()
                 if (ts.isNotEmpty()) payload.put("thread_ts", ts)
                 send("POST", "$base/chat.postMessage", headers, payload.toString())
@@ -953,7 +950,7 @@ object ConnectorTools : HarnessGroupTools {
             "upload" -> {
                 if (name.isEmpty()) return ToolExecResult("upload needs name.", success = false)
                 val boundary = "lucent${System.currentTimeMillis()}"
-                val metadata = JsonObject().put("name", name)
+                var metadata = kotlinx.serialization.json.JsonObject(emptyMap()).put("name", name)
                 val payload = multipart(boundary, metadata, mime, content)
                 val reply = send(
                     "POST",
@@ -972,7 +969,7 @@ object ConnectorTools : HarnessGroupTools {
             }
             else -> {
                 if (name.isEmpty()) return ToolExecResult("create_folder needs name.", success = false)
-                val payload = JsonObject()
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap())
                     .put("name", name)
                     .put("mimeType", "application/vnd.google-apps.folder")
                 val reply = send("POST", "$base/files?fields=id,name,webViewLink", headers, payload.toString())
@@ -1112,7 +1109,7 @@ object ConnectorTools : HarnessGroupTools {
                 if (project.isEmpty() || title.isEmpty()) {
                     return ToolExecResult("issue_create needs project and title.", success = false)
                 }
-                val payload = JsonObject().put("title", title)
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("title", title)
                 val description = (args["description"]?.jsonPrimitive?.content ?: "")
                 if (description.isNotEmpty()) payload.put("description", description)
                 val reply = send(
@@ -1141,7 +1138,7 @@ object ConnectorTools : HarnessGroupTools {
                     "POST",
                     "$base/projects/${HttpJson.encRaw(project)}/issues/$iid/notes",
                     headers,
-                    JsonObject().put("body", body).toString()
+                    kotlinx.serialization.json.JsonObject(emptyMap()).put("body", body).toString()
                 )
                 problem(reply, "GitLab")?.let { return it }
                 ToolExecResult("Comment added to issue !$iid.")
@@ -1257,20 +1254,20 @@ object ConnectorTools : HarnessGroupTools {
                 if (project.isEmpty() || summary.isEmpty()) {
                     return ToolExecResult("issue_create needs project and summary.", success = false)
                 }
-                val fields = JsonObject()
-                    .put("project", JsonObject().put("key", project))
+                var fields = kotlinx.serialization.json.JsonObject(emptyMap())
+                    .put("project", kotlinx.serialization.json.JsonObject(emptyMap()).put("key", project))
                     .put("summary", summary)
-                    .put("issuetype", JsonObject().put("name", "Task"))
+                    .put("issuetype", kotlinx.serialization.json.JsonObject(emptyMap()).put("name", "Task"))
                 val description = (args["description"]?.jsonPrimitive?.content ?: "")
                 if (description.isNotEmpty()) fields.put("description", adf(description))
-                val reply = send("POST", "$base/issue", headers, JsonObject().put("fields", fields).toString())
+                val reply = send("POST", "$base/issue", headers, kotlinx.serialization.json.JsonObject(emptyMap()).put("fields", fields).toString())
                 problem(reply, "Jira")?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
                 ToolExecResult("Created ${issue?.get("key")?.jsonPrimitive?.content.orEmpty()} ${issue?.get("self")?.jsonPrimitive?.content.orEmpty()}".trim())
             }
             "issue_update" -> {
                 if (key.isEmpty()) return ToolExecResult("issue_update needs issue_key.", success = false)
-                val fields = JsonObject()
+                var fields = kotlinx.serialization.json.JsonObject(emptyMap())
                 val summary = (args["summary"]?.jsonPrimitive?.content ?: "").trim()
                 if (summary.isNotEmpty()) fields.put("summary", summary)
                 val description = (args["description"]?.jsonPrimitive?.content ?: "")
@@ -1278,7 +1275,7 @@ object ConnectorTools : HarnessGroupTools {
                 if (fields.size == 0) {
                     return ToolExecResult("issue_update needs summary or description to change.", success = false)
                 }
-                val reply = send("PUT", "$base/issue/${HttpJson.enc(key)}", headers, JsonObject().put("fields", fields).toString())
+                val reply = send("PUT", "$base/issue/${HttpJson.enc(key)}", headers, kotlinx.serialization.json.JsonObject(emptyMap()).put("fields", fields).toString())
                 problem(reply, "Jira")?.let { return it }
                 ToolExecResult("Updated $key.")
             }
@@ -1290,7 +1287,7 @@ object ConnectorTools : HarnessGroupTools {
                     "POST",
                     "$base/issue/${HttpJson.enc(key)}/comment",
                     headers,
-                    JsonObject().put("body", adf(body)).toString()
+                    kotlinx.serialization.json.JsonObject(emptyMap()).put("body", adf(body)).toString()
                 )
                 problem(reply, "Jira")?.let { return it }
                 ToolExecResult("Comment added to $key.")
@@ -1298,10 +1295,10 @@ object ConnectorTools : HarnessGroupTools {
             "search" -> {
                 val jql = (args["jql"]?.jsonPrimitive?.content ?: "").trim()
                 if (jql.isEmpty()) return ToolExecResult("search needs jql.", success = false)
-                val payload = JsonObject()
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap())
                     .put("jql", jql)
                     .put("maxResults", 20)
-                    .put("fields", JsonArray().put("summary").put("status").put("assignee").put("updated"))
+                    .put("fields", kotlinx.serialization.json.JsonArray(emptyList()).put("summary").put("status").put("assignee").put("updated"))
                 val reply = send("POST", "$base/search/jql", headers, payload.toString())
                 problem(reply, "Jira")?.let { return it }
                 val issues = HttpJson.objectOf(reply.body)?.get("issues")?.jsonArray
@@ -1350,7 +1347,7 @@ object ConnectorTools : HarnessGroupTools {
                     }
                     id = (match["id"]?.jsonPrimitive?.content ?: "")
                 }
-                val payload = JsonObject().put("transition", JsonObject().put("id", id))
+                var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("transition", kotlinx.serialization.json.JsonObject(emptyMap()).put("id", id))
                 val reply = send("POST", "$base/issue/${HttpJson.enc(key)}/transitions", headers, payload.toString())
                 problem(reply, "Jira")?.let { return it }
                 ToolExecResult("Moved $key with transition $wanted.")
@@ -1358,15 +1355,15 @@ object ConnectorTools : HarnessGroupTools {
         }
     }
 
-    private fun adf(text: String): JsonObject = JsonObject()
+    private fun adf(text: String): JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())
         .put("type", "doc")
         .put("version", 1)
         .put(
             "content",
-            JsonArray().put(
-                JsonObject()
+            kotlinx.serialization.json.JsonArray(emptyList()).put(
+                kotlinx.serialization.json.JsonObject(emptyMap())
                     .put("type", "paragraph")
-                    .put("content", JsonArray().put(JsonObject().put("type", "text").put("text", text)))
+                    .put("content", kotlinx.serialization.json.JsonArray(emptyList()).put(kotlinx.serialization.json.JsonObject(emptyMap()).put("type", "text").put("text", text)))
             )
         )
 
@@ -1429,19 +1426,19 @@ object ConnectorTools : HarnessGroupTools {
                 "query Search(\$term: String!) { searchIssues(term: \$term) { nodes { identifier title url } } }"
             }
         }
-        val variables = JsonObject()
+        var variables = kotlinx.serialization.json.JsonObject(emptyMap())
         when (action) {
             "issue_get" -> variables.put("id", issueId)
             "issue_create" -> {
-                val input = JsonObject()
+                var input = kotlinx.serialization.json.JsonObject(emptyMap())
                     .put("teamId", (args["team_id"]?.jsonPrimitive?.content ?: "").trim())
                     .put("title", (args["title"]?.jsonPrimitive?.content ?: "").trim())
                 val description = (args["description"]?.jsonPrimitive?.content ?: "")
                 if (description.isNotEmpty()) input.put("description", description)
-                variables.put("input", input)
+                variables = variables.put("input", input)
             }
             "issue_update" -> {
-                val input = JsonObject()
+                var input = kotlinx.serialization.json.JsonObject(emptyMap())
                 val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isNotEmpty()) input.put("title", title)
                 val description = (args["description"]?.jsonPrimitive?.content ?: "")
@@ -1449,13 +1446,13 @@ object ConnectorTools : HarnessGroupTools {
                 if (input.size == 0) {
                     return ToolExecResult("issue_update needs title or description to change.", success = false)
                 }
-                variables.put("id", issueId).put("input", input)
+                variables = variables.put("id", issueId).put("input", input)
             }
             "search" -> variables.put("term", (args["query"]?.jsonPrimitive?.content ?: "").trim())
             else -> {
             }
         }
-        val payload = JsonObject().put("query", query)
+        var payload = kotlinx.serialization.json.JsonObject(emptyMap()).put("query", query)
         if (variables.size > 0) payload.put("variables", variables)
         val reply = send("POST", endpoint, headers, payload.toString())
         problem(reply, "Linear")?.let { return it }
@@ -1623,8 +1620,8 @@ object ConnectorTools : HarnessGroupTools {
                     success = false
                 )
             }
-            if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
-            file.parentFile?.mkdirs()
+            if (ctx.config.snapshots && okio.FileSystem.SYSTEM.exists(file)) Snapshots.capture(ctx, file)
+            file.parent?.let { okio.FileSystem.SYSTEM.createDirectories(it) }
             file.writeBytes(reply.bytes)
             val note = if (reply.truncated) " (cut at 2 MiB)" else ""
             return ToolExecResult("Saved ${reply.bytes.size} bytes$note to ${Workspace.display(ctx, file)}.")
@@ -1640,9 +1637,7 @@ object ConnectorTools : HarnessGroupTools {
     private fun headerMap(args: JsonObject): Map<String, String> {
         val obj = args?.get("headers")?.jsonObject ?: return emptyMap()
         val out = mutableMapOf<String, String>()
-        val keys = obj.keys()
-        while (keys.hasNext()) {
-            val key = keys.next()
+        for (key in obj.keys) {
             if (key.isBlank()) continue
             out[key] = HttpJson.text(obj[key])
         }
@@ -1696,4 +1691,30 @@ object ConnectorTools : HarnessGroupTools {
         "<?xml version=\"1.0\" encoding=\"utf-8\"?><d:propfind xmlns:d=\"DAV:\"><d:prop>" +
             "<d:displayname/><d:resourcetype/><d:getcontentlength/><d:getlastmodified/>" +
             "</d:prop></d:propfind>"
+}
+
+private fun kotlinx.serialization.json.JsonObject.put(key: String, value: Any?): kotlinx.serialization.json.JsonObject {
+    val map = this.toMutableMap()
+    map[key] = when (value) {
+        null -> kotlinx.serialization.json.JsonNull
+        is String -> kotlinx.serialization.json.JsonPrimitive(value)
+        is Number -> kotlinx.serialization.json.JsonPrimitive(value)
+        is Boolean -> kotlinx.serialization.json.JsonPrimitive(value)
+        is kotlinx.serialization.json.JsonElement -> value
+        else -> kotlinx.serialization.json.JsonPrimitive(value.toString())
+    }
+    return kotlinx.serialization.json.JsonObject(map)
+}
+
+private fun kotlinx.serialization.json.JsonArray.put(value: Any?): kotlinx.serialization.json.JsonArray {
+    val list = this.toMutableList()
+    list.add(when (value) {
+        null -> kotlinx.serialization.json.JsonNull
+        is String -> kotlinx.serialization.json.JsonPrimitive(value)
+        is Number -> kotlinx.serialization.json.JsonPrimitive(value)
+        is Boolean -> kotlinx.serialization.json.JsonPrimitive(value)
+        is kotlinx.serialization.json.JsonElement -> value
+        else -> kotlinx.serialization.json.JsonPrimitive(value.toString())
+    })
+    return kotlinx.serialization.json.JsonArray(list)
 }

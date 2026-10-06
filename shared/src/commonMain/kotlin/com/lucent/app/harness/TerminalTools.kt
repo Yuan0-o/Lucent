@@ -12,6 +12,7 @@ import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 data class HarnessJob(
@@ -332,7 +333,7 @@ object TerminalTools : HarnessGroupTools {
         val raw = args["workdir"]?.jsonPrimitive?.content ?: ""
         if (raw.isBlank()) return HarnessRuntime.workspacePath().toPath()
         val dir = try {
-            Workspace.resolveFile(raw).absolutePath.toPath()
+            Workspace.resolveFile(raw)
         } catch (e: HarnessError) {
             HarnessRuntime.workspacePath().toPath()
         }

@@ -161,9 +161,9 @@ object Xlsx {
             val sheetRel = addRelationship(workbookRels, REL_XL_WORKSHEET, "worksheets/sheet${index + 1}.xml")
             val container = ensureOrdered(workbook, workbook, "sheets", WORKBOOK_ORDER)
             val element = workbook.createXmlNode("sheet")
-            element.setAttribute("name", name)
-            element.setAttribute("sheetId", (index + 1).toString())
-            element.setAttribute("r:id", sheetRel)
+            element.attributes["name"] = name
+            element.attributes["sheetId"] = (index + 1.toString())
+            element.attributes["r:id"] = sheetRel
             container.appendChild(element)
         }
         addRelationship(workbookRels, REL_XL_STYLES, "styles.xml")
@@ -341,7 +341,7 @@ object Xlsx {
     private fun jsonObject(text: String, what: String): JsonObject {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            Json.parseToJsonXmlNode(text).jsonObject
+            Json.parseToJsonElement(text).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -350,7 +350,7 @@ object Xlsx {
     private fun jsonArray(text: String, what: String): JsonArray {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            Json.parseToJsonXmlNode(text).jsonArray
+            Json.parseToJsonElement(text).jsonArray
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -723,9 +723,9 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
         ensureRelationshipPrefix(workbook)
         val container = ensureOrdered(workbook, workbook, "sheets", WORKBOOK_ORDER)
         val element = workbook.createXmlNode("sheet")
-        element.setAttribute("name", clean)
-        element.setAttribute("sheetId", nextSheetId().toString())
-        element.setAttribute("r:id", relId)
+        element.attributes["name"] = clean
+        element.attributes["sheetId"] = nextSheetId(.toString())
+        element.attributes["r:id"] = relId
         container.appendChild(element)
         sheetParts[clean] = partName
         sheetDocs[clean] = document
@@ -737,7 +737,7 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
         if (key == to.trim()) return
         val clean = validSheetName(to, sheetParts.keys.toList())
         val element = sheetXmlNode(key) ?: throw IllegalArgumentException("Sheet $key is missing from the workbook")
-        element.setAttribute("name", clean)
+        element.attributes["name"] = clean
         val part = sheetParts.remove(key)
         val document = sheetDocs.remove(key)
         if (part != null) sheetParts[clean] = part
@@ -749,11 +749,11 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
         if (sheetParts.size <= 1) throw IllegalArgumentException("A workbook needs at least one sheet")
         val element = sheetXmlNode(key) ?: throw IllegalArgumentException("Sheet $key is missing from the workbook")
         val relId = attr(element, "r:id")
-        element.parentXmlNode?.removeChild(element)
+        parentOf(workbook, element)?.children?.remove(element)
         if (relId.isNotEmpty()) {
             children(workbookRels, "Relationship")
                 .firstOrNull { attr(it, "Id") == relId }
-                ?.let { workbookRels.removeChild(it) }
+                ?.let { workbookRels.children.remove(it) }
         }
         val part = sheetParts.remove(key)
         sheetDocs.remove(key)
@@ -777,8 +777,8 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
             "<si><t xml:space=\"preserve\">${escapeXml(text)}</t></si>", "xmlns=\"$NS_SPREADSHEET\""
         )
         val total = children(container, "si").size
-        container.setAttribute("count", total.toString())
-        container.setAttribute("uniqueCount", total.toString())
+        container.attributes["count"] = total.toString()
+        container.attributes["uniqueCount"] = total.toString()
         return total - 1
     }
 
@@ -884,39 +884,39 @@ private fun setCell(document: XmlNode, ref: Ref, data: CellData, styleIndex: Int
     cell.children.clear()
             cell.text = ""
     if (styleIndex >= 0) {
-        if (styleIndex > 0) cell.setAttribute("s", styleIndex.toString()) else cell.removeAttribute("s")
+        if (styleIndex > 0) cell.attributes["s"] = styleIndex.toString() else cell.attributes.remove("s")
     }
     val formula = data.formula.trim().removePrefix("=")
     val text = data.text
     val number = data.number
     val flag = data.flag
     if (formula.isNotEmpty()) {
-        cell.removeAttribute("t")
+        cell.attributes.remove("t")
         appendXml(document, cell, "<f>${escapeXml(formula)}</f>", ns.declaration)
         if (number != null) {
             appendXml(document, cell, "<v>${numberText(number)}</v>", ns.declaration)
         } else if (text != null) {
-            cell.setAttribute("t", "str")
+            cell.attributes["t"] = "str"
             appendXml(document, cell, "<v>${escapeXml(text)}</v>", ns.declaration)
         }
         return
     }
     when {
         number != null -> {
-            cell.removeAttribute("t")
+            cell.attributes.remove("t")
             appendXml(document, cell, "<v>${numberText(number)}</v>", ns.declaration)
         }
         flag != null -> {
-            cell.setAttribute("t", "b")
+            cell.attributes["t"] = "b"
             appendXml(document, cell, "<v>${if (flag) "1" else "0"}</v>", ns.declaration)
         }
         text != null -> {
             val index = shared?.invoke(text)
             if (index != null) {
-                cell.setAttribute("t", "s")
+                cell.attributes["t"] = "s"
                 appendXml(document, cell, "<v>$index</v>", ns.declaration)
             } else {
-                cell.setAttribute("t", "inlineStr")
+                cell.attributes["t"] = "inlineStr"
                 appendXml(
                     document, cell,
                     "<is><t xml:space=\"preserve\">${escapeXml(text)}</t></is>", ns.declaration
@@ -924,7 +924,7 @@ private fun setCell(document: XmlNode, ref: Ref, data: CellData, styleIndex: Int
             }
         }
         else -> {
-            cell.removeAttribute("t")
+            cell.attributes.remove("t")
         }
     }
 }
@@ -936,7 +936,7 @@ private fun ensureRow(document: XmlNode, rowIndex: Int): XmlNode {
     val existing = rows.firstOrNull { attr(it, "r").toIntOrNull() == rowIndex }
     if (existing != null) return existing
     val element = document.createXmlNode(ns.tag("row"))
-    element.setAttribute("r", rowIndex.toString())
+    element.attributes["r"] = rowIndex.toString()
     val anchor = rows.firstOrNull { (attr(it, "r").toIntOrNull() ?: 0) > rowIndex }
     if (anchor != null) sheetData.insertBefore(element, anchor) else sheetData.appendChild(element)
     return element
@@ -948,7 +948,7 @@ private fun ensureCell(document: XmlNode, row: XmlNode, ref: Ref): XmlNode {
     val existing = entries.firstOrNull { it.second == ref.col }
     if (existing != null) return existing.first
     val element = document.createXmlNode(ns.tag("c"))
-    element.setAttribute("r", columnName(ref.col) + ref.row)
+    element.attributes["r"] = columnName(ref.col + ref.row)
     val anchor = entries.firstOrNull { it.second > ref.col }
     if (anchor != null) row.insertBefore(element, anchor.first) else row.appendChild(element)
     return element
@@ -957,15 +957,13 @@ private fun ensureCell(document: XmlNode, row: XmlNode, ref: Ref): XmlNode {
 private fun cellEntries(row: XmlNode): List<Pair<XmlNode, Int>> {
     val out = mutableListOf<Pair<XmlNode, Int>>()
     var position = 0
-    var child = row.firstChild
-    while (child != null) {
+    for (child in row.children) {
         if (child is XmlNode && localName(child) == "c") {
             position++
             val declared = parseRefOrNull(attr(child, "r"))
             out.add(child to (declared?.col ?: position))
         }
-        child = child.nextSibling
-    }
+}
     return out
 }
 
@@ -980,22 +978,22 @@ private fun setColumnWidth(document: XmlNode, column: String, width: Double) {
         index in min..max
     }
     if (existing != null) {
-        existing.setAttribute("width", numberText(width))
-        existing.setAttribute("customWidth", "1")
+        existing.attributes["width"] = numberText(width)
+        existing.attributes["customWidth"] = "1"
         return
     }
     val created = document.createXmlNode(ns.tag("col"))
-    created.setAttribute("min", index.toString())
-    created.setAttribute("max", index.toString())
-    created.setAttribute("width", numberText(width))
-    created.setAttribute("customWidth", "1")
+    created.attributes["min"] = index.toString()
+    created.attributes["max"] = index.toString()
+    created.attributes["width"] = numberText(width)
+    created.attributes["customWidth"] = "1"
     container.appendChild(created)
 }
 
 private fun setRowHeight(document: XmlNode, rowIndex: Int, height: Double) {
     val row = ensureRow(document, rowIndex)
-    row.setAttribute("ht", numberText(height))
-    row.setAttribute("customHeight", "1")
+    row.attributes["ht"] = numberText(height)
+    row.attributes["customHeight"] = "1"
 }
 
 private fun appendMerge(document: XmlNode, range: String) {
@@ -1006,9 +1004,9 @@ private fun appendMerge(document: XmlNode, range: String) {
     val exists = children(container, "mergeCell").any { attr(it, "ref").equals(text, ignoreCase = true) }
     if (exists) return
     val created = document.createXmlNode(ns.tag("mergeCell"))
-    created.setAttribute("ref", text)
+    created.attributes["ref"] = text
     container.appendChild(created)
-    container.setAttribute("count", children(container, "mergeCell").size.toString())
+    container.attributes["count"] = children(container, "mergeCell".size.toString())
 }
 
 private fun setFreeze(document: XmlNode, cell: String) {
@@ -1020,7 +1018,7 @@ private fun setFreeze(document: XmlNode, cell: String) {
         existing
     } else {
         val created = document.createXmlNode(ns.tag("sheetView"))
-        created.setAttribute("workbookViewId", "0")
+        created.attributes["workbookViewId"] = "0"
         views.appendChild(created)
         created
     }
@@ -1048,7 +1046,7 @@ private fun setAutoFilter(document: XmlNode, range: String) {
     val parsed = parseRange(range) ?: throw IllegalArgumentException("Bad autofilter range: $range")
     val ns = SpreadsheetNs.of(document)
     val container = ensureOrdered(document, document, ns.tag("autoFilter"), WORKSHEET_ORDER)
-    container.setAttribute("ref", rangeText(parsed))
+    container.attributes["ref"] = rangeText(parsed)
 }
 
 private fun clearAutoFilter(document: XmlNode) {
@@ -1107,11 +1105,11 @@ private fun updateDimension(document: XmlNode) {
     val text = if (parsed == null) "A1" else rangeText(parsed)
     val existing = children(document, "dimension").firstOrNull()
     if (existing != null) {
-        existing.setAttribute("ref", text)
+        existing.attributes["ref"] = text
         return
     }
     val created = document.createXmlNode(ns.tag("dimension"))
-    created.setAttribute("ref", text)
+    created.attributes["ref"] = text
     insertOrdered(document, created, "dimension", WORKSHEET_ORDER)
 }
 
@@ -1376,8 +1374,8 @@ private fun addOverride(contentTypes: XmlNode, partName: String, contentType: St
     val exists = children(contentTypes, "Override").any { attr(it, "PartName") == partName }
     if (exists) return
     val element = contentTypes.createXmlNode("Override")
-    element.setAttribute("PartName", partName)
-    element.setAttribute("ContentType", contentType)
+    element.attributes["PartName"] = partName
+    element.attributes["ContentType"] = contentType
     contentTypes.appendChild(element)
 }
 
@@ -1396,16 +1394,16 @@ private fun addRelationship(rels: XmlNode, type: String, target: String): String
     while (used.contains("rId$index")) index++
     val id = "rId$index"
     val element = rels.createXmlNode("Relationship")
-    element.setAttribute("Id", id)
-    element.setAttribute("Type", type)
-    element.setAttribute("Target", target)
+    element.attributes["Id"] = id
+    element.attributes["Type"] = type
+    element.attributes["Target"] = target
     rels.appendChild(element)
     return id
 }
 
 private fun ensureRelationshipPrefix(document: XmlNode) {
     val root = document ?: return
-    if (attr(root, "xmlns:r").isEmpty()) root.setAttribute("xmlns:r", NS_OFFICE_RELATIONSHIPS)
+    if (attr(root, "xmlns:r").isEmpty()) root.attributes["xmlns:r"] = NS_OFFICE_RELATIONSHIPS
 }
 
 private fun addOrderedXml(
@@ -1424,19 +1422,17 @@ private fun addOrderedXml(
 
 private fun indexOfChild(parent: XmlNode, child: XmlNode): Int {
     var index = 0
-    var node = parent.firstChild
-    while (node != null) {
+    for (node in parent.children) {
         if (node is XmlNode) {
             if (node === child) return index
             index++
         }
-        node = node.nextSibling
-    }
+}
     return -1
 }
 
 private fun syncCount(container: XmlNode) {
-    container.setAttribute("count", directChildren(container).size.toString())
+    container.attributes["count"] = directChildren(container.size.toString())
 }
 
 private fun columnName(index: Int): String {

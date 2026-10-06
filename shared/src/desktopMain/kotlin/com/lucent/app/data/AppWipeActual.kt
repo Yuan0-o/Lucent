@@ -9,7 +9,7 @@ actual suspend fun cancelTaskReminder(context: PlatformContext, taskId: Long) {
 }
 
 actual suspend fun clearCacheDir(context: PlatformContext) {
-    context.cacheDir.listFiles()?.forEach { f -> runCatching { f.deleteRecursively() } }
+    okio.FileSystem.SYSTEM.listOrNull(context.cacheDir)?.forEach { f -> runCatching { okio.FileSystem.SYSTEM.deleteRecursively(f) } }
 }
 
 actual suspend fun wipeLocalModels(context: PlatformContext) {

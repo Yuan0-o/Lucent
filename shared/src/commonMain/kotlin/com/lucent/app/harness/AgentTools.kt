@@ -5,6 +5,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 class SubAgent internal constructor(
@@ -249,7 +250,7 @@ object AgentTools : HarnessGroupTools {
         val array: JsonArray? = args["tools"]?.jsonArray
         if (array != null) {
             for (i in 0 until array.size) {
-                val value = array.optString(i, "")
+                val value = array[i].jsonPrimitive.content
                 if (value.isNotBlank()) tools.add(value)
             }
         }

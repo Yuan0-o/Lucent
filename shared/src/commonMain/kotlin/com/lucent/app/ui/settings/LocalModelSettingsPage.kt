@@ -141,7 +141,7 @@ fun LocalModelSettingsPage(
                 Spacer(modifier = Modifier.height(8.dp))
                 val lmMmprojFile = remember(lmRefresh, lmActiveId) { LocalModelStore.activeMmprojFile(context) }
                 Text(
-                    lmMmprojFile?.let { "${it.length() / (1024 * 1024)} MB" } ?: S.lmMmprojMissing,
+                    lmMmprojFile?.let { "${okio.FileSystem.SYSTEM.metadataOrNull(it)?.size ?: 0L / (1024 * 1024)} MB" } ?: S.lmMmprojMissing,
                     color = onGradientMuted, fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))

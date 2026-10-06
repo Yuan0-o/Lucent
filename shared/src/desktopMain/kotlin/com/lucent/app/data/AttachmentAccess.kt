@@ -15,7 +15,7 @@ actual object AttachmentAccess {
 
     private fun previewDir(context: PlatformContext): PlatformFile {
         val ctx = context as PlatformContext
-        return PlatformFile(File(ctx.applicationContext.cacheDir, PREVIEW_DIR).apply { if (!exists()) mkdirs() }.absolutePath)
+        return PlatformFile((ctx.applicationContext.cacheDir / PREVIEW_DIR).also { okio.FileSystem.SYSTEM.createDirectories(it) }.toString())
     }
 
     actual fun materialize(context: PlatformContext, att: Attachment): PlatformFile? {
@@ -47,7 +47,7 @@ actual object AttachmentAccess {
             }
             dest
         } catch (t: Throwable) {
-            dest.delete()
+            okio.FileSystem.SYSTEM.delete(dest)
             null
         }
     }
@@ -56,7 +56,7 @@ actual object AttachmentAccess {
         val file = materialize(context, att) ?: return false
         return try {
             if (!java.awt.Desktop.isDesktopSupported()) return false
-            java.awt.Desktop.getDesktop().open(File(file.absolutePath))
+            java.awt.Desktop.getDesktop().open(File(file.toString()))
             true
         } catch (t: Throwable) {
             false

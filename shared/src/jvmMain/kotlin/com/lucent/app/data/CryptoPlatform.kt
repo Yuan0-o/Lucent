@@ -86,7 +86,7 @@ actual fun aesGcmDecryptingSource(source: okio.Source, key: ByteArray, iv: ByteA
                 cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, gcmParameterSpec)
                 
                 val ciphertext = okio.Buffer()
-                ciphertext.writeAll(super.source)
+                ciphertext.writeAll(delegate)
                 
                 val plaintext = cipher.doFinal(ciphertext.readByteArray())
                 decryptedBuffer = okio.Buffer().write(plaintext)

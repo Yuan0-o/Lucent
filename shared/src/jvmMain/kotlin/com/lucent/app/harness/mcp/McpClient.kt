@@ -12,7 +12,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
@@ -103,7 +103,7 @@ private class HttpTransport : McpTransport {
     override suspend fun send(
         server: McpServer,
         method: String,
-        params: JSONObject?,
+        params: JsonObject?,
         notification: Boolean
     ): McpReply {
         if (notification) {
@@ -255,7 +255,7 @@ private class StdioTransport : McpTransport {
     override suspend fun send(
         server: McpServer,
         method: String,
-        params: JSONObject?,
+        params: JsonObject?,
         notification: Boolean
     ): McpReply {
         val opened = session(server)
@@ -374,7 +374,7 @@ private class StdioTransport : McpTransport {
             thread.start()
         }
 
-        suspend fun roundTrip(method: String, params: JSONObject?, notification: Boolean): McpReply =
+        suspend fun roundTrip(method: String, params: JsonObject?, notification: Boolean): McpReply =
             lock.withLock {
                 if (notification) {
                     val failure = write(McpProtocol.notification(method, params))
@@ -390,7 +390,7 @@ private class StdioTransport : McpTransport {
                 exchange(method, params)
             }
 
-        private suspend fun exchange(method: String, params: JSONObject?): McpReply {
+        private suspend fun exchange(method: String, params: JsonObject?): McpReply {
             val id = nextMcpId()
             val failure = write(McpProtocol.request(id, method, params))
             if (failure.isNotBlank()) return McpReply(ok = false, error = failure)
@@ -508,7 +508,7 @@ actual object McpSessions {
     suspend fun tools(server: McpServer, force: Boolean = false): List<McpTool> =
         discovery(server, force).tools
 
-    suspend fun exchange(server: McpServer, method: String, params: JSONObject? = null): McpReply {
+    suspend fun exchange(server: McpServer, method: String, params: JsonObject? = null): McpReply {
         val problem = unavailable(server)
         if (problem.isNotBlank()) return McpReply(ok = false, error = problem)
         return try {
@@ -583,7 +583,7 @@ actual object McpSessions {
         }
         val arguments = try {
             val raw = argumentsJson.trim()
-            if (raw.isEmpty()) JSONObject() else JSONObject(raw)
+            if (raw.isEmpty()) kotlinx.serialization.json.buildJsonObject {} else kotlinx.serialization.json.Json.parseToJsonElement(raw).jsonObject
         } catch (e: Exception) {
             return McpResult(
                 "The arguments for $name must be a JSON object, for example {\"query\": \"rain\"}.",

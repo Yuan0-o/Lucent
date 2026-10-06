@@ -88,7 +88,7 @@ object OfficeDeckTools : HarnessGroupTools {
         }
         out.parentFile?.mkdirs()
         if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
-        val summary = Pptx.create(spec.toString(), out.absolutePath.toPath())
+        val summary = Pptx.create(spec.toString(), out)
         return ToolExecResult("Wrote ${Workspace.display(ctx, out)}: $summary")
     }
 
@@ -135,7 +135,7 @@ object OfficeDeckTools : HarnessGroupTools {
         val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val maxChars = args["max_chars"]?.jsonPrimitive?.intOrNull ?: 20000
         val shown = Workspace.display(ctx, file)
-        val text = Pptx.read(file.absolutePath.toPath(), maxChars)
+        val text = Pptx.read(file, maxChars)
         return ToolExecResult("$shown (${Workspace.humanSize(file.length())})\n$text")
     }
 
@@ -144,7 +144,7 @@ object OfficeDeckTools : HarnessGroupTools {
         val ops = opsJson(args["ops"])
         if (ops.isBlank()) return ToolExecResult("Give at least one operation in ops.", success = false)
         if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
-        val summary = Pptx.edit(file.absolutePath.toPath(), ops)
+        val summary = Pptx.edit(file, ops)
         return ToolExecResult("Edited ${Workspace.display(ctx, file)}\n$summary")
     }
 

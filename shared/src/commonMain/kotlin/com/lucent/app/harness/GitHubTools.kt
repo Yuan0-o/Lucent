@@ -267,9 +267,9 @@ object GitHubTools : HarnessGroupTools {
     }
 
     private fun splitList(raw: String): JsonArray {
-        val out = JSONArray()
-        raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { out.put(it) }
-        return out
+        return kotlinx.serialization.json.buildJsonArray {
+        raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { add(it) }
+    }
     }
 
     private fun labelNames(array: JsonArray?): String {
@@ -373,11 +373,11 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call("GET", url.toString())
                 problem(reply)?.let { return it }
                 val array = HttpJson.arrayOf(reply.body) ?: return notJson(reply)
-                val plain = JSONArray()
+                val plain = mutableListOf<kotlinx.serialization.json.JsonObject>()
                 for (i in 0 until array.size) {
                     val item = (array[i] as? JsonObject) ?: continue
                     if (item.containsKey("pull_request")) continue
-                    plain.put(item)
+                    plain.add(item)
                 }
                 ToolExecResult(
                     HttpJson.rows(plain, 25) { item ->
@@ -419,12 +419,12 @@ object GitHubTools : HarnessGroupTools {
             "create" -> {
                 val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
                 if (title.isEmpty()) return ToolExecResult("create needs a title.", success = false)
-                val payload = JSONObject().put("title", title)
+                val payload = mutableMapOf<String, kotlinx.serialization.json.JsonElement>("title" to kotlinx.serialization.json.JsonPrimitive(title))
                 val body = (args["body"]?.jsonPrimitive?.content ?: "")
-                if (body.isNotEmpty()) payload.put("body", body)
+                if (body.isNotEmpty()) payload["body"] = kotlinx.serialization.json.JsonPrimitive(body)
                 val labels = splitList((args["labels"]?.jsonPrimitive?.content ?: ""))
-                if (labels.size > 0) payload.put("labels", labels)
-                val reply = call("POST", "$root/issues", payload)
+                if (labels.size > 0) payload["labels"] = kotlinx.serialization.json.JsonPrimitive(labels)
+                val reply = call("POST", "$root/issues", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
                 val created = (issue?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
@@ -437,18 +437,18 @@ object GitHubTools : HarnessGroupTools {
             }
             "update" -> {
                 if (number <= 0) return numberNeeded("issue")
-                val payload = JSONObject()
+                val payload = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
                 val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
-                if (title.isNotEmpty()) payload.put("title", title)
-                if (args.containsKey("body")) payload.put("body", (args["body"]?.jsonPrimitive?.content ?: ""))
+                if (title.isNotEmpty()) payload["title"] = kotlinx.serialization.json.JsonPrimitive(title)
+                if (args.containsKey("body")) payload["body"] = kotlinx.serialization.json.JsonPrimitive((args["body"]?.jsonPrimitive?.content ?: ""))
                 val state = (args["state"]?.jsonPrimitive?.content ?: "").trim()
-                if (state.isNotEmpty()) payload.put("state", state)
+                if (state.isNotEmpty()) payload["state"] = kotlinx.serialization.json.JsonPrimitive(state)
                 val labels = splitList((args["labels"]?.jsonPrimitive?.content ?: ""))
-                if (labels.size > 0) payload.put("labels", labels)
+                if (labels.size > 0) payload["labels"] = kotlinx.serialization.json.JsonPrimitive(labels)
                 if (payload.size == 0) {
                     return ToolExecResult("update needs title, body, state or labels to change.", success = false)
                 }
-                val reply = call("PATCH", "$root/issues/$number", payload)
+                val reply = call("PATCH", "$root/issues/$number", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 ToolExecResult("Updated #$number.")
             }
@@ -456,13 +456,13 @@ object GitHubTools : HarnessGroupTools {
                 if (number <= 0) return numberNeeded("issue")
                 val body = (args["comment"]?.jsonPrimitive?.content ?: "").trim().ifBlank { (args["body"]?.jsonPrimitive?.content ?: "").trim() }
                 if (body.isEmpty()) return ToolExecResult("comment needs the text in comment.", success = false)
-                val reply = call("POST", "$root/issues/$number/comments", JSONObject().put("body", body))
+                val reply = call("POST", "$root/issues/$number/comments", kotlinx.serialization.json.buildJsonObject { put("body", body) })
                 problem(reply)?.let { return it }
                 ToolExecResult("Commented on #$number.")
             }
             else -> {
                 if (number <= 0) return numberNeeded("issue")
-                val reply = call("PATCH", "$root/issues/$number", JSONObject().put("state", "closed"))
+                val reply = call("PATCH", "$root/issues/$number", kotlinx.serialization.json.buildJsonObject { put("state", "closed") })
                 problem(reply)?.let { return it }
                 ToolExecResult("Closed #$number.")
             }
@@ -515,10 +515,10 @@ object GitHubTools : HarnessGroupTools {
                 if (title.isEmpty() || head.isEmpty() || target.isEmpty()) {
                     return ToolExecResult("create needs title, head and base.", success = false)
                 }
-                val payload = JSONObject().put("title", title).put("head", head).put("base", target)
+                val payload = mutableMapOf<String, kotlinx.serialization.json.JsonElement>("title" to kotlinx.serialization.json.JsonPrimitive(title), "head" to kotlinx.serialization.json.JsonPrimitive(head), "base" to kotlinx.serialization.json.JsonPrimitive(target))
                 val body = (args["body"]?.jsonPrimitive?.content ?: "")
-                if (body.isNotEmpty()) payload.put("body", body)
-                val reply = call("POST", "$root/pulls", payload)
+                if (body.isNotEmpty()) payload["body"] = kotlinx.serialization.json.JsonPrimitive(body)
+                val reply = call("POST", "$root/pulls", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 val pull = HttpJson.objectOf(reply.body)
                 val created = (pull?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
@@ -531,16 +531,16 @@ object GitHubTools : HarnessGroupTools {
             }
             "update" -> {
                 if (number <= 0) return numberNeeded("pull request")
-                val payload = JSONObject()
+                val payload = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
                 val title = (args["title"]?.jsonPrimitive?.content ?: "").trim()
-                if (title.isNotEmpty()) payload.put("title", title)
-                if (args.containsKey("body")) payload.put("body", (args["body"]?.jsonPrimitive?.content ?: ""))
+                if (title.isNotEmpty()) payload["title"] = kotlinx.serialization.json.JsonPrimitive(title)
+                if (args.containsKey("body")) payload["body"] = kotlinx.serialization.json.JsonPrimitive((args["body"]?.jsonPrimitive?.content ?: ""))
                 val state = (args["state"]?.jsonPrimitive?.content ?: "").trim()
-                if (state.isNotEmpty()) payload.put("state", state)
+                if (state.isNotEmpty()) payload["state"] = kotlinx.serialization.json.JsonPrimitive(state)
                 if (payload.size == 0) {
                     return ToolExecResult("update needs title, body or state to change.", success = false)
                 }
-                val reply = call("PATCH", "$root/pulls/$number", payload)
+                val reply = call("PATCH", "$root/pulls/$number", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 ToolExecResult("Updated #$number.")
             }
@@ -548,7 +548,7 @@ object GitHubTools : HarnessGroupTools {
                 if (number <= 0) return numberNeeded("pull request")
                 val body = (args["comment"]?.jsonPrimitive?.content ?: "").trim().ifBlank { (args["body"]?.jsonPrimitive?.content ?: "").trim() }
                 if (body.isEmpty()) return ToolExecResult("comment needs the text in comment.", success = false)
-                val reply = call("POST", "$root/issues/$number/comments", JSONObject().put("body", body))
+                val reply = call("POST", "$root/issues/$number/comments", kotlinx.serialization.json.buildJsonObject { put("body", body) })
                 problem(reply)?.let { return it }
                 ToolExecResult("Commented on #$number.")
             }
@@ -575,7 +575,7 @@ object GitHubTools : HarnessGroupTools {
             }
             else -> {
                 if (number <= 0) return numberNeeded("pull request")
-                val reply = call("PUT", "$root/pulls/$number/merge", JSONObject().put("merge_method", "merge"))
+                val reply = call("PUT", "$root/pulls/$number/merge", kotlinx.serialization.json.buildJsonObject { put("merge_method", "merge") })
                 problem(reply)?.let { return it }
                 val outcome = HttpJson.objectOf(reply.body)
                 val message = (outcome?.get("message")?.jsonPrimitive?.content ?: "").orEmpty()
@@ -626,8 +626,8 @@ object GitHubTools : HarnessGroupTools {
                         success = false
                     )
                 }
-                val payload = JSONObject().put("ref", "refs/heads/$name").put("sha", from)
-                val reply = call("POST", "$root/git/refs", payload)
+                val payload = mutableMapOf<String, kotlinx.serialization.json.JsonElement>("ref" to kotlinx.serialization.json.JsonPrimitive("refs/heads/$name"), "sha" to kotlinx.serialization.json.JsonPrimitive(from))
+                val reply = call("POST", "$root/git/refs", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 ToolExecResult("Created branch $name from $from.")
             }
@@ -773,7 +773,7 @@ object GitHubTools : HarnessGroupTools {
                 val reply = call(
                     "POST",
                     "$root/actions/workflows/${HttpJson.enc(workflow)}/dispatches",
-                    JSONObject().put("ref", ref)
+                    kotlinx.serialization.json.buildJsonObject { put("ref", ref) }
                 )
                 problem(reply)?.let { return it }
                 ToolExecResult("Dispatched $workflow on $ref.")
@@ -821,12 +821,12 @@ object GitHubTools : HarnessGroupTools {
             }
             else -> {
                 if (tag.isEmpty()) return ToolExecResult("create needs tag.", success = false)
-                val payload = JSONObject().put("tag_name", tag)
+                val payload = mutableMapOf<String, kotlinx.serialization.json.JsonElement>("tag_name" to kotlinx.serialization.json.JsonPrimitive(tag))
                 val name = (args["name"]?.jsonPrimitive?.content ?: "").trim()
-                if (name.isNotEmpty()) payload.put("name", name)
-                if (args.containsKey("body")) payload.put("body", (args["body"]?.jsonPrimitive?.content ?: ""))
-                payload.put("draft", (args["draft"]?.jsonPrimitive?.booleanOrNull ?: false))
-                val reply = call("POST", "$root/releases", payload)
+                if (name.isNotEmpty()) payload["name"] = kotlinx.serialization.json.JsonPrimitive(name)
+                if (args.containsKey("body")) payload["body"] = kotlinx.serialization.json.JsonPrimitive((args["body"]?.jsonPrimitive?.content ?: ""))
+                payload["draft"] = kotlinx.serialization.json.JsonPrimitive((args["draft"]?.jsonPrimitive?.booleanOrNull ?: false))
+                val reply = call("POST", "$root/releases", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 val release = HttpJson.objectOf(reply.body)
                 ToolExecResult(

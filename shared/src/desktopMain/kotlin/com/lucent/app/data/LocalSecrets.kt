@@ -89,7 +89,7 @@ actual object LocalSecrets {
         return try {
             val dir = keyDir()
             val file = File(dir, "master.key")
-            if (file.exists()) {
+            if (okio.FileSystem.SYSTEM.exists(file)) {
                 val text = file.readText().trim()
                 val key = decodeStoredForm(text)
                 if (key != null) {
@@ -140,7 +140,7 @@ actual object LocalSecrets {
         val wrapped = wrapper().wrap(key)
         if (wrapped != null) {
             writeMasterKeyDurably(
-                file.parentFile, file, PREFIX_DPAPI + java.util.Base64.getEncoder().encodeToString(wrapped)
+                file.parent, file, PREFIX_DPAPI + java.util.Base64.getEncoder().encodeToString(wrapped)
             )
         } else {
             reportUnbound()
@@ -164,9 +164,9 @@ actual object LocalSecrets {
                 out.flush()
                 out.fd.sync()
             }
-            if (AtomicFiles.replace(tmp, file)) true else { tmp.delete(); false }
+            if (AtomicFiles.replace(tmp, file)) true else { okio.FileSystem.SYSTEM.delete(tmp); false }
         } catch (t: Throwable) {
-            tmp.delete()
+            okio.FileSystem.SYSTEM.delete(tmp)
             false
         }
     }

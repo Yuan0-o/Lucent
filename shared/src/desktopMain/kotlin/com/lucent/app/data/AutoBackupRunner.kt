@@ -64,7 +64,7 @@ private fun appContextOf(context: PlatformContext): PlatformContext = context
 
 private suspend fun writeBackup(context: PlatformContext, folderUri: String, name: String) {
     val dir = java.io.File(folderUri)
-    if (!dir.isDirectory && !dir.mkdirs()) throw java.io.IOException("no folder $folderUri")
+    if (!dir.isDirectory && !okio.FileSystem.SYSTEM.createDirectories(dir)) throw java.io.IOException("no folder $folderUri")
     val db = createAppDatabase(context)
     val settings = createSettingsRepository(context)
     java.io.FileOutputStream(java.io.File(dir, name)).use { out ->

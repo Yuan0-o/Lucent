@@ -52,7 +52,7 @@ object HtmlText {
         val out = mutableListOf<Pair<String, String>>()
         val pattern = Regex("<a\\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
         pattern.findAll(html).forEach { match ->
-            if (out.length() >= limit) return@forEach
+            if (out.size >= limit) return@forEach
             val href = match.groupValues[1].trim()
             val label = clean(match.groupValues[2].replace(Regex("<[^>]+>"), " ")).trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript:")) return@forEach
@@ -291,7 +291,7 @@ object BrowserTools : HarnessGroupTools {
             if (single.isNotEmpty()) add(single)
             if (many != null) {
                 for (index in 0 until many.size) {
-                    val value = many.optString(index, "").trim()
+                    val value = many[index].jsonPrimitive.content.trim()
                     if (value.isNotEmpty()) add(value)
                 }
             }

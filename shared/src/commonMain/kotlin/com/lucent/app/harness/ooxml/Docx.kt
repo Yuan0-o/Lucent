@@ -201,7 +201,7 @@ object Docx {
     private fun jsonObject(text: String, what: String): JsonObject {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            Json.parseToJsonXmlNode(text).jsonObject
+            Json.parseToJsonElement(text).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -210,7 +210,7 @@ object Docx {
     private fun jsonArray(text: String, what: String): JsonArray {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            Json.parseToJsonXmlNode(text).jsonArray
+            Json.parseToJsonElement(text).jsonArray
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
@@ -626,7 +626,7 @@ object Docx {
         val paragraphs = descendants(document, "p")
         val target = paragraphs.firstOrNull { textOf(it).trim() == find.trim() }
             ?: throw IllegalArgumentException("No paragraph matches \"$find\"")
-        target.parentXmlNode?.removeChild(target)
+        parentOf(document, target)?.children?.remove(target)
     }
 
     private fun setParagraphText(document: XmlNode, paragraph: XmlNode, text: String) {
@@ -664,7 +664,7 @@ object Docx {
             ).firstOrNull()
             if (created != null) {
                 val imported = document.importXmlNode(created, true) as XmlNode
-                val first = body.firstChild
+                val first = body.children.firstOrNull()
                 if (first != null) body.insertBefore(imported, first) else body.appendChild(imported)
             }
         }
@@ -759,24 +759,22 @@ object Docx {
     private fun addSectionReference(document: XmlNode, section: XmlNode, tag: String, relId: String) {
         ensureRelationshipPrefix(document)
         val reference = document.createXmlNode("w:$tag")
-        reference.setAttribute("w:type", "default")
-        reference.setAttribute("r:id", relId)
+        reference.attributes["w:type"] = "default"
+        reference.attributes["r:id"] = relId
         val allowed = if (tag == "headerReference") setOf("headerReference") else setOf("headerReference", "footerReference")
         var anchor: XmlNode? = null
-        var child = section.firstChild
-        while (child != null) {
+        for (child in section.children) {
             if (child is XmlNode && localName(child) !in allowed) {
                 anchor = child
                 break
             }
-            child = child.nextSibling
-        }
+}
         if (anchor != null) section.insertBefore(reference, anchor) else section.appendChild(reference)
     }
 
     private fun ensureRelationshipPrefix(document: XmlNode) {
         val root = document ?: return
-        if (attr(root, "xmlns:r").isEmpty()) root.setAttribute("xmlns:r", NS_OFFICE_RELATIONSHIPS)
+        if (attr(root, "xmlns:r").isEmpty()) root.attributes["xmlns:r"] = NS_OFFICE_RELATIONSHIPS
     }
 
     private fun relationshipPart(rels: XmlNode, relId: String): String {
@@ -792,10 +790,10 @@ object Docx {
         if (existing != null) return attr(existing, "Id")
         val id = nextRelId(rels)
         val element = rels.createXmlNode("Relationship")
-        element.setAttribute("Id", id)
-        element.setAttribute("Type", type)
-        element.setAttribute("Target", target)
-        if (external) element.setAttribute("TargetMode", "External")
+        element.attributes["Id"] = id
+        element.attributes["Type"] = type
+        element.attributes["Target"] = target
+        if (external) element.attributes["TargetMode"] = "External"
         rels.appendChild(element)
         return id
     }
@@ -846,9 +844,9 @@ object Docx {
             }
             if (!exists) {
                 val created = document.createXmlNode("Default")
-                created.setAttribute("Extension", entry.key)
-                created.setAttribute("ContentType", entry.value)
-                document.insertBefore(created, document.firstChild)
+                created.attributes["Extension"] = entry.key
+                created.attributes["ContentType"] = entry.value
+                document.insertBefore(created, document.children.firstOrNull())
                 changed = true
             }
         }
@@ -913,10 +911,10 @@ private class EditSink(private val parts: MutableMap<String, ByteArray>, private
         while (used.contains("rId$index")) index++
         val id = "rId$index"
         val element = rels.createXmlNode("Relationship")
-        element.setAttribute("Id", id)
-        element.setAttribute("Type", type)
-        element.setAttribute("Target", target)
-        if (external) element.setAttribute("TargetMode", "External")
+        element.attributes["Id"] = id
+        element.attributes["Type"] = type
+        element.attributes["Target"] = target
+        if (external) element.attributes["TargetMode"] = "External"
         rels.appendChild(element)
         return id
     }

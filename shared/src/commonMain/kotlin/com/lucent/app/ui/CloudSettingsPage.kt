@@ -361,7 +361,7 @@ fun CloudSettingsPage(
                         val r = runCatching {
                             val bytes = CloudSync.download(cfg, name).getOrThrow()
                             val db = createAppDatabase(context)
-                            val source = BackupManager.BackupSource { Buffer().write(bytes).inputStream() }
+                            val source = BackupManager.BackupSource { Buffer().write(bytes) }
                             val preview = BackupManager.inspect(context, source, null)
                             BackupManager.commit(context, db, repo, preview, source = source)
                         }

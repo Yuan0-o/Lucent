@@ -1471,19 +1471,19 @@ object PdfTools : HarnessGroupTools {
     }
 
     private fun readPdf(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val pages = args["pages"]?.jsonPrimitive?.content ?: ""
         val maxChars = args["max_chars"]?.jsonPrimitive?.intOrNull ?: 40000
         return pdfResult(PdfBook.text(file, pages, maxChars))
     }
 
     private fun info(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         return pdfResult(PdfBook.info(file))
     }
 
     private fun search(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val query = args["query"]?.jsonPrimitive?.content ?: ""
         val maxHits = args["max_hits"]?.jsonPrimitive?.intOrNull ?: 40
         return pdfResult(PdfBook.search(file, query, maxHits))
@@ -1493,7 +1493,7 @@ object PdfTools : HarnessGroupTools {
         if (text.startsWith(PDF_PROBLEM)) ToolExecResult(text, success = false) else ToolExecResult(text)
 
     private suspend fun renderPage(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val page = (args["page"]?.jsonPrimitive?.intOrNull ?: 1).coerceAtLeast(1)
         val width = (args["width"]?.jsonPrimitive?.intOrNull ?: 1400).coerceIn(120, 4000)
         val host = HarnessRuntime.host
@@ -1520,7 +1520,7 @@ object PdfTools : HarnessGroupTools {
     }
 
     private suspend fun toImages(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val width = (args["width"]?.jsonPrimitive?.intOrNull ?: 1200).coerceIn(120, 4000)
         val host = HarnessRuntime.host
             ?: return ToolExecResult("No platform renderer is available, so pages cannot be drawn.", success = false)
@@ -1563,8 +1563,8 @@ object PdfTools : HarnessGroupTools {
     private suspend fun merge(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val paths = pdfPathList(args, "paths")
         if (paths.size < 2) return ToolExecResult("Give at least two PDFs to merge.", success = false)
-        val inputs = paths.map { Workspace.forRead(ctx, it).toPath() }
-        val out = Workspace.forWrite(ctx, args["out"]?.jsonPrimitive?.content ?: "").toPath()
+        val inputs = paths.map { Workspace.forReadFile(ctx, it) }
+        val out = Workspace.forWriteFile(ctx, args["out"]?.jsonPrimitive?.content ?: "")
         out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
         if (ctx.config.snapshots && FileSystem.SYSTEM.exists(out)) Snapshots.capture(ctx, out.toString())
         val host = HarnessRuntime.host
@@ -1579,14 +1579,14 @@ object PdfTools : HarnessGroupTools {
     }
 
     private suspend fun split(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val file = Workspace.forRead(ctx, args["path"]?.jsonPrimitive?.content ?: "").toPath()
+        val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val pages = (args["pages"]?.jsonPrimitive?.content ?: "").trim()
         if (pages.isEmpty()) return ToolExecResult("Give the pages to keep, for example \"2-4,9\".", success = false)
         val raw = args["out"]?.jsonPrimitive?.content ?: ""
         val out = if (raw.isBlank()) {
             pdfWritableTarget(ctx, pdfSibling(ctx, file, file.name.substringBeforeLast(".") + "-pages.pdf"))
         } else {
-            Workspace.forWrite(ctx, raw).toPath()
+            Workspace.forWriteFile(ctx, raw)
         }
         out.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
         if (ctx.config.snapshots && FileSystem.SYSTEM.exists(out)) Snapshots.capture(ctx, out.toString())
@@ -1606,7 +1606,7 @@ object PdfTools : HarnessGroupTools {
             "run_command instead, for example: python3 -c \"import pypdf; ...\"."
 
     private fun pdfOutputTarget(ctx: HarnessCtx, raw: String, fallback: Path): Path {
-        if (raw.isNotBlank()) return Workspace.forWrite(ctx, raw).toPath()
+        if (raw.isNotBlank()) return Workspace.forWriteFile(ctx, raw)
         return pdfWritableTarget(ctx, fallback)
     }
 

@@ -55,7 +55,7 @@ class Db private constructor(private val connection: Connection) {
 
         fun open(context: PlatformContext): Db {
             val file = File(context.filesDir, "lucent.db")
-            file.parentFile?.mkdirs()
+            file.parent?.mkdirs()
             Class.forName("org.sqlite.JDBC")
             val conn = openConnection(context, file)
             conn.createStatement().use { st ->
@@ -71,7 +71,7 @@ class Db private constructor(private val connection: Connection) {
         private val PLAINTEXT_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
 
         private fun isPlaintextDatabase(file: File): Boolean {
-            if (!file.exists() || file.length() < PLAINTEXT_HEADER.size) return false
+            if (!okio.FileSystem.SYSTEM.exists(file) || (okio.FileSystem.SYSTEM.metadataOrNull(file)?.size ?: 0L) < PLAINTEXT_HEADER.size) return false
             val head = ByteArray(PLAINTEXT_HEADER.size)
             file.inputStream().use { if (it.read(head) != head.size) return false }
             return head.contentEquals(PLAINTEXT_HEADER)
@@ -85,7 +85,7 @@ class Db private constructor(private val connection: Connection) {
                     EncryptionStatus.State.PLAINTEXT, "key unavailable: ${t.message}"
                 )
                 StartupLog.event(context, "db: key unavailable (${t.message}); opening unencrypted")
-                return DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
+                return DriverManager.getConnection("jdbc:sqlite:${file.toString()}")
             }
             val hexKey = passphrase.removePrefix("x'").removeSuffix("'")
             if (!hexKey.matches(Regex("[0-9a-fA-F]{64}"))) {
@@ -93,11 +93,11 @@ class Db private constructor(private val connection: Connection) {
                     EncryptionStatus.State.PLAINTEXT, "key had an unexpected form"
                 )
                 StartupLog.event(context, "db: key had an unexpected form; opening unencrypted")
-                return DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
+                return DriverManager.getConnection("jdbc:sqlite:${file.toString()}")
             }
 
             if (isPlaintextDatabase(file)) {
-                val conn = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
+                val conn = DriverManager.getConnection("jdbc:sqlite:${file.toString()}")
                 val core = probeCipherCore(conn)
                 val rekeyed = try {
                     conn.createStatement().use { st ->
@@ -128,7 +128,7 @@ class Db private constructor(private val connection: Connection) {
                 return conn
             }
 
-            val existed = file.exists()
+            val existed = okio.FileSystem.SYSTEM.exists(file)
             val conn = try {
                 DriverManager.getConnection(keyedSqliteUrl(file, hexKey))
             } catch (t: Throwable) {
@@ -136,7 +136,7 @@ class Db private constructor(private val connection: Connection) {
                     EncryptionStatus.State.LOCKED_OUT, "existing database rejected this machine's key"
                 )
                 if (existed) throw IllegalStateException(
-                    "The Lucent database at ${file.absolutePath} could not be unlocked with this " +
+                    "The Lucent database at ${file.toString()} could not be unlocked with this " +
                         "machine's key. If the key files under ${File(context.filesDir, "keys")} were " +
                         "deleted or replaced, restore from a .lcb backup.", t
                 )
@@ -510,7 +510,7 @@ class Db private constructor(private val connection: Connection) {
 
 
 fun keyedSqliteUrl(file: File, hexKey: String): String {
-    val p = file.absolutePath.replace('\\', '/')
+    val p = file.toString().replace('\\', '/')
         .replace("%", "%25").replace("?", "%3F").replace("#", "%23").replace(" ", "%20")
     return "jdbc:sqlite:file:$p?cipher=sqlcipher&legacy=4&hexkey=$hexKey"
 }

@@ -12,7 +12,8 @@ import okhttp3.Request
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
-import com.lucent.app.data.CryptoPlatform
+import okio.buffer
+import com.lucent.app.data.sha256
 
 
 
@@ -178,7 +179,7 @@ object PluginDownload {
                 }
 
                 val bytes = FileSystem.SYSTEM.read(partFile) { readByteArray() }
-                val hex = CryptoPlatform.sha256(bytes).joinToString("") {
+                val hex = sha256(bytes).joinToString("") {
                     it.toUByte().toString(16).padStart(2, '0')
                 }
                 if (source.sha256.isNotEmpty() && !hex.equals(source.sha256, ignoreCase = true)) {

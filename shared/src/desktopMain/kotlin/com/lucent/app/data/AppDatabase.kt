@@ -22,7 +22,7 @@ class DesktopAppDatabase private constructor(private val db: Db) : AppDatabase {
         @Volatile private var INSTANCE_PATH: String? = null
 
         private fun resolvedPath(context: PlatformContext): String =
-            File(context.applicationContext.filesDir, "lucent.db").absolutePath
+            (context.applicationContext.filesDir / "lucent.db").toString()
 
         fun getInstance(context: PlatformContext): DesktopAppDatabase {
             val path = resolvedPath(context)
