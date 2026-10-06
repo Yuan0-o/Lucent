@@ -4,7 +4,7 @@ import com.lucent.app.network.ToolExecResult
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -48,7 +48,7 @@ object HtmlText {
         val out = mutableListOf<Pair<String, String>>()
         val pattern = Regex("<a\\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
         pattern.findAll(html).forEach { match ->
-            if (out.size >= limit) return@forEach
+            if (out.length() >= limit) return@forEach
             val href = match.groupValues[1].trim()
             val label = clean(match.groupValues[2].replace(Regex("<[^>]+>"), " ")).trim()
             if (href.isEmpty() || href.startsWith("#") || href.startsWith("javascript:")) return@forEach
@@ -154,7 +154,7 @@ object BrowserTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "fetch_url" -> fetch(ctx, args, withLinks = false)
         "browse_page" -> fetch(ctx, args, withLinks = true)
         "download_file" -> download(ctx, args)
@@ -165,10 +165,10 @@ object BrowserTools : HarnessGroupTools {
 
     private fun valid(url: String): Boolean = url.startsWith("http://") || url.startsWith("https://")
 
-    private fun fetch(ctx: HarnessCtx, args: JSONObject, withLinks: Boolean): ToolExecResult {
-        val url = args.optString("url", "").trim()
+    private fun fetch(ctx: HarnessCtx, args: JsonObject, withLinks: Boolean): ToolExecResult {
+        val url = (args["url"]?.jsonPrimitive?.content ?: "").trim()
         if (!valid(url)) return ToolExecResult("Give me an http or https url.", success = false)
-        val max = args.optInt("max_chars", 12000).coerceIn(500, 120000)
+        val max = (args["max_chars"]?.jsonPrimitive?.intOrNull ?: 12000).coerceIn(500, 120000)
         return try {
             val request = Request.Builder().url(url).header("User-Agent", AGENT).build()
             client.newCall(request).execute().use { response ->
@@ -183,7 +183,7 @@ object BrowserTools : HarnessGroupTools {
                         success = false
                     )
                 }
-                val raw = args.optBoolean("raw", false)
+                val raw = (args["raw"]?.jsonPrimitive?.booleanOrNull ?: false)
                 val sb = StringBuilder()
                 sb.append(response.request.url).append(" — HTTP ").append(response.code).append('\n')
                 val title = HtmlText.title(body)
@@ -215,20 +215,20 @@ object BrowserTools : HarnessGroupTools {
         }
     }
 
-    private fun download(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val url = args.optString("url", "").trim()
+    private fun download(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val url = (args["url"]?.jsonPrimitive?.content ?: "").trim()
         if (!valid(url)) return ToolExecResult("Give me an http or https url.", success = false)
-        val target = if (args.optString("path", "").isBlank()) {
+        val target = if ((args["path"]?.jsonPrimitive?.content ?: "").isBlank()) {
             val name = url.substringAfterLast('/').substringBefore('?').ifBlank { "download.bin" }
             Workspace.forWriteFile(ctx, name)
         } else {
             try {
-                Workspace.forWriteFile(ctx, args.optString("path", ""))
+                Workspace.forWriteFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
             } catch (e: HarnessError) {
                 return ToolExecResult(e.message ?: "That path cannot be written", success = false)
             }
         }
-        if (target.exists() && !args.optBoolean("overwrite", false)) {
+        if (target.exists() && !(args["overwrite"]?.jsonPrimitive?.booleanOrNull ?: false)) {
             return ToolExecResult("${Workspace.display(ctx, target)} already exists.", success = false)
         }
         return try {
@@ -242,7 +242,7 @@ object BrowserTools : HarnessGroupTools {
                 target.parentFile?.mkdirs()
                 body.byteStream().use { input -> target.outputStream().use { output -> input.copyTo(output) } }
                 ToolExecResult(
-                    "Downloaded ${Workspace.display(ctx, target)} (${Workspace.humanSize(target.length())}, " +
+                    "Downloaded ${Workspace.display(ctx, target)} (${Workspace.humanSize(target.size)}, " +
                         "${response.header("Content-Type", "unknown type")})."
                 )
             }
@@ -251,7 +251,7 @@ object BrowserTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun search(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private suspend fun search(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val queries = searchQueries(args)
         if (queries.isEmpty()) return ToolExecResult("What should I look up?", success = false)
         val engine = com.lucent.app.data.WebSearchEngine.AUTO.key
@@ -280,13 +280,13 @@ object BrowserTools : HarnessGroupTools {
         return ToolExecResult(ctx.limit(body))
     }
 
-    private fun searchQueries(args: JSONObject): List<String> {
-        val single = args.optString("query", "").trim()
-        val many = args.optJSONArray("queries")
+    private fun searchQueries(args: JsonObject): List<String> {
+        val single = (args["query"]?.jsonPrimitive?.content ?: "").trim()
+        val many = args["queries"]?.jsonArray
         val collected = buildList {
             if (single.isNotEmpty()) add(single)
             if (many != null) {
-                for (index in 0 until many.length()) {
+                for (index in 0 until many.size) {
                     val value = many.optString(index, "").trim()
                     if (value.isNotEmpty()) add(value)
                 }
@@ -295,8 +295,8 @@ object BrowserTools : HarnessGroupTools {
         return collected.distinct().take(4)
     }
 
-    private fun openUrl(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val url = args.optString("url", "").trim()
+    private fun openUrl(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val url = (args["url"]?.jsonPrimitive?.content ?: "").trim()
         if (!valid(url)) return ToolExecResult("Give me an http or https url.", success = false)
         val host = HarnessRuntime.host ?: return ToolExecResult("This build cannot open links.", success = false)
         return if (host.openUrl(url)) ToolExecResult("Opened $url.")

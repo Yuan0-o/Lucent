@@ -3,7 +3,7 @@ package com.lucent.app.harness
 import kotlin.io.encoding.Base64
 import com.lucent.app.network.ToolExecResult
 import com.lucent.app.network.ToolImage
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 
 object DeviceTools : HarnessGroupTools {
 
@@ -86,40 +86,40 @@ object DeviceTools : HarnessGroupTools {
         ))
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? {
         val host = HarnessRuntime.host ?: return ToolExecResult("Device control is not available here.", success = false)
         if (!ctx.android) return ToolExecResult("Device control only works on Android.", success = false)
         return when (name) {
             "device_info" -> text(host.deviceInfo(), "No device information came back.")
             "read_screen" -> text(host.screenText(), "The screen could not be read. The accessibility service may be off.")
             "tap" -> tap(host, args)
-            "input_text" -> flag(host.typeText(args.optString("text", "")), "The text could not be typed.")
+            "input_text" -> flag(host.typeText((args["text"]?.jsonPrimitive?.content ?: "")), "The text could not be typed.")
             "swipe" -> flag(
                 host.swipe(
-                    args.optInt("x1", 0), args.optInt("y1", 0),
-                    args.optInt("x2", 0), args.optInt("y2", 0),
-                    args.optInt("millis", 300)
+                    (args["x1"]?.jsonPrimitive?.intOrNull ?: 0), (args["y1"]?.jsonPrimitive?.intOrNull ?: 0),
+                    (args["x2"]?.jsonPrimitive?.intOrNull ?: 0), (args["y2"]?.jsonPrimitive?.intOrNull ?: 0),
+                    (args["millis"]?.jsonPrimitive?.intOrNull ?: 300)
                 ),
                 "The swipe did not go through."
             )
-            "press_key" -> flag(host.pressKey(args.optString("key", "back")), "The key press did not go through.")
+            "press_key" -> flag(host.pressKey((args["key"]?.jsonPrimitive?.content ?: "back")), "The key press did not go through.")
             "screenshot" -> screenshot(host)
-            "list_apps" -> text(host.installedApps(args.optString("query", "")), "No apps came back.")
-            "launch_app" -> flag(host.launchApp(args.optString("package_name", "")), "That app could not be opened.")
-            "stop_app" -> flag(host.stopApp(args.optString("package_name", "")), "That app could not be stopped.")
+            "list_apps" -> text(host.installedApps((args["query"]?.jsonPrimitive?.content ?: "")), "No apps came back.")
+            "launch_app" -> flag(host.launchApp((args["package_name"]?.jsonPrimitive?.content ?: "")), "That app could not be opened.")
+            "stop_app" -> flag(host.stopApp((args["package_name"]?.jsonPrimitive?.content ?: "")), "That app could not be stopped.")
             "notifications" -> text(host.notifications(), "No notifications, or notification access is off.")
             "clipboard" -> clipboard(host, args)
             "share_text" -> flag(
-                host.shareText(args.optString("text", ""), args.optString("subject", "")),
+                host.shareText((args["text"]?.jsonPrimitive?.content ?: ""), (args["subject"]?.jsonPrimitive?.content ?: "")),
                 "Sharing did not open."
             )
-            "open_link_on_device" -> flag(host.openUrl(args.optString("url", "")), "The link could not be opened.")
+            "open_link_on_device" -> flag(host.openUrl((args["url"]?.jsonPrimitive?.content ?: "")), "The link could not be opened.")
             "notify_user" -> flag(
-                host.notify(args.optString("title", "Lucent"), args.optString("text", "")),
+                host.notify((args["title"]?.jsonPrimitive?.content ?: "Lucent"), (args["text"]?.jsonPrimitive?.content ?: "")),
                 "The notification could not be posted."
             )
-            "vibrate" -> flag(host.vibrate(args.optInt("millis", 250).toLong()), "The phone would not buzz.")
-            "torch" -> flag(host.setTorch(args.optBoolean("on", true)), "The flashlight is not available.")
+            "vibrate" -> flag(host.vibrate((args["millis"]?.jsonPrimitive?.intOrNull ?: 250).toLong()), "The phone would not buzz.")
+            "torch" -> flag(host.setTorch((args["on"]?.jsonPrimitive?.booleanOrNull ?: true)), "The flashlight is not available.")
             "location" -> text(host.location(), "No location fix yet. Try again in a moment.")
             "sensors" -> text(host.sensors(), "No sensor readings came back.")
             "export_file" -> export(ctx, host, args)
@@ -127,8 +127,8 @@ object DeviceTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun tap(host: HarnessHost, args: JSONObject): ToolExecResult {
-        val label = args.optString("text", "")
+    private suspend fun tap(host: HarnessHost, args: JsonObject): ToolExecResult {
+        val label = (args["text"]?.jsonPrimitive?.content ?: "")
         if (label.isNotBlank()) {
             val lines = host.screenText().lines()
             val hit = lines.firstOrNull { it.contains(label, ignoreCase = true) && it.contains("center=(") }
@@ -139,10 +139,10 @@ object DeviceTools : HarnessGroupTools {
             val y = coords.groupValues[2].toIntOrNull() ?: 0
             return flag(host.tap(x, y), "The tap did not go through at ($x,$y).")
         }
-        if (!args.has("x") || !args.has("y")) {
+        if (!args.containsKey("x") || !args.containsKey("y")) {
             return ToolExecResult("Give me either text to tap or both x and y.", success = false)
         }
-        return flag(host.tap(args.optInt("x", 0), args.optInt("y", 0)), "The tap did not go through.")
+        return flag(host.tap((args["x"]?.jsonPrimitive?.intOrNull ?: 0), (args["y"]?.jsonPrimitive?.intOrNull ?: 0)), "The tap did not go through.")
     }
 
     private suspend fun screenshot(host: HarnessHost): ToolExecResult {
@@ -154,10 +154,10 @@ object DeviceTools : HarnessGroupTools {
         )
     }
 
-    private fun clipboard(host: HarnessHost, args: JSONObject): ToolExecResult {
-        val action = args.optString("action", "get").lowercase()
+    private fun clipboard(host: HarnessHost, args: JsonObject): ToolExecResult {
+        val action = (args["action"]?.jsonPrimitive?.content ?: "get").lowercase()
         return if (action == "set") {
-            flag(host.writeClipboard(args.optString("text", "")), "The clipboard could not be written.")
+            flag(host.writeClipboard((args["text"]?.jsonPrimitive?.content ?: "")), "The clipboard could not be written.")
         } else {
             val value = host.readClipboard()
             if (value.isBlank()) ToolExecResult("The clipboard is empty, or Lucent is in the background.")
@@ -165,13 +165,13 @@ object DeviceTools : HarnessGroupTools {
         }
     }
 
-    private suspend fun ask(host: HarnessHost, args: JSONObject): ToolExecResult {
-        val question = args.optString("question", "").trim()
+    private suspend fun ask(host: HarnessHost, args: JsonObject): ToolExecResult {
+        val question = (args["question"]?.jsonPrimitive?.content ?: "").trim()
         if (question.isEmpty()) return ToolExecResult("What should I ask?", success = false)
         val options = mutableListOf<String>()
-        val array = args.optJSONArray("options")
+        val array = args["options"]?.jsonArray
         if (array != null) {
-            for (i in 0 until array.length()) {
+            for (i in 0 until array.size) {
                 val value = array.optString(i, "")
                 if (value.isNotBlank()) options.add(value)
             }
@@ -181,9 +181,9 @@ object DeviceTools : HarnessGroupTools {
         else ToolExecResult("The user answered: $answer")
     }
 
-    private fun export(ctx: HarnessCtx, host: HarnessHost, args: JSONObject): ToolExecResult {
+    private fun export(ctx: HarnessCtx, host: HarnessHost, args: JsonObject): ToolExecResult {
         val file = try {
-            Workspace.forReadFile(ctx, args.optString("path", ""))
+            Workspace.forReadFile(ctx, (args["path"]?.jsonPrimitive?.content ?: ""))
         } catch (e: HarnessError) {
             return ToolExecResult(e.message ?: "That path cannot be read", success = false)
         }

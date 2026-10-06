@@ -3,8 +3,7 @@ package com.lucent.app.harness
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -226,7 +225,7 @@ object AgentTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "spawn_agent" -> spawn(ctx, args)
         "agent_status" -> status(args)
         "agent_result" -> result(args)
@@ -237,29 +236,29 @@ object AgentTools : HarnessGroupTools {
         else -> null
     }
 
-    private fun spawn(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val task = args.optString("task", "").trim()
+    private fun spawn(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val task = (args["task"]?.jsonPrimitive?.content ?: "").trim()
         if (task.isEmpty()) return ToolExecResult("Tell the sub-agent what to do.", success = false)
         if (!ctx.config.subAgents) return ToolExecResult("Sub-agents are switched off in Settings.", success = false)
         if (SubAgents.running() >= ctx.config.maxSubAgents.coerceIn(1, 8)) {
             return ToolExecResult("Too many sub-agents are already running; wait for one to finish.", success = false)
         }
         val tools = mutableSetOf<String>()
-        val array: JSONArray? = args.optJSONArray("tools")
+        val array: JsonArray? = args["tools"]?.jsonArray
         if (array != null) {
-            for (i in 0 until array.length()) {
+            for (i in 0 until array.size) {
                 val value = array.optString(i, "")
                 if (value.isNotBlank()) tools.add(value)
             }
         }
-        val agent = SubAgents.start(ctx, task, tools, args.optString("model", ""))
+        val agent = SubAgents.start(ctx, task, tools, (args["model"]?.jsonPrimitive?.content ?: ""))
         return ToolExecResult(
             "Started ${agent.id}. Ask for agent_status(id=\"${agent.id}\") or agent_result(id=\"${agent.id}\") later."
         )
     }
 
-    private fun status(args: JSONObject): ToolExecResult {
-        val id = args.optString("id", "")
+    private fun status(args: JsonObject): ToolExecResult {
+        val id = (args["id"]?.jsonPrimitive?.content ?: "")
         if (id.isBlank()) {
             val all = SubAgents.list()
             if (all.isEmpty()) return ToolExecResult("No sub-agents have been started.")
@@ -269,10 +268,10 @@ object AgentTools : HarnessGroupTools {
         return ToolExecResult(agent.render(withResult = false))
     }
 
-    private suspend fun result(args: JSONObject): ToolExecResult {
-        val id = args.optString("id", "")
+    private suspend fun result(args: JsonObject): ToolExecResult {
+        val id = (args["id"]?.jsonPrimitive?.content ?: "")
         val agent = SubAgents.get(id) ?: return ToolExecResult("No sub-agent called $id.", success = false)
-        val wait = args.optInt("wait_seconds", 0).coerceIn(0, 300)
+        val wait = (args["wait_seconds"]?.jsonPrimitive?.intOrNull ?: 0).coerceIn(0, 300)
         val deadline = System.currentTimeMillis() + wait * 1000L
         while (agent.status == "running" && System.currentTimeMillis() < deadline) {
             kotlinx.coroutines.delay(400)
@@ -280,15 +279,15 @@ object AgentTools : HarnessGroupTools {
         return ToolExecResult(agent.render(withResult = true), success = agent.status != "failed")
     }
 
-    private fun stop(args: JSONObject): ToolExecResult {
-        val id = args.optString("id", "")
+    private fun stop(args: JsonObject): ToolExecResult {
+        val id = (args["id"]?.jsonPrimitive?.content ?: "")
         if (id.isBlank()) return ToolExecResult("Which sub-agent?", success = false)
         return if (SubAgents.stop(id)) ToolExecResult("Asked $id to stop.")
         else ToolExecResult("No sub-agent called $id.", success = false)
     }
 
-    private fun listAgents(args: JSONObject): ToolExecResult {
-        val runningOnly = args.optBoolean("running_only", false)
+    private fun listAgents(args: JsonObject): ToolExecResult {
+        val runningOnly = (args["running_only"]?.jsonPrimitive?.booleanOrNull ?: false)
         val all = SubAgents.list().filter { !runningOnly || it.status == "running" }
         if (all.isEmpty()) {
             return ToolExecResult(if (runningOnly) "No sub-agent is running." else "No sub-agents have been started.")
@@ -296,9 +295,9 @@ object AgentTools : HarnessGroupTools {
         return ToolExecResult(all.joinToString("\n\n") { it.render(withResult = false) })
     }
 
-    private fun sendMessage(args: JSONObject): ToolExecResult {
-        val id = args.optString("id", "")
-        val message = args.optString("message", "").trim()
+    private fun sendMessage(args: JsonObject): ToolExecResult {
+        val id = (args["id"]?.jsonPrimitive?.content ?: "")
+        val message = (args["message"]?.jsonPrimitive?.content ?: "").trim()
         if (id.isBlank() || message.isEmpty()) {
             return ToolExecResult("Give me both a sub-agent id and a message.", success = false)
         }
@@ -313,8 +312,8 @@ object AgentTools : HarnessGroupTools {
         }
     }
 
-    private fun interrupt(args: JSONObject): ToolExecResult {
-        val id = args.optString("id", "")
+    private fun interrupt(args: JsonObject): ToolExecResult {
+        val id = (args["id"]?.jsonPrimitive?.content ?: "")
         if (id.isBlank()) return ToolExecResult("Which sub-agent?", success = false)
         return if (SubAgents.stop(id)) ToolExecResult("Interrupted $id; its work so far is kept.")
         else ToolExecResult("No sub-agent called $id.", success = false)
