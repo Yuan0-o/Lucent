@@ -1,12 +1,11 @@
 package com.lucent.app.harness
 
 import com.lucent.app.platform.PlatformContext
+import kotlinx.serialization.json.*
 import com.lucent.app.network.ToolExecResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 
 enum class GoalPhase(val key: String) {
@@ -88,15 +87,15 @@ object GoalTools : HarnessGroupTools {
         )
     )
 
-    override suspend fun execute(ctx: HarnessCtx, name: String, args: JSONObject): ToolExecResult? = when (name) {
+    override suspend fun execute(ctx: HarnessCtx, name: String, args: JsonObject): ToolExecResult? = when (name) {
         "create_goal" -> create(ctx, args)
         "get_goal" -> get(ctx, args)
         "update_goal" -> update(ctx, args)
         else -> null
     }
 
-    private fun create(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
-        val objective = args.optString("objective", "").trim()
+    private fun create(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
+        val objective = (args["objective"]?.jsonPrimitive?.content ?: "").trim()
         if (objective.isEmpty()) return ToolExecResult("Give me the objective for the goal.", success = false)
         val conversation = conversationOf(args)
         GoalStore.load(ctx.context, conversation)
@@ -116,18 +115,18 @@ object GoalTools : HarnessGroupTools {
         )
     }
 
-    private fun get(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private fun get(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val conversation = conversationOf(args)
         GoalStore.load(ctx.context, conversation)
         val goal = GoalStore.current() ?: return ToolExecResult("No goal is set for this conversation yet.")
         return ToolExecResult(GoalStore.render(goal))
     }
 
-    private fun update(ctx: HarnessCtx, args: JSONObject): ToolExecResult {
+    private fun update(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val conversation = conversationOf(args)
         GoalStore.load(ctx.context, conversation)
         val goal = GoalStore.current() ?: return ToolExecResult("There is no goal to update.", success = false)
-        val stated = args.optString("goal_id", "").trim()
+        val stated = (args["goal_id"]?.jsonPrimitive?.content ?: "").trim()
         if (stated.isEmpty()) return ToolExecResult("Pass the goal_id from get_goal.", success = false)
         if (stated != goal.id) {
             return ToolExecResult("$stated is not the goal for this conversation (${goal.id}).", success = false)
@@ -139,7 +138,7 @@ object GoalTools : HarnessGroupTools {
                 success = false
             )
         }
-        return when (args.optString("action", "").trim().lowercase()) {
+        return when ((args["action"]?.jsonPrimitive?.content ?: "").trim().lowercase()) {
             "edit" -> edit(ctx, conversation, goal, args)
             "pause" -> pause(ctx, conversation, goal)
             "resume" -> resume(ctx, conversation, goal)
@@ -153,7 +152,7 @@ object GoalTools : HarnessGroupTools {
         ctx: HarnessCtx,
         conversation: Long,
         goal: GoalState,
-        args: JSONObject
+        args: JsonObject
     ): ToolExecResult {
         if (GoalStore.roundIsAutomatic(conversation)) {
             return ToolExecResult(
@@ -162,7 +161,7 @@ object GoalTools : HarnessGroupTools {
                 success = false
             )
         }
-        val objective = args.optString("objective", "").trim()
+        val objective = (args["objective"]?.jsonPrimitive?.content ?: "").trim()
         val requested = goalInt(args, "max_goal_rounds", 0)
         if (objective.isEmpty() && requested <= 0) {
             return ToolExecResult("Give me a new objective or a new max_goal_rounds.", success = false)
@@ -231,9 +230,9 @@ object GoalTools : HarnessGroupTools {
         ctx: HarnessCtx,
         conversation: Long,
         goal: GoalState,
-        args: JSONObject
+        args: JsonObject
     ): ToolExecResult {
-        val reason = args.optString("blocked_reason", "").trim()
+        val reason = (args["blocked_reason"]?.jsonPrimitive?.content ?: "").trim()
         if (reason.isEmpty()) {
             return ToolExecResult("blocked needs a concrete blocked_reason.", success = false)
         }
@@ -252,8 +251,8 @@ object GoalTools : HarnessGroupTools {
         return ToolExecResult(report.message)
     }
 
-    private fun conversationOf(args: JSONObject): Long {
-        val stated = args.optLong("conversation_id", 0L)
+    private fun conversationOf(args: JsonObject): Long {
+        val stated = (args["conversation_id"]?.jsonPrimitive?.longOrNull ?: 0L)
         if (stated > 0L) return stated
         val current = HarnessRuntime.conversationId
         return if (current > 0L) current else 1L
@@ -488,7 +487,7 @@ object GoalFiles {
         val text = HarnessVault.read(context, fileFor(conversationId))
         if (text.isBlank()) return null
         return try {
-            parse(JSONObject(text))
+            parse(Json.parseToJsonElement(text).jsonObject)
         } catch (t: Throwable) {
             null
         }
@@ -498,7 +497,7 @@ object GoalFiles {
         HarnessVault.write(context, fileFor(conversationId), toJson(state).toString())
     }
 
-    private fun toJson(state: GoalState): JSONObject = JSONObject().apply {
+    private fun toJson(state: GoalState): JsonObject = buildJsonObject {
         put("id", state.id)
         put("revision", state.revision)
         put("objective", state.objective)
@@ -508,44 +507,40 @@ object GoalFiles {
         put("blockerReason", state.blockerReason)
         put("blockerStreak", state.blockerStreak)
         put("blockerRound", state.blockerRound)
-        put("roundLog", JSONArray(state.roundLog))
+        put("roundLog", buildJsonArray { state.roundLog.forEach { add(it) } })
         put("createdAt", state.createdAt)
         put("updatedAt", state.updatedAt)
     }
 
-    private fun parse(json: JSONObject): GoalState? {
-        val id = json.optString("id", "").trim()
-        val objective = json.optString("objective", "").trim()
+    private fun parse(json: JsonObject): GoalState? {
+        val id = (json["id"]?.jsonPrimitive?.content ?: "").trim()
+        val objective = (json["objective"]?.jsonPrimitive?.content ?: "").trim()
         if (id.isEmpty() || objective.isEmpty()) return null
         val log = mutableListOf<String>()
-        json.optJSONArray("roundLog")?.let { array ->
-            for (i in 0 until array.length()) {
-                val line = array.optString(i, "")
+        json["roundLog"]?.jsonArray?.let { array ->
+            for (i in 0 until array.size) {
+                val line = array[i].jsonPrimitive.content
                 if (line.isNotBlank()) log.add(line)
             }
         }
         return GoalState(
             id = id,
-            revision = json.optInt("revision", 1),
+            revision = (json["revision"]?.jsonPrimitive?.intOrNull ?: 1),
             objective = objective,
-            phase = GoalPhase.of(json.optString("phase", GoalPhase.ACTIVE.key)),
-            roundsStarted = json.optInt("roundsStarted", 1),
-            maxRounds = GoalStore.roundLimit(json.optInt("maxRounds", GoalStore.DEFAULT_ROUNDS)),
-            blockerReason = json.optString("blockerReason", ""),
-            blockerStreak = json.optInt("blockerStreak", 0),
-            blockerRound = json.optInt("blockerRound", 0),
+            phase = GoalPhase.of((json["phase"]?.jsonPrimitive?.content ?: GoalPhase.ACTIVE.key)),
+            roundsStarted = (json["roundsStarted"]?.jsonPrimitive?.intOrNull ?: 1),
+            maxRounds = GoalStore.roundLimit((json["maxRounds"]?.jsonPrimitive?.intOrNull ?: GoalStore.DEFAULT_ROUNDS)),
+            blockerReason = (json["blockerReason"]?.jsonPrimitive?.content ?: ""),
+            blockerStreak = (json["blockerStreak"]?.jsonPrimitive?.intOrNull ?: 0),
+            blockerRound = (json["blockerRound"]?.jsonPrimitive?.intOrNull ?: 0),
             roundLog = log,
-            createdAt = json.optLong("createdAt", 0L),
-            updatedAt = json.optLong("updatedAt", 0L)
+            createdAt = (json["createdAt"]?.jsonPrimitive?.longOrNull ?: 0L),
+            updatedAt = (json["updatedAt"]?.jsonPrimitive?.longOrNull ?: 0L)
         )
     }
 }
 
-internal fun goalInt(args: JSONObject, key: String, fallback: Int): Int {
-    val raw = args.opt(key) ?: return fallback
-    return when (raw) {
-        is Number -> raw.toInt()
-        is String -> raw.trim().toIntOrNull() ?: fallback
-        else -> fallback
-    }
+internal fun goalInt(args: JsonObject, key: String, fallback: Int): Int {
+    val raw = args[key]?.jsonPrimitive?.content ?: return fallback
+    return raw.trim().toIntOrNull() ?: fallback
 }
