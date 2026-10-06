@@ -7,7 +7,6 @@ import org.w3c.dom.Node
 import org.xml.sax.InputSource
 import java.io.ByteArrayInputStream
 import java.io.File
-import java.io.StringReader
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -239,7 +238,7 @@ private fun parseXml(bytes: ByteArray): Document {
     } catch (e: Exception) {
     }
     val builder = factory.newDocumentBuilder()
-    builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
+    builder.setEntityResolver { _, _ -> InputSource(ByteArrayInputStream(ByteArray(0))) }
     builder.setErrorHandler(null)
     return builder.parse(ByteArrayInputStream(bytes))
 }

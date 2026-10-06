@@ -1,12 +1,10 @@
 package com.lucent.app.data
 
-import java.util.WeakHashMap
-
 object TokenEstimator {
 
     private const val CHARS_PER_TOKEN = 4
 
-    private val cache = WeakHashMap<String, Int>()
+    private val cache = mutableMapOf<String, Int>()
 
     private const val CACHE_MAX = 500
 

@@ -3,8 +3,6 @@ package com.lucent.app.data
 import com.lucent.app.data.createAppDatabase
 
 import com.lucent.app.platform.PlatformContext
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.math.sqrt
 
 object EmbeddingStore {
@@ -12,15 +10,26 @@ object EmbeddingStore {
     data class ScoredNote(val noteId: Long, val similarity: Float)
 
     fun encode(vec: FloatArray): ByteArray {
-        val buf = ByteBuffer.allocate(vec.size * 4).order(ByteOrder.LITTLE_ENDIAN)
-        vec.forEach { buf.putFloat(it) }
-        return buf.array()
+        val bytes = ByteArray(vec.size * 4)
+        for ((i, f) in vec.withIndex()) {
+            val bits = f.toBits()
+            bytes[i * 4] = (bits and 0xFF).toByte()
+            bytes[i * 4 + 1] = ((bits shr 8) and 0xFF).toByte()
+            bytes[i * 4 + 2] = ((bits shr 16) and 0xFF).toByte()
+            bytes[i * 4 + 3] = ((bits shr 24) and 0xFF).toByte()
+        }
+        return bytes
     }
 
     fun decode(bytes: ByteArray): FloatArray {
         require(bytes.size % 4 == 0) { "embedding byte length ${bytes.size} is not a multiple of 4" }
-        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        return FloatArray(bytes.size / 4) { buf.getFloat() }
+        return FloatArray(bytes.size / 4) { i ->
+            val bits = (bytes[i * 4].toInt() and 0xFF) or
+                    ((bytes[i * 4 + 1].toInt() and 0xFF) shl 8) or
+                    ((bytes[i * 4 + 2].toInt() and 0xFF) shl 16) or
+                    ((bytes[i * 4 + 3].toInt() and 0xFF) shl 24)
+            Float.fromBits(bits)
+        }
     }
 
     suspend fun store(
