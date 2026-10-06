@@ -171,35 +171,3 @@ private fun withPreservedExtension(typed: String, original: String): String {
     val ext = original.substringAfterLast('.', "")
     return if (ext.isEmpty()) typed else "$typed.$ext"
 }
-
-fun iconForAttachment(att: Attachment) = when {
-    att.isImage -> Icons.Default.Image
-    att.isVideo -> Icons.Default.Videocam
-    att.isAudio -> Icons.Default.Audiotrack
-    att.isPdf -> Icons.Default.PictureAsPdf
-    else -> Icons.Default.Description
-}
-
-@Composable
-actual fun rememberSaveAttachmentLauncher(): (Attachment) -> Unit {
-    val context = desktopPlatformContext
-    return remember {
-        { att ->
-            Thread {
-                try {
-                    val dialog = java.awt.FileDialog(null as java.awt.Frame?, com.lucent.app.i18n.S.actionSave, java.awt.FileDialog.SAVE)
-                    dialog.file = att.name.ifBlank { "attachment" }
-                    dialog.isVisible = true
-                    val dir = dialog.directory
-                    val name = dialog.file
-                    if (dir != null && name != null) {
-                        val ok = AttachmentAccess.writeTo(context, att, com.lucent.app.PlatformOutputStream(File(dir, name).outputStream()))
-                        LucentToast.show(context, if (ok) com.lucent.app.i18n.S.savedToast else com.lucent.app.i18n.S.cantSaveFile)
-                    }
-                } catch (t: Throwable) {
-                    LucentToast.show(context, com.lucent.app.i18n.S.cantSaveFile)
-                }
-            }.start()
-        }
-    }
-}
