@@ -10,7 +10,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.json.JSONException
+import kotlinx.serialization.json.JsonDecodingException
 
 class BackupRoundTripTest {
 
@@ -142,7 +142,7 @@ class BackupRoundTripTest {
             seedDb(db)
 
             val truncated = """{"version":1,"notes":["""
-            assertFailsWith<JSONException> {
+            assertFailsWith<JsonDecodingException> {
                 BackupImporter.import(context, db, createSettingsRepository(context), truncated)
             }
 
