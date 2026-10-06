@@ -1,4 +1,5 @@
 package com.lucent.app.data
+import com.lucent.app.platform.applicationContext
 
 import android.Manifest
 import android.annotation.SuppressLint

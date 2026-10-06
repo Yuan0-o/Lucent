@@ -1,4 +1,5 @@
 package com.lucent.app
+import com.lucent.app.platform.applicationContext
 
 import android.app.Activity
 import android.content.Intent

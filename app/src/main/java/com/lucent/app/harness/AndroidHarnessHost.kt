@@ -1,5 +1,7 @@
 
 package com.lucent.app.harness
+import com.lucent.app.platform.filesDir
+import com.lucent.app.platform.cacheDir
 
 import android.content.ClipData
 import android.content.ClipboardManager

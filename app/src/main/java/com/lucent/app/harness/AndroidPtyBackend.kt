@@ -1,4 +1,5 @@
 package com.lucent.app.harness
+import com.lucent.app.platform.filesDir
 
 import android.content.Context
 import com.lucent.app.harness.terminal.PtyBackend

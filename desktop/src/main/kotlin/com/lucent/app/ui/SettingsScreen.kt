@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import com.lucent.app.platform.applicationContext
 
 import androidx.activity.compose.BackHandler
 import com.lucent.desktop.platform.DesktopFiles

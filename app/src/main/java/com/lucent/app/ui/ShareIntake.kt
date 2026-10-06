@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import com.lucent.app.platform.applicationContext
 
 import android.content.Context
 import android.provider.OpenableColumns

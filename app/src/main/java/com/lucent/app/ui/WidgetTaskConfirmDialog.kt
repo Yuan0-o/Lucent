@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import com.lucent.app.platform.applicationContext
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button

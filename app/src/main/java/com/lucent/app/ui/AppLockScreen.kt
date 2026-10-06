@@ -1,4 +1,5 @@
 package com.lucent.app.ui
+import com.lucent.app.platform.applicationContext
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

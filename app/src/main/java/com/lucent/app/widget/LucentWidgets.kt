@@ -1,6 +1,7 @@
 @file:Suppress("DEPRECATION")
 
 package com.lucent.app.widget
+import com.lucent.app.platform.applicationContext
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
