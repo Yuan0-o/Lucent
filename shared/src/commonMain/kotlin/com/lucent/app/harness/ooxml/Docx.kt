@@ -1,7 +1,6 @@
 package com.lucent.app.harness.ooxml
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -46,8 +45,8 @@ object Docx {
         val author = stringOf(spec, "author").trim()
         val header = stringOf(spec, "header").trim()
         val footer = stringOf(spec, "footer").trim()
-        val pageNumbers = spec.optBoolean("page_numbers", false)
-        val toc = spec.optBoolean("toc", false)
+        val pageNumbers = spec["page_numbers"]?.jsonPrimitive?.booleanOrNull ?: false
+        val toc = spec["toc"]?.jsonPrimitive?.booleanOrNull ?: false
         val blocks = readBlocks(spec)
         if (blocks.isEmpty() && title.isEmpty()) {
             throw IllegalArgumentException("The document spec needs a title, a content string or a blocks array")
@@ -151,7 +150,7 @@ object Docx {
     fun edit(file: File, opsJson: String): String {
         if (!file.exists()) throw IllegalArgumentException("${file.name} does not exist")
         val ops = jsonArray(opsJson, "document edit operations")
-        if (ops.length() == 0) throw IllegalArgumentException("Give at least one edit operation")
+        if (ops.size == 0) throw IllegalArgumentException("Give at least one edit operation")
         val parts = readZip(file).toMutableMap()
         val bytes = parts[DOCUMENT_PART]
             ?: throw IllegalArgumentException("${file.name} is not a Word document: word/document.xml is missing")
@@ -162,8 +161,8 @@ object Docx {
         val body = children(document.documentElement, "body").firstOrNull()
             ?: throw IllegalArgumentException("word/document.xml has no body")
         val applied = LinkedHashSet<String>()
-        for (index in 0 until ops.length()) {
-            val op = ops.optJSONObject(index)
+        for (index in 0 until ops.size) {
+            val op = ops[index] as? JsonObject
                 ?: throw IllegalArgumentException("Operation ${index + 1} is not a JSON object")
             val kind = stringOf(op, "op").trim().lowercase()
             when (kind) {
@@ -180,10 +179,10 @@ object Docx {
                 "replace" -> replaceText(document, op)
                 "set_header" -> setHeaderFooter(parts, rels, document, false, stringOf(op, "text"), false)
                 "set_footer" -> setHeaderFooter(
-                    parts, rels, document, true, stringOf(op, "text"), op.optBoolean("page_numbers", false)
+                    parts, rels, document, true, stringOf(op, "text"), op["page_numbers"]?.jsonPrimitive?.booleanOrNull ?: false
                 )
                 "insert_image" -> insert(
-                    document, body, writer.image(stringOf(op, "path"), op.optInt("width", 480), stringOf(op, "caption"))
+                    document, body, writer.image(stringOf(op, "path"), op["width"]?.jsonPrimitive?.intOrNull ?: 480, stringOf(op, "caption"))
                 )
                 "delete_paragraph" -> deleteParagraph(document, stringOf(op, "find"))
                 "set_title" -> setTitle(parts, document, stringOf(op, "text"))
@@ -195,33 +194,33 @@ object Docx {
         parts[DOCUMENT_RELS_PART] = serialize(rels)
         if (sink.addedMedia) ensureImageDefaults(parts)
         writZip(file, parts.entries.map { it.key to it.value })
-        return "Applied ${ops.length()} operation(s): ${applied.joinToString(", ")}"
+        return "Applied ${ops.size} operation(s): ${applied.joinToString(", ")}"
     }
 
-    private fun jsonObject(text: String, what: String): JSONObject {
+    private fun jsonObject(text: String, what: String): JsonObject {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            JSONObject(text)
+            Json.parseToJsonElement(text).jsonObject
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
     }
 
-    private fun jsonArray(text: String, what: String): JSONArray {
+    private fun jsonArray(text: String, what: String): JsonArray {
         if (text.isBlank()) throw IllegalArgumentException("The $what is empty")
         return try {
-            JSONArray(text)
+            Json.parseToJsonElement(text).jsonArray
         } catch (e: Exception) {
             throw IllegalArgumentException("The $what is not valid JSON: ${e.message ?: "parse error"}")
         }
     }
 
-    private fun readBlocks(spec: JSONObject): List<DocBlock> {
-        val array = spec.optJSONArray("blocks")
+    private fun readBlocks(spec: JsonObject): List<DocBlock> {
+        val array = spec["blocks"] as? JsonArray
         if (array != null) {
             val out = mutableListOf<DocBlock>()
-            for (index in 0 until array.length()) {
-                val item = array.optJSONObject(index)
+            for (index in 0 until array.size) {
+                val item = array[index] as? JsonObject
                     ?: throw IllegalArgumentException("Block ${index + 1} is not a JSON object")
                 out.add(block(item))
             }
@@ -250,22 +249,22 @@ object Docx {
         }
     }
 
-    private fun block(spec: JSONObject): DocBlock {
+    private fun block(spec: JsonObject): DocBlock {
         val type = stringOf(spec, "type", "paragraph").trim().lowercase()
         return when (type) {
-            "heading", "title" -> DocBlock.Heading(spec.optInt("level", 1).coerceIn(1, 4), stringOf(spec, "text"))
+            "heading", "title" -> DocBlock.Heading((spec["level"]?.jsonPrimitive?.intOrNull ?: 1).coerceIn(1, 4), stringOf(spec, "text"))
             "paragraph", "para", "text" -> DocBlock.Paragraph(
-                stringOf(spec, "text"), stringOf(spec, "align"), spec.optJSONObject("style")
+                stringOf(spec, "text"), stringOf(spec, "align"), spec["style"] as? JsonObject
             )
-            "bullets", "bullet", "ul", "list" -> DocBlock.Listing(stringList(spec.optJSONArray("items")), false)
-            "numbers", "numbered", "ol" -> DocBlock.Listing(stringList(spec.optJSONArray("items")), true)
+            "bullets", "bullet", "ul", "list" -> DocBlock.Listing(stringList(spec["items"] as? JsonArray), false)
+            "numbers", "numbered", "ol" -> DocBlock.Listing(stringList(spec["items"] as? JsonArray), true)
             "table" -> DocBlock.Table(
-                stringList(spec.optJSONArray("header")),
-                rowList(spec.optJSONArray("rows")),
-                intList(spec.optJSONArray("widths"))
+                stringList(spec["header"] as? JsonArray),
+                rowList(spec["rows"] as? JsonArray),
+                intList(spec["widths"] as? JsonArray)
             )
             "image", "picture" -> DocBlock.Picture(
-                stringOf(spec, "path"), spec.optInt("width", 480), stringOf(spec, "caption")
+                stringOf(spec, "path"), spec["width"]?.jsonPrimitive?.intOrNull ?: 480, stringOf(spec, "caption")
             )
             "pagebreak", "page_break", "break" -> DocBlock.Break
             "quote" -> DocBlock.Quote(stringOf(spec, "text"))
@@ -276,25 +275,25 @@ object Docx {
         }
     }
 
-    private fun stringList(array: JSONArray?): List<String> {
+    private fun stringList(array: JsonArray?): List<String> {
         if (array == null) return emptyList()
         val out = mutableListOf<String>()
-        for (index in 0 until array.length()) out.add(array.optString(index, ""))
+        for (index in 0 until array.size) out.add(array[index].jsonPrimitive.contentOrNull ?: "")
         return out
     }
 
-    private fun intList(array: JSONArray?): List<Int> {
+    private fun intList(array: JsonArray?): List<Int> {
         if (array == null) return emptyList()
         val out = mutableListOf<Int>()
-        for (index in 0 until array.length()) out.add(array.optInt(index, 0))
+        for (index in 0 until array.size) out.add(array[index].jsonPrimitive.intOrNull ?: 0)
         return out
     }
 
-    private fun rowList(array: JSONArray?): List<List<String>> {
+    private fun rowList(array: JsonArray?): List<List<String>> {
         if (array == null) return emptyList()
         val out = mutableListOf<List<String>>()
-        for (index in 0 until array.length()) {
-            val row = array.optJSONArray(index) ?: continue
+        for (index in 0 until array.size) {
+            val row = array[index] as? JsonArray ?: continue
             out.add(stringList(row))
         }
         return out
@@ -594,11 +593,11 @@ object Docx {
         }
     }
 
-    private fun replaceText(document: Document, op: JSONObject) {
+    private fun replaceText(document: Document, op: JsonObject) {
         val find = stringOf(op, "find")
         if (find.isEmpty()) throw IllegalArgumentException("The replace op needs a non-empty \"find\" value")
         val replacement = stringOf(op, "replace")
-        val all = op.optBoolean("all", false)
+        val all = op["all"]?.jsonPrimitive?.booleanOrNull ?: false
         var done = 0
         val texts = descendants(document.documentElement, "t")
         for (element in texts) {
@@ -856,7 +855,7 @@ object Docx {
 
 private sealed class DocBlock {
     class Heading(val level: Int, val text: String) : DocBlock()
-    class Paragraph(val text: String, val align: String, val style: JSONObject?) : DocBlock()
+    class Paragraph(val text: String, val align: String, val style: JsonObject?) : DocBlock()
     class Listing(val items: List<String>, val ordered: Boolean) : DocBlock()
     class Table(val header: List<String>, val rows: List<List<String>>, val widths: List<Int>) : DocBlock()
     class Picture(val path: String, val width: Int, val caption: String) : DocBlock()
@@ -1075,7 +1074,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
         return paragraph
     }
 
-    private fun paragraph(text: String, align: String, style: JSONObject?, styleId: String = ""): XmlBuilder {
+    private fun paragraph(text: String, align: String, style: JsonObject?, styleId: String = ""): XmlBuilder {
         val paragraph = node("w:p")
         val props = node("w:pPr")
         var used = false
@@ -1083,7 +1082,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
             props.child("w:pStyle").attr("w:val", styleId)
             used = true
         }
-        val spacing = style?.optDouble("spacing", 0.0) ?: 0.0
+        val spacing = style?.get("spacing")?.jsonPrimitive?.doubleOrNull ?: 0.0
         if (spacing > 0.0) {
             props.child("w:spacing").attr("w:line", (spacing * 240.0).toInt()).attr("w:lineRule", "auto")
             used = true
@@ -1186,9 +1185,9 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
         return row
     }
 
-    private fun headerStyle(): JSONObject = JSONObject().put("bold", true)
+    private fun headerStyle(): JsonObject = buildJsonObject { put("bold", true) }
 
-    private fun runs(text: String, base: JSONObject?): List<XmlBuilder> {
+    private fun runs(text: String, base: JsonObject?): List<XmlBuilder> {
         val spans = SimpleMarkdown.spans(text)
         if (spans.isEmpty()) return emptyList()
         return spans.map { span ->
@@ -1202,7 +1201,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
         }
     }
 
-    private fun hyperlinkRun(text: String, base: JSONObject?): XmlBuilder {
+    private fun hyperlinkRun(text: String, base: JsonObject?): XmlBuilder {
         val run = node("w:r")
         val props = node("w:rPr")
         props.child("w:rStyle").attr("w:val", "Hyperlink")
@@ -1212,7 +1211,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
         return run
     }
 
-    private fun run(text: String, base: JSONObject?, bold: Boolean, italic: Boolean, code: Boolean): XmlBuilder {
+    private fun run(text: String, base: JsonObject?, bold: Boolean, italic: Boolean, code: Boolean): XmlBuilder {
         val run = node("w:r")
         val props = node("w:rPr")
         var used = false
@@ -1226,15 +1225,15 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
         return run
     }
 
-    private fun applyRunProperties(props: XmlBuilder, base: JSONObject?, bold: Boolean, italic: Boolean): Boolean {
+    private fun applyRunProperties(props: XmlBuilder, base: JsonObject?, bold: Boolean, italic: Boolean): Boolean {
         var used = false
         val font = stringOf(base, "font")
         if (font.isNotBlank()) {
             props.child("w:rFonts").attr("w:ascii", font).attr("w:hAnsi", font).attr("w:cs", font)
             used = true
         }
-        val strong = bold || (base?.optBoolean("bold", false) ?: false)
-        val emphasis = italic || (base?.optBoolean("italic", false) ?: false)
+        val strong = bold || (base?.get("bold")?.jsonPrimitive?.booleanOrNull ?: false)
+        val emphasis = italic || (base?.get("italic")?.jsonPrimitive?.booleanOrNull ?: false)
         if (strong) {
             props.child("w:b")
             props.child("w:bCs")
@@ -1245,7 +1244,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
             props.child("w:iCs")
             used = true
         }
-        if (base?.optBoolean("strike", false) == true) {
+        if (base?.get("strike")?.jsonPrimitive?.booleanOrNull == true) {
             props.child("w:strike")
             used = true
         }
@@ -1254,7 +1253,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
             props.child("w:color").attr("w:val", colour)
             used = true
         }
-        val size = base?.optDouble("size", 0.0) ?: 0.0
+        val size = base?.get("size")?.jsonPrimitive?.doubleOrNull ?: 0.0
         if (size > 0.0) {
             val half = (size * 2).toInt().coerceIn(2, 400)
             props.child("w:sz").attr("w:val", half)
@@ -1266,7 +1265,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: File) {
             props.child("w:highlight").attr("w:val", highlightName(highlight))
             used = true
         }
-        if (base?.optBoolean("underline", false) == true) {
+        if (base?.get("underline")?.jsonPrimitive?.booleanOrNull == true) {
             props.child("w:u").attr("w:val", "single")
             used = true
         }

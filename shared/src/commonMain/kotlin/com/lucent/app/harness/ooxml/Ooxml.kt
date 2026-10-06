@@ -1,6 +1,6 @@
 package com.lucent.app.harness.ooxml
 
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -449,12 +449,10 @@ fun removeChildren(parent: Element, tag: String) {
     children(parent, tag).forEach { parent.removeChild(it) }
 }
 
-fun stringOf(json: JSONObject?, key: String, fallback: String = ""): String {
+fun stringOf(json: JsonObject?, key: String, fallback: String = ""): String {
     if (json == null) return fallback
-    val value = json.opt(key) ?: return fallback
-    if (value == JSONObject.NULL) return fallback
-    val text = value.toString()
-    return if (text.isEmpty()) fallback else text
+    val value = json[key]?.jsonPrimitive?.content ?: return fallback
+    return if (value.isEmpty()) fallback else value
 }
 
 fun coreProperty(parts: Map<String, ByteArray>, tag: String): String {
