@@ -195,12 +195,23 @@ object AutoUpdate {
     suspend fun check(currentVersion: String, notifyWhenCurrent: Boolean = false): ReleaseInfo? {
         phase = Phase.CHECKING
         lastCheckFailed = false
-        val found = try {
+        var found = try {
             UpdateChecker.latest(currentVersion)
         } catch (t: Throwable) {
             lastCheckFailed = true
             null
         }
+        
+        if (found != null) {
+            val fBuildId = found.buildId
+            val cBuildId = com.lucent.app.LucentBuild.BUILD_ID
+            if (fBuildId != null && UpdateChecker.parseBuildId(fBuildId) != null && UpdateChecker.parseBuildId(cBuildId) != null) {
+                if (!UpdateChecker.isNewerBuildId(fBuildId, cBuildId)) {
+                    found = null
+                }
+            }
+        }
+        
         phase = Phase.IDLE
         if (found != null) {
             offer(found)
