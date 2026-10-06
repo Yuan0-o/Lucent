@@ -4,8 +4,7 @@ import com.lucent.app.harness.HarnessConfig
 import com.lucent.app.harness.HarnessRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
 import java.io.File
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -18,27 +17,27 @@ object PluginCatalogRemote {
     fun merge(static: List<PluginSpec>, remoteJson: String): List<PluginSpec> {
         val parsedRemote = mutableListOf<PluginSpec>()
         try {
-            val arr = JSONArray(remoteJson)
-            for (i in 0 until arr.length()) {
-                val obj = arr.optJSONObject(i) ?: continue
-                val id = obj.optString("id", "")
+            val arr = Json.parseToJsonElement(remoteJson).jsonArray
+            for (i in 0 until arr.size) {
+                val obj = arr[i] as? JsonObject ?: continue
+                val id = obj["id"]?.jsonPrimitive?.content ?: ""
                 if (id.isBlank()) continue
-                val sourcesArr = obj.optJSONArray("sources")
+                val sourcesArr = obj["sources"]?.jsonArray
                 val sourcesList = mutableListOf<PluginSource>()
                 if (sourcesArr != null) {
-                    for (j in 0 until sourcesArr.length()) {
-                        val so = sourcesArr.optJSONObject(j) ?: continue
-                        val sid = so.optString("id", "")
-                        val surl = so.optString("url", "")
+                    for (j in 0 until sourcesArr.size) {
+                        val so = sourcesArr[j] as? JsonObject ?: continue
+                        val sid = so["id"]?.jsonPrimitive?.content ?: ""
+                        val surl = so["url"]?.jsonPrimitive?.content ?: ""
                         if (sid.isNotBlank() && surl.isNotBlank()) {
                             sourcesList.add(
                                 PluginSource(
                                     id = sid,
-                                    label = so.optString("label", ""),
+                                    label = so["label"]?.jsonPrimitive?.content ?: "",
                                     url = surl,
-                                    official = so.optBoolean("official", false),
-                                    sha256 = so.optString("sha256", ""),
-                                    bytes = so.optLong("bytes", 0L)
+                                    official = so["official"]?.jsonPrimitive?.booleanOrNull ?: false,
+                                    sha256 = so["sha256"]?.jsonPrimitive?.content ?: "",
+                                    bytes = so["bytes"]?.jsonPrimitive?.longOrNull ?: 0L
                                 )
                             )
                         }
@@ -48,21 +47,21 @@ object PluginCatalogRemote {
                 parsedRemote.add(
                     PluginSpec(
                         id = id,
-                        name = obj.optString("name", obj.optString("title", "")),
-                        summary = obj.optString("summary", ""),
-                        android = obj.optBoolean("android", true),
-                        desktop = obj.optBoolean("desktop", true),
-                        bytes = obj.optLong("bytes", 0L),
+                        name = obj["name"]?.jsonPrimitive?.content ?: (obj["title"]?.jsonPrimitive?.content ?: ""),
+                        summary = obj["summary"]?.jsonPrimitive?.content ?: "",
+                        android = obj["android"]?.jsonPrimitive?.booleanOrNull ?: true,
+                        desktop = obj["desktop"]?.jsonPrimitive?.booleanOrNull ?: true,
+                        bytes = obj["bytes"]?.jsonPrimitive?.longOrNull ?: 0L,
                         sources = sourcesList,
-                        detectCommand = obj.optString("detectCommand", obj.optString("detect", "")),
-                        installScript = obj.optString("installScript", ""),
-                        removeScript = obj.optString("removeScript", ""),
-                        licence = obj.optString("licence", ""),
-                        homepage = obj.optString("homepage", ""),
-                        needsShell = obj.optBoolean("needsShell", true),
-                        windowsDetect = obj.optString("windowsDetect", ""),
-                        windowsInstall = obj.optString("windowsInstall", ""),
-                        windowsRemove = obj.optString("windowsRemove", "")
+                        detectCommand = obj["detectCommand"]?.jsonPrimitive?.content ?: (obj["detect"]?.jsonPrimitive?.content ?: ""),
+                        installScript = obj["installScript"]?.jsonPrimitive?.content ?: "",
+                        removeScript = obj["removeScript"]?.jsonPrimitive?.content ?: "",
+                        licence = obj["licence"]?.jsonPrimitive?.content ?: "",
+                        homepage = obj["homepage"]?.jsonPrimitive?.content ?: "",
+                        needsShell = obj["needsShell"]?.jsonPrimitive?.booleanOrNull ?: true,
+                        windowsDetect = obj["windowsDetect"]?.jsonPrimitive?.content ?: "",
+                        windowsInstall = obj["windowsInstall"]?.jsonPrimitive?.content ?: "",
+                        windowsRemove = obj["windowsRemove"]?.jsonPrimitive?.content ?: ""
                     )
                 )
             }
