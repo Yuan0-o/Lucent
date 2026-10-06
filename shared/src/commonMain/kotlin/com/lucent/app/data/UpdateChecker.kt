@@ -34,7 +34,8 @@ data class ReleaseInfo(
     val apkSha: String? = null,
     val exeSha: String? = null,
     val apkVersion: String? = null,
-    val exeVersion: String? = null
+    val exeVersion: String? = null,
+    val buildId: String? = null
 ) {
     val identity: String
         get() = version
@@ -72,6 +73,28 @@ object UpdateChecker {
             if (left != right) return left > right
         }
         return false
+    }
+
+    fun parseBuildId(id: String): Pair<Char, Long>? {
+        if (id.length != 13) return null
+        val prefix = id[0]
+        if (prefix != 'R' && prefix != 'P') return null
+        val timestamp = id.substring(1).toLongOrNull() ?: return null
+        return prefix to timestamp
+    }
+
+    fun isNewerBuildId(candidate: String, current: String): Boolean {
+        val candParsed = parseBuildId(candidate) ?: return false
+        val currParsed = parseBuildId(current) ?: return false
+        return candParsed.second > currParsed.second
+    }
+
+    fun buildIdTrack(id: String): String {
+        return when (id.firstOrNull()) {
+            'P' -> "preview"
+            'R' -> "official"
+            else -> "dev"
+        }
     }
 
     private suspend fun fetchJson(url: String): JsonObject? = withContext(Dispatchers.IO) {
@@ -128,7 +151,16 @@ object UpdateChecker {
             val isDraftOrPrerelease = (root["draft"]?.jsonPrimitive?.booleanOrNull == true) || (root["prerelease"]?.jsonPrimitive?.booleanOrNull == true)
             if (tag.isNotBlank() && !isDraftOrPrerelease) {
                 stableTag = tag
-                if (isNewer(tag, currentVersion)) {
+                val body = root["body"]?.jsonPrimitive?.content ?: ""
+                val buildId = Regex("(?m)^Build-ID:\\s*(\\S+)").find(body)?.groupValues?.get(1)?.ifBlank { null }
+                val cBuildId = LucentBuild.BUILD_ID
+                val usesBuildId = buildId != null && parseBuildId(buildId) != null && parseBuildId(cBuildId) != null
+                val isNewerStable = if (usesBuildId) {
+                    isNewerBuildId(buildId!!, cBuildId)
+                } else {
+                    isNewer(tag, currentVersion)
+                }
+                if (isNewerStable) {
                     val (apk, installer) = parseAssets(root)
                     stable = ReleaseInfo(
                         tag = tag,
@@ -137,23 +169,29 @@ object UpdateChecker {
                         apk = apk,
                         installer = installer,
                         notesUrl = root["html_url"]?.jsonPrimitive?.content ?: "",
-                        channel = "stable"
+                        channel = "stable",
+                        buildId = buildId
                     )
                 }
             }
         }
 
-        var candidate = stable
+        var candidate: ReleaseInfo? = null
         if (SettingsCache.updateChannel == "preview") {
             val preview = PreviewChecker.getPreviewCandidate(client)
             if (preview != null) {
-                val stableNow = stable
-                candidate = when {
-                    stableNow == null -> preview
-                    isNewer(AutoUpdate.installer?.versionOf(preview) ?: preview.version, AutoUpdate.installer?.versionOf(stableNow) ?: stableNow.version) -> preview
-                    else -> stableNow
+                val pBuildId = preview.buildId
+                val cBuildId = LucentBuild.BUILD_ID
+                val usesBuildId = pBuildId != null && parseBuildId(pBuildId) != null && parseBuildId(cBuildId) != null
+                val isNewerPreview = if (usesBuildId) {
+                    isNewerBuildId(pBuildId!!, cBuildId)
+                } else {
+                    isNewer(AutoUpdate.installer?.versionOf(preview) ?: preview.version, currentVersion)
                 }
+                if (isNewerPreview) candidate = preview
             }
+        } else {
+            candidate = stable
         }
 
         var result = candidate ?: return@withContext null
