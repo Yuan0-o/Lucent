@@ -17,6 +17,10 @@ class DirectoryBrowseTest {
         return root
     }
 
+    /** DirectoryBrowse speaks okio paths (forward slashes); java.io.File uses the
+        platform separator, so compare with separators unified. */
+    private fun slash(path: String): String = path.replace(File.separatorChar, '/')
+
     @Test
     fun normalizeKeepsRootsAndDropsTrailingSeparators() {
         assertEquals("/sdcard/Documents", DirectoryBrowse.normalize("/sdcard/Documents/"))
@@ -87,12 +91,15 @@ class DirectoryBrowseTest {
     fun aTypedPathIsResolvedAgainstTheFolderOnScreen() {
         val root = tree()
         val deep = File(root, "alpha").path
-        assertEquals(deep, DirectoryBrowse.resolve("alpha", root.path))
+        assertEquals(slash(deep), slash(DirectoryBrowse.resolve("alpha", root.path)))
         assertEquals(
-            DirectoryBrowse.normalize(root.path),
-            DirectoryBrowse.normalize(DirectoryBrowse.resolve("..", deep))
+            slash(DirectoryBrowse.normalize(root.path)),
+            slash(DirectoryBrowse.normalize(DirectoryBrowse.resolve("..", deep)))
         )
-        assertEquals(DirectoryBrowse.normalize(root.path), DirectoryBrowse.normalize(DirectoryBrowse.resolve("", root.path)))
+        assertEquals(
+            slash(DirectoryBrowse.normalize(root.path)),
+            slash(DirectoryBrowse.normalize(DirectoryBrowse.resolve("", root.path)))
+        )
     }
 
     @Test
