@@ -11,6 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class GitToolsTest {
 

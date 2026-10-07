@@ -1,19 +1,18 @@
 package com.lucent.app.data
 
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import okio.Buffer
 
 class BackupFramesTest {
 
     private val manifest = """{"modules":["notes"],"version":13}""".toByteArray(Charsets.UTF_8)
 
     private fun framedPayload(blobs: List<Pair<String, ByteArray>>): ByteArray {
-        val out = ByteArrayOutputStream()
+        val out = Buffer()
         out.write(byteArrayOf(BackupFrames.FRAME_MAGIC, BackupFrames.FRAME_VERSION))
         BackupFrames.writeInt(out, manifest.size)
         out.write(manifest)
@@ -24,11 +23,11 @@ class BackupFramesTest {
             BackupFrames.writeLong(out, bytes.size.toLong())
             out.write(bytes)
         }
-        return out.toByteArray()
+        return out.readByteArray()
     }
 
     private fun scan(bytes: ByteArray): BackupFrames.PayloadScan =
-        BackupFrames.scanPayload(ByteArrayInputStream(bytes))
+        BackupFrames.scanPayload(Buffer().write(bytes))
 
 
     @Test
@@ -75,14 +74,8 @@ class BackupFramesTest {
             listOf("model_1.gguf" to byteArrayOf(1, 2, 3), "model_2.gguf" to byteArrayOf(4, 5))
         )
         val seen = mutableListOf<Pair<String, Int>>()
-        val scan = BackupFrames.scanPayload(ByteArrayInputStream(payload)) { name, len, stream ->
-            val buf = ByteArray(len.toInt())
-            var off = 0
-            while (off < buf.size) {
-                val n = stream.read(buf, off, buf.size - off)
-                if (n < 0) throw java.io.EOFException("ended early")
-                off += n
-            }
+        val scan = BackupFrames.scanPayload(Buffer().write(payload)) { name, len, stream ->
+            val buf = stream.readByteArray(len)
             seen.add(name to buf.size)
         }
         assertEquals(2, seen.size)
@@ -94,22 +87,22 @@ class BackupFramesTest {
 
     @Test
     fun oversizedManifestLengthIsRejected() {
-        val out = ByteArrayOutputStream()
+        val out = Buffer()
         out.write(byteArrayOf(BackupFrames.FRAME_MAGIC, BackupFrames.FRAME_VERSION))
         BackupFrames.writeInt(out, BackupFrames.MAX_MANIFEST_BYTES + 1)
         assertFailsWith<IllegalArgumentException> {
-            scan(out.toByteArray())
+            scan(out.readByteArray())
         }
     }
 
     @Test
     fun hostileBlobNameLengthEndsWalkQuietly() {
-        val out = ByteArrayOutputStream()
+        val out = Buffer()
         out.write(byteArrayOf(BackupFrames.FRAME_MAGIC, BackupFrames.FRAME_VERSION))
         BackupFrames.writeInt(out, manifest.size)
         out.write(manifest)
         BackupFrames.writeInt(out, BackupFrames.MAX_BLOB_NAME_BYTES + 1)
-        val scan = scan(out.toByteArray())
+        val scan = scan(out.readByteArray())
         assertTrue(scan.framed)
         assertEquals(String(manifest, Charsets.UTF_8), scan.manifestJson)
         assertEquals(0, scan.modelCount)
@@ -135,14 +128,13 @@ class BackupFramesTest {
 
     @Test
     fun bigEndianPrimitivesRoundTrip() {
-        val out = ByteArrayOutputStream()
+        val out = Buffer()
         BackupFrames.writeInt(out, 0x6A3B4C5D)
         BackupFrames.writeLong(out, 0x0123456789ABCDEFL)
-        val bytes = out.toByteArray()
-        val input = ByteArrayInputStream(bytes)
+        val input: okio.Source = out
         assertEquals(0x6A3B4C5D, BackupFrames.readIntOrEnd(input))
         assertEquals(0x0123456789ABCDEFL, BackupFrames.readLongFrom(input))
         assertTrue(BackupFrames.readIntOrEnd(input) == null)
-        assertFailsWith<java.io.EOFException> { BackupFrames.readLongFrom(input) }
+        assertFailsWith<okio.EOFException> { BackupFrames.readLongFrom(input) }
     }
 }

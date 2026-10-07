@@ -198,7 +198,7 @@ class BackupRoundTripTest {
                     BackupManager.commit(
                         context2, db2, settings2, preview,
                         modules = setOf(BackupManager.BackupModule.HARNESS),
-                        source = BackupManager.BackupSource { bytes.inputStream() }
+                        source = BackupManager.BackupSource { okio.Buffer().write(bytes) }
                     )
 
                     val restoredHome = java.io.File(com.lucent.app.harness.HarnessRuntime.homePath())
@@ -255,7 +255,7 @@ class BackupRoundTripTest {
                     BackupManager.commit(
                         context2, db2, settings2, preview,
                         modules = setOf(BackupManager.BackupModule.NOTES),
-                        source = BackupManager.BackupSource { bytes.inputStream() }
+                        source = BackupManager.BackupSource { okio.Buffer().write(bytes) }
                     )
 
                     val restoredHome = java.io.File(com.lucent.app.harness.HarnessRuntime.homePath())
