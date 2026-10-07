@@ -17,6 +17,9 @@ detekt {
 
 kotlin {
     jvmToolchain(17)
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
     sourceSets {
         main {
             kotlin.srcDir(rootProject.file("shared/src/main/kotlin"))
