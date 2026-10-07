@@ -724,7 +724,7 @@ private class MutableBook(private val parts: MutableMap<String, ByteArray>) {
         val container = ensureOrdered(workbook, workbook, "sheets", WORKBOOK_ORDER)
         val element = workbook.createXmlNode("sheet")
         element.attributes["name"] = clean
-        element.attributes["sheetId"] = nextSheetId(.toString())
+        element.attributes["sheetId"] = nextSheetId().toString()
         element.attributes["r:id"] = relId
         container.appendChild(element)
         sheetParts[clean] = partName

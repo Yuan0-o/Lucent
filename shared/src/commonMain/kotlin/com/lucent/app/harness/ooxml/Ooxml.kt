@@ -226,8 +226,7 @@ private fun appendText(node: XmlNode, out: StringBuilder) {
     for (child in node.children) {
         when (child.localName) {
             "tab" -> out.append('\t')
-            "br", "cr" -> out.append('
-')
+            "br", "cr" -> out.append('\n')
             "instrText" -> {}
             else -> appendText(child, out)
         }
@@ -236,8 +235,7 @@ private fun appendText(node: XmlNode, out: StringBuilder) {
 
 fun serialize(document: XmlNode): ByteArray {
     val out = StringBuilder()
-    out.append(XML_DECLARATION).append('
-')
+    out.append(XML_DECLARATION).append('\n')
     render(document, out)
     return out.toString().encodeToByteArray()
 }

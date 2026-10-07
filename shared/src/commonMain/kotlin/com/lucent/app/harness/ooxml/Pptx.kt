@@ -1599,7 +1599,7 @@ private fun pptxReadSlide(entries: Map<String, ByteArray>, part: String, bytes: 
     val slide = PptxSlide()
     val rels = pptxRels(entries, pptxRelsName(part))
     val document = runCatching { Ooxml.parse(bytes) }.getOrNull()
-    val root = document? ?: return slide
+    val root = document ?: return slide
     val tree = pptxDescend(root, "spTree").firstOrNull() ?: return slide
     rels.forEach { (id, target) ->
         if (target.contains("slideLayout")) {
