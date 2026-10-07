@@ -14,6 +14,8 @@ object LucentBuild {
         else -> "dev"
     }
 
+    val DISPLAY_VERSION: String = if (BUILD_TRACK == "preview") "$VERSION alpha" else VERSION
+
     const val PRODUCT_NAME = "Lucent"
 
     const val COPYRIGHT = "Copyright \u00A9 2026-2027 Jessica Martinez"

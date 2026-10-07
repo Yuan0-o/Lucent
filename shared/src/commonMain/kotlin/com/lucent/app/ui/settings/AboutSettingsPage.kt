@@ -44,7 +44,7 @@ fun AboutSettingsPage(
     repo: SettingsRepository,
     onRoute: (SettingsRoute) -> Unit,
     onOpenUrl: ((String) -> Unit)? = null,
-    versionName: String = LucentBuild.VERSION,
+    versionName: String = LucentBuild.DISPLAY_VERSION,
     buildNumber: String = LucentBuild.BUILD_NUMBER
 ) {
     val scope = rememberCoroutineScope()

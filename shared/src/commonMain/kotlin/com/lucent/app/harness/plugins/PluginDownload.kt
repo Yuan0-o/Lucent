@@ -45,7 +45,7 @@ object PluginDownload {
             val request = Request.Builder()
                 .url(source.url)
                 .header("Range", "bytes=0-$PROBE_BYTES")
-                .header("User-Agent", "Lucent/3.0")
+                .header("User-Agent", "Lucent/3.1.0")
                 .build()
             val started = System.currentTimeMillis()
             client.newCall(request).execute().use { response ->
@@ -116,7 +116,7 @@ object PluginDownload {
         var existingLen = FileSystem.SYSTEM.metadataOrNull(partFile)?.size ?: 0L
 
         try {
-            val reqBuilder = Request.Builder().url(source.url).header("User-Agent", "Lucent/3.0")
+            val reqBuilder = Request.Builder().url(source.url).header("User-Agent", "Lucent/3.1.0")
             if (existingLen > 0L) {
                 reqBuilder.header("Range", "bytes=$existingLen-")
             }
