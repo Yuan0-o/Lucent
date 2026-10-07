@@ -40,6 +40,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.resume
+import okio.Path.Companion.toPath
 
 class AndroidHarnessHost(private val context: Context) : HarnessHost {
 
@@ -393,7 +394,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     }
 
     override suspend fun readPdfText(path: String): String = withContext(Dispatchers.IO) {
-        SimplePdfText.extract(File(path)).take(400000)
+        SimplePdfText.extract(path.toPath()).take(400000)
     }
 
     override suspend fun renderPdfPage(path: String, page: Int, width: Int): ByteArray? = withContext(Dispatchers.IO) {

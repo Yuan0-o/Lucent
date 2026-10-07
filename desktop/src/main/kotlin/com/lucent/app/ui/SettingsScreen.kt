@@ -117,6 +117,8 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
+import okio.Path.Companion.toPath
+import okio.sink
 
 
 private const val WRONG_PASSWORD = "__wrong_password__"
@@ -381,7 +383,7 @@ fun SettingsScreen(active: Boolean = true) {
                         outcome = try {
                             BackupManager.commit(
                                 context, db, repo, preview, modules, convIds, apiNames,
-                                source = sourceFile?.let { BackupManager.fileSource(it) }
+                                source = sourceFile?.let { BackupManager.fileSource(it.toPath()) }
                             )
                         } catch (t: kotlinx.coroutines.CancellationException) {
                             throw t
@@ -831,7 +833,7 @@ fun SettingsScreen(active: Boolean = true) {
                 val result = withContext(Dispatchers.IO) {
                     try {
                         file.outputStream().use { out ->
-                            BackupManager.exportEncrypted(context, db, repo, okio.sink(out), password, chosenSelection)
+                            BackupManager.exportEncrypted(context, db, repo, out.sink(), password, chosenSelection)
                         }
                         if (password.isNullOrEmpty()) {
                             S.backupSavedBuiltIn
@@ -1068,7 +1070,7 @@ fun SettingsScreen(active: Boolean = true) {
                     return@launch
                 }
                 importSourceFile = file
-                val source = BackupManager.fileSource(file)
+                val source = BackupManager.fileSource(file.toPath())
 
                 val header = BackupManager.peekPasswordRequirement(source)
                 if (header != null && header.needsPassword) {
@@ -1148,7 +1150,7 @@ fun SettingsScreen(active: Boolean = true) {
                                 val result = withContext(Dispatchers.IO) {
                                     try {
                                         Result.success(
-                                            BackupManager.inspect(context, BackupManager.fileSource(file), attempt)
+                                            BackupManager.inspect(context, BackupManager.fileSource(file.toPath()), attempt)
                                         )
                                     } catch (t: Throwable) {
                                         Result.failure(t)

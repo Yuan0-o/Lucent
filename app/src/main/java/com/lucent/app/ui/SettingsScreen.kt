@@ -118,6 +118,8 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.ui.text.style.TextAlign
 import com.lucent.app.data.createAppDatabase
 import com.lucent.app.data.createSettingsRepository
+import okio.sink
+import okio.source
 
 
 
@@ -379,7 +381,7 @@ fun SettingsScreen(active: Boolean = true) {
     var backupBusyLabel by remember { mutableStateOf<String?>(null) }
     var backupOpJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun uriSource(uri: Uri) = BackupManager.BackupSource {
-        context.contentResolver.openInputStream(uri)
+        context.contentResolver.openInputStream(uri)?.source()
             ?: throw java.io.FileNotFoundException("Backup could not be opened")
     }
     fun releaseImportGrant(uri: Uri) {
@@ -873,7 +875,7 @@ fun SettingsScreen(active: Boolean = true) {
                     val result = withContext(Dispatchers.IO) {
                         try {
                             context.contentResolver.openOutputStream(uri)?.use { out ->
-                                BackupManager.exportEncrypted(context, db, repo, okio.sink(out), password, chosenSelection)
+                                BackupManager.exportEncrypted(context, db, repo, out.sink(), password, chosenSelection)
                             } ?: return@withContext S.backupWriteFailed
                             if (password.isNullOrEmpty()) {
                                 S.backupSavedBuiltIn

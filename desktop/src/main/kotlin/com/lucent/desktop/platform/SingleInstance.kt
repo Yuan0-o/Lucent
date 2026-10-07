@@ -18,7 +18,7 @@ object SingleInstance {
     @Volatile private var server: ServerSocket? = null
 
     fun acquire(context: PlatformContext, onFocusRequested: () -> Unit): Boolean {
-        val portFile = File(context.filesDir, PORT_FILE)
+        val portFile = File(context.filesDir.toString(), PORT_FILE)
 
         val recorded = portFile.takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull()
         if (recorded != null && signalExisting(recorded)) {
