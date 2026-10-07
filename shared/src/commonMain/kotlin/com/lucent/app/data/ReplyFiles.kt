@@ -78,8 +78,8 @@ object ReplyFiles {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(kotlin.time.Duration.Companion.seconds(20))
-            .readTimeout(kotlin.time.Duration.Companion.seconds(60))
+            .connectTimeout(java.time.Duration.ofSeconds(20))
+            .readTimeout(java.time.Duration.ofSeconds(60))
             .build()
     }
 
@@ -110,16 +110,14 @@ object ReplyFiles {
 
     private fun okio.Source.readBytesCapped(max: Long): ByteArray? {
         val out = okio.Buffer()
-        val buf = ByteArray(64 * 1024)
         var total = 0L
         while (true) {
-            val r = read(buf)
-            if (r == -1) break
+            val r = read(out, 8192)
+            if (r == -1L) break
             total += r
             if (total > max) return null
-            out.write(buf, 0, r)
         }
-        return out.toByteArray()
+        return out.readByteArray()
     }
 
     suspend fun saveToNewItem(

@@ -1,4 +1,5 @@
 package com.lucent.app.data
+import okio.Path.Companion.toPath
 import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.PlatformContext
@@ -54,8 +55,8 @@ class Db private constructor(private val connection: Connection) {
         const val SCHEMA_VERSION = 25
 
         fun open(context: PlatformContext): Db {
-            val file = File(context.filesDir, "lucent.db")
-            file.parent?.mkdirs()
+            val file = File(context.filesDir.toString(), "lucent.db")
+            file.parentFile?.mkdirs()
             Class.forName("org.sqlite.JDBC")
             val conn = openConnection(context, file)
             conn.createStatement().use { st ->
@@ -71,7 +72,7 @@ class Db private constructor(private val connection: Connection) {
         private val PLAINTEXT_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
 
         private fun isPlaintextDatabase(file: File): Boolean {
-            if (!okio.FileSystem.SYSTEM.exists(file) || (okio.FileSystem.SYSTEM.metadataOrNull(file)?.size ?: 0L) < PLAINTEXT_HEADER.size) return false
+            if (!okio.FileSystem.SYSTEM.exists(file.toString().toPath()) || (okio.FileSystem.SYSTEM.metadataOrNull(file.toString().toPath())?.size ?: 0L) < PLAINTEXT_HEADER.size) return false
             val head = ByteArray(PLAINTEXT_HEADER.size)
             file.inputStream().use { if (it.read(head) != head.size) return false }
             return head.contentEquals(PLAINTEXT_HEADER)
@@ -128,7 +129,7 @@ class Db private constructor(private val connection: Connection) {
                 return conn
             }
 
-            val existed = okio.FileSystem.SYSTEM.exists(file)
+            val existed = okio.FileSystem.SYSTEM.exists(file.toString().toPath())
             val conn = try {
                 DriverManager.getConnection(keyedSqliteUrl(file, hexKey))
             } catch (t: Throwable) {
@@ -137,7 +138,7 @@ class Db private constructor(private val connection: Connection) {
                 )
                 if (existed) throw IllegalStateException(
                     "The Lucent database at ${file.toString()} could not be unlocked with this " +
-                        "machine's key. If the key files under ${File(context.filesDir, "keys")} were " +
+                        "machine's key. If the key files under ${File(context.filesDir.toString(), "keys")} were " +
                         "deleted or replaced, restore from a .lcb backup.", t
                 )
                 throw t

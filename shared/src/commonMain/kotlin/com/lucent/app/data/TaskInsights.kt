@@ -1,11 +1,10 @@
 package com.lucent.app.data
 
 import kotlinx.datetime.Instant
+import kotlinx.datetime.toEpochMilliseconds
 import kotlinx.datetime.Clock
 
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus

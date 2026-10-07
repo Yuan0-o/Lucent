@@ -1,5 +1,5 @@
 package com.lucent.app.data
-
+import okio.buffer
 
 import com.lucent.app.platform.PlatformContext
 import com.lucent.app.platform.desktopPlatformContext
@@ -411,7 +411,7 @@ actual object DocumentExport {
         val context = desktopPlatformContext
         for (slot in FontStore.fonts(context)) {
             try {
-                FontStore.fontFile(context, slot.id)?.let { okio.FileSystem.SYSTEM.source(it).let { okio.buffer(it) }.inputStream() }?.use { stream ->
+                FontStore.fontFile(context, slot.id)?.let { okio.FileSystem.SYSTEM.source(it).buffer().inputStream() }?.use { stream ->
                     faces.add(PDType0Font.load(doc, stream, true))
                 }
             } catch (_: Throwable) {

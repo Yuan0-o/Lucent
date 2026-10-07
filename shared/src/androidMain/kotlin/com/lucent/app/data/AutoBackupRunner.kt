@@ -1,4 +1,5 @@
 package com.lucent.app.data
+import okio.sink
 import com.lucent.app.platform.applicationContext
 
 import com.lucent.app.AppScope
@@ -81,7 +82,7 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
             override fun flush() = out.flush()
             override fun close() = out.close()
         }
-        BackupManager.exportEncrypted(context, db, settings, okio.FileSystem.SYSTEM.sink(okio.Path.Companion.toPath(mirrored.absolutePath)), null)
+        BackupManager.exportEncrypted(context, db, settings, mirrored.sink(), null)
         val cloudOn = runCatching {
             val repo = createSettingsRepository(context)
             repo.cloudEnabled.first() && repo.cloudAutoBackup.first() &&

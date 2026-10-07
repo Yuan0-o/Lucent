@@ -1,4 +1,8 @@
 package com.lucent.app.data
+import okio.Path.Companion.toPath
+import com.lucent.app.platform.getFilesDir
+import kotlinx.serialization.json.*
+import kotlinx.serialization.json.jsonObject
 import com.lucent.app.platform.applicationContext
 import com.lucent.app.platform.filesDir
 
@@ -31,9 +35,9 @@ actual object UsageTracker {
             if (loaded) return
             state.value = try {
                 val f = file(context)
-                if (!okio.FileSystem.SYSTEM.exists(f)) emptyMap() else {
-                    val obj = JSONObject(f.readText())
-                    buildMap { obj.keys().forEach { k -> put(k, obj.optString(k, "")) } }
+                if (!okio.FileSystem.SYSTEM.exists(f.toString().toPath())) emptyMap() else {
+                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(f.readText()).jsonObject
+                    buildMap { obj.entries.forEach { (k, v) -> put(k, v.jsonPrimitive.content) } }
                 }
             } catch (t: Throwable) {
                 emptyMap()
@@ -44,12 +48,11 @@ actual object UsageTracker {
 
     private fun persist(context: PlatformContext, values: Map<String, String>) {
         try {
-            val obj = JSONObject()
-            values.forEach { (k, v) -> obj.put(k, v) }
+            val obj = buildJsonObject { values.forEach { (k, v) -> put(k, v) } }
             val f = file(context)
-            val tmp = File(f.parent, f.name + ".tmp")
-            tmp.writeText(obj.toString())
-            if (!tmp.renameTo(f)) { okio.FileSystem.SYSTEM.delete(f); tmp.renameTo(f) }
+            val tmp = java.io.File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(Json.encodeToString(obj))
+            okio.FileSystem.SYSTEM.atomicMove(tmp.toString().toPath(), f.toString().toPath())
         } catch (_: Throwable) {
         }
     }
@@ -71,9 +74,8 @@ actual object UsageTracker {
     }
 
     private fun serialize(map: Map<Long, Entry>): String {
-        val obj = JSONObject()
-        map.forEach { (id, e) -> obj.put(id.toString(), JSONObject().put("c", e.count).put("t", e.lastOpened)) }
-        return obj.toString()
+        val obj = buildJsonObject { map.forEach { (id, e) -> put(id.toString(), buildJsonObject { put("c", e.count); put("t", e.lastOpened) }) } }
+        return Json.encodeToString(obj)
     }
 
     actual suspend fun clearAll(context: PlatformContext) {

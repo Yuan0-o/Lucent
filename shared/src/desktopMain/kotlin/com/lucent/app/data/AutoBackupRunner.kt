@@ -7,6 +7,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
+import okio.Path.Companion.toPath
+import okio.sink
+
 actual object AutoBackupRunner {
 
     private const val CHECK_INTERVAL_MS = 15L * 60L * 1000L
@@ -64,7 +67,13 @@ private fun appContextOf(context: PlatformContext): PlatformContext = context
 
 private suspend fun writeBackup(context: PlatformContext, folderUri: String, name: String) {
     val dir = java.io.File(folderUri)
-    if (!dir.isDirectory && !okio.FileSystem.SYSTEM.createDirectories(dir)) throw java.io.IOException("no folder $folderUri")
+    try {
+        if (!dir.isDirectory) {
+            okio.FileSystem.SYSTEM.createDirectories(dir.toString().toPath())
+        }
+    } catch (e: Exception) {
+        throw java.io.IOException("no folder $folderUri")
+    }
     val db = createAppDatabase(context)
     val settings = createSettingsRepository(context)
     java.io.FileOutputStream(java.io.File(dir, name)).use { out ->

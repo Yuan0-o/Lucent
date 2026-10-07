@@ -1,4 +1,6 @@
 package com.lucent.app.data
+import okio.Path.Companion.toPath
+import com.lucent.app.platform.getFilesDir
 import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.desktopPlatformContext
@@ -70,8 +72,8 @@ actual object LocalSecrets {
     private fun wrapper(): MasterKeyWrapper = wrapperOverride ?: dpapiWrapper
 
     private fun keyDir(): File {
-        val base = filesDirOverride ?: desktopPlatformContext.filesDir
-        return File(base, "keys").apply { mkdirs() }
+        val base = filesDirOverride?.toString() ?: desktopPlatformContext.getFilesDir().toString()
+        return java.io.File(base, "keys").apply { mkdirs() }
     }
 
     private val keyBytes: ByteArray?
@@ -89,7 +91,7 @@ actual object LocalSecrets {
         return try {
             val dir = keyDir()
             val file = File(dir, "master.key")
-            if (okio.FileSystem.SYSTEM.exists(file)) {
+            if (okio.FileSystem.SYSTEM.exists(file.toString().toPath())) {
                 val text = file.readText().trim()
                 val key = decodeStoredForm(text)
                 if (key != null) {

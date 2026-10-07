@@ -130,7 +130,7 @@ object OfficeConvertTools : HarnessGroupTools {
         FileSystem.SYSTEM.createDirectories(work)
         val pdf = if (input.name.substringAfterLast(".", "").equals("pdf", true)) input else {
             val outcome = sofficeCall(ctx, input, "pdf", work)
-            FileSystem.SYSTEM.listOrNull(work)?.firstOrNull { it.extension.equals("pdf", true) }
+            FileSystem.SYSTEM.listOrNull(work)?.firstOrNull { it.name.substringAfterLast(".", "").equals("pdf", true) }
                 ?: return ToolExecResult(
                     "Could not render ${Workspace.display(ctx, input.toString())}.\n" + ctx.limit(outcome.text).take(2000),
                     success = false
@@ -142,7 +142,7 @@ object OfficeConvertTools : HarnessGroupTools {
         val written = mutableListOf<String>()
         val host = HarnessRuntime.host
         for (page in pages.take(4)) {
-            val bytes = host?.renderPdfPage(pdf.path, page, width)
+            val bytes = host?.renderPdfPage(pdf.toString(), page, width)
             if (bytes == null || bytes.isEmpty()) break
             val file = work / "${input.name.substringBeforeLast(".")}-p$page.png"
             FileSystem.SYSTEM.write(file) { write(bytes) }
@@ -233,7 +233,7 @@ object OfficeConvertTools : HarnessGroupTools {
         }
         return when (file.name.substringAfterLast(".", "").lowercase()) {
             "pdf" -> {
-                val text = HarnessRuntime.host?.let { host -> kotlinx.coroutines.runBlocking { host.readPdfText(file.path) } }.orEmpty()
+                val text = HarnessRuntime.host?.let { host -> kotlinx.coroutines.runBlocking { host.readPdfText(file.toString()) } }.orEmpty()
                 if (text.isBlank()) ToolExecResult("No text could be pulled out of that PDF here.", success = false)
                 else ToolExecResult(ctx.limit(text))
             }

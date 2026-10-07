@@ -1,4 +1,5 @@
 package com.lucent.app.data
+import okio.Path.Companion.toPath
 import com.lucent.app.platform.cacheDir
 import com.lucent.app.platform.applicationContext
 
@@ -47,7 +48,7 @@ actual object AttachmentAccess {
             }
             dest
         } catch (t: Throwable) {
-            okio.FileSystem.SYSTEM.delete(dest)
+            try { okio.FileSystem.SYSTEM.delete(dest.toString().toPath()) } catch (e: Exception) {}
             null
         }
     }

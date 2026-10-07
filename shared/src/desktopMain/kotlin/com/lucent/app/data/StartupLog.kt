@@ -1,4 +1,6 @@
 package com.lucent.app.data
+import okio.Path.Companion.toPath
+import com.lucent.app.platform.getFilesDir
 import com.lucent.app.platform.applicationContext
 import com.lucent.app.platform.filesDir
 
@@ -23,7 +25,7 @@ actual object StartupLog {
     actual fun setEnabled(value: Boolean) { enabled = value }
     actual fun isEnabled(): Boolean = enabled
 
-    private fun logFile(context: PlatformContext) = File(context.applicationContext.filesDir, FILE_NAME)
+    private fun logFile(context: PlatformContext) = java.io.File(context.applicationContext.getFilesDir().toString(), FILE_NAME)
 
     actual fun event(context: PlatformContext, message: String) {
         if (!enabled) return
@@ -34,7 +36,7 @@ actual object StartupLog {
                 try {
                     val f = logFile(app)
                     f.appendText("$stamp  $message\n")
-                    if ((okio.FileSystem.SYSTEM.metadataOrNull(f)?.size ?: 0L) > MAX_BYTES) {
+                    if ((okio.FileSystem.SYSTEM.metadataOrNull(f.toString().toPath())?.size ?: 0L) > MAX_BYTES) {
                         val kept = f.readText().takeLast(MAX_BYTES / 2)
                         f.writeText(kept)
                     }
@@ -46,7 +48,7 @@ actual object StartupLog {
 
     actual fun readAll(context: PlatformContext): String = synchronized(lock) {
         val f = logFile(context)
-        if (!okio.FileSystem.SYSTEM.exists(f)) "" else try { f.readText() } catch (_: Throwable) { "" }
+        if (!okio.FileSystem.SYSTEM.exists(f.toString().toPath())) "" else try { f.readText() } catch (_: Throwable) { "" }
     }
 
     actual fun buildExport(context: PlatformContext): String {
@@ -64,7 +66,7 @@ actual object StartupLog {
 
     actual fun hasEntries(context: PlatformContext): Boolean = synchronized(lock) {
         val f = logFile(context)
-        okio.FileSystem.SYSTEM.exists(f) && (okio.FileSystem.SYSTEM.metadataOrNull(f)?.size ?: 0L) > 0
+        okio.FileSystem.SYSTEM.exists(f.toString().toPath()) && (okio.FileSystem.SYSTEM.metadataOrNull(f.toString().toPath())?.size ?: 0L) > 0
     }
 
     actual fun clear(context: PlatformContext) {

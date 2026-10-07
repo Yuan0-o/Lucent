@@ -1,4 +1,5 @@
 package com.lucent.app.data
+import okio.buffer
 import com.lucent.app.platform.filesDir
 import com.lucent.app.local.ImportSource
 
@@ -115,7 +116,7 @@ object FontStore {
         val id = newId()
         val pickedName = source.displayName(context) ?: "font"
 
-        source.openStream(context)?.let { okio.buffer(it) }?.use { raw ->
+        source.openStream(context)?.buffer()?.use { raw ->
             val head = ByteArray(4)
             val headRead = readUpTo(raw, head)
             val ext = classify(head, headRead) ?: throw NotFontException()

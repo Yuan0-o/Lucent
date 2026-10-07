@@ -57,19 +57,19 @@ actual object AttachmentStore {
 
     actual fun openOutputStream(context: PlatformContext, id: String): PlatformOutputStream? = try {
         val key = DataKeys.attachmentKey(context)
-        val dest = File(fileFor(context, id).toString())
-        PlatformOutputStream(FileCrypto.encryptingSink(dest.sink(), DataKeys.attachmentKey(context)).buffer().outputStream())
+        val dest = fileFor(context, id).toString().toPath()
+        PlatformOutputStream(FileCrypto.encryptingSink(okio.FileSystem.SYSTEM.sink(dest), DataKeys.attachmentKey(context)).buffer().outputStream())
     } catch (t: Throwable) {
         null
     }
 
     actual fun openInputStream(context: PlatformContext, id: String): PlatformInputStream? = try {
-        val file = File(fileFor(context, id).toString())
+        val file = fileFor(context, id).toString().toPath()
         when {
             !okio.FileSystem.SYSTEM.exists(file) -> null
             FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, file.toString().toPath()) ->
-                FileCrypto.decryptingSource(file.source(), DataKeys.attachmentKey(context)).buffer().inputStream()
-            else -> file.inputStream()
+                FileCrypto.decryptingSource(okio.FileSystem.SYSTEM.source(file), DataKeys.attachmentKey(context)).buffer().inputStream()
+            else -> okio.FileSystem.SYSTEM.source(file).buffer().inputStream()
         }
     } catch (t: Throwable) {
         null
@@ -97,59 +97,59 @@ actual object AttachmentStore {
     }
 
     actual fun exists(context: PlatformContext, id: String): Boolean =
-        fileFor(context, id).exists()
+        okio.FileSystem.SYSTEM.exists(fileFor(context, id).toString().toPath())
 
     actual fun sizeOf(context: PlatformContext, id: String): Long {
-        val file = File(fileFor(context, id).toString())
+        val file = fileFor(context, id).toString().toPath()
         if (!okio.FileSystem.SYSTEM.exists(file)) return 0L
         return if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, file.toString().toPath())) FileCrypto.plaintextSizeOf(okio.FileSystem.SYSTEM, file.toString().toPath()) else (okio.FileSystem.SYSTEM.metadataOrNull(file)?.size ?: 0L)
     }
 
     actual fun totalBytes(context: PlatformContext): Long =
         baseDir(context).listFiles()?.sumOf { f ->
-            val jf = File(f.toString())
+            val jf = f.toString().toPath()
             if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, jf.toString().toPath())) FileCrypto.plaintextSizeOf(okio.FileSystem.SYSTEM, jf.toString().toPath()) else (okio.FileSystem.SYSTEM.metadataOrNull(jf)?.size ?: 0L)
         } ?: 0L
 
     actual fun encryptExistingFile(context: PlatformContext, id: String): Boolean {
-        val file = File(fileFor(context, id).toString())
+        val file = fileFor(context, id).toString().toPath()
         if (!okio.FileSystem.SYSTEM.exists(file)) return false
         if (FileCrypto.isEncrypted(okio.FileSystem.SYSTEM, file.toString().toPath())) return true
         return try {
             val key = DataKeys.attachmentKey(context)
-            val temp = File(file.parent, "${file.name}.enc.tmp")
-            file.inputStream().use { input ->
-                FileCrypto.encryptingSink(temp.sink(), DataKeys.attachmentKey(context)).buffer().outputStream().use { output ->
+            val temp = (file.parent!!.toString() + "/" + "${file.name}.enc.tmp").toPath()
+            okio.FileSystem.SYSTEM.source(file).buffer().inputStream().use { input ->
+                FileCrypto.encryptingSink(okio.FileSystem.SYSTEM.sink(temp), DataKeys.attachmentKey(context)).buffer().outputStream().use { output ->
                     copyStream(input, output)
                 }
             }
-            if (temp.renameTo(file)) true
+            try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false }
             else {
-                if (okio.FileSystem.SYSTEM.delete(file) && temp.renameTo(file)) true else { okio.FileSystem.SYSTEM.delete(temp); false }
+                if (run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } } && run { try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false } }) true else { run { try { okio.FileSystem.SYSTEM.delete(temp); true } catch (e: Exception) { false } }; false }
             }
         } catch (t: Throwable) {
-            File(file.parent, "${file.name}.enc.tmp").delete()
+            try { okio.FileSystem.SYSTEM.delete((file.parent!!.toString() + "/" + "${file.name}.enc.tmp").toPath()) } catch (e: Exception) {}
             false
         }
     }
 
     actual fun delete(context: PlatformContext, id: String): Boolean {
-        val file = File(fileFor(context, id).toString())
-        return !okio.FileSystem.SYSTEM.exists(file) || okio.FileSystem.SYSTEM.delete(file)
+        val file = fileFor(context, id).toString().toPath()
+        return !okio.FileSystem.SYSTEM.exists(file) || run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } }
     }
 
     actual fun pruneOrphans(context: PlatformContext, referencedIds: Set<String>) {
         baseDir(context).listFiles()?.forEach { file ->
-            if (file.name !in referencedIds && looksLikeId(file.name)) okio.FileSystem.SYSTEM.delete(file)
+            if (file.name !in referencedIds && looksLikeId(file.name)) run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } }
         }
     }
 
     fun importFile(context: PlatformContext, source: File): String? {
         val id = UUID.randomUUID().toString()
-        val dest = File(fileFor(context, id).toString())
+        val dest = fileFor(context, id).toString().toPath()
         return try {
-            source.inputStream().use { input ->
-                val out = openOutputStream(context, id) ?: run { okio.FileSystem.SYSTEM.delete(dest); return null }
+            okio.FileSystem.SYSTEM.source(source.toString().toPath()).buffer().inputStream().use { input ->
+                val out = openOutputStream(context, id) ?: run { try { okio.FileSystem.SYSTEM.delete(dest) } catch (e: Exception) {}; return null }
                 try {
                     copyStream(input, out.stream)
                 } finally {
@@ -158,7 +158,7 @@ actual object AttachmentStore {
             }
             id
         } catch (e: IOException) {
-            okio.FileSystem.SYSTEM.delete(dest)
+            try { okio.FileSystem.SYSTEM.delete(dest) } catch (e: Exception) {}
             null
         }
     }

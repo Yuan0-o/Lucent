@@ -16,8 +16,8 @@ actual object DataKeys {
     @Volatile private var attachmentKey: ByteArray? = null
     @Volatile private var databaseKeyHex: String? = null
 
-    private fun keyDir(context: PlatformContext): File =
-        File(context.filesDir, KEY_DIR).apply { if (!exists()) mkdirs() }
+    private fun keyDir(context: PlatformContext): okio.Path =
+        (context.filesDir / KEY_DIR).also { okio.FileSystem.SYSTEM.createDirectories(it) }
 
     private fun decodeKey(base64: String): ByteArray? {
         if (base64.isEmpty()) return null
@@ -30,23 +30,23 @@ actual object DataKeys {
     }
 
     private fun atomicWrite(file: File, contents: String): Boolean {
-        val temp = File(file.parent, "${file.name}.tmp")
+        val temp = java.io.File(file.parent, "${file.name}.tmp")
         return try {
             java.io.FileOutputStream(temp).use { out ->
                 out.write(contents.toByteArray(Charsets.UTF_8))
                 out.flush()
                 out.fd.sync()
             }
-            if (AtomicFiles.replace(temp, file)) true else { okio.FileSystem.SYSTEM.delete(temp); false }
+            if (AtomicFiles.replace(temp, file)) true else { okio.FileSystem.SYSTEM.delete(temp.toString().toPath()); false }
         } catch (t: Throwable) {
-            okio.FileSystem.SYSTEM.delete(temp)
+            okio.FileSystem.SYSTEM.delete(temp.toString().toPath())
             false
         }
     }
 
     private fun getOrCreate(context: PlatformContext, fileName: String): ByteArray {
-        val file = File(keyDir(context), fileName)
-        if (okio.FileSystem.SYSTEM.exists(file)) {
+        val file = java.io.File(keyDir(context).toString(), fileName)
+        if (okio.FileSystem.SYSTEM.exists(file.toString().toPath())) {
             val stored = try { file.readText() } catch (t: Throwable) { "" }
             decodeKey(LocalSecrets.decrypt(stored))?.let { return it }
             throw IllegalStateException(
@@ -85,7 +85,7 @@ actual object DataKeys {
     }
 
     actual fun hasDatabaseKey(context: PlatformContext): Boolean =
-        File(keyDir(context), DATABASE_KEY_FILE).exists()
+        java.io.File(keyDir(context).toString(), DATABASE_KEY_FILE).exists()
 
     actual fun resetCacheForTesting() {
         synchronized(lock) {

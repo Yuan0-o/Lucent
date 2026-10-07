@@ -2,7 +2,6 @@ package com.lucent.app.data
 import kotlinx.datetime.Instant
 import kotlinx.datetime.Clock
 
-import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 

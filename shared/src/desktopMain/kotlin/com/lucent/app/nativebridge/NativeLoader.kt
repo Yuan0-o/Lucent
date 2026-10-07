@@ -1,4 +1,6 @@
 package com.lucent.app.nativebridge
+import okio.Path.Companion.toPath
+import com.lucent.app.platform.getFilesDir
 import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.desktopPlatformContext
@@ -43,16 +45,16 @@ object NativeLoader {
         return try {
             val mapped = System.mapLibraryName(baseName)
             val resource = NativeLoader::class.java.getResourceAsStream("/native/$mapped") ?: return false
-            val dir = File(desktopPlatformContext.filesDir, "native").apply { mkdirs() }
+            val dir = java.io.File(desktopPlatformContext.getFilesDir().toString(), "native").apply { mkdirs() }
             val target = File(dir, mapped)
             resource.use { input ->
                 val bytes = input.readBytes()
-                if (!okio.FileSystem.SYSTEM.exists(target) || (okio.FileSystem.SYSTEM.metadataOrNull(target)?.size ?: 0L) != bytes.size.toLong()) {
+                if (!okio.FileSystem.SYSTEM.exists(target.toString().toPath()) || (okio.FileSystem.SYSTEM.metadataOrNull(target.toString().toPath())?.size ?: 0L) != bytes.size.toLong()) {
                     val tmp = File(dir, "$mapped.tmp")
                     tmp.writeBytes(bytes)
-                    if (!tmp.renameTo(target)) {
-                        okio.FileSystem.SYSTEM.delete(target)
-                        if (!tmp.renameTo(target)) return false
+                    if (!try { okio.FileSystem.SYSTEM.atomicMove(tmp.toString().toPath(), target.toString().toPath()); true } catch (e: Exception) { false }) {
+                        try { okio.FileSystem.SYSTEM.delete(target.toString().toPath()) } catch (e: Exception) {}
+                        if (!try { okio.FileSystem.SYSTEM.atomicMove(tmp.toString().toPath(), target.toString().toPath()); true } catch (e: Exception) { false }) return false
                     }
                 }
             }

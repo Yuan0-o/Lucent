@@ -1,5 +1,5 @@
 package com.lucent.app.local
-
+import okio.Path.Companion.toPath
 import com.lucent.app.platform.PlatformContext
 import java.io.File
 
@@ -8,5 +8,5 @@ class FileImportSource(val file: File) : ImportSource {
         file.name.ifBlank { null }
 
     override fun openStream(context: PlatformContext): okio.Source? =
-        okio.FileSystem.SYSTEM.source(okio.Path.Companion.toPath(file.absolutePath))
+        okio.FileSystem.SYSTEM.source(file.absolutePath.toPath())
 }

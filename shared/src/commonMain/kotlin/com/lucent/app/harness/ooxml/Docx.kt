@@ -5,7 +5,6 @@ import okio.Path.Companion.toPath
 import kotlinx.serialization.json.*
 import okio.FileSystem
 import okio.Path
-import okio.Path.Companion.toPath
 
 private const val DOCUMENT_PART = "word/document.xml"
 private const val DOCUMENT_RELS_PART = "word/_rels/document.xml.rels"
