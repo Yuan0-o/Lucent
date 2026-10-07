@@ -35,6 +35,7 @@ kotlin {
         namespace = "com.lucent.shared"
         compileSdk = 36
         minSdk = 28
+        withHostTest {}
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
             freeCompilerArgs.add("-Xexpect-actual-classes")
