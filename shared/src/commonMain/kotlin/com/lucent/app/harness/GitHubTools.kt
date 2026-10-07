@@ -423,7 +423,7 @@ object GitHubTools : HarnessGroupTools {
                 val body = (args["body"]?.jsonPrimitive?.content ?: "")
                 if (body.isNotEmpty()) payload["body"] = kotlinx.serialization.json.JsonPrimitive(body)
                 val labels = splitList((args["labels"]?.jsonPrimitive?.content ?: ""))
-                if (labels.size > 0) payload["labels"] = kotlinx.serialization.json.JsonArray(labels.map { kotlinx.serialization.json.JsonPrimitive(it) as kotlinx.serialization.json.JsonElement })
+                if (labels.size > 0) payload["labels"] = labels
                 val reply = call("POST", "$root/issues", kotlinx.serialization.json.JsonObject(payload))
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
@@ -444,7 +444,7 @@ object GitHubTools : HarnessGroupTools {
                 val state = (args["state"]?.jsonPrimitive?.content ?: "").trim()
                 if (state.isNotEmpty()) payload["state"] = kotlinx.serialization.json.JsonPrimitive(state)
                 val labels = splitList((args["labels"]?.jsonPrimitive?.content ?: ""))
-                if (labels.size > 0) payload["labels"] = kotlinx.serialization.json.JsonArray(labels.map { kotlinx.serialization.json.JsonPrimitive(it) as kotlinx.serialization.json.JsonElement })
+                if (labels.size > 0) payload["labels"] = labels
                 if (payload.size == 0) {
                     return ToolExecResult("update needs title, body, state or labels to change.", success = false)
                 }

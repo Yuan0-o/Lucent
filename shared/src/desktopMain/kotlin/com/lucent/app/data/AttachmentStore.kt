@@ -141,7 +141,7 @@ actual object AttachmentStore {
 
     actual fun pruneOrphans(context: PlatformContext, referencedIds: Set<String>) {
         baseDir(context).listFiles()?.forEach { file ->
-            if (file.name !in referencedIds && looksLikeId(file.name)) run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } }
+            if (file.name !in referencedIds && looksLikeId(file.name)) run { try { okio.FileSystem.SYSTEM.delete(file.toString().toPath()); true } catch (e: Exception) { false } }
         }
     }
 

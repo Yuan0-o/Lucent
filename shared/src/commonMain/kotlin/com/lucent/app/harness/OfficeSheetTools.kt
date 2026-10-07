@@ -142,7 +142,7 @@ object OfficeSheetTools : HarnessGroupTools {
         }
         val declared = (args["out"]?.jsonPrimitive?.content ?: "")
         val target = if (declared.isBlank()) {
-            val sibling = (sourcePath.parent ?: ctx.workspace.toPath()) / (sourcePath.name.removeSuffix(".xlsx") + ".csv")
+            val sibling = (sourcePath.parent ?: ctx.workspace) / (sourcePath.name.removeSuffix(".xlsx") + ".csv")
             Workspace.forWriteFile(ctx, sibling.toString())
         } else {
             Workspace.forWriteFile(ctx, declared)

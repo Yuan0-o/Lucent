@@ -322,7 +322,7 @@ object FileTools : HarnessGroupTools {
     private fun searchFiles(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val query = (args["query"]?.jsonPrimitive?.content ?: "")
         if (query.isBlank()) return ToolExecResult("Give me something to search for.", success = false)
-        val root = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").ifBlank { "." }.toPath())
+        val root = Workspace.forRead(ctx, (args["path"]?.jsonPrimitive?.content ?: "").ifBlank { "." })
         val regex = (args["regex"]?.jsonPrimitive?.booleanOrNull ?: false)
         val glob = (args["glob"]?.jsonPrimitive?.content ?: "")
         val max = (args["max_results"]?.jsonPrimitive?.intOrNull ?: MAX_SEARCH).coerceIn(1, 500)

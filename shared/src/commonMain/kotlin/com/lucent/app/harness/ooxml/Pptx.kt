@@ -2214,8 +2214,7 @@ private fun pptxCollect(node: XmlNode, tag: String, out: MutableList<XmlNode>) {
 
 private fun pptxAttr(node: XmlNode?, name: String): String {
     if (node == null) return ""
-    val attribute = node.attributes[name] ?: return ""
-    return attribute.value ?: ""
+    return node.attributes[name] ?: ""
 }
 
 private fun pptxNsAttr(node: XmlNode?, name: String): String {

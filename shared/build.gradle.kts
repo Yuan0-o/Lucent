@@ -57,6 +57,9 @@ kotlin {
         val jvmMain = create("jvmMain") {
             dependsOn(commonMain)
             dependencies {
+                implementation(libs.kotlinx.datetime)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.okio)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.okhttp)
                 implementation(libs.org.json)

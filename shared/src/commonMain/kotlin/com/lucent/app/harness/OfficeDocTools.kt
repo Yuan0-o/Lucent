@@ -67,21 +67,21 @@ object OfficeDocTools : HarnessGroupTools {
 
     private fun createDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
-        if (okio.FileSystem.SYSTEM.metadataOrNull(file.toPath())?.isDirectory == true) {
+        if (okio.FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
         val spec = documentSpec(args)
-        if (ctx.config.snapshots && okio.FileSystem.SYSTEM.exists(file.toPath())) Snapshots.capture(ctx, file)
-        file.toPath().parent?.let { okio.FileSystem.SYSTEM.createDirectories(it) }
+        if (ctx.config.snapshots && okio.FileSystem.SYSTEM.exists(file)) Snapshots.capture(ctx, file)
+        file.parent?.let { okio.FileSystem.SYSTEM.createDirectories(it) }
         val detail = Docx.create(spec, file)
         return ToolExecResult(
-            "Created ${Workspace.display(ctx, file)} (${Workspace.humanSize(okio.FileSystem.SYSTEM.metadataOrNull(file.toPath())?.size ?: 0L)}): $detail."
+            "Created ${Workspace.display(ctx, file)} (${Workspace.humanSize(okio.FileSystem.SYSTEM.metadataOrNull(file)?.size ?: 0L)}): $detail."
         )
     }
 
     private fun readDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
-        if (okio.FileSystem.SYSTEM.metadataOrNull(file.toPath())?.isDirectory == true) {
+        if (okio.FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
         val maxChars = (args["max_chars"]?.jsonPrimitive?.intOrNull ?: 20000).coerceIn(500, 400000)
@@ -90,17 +90,17 @@ object OfficeDocTools : HarnessGroupTools {
 
     private fun editDocument(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
-        if (okio.FileSystem.SYSTEM.metadataOrNull(file.toPath())?.isDirectory == true) {
+        if (okio.FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true) {
             return ToolExecResult("${Workspace.display(ctx, file)} is a directory, not a .docx file.", success = false)
         }
-        if (!okio.FileSystem.SYSTEM.exists(file.toPath())) {
+        if (!okio.FileSystem.SYSTEM.exists(file)) {
             return ToolExecResult("${Workspace.display(ctx, file)} does not exist yet.", success = false)
         }
         val ops = operations(args)
         if (ctx.config.snapshots) Snapshots.capture(ctx, file)
         val detail = Docx.edit(file, ops)
         return ToolExecResult(
-            "Edited ${Workspace.display(ctx, file)} (${Workspace.humanSize(okio.FileSystem.SYSTEM.metadataOrNull(file.toPath())?.size ?: 0L)}): $detail."
+            "Edited ${Workspace.display(ctx, file)} (${Workspace.humanSize(okio.FileSystem.SYSTEM.metadataOrNull(file)?.size ?: 0L)}): $detail."
         )
     }
 
