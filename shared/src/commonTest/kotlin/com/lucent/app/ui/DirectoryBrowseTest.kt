@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 class DirectoryBrowseTest {
 
     private fun tree(): File {
-        val root = File(System.getProperty("java.io.tmpdir"), "lucent-browse-${System.nanoTime()}")
+        val root = File(System.getProperty("java.io.tmpdir"), "lucent-browse-${System.nanoTime()}").canonicalFile
         File(root, "Beta").mkdirs()
         File(root, "alpha").mkdirs()
         File(root, ".hidden").mkdirs()
@@ -17,8 +17,6 @@ class DirectoryBrowseTest {
         return root
     }
 
-    /** DirectoryBrowse speaks okio paths (forward slashes); java.io.File uses the
-        platform separator, so compare with separators unified. */
     private fun slash(path: String): String = path.replace(File.separatorChar, '/')
 
     @Test
