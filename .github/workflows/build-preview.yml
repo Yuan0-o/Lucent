@@ -522,11 +522,11 @@ jobs:
             printf 'Lucent %s Preview\n\n' "$VERSION"
             printf -- '---\n\n'
             printf 'Build info:\n'
-            printf '- Build-ID: %s\n' "$BUILD_ID"
-            printf '- Android APK: %s MiB\n' "$APK_SIZE_MB"
-            printf '- Windows installer: %s MiB\n' "$EXE_SIZE_MB"
-            printf '- Built from commit %s\n' "${{ github.sha }}"
-            printf '- Build log: https://github.com/%s/actions/runs/%s\n' "${{ github.repository }}" "${{ github.run_id }}"
+            printf -- '- Build-ID: %s\n' "$BUILD_ID"
+            printf -- '- Android APK: %s MiB\n' "$APK_SIZE_MB"
+            printf -- '- Windows installer: %s MiB\n' "$EXE_SIZE_MB"
+            printf -- '- Built from commit %s\n' "${{ github.sha }}"
+            printf -- '- Build log: https://github.com/%s/actions/runs/%s\n' "${{ github.repository }}" "${{ github.run_id }}"
           } > /tmp/notes.md
 
       - name: Create the release and attach both assets
