@@ -2,6 +2,7 @@ package com.lucent.app.ui
 
 import com.lucent.app.data.createSettingsRepository
 import kotlinx.serialization.json.*
+import kotlinx.serialization.json.JsonObject
 
 import com.lucent.app.data.createAppDatabase
 
@@ -99,7 +100,7 @@ fun NotebooksScreen(
             runCatching {
                 val dataStr = settingsRepo.notebookOpensOnce()
                 val data = if (dataStr.isBlank()) buildJsonObject {} else try { Json.parseToJsonElement(dataStr).jsonObject } catch (e: Exception) { buildJsonObject {} }
-                val previous = data[id.toString()]?.jsonObject ?: buildJsonObject {}
+                val previous = (data[id.toString()] as? JsonObject) ?: buildJsonObject {}
                 val updatedData = buildJsonObject {
                     data.forEach { k, v -> put(k, v) }
                     put(id.toString(), buildJsonObject {
