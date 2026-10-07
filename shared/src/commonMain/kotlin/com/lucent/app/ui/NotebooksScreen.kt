@@ -1,6 +1,7 @@
 package com.lucent.app.ui
 
 import com.lucent.app.data.createSettingsRepository
+import kotlinx.serialization.json.*
 
 import com.lucent.app.data.createAppDatabase
 
@@ -96,12 +97,18 @@ fun NotebooksScreen(
     fun recordNotebookOpen(id: Long) {
         AppScope.io.launch {
             runCatching {
-                val data = org.json.JSONObject(settingsRepo.notebookOpensOnce())
-                val previous = data.optJSONObject(id.toString()) ?: org.json.JSONObject()
-                data.put(id.toString(), org.json.JSONObject()
-                    .put("last", System.currentTimeMillis())
-                    .put("count", previous.optInt("count", 0) + 1))
-                settingsRepo.setNotebookOpens(data.toString())
+                val dataStr = settingsRepo.notebookOpensOnce()
+                val data = if (dataStr.isBlank()) buildJsonObject {} else try { Json.parseToJsonElement(dataStr).jsonObject } catch (e: Exception) { buildJsonObject {} }
+                val previous = data[id.toString()]?.jsonObject ?: buildJsonObject {}
+                val updatedData = buildJsonObject {
+                    data.forEach { k, v -> put(k, v) }
+                    put(id.toString(), buildJsonObject {
+                        put("last", System.currentTimeMillis())
+                        val count = (previous["count"] as? JsonPrimitive)?.int ?: 0
+                        put("count", count + 1)
+                    })
+                }
+                settingsRepo.setNotebookOpens(updatedData.toString())
                 StartupLog.event(context, "notebooks: opened notebook $id")
             }.onFailure { StartupLog.event(context, "notebooks: open tracking failed: ${it.message}") }
         }

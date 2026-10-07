@@ -1,4 +1,5 @@
 package com.lucent.app.harness.plugins
+import kotlinx.serialization.json.*
 import com.lucent.app.platform.filesDir
 
 import com.lucent.app.harness.HarnessRuntime
@@ -229,7 +230,7 @@ object PluginJournal {
         val dir = dir() ?: return
         try {
             val safe = pluginId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-            val line = org.json.JSONObject().apply {
+            val line = buildJsonObject {
                 put("stage", stage)
                 put("message", message.take(400))
                 put("ok", ok)
@@ -246,8 +247,11 @@ object PluginJournal {
             val safe = pluginId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
             val file = dir / "$safe.json"
             if (FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile != true) return null
-            val o = org.json.JSONObject(FileSystem.SYSTEM.read(file) { readUtf8() })
-            PluginJournalEntry(o.optString("stage", ""), o.optString("message", ""), o.optBoolean("ok", false))
+            val o = Json.parseToJsonElement(FileSystem.SYSTEM.read(file) { readUtf8() }).jsonObject
+            val stage = (o["stage"] as? JsonPrimitive)?.content ?: ""
+            val message = (o["message"] as? JsonPrimitive)?.content ?: ""
+            val ok = (o["ok"] as? JsonPrimitive)?.booleanOrNull ?: false
+            PluginJournalEntry(stage, message, ok)
         } catch (_: Throwable) {
             null
         }

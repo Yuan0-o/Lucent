@@ -9,6 +9,7 @@ import com.lucent.app.data.createAppDatabase
 import kotlin.time.Clock
 
 import com.lucent.app.platform.PlatformContext
+import kotlinx.serialization.json.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -1577,9 +1578,9 @@ class AssistantControllerImpl(
     }
 
     private fun titleQueryOf(argsJson: String): String = try {
-        val args = org.json.JSONObject(argsJson)
+        val args = Json.parseToJsonElement(argsJson).jsonObject
         listOf("title", "note_title", "task_title", "new_title", "query", "name")
-            .firstNotNullOfOrNull { key -> args.optString(key, "").takeIf { it.isNotBlank() } }
+            .firstNotNullOfOrNull { key -> (args[key] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } }
             .orEmpty()
     } catch (t: Throwable) {
         ""
@@ -1637,8 +1638,12 @@ class AssistantControllerImpl(
 
     private fun signatureOf(name: String, argsJson: String): String {
         val norm = try {
-            val o = org.json.JSONObject(argsJson)
-            o.keys().asSequence().sorted().joinToString(";") { k -> "$k=${o.opt(k)}" }
+            val o = Json.parseToJsonElement(argsJson).jsonObject
+            o.keys.asSequence().sorted().joinToString(";") { k ->
+                val v = o[k]
+                val str = if (v is JsonPrimitive && v.isString) v.content else v.toString()
+                "$k=$str"
+            }
         } catch (e: Exception) {
             argsJson.trim()
         }

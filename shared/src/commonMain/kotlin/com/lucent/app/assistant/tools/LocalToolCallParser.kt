@@ -1,12 +1,16 @@
 package com.lucent.app.assistant.tools
+import kotlinx.serialization.json.*
 
 object LocalToolCallParser {
 
     data class LocalToolCall(val name: String, val argsJson: String)
 
     fun renderLocalToolCall(call: LocalToolCall): String {
-        val args = try { org.json.JSONObject(call.argsJson) } catch (e: Exception) { org.json.JSONObject() }
-        return org.json.JSONObject().put("tool", call.name).put("arguments", args).toString()
+        val args = try { kotlinx.serialization.json.Json.parseToJsonElement(call.argsJson).jsonObject } catch (e: Exception) { kotlinx.serialization.json.buildJsonObject {} }
+        return kotlinx.serialization.json.buildJsonObject {
+            put("tool", call.name)
+            put("arguments", args)
+        }.toString()
     }
 
     fun parseLocalToolCall(raw: String, valid: Set<String>): LocalToolCall? {
@@ -14,8 +18,8 @@ object LocalToolCallParser {
         val s = stripToolWrappers(raw)
 
         for (candidate in jsonObjectCandidates(s)) {
-            var obj = try { org.json.JSONObject(candidate) } catch (e: Exception) { continue }
-            for (k in TOOL_WRAPPER_KEYS) obj.optJSONObject(k)?.let { obj = it }
+            var obj = try { kotlinx.serialization.json.Json.parseToJsonElement(candidate).jsonObject } catch (e: Exception) { continue }
+            for (k in TOOL_WRAPPER_KEYS) obj[k]?.jsonObject?.let { obj = it }
             val rawName = firstJsonString(obj, "tool", "name", "function", "action", "tool_name")?.trim()
             if (rawName.isNullOrBlank()) continue
             val name = resolveToolName(rawName, valid) ?: continue
@@ -29,8 +33,8 @@ object LocalToolCallParser {
         if (raw.isBlank()) return null
         val s = stripToolWrappers(raw)
         for (candidate in jsonObjectCandidates(s)) {
-            var obj = try { org.json.JSONObject(candidate) } catch (e: Exception) { continue }
-            for (k in TOOL_WRAPPER_KEYS) obj.optJSONObject(k)?.let { obj = it }
+            var obj = try { Json.parseToJsonElement(candidate).jsonObject } catch (e: Exception) { continue }
+            for (k in TOOL_WRAPPER_KEYS) obj[k]?.jsonObject?.let { obj = it }
             val name = firstJsonString(obj, "tool", "name", "function", "action", "tool_name")?.trim()
             val hasArgs = firstJsonObject(obj, "arguments", "args", "parameters", "input", "params") != null
             if (!name.isNullOrBlank() && (hasArgs || SNAKE_CASE_NAME.matches(name))) return name
@@ -92,19 +96,18 @@ object LocalToolCallParser {
         return containment.singleOrNull()
     }
 
-    private fun stripBlankArguments(argsObj: org.json.JSONObject?): org.json.JSONObject {
-        val cleaned = org.json.JSONObject()
-        if (argsObj == null) return cleaned
-        for (k in argsObj.keys()) {
-            val v = argsObj.opt(k)
-            val keep = when (v) {
-                null, org.json.JSONObject.NULL -> false
-                is String -> v.isNotBlank()
-                else -> true
+    private fun stripBlankArguments(argsObj: JsonObject?): JsonObject {
+        if (argsObj == null) return buildJsonObject {}
+        return buildJsonObject {
+            for ((k, v) in argsObj) {
+                val keep = when (v) {
+                    JsonNull -> false
+                    is JsonPrimitive -> if (v.isString) v.content.isNotBlank() else true
+                    else -> true
+                }
+                if (keep) put(k, v)
             }
-            if (keep) cleaned.put(k, v)
         }
-        return cleaned
     }
 
     private fun jsonObjectCandidates(s: String): List<String> {
@@ -135,17 +138,20 @@ object LocalToolCallParser {
         return out
     }
 
-    private fun firstJsonString(o: org.json.JSONObject, vararg keys: String): String? {
-        for (k in keys) { val v = o.opt(k); if (v is String && v.isNotBlank()) return v }
+    private fun firstJsonString(o: JsonObject, vararg keys: String): String? {
+        for (k in keys) {
+            val v = o[k]
+            if (v is JsonPrimitive && v.isString && v.content.isNotBlank()) return v.content
+        }
         return null
     }
 
-    private fun firstJsonObject(o: org.json.JSONObject, vararg keys: String): org.json.JSONObject? {
+    private fun firstJsonObject(o: JsonObject, vararg keys: String): JsonObject? {
         for (k in keys) {
-            val v = o.opt(k)
-            if (v is org.json.JSONObject) return v
-            if (v is String && v.trim().startsWith("{")) {
-                try { return org.json.JSONObject(v) } catch (_: Exception) {}
+            val v = o[k]
+            if (v is JsonObject) return v
+            if (v is JsonPrimitive && v.isString && v.content.trim().startsWith("{")) {
+                try { return Json.parseToJsonElement(v.content).jsonObject } catch (_: Exception) {}
             }
         }
         return null
