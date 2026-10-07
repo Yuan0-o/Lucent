@@ -207,6 +207,7 @@ dependencies {
 
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
     testImplementation(libs.org.json)
+    testImplementation(libs.kotlinx.serialization.json)
 
     androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.androidx.test.core)

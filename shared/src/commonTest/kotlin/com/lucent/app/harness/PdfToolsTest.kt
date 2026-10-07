@@ -7,6 +7,8 @@ import java.util.zip.DeflaterOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import okio.Path
+import okio.Path.Companion.toPath
 
 class PdfToolsTest {
 
@@ -89,7 +91,7 @@ class PdfToolsTest {
 
     @Test
     fun missingFileFailsGracefully() {
-        val missing = File(tempDir(), "nope.pdf")
+        val missing = File(tempDir(), "nope.pdf").absolutePath.toPath()
         assertTrue(PdfBook.info(missing).startsWith("Cannot read this PDF"))
     }
 
@@ -229,10 +231,10 @@ class PdfToolsTest {
         return sb.append(text).toString()
     }
 
-    private fun write(name: String, bytes: ByteArray): File {
+    private fun write(name: String, bytes: ByteArray): Path {
         val file = File(tempDir(), name)
         file.writeBytes(bytes)
-        return file
+        return file.absolutePath.toPath()
     }
 
     private fun tempDir(): File {

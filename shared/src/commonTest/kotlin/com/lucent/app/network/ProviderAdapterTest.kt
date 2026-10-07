@@ -2,6 +2,11 @@ package com.lucent.app.network
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -20,6 +25,8 @@ class ProviderAdapterTest {
         ChatTurn(role = "user", content = "Hello"),
         ChatTurn(role = "assistant", content = "Hi there")
     )
+
+    private fun jsonObj(json: String): JsonObject = Json.parseToJsonElement(json).jsonObject
 
 
     @Test
@@ -79,38 +86,38 @@ class ProviderAdapterTest {
     @Test
     fun `openai body shape`() {
         val body = OpenAiAdapter.buildBody("model-x", sampleHistory(), "sys", tools, streaming = false)
-        assertEquals("model-x", body.getString("model"))
-        assertEquals("sys", body.getJSONArray("messages").getJSONObject(0).getString("content"))
-        assertEquals("user", body.getJSONArray("messages").getJSONObject(1).getString("role"))
-        assertTrue(body.getDouble("temperature") > 0)
-        val t = body.getJSONArray("tools").getJSONObject(0)
-        assertEquals("function", t.getString("type"))
-        assertEquals("create_task", t.getJSONObject("function").getString("name"))
+        assertEquals("model-x", body["model"]!!.jsonPrimitive.content)
+        assertEquals("sys", body["messages"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content)
+        assertEquals("user", body["messages"]!!.jsonArray[1].jsonObject["role"]!!.jsonPrimitive.content)
+        assertTrue(body["temperature"]!!.jsonPrimitive.double > 0)
+        val t = body["tools"]!!.jsonArray[0].jsonObject
+        assertEquals("function", t["type"]!!.jsonPrimitive.content)
+        assertEquals("create_task", t["function"]!!.jsonObject["name"]!!.jsonPrimitive.content)
     }
 
     @Test
     fun `anthropic body shape`() {
         val body = AnthropicAdapter.buildBody("claude-x", sampleHistory(), "sys", tools, streaming = false)
-        assertEquals("claude-x", body.getString("model"))
-        val system = body.getJSONArray("system")
-        assertEquals("sys", system.getJSONObject(0).getString("text"))
-        assertNotNull(system.getJSONObject(0).optJSONObject("cache_control"))
-        val messages = body.getJSONArray("messages")
-        assertEquals("user", messages.getJSONObject(0).getString("role"))
-        val t = body.getJSONArray("tools").getJSONObject(0)
-        assertEquals("create_task", t.getString("name"))
-        assertNotNull(t.optJSONObject("input_schema"))
+        assertEquals("claude-x", body["model"]!!.jsonPrimitive.content)
+        val system = body["system"]!!.jsonArray
+        assertEquals("sys", system[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertNotNull(system[0].jsonObject["cache_control"] as? JsonObject)
+        val messages = body["messages"]!!.jsonArray
+        assertEquals("user", messages[0].jsonObject["role"]!!.jsonPrimitive.content)
+        val t = body["tools"]!!.jsonArray[0].jsonObject
+        assertEquals("create_task", t["name"]!!.jsonPrimitive.content)
+        assertNotNull(t["input_schema"] as? JsonObject)
     }
 
     @Test
     fun `google body shape`() {
         val body = GoogleAdapter.buildBody("gemini-x", sampleHistory(), "sys", tools, streaming = true)
-        val contents = body.getJSONArray("contents")
-        assertEquals("user", contents.getJSONObject(0).getString("role"))
-        assertTrue(body.has("generationConfig"))
-        val decls = body.getJSONArray("tools").getJSONObject(0).getJSONArray("functionDeclarations")
-        assertEquals("create_task", decls.getJSONObject(0).getString("name"))
-        assertEquals("sys", body.getJSONObject("systemInstruction").getJSONArray("parts").getJSONObject(0).getString("text"))
+        val contents = body["contents"]!!.jsonArray
+        assertEquals("user", contents[0].jsonObject["role"]!!.jsonPrimitive.content)
+        assertTrue(body.containsKey("generationConfig"))
+        val decls = body["tools"]!!.jsonArray[0].jsonObject["functionDeclarations"]!!.jsonArray
+        assertEquals("create_task", decls[0].jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("sys", body["systemInstruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
     }
 
 
@@ -155,7 +162,7 @@ class ProviderAdapterTest {
     @Test
     fun `openai stream event accumulates text`() {
         val acc = StreamAccumulator()
-        val json = org.json.JSONObject("""{"choices":[{"delta":{"content":"Hel"}}]}""")
+        val json = jsonObj("""{"choices":[{"delta":{"content":"Hel"}}]}""")
         val collected = StringBuilder()
         OpenAiAdapter.parseStreamEvent(json, acc, { collected.append(it) })
         assertEquals("Hel", acc.fullText.toString())
@@ -165,7 +172,7 @@ class ProviderAdapterTest {
     @Test
     fun `anthropic stream event accumulates text delta`() {
         val acc = StreamAccumulator()
-        val json = org.json.JSONObject("""{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}""")
+        val json = jsonObj("""{"type":"content_block_delta","delta":{"type":"text_delta","text":"lo"}}""")
         val collected = StringBuilder()
         AnthropicAdapter.parseStreamEvent(json, acc, { collected.append(it) })
         assertEquals("lo", acc.fullText.toString())
@@ -174,7 +181,7 @@ class ProviderAdapterTest {
     @Test
     fun `google stream event accumulates text and function call`() {
         val acc = StreamAccumulator()
-        val json = org.json.JSONObject(
+        val json = jsonObj(
             """{"candidates":[{"content":{"parts":[{"text":"ok"},{"functionCall":{"name":"create_task","args":{"title":"x"}}}]}}]}"""
         )
         GoogleAdapter.parseStreamEvent(json, acc, {})
@@ -190,11 +197,11 @@ class ProviderAdapterTest {
             "claude-opus-5.5", sampleHistory(), "sys", tools, streaming = true,
             reasoning = "high", provider = "claude"
         )
-        assertEquals("adaptive", body.getJSONObject("thinking").getString("type"))
-        assertEquals("high", body.getJSONObject("output_config").getString("effort"))
-        assertNotNull(body.getJSONArray("tools").getJSONObject(0).optJSONObject("cache_control"))
-        val last = body.getJSONArray("messages").getJSONObject(1)
-        assertNotNull(last.getJSONArray("content").getJSONObject(0).optJSONObject("cache_control"))
+        assertEquals("adaptive", body["thinking"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("high", body["output_config"]!!.jsonObject["effort"]!!.jsonPrimitive.content)
+        assertNotNull(body["tools"]!!.jsonArray[0].jsonObject["cache_control"] as? JsonObject)
+        val last = body["messages"]!!.jsonArray[1].jsonObject
+        assertNotNull(last["content"]!!.jsonArray[0].jsonObject["cache_control"] as? JsonObject)
     }
 
     @Test
@@ -203,9 +210,9 @@ class ProviderAdapterTest {
             "claude-sonnet-4-5", sampleHistory(), "sys", tools, streaming = true,
             reasoning = "high", provider = "claude"
         )
-        assertEquals("enabled", body.getJSONObject("thinking").getString("type"))
-        assertEquals(16384, body.getJSONObject("thinking").getInt("budget_tokens"))
-        assertFalse(body.has("output_config"))
+        assertEquals("enabled", body["thinking"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals(16384, body["thinking"]!!.jsonObject["budget_tokens"]!!.jsonPrimitive.int)
+        assertFalse(body.containsKey("output_config"))
     }
 
     @Test
@@ -214,11 +221,11 @@ class ProviderAdapterTest {
             "gpt-5.6-terra", sampleHistory(), "sys", tools, streaming = true,
             reasoning = "xhigh", provider = "chatgpt", cacheKey = "lucent-7"
         )
-        assertEquals("xhigh", body.getString("reasoning_effort"))
-        assertEquals("lucent-7", body.getString("prompt_cache_key"))
-        assertEquals("30m", body.getJSONObject("prompt_cache_options").getString("ttl"))
-        assertTrue(body.getJSONObject("stream_options").getBoolean("include_usage"))
-        assertFalse(body.has("temperature"))
+        assertEquals("xhigh", body["reasoning_effort"]!!.jsonPrimitive.content)
+        assertEquals("lucent-7", body["prompt_cache_key"]!!.jsonPrimitive.content)
+        assertEquals("30m", body["prompt_cache_options"]!!.jsonObject["ttl"]!!.jsonPrimitive.content)
+        assertTrue(body["stream_options"]!!.jsonObject["include_usage"]!!.jsonPrimitive.boolean)
+        assertFalse(body.containsKey("temperature"))
     }
 
     @Test
@@ -227,8 +234,8 @@ class ProviderAdapterTest {
             "gpt-4o", sampleHistory(), "sys", tools, streaming = false,
             reasoning = "high", provider = "chatgpt"
         )
-        assertFalse(body.has("reasoning_effort"))
-        assertTrue(body.getDouble("temperature") > 0)
+        assertFalse(body.containsKey("reasoning_effort"))
+        assertTrue(body["temperature"]!!.jsonPrimitive.double > 0)
     }
 
     @Test
@@ -240,9 +247,9 @@ class ProviderAdapterTest {
             "deepseek-flash", history, "sys", tools, streaming = true,
             reasoning = "low", provider = "deepseek"
         )
-        assertEquals("low", body.getString("reasoning_effort"))
-        assertFalse(body.has("stream_options"))
-        assertEquals("because", body.getJSONArray("messages").getJSONObject(1).getString("reasoning_content"))
+        assertEquals("low", body["reasoning_effort"]!!.jsonPrimitive.content)
+        assertFalse(body.containsKey("stream_options"))
+        assertEquals("because", body["messages"]!!.jsonArray[1].jsonObject["reasoning_content"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -251,16 +258,16 @@ class ProviderAdapterTest {
             "gemini-3.5-flash", sampleHistory(), "sys", tools, streaming = true,
             reasoning = "low", provider = "gemini"
         )
-        val config = three.getJSONObject("generationConfig").getJSONObject("thinkingConfig")
-        assertEquals("low", config.getString("thinkingLevel"))
-        assertFalse(config.has("thinkingBudget"))
+        val config = three["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject
+        assertEquals("low", config["thinkingLevel"]!!.jsonPrimitive.content)
+        assertFalse(config.containsKey("thinkingBudget"))
         val two = GoogleAdapter.buildBody(
             "gemini-2.5-flash", sampleHistory(), "sys", tools, streaming = true,
             reasoning = "none", provider = "gemini"
         )
-        val legacy = two.getJSONObject("generationConfig").getJSONObject("thinkingConfig")
-        assertEquals(0, legacy.getInt("thinkingBudget"))
-        assertFalse(legacy.has("thinkingLevel"))
+        val legacy = two["generationConfig"]!!.jsonObject["thinkingConfig"]!!.jsonObject
+        assertEquals(0, legacy["thinkingBudget"]!!.jsonPrimitive.int)
+        assertFalse(legacy.containsKey("thinkingLevel"))
     }
 
     @Test
@@ -269,30 +276,30 @@ class ProviderAdapterTest {
             "gpt-5.6-terra", sampleHistory(), "sys", tools, streaming = false,
             provider = "chatgpt", context = "the time is now"
         )
-        val messages = openai.getJSONArray("messages")
-        assertEquals("system", messages.getJSONObject(messages.length() - 1).getString("role"))
-        assertEquals("the time is now", messages.getJSONObject(messages.length() - 1).getString("content"))
+        val messages = openai["messages"]!!.jsonArray
+        assertEquals("system", messages[messages.size - 1].jsonObject["role"]!!.jsonPrimitive.content)
+        assertEquals("the time is now", messages[messages.size - 1].jsonObject["content"]!!.jsonPrimitive.content)
         val claude = AnthropicAdapter.buildBody(
             "claude-opus-5.5", sampleHistory(), "sys", tools, streaming = false,
             provider = "claude", context = "the time is now"
         )
-        assertEquals("the time is now", claude.getJSONArray("system").getJSONObject(1).getString("text"))
+        assertEquals("the time is now", claude["system"]!!.jsonArray[1].jsonObject["text"]!!.jsonPrimitive.content)
         val google = GoogleAdapter.buildBody(
             "gemini-3.5-flash", listOf(ChatTurn(role = "user", content = "Hello")), "sys", tools,
             streaming = true, provider = "gemini", context = "the time is now"
         )
-        val contents = google.getJSONArray("contents")
-        assertEquals(1, contents.length())
-        val parts = contents.getJSONObject(0).getJSONArray("parts")
-        assertEquals("Hello", parts.getJSONObject(0).getString("text"))
-        assertEquals("the time is now", parts.getJSONObject(1).getString("text"))
+        val contents = google["contents"]!!.jsonArray
+        assertEquals(1, contents.size)
+        val parts = contents[0].jsonObject["parts"]!!.jsonArray
+        assertEquals("Hello", parts[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("the time is now", parts[1].jsonObject["text"]!!.jsonPrimitive.content)
     }
 
     @Test
     fun `openai usage reports the cached share`() {
         val acc = StreamAccumulator()
         OpenAiAdapter.parseStreamEvent(
-            org.json.JSONObject(
+            jsonObj(
                 """{"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":50,
                     "prompt_tokens_details":{"cached_tokens":896}}}"""
             ),
@@ -308,7 +315,7 @@ class ProviderAdapterTest {
     fun `deepseek usage reports the hit tokens`() {
         val acc = StreamAccumulator()
         OpenAiAdapter.parseStreamEvent(
-            org.json.JSONObject("""{"choices":[],"usage":{"prompt_tokens":900,"prompt_cache_hit_tokens":450}}"""),
+            jsonObj("""{"choices":[],"usage":{"prompt_tokens":900,"prompt_cache_hit_tokens":450}}"""),
             acc,
             {}
         )
@@ -319,7 +326,7 @@ class ProviderAdapterTest {
     fun `anthropic streaming usage adds the cache read to the prompt`() {
         val acc = StreamAccumulator()
         AnthropicAdapter.parseStreamEvent(
-            org.json.JSONObject(
+            jsonObj(
                 """{"type":"message_start","message":{"usage":{"input_tokens":100,
                     "cache_creation_input_tokens":0,"cache_read_input_tokens":900,"output_tokens":2}}}"""
             ),
@@ -329,7 +336,7 @@ class ProviderAdapterTest {
         assertEquals(1000, acc.usage.promptTokens)
         assertEquals(900, acc.usage.cachedTokens)
         AnthropicAdapter.parseStreamEvent(
-            org.json.JSONObject("""{"type":"message_delta","usage":{"output_tokens":120}}"""),
+            jsonObj("""{"type":"message_delta","usage":{"output_tokens":120}}"""),
             acc,
             {}
         )
@@ -341,7 +348,7 @@ class ProviderAdapterTest {
     fun `google streaming usage is read from the metadata`() {
         val acc = StreamAccumulator()
         GoogleAdapter.parseStreamEvent(
-            org.json.JSONObject(
+            jsonObj(
                 """{"usageMetadata":{"promptTokenCount":500,"cachedContentTokenCount":400,
                     "candidatesTokenCount":20,"thoughtsTokenCount":5}}"""
             ),
@@ -370,7 +377,7 @@ class ProviderAdapterTest {
             """{"choices":[{"delta":{"content":"Answer"}}]}"""
         )
         deltas.forEach {
-            OpenAiAdapter.parseStreamEvent(org.json.JSONObject(it), acc, { answer.append(it) }, { reasoning.append(it) })
+            OpenAiAdapter.parseStreamEvent(jsonObj(it), acc, { answer.append(it) }, { reasoning.append(it) })
         }
         assertEquals("weighing options", reasoning.toString())
         assertEquals("Answer", answer.toString())
@@ -383,7 +390,7 @@ class ProviderAdapterTest {
         val acc = StreamAccumulator()
         val reasoning = StringBuilder()
         OpenAiAdapter.parseStreamEvent(
-            org.json.JSONObject("""{"choices":[{"delta":{"reasoning":"thinking"}}]}"""),
+            jsonObj("""{"choices":[{"delta":{"reasoning":"thinking"}}]}"""),
             acc,
             {},
             { reasoning.append(it) }
@@ -403,7 +410,7 @@ class ProviderAdapterTest {
             """{"choices":[{"delta":{"content":"nk>Done"}}]}"""
         )
         deltas.forEach {
-            OpenAiAdapter.parseStreamEvent(org.json.JSONObject(it), acc, { answer.append(it) }, { reasoning.append(it) })
+            OpenAiAdapter.parseStreamEvent(jsonObj(it), acc, { answer.append(it) }, { reasoning.append(it) })
         }
         assertEquals("Heads up Done", answer.toString())
         assertEquals("secret plan", reasoning.toString())
@@ -416,13 +423,13 @@ class ProviderAdapterTest {
         val reasoning = StringBuilder()
         val answer = StringBuilder()
         AnthropicAdapter.parseStreamEvent(
-            org.json.JSONObject("""{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}"""),
+            jsonObj("""{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}"""),
             acc,
             { answer.append(it) },
             { reasoning.append(it) }
         )
         AnthropicAdapter.parseStreamEvent(
-            org.json.JSONObject("""{"type":"content_block_delta","delta":{"type":"text_delta","text":"Sure"}}"""),
+            jsonObj("""{"type":"content_block_delta","delta":{"type":"text_delta","text":"Sure"}}"""),
             acc,
             { answer.append(it) },
             { reasoning.append(it) }
@@ -438,7 +445,7 @@ class ProviderAdapterTest {
         val reasoning = StringBuilder()
         val answer = StringBuilder()
         GoogleAdapter.parseStreamEvent(
-            org.json.JSONObject("""{"candidates":[{"content":{"parts":[{"text":"planning","thought":true},{"text":"Result"}]}}]}"""),
+            jsonObj("""{"candidates":[{"content":{"parts":[{"text":"planning","thought":true},{"text":"Result"}]}}]}"""),
             acc,
             { answer.append(it) },
             { reasoning.append(it) }

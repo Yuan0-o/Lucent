@@ -210,8 +210,9 @@ class PluginPreflightTest {
             )
             val source = plugin.sources.single()
             val target = PluginPreflight.targetFile(plugin, source)
-            target.parentFile?.mkdirs()
-            target.writeBytes(bytes)
+            val targetFile = File(target.toString())
+            targetFile.parentFile?.mkdirs()
+            targetFile.writeBytes(bytes)
             assertNotNull(PluginPreflight.reusableStaged(plugin, source))
             val report = runBlocking { PluginPreflight.inspect(plugin, source, false) }
             assertFalse(report.blocked)

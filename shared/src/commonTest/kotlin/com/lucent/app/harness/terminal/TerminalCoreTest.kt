@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okio.buffer
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

@@ -383,7 +383,7 @@ fun SettingsScreen(active: Boolean = true) {
                         outcome = try {
                             BackupManager.commit(
                                 context, db, repo, preview, modules, convIds, apiNames,
-                                source = sourceFile?.let { BackupManager.fileSource(it.toPath()) }
+                                source = sourceFile?.let { BackupManager.fileSource(it.absolutePath.toPath()) }
                             )
                         } catch (t: kotlinx.coroutines.CancellationException) {
                             throw t
@@ -1070,7 +1070,7 @@ fun SettingsScreen(active: Boolean = true) {
                     return@launch
                 }
                 importSourceFile = file
-                val source = BackupManager.fileSource(file.toPath())
+                val source = BackupManager.fileSource(file.absolutePath.toPath())
 
                 val header = BackupManager.peekPasswordRequirement(source)
                 if (header != null && header.needsPassword) {
@@ -1150,7 +1150,7 @@ fun SettingsScreen(active: Boolean = true) {
                                 val result = withContext(Dispatchers.IO) {
                                     try {
                                         Result.success(
-                                            BackupManager.inspect(context, BackupManager.fileSource(file.toPath()), attempt)
+                                            BackupManager.inspect(context, BackupManager.fileSource(file.absolutePath.toPath()), attempt)
                                         )
                                     } catch (t: Throwable) {
                                         Result.failure(t)

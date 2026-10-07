@@ -29,7 +29,7 @@ class DocxTest {
         val detail = Docx.create(reportSpec(), out.absolutePath.toPath())
         assertTrue(out.length() > 0L)
         assertTrue(detail.contains("paragraph"), "unexpected summary: $detail")
-        val parts = readZip(out)
+        val parts = readZip(out.absolutePath.toPath())
         val required = listOf(
             "[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels",
             "word/styles.xml", "word/numbering.xml", "word/settings.xml", "word/header1.xml",
@@ -105,10 +105,10 @@ class DocxTest {
         val footer = headerText(out, "word/footer1.xml")
         assertTrue(footer.contains("Page"), "footer text is missing: $footer")
         assertTrue(
-            readZip(out).getValue("word/footer1.xml").toString(Charsets.UTF_8).contains("PAGE"),
+            readZip(out.absolutePath.toPath()).getValue("word/footer1.xml").toString(Charsets.UTF_8).contains("PAGE"),
             "footer page number field is missing"
         )
-        readZip(out).forEach { entry -> parseXmlPart(entry.key, entry.value) }
+        readZip(out.absolutePath.toPath()).forEach { entry -> parseXmlPart(entry.key, entry.value) }
     }
 
     @Test
@@ -129,9 +129,9 @@ class DocxTest {
         val dir = tempDir()
         val out = File(dir, "plain.docx")
         Docx.create("""{"title":"Plain","content":"Body text."}""", out.absolutePath.toPath())
-        assertFalse(readZip(out).containsKey("word/header1.xml"))
+        assertFalse(readZip(out.absolutePath.toPath()).containsKey("word/header1.xml"))
         Docx.edit(out.absolutePath.toPath(), """[{"op":"set_header","text":"Added later"},{"op":"set_title","text":"Renamed"}]""")
-        val parts = readZip(out)
+        val parts = readZip(out.absolutePath.toPath())
         assertTrue(parts.containsKey("word/header1.xml"), "header part was not created")
         assertEquals("Added later", headerText(out, "word/header1.xml"))
         assertTrue(Docx.read(out.absolutePath.toPath()).contains("# Renamed"), "title was not replaced")
@@ -193,8 +193,8 @@ class DocxTest {
     }
 
     private fun headerText(file: File, part: String): String {
-        val bytes = readZip(file)[part] ?: return ""
-        return textOf(parse(bytes).documentElement).trim()
+        val bytes = readZip(file.absolutePath.toPath())[part] ?: return ""
+        return textOf(parse(bytes)).trim()
     }
 
     private fun firstZipEntry(file: File): String {

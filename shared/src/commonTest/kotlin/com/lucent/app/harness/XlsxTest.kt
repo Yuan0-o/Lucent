@@ -21,7 +21,7 @@ class XlsxTest {
         val out = File(dir, "scores.xlsx")
         val detail = Xlsx.create(workbookSpec(), out.absolutePath.toPath())
         assertTrue(detail.contains("Scores"), "unexpected summary: $detail")
-        val parts = readZip(out)
+        val parts = readZip(out.absolutePath.toPath())
         val required = listOf(
             "[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels",
             "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml",
@@ -75,12 +75,12 @@ class XlsxTest {
         val dir = tempDir()
         val out = File(dir, "scores.xlsx")
         Xlsx.create(workbookSpec(), out.absolutePath.toPath())
-        val csv = Xlsx.csvOut(out, "Scores")
+        val csv = Xlsx.csvOut(out.absolutePath.toPath(), "Scores")
         assertEquals(
             "Scores,\nName,Score\nAda,9\nGrace,10\nAlan,7\n,\n,\n,\nTotal,=SUM(B3:B8)",
             csv
         )
-        assertEquals("Note\nRemember the review", Xlsx.csvOut(out, "Notes"))
+        assertEquals("Note\nRemember the review", Xlsx.csvOut(out.absolutePath.toPath(), "Notes"))
     }
 
     @Test
@@ -102,13 +102,13 @@ class XlsxTest {
         """.trimIndent()
         val summary = Xlsx.edit(out.absolutePath.toPath(), ops)
         assertTrue(summary.contains("append_rows"), "unexpected summary: $summary")
-        val parts = readZip(out)
+        val parts = readZip(out.absolutePath.toPath())
         parts.forEach { entry -> parseXmlPart(entry.key, entry.value) }
         assertTrue(parts.containsKey("xl/worksheets/sheet3.xml"), "the new sheet part was not written")
         val scores = Xlsx.read(out.absolutePath.toPath(), "Scores")
         assertTrue(scores.contains("Linus,8"), "the appended row is missing: $scores")
         assertTrue(Xlsx.read(out.absolutePath.toPath(), "Extra").contains("Sheet: Extra"), "the new sheet was not renamed")
-        val notes = Xlsx.csvOut(out, "Notes")
+        val notes = Xlsx.csvOut(out.absolutePath.toPath(), "Notes")
         assertTrue(notes.contains("ok"), "the set op did not apply: $notes")
         assertFalse(parts.getValue("xl/worksheets/sheet1.xml").toString(Charsets.UTF_8).contains("Extra"))
         assertTrue(parts.getValue("xl/workbook.xml").toString(Charsets.UTF_8).contains("Extra"))
@@ -119,13 +119,13 @@ class XlsxTest {
         val dir = tempDir()
         val out = File(dir, "data.xlsx")
         Xlsx.create("""{"sheets":[{"name":"Sheet1","rows":[["a"]]}]}""", out.absolutePath.toPath())
-        val detail = Xlsx.csvIn(out, "name,score\nAda,9\n\"Grace, Hopper\",10", "Imported", "B2")
+        val detail = Xlsx.csvIn(out.absolutePath.toPath(), "name,score\nAda,9\n\"Grace, Hopper\",10", "Imported", "B2")
         assertTrue(detail.contains("Imported"), "unexpected summary: $detail")
         assertEquals(
             "name,score\nAda,9\n\"Grace, Hopper\",10",
-            Xlsx.csvOut(out, "Imported")
+            Xlsx.csvOut(out.absolutePath.toPath(), "Imported")
         )
-        readZip(out).forEach { entry -> parseXmlPart(entry.key, entry.value) }
+        readZip(out.absolutePath.toPath()).forEach { entry -> parseXmlPart(entry.key, entry.value) }
         assertTrue(Xlsx.read(out.absolutePath.toPath()).contains("Sheet1"), "the original sheet was lost")
     }
 
@@ -140,13 +140,13 @@ class XlsxTest {
         val plain = File(dir, "notes.txt")
         plain.writeText("not a package")
         assertFailsWith<IllegalArgumentException> { Xlsx.read(plain.absolutePath.toPath()) }
-        assertFailsWith<IllegalArgumentException> { Xlsx.csvOut(plain) }
+        assertFailsWith<IllegalArgumentException> { Xlsx.csvOut(plain.absolutePath.toPath()) }
         val out = File(dir, "ok.xlsx")
         Xlsx.create("""{"sheets":[{"name":"One","rows":[[1]]}]}""", out.absolutePath.toPath())
         assertFailsWith<IllegalArgumentException> { Xlsx.read(out.absolutePath.toPath(), "Missing") }
         assertFailsWith<IllegalArgumentException> { Xlsx.edit(out.absolutePath.toPath(), """[{"op":"nope"}]""") }
         assertFailsWith<IllegalArgumentException> { Xlsx.edit(out.absolutePath.toPath(), """[{"op":"delete_sheet","name":"One"}]""") }
-        assertFailsWith<IllegalArgumentException> { Xlsx.csvIn(out, "") }
+        assertFailsWith<IllegalArgumentException> { Xlsx.csvIn(out.absolutePath.toPath(), "") }
     }
 
     private fun workbookSpec(): String = """

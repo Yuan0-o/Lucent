@@ -8,7 +8,11 @@ import com.lucent.app.harness.mcp.McpSessions
 import com.lucent.app.harness.mcp.McpTool
 import com.lucent.app.harness.mcp.mcpCommandLine
 import kotlinx.coroutines.runBlocking
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -70,26 +74,26 @@ class McpTest {
         val text = McpProtocol.request(
             7L,
             McpProtocol.TOOLS_CALL,
-            McpProtocol.callParams("echo", JSONObject().put("text", "hi"))
+            McpProtocol.callParams("echo", buildJsonObject { put("text", "hi") })
         )
-        val message = JSONObject(text)
-        assertEquals("2.0", message.getString("jsonrpc"))
-        assertEquals(7L, message.getLong("id"))
-        assertEquals("tools/call", message.getString("method"))
-        val params = message.getJSONObject("params")
-        assertEquals("echo", params.getString("name"))
-        assertEquals("hi", params.getJSONObject("arguments").getString("text"))
+        val message = Json.parseToJsonElement(text).jsonObject
+        assertEquals("2.0", message["jsonrpc"]!!.jsonPrimitive.content)
+        assertEquals(7L, message["id"]!!.jsonPrimitive.long)
+        assertEquals("tools/call", message["method"]!!.jsonPrimitive.content)
+        val params = message["params"]!!.jsonObject
+        assertEquals("echo", params["name"]!!.jsonPrimitive.content)
+        assertEquals("hi", params["arguments"]!!.jsonObject["text"]!!.jsonPrimitive.content)
         val listed = McpProtocol.request(8L, McpProtocol.TOOLS_LIST)
-        assertFalse(JSONObject(listed).has("params"))
-        assertEquals("page-3", McpProtocol.listParams("page-3")?.getString("cursor"))
+        assertFalse(Json.parseToJsonElement(listed).jsonObject.containsKey("params"))
+        assertEquals("page-3", McpProtocol.listParams("page-3")?.get("cursor")?.jsonPrimitive?.content)
         assertNull(McpProtocol.listParams(""))
     }
 
     @Test
     fun notificationCarriesNoId() {
-        val message = JSONObject(McpProtocol.notification(McpProtocol.INITIALIZED))
-        assertFalse(message.has("id"))
-        assertEquals("notifications/initialized", message.getString("method"))
+        val message = Json.parseToJsonElement(McpProtocol.notification(McpProtocol.INITIALIZED)).jsonObject
+        assertFalse(message.containsKey("id"))
+        assertEquals("notifications/initialized", message["method"]!!.jsonPrimitive.content)
         assertTrue(McpProtocol.isNotification(message))
         assertNull(McpProtocol.idOf(message))
     }
@@ -98,13 +102,13 @@ class McpTest {
     fun initializePayloadMatchesProtocolRevision() {
         val params = McpProtocol.initializeParams()
         assertEquals("2025-06-18", McpProtocol.VERSION)
-        assertEquals(McpProtocol.VERSION, params.getString("protocolVersion"))
-        val capabilities = params.getJSONObject("capabilities")
-        assertFalse(capabilities.getJSONObject("roots").getBoolean("listChanged"))
-        assertTrue(capabilities.has("sampling"))
-        val client = params.getJSONObject("clientInfo")
-        assertEquals("Lucent", client.getString("name"))
-        assertEquals(LucentBuild.VERSION, client.getString("version"))
+        assertEquals(McpProtocol.VERSION, params["protocolVersion"]!!.jsonPrimitive.content)
+        val capabilities = params["capabilities"]!!.jsonObject
+        assertFalse(capabilities["roots"]!!.jsonObject["listChanged"]!!.jsonPrimitive.boolean)
+        assertTrue(capabilities.containsKey("sampling"))
+        val client = params["clientInfo"]!!.jsonObject
+        assertEquals("Lucent", client["name"]!!.jsonPrimitive.content)
+        assertEquals(LucentBuild.VERSION, client["version"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -121,10 +125,10 @@ class McpTest {
         assertTrue(McpProtocol.isNotification(messages[0]))
         assertNull(McpProtocol.idOf(messages[0]))
         val reply = assertNotNull(McpProtocol.pick(messages, 4L))
-        assertEquals("2.0", reply.getString("jsonrpc"))
-        assertNotNull(reply.optJSONObject("result"))
+        assertEquals("2.0", reply["jsonrpc"]!!.jsonPrimitive.content)
+        assertNotNull(reply["result"] as? JsonObject)
         assertNull(McpProtocol.pick(messages, 5L))
-        assertNull(McpProtocol.pick(messages, 4L)?.optJSONObject("error"))
+        assertNull(McpProtocol.pick(messages, 4L)?.get("error") as? JsonObject)
     }
 
     @Test
@@ -144,14 +148,14 @@ class McpTest {
 
     @Test
     fun jsonRpcErrorsMapToReadableText() {
-        val message = JSONObject(
+        val message = Json.parseToJsonElement(
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32601,\"message\":\"Unknown tool\"}}"
-        )
+        ).jsonObject
         val text = McpProtocol.errorOf(message)
         assertTrue(text.contains("method not found"))
         assertTrue(text.contains("Unknown tool"))
         assertTrue(text.contains("-32601"))
-        val ok = JSONObject("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}")
+        val ok = Json.parseToJsonElement("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}").jsonObject
         assertEquals("", McpProtocol.errorOf(ok))
         assertTrue(McpProtocol.errorText(-32002, "").contains("resource not found"))
         assertTrue(McpProtocol.errorText(-32050, "boom").contains("server error"))
@@ -159,7 +163,7 @@ class McpTest {
 
     @Test
     fun toolsListDecodesDescriptorsAndCursor() {
-        val result = JSONObject(toolsListJson)
+        val result = Json.parseToJsonElement(toolsListJson).jsonObject
         val tools = McpProtocol.decodeTools("demo", result)
         assertEquals(2, tools.size)
         assertEquals("demo", tools[0].serverId)
@@ -168,22 +172,22 @@ class McpTest {
         assertTrue(tools[0].schemaJson.contains("\"query\""))
         assertEquals("echo", tools[1].name)
         assertEquals("page-2", McpProtocol.nextCursor(result))
-        assertEquals("", McpProtocol.nextCursor(JSONObject()))
-        val bare = McpProtocol.decodeTools("demo", JSONObject("{\"tools\":[{\"name\":\"noSchema\"}]}"))
+        assertEquals("", McpProtocol.nextCursor(buildJsonObject { }))
+        val bare = McpProtocol.decodeTools("demo", Json.parseToJsonElement("{\"tools\":[{\"name\":\"noSchema\"}]}").jsonObject)
         assertEquals(1, bare.size)
         assertTrue(bare[0].schemaJson.contains("properties"))
-        assertEquals(0, McpProtocol.decodeTools("demo", JSONObject("{}")).size)
+        assertEquals(0, McpProtocol.decodeTools("demo", Json.parseToJsonElement("{}").jsonObject).size)
     }
 
     @Test
     fun callResultDecodesTextImagesAndResources() {
-        val result = JSONObject(
+        val result = Json.parseToJsonElement(
             "{\"content\":[" +
                 "{\"type\":\"text\",\"text\":\"42 degrees\"}," +
                 "{\"type\":\"image\",\"data\":\"AAAA\",\"mimeType\":\"image/png\"}," +
                 "{\"type\":\"resource\",\"resource\":{\"uri\":\"file:///notes/a.txt\",\"text\":\"hello\"}}" +
                 "],\"isError\":true}"
-        )
+        ).jsonObject
         val decoded = McpProtocol.decodeResult(result)
         assertTrue(decoded.text.contains("42 degrees"))
         assertTrue(decoded.text.contains("hello"))
@@ -191,32 +195,32 @@ class McpTest {
         assertEquals(1, decoded.images.size)
         assertEquals("image/png", decoded.images[0].first)
         assertEquals("AAAA", decoded.images[0].second)
-        val plain = McpProtocol.decodeResult(JSONObject("{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}"))
+        val plain = McpProtocol.decodeResult(Json.parseToJsonElement("{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}").jsonObject)
         assertFalse(plain.isError)
         assertEquals("ok", plain.text)
         assertTrue(plain.images.isEmpty())
-        val structured = McpProtocol.decodeResult(JSONObject("{\"structuredContent\":{\"count\":3}}"))
+        val structured = McpProtocol.decodeResult(Json.parseToJsonElement("{\"structuredContent\":{\"count\":3}}").jsonObject)
         assertTrue(structured.text.contains("count"))
     }
 
     @Test
     fun resourcesAndPromptsDecode() {
         val contents = McpProtocol.decodeResourceContents(
-            JSONObject("{\"contents\":[{\"uri\":\"file:///a.txt\",\"mimeType\":\"text/plain\",\"text\":\"body\"}]}")
+            Json.parseToJsonElement("{\"contents\":[{\"uri\":\"file:///a.txt\",\"mimeType\":\"text/plain\",\"text\":\"body\"}]}").jsonObject
         )
         assertTrue(contents.contains("body"))
         assertTrue(contents.contains("file:///a.txt"))
         val resources = McpProtocol.decodeResources(
-            JSONObject("{\"resources\":[{\"uri\":\"file:///b.md\",\"name\":\"B\",\"mimeType\":\"text/markdown\"}]}")
+            Json.parseToJsonElement("{\"resources\":[{\"uri\":\"file:///b.md\",\"name\":\"B\",\"mimeType\":\"text/markdown\"}]}").jsonObject
         )
         assertEquals(1, resources.size)
         assertEquals("file:///b.md", resources[0].uri)
         assertEquals("B", resources[0].name)
         val prompts = McpProtocol.decodePrompts(
-            JSONObject(
+            Json.parseToJsonElement(
                 "{\"prompts\":[{\"name\":\"summarise\",\"description\":\"Summarise a note\"," +
                     "\"arguments\":[{\"name\":\"title\",\"required\":true}]}]}"
-            )
+            ).jsonObject
         )
         assertEquals(1, prompts.size)
         assertEquals("summarise", prompts[0].name)
@@ -298,12 +302,12 @@ class McpTest {
     fun executeReturnsNullForForeignNames() = runBlocking {
         HarnessRuntime.update(HarnessConfig())
         val ctx = testCtx() ?: return@runBlocking
-        assertNull(McpTools.execute(ctx, "read_file", JSONObject()))
-        assertNull(McpTools.execute(ctx, "list_notes", JSONObject()))
-        assertNull(McpTools.execute(ctx, "mcp_tool", JSONObject()))
-        assertNull(McpTools.execute(ctx, "mcp__ghost__search", JSONObject()))
-        assertNotNull(McpTools.execute(ctx, "mcp_servers", JSONObject()))
-        assertNotNull(McpTools.execute(ctx, "mcp_tools", JSONObject().put("server", "ghost")))
+        assertNull(McpTools.execute(ctx, "read_file", buildJsonObject { }))
+        assertNull(McpTools.execute(ctx, "list_notes", buildJsonObject { }))
+        assertNull(McpTools.execute(ctx, "mcp_tool", buildJsonObject { }))
+        assertNull(McpTools.execute(ctx, "mcp__ghost__search", buildJsonObject { }))
+        assertNotNull(McpTools.execute(ctx, "mcp_servers", buildJsonObject { }))
+        assertNotNull(McpTools.execute(ctx, "mcp_tools", buildJsonObject { put("server", "ghost") }))
     }
 
     @Test
@@ -336,7 +340,7 @@ class McpTest {
         )
         try {
             val ctx = testCtx() ?: return@runBlocking
-            val result = assertNotNull(McpTools.execute(ctx, "mcp__off__echo", JSONObject()))
+            val result = assertNotNull(McpTools.execute(ctx, "mcp__off__echo", buildJsonObject { }))
             assertFalse(result.success)
             assertTrue(result.summary.contains("switched off"))
         } finally {
@@ -404,7 +408,7 @@ class McpTest {
         )
         try {
             val ctx = testCtx() ?: return@runBlocking
-            val result = assertNotNull(McpTools.execute(ctx, "mcp_servers", JSONObject()))
+            val result = assertNotNull(McpTools.execute(ctx, "mcp_servers", buildJsonObject { }))
             assertFalse(result.summary.contains("super-secret-token"))
             assertTrue(result.summary.contains("tokened"))
             assertTrue(result.summary.contains("switched off"))

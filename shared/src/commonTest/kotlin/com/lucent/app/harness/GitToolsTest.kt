@@ -10,7 +10,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
-import org.json.JSONObject
+import kotlinx.serialization.json.buildJsonObject
 
 class GitToolsTest {
 
@@ -147,30 +147,30 @@ class GitToolsTest {
     @Test
     fun executeIgnoresNamesFromOtherGroups() = runBlocking {
         val ctx = blankCtx()
-        assertNull(GitTools.execute(ctx, "read_file", JSONObject()))
-        assertNull(GitTools.execute(ctx, "run_command", JSONObject()))
-        assertNull(GitTools.execute(ctx, "git_push_force", JSONObject()))
-        assertNull(GitTools.execute(ctx, "", JSONObject()))
+        assertNull(GitTools.execute(ctx, "read_file", buildJsonObject { }))
+        assertNull(GitTools.execute(ctx, "run_command", buildJsonObject { }))
+        assertNull(GitTools.execute(ctx, "git_push_force", buildJsonObject { }))
+        assertNull(GitTools.execute(ctx, "", buildJsonObject { }))
     }
 
     @Test
     fun executeRefusesDangerousRequestsBeforeItLooksForAShell() = runBlocking {
         val ctx = blankCtx()
-        val hard = assertNotNull(GitTools.execute(ctx, "git_reset", JSONObject().put("mode", "hard")))
+        val hard = assertNotNull(GitTools.execute(ctx, "git_reset", buildJsonObject { put("mode", "hard") }))
         assertFalse(hard.success)
         assertTrue(hard.summary.contains("--hard"), hard.summary)
-        val injected = assertNotNull(GitTools.execute(ctx, "git_commit", JSONObject().put("message", "ship it; rm -rf /")))
+        val injected = assertNotNull(GitTools.execute(ctx, "git_commit", buildJsonObject { put("message", "ship it; rm -rf /") }))
         assertFalse(injected.success)
         assertTrue(injected.summary.contains("Blocked"), injected.summary)
-        val escaping = assertNotNull(GitTools.execute(ctx, "git_add", JSONObject().put("paths", "../../etc/passwd")))
+        val escaping = assertNotNull(GitTools.execute(ctx, "git_add", buildJsonObject { put("paths", "../../etc/passwd") }))
         assertFalse(escaping.success)
-        val dashed = assertNotNull(GitTools.execute(ctx, "git_push", JSONObject().put("remote", "-f")))
+        val dashed = assertNotNull(GitTools.execute(ctx, "git_push", buildJsonObject { put("remote", "-f") }))
         assertFalse(dashed.success)
-        val noMessage = assertNotNull(GitTools.execute(ctx, "git_commit", JSONObject()))
+        val noMessage = assertNotNull(GitTools.execute(ctx, "git_commit", buildJsonObject { }))
         assertFalse(noMessage.success)
-        val noPatch = assertNotNull(GitTools.execute(ctx, "git_apply_patch", JSONObject()))
+        val noPatch = assertNotNull(GitTools.execute(ctx, "git_apply_patch", buildJsonObject { }))
         assertFalse(noPatch.success)
-        val badAction = assertNotNull(GitTools.execute(ctx, "git_stash", JSONObject().put("action", "burn")))
+        val badAction = assertNotNull(GitTools.execute(ctx, "git_stash", buildJsonObject { put("action", "burn") }))
         assertFalse(badAction.success)
     }
 
@@ -186,11 +186,11 @@ class GitToolsTest {
         HarnessRuntime.install(HarnessConfig(workspace = dir.path))
         try {
             val ctx = blankCtx(dir)
-            val status = assertNotNull(GitTools.execute(ctx, "git_status", JSONObject()))
+            val status = assertNotNull(GitTools.execute(ctx, "git_status", buildJsonObject { }))
             assertFalse(status.success)
             assertTrue(status.summary.contains("needs a shell"), status.summary)
             val rebase = assertNotNull(
-                GitTools.execute(ctx, "git_rebase", JSONObject().put("action", "abort"))
+                GitTools.execute(ctx, "git_rebase", buildJsonObject { put("action", "abort") })
             )
             assertFalse(rebase.success)
             assertTrue(rebase.summary.contains("needs a shell"), rebase.summary)

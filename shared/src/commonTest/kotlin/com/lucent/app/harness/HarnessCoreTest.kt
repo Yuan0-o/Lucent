@@ -58,11 +58,11 @@ class HarnessWorkspaceTest {
     fun declaredRootsWidenThePolicy() = withSandbox { root ->
         val extra = File(root, "shared").apply { mkdirs() }
         val config = HarnessConfig(writeRoots = listOf(extra.path))
-        assertTrue(Workspace.writable(config, File(extra, "a.txt")))
-        assertFalse(Workspace.readable(config, File(root, "elsewhere/a.txt")))
+        assertTrue(Workspace.writable(config, File(extra, "a.txt").path))
+        assertFalse(Workspace.readable(config, File(root, "elsewhere/a.txt").path))
         val ro = HarnessConfig(readOnlyRoots = listOf(File(root, "reference").path))
-        assertTrue(Workspace.readable(ro, File(root, "reference/manual.pdf")))
-        assertFalse(Workspace.writable(ro, File(root, "reference/manual.pdf")))
+        assertTrue(Workspace.readable(ro, File(root, "reference/manual.pdf").path))
+        assertFalse(Workspace.writable(ro, File(root, "reference/manual.pdf").path))
     }
 
     @Test
@@ -82,7 +82,7 @@ class HarnessWorkspaceTest {
     fun textAndBinaryAreToldApart() = withSandbox { root ->
         val text = File(root, "note.md")
         text.writeText("# heading\n\nbody\n")
-        assertEquals(3, Workspace.countLines(text))
+        assertEquals(3, Workspace.countLines(text.path))
         assertTrue(!Workspace.looksBinary(text.readBytes()))
         val binary = ByteArray(64) { 0 }
         assertTrue(Workspace.looksBinary(binary))
@@ -93,7 +93,7 @@ class HarnessWorkspaceTest {
     fun snapshotsRestoreWhatWasThereBefore() = withSandbox { _ ->
         val file = File(HarnessRuntime.workspacePath(), "report.md")
         file.writeText("first version")
-        Snapshots.capture(file)
+        Snapshots.capture(file.path)
         file.writeText("second version")
         val history = Snapshots.history(file.canonicalPath, 5)
         assertEquals(1, history.size)

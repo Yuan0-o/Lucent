@@ -8,8 +8,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 
 class HttpToolsTest {
 
@@ -73,10 +77,10 @@ class HttpToolsTest {
 
     @Test
     fun compactListPullsMappedFields() {
-        val array = JSONArray(
+        val array = Json.parseToJsonElement(
             "[{\"number\":12,\"title\":\"Fix the bug\",\"user\":{\"login\":\"ada\"}}," +
                 "{\"number\":13,\"title\":\"Ship it\"}]"
-        )
+        ).jsonArray
         val text = HttpJson.compactList(
             array,
             listOf("number" to "#", "title" to "title", "user.login" to "by"),
@@ -86,19 +90,20 @@ class HttpToolsTest {
         assertTrue(text.contains("- #: 13 | title: Ship it"), text)
         assertFalse(text.contains("by: \n"), text)
         assertEquals("No items came back.", HttpJson.compactList(null, listOf("a" to "a")))
-        assertEquals("No items came back.", HttpJson.compactList(JSONArray(), listOf("a" to "a")))
+        assertEquals("No items came back.", HttpJson.compactList(buildJsonArray { }, listOf("a" to "a")))
     }
 
     @Test
     fun compactListReportsWhatItLeftOut() {
-        val array = JSONArray()
-        for (i in 1..30) array.put(JSONObject().put("n", i))
+        val array = buildJsonArray {
+            for (i in 1..30) add(buildJsonObject { put("n", i) })
+        }
         val text = HttpJson.compactList(array, listOf("n" to "n"), 5)
         assertEquals(6, text.lines().size, text)
         assertTrue(text.endsWith("… and 25 more"), text)
-        assertEquals("12", HttpJson.field(JSONObject("{\"a\":{\"b\":12}}"), "a.b"))
-        assertEquals("", HttpJson.field(JSONObject("{\"a\":1}"), "a.b"))
-        assertEquals("", HttpJson.field(JSONObject("{}"), "missing"))
+        assertEquals("12", HttpJson.field(Json.parseToJsonElement("{\"a\":{\"b\":12}}").jsonObject, "a.b"))
+        assertEquals("", HttpJson.field(Json.parseToJsonElement("{\"a\":1}").jsonObject, "a.b"))
+        assertEquals("", HttpJson.field(Json.parseToJsonElement("{}").jsonObject, "missing"))
     }
 
     @Test
@@ -131,23 +136,23 @@ class HttpToolsTest {
                 ConnectorTools.execute(
                     ctx,
                     "http_request",
-                    JSONObject().put("method", "GET").put("url", "file:///etc/passwd")
+                    buildJsonObject { put("method", "GET"); put("url", "file:///etc/passwd") }
                 )
             )
             assertFalse(local.success)
             assertTrue(local.summary.contains("http:// and https://"), local.summary)
             val ftp = assertNotNull(
-                ConnectorTools.execute(ctx, "http_request", JSONObject().put("url", "ftp://example.com/data"))
+                ConnectorTools.execute(ctx, "http_request", buildJsonObject { put("url", "ftp://example.com/data") })
             )
             assertFalse(ftp.success)
-            val empty = assertNotNull(ConnectorTools.execute(ctx, "http_request", JSONObject()))
+            val empty = assertNotNull(ConnectorTools.execute(ctx, "http_request", buildJsonObject { }))
             assertFalse(empty.success)
             assertTrue(empty.summary.contains("Give the URL"), empty.summary)
             val escape = assertNotNull(
                 ConnectorTools.execute(
                     ctx,
                     "http_request",
-                    JSONObject().put("url", "https://example.com").put("save_to", "../escape.txt")
+                    buildJsonObject { put("url", "https://example.com"); put("save_to", "../escape.txt") }
                 )
             )
             assertFalse(escape.success)
@@ -188,7 +193,7 @@ class HttpToolsTest {
                     GitHubTools.execute(
                         ctx,
                         name,
-                        JSONObject().put("owner", "octocat").put("repo", "hello-world")
+                        buildJsonObject { put("owner", "octocat"); put("repo", "hello-world") }
                     ),
                     name
                 )
@@ -201,14 +206,14 @@ class HttpToolsTest {
     @Test
     fun githubValidatesArgumentsBeforeItReachesTheNetwork() = runBlocking {
         withConfig(HarnessConfig(githubToken = "test-token")) { ctx ->
-            val noRepo = assertNotNull(GitHubTools.execute(ctx, "github_repo", JSONObject()))
+            val noRepo = assertNotNull(GitHubTools.execute(ctx, "github_repo", buildJsonObject { }))
             assertFalse(noRepo.success)
             assertTrue(noRepo.summary.contains("owner and repo"), noRepo.summary)
             val badAction = assertNotNull(
                 GitHubTools.execute(
                     ctx,
                     "github_issues",
-                    JSONObject().put("owner", "a").put("repo", "b").put("action", "burn")
+                    buildJsonObject { put("owner", "a"); put("repo", "b"); put("action", "burn") }
                 )
             )
             assertFalse(badAction.success)
@@ -218,7 +223,7 @@ class HttpToolsTest {
                 GitHubTools.execute(
                     ctx,
                     "github_pulls",
-                    JSONObject().put("owner", "a").put("repo", "b").put("action", "diff")
+                    buildJsonObject { put("owner", "a"); put("repo", "b"); put("action", "diff") }
                 )
             )
             assertFalse(noNumber.success)
@@ -226,7 +231,7 @@ class HttpToolsTest {
                 GitHubTools.execute(
                     ctx,
                     "github_pulls",
-                    JSONObject().put("owner", "a").put("repo", "b").put("action", "create").put("title", "t")
+                    buildJsonObject { put("owner", "a"); put("repo", "b"); put("action", "create"); put("title", "t") }
                 )
             )
             assertFalse(noHead.success)
@@ -235,7 +240,7 @@ class HttpToolsTest {
                 GitHubTools.execute(
                     ctx,
                     "github_actions",
-                    JSONObject().put("owner", "a").put("repo", "b").put("action", "dispatch")
+                    buildJsonObject { put("owner", "a"); put("repo", "b"); put("action", "dispatch") }
                 )
             )
             assertFalse(noWorkflow.success)
@@ -243,7 +248,7 @@ class HttpToolsTest {
                 GitHubTools.execute(
                     ctx,
                     "github_releases",
-                    JSONObject().put("owner", "a").put("repo", "b").put("action", "create")
+                    buildJsonObject { put("owner", "a"); put("repo", "b"); put("action", "create") }
                 )
             )
             assertFalse(noUpdate.success)
@@ -259,7 +264,7 @@ class HttpToolsTest {
                 GitHubTools.execute(
                     ctx,
                     "github_branches",
-                    JSONObject().put("owner", "a").put("repo", "b").put("action", "delete").put("name", "old")
+                    buildJsonObject { put("owner", "a"); put("repo", "b"); put("action", "delete"); put("name", "old") }
                 )
             )
             assertFalse(refused.success)
@@ -272,25 +277,25 @@ class HttpToolsTest {
     fun connectorsReportMissingConfiguration() = runBlocking {
         withConfig(HarnessConfig()) { ctx ->
             val notion = assertNotNull(
-                ConnectorTools.execute(ctx, "notion_api", JSONObject().put("action", "search"))
+                ConnectorTools.execute(ctx, "notion_api", buildJsonObject { put("action", "search") })
             )
             assertFalse(notion.success)
             assertTrue(notion.summary.contains("The Notion connector is not configured."), notion.summary)
             assertTrue(notion.summary.contains("Settings → Agent → Connectors"), notion.summary)
-            val slack = assertNotNull(ConnectorTools.execute(ctx, "slack_api", JSONObject().put("action", "history")))
+            val slack = assertNotNull(ConnectorTools.execute(ctx, "slack_api", buildJsonObject { put("action", "history") }))
             assertTrue(slack.summary.contains("The Slack connector is not configured."), slack.summary)
-            val drive = assertNotNull(ConnectorTools.execute(ctx, "gdrive_api", JSONObject().put("action", "list")))
+            val drive = assertNotNull(ConnectorTools.execute(ctx, "gdrive_api", buildJsonObject { put("action", "list") }))
             assertTrue(drive.summary.contains("Google Drive connector is not configured"), drive.summary)
-            val one = assertNotNull(ConnectorTools.execute(ctx, "onedrive_api", JSONObject().put("action", "list")))
+            val one = assertNotNull(ConnectorTools.execute(ctx, "onedrive_api", buildJsonObject { put("action", "list") }))
             assertTrue(one.summary.contains("OneDrive connector is not configured"), one.summary)
-            val gitlab = assertNotNull(ConnectorTools.execute(ctx, "gitlab_api", JSONObject().put("action", "projects")))
+            val gitlab = assertNotNull(ConnectorTools.execute(ctx, "gitlab_api", buildJsonObject { put("action", "projects") }))
             assertTrue(gitlab.summary.contains("GitLab connector is not configured"), gitlab.summary)
-            val jira = assertNotNull(ConnectorTools.execute(ctx, "jira_api", JSONObject().put("action", "issue_get")))
+            val jira = assertNotNull(ConnectorTools.execute(ctx, "jira_api", buildJsonObject { put("action", "issue_get") }))
             assertTrue(jira.summary.contains("Jira connector is not configured"), jira.summary)
-            val linear = assertNotNull(ConnectorTools.execute(ctx, "linear_api", JSONObject().put("action", "teams")))
+            val linear = assertNotNull(ConnectorTools.execute(ctx, "linear_api", buildJsonObject { put("action", "teams") }))
             assertTrue(linear.summary.contains("Linear connector is not configured"), linear.summary)
             val webdav = assertNotNull(
-                ConnectorTools.execute(ctx, "webdav_request", JSONObject().put("action", "list"))
+                ConnectorTools.execute(ctx, "webdav_request", buildJsonObject { put("action", "list") })
             )
             assertTrue(webdav.summary.contains("WebDAV connector is not configured"), webdav.summary)
         }
@@ -310,14 +315,14 @@ class HttpToolsTest {
         )
         withConfig(HarnessConfig(connectors = connectors)) { ctx ->
             val calls = mapOf(
-                "notion_api" to JSONObject().put("action", "search"),
-                "slack_api" to JSONObject().put("action", "post_message"),
-                "gdrive_api" to JSONObject().put("action", "list"),
-                "onedrive_api" to JSONObject().put("action", "list"),
-                "gitlab_api" to JSONObject().put("action", "projects"),
-                "linear_api" to JSONObject().put("action", "teams"),
-                "jira_api" to JSONObject().put("action", "issue_get"),
-                "webdav_request" to JSONObject().put("action", "list")
+                "notion_api" to buildJsonObject { put("action", "search") },
+                "slack_api" to buildJsonObject { put("action", "post_message") },
+                "gdrive_api" to buildJsonObject { put("action", "list") },
+                "onedrive_api" to buildJsonObject { put("action", "list") },
+                "gitlab_api" to buildJsonObject { put("action", "projects") },
+                "linear_api" to buildJsonObject { put("action", "teams") },
+                "jira_api" to buildJsonObject { put("action", "issue_get") },
+                "webdav_request" to buildJsonObject { put("action", "list") }
             )
             for ((name, args) in calls) {
                 val result = assertNotNull(ConnectorTools.execute(ctx, name, args), name)
@@ -334,10 +339,10 @@ class HttpToolsTest {
             ConnectorConfig(id = "jira", token = "jira-token", baseUrl = "", account = "me@example.com")
         )
         withConfig(HarnessConfig(connectors = connectors)) { ctx ->
-            val drive = assertNotNull(ConnectorTools.execute(ctx, "gdrive_api", JSONObject().put("action", "get")))
+            val drive = assertNotNull(ConnectorTools.execute(ctx, "gdrive_api", buildJsonObject { put("action", "get") }))
             assertFalse(drive.success)
             assertTrue(drive.summary.contains("file_id"), drive.summary)
-            val jira = assertNotNull(ConnectorTools.execute(ctx, "jira_api", JSONObject().put("action", "issue_get")))
+            val jira = assertNotNull(ConnectorTools.execute(ctx, "jira_api", buildJsonObject { put("action", "issue_get") }))
             assertFalse(jira.success)
             assertTrue(jira.summary.contains("no site URL"), jira.summary)
         }
@@ -351,7 +356,7 @@ class HttpToolsTest {
             connectors = listOf(ConnectorConfig(id = "slack", token = "xoxb-secret-value", account = "lucent"))
         )
         withConfig(config) { ctx ->
-            val status = assertNotNull(ConnectorTools.execute(ctx, "connector_status", JSONObject()))
+            val status = assertNotNull(ConnectorTools.execute(ctx, "connector_status", buildJsonObject { }))
             assertTrue(status.success)
             assertTrue(status.summary.contains("GitHub: token set"), status.summary)
             assertTrue(status.summary.contains("https://api.github.com"), status.summary)
@@ -365,12 +370,12 @@ class HttpToolsTest {
     @Test
     fun executeReturnsNullForForeignNames() = runBlocking {
         withConfig(HarnessConfig(githubToken = "test-token")) { ctx ->
-            assertNull(GitHubTools.execute(ctx, "read_file", JSONObject()))
-            assertNull(GitHubTools.execute(ctx, "connector_status", JSONObject()))
-            assertNull(GitHubTools.execute(ctx, "", JSONObject()))
-            assertNull(ConnectorTools.execute(ctx, "github_repo", JSONObject()))
-            assertNull(ConnectorTools.execute(ctx, "mcp_call", JSONObject()))
-            assertNull(ConnectorTools.execute(ctx, "", JSONObject()))
+            assertNull(GitHubTools.execute(ctx, "read_file", buildJsonObject { }))
+            assertNull(GitHubTools.execute(ctx, "connector_status", buildJsonObject { }))
+            assertNull(GitHubTools.execute(ctx, "", buildJsonObject { }))
+            assertNull(ConnectorTools.execute(ctx, "github_repo", buildJsonObject { }))
+            assertNull(ConnectorTools.execute(ctx, "mcp_call", buildJsonObject { }))
+            assertNull(ConnectorTools.execute(ctx, "", buildJsonObject { }))
         }
     }
 
