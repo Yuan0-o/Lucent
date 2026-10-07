@@ -19,7 +19,7 @@ object LocalToolCallParser {
 
         for (candidate in jsonObjectCandidates(s)) {
             var obj = try { kotlinx.serialization.json.Json.parseToJsonElement(candidate).jsonObject } catch (e: Exception) { continue }
-            for (k in TOOL_WRAPPER_KEYS) obj[k]?.jsonObject?.let { obj = it }
+            for (k in TOOL_WRAPPER_KEYS) (obj[k] as? JsonObject)?.let { obj = it }
             val rawName = firstJsonString(obj, "tool", "name", "function", "action", "tool_name")?.trim()
             if (rawName.isNullOrBlank()) continue
             val name = resolveToolName(rawName, valid) ?: continue
@@ -34,7 +34,7 @@ object LocalToolCallParser {
         val s = stripToolWrappers(raw)
         for (candidate in jsonObjectCandidates(s)) {
             var obj = try { Json.parseToJsonElement(candidate).jsonObject } catch (e: Exception) { continue }
-            for (k in TOOL_WRAPPER_KEYS) obj[k]?.jsonObject?.let { obj = it }
+            for (k in TOOL_WRAPPER_KEYS) (obj[k] as? JsonObject)?.let { obj = it }
             val name = firstJsonString(obj, "tool", "name", "function", "action", "tool_name")?.trim()
             val hasArgs = firstJsonObject(obj, "arguments", "args", "parameters", "input", "params") != null
             if (!name.isNullOrBlank() && (hasArgs || SNAKE_CASE_NAME.matches(name))) return name
