@@ -1,4 +1,4 @@
-name: Build Release (APK + EXE + draft)
+name: Build Release (APK + EXE + Draft)
 
 on:
   workflow_dispatch:
