@@ -1,4 +1,4 @@
-name: Build Preview (APK+EXE)
+name: Build Preview (APK+EXE+Preview)
 
 on:
   workflow_dispatch:
