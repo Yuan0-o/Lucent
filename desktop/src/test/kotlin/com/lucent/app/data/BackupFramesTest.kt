@@ -75,7 +75,14 @@ class BackupFramesTest {
         )
         val seen = mutableListOf<Pair<String, Int>>()
         val scan = BackupFrames.scanPayload(Buffer().write(payload)) { name, len, stream ->
-            val buf = stream.readByteArray(len)
+            val sink = Buffer()
+            var remaining = len
+            while (remaining > 0) {
+                val n = stream.read(sink, remaining)
+                if (n == -1L) throw okio.EOFException("ended early")
+                remaining -= n
+            }
+            val buf = sink.snapshot().toByteArray()
             seen.add(name to buf.size)
         }
         assertEquals(2, seen.size)
