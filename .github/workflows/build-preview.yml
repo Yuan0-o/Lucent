@@ -69,7 +69,11 @@ jobs:
           if [ -z "$VER" ]; then echo "::error::Could not determine the version."; exit 1; fi
           DIGITS=$(printf '%s' "$VER" | tr -cd '0-9')
           if [ -z "$DIGITS" ]; then echo "::error::Version '$VER' has no digits to build a version code from."; exit 1; fi
-          CODE=$(( DIGITS * 10000 + GITHUB_RUN_NUMBER ))
+          # versionCode must always increase so a new build installs over any older one.
+          # GITHUB_RUN_NUMBER resets to 1 when a workflow file is renamed, which once
+          # made new builds uninstallable over older ones, so use UTC minutes instead.
+          MINUTES=$(( $(date -u +%s) / 60 ))
+          CODE=$(( DIGITS * 100000 + MINUTES ))
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "version_code=$CODE" >> "$GITHUB_OUTPUT"
           echo "Building APK for version $VER (versionCode $CODE)"
