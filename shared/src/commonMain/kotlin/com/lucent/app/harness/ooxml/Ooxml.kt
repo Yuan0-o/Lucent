@@ -340,11 +340,11 @@ object Ooxml {
 
     fun escape(value: String): String = escapeXml(value)
 
-    fun textOf(node: XmlNode?): String = textOf(node)
+    fun textOf(node: XmlNode?): String = com.lucent.app.harness.ooxml.textOf(node)
 
-    fun children(node: XmlNode?, tag: String): List<XmlNode> = children(node, tag)
+    fun children(node: XmlNode?, tag: String): List<XmlNode> = com.lucent.app.harness.ooxml.children(node, tag)
 
-    fun attr(node: XmlNode?, name: String): String = attr(node, name)
+    fun attr(node: XmlNode?, name: String): String = com.lucent.app.harness.ooxml.attr(node, name)
 }
 
 data class MdSpan(

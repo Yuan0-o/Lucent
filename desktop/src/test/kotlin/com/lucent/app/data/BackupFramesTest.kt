@@ -23,7 +23,7 @@ class BackupFramesTest {
             BackupFrames.writeLong(out, bytes.size.toLong())
             out.write(bytes)
         }
-        return out.readByteArray()
+        return out.snapshot().toByteArray()
     }
 
     private fun scan(bytes: ByteArray): BackupFrames.PayloadScan =
@@ -91,7 +91,7 @@ class BackupFramesTest {
         out.write(byteArrayOf(BackupFrames.FRAME_MAGIC, BackupFrames.FRAME_VERSION))
         BackupFrames.writeInt(out, BackupFrames.MAX_MANIFEST_BYTES + 1)
         assertFailsWith<IllegalArgumentException> {
-            scan(out.readByteArray())
+            scan(out.snapshot().toByteArray())
         }
     }
 
@@ -102,7 +102,7 @@ class BackupFramesTest {
         BackupFrames.writeInt(out, manifest.size)
         out.write(manifest)
         BackupFrames.writeInt(out, BackupFrames.MAX_BLOB_NAME_BYTES + 1)
-        val scan = scan(out.readByteArray())
+        val scan = scan(out.snapshot().toByteArray())
         assertTrue(scan.framed)
         assertEquals(String(manifest, Charsets.UTF_8), scan.manifestJson)
         assertEquals(0, scan.modelCount)

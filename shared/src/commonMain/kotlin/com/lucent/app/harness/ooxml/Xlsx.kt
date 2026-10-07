@@ -1519,6 +1519,12 @@ private fun colourValue(text: String): String {
 private fun cellData(value: Any?): CellData = when (value) {
     null -> CellData()
     is JsonNull -> CellData()
+    is JsonPrimitive -> when {
+        value.isString -> CellData(text = value.content)
+        else -> value.doubleOrNull?.let { CellData(number = it) }
+            ?: value.booleanOrNull?.let { CellData(flag = it) }
+            ?: CellData(text = value.toString())
+    }
     is Boolean -> CellData(flag = value)
     is Number -> CellData(number = value.toDouble())
     else -> CellData(text = value.toString())
@@ -1550,7 +1556,7 @@ private fun formulaList(value: Any?): List<String> {
         val out = mutableListOf<String>()
         for (index in 0 until value.size) {
             val item = value[index] ?: continue
-            if (item !is JsonNull) out.add(item.toString())
+            if (item !is JsonNull) out.add(if (item is JsonPrimitive && item.isString) item.content else item.toString())
         }
         return out
     }

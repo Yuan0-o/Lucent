@@ -35,6 +35,8 @@ data class HttpBytes(
 
 object HttpJson {
 
+    private val prettyPrinter = Json { prettyPrint = true; prettyPrintIndent = "  " }
+
     const val REPLY_BUDGET = 4000
 
     const val INLINE_BUDGET = 20000
@@ -187,8 +189,7 @@ object HttpJson {
         if (text.isEmpty()) return ""
         val formatted = try {
             when (text.first()) {
-                '{' -> Json.parseToJsonElement(text).jsonObject.toString()
-                '[' -> Json.parseToJsonElement(text).jsonArray.toString()
+                '{', '[' -> prettyPrinter.encodeToString(JsonElement.serializer(), Json.parseToJsonElement(text))
                 else -> text
             }
         } catch (e: Exception) {
@@ -246,6 +247,7 @@ object HttpJson {
     fun text(value: Any?): String = when (value) {
         null, JsonNull -> ""
         is String -> value
+        is JsonPrimitive -> if (value.isString) value.content else value.toString()
         is JsonObject, is JsonArray -> value.toString()
         else -> value.toString()
     }
