@@ -30,7 +30,7 @@ android {
         versionName = ciVersionName
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
 
         externalNativeBuild {
@@ -151,7 +151,7 @@ val cargoNdkBuild = tasks.register<Exec>("cargoNdkBuild") {
     group = "build"
     description = "Compile rust/ into liblucent_native.so for every packaged ABI"
     workingDir = rustProjectDir
-    val rustTargets = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    val rustTargets = listOf("arm64-v8a")
     commandLine(
         buildList {
             add("cargo"); add("ndk")
