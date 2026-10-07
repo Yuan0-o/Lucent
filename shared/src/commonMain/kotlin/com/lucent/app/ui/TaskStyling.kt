@@ -44,9 +44,9 @@ import androidx.compose.ui.unit.sp
 import com.lucent.app.data.RepeatRule
 import com.lucent.app.data.TaskPriority
 import com.lucent.app.i18n.S
-import kotlin.time.Clock
+import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
-import kotlin.time.Instant
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
