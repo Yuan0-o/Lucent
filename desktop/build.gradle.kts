@@ -46,7 +46,10 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(compose.desktop.uiTestJUnit4)
     testImplementation(libs.kotlinx.serialization.json)
-    implementation(libs.kotlinx.datetime)
+    // Explicit -jvm artifact: the root kotlinx-datetime module's variant matching
+    // does not land the JVM classes on this plain-JVM module's runtime classpath
+    // (NoClassDefFoundError: kotlinx/datetime at test runtime).
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime-jvm:${libs.versions.kotlinxDatetime.get()}")
     tasks.withType<Test> { useJUnitPlatform() }
 
     implementation(libs.sqlite.jdbc)
