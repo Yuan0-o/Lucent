@@ -13,3 +13,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Dump desktop test runtime classpath
         run: ./gradlew :desktop:printTestCp --no-daemon --console=plain
+
+      - name: Show datetime dependency insight
+        run: ./gradlew :desktop:dependencyInsight --dependency kotlinx-datetime --configuration testRuntimeClasspath --no-daemon --console=plain
