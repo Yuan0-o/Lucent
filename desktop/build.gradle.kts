@@ -60,6 +60,15 @@ dependencies {
 
 }
 
+tasks.register("printTestCp") {
+    doLast {
+        println("=== DESKTOP TEST RUNTIME CLASSPATH ===")
+        configurations.named("testRuntimeClasspath").get().files
+            .sortedBy { it.name }
+            .forEach { println(it.length().toString().padStart(10) + "  " + it.name) }
+    }
+}
+
 tasks.register<org.gradle.api.tasks.JavaExec>("cipherSelfCheck") {
     group = "verification"
     description = "Prove at-rest encryption end to end with the resolved sqlite-jdbc driver."
