@@ -19,6 +19,11 @@ on:
         required: false
         type: string
         default: ''
+      create_release:
+        description: Create preview GitHub release
+        required: false
+        type: boolean
+        default: true
     outputs:
       apk_version:
         description: "Version of APK"
@@ -469,45 +474,71 @@ jobs:
           path: desktop/build/compose/binaries/main/exe/*.exe
           if-no-files-found: error
 
-  publish-preview:
+  create-release:
     needs: [prepare, build-apk, build-exe]
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || inputs.create_release == true
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
+
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
       - name: Download EXE
         uses: actions/download-artifact@v6
         with:
           name: lucent-windows-exe
-          path: exe
+          path: artifacts/windows
+
       - name: Download APK
         uses: actions/download-artifact@v6
         with:
           name: lucent-release-apk
-          path: apk
-      - name: Publish preview release
+          path: artifacts/apk
+
+      - name: Verify both assets are present
+        run: |
+          set -eu
+          APK_FILE="$(find artifacts/apk -name '*.apk' | head -n 1)"
+          EXE_FILE="$(find artifacts/windows -name '*.exe' | head -n 1)"
+          [ -n "$APK_FILE" ] || { echo "::error::No APK was produced - no release is created."; exit 1; }
+          [ -n "$EXE_FILE" ] || { echo "::error::No installer was produced - no release is created."; exit 1; }
+          APK_BYTES="$(stat -c%s "$APK_FILE")"
+          EXE_BYTES="$(stat -c%s "$EXE_FILE")"
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
+          echo "EXE_FILE=$EXE_FILE" >> "$GITHUB_ENV"
+          echo "APK_SIZE_MB=$(python3 -c "print(f'{$APK_BYTES/1048576:.2f}')")" >> "$GITHUB_ENV"
+          echo "EXE_SIZE_MB=$(python3 -c "print(f'{$EXE_BYTES/1048576:.2f}')")" >> "$GITHUB_ENV"
+
+      - name: Compose the release body
+        env:
+          BUILD_ID: ${{ needs.prepare.outputs.build_id }}
+          VERSION: ${{ needs.build-exe.outputs.version }}
+        run: |
+          set -eu
+          {
+            printf 'Lucent %s Preview\n\n' "$VERSION"
+            printf '---\n\n'
+            printf 'Build info:\n'
+            printf '- Build-ID: %s\n' "$BUILD_ID"
+            printf '- Android APK: %s MiB\n' "$APK_SIZE_MB"
+            printf '- Windows installer: %s MiB\n' "$EXE_SIZE_MB"
+            printf '- Built from commit %s\n' "${{ github.sha }}"
+            printf '- Build log: https://github.com/%s/actions/runs/%s\n' "${{ github.repository }}" "${{ github.run_id }}"
+          } > /tmp/notes.md
+
+      - name: Create the release and attach both assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUILD_ID: ${{ needs.prepare.outputs.build_id }}
         run: |
           set -eu
-          EXE=$(find exe -name '*.exe' | head -n 1)
-          APK=$(find apk -name '*.apk' | head -n 1)
-          [ -n "$EXE" ] || { echo "::error::No EXE found."; exit 1; }
-          [ -n "$APK" ] || { echo "::error::No APK found."; exit 1; }
-          if ! gh release view preview --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release create preview --prerelease --title "Preview Build" --notes "Initial preview" --repo "${{ github.repository }}"
-          fi
-          EXISTING=$(gh release view preview --repo "${{ github.repository }}" --json body -q .body 2>/dev/null || true)
-          KEPT=$(printf '%s\n' "$EXISTING" | grep -v -e '^Build-ID:' -e '^EXE-' -e '^APK-' -e '^Commit:' -e '^Version:' -e '^Run:' || true)
-          NOTES="$KEPT
-          Build-ID: $BUILD_ID
-          EXE-Commit: ${{ github.sha }}
-          EXE-Version: ${{ needs.build-exe.outputs.version }}
-          EXE-Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          APK-Commit: ${{ github.sha }}
-          APK-Version: ${{ needs.build-apk.outputs.version }}
-          APK-Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          gh release upload preview "$EXE" "$APK" --clobber --repo "${{ github.repository }}"
-          gh release edit preview --notes "$NOTES" --repo "${{ github.repository }}"
+          gh release create "$BUILD_ID" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --title "$BUILD_ID" \
+            --notes-file /tmp/notes.md \
+            "$APK_FILE" \
+            "$EXE_FILE"

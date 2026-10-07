@@ -88,11 +88,12 @@ jobs:
 
   build:
     needs: prepare
-    uses: ./.github/workflows/build-internal.yml
+    uses: ./.github/workflows/build-preview.yml
     secrets: inherit
     with:
       version_name: ${{ needs.prepare.outputs.version }}
       build_id: ${{ needs.prepare.outputs.build_id }}
+      create_release: false
 
   create-release:
     runs-on: ubuntu-24.04
