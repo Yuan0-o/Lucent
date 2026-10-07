@@ -29,6 +29,7 @@ import android.os.ParcelFileDescriptor
 import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.MediaStore
 import android.provider.Settings
 import android.widget.Toast
@@ -146,7 +147,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
 
     override fun vibrate(millis: Long): Boolean = try {
         val vibrator = if (Build.VERSION.SDK_INT >= 31) {
-            context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
         } else {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
