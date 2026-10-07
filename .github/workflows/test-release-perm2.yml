@@ -1,0 +1,35 @@
+name: Test Release Permission 2
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      dummy:
+        required: false
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      build_id: ${{ steps.b.outputs.build_id }}
+    steps:
+      - id: b
+        run: echo "build_id=test-perm2-$(date +%s)" >> "$GITHUB_OUTPUT"
+  create-release:
+    needs: [prepare]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_ID: ${{ needs.prepare.outputs.build_id }}
+        run: |
+          set -eu
+          gh release create "$BUILD_ID" --prerelease --target main --title "perm test 2"
+          echo "RELEASE CREATE OK"
