@@ -66,7 +66,7 @@ object HarnessJobs {
                 if (shell == null || !shell.isReady()) {
                     handle.failure = "no shell backend is available"
                 } else {
-                    handle.outcome = shell.run(command, workdir.path, timeoutSeconds, emptyMap())
+                    handle.outcome = shell.run(command, workdir.toString(), timeoutSeconds, emptyMap())
                 }
             } catch (e: Exception) {
                 handle.failure = e.message ?: e::class.simpleName ?: "failed"

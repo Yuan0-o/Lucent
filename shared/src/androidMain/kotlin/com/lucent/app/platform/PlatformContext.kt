@@ -2,9 +2,10 @@
 
 package com.lucent.app.platform
 
+import okio.Path.Companion.toPath
+
 actual typealias PlatformContext = android.content.Context
 
-import okio.Path.Companion.toPath
 
 actual fun PlatformContext.getApplicationContext(): PlatformContext = this.applicationContext
 actual fun PlatformContext.getFilesDir(): okio.Path = this.filesDir.absolutePath.toPath()

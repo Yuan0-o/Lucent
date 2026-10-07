@@ -142,7 +142,7 @@ actual object LocalSecrets {
         val wrapped = wrapper().wrap(key)
         if (wrapped != null) {
             writeMasterKeyDurably(
-                file.parent, file, PREFIX_DPAPI + java.util.Base64.getEncoder().encodeToString(wrapped)
+                file.parentFile, file, PREFIX_DPAPI + java.util.Base64.getEncoder().encodeToString(wrapped)
             )
         } else {
             reportUnbound()
@@ -166,9 +166,9 @@ actual object LocalSecrets {
                 out.flush()
                 out.fd.sync()
             }
-            if (AtomicFiles.replace(tmp, file)) true else { okio.FileSystem.SYSTEM.delete(tmp); false }
+            if (AtomicFiles.replace(tmp, file)) true else { okio.FileSystem.SYSTEM.delete(tmp.toString().toPath()); false }
         } catch (t: Throwable) {
-            okio.FileSystem.SYSTEM.delete(tmp)
+            okio.FileSystem.SYSTEM.delete(tmp.toString().toPath())
             false
         }
     }

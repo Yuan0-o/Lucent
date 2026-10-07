@@ -295,7 +295,7 @@ object FileTools : HarnessGroupTools {
     private fun listDirectory(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val raw = (args["path"]?.jsonPrimitive?.content ?: "").ifBlank { "." }
         val dir = Workspace.forReadFile(ctx, raw)
-        if (!dir.toString().toPath().isDirectory) return ToolExecResult("${Workspace.display(ctx, dir)} is a file, not a directory.", success = false)
+        if (FileSystem.SYSTEM.metadataOrNull(dir.toString().toPath())?.isDirectory != true) return ToolExecResult("${Workspace.display(ctx, dir)} is a file, not a directory.", success = false)
         val depth = (args["depth"]?.jsonPrimitive?.intOrNull ?: 1).coerceIn(1, 3)
         val max = (args["max_entries"]?.jsonPrimitive?.intOrNull ?: MAX_LIST).coerceIn(1, 2000)
         val out = StringBuilder()
@@ -309,7 +309,7 @@ object FileTools : HarnessGroupTools {
                 out.append(prefix).append(child.name).append(marker)
                 if (FileSystem.SYSTEM.metadataOrNull(child)?.isRegularFile == true) out.append("  ").append(Workspace.humanSize(FileSystem.SYSTEM.metadata(child).size ?: 0L))
                 out.append('\n')
-                if (child.toString().toPath().isDirectory && level < depth) walk(child, level + 1, "$prefix  ")
+                if (FileSystem.SYSTEM.metadataOrNull(child)?.isDirectory == true && level < depth) walk(child, level + 1, "$prefix  ")
             }
         }
         walk(dir, 1, "")
@@ -331,14 +331,15 @@ object FileTools : HarnessGroupTools {
         val matches = mutableListOf<String>()
         var scanned = 0
         val files = mutableListOf<Path>()
-        if (FileSystem.SYSTEM.metadataOrNull(root)?.isRegularFile == true) files.add(root.toPath()) else {
+        val rootPath = root.toPath()
+        if (FileSystem.SYSTEM.metadataOrNull(rootPath)?.isRegularFile == true) files.add(rootPath) else {
             fun walk(p: Path) {
                 FileSystem.SYSTEM.listOrNull(p)?.forEach {
                     if (FileSystem.SYSTEM.metadataOrNull(it)?.isDirectory == true) walk(it)
                     else if (FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true) files.add(it)
                 }
             }
-            walk(root.toPath())
+            walk(rootPath)
         }
         for (file in files) {
             if (matches.size >= max) break
@@ -466,7 +467,7 @@ object FileTools : HarnessGroupTools {
         if (append) {
             if (ctx.config.snapshots && FileSystem.SYSTEM.exists(file)) Snapshots.capture(ctx, file.toString())
             file.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
-            file.toString().toPath().appendText(if ((FileSystem.SYSTEM.metadataOrNull(file.toString().toPath())?.size ?: 0L) > 0 && !FileSystem.SYSTEM.read(file.toString().toPath()) { readUtf8() }.endsWith("\n")) "\n$content" else content)
+            okio.FileSystem.SYSTEM.appendingSink(file.toString().toPath()).buffer().use { it.writeUtf8(if ((FileSystem.SYSTEM.metadataOrNull(file.toString().toPath())?.size ?: 0L) > 0 && !FileSystem.SYSTEM.read(file.toString().toPath()) { readUtf8() }.endsWith("\n")) "\n$content" else content) }
         } else {
             Workspace.writeText(ctx, file.toString(), content)
         }
@@ -627,7 +628,17 @@ object FileTools : HarnessGroupTools {
                         val destination = Workspace.forWrite(ctx, "$target/${file.name}").toPath()
                         destination.parent?.let { FileSystem.SYSTEM.createDirectories(it) }
                         if (action == "copy") {
-                            if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) file.copyRecursively(destination, overwrite = true)
+                            if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) {
+                                fun copyWalk(src: Path, dst: Path) {
+                                    FileSystem.SYSTEM.createDirectories(dst)
+                                    FileSystem.SYSTEM.list(src).forEach { p ->
+                                        val childDst = dst / p.name
+                                        if (FileSystem.SYSTEM.metadata(p).isDirectory == true) copyWalk(p, childDst) else FileSystem.SYSTEM.copy(p, childDst)
+                                    }
+                                }
+                                if (FileSystem.SYSTEM.exists(destination)) FileSystem.SYSTEM.deleteRecursively(destination)
+                                copyWalk(file, destination)
+                            }
                             else okio.FileSystem.SYSTEM.source(file).use { s -> okio.FileSystem.SYSTEM.sink(destination).buffer().use { it.writeAll(s) } }
                             done.add("${file.name} copied")
                         } else {
@@ -638,7 +649,7 @@ object FileTools : HarnessGroupTools {
                     "delete" -> {
                         val file = Workspace.forWrite(ctx, raw).toPath()
                         if ((FileSystem.SYSTEM.metadataOrNull(file)?.isRegularFile == true) && ctx.config.snapshots) Snapshots.capture(ctx, file.toString())
-                        val ok = if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) FileSystem.SYSTEM.deleteRecursively(file) else run { try { FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } }
+                        val ok = if ((FileSystem.SYSTEM.metadataOrNull(file)?.isDirectory == true)) run { try { FileSystem.SYSTEM.deleteRecursively(file); true } catch (e: Exception) { false } } else run { try { FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } }
                         done.add("${file.name} ${if (ok) "deleted" else "(failed)"}")
                     }
                     else -> return ToolExecResult("action must be rename, copy, move or delete.", success = false)
@@ -726,7 +737,7 @@ object FileTools : HarnessGroupTools {
                     else if (FileSystem.SYSTEM.metadataOrNull(it)?.isRegularFile == true) files.add(it)
                 }
             }
-            if (FileSystem.SYSTEM.metadataOrNull(root)?.isDirectory == true) walk(root.toPath()) else files.add(root.toPath())
+            if (FileSystem.SYSTEM.metadataOrNull(root)?.isDirectory == true) walk(root) else files.add(root)
             
             files.forEach { file ->
                 val entryName = file.toString().removePrefix(base.toString()).removePrefix("/").replace('\\', '/')

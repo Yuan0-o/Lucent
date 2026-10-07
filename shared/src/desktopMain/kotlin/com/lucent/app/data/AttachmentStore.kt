@@ -123,8 +123,9 @@ actual object AttachmentStore {
                     copyStream(input, output)
                 }
             }
-            try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false }
-            else {
+            if (run { try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false } }) {
+                true
+            } else {
                 if (run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } } && run { try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false } }) true else { run { try { okio.FileSystem.SYSTEM.delete(temp); true } catch (e: Exception) { false } }; false }
             }
         } catch (t: Throwable) {

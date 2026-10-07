@@ -46,20 +46,20 @@ kotlin {
     }
 
     sourceSets {
-        val jvmMain = create("jvmMain") {
-            dependsOn(getByName("commonMain"))
-            dependencies {
-                implementation(libs.kotlinx.coroutines.core)
-                implementation(libs.okhttp)
-                implementation(libs.org.json)
-            }
-        }
         val commonMain by getting {
             kotlin.srcDir(buildIdDir)
             dependencies {
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.okio)
+            }
+        }
+        val jvmMain = create("jvmMain") {
+            dependsOn(commonMain)
+            dependencies {
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.okhttp)
+                implementation(libs.org.json)
             }
         }
         val androidMain by getting {

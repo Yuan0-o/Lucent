@@ -983,7 +983,7 @@ private class DocBlocks(private val sink: DocxRelSink, private val base: Path) {
         val file = resolve(path)
         if (!FileSystem.SYSTEM.exists(file)) throw IllegalArgumentException("Image ${file.name} was not found")
         val bytes = try {
-            file.readBytes()
+            FileSystem.SYSTEM.read(file) { readByteArray() }
         } catch (e: Exception) {
             throw IllegalArgumentException("Cannot read image ${file.name}: ${e.message ?: "read error"}")
         }

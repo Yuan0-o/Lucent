@@ -86,8 +86,8 @@ object OfficeDeckTools : HarnessGroupTools {
                 success = false
             )
         }
-        out.parentFile?.mkdirs()
-        if (ctx.config.snapshots && out.exists()) Snapshots.capture(ctx, out)
+        out.toPath().parent?.let { okio.FileSystem.SYSTEM.createDirectories(it) }
+        if (ctx.config.snapshots && okio.FileSystem.SYSTEM.exists(out.toPath())) Snapshots.capture(ctx, out)
         val summary = Pptx.create(spec.toString(), out)
         return ToolExecResult("Wrote ${Workspace.display(ctx, out)}: $summary")
     }
@@ -136,14 +136,14 @@ object OfficeDeckTools : HarnessGroupTools {
         val maxChars = args["max_chars"]?.jsonPrimitive?.intOrNull ?: 20000
         val shown = Workspace.display(ctx, file)
         val text = Pptx.read(file, maxChars)
-        return ToolExecResult("$shown (${Workspace.humanSize(file.length())})\n$text")
+        return ToolExecResult("$shown (${Workspace.humanSize(okio.FileSystem.SYSTEM.metadataOrNull(file.toPath())?.size ?: 0L)})\n$text")
     }
 
     private fun edit(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val file = Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         val ops = opsJson(args["ops"])
         if (ops.isBlank()) return ToolExecResult("Give at least one operation in ops.", success = false)
-        if (ctx.config.snapshots && file.exists()) Snapshots.capture(ctx, file)
+        if (ctx.config.snapshots && okio.FileSystem.SYSTEM.exists(file.toPath())) Snapshots.capture(ctx, file)
         val summary = Pptx.edit(file, ops)
         return ToolExecResult("Edited ${Workspace.display(ctx, file)}\n$summary")
     }

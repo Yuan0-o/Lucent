@@ -88,7 +88,7 @@ private class SpreadsheetNs(private val prefix: String) {
 
     companion object {
         fun of(document: XmlNode): SpreadsheetNs {
-            val name = document?.nodeName ?: ""
+            val name = document?.name ?: ""
             return SpreadsheetNs(name.substringBefore(':', ""))
         }
     }
@@ -160,7 +160,7 @@ object Xlsx {
             val container = ensureOrdered(workbook, workbook, "sheets", WORKBOOK_ORDER)
             val element = workbook.createXmlNode("sheet")
             element.attributes["name"] = name
-            element.attributes["sheetId"] = (index + 1.toString())
+            element.attributes["sheetId"] = (index + 1).toString()
             element.attributes["r:id"] = sheetRel
             container.appendChild(element)
         }
@@ -822,7 +822,7 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     }
     val heights = spec["heights"]?.jsonObject ?: spec["row_heights"]?.jsonObject
     if (heights != null) {
-        heights.keys().forEach { key ->
+        heights.keys.forEach { key ->
             val row = key.toIntOrNull()
             val height = heights[key]?.jsonPrimitive?.doubleOrNull ?: 0.0
             if (row != null && row > 0 && height > 0.0) setRowHeight(document, row, height)
@@ -860,10 +860,10 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     val freeze = stringOf(spec, "freeze")
     if (freeze.isNotBlank()) setFreeze(document, freeze)
     val filter = spec["autofilter"]
-    if (filter == true) {
+    if (filter?.jsonPrimitive?.booleanOrNull == true) {
         setAutoFilter(document, autoFilterRange(document))
-    } else if (filter is String && filter.isNotBlank()) {
-        setAutoFilter(document, filter)
+    } else if (filter?.jsonPrimitive?.isString == true && filter.jsonPrimitive.content.isNotBlank()) {
+        setAutoFilter(document, filter.jsonPrimitive.content)
     }
     val conditional = spec["conditional"]?.jsonArray
     if (conditional != null) {
@@ -1004,7 +1004,7 @@ private fun appendMerge(document: XmlNode, range: String) {
     val created = document.createXmlNode(ns.tag("mergeCell"))
     created.attributes["ref"] = text
     container.appendChild(created)
-    container.attributes["count"] = children(container, "mergeCell".size.toString())
+    container.attributes["count"] = children(container, "mergeCell").size.toString()
 }
 
 private fun setFreeze(document: XmlNode, cell: String) {
@@ -1430,7 +1430,7 @@ private fun indexOfChild(parent: XmlNode, child: XmlNode): Int {
 }
 
 private fun syncCount(container: XmlNode) {
-    container.attributes["count"] = directChildren(container.size.toString())
+    container.attributes["count"] = directChildren(container).size.toString()
 }
 
 private fun columnName(index: Int): String {

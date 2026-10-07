@@ -84,7 +84,7 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
             override fun flush() = out.flush()
             override fun close() = out.close()
         }
-        BackupManager.exportEncrypted(context, db, settings, okio.sink(mirrored), null)
+        BackupManager.exportEncrypted(context, db, settings, mirrored.sink(), null)
         val cloudOn = runCatching {
             val repo = createSettingsRepository(context)
             repo.cloudEnabled.first() && repo.cloudAutoBackup.first() &&

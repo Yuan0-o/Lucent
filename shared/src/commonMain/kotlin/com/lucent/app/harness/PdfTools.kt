@@ -1611,9 +1611,9 @@ object PdfTools : HarnessGroupTools {
     }
 
     private fun pdfSibling(ctx: HarnessCtx, file: Path, name: String): Path =
-        (file.parent ?: ctx.workspace.toPath()).resolve(name)
+        (file.parent ?: ctx.workspace.toPath()) / name
 
     private fun pdfWritableTarget(ctx: HarnessCtx, target: Path): Path {
-        return if (Workspace.writable(ctx, target.toString())) target else ctx.workspace.toPath().resolve(target.name)
+        return if (Workspace.writable(ctx, target.toString())) target else ctx.workspace.toPath() / target.name
     }
 }

@@ -2,6 +2,7 @@ package com.lucent.app.data
 import com.lucent.app.platform.filesDir
 
 import com.lucent.app.platform.PlatformContext
+import okio.Path.Companion.toPath
 import java.io.File
 import java.security.SecureRandom
 

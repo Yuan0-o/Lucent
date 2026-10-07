@@ -35,8 +35,8 @@ actual object UsageTracker {
             if (loaded) return
             state.value = try {
                 val f = file(context)
-                if (!okio.FileSystem.SYSTEM.exists(f.toString().toPath())) emptyMap() else {
-                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(f.readText()).jsonObject
+                if (!okio.FileSystem.SYSTEM.exists(f)) emptyMap() else {
+                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(okio.FileSystem.SYSTEM.read(f) { readUtf8() }).jsonObject
                     buildMap { obj.entries.forEach { (k, v) -> put(k, v.jsonPrimitive.content) } }
                 }
             } catch (t: Throwable) {
@@ -50,9 +50,9 @@ actual object UsageTracker {
         try {
             val obj = buildJsonObject { values.forEach { (k, v) -> put(k, v) } }
             val f = file(context)
-            val tmp = java.io.File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(Json.encodeToString(obj))
-            okio.FileSystem.SYSTEM.atomicMove(tmp.toString().toPath(), f.toString().toPath())
+            val tmp = (f.parent?.toString() + "/" + f.name + ".tmp").toPath()
+            okio.FileSystem.SYSTEM.write(tmp) { writeUtf8(obj.toString()) }
+            okio.FileSystem.SYSTEM.atomicMove(tmp, f)
         } catch (_: Throwable) {
         }
     }
@@ -75,7 +75,7 @@ actual object UsageTracker {
 
     private fun serialize(map: Map<Long, Entry>): String {
         val obj = buildJsonObject { map.forEach { (id, e) -> put(id.toString(), buildJsonObject { put("c", e.count); put("t", e.lastOpened) }) } }
-        return Json.encodeToString(obj)
+        return obj.toString()
     }
 
     actual suspend fun clearAll(context: PlatformContext) {

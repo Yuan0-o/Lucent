@@ -33,7 +33,7 @@ object LocalModelStore {
 
     data class ModelIndex(val slots: List<ModelSlot>, val activeId: String?)
 
-    private fun dir(context: PlatformContext): Path = context.filesDir.toPath() / DIR
+    private fun dir(context: PlatformContext): Path = context.filesDir / DIR
 
 
     @Synchronized
@@ -114,7 +114,7 @@ object LocalModelStore {
             put("slots", arr)
             idx.activeId?.let { put("active", it) }
         }
-        (dir / INDEX_FILE).writeText(LocalSecrets.encrypt(Json.encodeToString(JsonElement.serializer(), root)))
+        FileSystem.SYSTEM.write(dir / INDEX_FILE) { writeUtf8(LocalSecrets.encrypt(Json.encodeToString(JsonElement.serializer(), root))) }
     }
 
 
@@ -264,7 +264,7 @@ object LocalModelStore {
     }
 
     fun totalModelBytes(context: PlatformContext): Long =
-        slots(context).sumOf { (dir(context) / it.fileName).length() }
+        slots(context).sumOf { FileSystem.SYSTEM.metadataOrNull(dir(context) / it.fileName)?.size ?: 0L }
 
     fun modelFileForSlot(context: PlatformContext, slot: ModelSlot): Path? =
         (dir(context) / slot.fileName).takeIf { FileSystem.SYSTEM.exists(it) && (FileSystem.SYSTEM.metadata(it).size ?: 0L) > 0L }
