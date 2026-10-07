@@ -520,7 +520,7 @@ jobs:
           set -eu
           {
             printf 'Lucent %s Preview\n\n' "$VERSION"
-            printf '---\n\n'
+            printf -- '---\n\n'
             printf 'Build info:\n'
             printf '- Build-ID: %s\n' "$BUILD_ID"
             printf '- Android APK: %s MiB\n' "$APK_SIZE_MB"
