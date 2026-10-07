@@ -109,7 +109,7 @@ jobs:
           if ($dll) { Copy-Item $dll.FullName desktop/src/main/resources/native/lucent_llama.dll -Force }
 
       - name: Cache Vulkan SDK installer
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .vulkan-installer
           key: vulkan-installer-1.4.321.1
@@ -155,7 +155,7 @@ jobs:
           if ($dll) { Copy-Item $dll.FullName desktop/src/main/resources/native/lucent_llama_vk.dll -Force }
 
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -184,7 +184,7 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Cache WiX
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: desktop/build/wixToolset
           key: wix311-compose
@@ -227,7 +227,7 @@ jobs:
           if ($exe.Name -ne $target) { Move-Item -Force $exe.FullName (Join-Path $exe.DirectoryName $target) }
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lucent-windows-exe
           path: desktop/build/compose/binaries/main/exe/*.exe
