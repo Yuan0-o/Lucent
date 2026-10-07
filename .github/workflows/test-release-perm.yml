@@ -8,8 +8,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
       - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api repos/Yuan0-o/Lucent --jq .name && echo "API OK"
-          gh release create test-perm-$(date +%s) --prerelease --target main --title "perm test" 2>&1 | head -3
+          set -eu
+          gh release create test-perm-$(date +%s) --prerelease --target main --title "perm test"
+          echo "RELEASE CREATE OK"
