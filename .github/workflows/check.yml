@@ -70,7 +70,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: desktop-test-results
-          path: desktop/build/reports/tests/test
+          path: desktop/build/test-results/test
           if-no-files-found: ignore
 
   windows-jvm-check:
@@ -147,10 +147,6 @@ jobs:
       - name: Run Android JVM unit tests (shared and Android logic)
         run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
 
-      - name: Count the tests that actually ran
-        if: always()
-        run: python3 tools/test_inventory.py
-
       - name: Compile the release Kotlin sources
         run: ./gradlew :app:compileReleaseKotlin --no-daemon --console=plain
 
@@ -185,5 +181,31 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: android-test-results
-          path: app/build/reports/tests/testDebugUnitTest
+          path: app/build/test-results/testDebugUnitTest
           if-no-files-found: ignore
+
+  test-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [desktop-jvm-check, android-jvm-check]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download desktop test results
+        continue-on-error: true
+        uses: actions/download-artifact@v6
+        with:
+          name: desktop-test-results
+          path: desktop/build/test-results/test
+
+      - name: Download Android test results
+        continue-on-error: true
+        uses: actions/download-artifact@v6
+        with:
+          name: android-test-results
+          path: app/build/test-results/testDebugUnitTest
+
+      - name: Count the tests that actually ran
+        run: python3 tools/test_inventory.py
