@@ -1,7 +1,6 @@
 package com.lucent.app.data
 
 import kotlinx.datetime.Instant
-import kotlinx.datetime.toEpochMilliseconds
 import kotlinx.datetime.Clock
 
 import kotlinx.datetime.DateTimeUnit
