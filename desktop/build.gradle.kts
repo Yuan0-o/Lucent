@@ -27,6 +27,18 @@ kotlin {
     }
 }
 
+// kotlinx-datetime: shared is written against the 0.6.x API (kotlinx.datetime.Clock),
+// but org.jetbrains.compose.material3:material3-desktop pulls 0.7.1, whose removal
+// of Clock breaks shared at runtime. Pin the whole desktop graph to the catalog
+// version. (material3's own datetime calls — LocalDateTime/TimeZone/Month — exist
+// in 0.6.x, so this is safe for its DatePicker.)
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlinx:kotlinx-datetime:${libs.versions.kotlinxDatetime.get()}")
+        force("org.jetbrains.kotlinx:kotlinx-datetime-jvm:${libs.versions.kotlinxDatetime.get()}")
+    }
+}
+
 dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
@@ -58,15 +70,6 @@ dependencies {
 
     implementation(libs.jna.platform)
 
-}
-
-tasks.register("printTestCp") {
-    doLast {
-        println("=== DESKTOP TEST RUNTIME CLASSPATH ===")
-        configurations.named("testRuntimeClasspath").get().files
-            .sortedBy { it.name }
-            .forEach { println(it.length().toString().padStart(10) + "  " + it.name) }
-    }
 }
 
 tasks.register<org.gradle.api.tasks.JavaExec>("cipherSelfCheck") {
