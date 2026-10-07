@@ -13,6 +13,7 @@ import com.lucent.app.platform.PlatformContext
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -50,7 +51,7 @@ internal object LocalLlmProxy {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             engineStub = ILocalLlmEngine.Stub.asInterface(service)
-            connectWaiter?.let { if (it.isActive) it.resume(true, onCancellation = null) }
+            connectWaiter?.let { if (it.isActive) it.resume(true) }
             connectWaiter = null
         }
 
@@ -66,7 +67,7 @@ internal object LocalLlmProxy {
 
     private fun failPendingGenerate(rc: Int) {
         cachedIsGenerating = false
-        pendingGenerate.getAndSet(null)?.let { cont -> if (cont.isActive) cont.resume(rc, onCancellation = null) }
+        pendingGenerate.getAndSet(null)?.let { cont -> if (cont.isActive) cont.resume(rc) }
     }
 
 
@@ -141,7 +142,7 @@ internal object LocalLlmProxy {
                             if (piece != null) onDelta(piece)
                         }
                         override fun onDone(rc: Int) {
-                            pendingGenerate.getAndSet(null)?.let { c -> if (c.isActive) c.resume(rc, onCancellation = null) }
+                            pendingGenerate.getAndSet(null)?.let { c -> if (c.isActive) c.resume(rc) }
                         }
                     }
                     try {
@@ -149,7 +150,7 @@ internal object LocalLlmProxy {
                     } catch (e: RemoteException) {
                         Log.e(TAG, "generate RPC failed", e)
                         pendingGenerate.getAndSet(null)?.let { c ->
-                            if (c.isActive) c.resume(RC_ENGINE_PROCESS_DIED, onCancellation = null)
+                            if (c.isActive) c.resume(RC_ENGINE_PROCESS_DIED)
                         }
                     }
                 }
@@ -202,7 +203,7 @@ internal object LocalLlmProxy {
                     }
                     if (!requested) {
                         connectWaiter = null
-                        cont.resume(false, onCancellation = null)
+                        cont.resume(false)
                     }
                     cont.invokeOnCancellation { connectWaiter = null }
                 }

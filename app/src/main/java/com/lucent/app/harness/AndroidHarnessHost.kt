@@ -145,7 +145,12 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     }
 
     override fun vibrate(millis: Long): Boolean = try {
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return false
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        } ?: return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator.vibrate(VibrationEffect.createOneShot(millis.coerceIn(30, 3000), VibrationEffect.DEFAULT_AMPLITUDE))
         } else {
