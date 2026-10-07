@@ -588,14 +588,6 @@ fun XmlNode.removeChild(child: XmlNode) {
     this.children.remove(child)
 }
 
-fun parentOf(root: XmlNode, target: XmlNode): XmlNode? {
-    if (target in root.children) return root
-    for (c in root.children) {
-        val p = parentOf(c, target)
-        if (p != null) return p
-    }
-    return null
-}
 
 fun parentOf(root: XmlNode?, target: XmlNode): XmlNode? {
     if (root == null) return null
