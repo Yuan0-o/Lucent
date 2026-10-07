@@ -16,6 +16,7 @@ object BackupManager {
     typealias BackupModule = com.lucent.app.data.BackupModule
 
     val DEFAULT_MODULES: Set<BackupModule> = com.lucent.app.data.DEFAULT_BACKUP_MODULES
+    private val prettyJson = Json { prettyPrint = true }
 
     fun interface BackupSource {
         fun open(): okio.Source
@@ -92,7 +93,7 @@ object BackupManager {
             notebooks = notebooks, notebookItems = notebookItems,
             inlineAttachments = true, modules = modules, apiProfileNames = selection.apiProfileNames
         )
-        return kotlinx.serialization.json.Json { prettyPrint = true }.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObj)
+        return prettyJson.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObj)
     }
 
     suspend fun exportEncrypted(

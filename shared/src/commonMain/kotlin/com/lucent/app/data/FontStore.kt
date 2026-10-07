@@ -17,6 +17,7 @@ import okio.buffer
 import okio.source
 
 object FontStore {
+    private val jsonParser = Json { ignoreUnknownKeys = true }
 
     const val MAX_FONTS = 12
 
@@ -51,7 +52,7 @@ object FontStore {
             val raw = FileSystem.SYSTEM.source(indexFile).buffer().readUtf8()
             val decrypted = LocalSecrets.decrypt(raw)
             if (decrypted.isEmpty() && raw.isNotEmpty()) return rebuildFromFiles(context)
-            val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<FontIndex>(decrypted)
+            val parsed = jsonParser.decodeFromString<FontIndex>(decrypted)
             val validSlots = parsed.slots.filter { 
                 it.id.isNotBlank() && it.fileName.isNotBlank() && FileSystem.SYSTEM.exists(dir / it.fileName) 
             }.map {

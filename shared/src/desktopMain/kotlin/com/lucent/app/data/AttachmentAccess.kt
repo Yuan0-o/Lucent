@@ -15,14 +15,14 @@ actual object AttachmentAccess {
     private const val COPY_BUFFER = 64 * 1024
 
     private fun previewDir(context: PlatformContext): PlatformFile {
-        val ctx = context as PlatformContext
+        val ctx = context
         return PlatformFile((ctx.applicationContext.cacheDir / PREVIEW_DIR).also { okio.FileSystem.SYSTEM.createDirectories(it) }.toString())
     }
 
     actual fun materialize(context: PlatformContext, att: Attachment): PlatformFile? {
         val dir = PlatformFile(previewDir(context), safeFolder(att)).apply { if (!exists()) mkdirs() }
         val dest = PlatformFile(dir, safeName(att.name))
-        val stream = openAttachmentStream(context, att) as? java.io.InputStream
+        val stream = openAttachmentStream(context, att)
         return try {
             if (stream != null) {
                 stream.use { input ->
@@ -65,7 +65,7 @@ actual object AttachmentAccess {
     }
 
     actual fun writeTo(context: PlatformContext, att: Attachment, out: PlatformOutputStream): Boolean {
-        val stream = openAttachmentStream(context, att) as? java.io.InputStream
+        val stream = openAttachmentStream(context, att)
         return try {
             try {
                 if (stream != null) {

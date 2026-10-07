@@ -156,7 +156,7 @@ object UpdateChecker {
                 val cBuildId = LucentBuild.BUILD_ID
                 val usesBuildId = buildId != null && parseBuildId(buildId) != null && parseBuildId(cBuildId) != null
                 val isNewerStable = if (usesBuildId) {
-                    isNewerBuildId(buildId!!, cBuildId)
+                    isNewerBuildId(buildId, cBuildId)
                 } else {
                     isNewer(tag, currentVersion)
                 }
@@ -184,7 +184,7 @@ object UpdateChecker {
                 val cBuildId = LucentBuild.BUILD_ID
                 val usesBuildId = pBuildId != null && parseBuildId(pBuildId) != null && parseBuildId(cBuildId) != null
                 val isNewerPreview = if (usesBuildId) {
-                    isNewerBuildId(pBuildId!!, cBuildId)
+                    isNewerBuildId(pBuildId, cBuildId)
                 } else {
                     isNewer(AutoUpdate.installer?.versionOf(preview) ?: preview.version, currentVersion)
                 }

@@ -2173,7 +2173,7 @@ private fun pptxLocal(tag: String): String {
 private fun pptxChild(node: XmlNode?, tag: String): XmlNode? {
     if (node == null) return null
     for (child in node.children) {
-        if (child is XmlNode && pptxLocal(child.name) == tag) return child
+        if (pptxLocal(child.name) == tag) return child
 }
     return null
 }
@@ -2182,7 +2182,7 @@ private fun pptxChildren(node: XmlNode?, tag: String): List<XmlNode> {
     if (node == null) return emptyList()
     val out = mutableListOf<XmlNode>()
     for (child in node.children) {
-        if (child is XmlNode && pptxLocal(child.name) == tag) out.add(child)
+        if (pptxLocal(child.name) == tag) out.add(child)
 }
     return out
 }
@@ -2191,7 +2191,7 @@ private fun pptxDirectChildren(node: XmlNode?): List<XmlNode> {
     if (node == null) return emptyList()
     val out = mutableListOf<XmlNode>()
     for (child in node.children) {
-        if (child is XmlNode) out.add(child)
+        out.add(child)
 }
     return out
 }
@@ -2205,10 +2205,8 @@ private fun pptxDescend(node: XmlNode?, tag: String): List<XmlNode> {
 
 private fun pptxCollect(node: XmlNode, tag: String, out: MutableList<XmlNode>) {
     for (child in node.children) {
-        if (child is XmlNode) {
-            if (pptxLocal(child.name) == tag) out.add(child)
-            pptxCollect(child, tag, out)
-        }
+        if (pptxLocal(child.name) == tag) out.add(child)
+        pptxCollect(child, tag, out)
 }
 }
 

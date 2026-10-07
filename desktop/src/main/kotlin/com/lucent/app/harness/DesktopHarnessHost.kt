@@ -161,7 +161,7 @@ object DesktopHarnessHost : HarnessHost {
     }
 
     override fun openUrl(url: String): Boolean = try {
-        if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(java.net.URI(url)) else false
+        if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(java.net.URI(url))
         true
     } catch (t: Throwable) {
         false

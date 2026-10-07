@@ -734,9 +734,9 @@ fun SettingsScreen(active: Boolean = true) {
         if (assistantDirty) discardAssistantSettings()
         if (apiDirty) {
             url = savedUrl; spec = savedSpec; key = savedKey; selectedModel = savedModel
-            editingProfileName = activeApiProfile?.name.orEmpty()
-            provider = activeApiProfile?.provider ?: com.lucent.app.data.ApiProviders.CUSTOM
-            models = activeApiProfile?.selectedModels ?: emptyList()
+            editingProfileName = activeApiProfile.name
+            provider = activeApiProfile.provider
+            models = activeApiProfile.selectedModels
         }
     }
 

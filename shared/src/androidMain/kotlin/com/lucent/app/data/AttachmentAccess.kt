@@ -16,17 +16,17 @@ actual object AttachmentAccess {
     private const val COPY_BUFFER = 64 * 1024
 
     private fun previewDir(context: PlatformContext): PlatformFile {
-        val ctx = context as Context
+        val ctx = context
         return PlatformFile(File(ctx.applicationContext.cacheDir, PREVIEW_DIR).apply { if (!exists()) mkdirs() }.absolutePath)
     }
 
     private fun authority(context: PlatformContext): String {
-        val ctx = context as Context
+        val ctx = context
         return "${ctx.applicationContext.packageName}.fileprovider"
     }
 
     fun contentUri(context: PlatformContext, att: Attachment): Uri? {
-        val ctx = context as Context
+        val ctx = context
         val plaintext = materialize(context, att) ?: return null
         return try {
             FileProvider.getUriForFile(ctx.applicationContext, authority(context), File(plaintext.absolutePath))
@@ -38,7 +38,7 @@ actual object AttachmentAccess {
     actual fun materialize(context: PlatformContext, att: Attachment): PlatformFile? {
         val dir = PlatformFile(previewDir(context), safeFolder(att)).apply { if (!exists()) mkdirs() }
         val dest = PlatformFile(dir, safeName(att.name))
-        val stream = openAttachmentStream(context, att) as? java.io.InputStream
+        val stream = openAttachmentStream(context, att)
         return try {
             if (stream != null) {
                 stream.use { input ->
@@ -70,7 +70,7 @@ actual object AttachmentAccess {
     }
 
     actual fun writeTo(context: PlatformContext, att: Attachment, out: PlatformOutputStream): Boolean {
-        val stream = openAttachmentStream(context, att) as? java.io.InputStream
+        val stream = openAttachmentStream(context, att)
         return try {
             try {
                 if (stream != null) {

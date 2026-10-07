@@ -278,17 +278,18 @@ class DesktopNoteDao internal constructor(private val db: Db) : NoteDao {
 
 class DesktopNoteEmbeddingDao internal constructor(private val db: Db) : NoteEmbeddingDao {
 
-    override suspend fun upsert(embedding: NoteEmbedding): Unit = db.write("note_embeddings") { c ->
-        c.prepareStatement(
-            "INSERT OR REPLACE INTO note_embeddings (noteId, model, dim, vec, updatedAt) VALUES (?, ?, ?, ?, ?)"
-        ).apply {
-            setLong(1, embedding.noteId)
-            setString(2, embedding.model)
-            setInt(3, embedding.dim)
-            setBytes(4, embedding.vec)
-            setLong(5, embedding.updatedAt)
-        }.executeUpdate()
-        Unit
+    override suspend fun upsert(embedding: NoteEmbedding) {
+        db.write("note_embeddings") { c ->
+            c.prepareStatement(
+                "INSERT OR REPLACE INTO note_embeddings (noteId, model, dim, vec, updatedAt) VALUES (?, ?, ?, ?, ?)"
+            ).apply {
+                setLong(1, embedding.noteId)
+                setString(2, embedding.model)
+                setInt(3, embedding.dim)
+                setBytes(4, embedding.vec)
+                setLong(5, embedding.updatedAt)
+            }.executeUpdate()
+        }
     }
 
     override suspend fun getForModel(model: String): List<NoteEmbedding> = db.use { c ->
@@ -301,22 +302,25 @@ class DesktopNoteEmbeddingDao internal constructor(private val db: Db) : NoteEmb
             .executeQuery().mapAll(::noteEmbeddingOf)
     }
 
-    override suspend fun delete(noteId: Long, model: String): Unit = db.write("note_embeddings") { c ->
-        c.prepareStatement("DELETE FROM note_embeddings WHERE noteId = ? AND model = ?").apply {
-            setLong(1, noteId)
-            setString(2, model)
-        }.executeUpdate()
-        Unit
+    override suspend fun delete(noteId: Long, model: String) {
+        db.write("note_embeddings") { c ->
+            c.prepareStatement("DELETE FROM note_embeddings WHERE noteId = ? AND model = ?").apply {
+                setLong(1, noteId)
+                setString(2, model)
+            }.executeUpdate()
+        }
     }
 
-    override suspend fun deleteAllForModel(model: String): Unit = db.write("note_embeddings") { c ->
-        c.prepareStatement("DELETE FROM note_embeddings WHERE model = ?").apply { setString(1, model) }.executeUpdate()
-        Unit
+    override suspend fun deleteAllForModel(model: String) {
+        db.write("note_embeddings") { c ->
+            c.prepareStatement("DELETE FROM note_embeddings WHERE model = ?").apply { setString(1, model) }.executeUpdate()
+        }
     }
 
-    override suspend fun clearAll(): Unit = db.write("note_embeddings") { c ->
-        c.createStatement().use { st -> st.executeUpdate("DELETE FROM note_embeddings") }
-        Unit
+    override suspend fun clearAll() {
+        db.write("note_embeddings") { c ->
+            c.createStatement().use { st -> st.executeUpdate("DELETE FROM note_embeddings") }
+        }
     }
 }
 

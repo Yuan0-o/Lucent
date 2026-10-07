@@ -21,7 +21,7 @@ actual object AttachmentStore {
     private const val COPY_BUFFER = 64 * 1024
 
     actual fun baseDir(context: PlatformContext): PlatformFile {
-        val ctx = context as Context
+        val ctx = context
         val root = ctx.getExternalFilesDir(null) ?: ctx.filesDir
         return PlatformFile(File(root, DIR_NAME).apply { if (!exists()) mkdirs() }.absolutePath)
     }
@@ -81,7 +81,7 @@ actual object AttachmentStore {
     actual fun readBytes(context: PlatformContext, id: String, maxBytes: Long): ByteArray? {
         if (sizeOf(context, id) > maxBytes) return null
         return try {
-            (openInputStream(context, id) as? java.io.InputStream)?.use { it.readBytes() }
+            openInputStream(context, id)?.use { it.readBytes() }
         } catch (t: Throwable) {
             null
         }
@@ -137,7 +137,7 @@ actual object AttachmentStore {
     }
 
     fun importUri(context: PlatformContext, uri: Uri): String? {
-        val ctx = context as Context
+        val ctx = context
         val id = UUID.randomUUID().toString()
         val dest = File(fileFor(context, id).absolutePath)
         return try {
@@ -158,7 +158,7 @@ actual object AttachmentStore {
     }
 
     fun queryDisplayName(context: PlatformContext, uri: Uri): String? = try {
-        val ctx = context as Context
+        val ctx = context
         ctx.contentResolver
             .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->
@@ -170,7 +170,7 @@ actual object AttachmentStore {
     }
 
     fun sizeHint(context: PlatformContext, uri: Uri): Long = try {
-        val ctx = context as Context
+        val ctx = context
         ctx.contentResolver
             .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
             ?.use { cursor ->

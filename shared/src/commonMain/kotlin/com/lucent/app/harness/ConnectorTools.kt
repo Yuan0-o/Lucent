@@ -35,6 +35,7 @@ data class HttpBytes(
 
 object HttpJson {
 
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private val prettyPrinter = Json { prettyPrint = true; prettyPrintIndent = "  " }
 
     const val REPLY_BUDGET = 4000
@@ -1127,7 +1128,7 @@ object ConnectorTools : HarnessGroupTools {
                 problem(reply, "GitLab")?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
                 val created = issue?.get("web_url")?.jsonPrimitive?.content.orEmpty()
-                val createdIid = issue?.get("iid")?.jsonPrimitive?.intOrNull ?: 0 ?: 0
+                val createdIid = issue?.get("iid")?.jsonPrimitive?.intOrNull ?: 0
                 if (createdIid > 0) {
                     ToolExecResult("Created issue !$createdIid $created".trim())
                 } else {

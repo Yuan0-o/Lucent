@@ -428,7 +428,7 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val issue = HttpJson.objectOf(reply.body)
                 val created = (issue?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
-                val createdNumber = (issue?.get("number")?.jsonPrimitive?.intOrNull ?: 0) ?: 0
+                val createdNumber = (issue?.get("number")?.jsonPrimitive?.intOrNull ?: 0)
                 if (createdNumber > 0) {
                     ToolExecResult("Created #$createdNumber $created".trim())
                 } else {
@@ -522,7 +522,7 @@ object GitHubTools : HarnessGroupTools {
                 problem(reply)?.let { return it }
                 val pull = HttpJson.objectOf(reply.body)
                 val created = (pull?.get("html_url")?.jsonPrimitive?.content ?: "").orEmpty()
-                val createdNumber = (pull?.get("number")?.jsonPrimitive?.intOrNull ?: 0) ?: 0
+                val createdNumber = (pull?.get("number")?.jsonPrimitive?.intOrNull ?: 0)
                 if (createdNumber > 0) {
                     ToolExecResult("Created #$createdNumber $created".trim())
                 } else {

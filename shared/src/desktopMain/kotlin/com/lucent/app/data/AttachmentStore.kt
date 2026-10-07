@@ -20,7 +20,7 @@ actual object AttachmentStore {
     private const val COPY_BUFFER = 64 * 1024
 
     actual fun baseDir(context: PlatformContext): PlatformFile {
-        val ctx = context as PlatformContext
+        val ctx = context
         return PlatformFile((ctx.applicationContext.filesDir / DIR_NAME).also { okio.FileSystem.SYSTEM.createDirectories(it) }.toString())
     }
 
@@ -76,7 +76,7 @@ actual object AttachmentStore {
     }
 
     actual fun readBytes(context: PlatformContext, id: String, maxBytes: Long): ByteArray? {
-        val input = openInputStream(context, id) as? java.io.InputStream ?: return null
+        val input = openInputStream(context, id) ?: return null
         return try {
             input.use { stream ->
                 val out = java.io.ByteArrayOutputStream()
@@ -126,7 +126,7 @@ actual object AttachmentStore {
             if (run { try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false } }) {
                 true
             } else {
-                if (run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } } && run { try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false } }) true else { run { try { okio.FileSystem.SYSTEM.delete(temp); true } catch (e: Exception) { false } }; false }
+                if (run { try { okio.FileSystem.SYSTEM.delete(file); true } catch (e: Exception) { false } } && run { try { okio.FileSystem.SYSTEM.atomicMove(temp, file); true } catch (e: Exception) { false } }) true else { try { okio.FileSystem.SYSTEM.delete(temp) } catch (e: Exception) { }; false }
             }
         } catch (t: Throwable) {
             try { okio.FileSystem.SYSTEM.delete((file.parent!!.toString() + "/" + "${file.name}.enc.tmp").toPath()) } catch (e: Exception) {}
@@ -141,7 +141,7 @@ actual object AttachmentStore {
 
     actual fun pruneOrphans(context: PlatformContext, referencedIds: Set<String>) {
         baseDir(context).listFiles()?.forEach { file ->
-            if (file.name !in referencedIds && looksLikeId(file.name)) run { try { okio.FileSystem.SYSTEM.delete(file.toString().toPath()); true } catch (e: Exception) { false } }
+            if (file.name !in referencedIds && looksLikeId(file.name)) { try { okio.FileSystem.SYSTEM.delete(file.toString().toPath()) } catch (e: Exception) {} }
         }
     }
 

@@ -956,7 +956,7 @@ private fun cellEntries(row: XmlNode): List<Pair<XmlNode, Int>> {
     val out = mutableListOf<Pair<XmlNode, Int>>()
     var position = 0
     for (child in row.children) {
-        if (child is XmlNode && localName(child) == "c") {
+        if (localName(child) == "c") {
             position++
             val declared = parseRefOrNull(attr(child, "r"))
             out.add(child to (declared?.col ?: position))
@@ -1421,10 +1421,8 @@ private fun addOrderedXml(
 private fun indexOfChild(parent: XmlNode, child: XmlNode): Int {
     var index = 0
     for (node in parent.children) {
-        if (node is XmlNode) {
-            if (node === child) return index
-            index++
-        }
+        if (node === child) return index
+        index++
 }
     return -1
 }
