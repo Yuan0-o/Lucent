@@ -173,9 +173,6 @@ jobs:
       - name: Run Android lint
         run: ./gradlew :app:lintRelease --no-daemon --console=plain
 
-      - name: Generate Room exported schemas
-        run: ./gradlew :app:kspDebugKotlin --no-daemon --console=plain
-
       - name: Summarise test results
         if: always()
         run: python3 tools/test_report_summary.py app/build/test-results/testDebugUnitTest "Android"
@@ -193,7 +190,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: room-schemas
-          path: app/schemas
+          path: shared/schemas
           if-no-files-found: ignore
 
       - name: Upload Android test reports

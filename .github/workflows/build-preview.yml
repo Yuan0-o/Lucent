@@ -252,6 +252,10 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
+      - name: Guard - Room implementation must be in the release build
+        run: |
+          grep -q "com.lucent.app.data.AndroidAppDatabase_Impl" app/build/outputs/mapping/release/mapping.txt || { echo "::error::AndroidAppDatabase_Impl missing from release build"; exit 1; }
+
       - name: Upload R8 mapping
         if: always()
         uses: actions/upload-artifact@v6
