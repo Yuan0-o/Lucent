@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 val buildIdDir = layout.buildDirectory.dir("generated/buildId")
@@ -110,4 +111,12 @@ kotlin {
             }
         }
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+dependencies {
+    add("kspAndroid", libs.room.compiler)
 }

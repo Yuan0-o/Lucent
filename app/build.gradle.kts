@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.devtools.ksp")
     id("androidx.baselineprofile")
 }
 
@@ -59,13 +58,12 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.directories += layout.buildDirectory.dir("rustJniLibs").get().asFile.path
-            kotlin.directories += rootProject.file("shared/src/main/kotlin").path
         }
         getByName("test") {
             kotlin.directories += rootProject.file("shared/src/commonTest/kotlin").path
         }
         getByName("androidTest") {
-            assets.directories += "$projectDir/schemas"
+            assets.directories += rootProject.file("shared/schemas").path
         }
     }
 
@@ -130,10 +128,6 @@ kotlin {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
-
 val rustProjectDir = rootProject.file("rust")
 val rustOutDir = layout.buildDirectory.dir("rustJniLibs")
 
@@ -190,7 +184,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.room.runtime)
-    ksp(libs.room.compiler)
 
     implementation(libs.sqlcipher.android)
     implementation(libs.sqlite.ktx)
