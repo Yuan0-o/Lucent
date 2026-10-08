@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: No comments, balanced brackets, no oversized files
         run: python3 tools/code_hygiene_check.py
 
@@ -39,6 +42,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - uses: actions/setup-java@v5
         with:
@@ -79,6 +85,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - uses: actions/setup-java@v5
         with:
@@ -127,6 +136,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - uses: actions/setup-java@v5
         with:
@@ -192,6 +204,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Download desktop test results
         continue-on-error: true
