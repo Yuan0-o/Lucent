@@ -30,7 +30,7 @@ class DataKeysSqlCipherTest {
     }
 
     private fun openTestDatabase(context: Context, passphrase: String): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, TEST_DB_NAME)
+        Room.databaseBuilder(context, AndroidAppDatabase::class.java, TEST_DB_NAME)
             .openHelperFactory(SupportOpenHelperFactory(passphrase.toByteArray(Charsets.UTF_8)))
             .build()
 
