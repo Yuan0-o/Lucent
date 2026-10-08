@@ -296,6 +296,12 @@ jobs:
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
+      - name: Create sccache cache directory
+        shell: pwsh
+        run: |
+          $dir = if ($env:SCCACHE_DIR) { $env:SCCACHE_DIR } else { "$env:LOCALAPPDATA\Mozilla\sccache" }
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
       - name: Resolve Gradle dependencies
         shell: pwsh
         run: |
