@@ -382,6 +382,7 @@ jobs:
           VULKAN_VERSION: 1.4.321.1
         run: |
           $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force -Path ".vulkan-installer" | Out-Null
           try {
             function Get-Installer([string]$url, [string]$dest) {
               curl.exe -fSL -o $dest $url
@@ -394,6 +395,7 @@ jobs:
             if (Test-Path $cached) { Copy-Item $cached $installer -Force }
             if (-not (Test-Path $installer)) {
               Get-Installer "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/VulkanSDK-$env:VULKAN_VERSION-Installer.exe" $installer
+              if (Test-Path $installer) { Copy-Item $installer $cached -Force }
             }
             if (Test-Path $installer) {
               $proc = Start-Process -Wait -PassThru -FilePath $installer -ArgumentList "--accept-licenses","--default-answer","--confirm-command","install" -ErrorAction Stop
@@ -447,7 +449,7 @@ jobs:
       - name: Cache WiX
         uses: actions/cache@v5
         with:
-          path: desktop/build/wixToolset
+          path: build/wixToolset
           key: wix311-compose
 
       - name: Package EXE
