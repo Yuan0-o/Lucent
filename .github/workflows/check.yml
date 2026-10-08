@@ -9,12 +9,12 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Mark workspace as safe for git
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v6
 
       - name: No comments, balanced brackets, no oversized files
         run: python3 tools/code_hygiene_check.py
@@ -43,12 +43,12 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Mark workspace as safe for git
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v5
         with:
@@ -88,12 +88,12 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Mark workspace as safe for git
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v5
         with:
@@ -141,12 +141,12 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Mark workspace as safe for git
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v5
         with:
@@ -211,12 +211,12 @@ jobs:
     if: always()
 
     steps:
-      - uses: actions/checkout@v6
-
       - name: Mark workspace as safe for git
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global init.defaultBranch main
+
+      - uses: actions/checkout@v6
 
       - name: Download desktop test results
         continue-on-error: true
