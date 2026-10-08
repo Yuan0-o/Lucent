@@ -59,7 +59,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Mark workspace as safe for git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global init.defaultBranch main
 
       - name: Resolve version
         id: resolve-version
@@ -269,7 +271,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Mark workspace as safe for git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global init.defaultBranch main
 
       - name: Resolve version
         id: resolve-version
@@ -503,7 +507,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Mark workspace as safe for git
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global init.defaultBranch main
 
       - name: Download EXE
         uses: actions/download-artifact@v6
