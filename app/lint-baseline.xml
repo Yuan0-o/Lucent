@@ -450,39 +450,6 @@
 
     <issue
         id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var highlightStart by remember { mutableStateOf(0) }"
-        errorLine2="                                     ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/lucent/app/ui/AssistantScreen.kt"
-            line="344"
-            column="38"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var highlightLen by remember { mutableStateOf(0) }"
-        errorLine2="                                   ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/lucent/app/ui/AssistantScreen.kt"
-            line="345"
-            column="36"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var highlightPulse by remember { mutableStateOf(0) }"
-        errorLine2="                                     ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/com/lucent/app/ui/AssistantScreen.kt"
-            line="347"
-            column="38"/>
-    </issue>
-
-    <issue
-        id="AutoboxingStateCreation"
         message="Prefer `mutableLongStateOf` instead of `mutableStateOf`"
         errorLine1="    var gateTick by remember { mutableStateOf(0L) }"
         errorLine2="                               ~~~~~~~~~~~~~~">
