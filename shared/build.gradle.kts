@@ -31,6 +31,10 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     dependsOn(generateBuildId)
 }
 
+tasks.withType<com.google.devtools.ksp.gradle.KspAATask>().configureEach {
+    dependsOn(generateBuildId)
+}
+
 kotlin {
     android {
         namespace = "com.lucent.shared"
