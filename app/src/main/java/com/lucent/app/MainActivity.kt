@@ -7,7 +7,20 @@ import android.os.Build
 import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.BackHandler
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.runtime.CompositionLocalProvider
 import com.lucent.app.platform.LocalPlatformContext
 import androidx.activity.SystemBarStyle
@@ -147,6 +160,31 @@ class MainActivity : FragmentActivity() {
             ?: com.lucent.app.LucentBuild.VERSION
     }
 
+    private fun startDatabaseInit() {
+        AppReady.databaseError = null
+        AppScope.io.launch {
+            try {
+                StartupProbe.step = "createAppDatabase"
+                val db = com.lucent.app.data.createAppDatabase(applicationContext)
+                StartupProbe.step = "DataCache.warm"
+                com.lucent.app.data.DataCache.warm(db)
+                StartupProbe.step = "AssistantController.ensureMessagesLoaded"
+                AssistantController.ensureMessagesLoaded(applicationContext)
+                StartupProbe.step = "done"
+                AppReady.databaseReady = true
+            } catch (t: CancellationException) {
+                throw t
+            } catch (t: Throwable) {
+                android.util.Log.e("LucentStartup", "database init failed at startup (step=${StartupProbe.step})", t)
+                StartupLog.event(
+                    applicationContext,
+                    "db: startup init failed in ${StartupProbe.step} (${t::class.simpleName}: ${t.message})"
+                )
+                AppReady.databaseError = "${t.javaClass.name}: ${t.message}\nstep=${StartupProbe.step}\n${android.util.Log.getStackTraceString(t)}"
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -202,7 +240,6 @@ class MainActivity : FragmentActivity() {
             StartupLog.event(applicationContext, "crash shield: preference read failed at startup (${t::class.simpleName}) - shield not installed this launch")
             false
         }
-        if (crashShieldWanted) com.lucent.app.data.CrashShield.install(applicationContext)
 
         val initialPalette = display.palette
         val initialFont = display.font
@@ -268,28 +305,7 @@ class MainActivity : FragmentActivity() {
         handleShareIntent(intent)
         handleWidgetIntent(intent)
 
-
-        AppScope.io.launch {
-            try {
-                StartupProbe.step = "createAppDatabase"
-                val db = com.lucent.app.data.createAppDatabase(applicationContext)
-                StartupProbe.step = "DataCache.warm"
-                com.lucent.app.data.DataCache.warm(db)
-                StartupProbe.step = "AssistantController.ensureMessagesLoaded"
-                AssistantController.ensureMessagesLoaded(applicationContext)
-                StartupProbe.step = "done"
-            } catch (t: CancellationException) {
-                throw t
-            } catch (t: Throwable) {
-                android.util.Log.e("LucentStartup", "database init failed at startup (step=${StartupProbe.step})", t)
-                StartupLog.event(
-                    applicationContext,
-                    "db: startup init failed in ${StartupProbe.step} (${t::class.simpleName}: ${t.message})"
-                )
-            } finally {
-                com.lucent.app.ui.AppReady.databaseReady = true
-            }
-        }
+        startDatabaseInit()
 
         AppScope.io.launch {
             AttachmentMigration.runIfNeeded(applicationContext)
@@ -351,19 +367,26 @@ class MainActivity : FragmentActivity() {
             }
             var splashAnimationFinished by rememberSaveable { mutableStateOf(false) }
             var appReady by remember { mutableStateOf(AppReady.databaseReady) }
+            LaunchedEffect(appReady) {
+                if (appReady && crashShieldWanted) {
+                    delay(2_000)
+                    com.lucent.app.data.CrashShield.install(applicationContext)
+                }
+            }
             LaunchedEffect(Unit) {
                 val startedAt = android.os.SystemClock.elapsedRealtime()
+                var watchdogLogged = false
                 while (!appReady) {
                     if (AppReady.databaseReady) {
                         appReady = true
-                    } else if (android.os.SystemClock.elapsedRealtime() - startedAt >= STARTUP_WATCHDOG_MS) {
-                        StartupLog.event(
-                            applicationContext,
-                            "startup: db gate still closed after ${STARTUP_WATCHDOG_MS}ms (step=${StartupProbe.step}); opening UI anyway"
-                        )
-                        AppReady.databaseReady = true
-                        appReady = true
                     } else {
+                        if (!watchdogLogged && android.os.SystemClock.elapsedRealtime() - startedAt >= STARTUP_WATCHDOG_MS) {
+                            watchdogLogged = true
+                            StartupLog.event(
+                                applicationContext,
+                                "startup: db gate still closed after ${STARTUP_WATCHDOG_MS}ms (step=${StartupProbe.step})"
+                            )
+                        }
                         delay(50)
                     }
                 }
@@ -479,7 +502,10 @@ class MainActivity : FragmentActivity() {
 
                     com.lucent.app.ui.GlobalTextSelectionContainer(enabledFlow = settingsRepo.globalTextSelectionEnabled) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            if (appReady) {
+                            val startupError = AppReady.databaseError
+                            if (startupError != null) {
+                                StartupFailureScreen(detail = startupError, onRetry = { startDatabaseInit() })
+                            } else if (appReady) {
                                 if (AppLockController.locked) {
                                     LockScreen(
                                         paletteColors = paletteColors,
@@ -502,7 +528,7 @@ class MainActivity : FragmentActivity() {
                                 )
                             }
 
-                            if (splashEnabled && !removeSplash) {
+                            if (splashEnabled && !removeSplash && startupError == null) {
                                 LucentSplash(
                                     paletteColors = paletteColors,
                                     backdropColor = backdropColor,
@@ -938,6 +964,71 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                 }
             )
             ShizukuNoticeDialog()
+        }
+    }
+}
+
+@Composable
+private fun StartupFailureScreen(detail: String, onRetry: () -> Unit) {
+    val isDark = isSystemInDarkTheme()
+    val colorScheme = if (isDark) darkColorScheme() else lightColorScheme()
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    MaterialTheme(colorScheme = colorScheme) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorScheme.background)
+                .systemBarsPadding()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Lucent 启动失败 / Startup failed",
+                style = MaterialTheme.typography.titleLarge,
+                color = colorScheme.onBackground
+            )
+            Text(
+                text = "数据库初始化出错。请不要卸载应用或清除数据，复制下面的信息用于排查。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colorScheme.onBackground
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(detail))
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        cm?.setPrimaryClip(ClipData.newPlainText("Lucent", detail))
+                    }
+                ) {
+                    Text("复制错误信息")
+                }
+                OutlinedButton(
+                    onClick = onRetry
+                ) {
+                    Text("重试")
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(
+                        if (isDark) Color(0xFF1E1E1E) else Color(0xFFF0F0F0),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = detail,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = colorScheme.onSurface
+                )
+            }
         }
     }
 }

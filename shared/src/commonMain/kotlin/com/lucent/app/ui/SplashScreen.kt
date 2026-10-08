@@ -47,6 +47,7 @@ import kotlin.math.sin
 
 object AppReady {
     var databaseReady by mutableStateOf(false)
+    var databaseError by mutableStateOf<String?>(null)
 }
 
 @Composable
