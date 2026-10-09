@@ -7,6 +7,7 @@ import android.content.Intent
 import com.lucent.app.platform.PlatformContext
 
 object WidgetUpdater {
+    @Suppress("DEPRECATION")
     fun refreshContent(context: PlatformContext) {
         val manager = AppWidgetManager.getInstance(context) ?: return
         val appContext = context.applicationContext

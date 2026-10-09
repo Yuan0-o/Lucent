@@ -159,6 +159,7 @@ class TaskSummaryWidget : AppWidgetProvider() {
 
 
 class TodayTasksWidget : AppWidgetProvider() {
+    @Suppress("DEPRECATION")
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_today_tasks).apply {

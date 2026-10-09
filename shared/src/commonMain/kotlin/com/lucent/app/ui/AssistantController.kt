@@ -981,7 +981,7 @@ class AssistantControllerImpl(
                         } else {
                             finalReply = forced.getOrThrow()
                             turn.recorder.endReasoningBlock()
-                            reportCacheUse(turn, finalReply.usage ?: com.lucent.app.network.TokenUsage.NONE)
+                            reportCacheUse(turn, finalReply.usage)
                         }
                     }
                     if (!errored) finalReply?.let { reply ->
