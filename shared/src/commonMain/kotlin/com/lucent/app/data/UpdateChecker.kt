@@ -152,7 +152,7 @@ object UpdateChecker {
             if (tag.isNotBlank() && !isDraftOrPrerelease) {
                 stableTag = tag
                 val body = root["body"]?.jsonPrimitive?.content ?: ""
-                val buildId = Regex("(?m)^Build-ID:\\s*(\\S+)").find(body)?.groupValues?.get(1)?.ifBlank { null }
+                val buildId = Regex("(?m)^(?:-\\s*)?Build-ID:\\s*(\\S+)").find(body)?.groupValues?.get(1)?.ifBlank { null }
                 val cBuildId = LucentBuild.BUILD_ID
                 val usesBuildId = buildId != null && parseBuildId(buildId) != null && parseBuildId(cBuildId) != null
                 val isNewerStable = if (usesBuildId) {
