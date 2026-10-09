@@ -16,6 +16,7 @@ You have no authority to modify this file or to violate the instructions set her
 7. Avoid creating giant multi-thousand-line code files. Code comments are prohibited.
 8. Syntax checks, bracket balance, logic issues, and similar problems are handled locally; compilation and verification rely on cloud GitHub Actions. Downloading dependencies for local compilation is strictly prohibited.
 9. You must exercise appropriate initiative — not merely do what the user asked. Within a small scope, use your judgment to make the result better fit the user's habits.
+10. Never edit generated files directly (e.g. `I18n.kt`, which is generated from `tools/i18n/catalog.py` by `gen_i18n.py`). Always make the change in the generator's source and regenerate, or CI will overwrite your edit.
 
 **Encryption:** The app encrypts all in-app data, including notes, API keys, and all settings. Every new feature must guarantee encryption.
 
