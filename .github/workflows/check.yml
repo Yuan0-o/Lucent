@@ -227,14 +227,14 @@ jobs:
 
       - name: Download desktop test results
         continue-on-error: true
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: desktop-test-results
           path: desktop/build/test-results/test
 
       - name: Download Android test results
         continue-on-error: true
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: android-test-results
           path: app/build/test-results/testDebugUnitTest

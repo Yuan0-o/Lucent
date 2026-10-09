@@ -303,12 +303,14 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.11
+        with:
+          disable_annotations: true
 
       - name: Create sccache cache directory
         shell: pwsh
@@ -512,13 +514,13 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download EXE
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: lucent-windows-exe
           path: artifacts/windows
 
       - name: Download APK
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: lucent-release-apk
           path: artifacts/apk
