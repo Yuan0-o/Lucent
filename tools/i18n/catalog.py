@@ -56,6 +56,14 @@ ENTRIES = [
     ("autoBackupWhyNoModels", "Local model files can be several gigabytes and can be downloaded again, so they are left out. Everything else — notes, tasks, chats, settings and attachments — is included.", "本地模型文件可能有数 GB，且可以重新下载，因此不纳入自动备份。其余内容——笔记、任务、聊天、设置和附件——全部包含。", "ローカルモデルのファイルは数ギガバイトになることがあり、再ダウンロードも可能なため除外しています。それ以外——メモ、タスク、チャット、設定、添付ファイル——はすべて含まれます。", "로컬 모델 파일은 수 기가바이트에 이를 수 있고 다시 내려받을 수 있으므로 제외합니다. 그 외 노트, 할 일, 채팅, 설정, 첨부 파일은 모두 포함됩니다."),
     ("autoBackupFailed(reason: String)", "Last automatic backup failed: {reason}", "上次自动备份失败：{reason}", "前回の自動バックアップに失敗しました：{reason}", "마지막 자동 백업 실패: {reason}"),
     ("autoBackupRunNow", "Back up now", "立即备份", "今すぐバックアップ", "지금 백업"),
+    ("autoBackupPasswordsTitle", "Backup passwords", "备份密码", "バックアップパスワード", "백업 비밀번호"),
+    ("autoBackupPasswordsDesc", "Set up to 3 passwords. Any one of them can decrypt your backups.", "最多可设置 3 个密码。任意一个均可解密你的备份。", "最大3つのパスワードを設定できます。いずれか1つで復号できます。", "최대 3개의 비밀번호를 설정할 수 있습니다. 그중 하나로 백업을 복호화할 수 있습니다."),
+    ("autoBackupPasswordSlot(index: Int)", "Password {index}", "密码 {index}", "パスワード {index}", "비밀번호 {index}"),
+    ("autoBackupAddPassword", "Add password", "添加密码", "パスワードを追加", "비밀번호 추가"),
+    ("autoBackupChangePassword", "Change password", "更改密码", "パスワードを変更", "비밀번호 변경"),
+    ("autoBackupRemovePassword", "Remove", "移除", "削除", "삭제"),
+    ("autoBackupMaxPasswords", "Up to 3 passwords supported", "最多支持 3 个密码", "パスワードは最大3つまで設定できます", "최대 3개의 비밀번호까지 지원됩니다"),
+    ("autoBackupWrongPassword", "Wrong password", "密码错误", "パスワードが違います", "잘못된 비밀번호"),
 
 
     ("importModeTitle", "If something is already here", "如果本机已有相同内容", "同じ内容が既にある場合", "같은 내용이 이미 있을 때"),
