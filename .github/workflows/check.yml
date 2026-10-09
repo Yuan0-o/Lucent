@@ -173,6 +173,16 @@ jobs:
       - name: Run Android lint
         run: ./gradlew :app:lintRelease --no-daemon --console=plain
 
+      - name: Upload lint SARIF report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lint-report
+          path: |
+            app/build/reports/lint-results-release.sarif
+            app/build/reports/lint-results-release.html
+          if-no-files-found: ignore
+
       - name: Summarise test results
         if: always()
         run: python3 tools/test_report_summary.py app/build/test-results/testDebugUnitTest "Android"
