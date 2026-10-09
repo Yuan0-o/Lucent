@@ -633,7 +633,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
     var currentScreen by rememberSaveable { mutableStateOf(LastScreen.current) }
     val tabs = HomeTab.entries
     val currentTab = HomeTab.of(currentScreen)
-    val swipeChain = remember { listOf(Screen.Settings, Screen.Assistant, Screen.Notebooks, Screen.Notes, Screen.Tasks) }
+    val swipeChain = remember { listOf(Screen.Tasks, Screen.Notes, Screen.Notebooks, Screen.Assistant, Screen.Settings) }
     val pagerState = rememberPagerState(
         initialPage = swipeChain.indexOf(currentScreen).takeIf { it >= 0 } ?: 0,
         pageCount = { swipeChain.size }
