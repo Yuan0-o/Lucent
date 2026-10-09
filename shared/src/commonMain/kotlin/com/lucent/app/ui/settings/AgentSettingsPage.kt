@@ -42,12 +42,10 @@ fun AgentSettingsPage(onRoute: (SettingsRoute) -> Unit) {
     BackHeader(onBack = { onRoute(SettingsRoute.Advanced) })
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
-            ToolkitToggleRow(S.agentToolkitEnabled, S.agentToolkitEnabledSub, config.enabled, onGradient, onGradientMuted) {
-                update(config.copy(enabled = it))
-            }
-            if (!config.enabled) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(S.agentToolkitOffHint, color = onGradientMuted, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text(S.agentToolkitEnabled, color = onGradient, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(checked = config.enabled, onCheckedChange = { update(config.copy(enabled = it)) })
             }
         }
         if (config.enabled) {
