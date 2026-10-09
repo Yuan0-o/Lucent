@@ -81,8 +81,6 @@ fun AboutSettingsPage(
     )
     Spacer(modifier = Modifier.height(12.dp))
     AboutFooter(
-        versionName = versionName,
-        buildNumber = buildNumber,
         onOpenUrl = onOpenUrl,
         onLicences = { onRoute(SettingsRoute.Licences) }
     )
@@ -179,8 +177,6 @@ private fun AboutUpdateCard(
 
 @Composable
 private fun AboutFooter(
-    versionName: String,
-    buildNumber: String,
     onOpenUrl: ((String) -> Unit)?,
     onLicences: () -> Unit
 ) {
@@ -203,12 +199,6 @@ private fun AboutFooter(
         AboutLink("${S.aboutPrivacy}: ${S.aboutPrivacyOpen}", onGradient) {
             onOpenUrl?.invoke(LucentBuild.privacyPage(com.lucent.app.i18n.currentLanguageKey()))
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Lucent v$versionName (${S.aboutBuild} ${LucentBuild.BUILD_ID})",
-            color = onGradientMuted.copy(alpha = 0.6f),
-            fontSize = 10.sp
-        )
     }
 }
 
