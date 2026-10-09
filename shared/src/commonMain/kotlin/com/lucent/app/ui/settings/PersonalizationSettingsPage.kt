@@ -93,6 +93,45 @@ fun PersonalizationSettingsPage(
     Spacer(modifier = Modifier.height(12.dp))
 
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        if (webSearchChecked) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(S.webSearchEngineTitle, color = onGradient, fontSize = 16.sp)
+                    Text(S.webSearchEngineSub, color = onGradientMuted, fontSize = 12.sp)
+                }
+                Box {
+                    IconButton(onClick = { engineMenuOpen = true }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(engine.label, color = onGradient, fontSize = 13.sp)
+                            Icon(
+                                Icons.Default.ExpandMore,
+                                contentDescription = S.webSearchEngineTitle,
+                                tint = onGradient
+                            )
+                        }
+                    }
+                    DropdownMenu(expanded = engineMenuOpen, onDismissRequest = { engineMenuOpen = false }) {
+                        WebSearchEngine.PICKER.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label, fontSize = 14.sp) },
+                                leadingIcon = if (option == engine) {
+                                    { Icon(Icons.Default.Check, contentDescription = null) }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    engineMenuOpen = false
+                                    SettingsCache.webSearchEngine = option.key
+                                    AppScope.io.launch { repo.setWebSearchEngine(option.key) }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
         ToggleRow(
             title = S.typingHapticsTitle,
             detail = S.typingHapticsSub,
@@ -145,45 +184,6 @@ fun PersonalizationSettingsPage(
             ) { on ->
                 SettingsCache.webSearchEnabled = on
                 AppScope.io.launch { repo.setWebSearchEnabled(on) }
-            }
-
-            if (webSearchChecked) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(S.webSearchEngineTitle, color = onGradient, fontSize = 14.sp)
-                        Text(S.webSearchEngineSub, color = onGradientMuted, fontSize = 12.sp)
-                    }
-                    Box {
-                        IconButton(onClick = { engineMenuOpen = true }) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(engine.label, color = onGradient, fontSize = 13.sp)
-                                Icon(
-                                    Icons.Default.ExpandMore,
-                                    contentDescription = S.webSearchEngineTitle,
-                                    tint = onGradient
-                                )
-                            }
-                        }
-                        DropdownMenu(expanded = engineMenuOpen, onDismissRequest = { engineMenuOpen = false }) {
-                            WebSearchEngine.PICKER.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.label, fontSize = 14.sp) },
-                                    leadingIcon = if (option == engine) {
-                                        { Icon(Icons.Default.Check, contentDescription = null) }
-                                    } else {
-                                        null
-                                    },
-                                    onClick = {
-                                        engineMenuOpen = false
-                                        SettingsCache.webSearchEngine = option.key
-                                        AppScope.io.launch { repo.setWebSearchEngine(option.key) }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
 
