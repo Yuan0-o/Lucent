@@ -1,5 +1,9 @@
 package com.lucent.app.i18n
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 
 enum class AppLanguage(val key: String, val label: String) {
     SYSTEM("system", "System"),
@@ -24,7 +28,7 @@ enum class AppLanguage(val key: String, val label: String) {
 }
 
 object L {
-    @Volatile var current: Tr = resolve(AppLanguage.SYSTEM)
+    var current: Tr by mutableStateOf(resolve(AppLanguage.SYSTEM))
         private set
 
     var language: AppLanguage = AppLanguage.SYSTEM
@@ -1703,6 +1707,13 @@ open class Tr {
     open val agentPluginsUnavailable: String = "This build cannot install plugins."
     open val pluginDetailTitle: String = "Shell output"
     open val pluginOutputTitle: String = "Live output"
+    open val setupInstallFailedTitle: String = "Installation failed"
+    open val setupInstallReasonNetwork: String = "The download failed, which usually means a network problem. Check your connection and try again."
+    open val setupInstallReasonDpkg: String = "The system package manager reported an error. This is usually caused by low disk space, conflicting packages, or a previous installation that was interrupted."
+    open val setupInstallReasonGeneric: String = "The installation did not finish. Check the output above for details, then try again."
+    open val setupInstallStepCheckNetwork: String = "Check the network connection, then retry"
+    open val setupInstallStepFreeDisk: String = "Free up disk space, then retry"
+    open val setupInstallStepRetry: String = "Tap Retry to run the installation again"
     open val pluginReasonCancelled: String = "The operation was cancelled before it finished."
     open val pluginPreflightTitle: String = "Preflight check"
     open val pluginPreflightBlocked: String = "Lucent checked first and found a problem:"
@@ -3261,7 +3272,7 @@ object Zh : Tr() {
     override val splashStyleCatDesc: String = "小猫招手、眨眼，随后化作玻璃。"
     override val splashStylePenTitle: String = "钢笔"
     override val splashStylePenDesc: String = "一支钢笔居中写出花体字，随后墨迹慢慢淡去。"
-    override val splashStyleAvatarTitle: String = "乔利（Jolly）"
+    override val splashStyleAvatarTitle: String = "乔利"
     override val splashStyleAvatarDesc: String = "Jolly 招手、眨眼，随后化作玻璃。"
     override val shizukuInstallTitle: String = "安装 Shizuku"
     override val shizukuInstallBody: String = "此设备尚未安装 Shizuku。请从官方 GitHub 发布页安装，然后重新开启高级开关。"
@@ -3501,6 +3512,13 @@ object Zh : Tr() {
     override val agentPluginsUnavailable: String = "此版本无法安装插件。"
     override val pluginDetailTitle: String = "shell 输出"
     override val pluginOutputTitle: String = "实时输出"
+    override val setupInstallFailedTitle: String = "安装失败"
+    override val setupInstallReasonNetwork: String = "下载失败，通常是网络问题。请检查网络连接后重试。"
+    override val setupInstallReasonDpkg: String = "系统包管理器报错，通常是磁盘空间不足、软件包冲突或上次安装被中断导致的。"
+    override val setupInstallReasonGeneric: String = "安装未能完成，请查看上方的输出了解详情，然后重试。"
+    override val setupInstallStepCheckNetwork: String = "检查网络连接后重试"
+    override val setupInstallStepFreeDisk: String = "清理磁盘空间后重试"
+    override val setupInstallStepRetry: String = "点击「重试」重新执行安装"
     override val pluginReasonCancelled: String = "操作在完成前被取消。"
     override val pluginPreflightTitle: String = "安装前检查"
     override val pluginPreflightBlocked: String = "Lucent 先检查了一遍，发现了一个问题："
@@ -5056,7 +5074,7 @@ object Ja : Tr() {
     override val splashStyleCatDesc: String = "ねこが手を振り、まばたきし、ガラスになります。"
     override val splashStylePenTitle: String = "ペン"
     override val splashStylePenDesc: String = "ペンが中央に筆記体で名前を書き、インクがゆっくり消えていきます。"
-    override val splashStyleAvatarTitle: String = "ジョリー（Jolly）"
+    override val splashStyleAvatarTitle: String = "ジョリー"
     override val splashStyleAvatarDesc: String = "Jollyが手を振り、まばたきし、ガラスになります。"
     override val shizukuInstallTitle: String = "Shizuku をインストール"
     override val shizukuInstallBody: String = "この端末に Shizuku がまだありません。公式 GitHub リリースからインストールし、詳細設定のスイッチを入れ直してください。"
@@ -5296,6 +5314,13 @@ object Ja : Tr() {
     override val agentPluginsUnavailable: String = "このビルドではプラグインをインストールできません。"
     override val pluginDetailTitle: String = "シェル出力"
     override val pluginOutputTitle: String = "ライブ出力"
+    override val setupInstallFailedTitle: String = "インストールに失敗しました"
+    override val setupInstallReasonNetwork: String = "ダウンロードに失敗しました。ネットワークの問題が考えられます。接続を確認して再試行してください。"
+    override val setupInstallReasonDpkg: String = "システムのパッケージマネージャーがエラーを報告しました。ディスク容量不足、パッケージの競合、または前回のインストールの中断が原因の可能性があります。"
+    override val setupInstallReasonGeneric: String = "インストールが完了しませんでした。上の出力を確認してから再試行してください。"
+    override val setupInstallStepCheckNetwork: String = "ネットワーク接続を確認して再試行する"
+    override val setupInstallStepFreeDisk: String = "ディスク容量を確保してから再試行する"
+    override val setupInstallStepRetry: String = "「再試行」をタップしてインストールをやり直す"
     override val pluginReasonCancelled: String = "操作が完了する前にキャンセルされました。"
     override val pluginPreflightTitle: String = "事前チェック"
     override val pluginPreflightBlocked: String = "Lucent が事前に確認し、問題を見つけました："
@@ -6851,7 +6876,7 @@ object Ko : Tr() {
     override val splashStyleCatDesc: String = "고양이가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."
     override val splashStylePenTitle: String = "펜"
     override val splashStylePenDesc: String = "펜이 가운데에 필기체로 이름을 쓰고, 잉크가 천천히 사라집니다."
-    override val splashStyleAvatarTitle: String = "졸리 (Jolly)"
+    override val splashStyleAvatarTitle: String = "졸리"
     override val splashStyleAvatarDesc: String = "Jolly가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."
     override val shizukuInstallTitle: String = "Shizuku 설치"
     override val shizukuInstallBody: String = "이 기기에 아직 Shizuku가 없습니다. 공식 GitHub 릴리스에서 설치한 뒤 고급 스위치를 다시 켜세요."
@@ -7091,6 +7116,13 @@ object Ko : Tr() {
     override val agentPluginsUnavailable: String = "이 빌드에서는 플러그인을 설치할 수 없습니다."
     override val pluginDetailTitle: String = "셸 출력"
     override val pluginOutputTitle: String = "실시간 출력"
+    override val setupInstallFailedTitle: String = "설치 실패"
+    override val setupInstallReasonNetwork: String = "다운로드에 실패했습니다. 네트워크 문제일 가능성이 높습니다. 연결을 확인한 뒤 다시 시도하세요."
+    override val setupInstallReasonDpkg: String = "시스템 패키지 관리자에서 오류가 발생했습니다. 디스크 공간 부족, 패키지 충돌 또는 이전 설치 중단이 원인인 경우가 많습니다."
+    override val setupInstallReasonGeneric: String = "설치가 완료되지 않았습니다. 위의 출력을 확인한 뒤 다시 시도하세요."
+    override val setupInstallStepCheckNetwork: String = "네트워크 연결을 확인한 뒤 다시 시도"
+    override val setupInstallStepFreeDisk: String = "디스크 공간을 확보한 뒤 다시 시도"
+    override val setupInstallStepRetry: String = "다시 시도를 눌러 설치를 다시 실행"
     override val pluginReasonCancelled: String = "작업이 완료되기 전에 취소되었습니다."
     override val pluginPreflightTitle: String = "설치 전 검사"
     override val pluginPreflightBlocked: String = "Lucent가 먼저 확인해 문제를 찾았습니다:"
