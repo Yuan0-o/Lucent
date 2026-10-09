@@ -138,7 +138,6 @@ class ProviderAdapterTest {
 
     @Test
     fun `openai reply tolerates null usage and null message fields`() {
-        // Regression: JsonNull must not crash the parser ("Element ... is not a JsonObject").
         val json = """{"choices":[{"message":{"content":null,"tool_calls":null}}],"usage":null}"""
         val reply = OpenAiAdapter.parseReply(json)
         assertEquals(null, reply.text)
