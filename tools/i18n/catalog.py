@@ -1507,7 +1507,7 @@ ENTRIES = [
     ("splashStylePenTitle", "The pen", "钢笔", "ペン", "펜"),
     ("splashStylePenDesc", "A pen writes the name in script, then the ink fades away.", "一支钢笔居中写出花体字，随后墨迹慢慢淡去。", "ペンが中央に筆記体で名前を書き、インクがゆっくり消えていきます。", "펜이 가운데에 필기체로 이름을 쓰고, 잉크가 천천히 사라집니다."),
     ("splashStyleAvatarTitle", "Jolly", "乔利", "ジョリー", "졸리"),
-    ("splashStyleAvatarDesc", "Jolly waves hello, blinks, and turns to glass.", "Jolly 招手、眨眼，随后化作玻璃。", "Jollyが手を振り、まばたきし、ガラスになります。", "Jolly가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."),
+    ("splashStyleAvatarDesc", "Jolly waves hello, blinks, and turns to glass.", "乔利招手、眨眼，随后化作玻璃。", "ジョリーが手を振り、まばたきし、ガラスになります。", "졸리가 손을 흔들고 눈을 깜빡인 뒤 유리로 변합니다."),
 
     ("shizukuInstallTitle", "Install Shizuku", "安装 Shizuku", "Shizuku をインストール", "Shizuku 설치"),
     ("shizukuInstallBody", "Shizuku is not on this device yet. Install it from its official GitHub releases, then turn the Advanced switch on again.", "此设备尚未安装 Shizuku。请从官方 GitHub 发布页安装，然后重新开启高级开关。", "この端末に Shizuku がまだありません。公式 GitHub リリースからインストールし、詳細設定のスイッチを入れ直してください。", "이 기기에 아직 Shizuku가 없습니다. 공식 GitHub 릴리스에서 설치한 뒤 고급 스위치를 다시 켜세요."),
