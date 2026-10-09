@@ -82,7 +82,16 @@ private suspend fun writeBackup(context: PlatformContext, folderUri: String, nam
             override fun flush() = out.flush()
             override fun close() = out.close()
         }
-        BackupManager.exportEncrypted(context, db, settings, mirrored.sink(), null)
+        val passwords = settings.autoBackupPasswordsOnce()
+        if (passwords.isNotEmpty()) {
+            val q = settings.autoBackupRecoveryQuestionOnce()
+            val a = settings.autoBackupRecoveryAnswerOnce()
+            val dek = secureRandomBytes(32)
+            val envelope = if (q.isNotBlank() && a.isNotBlank()) BackupRecovery.createForKey(q, a, dek) else null
+            BackupManager.exportEncrypted(context, db, settings, mirrored.sink(), password = null, passwords = passwords, recovery = envelope, dek = dek)
+        } else {
+            BackupManager.exportEncrypted(context, db, settings, mirrored.sink(), null)
+        }
         val cloudOn = runCatching {
             val repo = createSettingsRepository(context)
             repo.cloudEnabled.first() && repo.cloudAutoBackup.first() &&
