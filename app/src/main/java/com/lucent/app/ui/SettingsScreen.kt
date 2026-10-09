@@ -1,7 +1,7 @@
 package com.lucent.app.ui
 import com.lucent.app.platform.applicationContext
 
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +47,7 @@ import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -2244,7 +2245,7 @@ fun SettingsScreen(active: Boolean = true) {
                 context.startActivity(
                     android.content.Intent(
                         android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        android.net.Uri.parse("package:" + context.packageName)
+                        ("package:" + context.packageName).toUri()
                     )
                 )
             }
@@ -2511,7 +2512,7 @@ fun SettingsScreen(active: Boolean = true) {
                 repo = repo,
                 onRoute = { navigate(it) },
                 onOpenUrl = { url ->
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri())
                     context.startActivity(intent)
                 },
                 versionName = appVersionName,
@@ -2521,7 +2522,7 @@ fun SettingsScreen(active: Boolean = true) {
             SettingsRoute.Licences -> LicenceSettingsPage(
                 onRoute = { navigate(it) },
                 onOpenUrl = { url ->
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri())
                     context.startActivity(intent)
                 }
             )
@@ -2554,7 +2555,7 @@ fun SettingsScreen(active: Boolean = true) {
                 onOpenUrl = { url ->
                     runCatching {
                         context.startActivity(
-                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri())
                         )
                     }
                 },
@@ -2571,7 +2572,7 @@ fun SettingsScreen(active: Boolean = true) {
                 var shizukuReady by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isReady()) }
                 var shizukuRunning by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isServiceRunning()) }
                 var shizukuInstalled by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.isInstalled(context)) }
-                var shizukuUid by remember { mutableStateOf(com.lucent.app.data.ShizukuShell.privilegeUid()) }
+                var shizukuUid by remember { mutableIntStateOf(com.lucent.app.data.ShizukuShell.privilegeUid()) }
                 val refreshShizuku = {
                     shizukuRunning = com.lucent.app.data.ShizukuShell.isServiceRunning()
                     shizukuInstalled = com.lucent.app.data.ShizukuShell.isInstalled(context)

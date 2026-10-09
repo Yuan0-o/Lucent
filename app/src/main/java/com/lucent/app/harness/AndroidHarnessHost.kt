@@ -21,7 +21,6 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.location.LocationManager
 import android.media.AudioManager
-import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
@@ -35,6 +34,8 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import com.lucent.app.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -85,7 +86,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
             out.add("screenshot")
             out.add("screen")
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) out.add("torch")
+        out.add("torch")
         out.add("sensors")
         out.add("location")
         return out
@@ -95,7 +96,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
         if (LucentAccessibilityService.isRunning()) "" else "Turn the Lucent accessibility service on to read the screen and tap."
 
     override fun openUrl(url: String): Boolean = try {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
         true
@@ -152,12 +153,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         } ?: return false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(millis.coerceIn(30, 3000), VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(millis)
-        }
+        vibrator.vibrate(VibrationEffect.createOneShot(millis.coerceIn(30, 3000), VibrationEffect.DEFAULT_AMPLITUDE))
         true
     } catch (t: Throwable) {
         false
@@ -230,6 +226,7 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
         outcome.ok
     }
 
+    @Suppress("QueryPermissionsNeeded")
     override suspend fun installedApps(query: String): String = withContext(Dispatchers.IO) {
         val manager = context.packageManager
         val packages = try {
@@ -404,14 +401,13 @@ class AndroidHarnessHost(private val context: Context) : HarnessHost {
     }
 
     override suspend fun renderPdfPage(path: String, page: Int, width: Int): ByteArray? = withContext(Dispatchers.IO) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return@withContext null
         try {
             PdfRenderer(ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)).use { renderer ->
                 if (page < 1 || page > renderer.pageCount) return@withContext null
                 renderer.openPage(page - 1).use { pdfPage ->
                     val target = width.coerceIn(200, 3000)
                     val height = (target.toFloat() / pdfPage.width * pdfPage.height).toInt().coerceAtLeast(1)
-                    val bitmap = Bitmap.createBitmap(target, height, Bitmap.Config.ARGB_8888)
+                    val bitmap = createBitmap(target, height)
                     bitmap.eraseColor(Color.WHITE)
                     pdfPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     val out = java.io.ByteArrayOutputStream()

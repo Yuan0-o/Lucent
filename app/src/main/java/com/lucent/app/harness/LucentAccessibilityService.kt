@@ -143,9 +143,7 @@ class LucentAccessibilityService : AccessibilityService() {
                 "recents", "recent" -> AccessibilityService.GLOBAL_ACTION_RECENTS
                 "notifications", "notification" -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
                 "quicksettings", "settings" -> AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
-                "lock", "lockscreen" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN
-                } else -1
+                "lock", "lockscreen" -> AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN
                 else -> -1
             }
             if (action < 0) return false

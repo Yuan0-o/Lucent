@@ -114,6 +114,11 @@ android {
     lint {
         abortOnError = true
         baseline = file("lint-baseline.xml")
+        disable += listOf(
+            "NewerVersionAvailable",
+            "GradleDependency",
+            "AndroidGradlePluginVersion"
+        )
     }
 }
 
@@ -192,14 +197,14 @@ dependencies {
 
     implementation(libs.okhttp)
 
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
-    implementation("dev.rikka.shizuku:aidl:13.1.5")
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
+    implementation(libs.shizuku.aidl)
 
     implementation(libs.haze)
     implementation(libs.haze.materials)
 
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.4.0")
+    testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.org.json)
     testImplementation(libs.kotlinx.serialization.json)
 
@@ -211,6 +216,6 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":baselineprofile"))
 
-    implementation("org.apache.commons:commons-compress:1.27.1")
-    implementation("org.tukaani:xz:1.10")
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
 }

@@ -6,6 +6,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -218,7 +220,7 @@ class MainActivity : FragmentActivity() {
         } else {
             themeChoice.backdrop(systemDark)
         }
-        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(initialBackdropColor.toArgb()))
+        window.setBackgroundDrawable(initialBackdropColor.toArgb().toDrawable())
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -957,7 +959,7 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                         (owner as? Activity)?.startActivity(
                             android.content.Intent(
                                 android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse(url)
+                                url.toUri()
                             )
                         )
                     }

@@ -8,7 +8,6 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.net.Uri
 import android.os.IBinder
 import android.provider.DocumentsContract
 import androidx.core.app.NotificationChannelCompat
@@ -16,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.lucent.app.data.AutoUpdate
 import com.lucent.app.data.ReleaseAsset
 import com.lucent.app.data.SettingsCache
@@ -71,7 +71,7 @@ class UpdateDownloadService : Service() {
             val folder = SettingsCache.autoBackup.folderUri
             if (folder.isBlank()) return false
             return try {
-                val tree = Uri.parse(folder)
+                val tree = folder.toUri()
                 val resolver = context.contentResolver
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(
                     tree,
@@ -233,7 +233,7 @@ class UpdateDownloadService : Service() {
         val folder = SettingsCache.autoBackup.folderUri
         if (folder.isBlank()) return false
         return try {
-            val tree = Uri.parse(folder)
+            val tree = folder.toUri()
             val resolver = contentResolver
             val existing = findChild(resolver, tree, name)
             val parent = DocumentsContract.buildDocumentUriUsingTree(
@@ -287,6 +287,7 @@ class UpdateDownloadService : Service() {
         null
     }
 
+    @Suppress("InlinedApi")
     private fun promoteToForeground(percent: Int) {
         createChannel()
         val label = if (percent < 0) com.lucent.app.i18n.S.updateNotifPreparing

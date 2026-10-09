@@ -3,7 +3,7 @@ package com.lucent.app.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import androidx.core.net.toUri
 import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -128,7 +128,7 @@ object ShizukuShell : PrivilegedShell.PrivilegedShellProvider {
     fun openDownloadPage(context: Context?): Boolean {
         if (context == null) return false
         return try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(DOWNLOAD_PAGE))
+            val intent = Intent(Intent.ACTION_VIEW, DOWNLOAD_PAGE.toUri())
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
             true

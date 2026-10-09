@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Box
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
+import androidx.core.graphics.scale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -102,11 +102,9 @@ private fun downscaleImageFileInPlace(file: File, mime: String, maxDim: Int = MA
         val decoded = decodeSampledBitmapFromFile(file, maxDim) ?: return mime
         val scale = maxDim.toFloat() / maxOf(decoded.width, decoded.height).toFloat()
         val scaled = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                decoded,
+            decoded.scale(
                 (decoded.width * scale).toInt().coerceAtLeast(1),
-                (decoded.height * scale).toInt().coerceAtLeast(1),
-                true
+                (decoded.height * scale).toInt().coerceAtLeast(1)
             )
         } else decoded
 
