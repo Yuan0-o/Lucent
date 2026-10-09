@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -946,6 +948,15 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
                     KeepAliveTabs(pagerState = pagerState, modifier = contentModifier)
                 }
             }
+            }
+
+            if (com.lucent.app.AppNavigation.terminalOpen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .background(Color.Black)
+                )
             }
 
             ShareIntakeDialog()
