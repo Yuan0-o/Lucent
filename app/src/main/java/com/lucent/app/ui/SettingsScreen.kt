@@ -373,6 +373,10 @@ fun SettingsScreen(active: Boolean = true) {
     var importPasswordPrompt by remember { mutableStateOf(false) }
     var importPasswordDraft by remember { mutableStateOf("") }
     var importPasswordError by remember { mutableStateOf(false) }
+    var importHeader by remember { mutableStateOf<com.lucent.app.data.BackupCrypto.Header?>(null) }
+    var importRecoveryMode by remember { mutableStateOf(false) }
+    var importAnswerDraft by remember { mutableStateOf("") }
+    var importAnswerError by remember { mutableStateOf(false) }
     var importPreview by remember { mutableStateOf<BackupManager.BackupPreview?>(null) }
     var importResultSheet by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var backupBusyLabel by remember { mutableStateOf<String?>(null) }
@@ -393,6 +397,10 @@ fun SettingsScreen(active: Boolean = true) {
         importSourceUri?.let { releaseImportGrant(it) }
         importSourceUri = null
         importPasswordPrompt = false
+        importHeader = null
+        importRecoveryMode = false
+        importAnswerDraft = ""
+        importAnswerError = false
     }
     val runRestore: (BackupManager.BackupPreview, Set<BackupManager.BackupModule>, Set<Long>?, Set<String>?) -> Unit =
         { preview, modules, convIds, apiNames ->
@@ -428,6 +436,10 @@ fun SettingsScreen(active: Boolean = true) {
                     }
                     importSourceUri = null
                     importPasswordPrompt = false
+                    importHeader = null
+                    importRecoveryMode = false
+                    importAnswerDraft = ""
+                    importAnswerError = false
                     sourceUri?.let { releaseImportGrant(it) }
                     backupBusyLabel = null
                     backupOpJob = null
@@ -1121,6 +1133,7 @@ fun SettingsScreen(active: Boolean = true) {
                     val source = uriSource(uri)
 
                     val header = BackupManager.peekPasswordRequirement(source)
+                    importHeader = header
                     if (header != null && header.needsPassword) {
                         val stored = repo.backupPassword.first()
                         val preview = if (stored.isEmpty()) null else withContext(Dispatchers.IO) {
@@ -1135,6 +1148,9 @@ fun SettingsScreen(active: Boolean = true) {
                         } else {
                             importPasswordDraft = ""
                             importPasswordError = false
+                            importRecoveryMode = false
+                            importAnswerDraft = ""
+                            importAnswerError = false
                             importPasswordPrompt = true
                         }
                     } else {
@@ -1170,65 +1186,140 @@ fun SettingsScreen(active: Boolean = true) {
     fun ImportPasswordDialog(uri: Uri) {
         AlertDialog(
             onDismissRequest = { discardImportSource() },
-            title = { Text(S.backupPasswordTitle) },
+            title = { Text(if (importRecoveryMode) S.backupRecoveryTitle else S.backupPasswordTitle) },
             text = {
                 Column {
-                    Text(S.backupPasswordBody, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = importPasswordDraft,
-                        onValueChange = { importPasswordDraft  = com.lucent.app.collapseExcessBlankLines(it); importPasswordError = false  },
-                        singleLine = true,
-                        isError = importPasswordError,
-                        enabled = !gateLockedOut && !gateWiping,
-                        visualTransformation = PasswordVisualTransformation(),
-                        label = { Text(if (importPasswordError) S.wrongPassword else S.lockPassword) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    SettingsGateFeedback()
+                    if (importRecoveryMode) {
+                        val question = importHeader?.recovery?.question.orEmpty()
+                        Text(question.ifBlank { S.lockSecurityQuestionFallback }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = importAnswerDraft,
+                            onValueChange = { importAnswerDraft = com.lucent.app.collapseExcessBlankLines(it); importAnswerError = false },
+                            singleLine = true,
+                            isError = importAnswerError,
+                            enabled = !gateLockedOut && !gateWiping,
+                            label = { Text(if (importAnswerError) S.backupRecoveryAnswerWrong else S.lockAnswer) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        SettingsGateFeedback()
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TextButton(onClick = {
+                            importRecoveryMode = false
+                            importAnswerError = false
+                            importAnswerDraft = ""
+                        }) {
+                            Text(S.biometricUsePassword)
+                        }
+                    } else {
+                        Text(S.backupPasswordBody, fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = importPasswordDraft,
+                            onValueChange = { importPasswordDraft = com.lucent.app.collapseExcessBlankLines(it); importPasswordError = false },
+                            singleLine = true,
+                            isError = importPasswordError,
+                            enabled = !gateLockedOut && !gateWiping,
+                            visualTransformation = PasswordVisualTransformation(),
+                            label = { Text(if (importPasswordError) S.wrongPassword else S.lockPassword) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        SettingsGateFeedback()
+                        if (importHeader?.hasRecovery == true) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TextButton(onClick = {
+                                importRecoveryMode = true
+                                importPasswordError = false
+                                importAnswerDraft = ""
+                                importAnswerError = false
+                            }) {
+                                Text(S.backupRecoveryForgot)
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = importPasswordDraft.isNotEmpty() && !gateLockedOut && !gateWiping,
+                    enabled = (if (importRecoveryMode) importAnswerDraft.isNotEmpty() else importPasswordDraft.isNotEmpty()) && !gateLockedOut && !gateWiping,
                     onClick = {
-                        val attempt = importPasswordDraft
-                        val job = scope.launch {
-                            backupBusyLabel = S.importingBackup
-                            try {
-                                val result = withContext(Dispatchers.IO) {
-                                    try {
-                                        Result.success(
-                                            BackupManager.inspect(context, uriSource(uri), attempt)
-                                        )
-                                    } catch (t: Throwable) {
-                                        Result.failure(t)
-                                    }
-                                }
-                                result.fold(
-                                    onSuccess = {
-                                        importPasswordPrompt = false
-                                        importPreview = it
-                                    },
-                                    onFailure = { error ->
-                                        if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
-                                            importPasswordError = true
-                                            chargeSettingsGate()
-                                        } else {
-                                            backupStatus = S.importFailed(error.message ?: "")
-                                            discardImportSource()
+                        if (importRecoveryMode) {
+                            val answer = importAnswerDraft
+                            val job = scope.launch {
+                                backupBusyLabel = S.importingBackup
+                                try {
+                                    val result = withContext(Dispatchers.IO) {
+                                        try {
+                                            Result.success(
+                                                BackupManager.inspectWithAnswer(context, uriSource(uri), answer)
+                                            )
+                                        } catch (t: Throwable) {
+                                            Result.failure(t)
                                         }
                                     }
-                                )
-                            } catch (e: kotlinx.coroutines.CancellationException) {
-                                discardImportSource()
-                                backupStatus = S.importCancelledStatus
-                            } finally {
-                                backupBusyLabel = null
-                                backupOpJob = null
+                                    result.fold(
+                                        onSuccess = {
+                                            importPasswordPrompt = false
+                                            importPreview = it
+                                        },
+                                        onFailure = { error ->
+                                            if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
+                                                importAnswerError = true
+                                                chargeSettingsGate()
+                                            } else {
+                                                backupStatus = S.importFailed(error.message ?: "")
+                                                discardImportSource()
+                                            }
+                                        }
+                                    )
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    discardImportSource()
+                                    backupStatus = S.importCancelledStatus
+                                } finally {
+                                    backupBusyLabel = null
+                                    backupOpJob = null
+                                }
                             }
+                            backupOpJob = job
+                        } else {
+                            val attempt = importPasswordDraft
+                            val job = scope.launch {
+                                backupBusyLabel = S.importingBackup
+                                try {
+                                    val result = withContext(Dispatchers.IO) {
+                                        try {
+                                            Result.success(
+                                                BackupManager.inspect(context, uriSource(uri), attempt)
+                                            )
+                                        } catch (t: Throwable) {
+                                            Result.failure(t)
+                                        }
+                                    }
+                                    result.fold(
+                                        onSuccess = {
+                                            importPasswordPrompt = false
+                                            importPreview = it
+                                        },
+                                        onFailure = { error ->
+                                            if (error is com.lucent.app.data.BackupCrypto.WrongPasswordException) {
+                                                importPasswordError = true
+                                                chargeSettingsGate()
+                                            } else {
+                                                backupStatus = S.importFailed(error.message ?: "")
+                                                discardImportSource()
+                                            }
+                                        }
+                                    )
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    discardImportSource()
+                                    backupStatus = S.importCancelledStatus
+                                } finally {
+                                    backupBusyLabel = null
+                                    backupOpJob = null
+                                }
+                            }
+                            backupOpJob = job
                         }
-                        backupOpJob = job
                     }
                 ) { Text(S.lockContinue) }
             },
