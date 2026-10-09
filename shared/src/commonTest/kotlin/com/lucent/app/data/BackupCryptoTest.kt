@@ -136,4 +136,67 @@ class BackupCryptoTest {
         assertEquals(16, header.salt.size)
         assertTrue(header.iterations > 0)
     }
+
+    @Test
+    fun multiPasswordRoundTripEachPasswordDecrypts() {
+        val passwords = listOf("first-pass", "second-pass", "third-pass")
+        val blob = BackupCrypto.encryptMultiPassword(payload, passwords, recovery = null)
+        assertTrue(BackupCrypto.looksEncrypted(blob))
+        val header = BackupCrypto.readHeader(blob)
+        assertNotNull(header)
+        assertEquals(BackupCrypto.VERSION_MULTI_PASSWORD, header.version)
+        assertEquals(BackupCrypto.Mode.PASSWORD, header.mode)
+        assertTrue(header.needsPassword)
+        assertFalse(header.hasRecovery)
+        assertEquals(3, header.slots.size)
+
+        for (pw in passwords) {
+            assertContentEquals(payload, BackupCrypto.decrypt(blob, password = pw))
+        }
+    }
+
+    @Test
+    fun multiPasswordWrongPasswordThrowsWrongPasswordException() {
+        val passwords = listOf("pass-one", "pass-two")
+        val blob = BackupCrypto.encryptMultiPassword(payload, passwords, recovery = null)
+        assertFailsWith<BackupCrypto.WrongPasswordException> {
+            BackupCrypto.decrypt(blob, password = "wrong-password")
+        }
+        assertFailsWith<BackupCrypto.WrongPasswordException> {
+            BackupCrypto.decrypt(blob, password = null)
+        }
+        assertFailsWith<BackupCrypto.WrongPasswordException> {
+            BackupCrypto.decrypt(blob, password = "")
+        }
+    }
+
+    @Test
+    fun multiPasswordRecoveryEnvelopeRoundTripViaAnswer() {
+        val dek = secureRandomBytes(32)
+        val envelope = BackupRecovery.createForKey("Your favorite constellation?", "Orion", dek)
+        assertNotNull(envelope)
+
+        val passwords = listOf("p1", "p2", "p3")
+        val blob = BackupCrypto.encryptMultiPassword(payload, passwords, recovery = envelope, dek = dek)
+        val header = BackupCrypto.readHeader(blob)
+        assertNotNull(header)
+        assertTrue(header.needsPassword)
+        assertTrue(header.hasRecovery)
+        assertEquals("Your favorite constellation?", header.recovery?.question)
+
+        for (pw in passwords) {
+            assertContentEquals(payload, BackupCrypto.decrypt(blob, password = pw))
+        }
+
+        val decryptedWithAnswer = BackupCrypto.decryptWithAnswer(blob, "Orion")
+        assertNotNull(decryptedWithAnswer)
+        assertContentEquals(payload, decryptedWithAnswer)
+
+        val decryptedCaseInsensitive = BackupCrypto.decryptWithAnswer(blob, "  orion  ")
+        assertNotNull(decryptedCaseInsensitive)
+        assertContentEquals(payload, decryptedCaseInsensitive)
+
+        assertNull(BackupCrypto.decryptWithAnswer(blob, "Ursa Major"))
+        assertNull(BackupCrypto.decryptWithAnswer(blob, ""))
+    }
 }
