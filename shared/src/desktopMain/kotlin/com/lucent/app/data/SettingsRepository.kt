@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.io.File
 
@@ -439,7 +442,7 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
         if (rawJson.isBlank()) emptyList()
         else {
             try {
-                val encList = kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                val encList = Json.decodeFromString<List<String>>(rawJson)
                 encList.mapNotNull { enc ->
                     if (enc.isEmpty()) null
                     else {
@@ -461,7 +464,7 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
             val rawJson = str(prefs, K.AUTO_BACKUP_PASSWORDS_ENC) ?: ""
             val current = try {
                 if (rawJson.isBlank()) mutableListOf()
-                else kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                else Json.decodeFromString<List<String>>(rawJson)
                     .map { LocalSecrets.decrypt(it) }
                     .filter { it.isNotEmpty() }
                     .toMutableList()
@@ -484,7 +487,7 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
                 prefs.remove(K.AUTO_BACKUP_PASSWORDS_ENC)
             } else {
                 val encList = updated.map { LocalSecrets.encrypt(it) }
-                prefs[K.AUTO_BACKUP_PASSWORDS_ENC] = kotlinx.serialization.json.Json.encodeToString(encList)
+                prefs[K.AUTO_BACKUP_PASSWORDS_ENC] = Json.encodeToString<List<String>>(encList)
             }
         }
     }

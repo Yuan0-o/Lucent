@@ -11,6 +11,9 @@ import com.lucent.app.platform.PlatformContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private val Context.settingsDataStore by preferencesDataStore(name = "lucent_settings")
 
@@ -506,7 +509,7 @@ class AndroidSettingsRepository(private val context: Context) : SettingsReposito
         if (rawJson.isBlank()) emptyList()
         else {
             try {
-                val encList = kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                val encList = Json.decodeFromString<List<String>>(rawJson)
                 encList.mapNotNull { enc ->
                     if (enc.isEmpty()) null
                     else {
@@ -528,7 +531,7 @@ class AndroidSettingsRepository(private val context: Context) : SettingsReposito
             val rawJson = prefs[SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC] ?: ""
             val current = try {
                 if (rawJson.isBlank()) mutableListOf()
-                else kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                else Json.decodeFromString<List<String>>(rawJson)
                     .map { LocalSecrets.decrypt(it) }
                     .filter { it.isNotEmpty() }
                     .toMutableList()
@@ -551,7 +554,7 @@ class AndroidSettingsRepository(private val context: Context) : SettingsReposito
                 prefs.remove(SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC)
             } else {
                 val encList = updated.map { LocalSecrets.encrypt(it) }
-                prefs[SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC] = kotlinx.serialization.json.Json.encodeToString(encList)
+                prefs[SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC] = Json.encodeToString<List<String>>(encList)
             }
         }
     }
