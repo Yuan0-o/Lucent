@@ -1621,7 +1621,6 @@ fun NotesScreen(active: Boolean = true) {
                             onHorizontalDrag = { change, dragAmount ->
                                 if (armed) {
                                     val idx = swipeList.indexOfFirst { it.id == note.id }
-                                    // Invert dragAmount so content follows finger and navigation logic matches
                                     val actualDrag = -dragAmount
                                     val blocked = idx < 0 ||
                                         (actualDrag < 0 && idx >= swipeList.lastIndex) ||
