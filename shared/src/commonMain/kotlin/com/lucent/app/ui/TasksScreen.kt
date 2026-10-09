@@ -1142,13 +1142,15 @@ fun TasksScreen(active: Boolean = true) {
                             onHorizontalDrag = { change, dragAmount ->
                                 if (armed) {
                                     val idx = swipeList.indexOfFirst { it.id == task.id }
+                                    // Invert dragAmount so content follows finger and navigation logic matches
+                                    val actualDrag = -dragAmount
                                     val blocked = idx < 0 ||
-                                        (dragAmount < 0 && idx >= swipeList.lastIndex) ||
-                                        (dragAmount > 0 && idx <= 0)
+                                        (actualDrag < 0 && idx >= swipeList.lastIndex) ||
+                                        (actualDrag > 0 && idx <= 0)
                                     atEnd = blocked
                                     change.consume()
                                     scope.launch {
-                                        swipeOffset.snapTo(swipeOffset.value + if (blocked) dragAmount * SWIPE_RESIST else dragAmount)
+                                        swipeOffset.snapTo(swipeOffset.value + if (blocked) actualDrag * SWIPE_RESIST else actualDrag)
                                     }
                                 }
                             }
@@ -1475,10 +1477,11 @@ fun TasksScreen(active: Boolean = true) {
                             )
                         },
                         actions = {
+                            val activityContext = androidx.compose.ui.platform.LocalContext.current as com.lucent.app.platform.PlatformContext
                             DateFilterIconButton(
                                 active = dateRange != null,
                                 onClick = {
-                                    showDateRangePicker(context, dateRange?.first, dateRange?.second) { start, end ->
+                                    showDateRangePicker(activityContext, dateRange?.first, dateRange?.second) { start, end ->
                                         dateRange = start to end
                                     }
                                 }
