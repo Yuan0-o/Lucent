@@ -193,7 +193,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        
+        com.lucent.app.ui.ActivityProvider.currentActivity = this
+
         if (intent?.getBooleanExtra(UpdateDownloadService.EXTRA_SHOW_UPDATE, false) == true) {
             handleShowUpdate()
         }
@@ -585,6 +586,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         if (isFinishing) com.lucent.app.local.LocalLlm.shutdown()
+        com.lucent.app.ui.ActivityProvider.currentActivity = null
         super.onDestroy()
     }
 

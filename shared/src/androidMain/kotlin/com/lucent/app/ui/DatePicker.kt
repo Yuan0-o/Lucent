@@ -1,8 +1,13 @@
 package com.lucent.app.ui
 
+import android.app.Activity
 import android.app.DatePickerDialog
 import com.lucent.app.platform.PlatformContext
 import java.util.Calendar
+
+object ActivityProvider {
+    var currentActivity: Activity? = null
+}
 
 private fun startOfDayMillis(year: Int, month: Int, day: Int): Long =
     Calendar.getInstance().apply {
@@ -16,16 +21,17 @@ private fun startOfDayMillis(year: Int, month: Int, day: Int): Long =
     }.timeInMillis
 
 actual fun showDateRangePicker(context: PlatformContext, currentStart: Long?, currentEnd: Long?, onPicked: (Long, Long) -> Unit) {
+    val dialogContext = ActivityProvider.currentActivity ?: context
     val startBase = Calendar.getInstance().apply { if (currentStart != null) timeInMillis = currentStart }
     DatePickerDialog(
-        context,
+        dialogContext,
         { _, sYear, sMonth, sDay ->
             val startMillis = startOfDayMillis(sYear, sMonth, sDay)
             val endBase = Calendar.getInstance().apply {
                 timeInMillis = if (currentEnd != null && currentEnd >= startMillis) currentEnd else startMillis
             }
             DatePickerDialog(
-                context,
+                dialogContext,
                 { _, eYear, eMonth, eDay ->
                     val endMillis = startOfDayMillis(eYear, eMonth, eDay)
                     onPicked(startMillis, maxOf(startMillis, endMillis))
@@ -40,3 +46,4 @@ actual fun showDateRangePicker(context: PlatformContext, currentStart: Long?, cu
         startBase.get(Calendar.DAY_OF_MONTH)
     ).show()
 }
+

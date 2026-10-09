@@ -1476,11 +1476,10 @@ fun TasksScreen(active: Boolean = true) {
                             )
                         },
                         actions = {
-                            val activityContext = androidx.compose.ui.platform.LocalContext.current as com.lucent.app.platform.PlatformContext
                             DateFilterIconButton(
                                 active = dateRange != null,
                                 onClick = {
-                                    showDateRangePicker(activityContext, dateRange?.first, dateRange?.second) { start, end ->
+                                    showDateRangePicker(context, dateRange?.first, dateRange?.second) { start, end ->
                                         dateRange = start to end
                                     }
                                 }
