@@ -27,6 +27,7 @@ class AndroidPtyBackend(private val context: Context) : PtyBackend {
         check(isReady()) { describe() }
 
         val rootfs = BuiltinShell.rootfsDir(context)
+        BuiltinRuntimeInstaller.ensureHostIdentity(rootfs)
         val libDir = File(context.applicationInfo.nativeLibraryDir)
         val proot = File(libDir, "libproot.so")
         val tmpDir = File(context.filesDir, "proot-tmp").apply { mkdirs() }
