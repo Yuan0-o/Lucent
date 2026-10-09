@@ -34,7 +34,8 @@ fun PluginSetupWizard(onBack: () -> Unit) {
     var steps by remember { mutableStateOf<List<SetupStep>>(emptyList()) }
     var busy by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf(0f) }
-    var errorMsg by remember { mutableStateOf("") }
+    var failKind by remember { mutableStateOf<SetupFailKind?>(null) }
+    var logLines by remember { mutableStateOf(listOf<String>()) }
     var statusMsg by remember { mutableStateOf("") }
     var errorStep by remember { mutableStateOf("") }
     var setupComplete by remember { mutableStateOf(HarnessRuntime.config().setupComplete) }
@@ -94,15 +95,18 @@ fun PluginSetupWizard(onBack: () -> Unit) {
                         step = step,
                         busy = busy == step.id,
                         progress = progress,
-                        errorMsg = if (errorStep == step.id) errorMsg else "",
+                        failKind = if (errorStep == step.id) failKind else null,
                         statusText = if (busy == step.id) statusMsg else "",
+                        logLines = if (busy == step.id || errorStep == step.id) logLines else emptyList(),
+                        onClearLog = { logLines = emptyList() },
                         onGradient = onGradient,
                         onGradientMuted = onGradientMuted,
                         onReload = { reload() },
                         onAction = {
-                            errorMsg = ""
+                            failKind = null
                             errorStep = ""
                             statusMsg = ""
+                            logLines = emptyList()
                             when (step.id) {
 
                                 "workspace_shared" -> {
@@ -116,11 +120,12 @@ fun PluginSetupWizard(onBack: () -> Unit) {
                                     scope.launch {
                                         val outcome = HarnessRuntime.host?.extractBuiltinRuntime { line ->
                                             statusMsg = line
+                                            logLines = (logLines + line).takeLast(300)
                                         }
                                         if (outcome?.ok == true) {
                                             reload()
                                         } else {
-                                            errorMsg = outcome?.stderr.orEmpty().ifEmpty { outcome?.text.orEmpty().ifEmpty { S.setupFailed } }
+                                            failKind = classifyInstallFailure(null, "", outcome?.stderr.orEmpty() + "\n" + outcome?.text.orEmpty())
                                             errorStep = step.id
                                         }
                                         statusMsg = ""
@@ -130,24 +135,29 @@ fun PluginSetupWizard(onBack: () -> Unit) {
                                 "base_tools" -> {
                                     busy = step.id
                                     scope.launch {
-                                        var failureMessage = ""
+                                        var failure: com.lucent.app.harness.PluginOutcome? = null
                                         val tools = PluginCatalog.forPlatform(HarnessRuntime.android).filter { it.id != "ubuntu" && it.id != "playwright" }
                                         for (tool in tools) {
                                             if (!HarnessRuntime.config().pluginInstalled(tool.id) && HarnessRuntime.pluginHost?.detect(tool) != true) {
-                                                val outcome = HarnessRuntime.pluginHost?.install(tool, PluginSource("", "", ""), onProgress = { p, t ->
-                                                    progress = p
-                                                    statusMsg = "${tool.name}: $t"
-                                                })
+                                                val outcome = HarnessRuntime.pluginHost?.install(
+                                                    tool,
+                                                    PluginSource("", "", ""),
+                                                    onProgress = { p, t ->
+                                                        progress = p
+                                                        statusMsg = "${tool.name}: $t"
+                                                    },
+                                                    onOutput = { line ->
+                                                        logLines = (logLines + line).takeLast(300)
+                                                    }
+                                                )
                                                 if (outcome?.ok != true) {
-                                                    val detail = outcome?.detail.orEmpty().trim().takeLast(400)
-                                                    failureMessage = outcome?.message.orEmpty() +
-                                                        if (detail.isNotEmpty()) "\n$detail" else ""
+                                                    failure = outcome
                                                     break
                                                 }
                                             }
                                         }
-                                        if (failureMessage.isNotEmpty()) {
-                                            errorMsg = failureMessage
+                                        if (failure != null) {
+                                            failKind = classifyInstallFailure(failure.failure, failure.message, failure.detail)
                                             errorStep = step.id
                                         }
                                         statusMsg = ""
@@ -181,8 +191,10 @@ private fun SetupStepCard(
     step: SetupStep,
     busy: Boolean,
     progress: Float,
-    errorMsg: String,
+    failKind: SetupFailKind?,
     statusText: String,
+    logLines: List<String>,
+    onClearLog: () -> Unit,
     onGradient: androidx.compose.ui.graphics.Color,
     onGradientMuted: androidx.compose.ui.graphics.Color,
     onAction: () -> Unit,
@@ -203,9 +215,16 @@ private fun SetupStepCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(step.body, color = onGradientMuted, fontSize = 13.sp)
                 
-                if (errorMsg.isNotBlank()) {
+                if (failKind != null) {
+                    val reason = setupFailReason(failKind)
+                    val steps = setupFailSteps(failKind)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(S.setupInstallFailedTitle, color = androidx.compose.ui.graphics.Color(0xFFFF8A80), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(errorMsg, color = androidx.compose.ui.graphics.Color(0xFFFF8A80), fontSize = 12.sp)
+                    Text(reason, color = onGradientMuted, fontSize = 12.sp)
+                    steps.forEach { s -> Spacer(modifier = Modifier.height(4.dp)); Text("\u2022 $s", color = onGradientMuted, fontSize = 12.sp) }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = onAction) { Text(S.actionRetry, color = onGradient, fontSize = 13.sp) }
                 }
 
                 if (busy) {
@@ -229,7 +248,31 @@ private fun SetupStepCard(
                         }
                     }
                 }
+
+                PluginOutputLog(lines = logLines, running = busy, onGradient = onGradient, onGradientMuted = onGradientMuted, onClear = onClearLog)
             }
         }
     }
+}
+
+private enum class SetupFailKind { NETWORK, DPKG, GENERIC }
+
+private fun classifyInstallFailure(failure: com.lucent.app.harness.PluginFailure?, message: String, detail: String): SetupFailKind {
+    val text = (message + "\n" + detail).lowercase()
+    if (failure == com.lucent.app.harness.PluginFailure.DOWNLOAD) return SetupFailKind.NETWORK
+    if (text.contains("dpkg returned an error") || text.contains("sub-process /usr/bin/dpkg")) return SetupFailKind.DPKG
+    if (Regex("exited 100\\b").containsMatchIn(text) || text.contains("failed to fetch") || text.contains("unable to fetch") || text.contains("could not resolve") || text.contains("network is unreachable") || text.contains("connection timed out") || text.contains("connection failed")) return SetupFailKind.NETWORK
+    return SetupFailKind.GENERIC
+}
+
+private fun setupFailReason(kind: SetupFailKind): String = when (kind) {
+    SetupFailKind.NETWORK -> S.setupInstallReasonNetwork
+    SetupFailKind.DPKG -> S.setupInstallReasonDpkg
+    SetupFailKind.GENERIC -> S.setupInstallReasonGeneric
+}
+
+private fun setupFailSteps(kind: SetupFailKind): List<String> = when (kind) {
+    SetupFailKind.NETWORK -> listOf(S.setupInstallStepCheckNetwork, S.setupInstallStepRetry)
+    SetupFailKind.DPKG -> listOf(S.setupInstallStepFreeDisk, S.setupInstallStepRetry)
+    SetupFailKind.GENERIC -> listOf(S.setupInstallStepRetry)
 }

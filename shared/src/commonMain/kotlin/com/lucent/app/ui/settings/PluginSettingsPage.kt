@@ -638,7 +638,7 @@ private fun PendingReinstallCard(
 }
 
 @Composable
-private fun PluginOutputLog(
+internal fun PluginOutputLog(
     lines: List<String>,
     running: Boolean,
     onGradient: androidx.compose.ui.graphics.Color,
