@@ -137,6 +137,57 @@ class ProviderAdapterTest {
     }
 
     @Test
+    fun `openai reply tolerates null usage and null message fields`() {
+        // Regression: JsonNull must not crash the parser ("Element ... is not a JsonObject").
+        val json = """{"choices":[{"message":{"content":null,"tool_calls":null}}],"usage":null}"""
+        val reply = OpenAiAdapter.parseReply(json)
+        assertEquals(null, reply.text)
+        assertTrue(reply.toolCalls.isEmpty())
+    }
+
+    @Test
+    fun `openai reply tolerates null message object`() {
+        val json = """{"choices":[{"message":null}]}"""
+        try {
+            OpenAiAdapter.parseReply(json)
+            assertFalse(true, "expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("message") == true)
+        }
+    }
+
+    @Test
+    fun `openai reply surfaces provider error body`() {
+        val json = """{"error":{"message":"No available channel","type":"mixroute_error"}}"""
+        try {
+            OpenAiAdapter.parseReply(json)
+            assertFalse(true, "expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("No available channel") == true)
+        }
+    }
+
+    @Test
+    fun `openai reply rejects non object body`() {
+        try {
+            OpenAiAdapter.parseReply("null")
+            assertFalse(true, "expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("非 JSON 对象") == true)
+        }
+    }
+
+    @Test
+    fun `openai reply accepts object arguments`() {
+        val json = """{"choices":[{"message":{"content":"","tool_calls":[
+            {"id":"c1","function":{"name":"create_task","arguments":{"title":"x"}}}
+        ]}}]}"""
+        val reply = OpenAiAdapter.parseReply(json)
+        assertEquals(1, reply.toolCalls.size)
+        assertTrue(reply.toolCalls[0].argumentsJson.contains("title"))
+    }
+
+    @Test
     fun `anthropic reply parses text and tool_use blocks`() {
         val json = """{"content":[
             {"type":"text","text":"Hello"},

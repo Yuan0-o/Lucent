@@ -197,12 +197,18 @@ internal const val MAX_TOKENS = 2048
 
 internal fun openAiUsage(usage: JsonObject?): TokenUsage {
     if (usage == null || usage.isEmpty()) return TokenUsage.NONE
-    val prompt = usage["prompt_tokens"]?.jsonPrimitive?.intOrNull ?: usage["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0
-    val details = usage["prompt_tokens_details"]?.jsonObject?.get("cached_tokens")?.jsonPrimitive?.intOrNull
-        ?: usage["input_tokens_details"]?.jsonObject?.get("cached_tokens")?.jsonPrimitive?.intOrNull
+    val prompt = (usage["prompt_tokens"] as? JsonPrimitive)?.intOrNull
+        ?: (usage["input_tokens"] as? JsonPrimitive)?.intOrNull ?: 0
+    val details = ((usage["prompt_tokens_details"] as? JsonObject)?.get("cached_tokens") as? JsonPrimitive)?.intOrNull
+        ?: ((usage["input_tokens_details"] as? JsonObject)?.get("cached_tokens") as? JsonPrimitive)?.intOrNull
         ?: 0
-    val cached = maxOf(details, usage["prompt_cache_hit_tokens"]?.jsonPrimitive?.intOrNull ?: 0, usage["cached_tokens"]?.jsonPrimitive?.intOrNull ?: 0)
-    val output = usage["completion_tokens"]?.jsonPrimitive?.intOrNull ?: usage["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+    val cached = maxOf(
+        details,
+        (usage["prompt_cache_hit_tokens"] as? JsonPrimitive)?.intOrNull ?: 0,
+        (usage["cached_tokens"] as? JsonPrimitive)?.intOrNull ?: 0
+    )
+    val output = (usage["completion_tokens"] as? JsonPrimitive)?.intOrNull
+        ?: (usage["output_tokens"] as? JsonPrimitive)?.intOrNull ?: 0
     return TokenUsage(prompt.coerceAtLeast(0), cached.coerceAtLeast(0), output.coerceAtLeast(0))
 }
 
@@ -405,26 +411,45 @@ object OpenAiAdapter : ProviderAdapter {
     }
 
     override fun parseReply(bodyStr: String): RawModelReply {
-        val json = Json.parseToJsonElement(bodyStr).jsonObject
-        val message = json["choices"]!!.jsonArray[0].jsonObject["message"]!!.jsonObject
-        val text = message["content"]?.jsonPrimitive?.contentOrNull
+        val json = Json.parseToJsonElement(bodyStr) as? JsonObject
+            ?: throw IllegalArgumentException("接口返回了非 JSON 对象，无法解析")
+        (json["error"] as? JsonObject)?.let { err ->
+            val msg = (err["message"] as? JsonPrimitive)?.contentOrNull ?: "未知错误"
+            throw IllegalArgumentException("接口返回错误：$msg")
+        }
+        val message = ((json["choices"] as? JsonArray)?.firstOrNull() as? JsonObject)?.get("message") as? JsonObject
+            ?: throw IllegalArgumentException("接口响应缺少 message 字段，无法解析")
+        val text = (message["content"] as? JsonPrimitive)?.contentOrNull
         val toolCalls = mutableListOf<ToolCallRequest>()
-        val toolCallsArray = message["tool_calls"]?.jsonArray
+        val toolCallsArray = message["tool_calls"] as? JsonArray
         if (toolCallsArray != null) {
             for (i in 0 until toolCallsArray.size) {
-                val tc = toolCallsArray[i].jsonObject
-                val fn = tc["function"]!!.jsonObject
-                toolCalls.add(ToolCallRequest(tc["id"]?.jsonPrimitive?.content ?: "call_$i", fn["name"]!!.jsonPrimitive.content, fn["arguments"]?.jsonPrimitive?.content ?: "{}"))
+                val tc = toolCallsArray[i] as? JsonObject ?: continue
+                val fn = tc["function"] as? JsonObject ?: continue
+                val name = (fn["name"] as? JsonPrimitive)?.contentOrNull ?: continue
+                val argsEl = fn["arguments"]
+                val argsJson = when (argsEl) {
+                    is JsonPrimitive -> argsEl.contentOrNull ?: "{}"
+                    is JsonObject, is JsonArray -> Json.encodeToString(JsonElement.serializer(), argsEl)
+                    else -> "{}"
+                }
+                toolCalls.add(
+                    ToolCallRequest(
+                        (tc["id"] as? JsonPrimitive)?.contentOrNull ?: "call_$i",
+                        name,
+                        argsJson
+                    )
+                )
             }
         }
-        val image = imageFromOpenAiImages(message["images"]?.jsonArray)
+        val image = imageFromOpenAiImages(message["images"] as? JsonArray)
         return RawModelReply(
             text,
             toolCalls,
             image?.first,
             image?.second,
-            reasoningContent = message["reasoning_content"]?.jsonPrimitive?.content ?: "",
-            usage = openAiUsage(json["usage"]?.jsonObject)
+            reasoningContent = (message["reasoning_content"] as? JsonPrimitive)?.contentOrNull ?: "",
+            usage = openAiUsage(json["usage"] as? JsonObject)
         )
     }
 
