@@ -137,14 +137,16 @@ fun LocalModelSettingsPage(
 
             if (lmActiveId != null) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(S.lmMmprojTitle, color = onGradient, fontSize = 14.sp)
+                Text(S.lmMmprojTitle, color = onGradient, fontSize = 16.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 val lmMmprojFile = remember(lmRefresh, lmActiveId) { LocalModelStore.activeMmprojFile(context) }
-                Text(
-                    lmMmprojFile?.let { "${okio.FileSystem.SYSTEM.metadataOrNull(it)?.size ?: 0L / (1024 * 1024)} MB" } ?: S.lmMmprojMissing,
-                    color = onGradientMuted, fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                if (lmMmprojFile != null) {
+                    Text(
+                        lmMmprojFile.let { "${okio.FileSystem.SYSTEM.metadataOrNull(lmMmprojFile)?.size ?: 0L / (1024 * 1024)} MB" },
+                        color = onGradientMuted, fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     GlassButton(
                         text = S.lmMmprojImport,
