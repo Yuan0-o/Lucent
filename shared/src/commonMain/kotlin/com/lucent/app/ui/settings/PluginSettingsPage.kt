@@ -225,11 +225,12 @@ fun PluginSettingsPage(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
+        PluginIntroCard(shellReady = shellReady, onGradient = onGradient, onGradientMuted = onGradientMuted)
         if (!setupComplete) {
+            Spacer(modifier = Modifier.height(12.dp))
             SetupGateCard(onGradient = onGradient, onGradientMuted = onGradientMuted, onStart = { onRoute(SettingsRoute.PluginSetup) })
             Spacer(modifier = Modifier.height(12.dp))
         }
-        PluginIntroCard(shellReady = shellReady, onGradient = onGradient, onGradientMuted = onGradientMuted)
 
         if (android && !storageGranted) {
             Spacer(modifier = Modifier.height(12.dp))
