@@ -174,6 +174,15 @@ interface SettingsRepository {
     suspend fun autoBackupOnce(): AutoBackup.State
     suspend fun setAutoBackup(state: AutoBackup.State)
 
+    val autoBackupPasswords: Flow<List<String>>
+    suspend fun autoBackupPasswordsOnce(): List<String>
+    suspend fun setAutoBackupPassword(index: Int, value: String)
+    val autoBackupRecoveryQuestion: Flow<String>
+    suspend fun autoBackupRecoveryQuestionOnce(): String
+    val autoBackupRecoveryAnswer: Flow<String>
+    suspend fun autoBackupRecoveryAnswerOnce(): String
+    suspend fun setAutoBackupRecovery(question: String, answer: String)
+
     val notesSort: Flow<String>
     val tasksSort: Flow<String>
     val notebooksSort: Flow<String>

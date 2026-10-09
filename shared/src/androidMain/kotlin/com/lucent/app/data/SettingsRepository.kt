@@ -38,6 +38,9 @@ private object SettingsKeys {
     val API_PROFILES_ENC = stringPreferencesKey("api_profiles_json_enc")
 
     val BACKUP_PASSWORD_ENC = stringPreferencesKey("backup_password_enc")
+    val AUTO_BACKUP_PASSWORDS_ENC = stringPreferencesKey("auto_backup_passwords_enc")
+    val AUTO_BACKUP_RECOVERY_Q = stringPreferencesKey("auto_backup_recovery_q")
+    val AUTO_BACKUP_RECOVERY_A_ENC = stringPreferencesKey("auto_backup_recovery_a_enc")
 
     val LEGACY_API_KEY = stringPreferencesKey("api_key")
     val LEGACY_API_PROFILES = stringPreferencesKey("api_profiles_json")
@@ -496,6 +499,86 @@ class AndroidSettingsRepository(private val context: Context) : SettingsReposito
     override suspend fun setAutoBackup(state: AutoBackup.State) {
         SettingsCache.autoBackup = state
         context.settingsDataStore.edit { it[SettingsKeys.AUTO_BACKUP] = state.toJson() }
+    }
+
+    override val autoBackupPasswords: Flow<List<String>> = context.settingsDataStore.data.map { prefs ->
+        val rawJson = prefs[SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC] ?: ""
+        if (rawJson.isBlank()) emptyList()
+        else {
+            try {
+                val encList = kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                encList.mapNotNull { enc ->
+                    if (enc.isEmpty()) null
+                    else {
+                        val dec = LocalSecrets.decrypt(enc)
+                        if (dec.isEmpty()) null else dec
+                    }
+                }.take(3)
+            } catch (_: Throwable) {
+                emptyList()
+            }
+        }
+    }
+
+    override suspend fun autoBackupPasswordsOnce(): List<String> = autoBackupPasswords.first()
+
+    override suspend fun setAutoBackupPassword(index: Int, value: String) {
+        if (index !in 0..2) return
+        context.settingsDataStore.edit { prefs ->
+            val rawJson = prefs[SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC] ?: ""
+            val current = try {
+                if (rawJson.isBlank()) mutableListOf()
+                else kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                    .map { LocalSecrets.decrypt(it) }
+                    .filter { it.isNotEmpty() }
+                    .toMutableList()
+            } catch (_: Throwable) {
+                mutableListOf()
+            }
+            if (value.isEmpty()) {
+                if (index in current.indices) {
+                    current.removeAt(index)
+                }
+            } else {
+                if (index in current.indices) {
+                    current[index] = value
+                } else if (current.size < 3) {
+                    current.add(value)
+                }
+            }
+            val updated = current.take(3)
+            if (updated.isEmpty()) {
+                prefs.remove(SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC)
+            } else {
+                val encList = updated.map { LocalSecrets.encrypt(it) }
+                prefs[SettingsKeys.AUTO_BACKUP_PASSWORDS_ENC] = kotlinx.serialization.json.Json.encodeToString(encList)
+            }
+        }
+    }
+
+    override val autoBackupRecoveryQuestion: Flow<String> = context.settingsDataStore.data.map {
+        it[SettingsKeys.AUTO_BACKUP_RECOVERY_Q] ?: ""
+    }
+
+    override suspend fun autoBackupRecoveryQuestionOnce(): String = autoBackupRecoveryQuestion.first()
+
+    override val autoBackupRecoveryAnswer: Flow<String> = context.settingsDataStore.data.map { prefs ->
+        val enc = prefs[SettingsKeys.AUTO_BACKUP_RECOVERY_A_ENC] ?: ""
+        if (enc.isEmpty()) "" else LocalSecrets.decrypt(enc)
+    }
+
+    override suspend fun autoBackupRecoveryAnswerOnce(): String = autoBackupRecoveryAnswer.first()
+
+    override suspend fun setAutoBackupRecovery(question: String, answer: String) {
+        context.settingsDataStore.edit { prefs ->
+            if (question.isBlank()) {
+                prefs.remove(SettingsKeys.AUTO_BACKUP_RECOVERY_Q)
+                prefs.remove(SettingsKeys.AUTO_BACKUP_RECOVERY_A_ENC)
+            } else {
+                prefs[SettingsKeys.AUTO_BACKUP_RECOVERY_Q] = question
+                prefs[SettingsKeys.AUTO_BACKUP_RECOVERY_A_ENC] = LocalSecrets.encrypt(answer)
+            }
+        }
     }
 
     override val notesSort: Flow<String> = context.settingsDataStore.data.map { it[SettingsKeys.NOTES_SORT] ?: "recent" }

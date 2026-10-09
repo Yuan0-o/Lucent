@@ -31,6 +31,9 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
         const val API_KEY_ENC = "api_key_enc"
         const val API_PROFILES_ENC = "api_profiles_json_enc"
         const val BACKUP_PASSWORD_ENC = "backup_password_enc"
+        const val AUTO_BACKUP_PASSWORDS_ENC = "auto_backup_passwords_enc"
+        const val AUTO_BACKUP_RECOVERY_Q = "auto_backup_recovery_q"
+        const val AUTO_BACKUP_RECOVERY_A_ENC = "auto_backup_recovery_a_enc"
         const val API_PROFILE_SELECTED = "api_profile_selected"
         const val NOTES_SORT = "notes_sort"
         const val AUTO_BACKUP = "auto_backup_state"
@@ -429,6 +432,86 @@ class DesktopSettingsRepository(private val context: PlatformContext) : Settings
     override suspend fun setAutoBackup(state: AutoBackup.State) {
         SettingsCache.autoBackup = state
         edit { it[K.AUTO_BACKUP] = state.toJson() }
+    }
+
+    override val autoBackupPasswords: Flow<List<String>> = state.map { prefs ->
+        val rawJson = str(prefs, K.AUTO_BACKUP_PASSWORDS_ENC) ?: ""
+        if (rawJson.isBlank()) emptyList()
+        else {
+            try {
+                val encList = kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                encList.mapNotNull { enc ->
+                    if (enc.isEmpty()) null
+                    else {
+                        val dec = LocalSecrets.decrypt(enc)
+                        if (dec.isEmpty()) null else dec
+                    }
+                }.take(3)
+            } catch (_: Throwable) {
+                emptyList()
+            }
+        }
+    }
+
+    override suspend fun autoBackupPasswordsOnce(): List<String> = autoBackupPasswords.first()
+
+    override suspend fun setAutoBackupPassword(index: Int, value: String) {
+        if (index !in 0..2) return
+        edit { prefs ->
+            val rawJson = str(prefs, K.AUTO_BACKUP_PASSWORDS_ENC) ?: ""
+            val current = try {
+                if (rawJson.isBlank()) mutableListOf()
+                else kotlinx.serialization.json.Json.decodeFromString<List<String>>(rawJson)
+                    .map { LocalSecrets.decrypt(it) }
+                    .filter { it.isNotEmpty() }
+                    .toMutableList()
+            } catch (_: Throwable) {
+                mutableListOf()
+            }
+            if (value.isEmpty()) {
+                if (index in current.indices) {
+                    current.removeAt(index)
+                }
+            } else {
+                if (index in current.indices) {
+                    current[index] = value
+                } else if (current.size < 3) {
+                    current.add(value)
+                }
+            }
+            val updated = current.take(3)
+            if (updated.isEmpty()) {
+                prefs.remove(K.AUTO_BACKUP_PASSWORDS_ENC)
+            } else {
+                val encList = updated.map { LocalSecrets.encrypt(it) }
+                prefs[K.AUTO_BACKUP_PASSWORDS_ENC] = kotlinx.serialization.json.Json.encodeToString(encList)
+            }
+        }
+    }
+
+    override val autoBackupRecoveryQuestion: Flow<String> = state.map {
+        str(it, K.AUTO_BACKUP_RECOVERY_Q) ?: ""
+    }
+
+    override suspend fun autoBackupRecoveryQuestionOnce(): String = autoBackupRecoveryQuestion.first()
+
+    override val autoBackupRecoveryAnswer: Flow<String> = state.map { prefs ->
+        val enc = str(prefs, K.AUTO_BACKUP_RECOVERY_A_ENC) ?: ""
+        if (enc.isEmpty()) "" else LocalSecrets.decrypt(enc)
+    }
+
+    override suspend fun autoBackupRecoveryAnswerOnce(): String = autoBackupRecoveryAnswer.first()
+
+    override suspend fun setAutoBackupRecovery(question: String, answer: String) {
+        edit { prefs ->
+            if (question.isBlank()) {
+                prefs.remove(K.AUTO_BACKUP_RECOVERY_Q)
+                prefs.remove(K.AUTO_BACKUP_RECOVERY_A_ENC)
+            } else {
+                prefs[K.AUTO_BACKUP_RECOVERY_Q] = question
+                prefs[K.AUTO_BACKUP_RECOVERY_A_ENC] = LocalSecrets.encrypt(answer)
+            }
+        }
     }
 
     override val memoryTier: Flow<String> = state.map { str(it, K.MEMORY_TIER) ?: MemoryTier.DEFAULT.key }
