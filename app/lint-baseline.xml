@@ -398,17 +398,6 @@
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of `compileSdk` than 36 is available: 37"
-        errorLine1="    compileSdk = 36"
-        errorLine2="    ~~~~~~~~~~~~~~~">
-        <location
-            file="build.gradle.kts"
-            line="92"
-            column="5"/>
-    </issue>
-
-    <issue
         id="MissingTranslation"
         message="&quot;app_name&quot; is not translated in &quot;ko&quot; (Korean), &quot;ja&quot; (Japanese), &quot;zh&quot; (Chinese)"
         errorLine1="    &lt;string name=&quot;app_name&quot;>𝓛𝓾𝓬𝓮𝓷𝓽&lt;/string>"
@@ -669,17 +658,6 @@
             file="src/main/java/com/lucent/app/widget/WidgetActions.kt"
             line="67"
             column="20"/>
-    </issue>
-
-    <issue
-        id="UseTomlInstead"
-        message="Use version catalog instead"
-        errorLine1="    testImplementation(&quot;org.jetbrains.kotlin:kotlin-test-junit:2.4.0&quot;)"
-        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="build.gradle.kts"
-            line="352"
-            column="24"/>
     </issue>
 
     <issue
