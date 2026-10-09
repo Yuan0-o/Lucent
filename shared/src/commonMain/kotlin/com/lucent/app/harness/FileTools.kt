@@ -343,7 +343,7 @@ object FileTools : HarnessGroupTools {
         }
         for (file in files) {
             if (matches.size >= max) break
-            val relativePath = file.toString().removePrefix(root.toString()).removePrefix("/")
+            val relativePath = file.toString().removePrefix(root).removePrefix("/")
             if (namePattern != null && !namePattern.matches(relativePath.replace('\\', '/'))) continue
             val nameHit = file.name.contains(query, ignoreCase = !regex)
             if (nameHit) matches.add("${file.toString()}  (name match)")

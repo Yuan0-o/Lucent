@@ -116,7 +116,7 @@ object WebSearchClient {
             sb.append("Web search results for \"").append(trimmed).append("\"")
             used?.let { if (it.results.isNotEmpty()) sb.append(" (via ").append(it.engine.label).append(")") }
             sb.append(":\n")
-            if (hasInstant) sb.append("\nSummary: ").append(instant?.trim()).append("\n")
+            if (hasInstant) sb.append("\nSummary: ").append(instant.trim()).append("\n")
             if (results.isNotEmpty()) {
                 sb.append("\nTop results:\n")
                 results.take(MAX_RESULTS).forEachIndexed { i, r ->

@@ -54,7 +54,7 @@ kotlin {
     }
 
     sourceSets {
-        val commonMain by getting {
+        val commonMain = getByName("commonMain") {
             kotlin.srcDir(buildIdDir)
             dependencies {
                 implementation(libs.kotlinx.datetime)
@@ -73,7 +73,7 @@ kotlin {
                 implementation(libs.org.json)
             }
         }
-        val androidMain by getting {
+        val androidMain = getByName("androidMain") {
             dependsOn(jvmMain)
             dependencies {
                 implementation(libs.core.ktx)
@@ -98,7 +98,7 @@ kotlin {
                 implementation("androidx.compose.material:material-icons-extended:1.7.8")
             }
         }
-        val desktopMain by getting {
+        val desktopMain = getByName("desktopMain") {
             dependsOn(jvmMain)
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
