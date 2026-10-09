@@ -100,18 +100,23 @@ object BackupFrames {
         return v
     }
 
-    fun openDecrypted(source: BackupManager.BackupSource, password: String?): okio.Source {
+    fun openDecrypted(source: BackupManager.BackupSource, password: String?, answer: String? = null): okio.Source {
         val raw = source.open()
         try {
-            val head = ByteArray(30)
-            try {
-                readFully(raw, head, head.size)
-            } catch (_: okio.EOFException) {
-                throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
-            }
+            val buffered = raw.buffer()
+            val peek = buffered.peek()
+            val buffer = okio.Buffer()
+            peek.read(buffer, 8192L)
+            val head = buffer.readByteArray()
+            if (head.isEmpty()) throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
             val header = BackupCrypto.readHeader(head)
                 ?: throw IllegalArgumentException(com.lucent.app.i18n.S.notLcbBackup)
-            return BackupCrypto.decryptingSource(raw, header, password)
+            buffered.skip(header.byteLength.toLong())
+            return if (!answer.isNullOrEmpty()) {
+                BackupCrypto.decryptingSourceWithAnswer(buffered, header, answer)
+            } else {
+                BackupCrypto.decryptingSource(buffered, header, password)
+            }
         } catch (t: Throwable) {
             try { raw.close() } catch (_: Throwable) {}
             throw t

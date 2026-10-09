@@ -102,7 +102,10 @@ object BackupManager {
         settings: SettingsRepository,
         out: okio.Sink,
         password: String?,
-        selection: BackupSelection = BackupSelection()
+        selection: BackupSelection = BackupSelection(),
+        passwords: List<String> = emptyList(),
+        recovery: BackupRecovery.Envelope? = null,
+        dek: ByteArray? = null
     ) {
         val modules = selection.modules
         val exportJob = coroutineContext[Job]
@@ -132,7 +135,12 @@ object BackupManager {
             } else emptyList()
 
         val blobs = modelFiles + fontFiles + harnessFiles
-        BackupCrypto.encryptingSink(out, password).buffer().use { cipherOut ->
+        val sink = if (passwords.isNotEmpty()) {
+            BackupCrypto.encryptingSinkMultiPassword(out, passwords, recovery, dek ?: secureRandomBytes(32))
+        } else {
+            BackupCrypto.encryptingSink(out, password)
+        }
+        sink.buffer().use { cipherOut ->
             if (blobs.isEmpty()) {
                 cipherOut.write(jsonBytes)
                 cipherOut.flush()
@@ -202,6 +210,7 @@ object BackupManager {
         val harnessBytes: Long = 0L,
         internal val hasBlobs: Boolean = false,
         internal val password: String? = null,
+        internal val recoveryAnswer: String? = null,
         val conversationList: List<Pair<Long, String>> = emptyList(),
         val apiProfileNames: List<String> = emptyList()
     ) {
@@ -310,6 +319,99 @@ object BackupManager {
     suspend fun inspect(context: PlatformContext, bytes: ByteArray, password: String? = null): BackupPreview =
         inspect(context, BackupSource { okio.Buffer().write(bytes) }, password)
 
+    suspend fun inspectWithAnswer(context: PlatformContext, source: BackupSource, answer: String): BackupPreview {
+        val inspectJob = coroutineContext[Job]
+        val cancelled: () -> Boolean = { inspectJob?.isActive == false }
+        val scan: BackupFrames.PayloadScan
+        var plain: okio.Source? = null
+        try {
+            plain = BackupFrames.openDecrypted(source, password = null, answer = answer)
+            scan = try {
+                BackupFrames.scanPayload(plain, cancelled)
+            } catch (t: okio.IOException) {
+                if (t is BackupCrypto.WrongPasswordException) throw t
+                throw BackupCrypto.WrongPasswordException()
+            }
+        } finally {
+            try { plain?.close() } catch (_: Throwable) {}
+        }
+        val manifestJson = scan.manifestJson
+
+        val root = try {
+            Json.parseToJsonElement(manifestJson).jsonObject
+        } catch (t: Throwable) {
+            throw IllegalArgumentException("That backup couldn't be read — the file may be damaged.")
+        }
+
+        val notesArr = root["notes"]?.jsonArray
+        val tasksArr = root["tasks"]?.jsonArray
+
+        var archived = 0
+        var trashedNotes = 0
+        var attachments = 0
+        for (i in 0 until (notesArr?.size ?: 0)) {
+            val o = notesArr!![i].jsonObject
+            if (o["archived"]?.jsonPrimitive?.booleanOrNull == true) archived++
+            if (o.containsKey("trashedAt") && o["trashedAt"] !is JsonNull) trashedNotes++
+            attachments += Attachments.parse(o["attachments"]?.jsonPrimitive?.content ?: "[]").size
+        }
+
+        var completed = 0
+        var trashedTasks = 0
+        for (i in 0 until (tasksArr?.size ?: 0)) {
+            val o = tasksArr!![i].jsonObject
+            if (o["isDone"]?.jsonPrimitive?.booleanOrNull == true) completed++
+            if (o.containsKey("trashedAt") && o["trashedAt"] !is JsonNull) trashedTasks++
+            attachments += Attachments.parse(o["attachments"]?.jsonPrimitive?.content ?: "[]").size
+        }
+
+        val convList = root["conversations"]?.jsonArray?.let { arr ->
+            (0 until arr.size).mapNotNull { i ->
+                val o = arr[i].jsonObject
+                val id = o["id"]?.jsonPrimitive?.longOrNull ?: 0L
+                if (id == 0L) null else id to (o["title"]?.jsonPrimitive?.content ?: "")
+            }
+        } ?: emptyList()
+        val profileNames = root["settings"]?.jsonObject?.get("apiProfiles")?.jsonPrimitive?.content?.let { pj ->
+            if (pj.isBlank()) emptyList() else ApiProfiles.parse(pj).map { it.name }
+        } ?: emptyList()
+
+        return BackupPreview(
+            manifestJson = manifestJson,
+            formatVersion = root["version"]?.jsonPrimitive?.intOrNull ?: 0,
+            exportedAt = (root["exportedAt"]?.jsonPrimitive?.longOrNull ?: 0L).takeIf { it > 0 },
+            encrypted = true,
+            passwordProtected = true,
+            notes = notesArr?.size ?: 0,
+            archivedNotes = archived,
+            trashedNotes = trashedNotes,
+            tasks = tasksArr?.size ?: 0,
+            completedTasks = completed,
+            trashedTasks = trashedTasks,
+            noteVersions = root["noteVersions"]?.jsonArray?.size ?: 0,
+            conversations = root["conversations"]?.jsonArray?.size ?: 0,
+            chatMessages = root["chats"]?.jsonArray?.size ?: 0,
+            attachments = attachments,
+            hasSettings = root["settings"]?.jsonObject != null,
+            modules = root["modules"]?.jsonArray?.let { arr ->
+                (0 until arr.size).mapNotNull { i ->
+                    runCatching { BackupModule.valueOf(arr[i].jsonPrimitive.content) }.getOrNull()
+                }.toSet()
+            } ?: emptySet(),
+            modelFiles = scan.modelCount,
+            modelBytes = scan.modelBytes,
+            fontFiles = scan.fontCount,
+            fontBytes = scan.fontBytes,
+            harnessFiles = scan.harnessCount,
+            harnessBytes = scan.harnessBytes,
+            hasBlobs = scan.framed,
+            password = null,
+            recoveryAnswer = answer,
+            conversationList = convList,
+            apiProfileNames = profileNames
+        )
+    }
+
     suspend fun commit(
         context: PlatformContext,
         db: AppDatabase,
@@ -334,7 +436,7 @@ object BackupManager {
                 val scratch = ByteArray(1 shl 16)
                 var plain: okio.Source? = null
                 try {
-                    plain = BackupFrames.openDecrypted(source, preview.password)
+                    plain = BackupFrames.openDecrypted(source, preview.password, preview.recoveryAnswer)
                     BackupFrames.scanPayload(plain, cancelled) { name, dataLen, data ->
                         val (m, f) = BackupFrames.restoreOneBlob(
                             context, name, dataLen, data, wantModels, wantFonts, scratch, cancelled
@@ -349,7 +451,7 @@ object BackupManager {
                 }
             }
             if (wantHarness) {
-                val harness = BackupImporter.restoreHarness(context, source, preview.password, cancelled)
+                val harness = BackupImporter.restoreHarness(context, source, preview.password, preview.recoveryAnswer, cancelled)
                 restoredHarness = harness.restored
                 harnessProblems = harness.problems
             }
@@ -382,7 +484,7 @@ object BackupManager {
 
     fun peekPasswordRequirement(source: BackupSource): BackupCrypto.Header? = try {
         source.open().use { input ->
-            val head = ByteArray(64)
+            val head = ByteArray(8192)
             var read = 0
             while (read < head.size) {
                 val n = input.read(head, read, head.size - read)

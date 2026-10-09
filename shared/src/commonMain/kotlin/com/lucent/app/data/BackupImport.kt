@@ -587,13 +587,14 @@ object BackupImporter {
         context: PlatformContext,
         source: BackupManager.BackupSource,
         password: String?,
+        answer: String? = null,
         cancelled: () -> Boolean
     ): HarnessRestoreResult {
         val problems = mutableListOf<String>()
         var restored = 0
         var plain: okio.Source? = null
         try {
-            plain = BackupFrames.openDecrypted(source, password)
+            plain = BackupFrames.openDecrypted(source, password, answer)
             val scratch = ByteArray(1 shl 16)
             HarnessBackup.useHome {
                 BackupFrames.scanPayload(plain, cancelled) { name, dataLen, data ->
