@@ -88,7 +88,7 @@ private class SpreadsheetNs(private val prefix: String) {
 
     companion object {
         fun of(document: XmlNode): SpreadsheetNs {
-            val name = document?.name ?: ""
+            val name = document.name ?: ""
             return SpreadsheetNs(name.substringBefore(':', ""))
         }
     }
@@ -116,7 +116,7 @@ object Xlsx {
         var chartCount = 0
         var drawingCount = 0
         for (index in 0 until sheets.size) {
-            val sheetSpec = sheets[index]?.jsonObject
+            val sheetSpec = sheets[index].jsonObject
                 ?: throw IllegalArgumentException("Sheet ${index + 1} in the spec is not a JSON object")
             val name = validSheetName(stringOf(sheetSpec, "name", "Sheet${index + 1}"), names)
             names.add(name)
@@ -128,7 +128,7 @@ object Xlsx {
                 val drawingDoc = parse(emptyDrawingBytes())
                 val drawingRels = parse(emptyRelationshipsBytes())
                 for (position in 0 until charts.size) {
-                    val chartSpec = charts[position]?.jsonObject ?: continue
+                    val chartSpec = charts[position].jsonObject ?: continue
                     chartCount++
                     val chartPart = "xl/charts/chart$chartCount.xml"
                     parts[chartPart] = documentBytes(chartXmlNode(chartSpec, name, chartCount))
@@ -234,7 +234,7 @@ object Xlsx {
         }
         val applied = LinkedHashSet<String>()
         for (index in 0 until ops.size) {
-            val op = ops[index]?.jsonObject
+            val op = ops[index].jsonObject
                 ?: throw IllegalArgumentException("Operation ${index + 1} is not a JSON object")
             val kind = stringOf(op, "op").trim().lowercase()
             when (kind) {
@@ -255,7 +255,7 @@ object Xlsx {
                     val sheetDoc = book.document(stringOf(op, "sheet"))
                     val start = lastRow(sheetDoc) + 1
                     for (rowIndex in 0 until rows.size) {
-                        val values = rows[rowIndex]?.jsonArray ?: continue
+                        val values = rows[rowIndex].jsonArray ?: continue
                         for (column in 0 until values.size) {
                             setCell(sheetDoc, Ref(start + rowIndex, column + 1), cellData(values[column]), -1, shared)
                         }
@@ -815,7 +815,7 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     val columns = spec["columns"]?.jsonArray
     if (columns != null) {
         for (index in 0 until columns.size) {
-            val column = columns[index]?.jsonObject ?: continue
+            val column = columns[index].jsonObject ?: continue
             val width = column["width"]?.jsonPrimitive?.doubleOrNull ?: 0.0
             if (width > 0.0) setColumnWidth(document, columnName(index + 1), width)
         }
@@ -831,7 +831,7 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     val rows = spec["rows"]?.jsonArray
     if (rows != null) {
         for (index in 0 until rows.size) {
-            val values = rows[index]?.jsonArray ?: continue
+            val values = rows[index].jsonArray ?: continue
             for (column in 0 until values.size) {
                 setCell(document, Ref(startRow + index, column + 1), cellData(values[column]), 0, null)
             }
@@ -840,7 +840,7 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     val cells = spec["cells"]?.jsonArray
     if (cells != null) {
         for (index in 0 until cells.size) {
-            val cell = cells[index]?.jsonObject
+            val cell = cells[index].jsonObject
                 ?: throw IllegalArgumentException("Cell ${index + 1} in the sheet spec is not a JSON object")
             val refText = stringOf(cell, "ref")
             if (refText.isBlank()) throw IllegalArgumentException("Cell ${index + 1} needs a \"ref\" such as B2")
@@ -853,7 +853,7 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     val merges = spec["merges"]?.jsonArray
     if (merges != null) {
         for (index in 0 until merges.size) {
-            val range = merges[index]?.jsonPrimitive?.content ?: ""
+            val range = merges[index].jsonPrimitive?.content ?: ""
             if (range.isNotBlank()) appendMerge(document, range)
         }
     }
@@ -868,7 +868,7 @@ private fun populateSheet(document: XmlNode, book: StyleBook, spec: JsonObject) 
     val conditional = spec["conditional"]?.jsonArray
     if (conditional != null) {
         for (index in 0 until conditional.size) {
-            val rule = conditional[index]?.jsonObject
+            val rule = conditional[index].jsonObject
                 ?: throw IllegalArgumentException("Conditional rule ${index + 1} is not a JSON object")
             addConditional(document, rule, book)
         }
@@ -1212,7 +1212,7 @@ private fun chartXmlNode(spec: JsonObject, sheetName: String, index: Int): XmlBu
         }
     }
     for (position in 0 until series.size) {
-        val item = series[position]?.jsonObject ?: continue
+        val item = series[position].jsonObject ?: continue
         group.add(chartSeries(item, position, sheetName, categories))
     }
     if (type == "line") group.child("c:marker").attr("val", 1)
@@ -1400,7 +1400,7 @@ private fun addRelationship(rels: XmlNode, type: String, target: String): String
 }
 
 private fun ensureRelationshipPrefix(document: XmlNode) {
-    val root = document ?: return
+    val root = document
     if (attr(root, "xmlns:r").isEmpty()) root.attributes["xmlns:r"] = NS_OFFICE_RELATIONSHIPS
 }
 
@@ -1413,7 +1413,7 @@ private fun addOrderedXml(
     namespaces: String
 ): XmlNode? {
     val parsed = parseFragment(xml, namespaces).firstOrNull() ?: return null
-    val imported = document.importXmlNode(parsed, true) as? XmlNode ?: return null
+    val imported = document.importXmlNode(parsed, true)
     insertOrdered(parent, imported, tag, order)
     return imported
 }
@@ -1553,7 +1553,7 @@ private fun formulaList(value: Any?): List<String> {
     if (value is JsonArray) {
         val out = mutableListOf<String>()
         for (index in 0 until value.size) {
-            val item = value[index] ?: continue
+            val item = value[index]
             if (item !is JsonNull) out.add(if (item is JsonPrimitive && item.isString) item.content else item.toString())
         }
         return out

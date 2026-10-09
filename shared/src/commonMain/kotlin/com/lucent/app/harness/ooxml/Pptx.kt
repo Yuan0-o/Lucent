@@ -367,7 +367,7 @@ private fun pptxOps(opsJson: String): List<JsonObject> {
     }
     val out = mutableListOf<JsonObject>()
     for (i in 0 until array.size) {
-        val item = array[i]?.jsonObject
+        val item = array[i].jsonObject
         if (item != null) out.add(item)
     }
     return out
@@ -397,7 +397,7 @@ private fun pptxDeckFromSpec(spec: JsonObject): PptxDeck {
     val slides = spec["slides"]?.jsonArray
     if (slides != null && slides.size > 0) {
         for (i in 0 until slides.size) {
-            val item = slides[i]?.jsonObject ?: continue
+            val item = slides[i].jsonObject ?: continue
             deck.slides.add(pptxSlideFromJson(item, "bullets"))
         }
     }
@@ -442,9 +442,9 @@ private fun pptxTableFromJson(json: JsonObject): PptxTable {
     val rows = json["rows"]?.jsonArray
     if (rows != null) {
         for (i in 0 until rows.size) {
-            val row = rows[i]?.jsonArray ?: continue
+            val row = rows[i].jsonArray ?: continue
             val cells = mutableListOf<String>()
-            for (c in 0 until row.size) cells.add(row[c]?.jsonPrimitive?.content ?: "")
+            for (c in 0 until row.size) cells.add(row[c].jsonPrimitive?.content ?: "")
             table.rows.add(cells)
         }
     }
@@ -464,7 +464,7 @@ private fun pptxChartFromJson(json: JsonObject): PptxChart {
     val series = json["series"]?.jsonArray
     if (series != null) {
         for (i in 0 until series.size) {
-            val item = series[i]?.jsonObject ?: continue
+            val item = series[i].jsonObject ?: continue
             val name = (item["name"]?.jsonPrimitive?.content ?: "").trim()
             chart.series.add(
                 PptxSeries(
@@ -538,7 +538,7 @@ private fun pptxStrings(value: Any?): MutableList<String> {
     when (value) {
         is JsonArray -> {
             for (i in 0 until value.size) {
-                val text = (value[i]?.jsonPrimitive?.content ?: "").trim()
+                val text = (value[i].jsonPrimitive?.content ?: "").trim()
                 if (text.isNotEmpty()) out.add(text)
             }
         }
@@ -555,7 +555,7 @@ private fun pptxStrings(value: Any?): MutableList<String> {
 private fun pptxNumbers(array: JsonArray?): MutableList<Double> {
     val out = mutableListOf<Double>()
     if (array == null) return out
-    for (i in 0 until array.size) out.add(array[i]?.jsonPrimitive?.doubleOrNull ?: 0.0)
+    for (i in 0 until array.size) out.add(array[i].jsonPrimitive?.doubleOrNull ?: 0.0)
     return out
 }
 

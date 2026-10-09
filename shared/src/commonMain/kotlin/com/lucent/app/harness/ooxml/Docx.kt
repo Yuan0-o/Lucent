@@ -662,7 +662,7 @@ object Docx {
                 BODY_NAMESPACES
             ).firstOrNull()
             if (created != null) {
-                val imported = document.importXmlNode(created, true) as XmlNode
+                val imported = document.importXmlNode(created, true)
                 val first = body.children.firstOrNull()
                 if (first != null) body.insertBefore(imported, first) else body.appendChild(imported)
             }
@@ -763,7 +763,7 @@ object Docx {
         val allowed = if (tag == "headerReference") setOf("headerReference") else setOf("headerReference", "footerReference")
         var anchor: XmlNode? = null
         for (child in section.children) {
-            if (child is XmlNode && localName(child) !in allowed) {
+            if (localName(child) !in allowed) {
                 anchor = child
                 break
             }
@@ -772,7 +772,7 @@ object Docx {
     }
 
     private fun ensureRelationshipPrefix(document: XmlNode) {
-        val root = document ?: return
+        val root = document
         if (attr(root, "xmlns:r").isEmpty()) root.attributes["xmlns:r"] = NS_OFFICE_RELATIONSHIPS
     }
 
