@@ -64,12 +64,31 @@ object BackupRecovery {
         return Envelope(question.trim(), salt, ITERATIONS, iv, wrapped)
     }
 
+    fun createForKey(question: String, answer: String, key: ByteArray): Envelope? {
+        if (question.isBlank() || answer.isBlank() || key.isEmpty()) return null
+        val salt = secureRandomBytes(SALT_LEN)
+        val iv = secureRandomBytes(IV_LEN)
+        val derivedKey = deriveKey(normalise(answer), salt, ITERATIONS)
+        val wrapped = aesGcmEncrypt(derivedKey, iv, key)
+        return Envelope(question.trim(), salt, ITERATIONS, iv, wrapped)
+    }
+
     fun recover(envelope: Envelope, answer: String): String? {
         if (answer.isBlank()) return null
         return try {
             val key = deriveKey(normalise(answer), envelope.salt, envelope.iterations)
             val decrypted = aesGcmDecrypt(key, envelope.iv, envelope.wrapped)
             String(decrypted, Charsets.UTF_8)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun recoverKey(envelope: Envelope, answer: String): ByteArray? {
+        if (answer.isBlank()) return null
+        return try {
+            val key = deriveKey(normalise(answer), envelope.salt, envelope.iterations)
+            aesGcmDecrypt(key, envelope.iv, envelope.wrapped)
         } catch (_: Throwable) {
             null
         }
