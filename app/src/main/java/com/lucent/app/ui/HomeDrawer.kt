@@ -135,7 +135,7 @@ fun HomeDrawerSheet(
             }
         }
         Text(
-            com.lucent.app.i18n.S.drawerFooter(com.lucent.app.LucentBuild.VERSION),
+            com.lucent.app.i18n.S.drawerFooter(com.lucent.app.LucentBuild.DISPLAY_VERSION),
             color = onGradientMuted,
             fontSize = 12.sp,
             modifier = Modifier.padding(start = 10.dp, top = 8.dp)

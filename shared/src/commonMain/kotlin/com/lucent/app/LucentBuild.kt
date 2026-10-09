@@ -14,7 +14,7 @@ object LucentBuild {
         else -> "dev"
     }
 
-    val DISPLAY_VERSION: String = if (BUILD_TRACK == "preview") "$VERSION alpha" else VERSION
+    val DISPLAY_VERSION: String = if (BUILD_TRACK == "preview") "$VERSION-alpha" else VERSION
 
     const val PRODUCT_NAME = "Lucent"
 

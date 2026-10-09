@@ -2443,7 +2443,7 @@ fun SettingsScreen(active: Boolean = true) {
                 repo = repo,
                 onRoute = { navigate(it) },
                 onOpenUrl = { url -> DesktopShell.openUrl(url) },
-                versionName = com.lucent.app.LucentBuild.VERSION,
+                versionName = com.lucent.app.LucentBuild.DISPLAY_VERSION,
                 buildNumber = com.lucent.app.LucentBuild.BUILD_NUMBER
             )
 

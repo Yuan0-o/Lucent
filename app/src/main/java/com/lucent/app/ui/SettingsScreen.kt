@@ -136,11 +136,6 @@ fun SettingsScreen(active: Boolean = true) {
     val scope = rememberCoroutineScope()
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
-
-    val appVersionName = remember {
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
-            ?: com.lucent.app.LucentBuild.VERSION
-    }
     val appBuildNumber = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toString()
@@ -2516,7 +2511,7 @@ fun SettingsScreen(active: Boolean = true) {
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, url.toUri())
                     context.startActivity(intent)
                 },
-                versionName = appVersionName,
+                versionName = com.lucent.app.LucentBuild.DISPLAY_VERSION,
                 buildNumber = appBuildNumber
             )
 

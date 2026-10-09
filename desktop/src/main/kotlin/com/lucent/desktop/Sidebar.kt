@@ -117,7 +117,7 @@ fun Sidebar(current: Screen, recentNotebooks: List<Notebook> = emptyList(), onSe
             }
             Text("Windows", color = onGradientMuted, fontSize = 12.sp)
             Spacer(modifier = Modifier.width(12.dp))
-            Text(LucentBuild.VERSION, color = onGradientMuted, fontSize = 12.sp)
+            Text(LucentBuild.DISPLAY_VERSION, color = onGradientMuted, fontSize = 12.sp)
         }
     }
 }
