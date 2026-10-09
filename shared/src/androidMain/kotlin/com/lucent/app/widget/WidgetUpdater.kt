@@ -16,7 +16,7 @@ object WidgetUpdater {
         if (todayIds.isNotEmpty()) {
             val listId = appContext.resources.getIdentifier("widget_today_list", "id", appContext.packageName)
             if (listId != 0) {
-                todayIds.forEach { manager.notifyAppWidgetViewDataChanged(it, listId) }
+                manager.notifyAppWidgetViewDataChanged(todayIds, listId)
             }
             appContext.sendBroadcast(
                 Intent().apply {

@@ -18,8 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.runtime.CompositionLocalProvider
 import com.lucent.app.platform.LocalPlatformContext
@@ -972,7 +972,8 @@ fun LucentApp(paletteColors: List<Color>, backdropColor: Color, backgroundAnimat
 private fun StartupFailureScreen(detail: String, onRetry: () -> Unit) {
     val isDark = isSystemInDarkTheme()
     val colorScheme = if (isDark) darkColorScheme() else lightColorScheme()
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     MaterialTheme(colorScheme = colorScheme) {
         Column(
@@ -998,7 +999,9 @@ private fun StartupFailureScreen(detail: String, onRetry: () -> Unit) {
             ) {
                 Button(
                     onClick = {
-                        clipboardManager.setText(AnnotatedString(detail))
+                        scope.launch {
+                            clipboard.setClipEntry(ClipData.newPlainText("Lucent", detail).toClipEntry())
+                        }
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                         cm?.setPrimaryClip(ClipData.newPlainText("Lucent", detail))
                     }
