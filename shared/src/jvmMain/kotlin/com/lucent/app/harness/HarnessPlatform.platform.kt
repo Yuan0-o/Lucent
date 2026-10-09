@@ -13,9 +13,9 @@ actual var harnessIsAndroid: Boolean
         HarnessRuntime.android = value
     }
 
-actual fun harnessUserHome(): String = System.getProperty("user.home")
+actual fun harnessUserHome(): String = System.getProperty("user.home")!!
 
-actual fun harnessTempDir(): String = System.getProperty("java.io.tmpdir")
+actual fun harnessTempDir(): String = System.getProperty("java.io.tmpdir")!!
 
 actual fun <T> harnessRunBlocking(block: suspend () -> T): T = kotlinx.coroutines.runBlocking { block() }
 

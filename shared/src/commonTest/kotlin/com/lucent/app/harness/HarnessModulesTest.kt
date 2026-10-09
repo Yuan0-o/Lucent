@@ -71,7 +71,7 @@ class HarnessModulesTest {
             names.forEach { name ->
                 val tool = registered[name]
                 assertTrue(tool != null, "$module should expose $name")
-                assertTrue(tool!!.description.length > 30, "$name needs a description a model can act on")
+                assertTrue(tool.description.length > 30, "$name needs a description a model can act on")
             }
         }
         val declared = expected.values.flatten()

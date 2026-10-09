@@ -87,7 +87,7 @@ object PluginTools : HarnessGroupTools {
         val state = ctx.config.plugin(plugin.id)
         val installed = state?.installed == true
         val size = when {
-            installed && (state?.sizeBytes ?: 0L) > 0 -> Workspace.humanSize(state!!.sizeBytes)
+            installed && state.sizeBytes > 0 -> Workspace.humanSize(state.sizeBytes)
             plugin.bytes > 0 -> Workspace.humanSize(plugin.bytes)
             else -> "small"
         }

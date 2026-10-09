@@ -51,7 +51,7 @@ object BuiltinRuntimeInstaller {
                 XZCompressorInputStream(rawIn).use { xzIn ->
                     TarArchiveInputStream(xzIn).use { tarIn ->
                         while (true) {
-                            val entry = tarIn.nextEntry as? org.apache.commons.compress.archivers.tar.TarArchiveEntry ?: break
+                            val entry = tarIn.nextEntry ?: break
                             val destination = File(tmp, entry.name)
                             val canonicalDest = destination.canonicalPath
                             if (!canonicalDest.startsWith(canonicalTmp + File.separator) && canonicalDest != canonicalTmp) {

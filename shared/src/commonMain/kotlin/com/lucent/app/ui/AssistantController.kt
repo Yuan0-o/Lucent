@@ -1294,7 +1294,7 @@ class AssistantControllerImpl(
             finalText = ReplyPolish.deRobotify(turn.snapshotBuffer()).trim()
         }
 
-        val unusableToolCall = finalText?.let { ft ->
+        val unusableToolCall = finalText.let { ft ->
             LocalToolCallParser.attemptedToolCallName(ft) != null && ft.trim().let { shape ->
                 shape.startsWith("{") || shape.startsWith("<tool_call") || shape.startsWith("```")
             }

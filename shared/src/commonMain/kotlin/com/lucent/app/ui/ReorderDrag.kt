@@ -195,8 +195,6 @@ class ReorderSlots internal constructor(
     }
 }
 
-private operator fun IntOffset.minus(other: IntOffset) = IntOffset(x - other.x, y - other.y)
-
 private fun LazyListState.visibleSlots(): ReorderSlots {
     val info = layoutInfo
     val cards = info.visibleItemsInfo.filter { it.key is Long }

@@ -928,10 +928,10 @@ class DesktopNotebookDao internal constructor(private val db: Db) : NotebookDao 
         }
     }
 
-    override suspend fun deleteById(notebookId: Long) {
+    override suspend fun deleteById(id: Long) {
         db.write("notebooks") { c ->
             c.prepareStatement("DELETE FROM notebooks WHERE id=?")
-                .apply { setLong(1, notebookId) }.executeUpdate()
+                .apply { setLong(1, id) }.executeUpdate()
         }
     }
 

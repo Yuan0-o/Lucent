@@ -203,7 +203,7 @@ class GitToolsTest {
         }
     }
 
-    private fun blankCtx(dir: File = File(System.getProperty("java.io.tmpdir"))): HarnessCtx {
+    private fun blankCtx(dir: File = File(System.getProperty("java.io.tmpdir")!!)): HarnessCtx {
         val context = allocate(PlatformContext::class.java) as? PlatformContext
         val db = allocate(AppDatabase::class.java) as? AppDatabase
         if (context != null && db != null) {
