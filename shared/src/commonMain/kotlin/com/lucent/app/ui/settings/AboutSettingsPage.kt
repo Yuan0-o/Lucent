@@ -143,6 +143,12 @@ private fun AboutUpdateCard(
     val onGradient = LocalOnGradient.current
     val onGradientMuted = LocalOnGradientMuted.current
     Column(modifier = Modifier.fillMaxWidth().frostedGlass().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(S.aboutAutoUpdate, color = onGradient, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(checked = autoUpdateOn, onCheckedChange = onToggle)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onChannelToggle() }.padding(vertical = 4.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(S.updateChannelTitle, color = onGradient, fontSize = 15.sp)
@@ -151,17 +157,8 @@ private fun AboutUpdateCard(
             Text(if (updateChannel == "preview") S.updateChannelPreview else S.updateChannelStable, color = onGradientMuted, fontSize = 14.sp)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(S.aboutAutoUpdate, color = onGradient, fontSize = 15.sp)
-                Text(S.aboutAutoUpdateDesc, color = onGradientMuted, fontSize = 12.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(checked = autoUpdateOn, onCheckedChange = onToggle)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onCheck, enabled = !busy) {
-            Text(S.aboutCheckUpdate, color = onGradient, fontSize = 13.sp)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { onCheck() }.padding(vertical = 4.dp)) {
+            Text(S.aboutCheckUpdate, color = onGradient, fontSize = 15.sp, modifier = Modifier.weight(1f))
         }
         status?.let { line ->
             Text(line, color = onGradientMuted, fontSize = 12.sp)
@@ -194,8 +191,8 @@ private fun AboutFooter(
         Text(S.aboutRights, color = onGradientMuted, fontSize = 11.sp)
         Spacer(modifier = Modifier.height(8.dp))
         Text("${S.aboutDeveloper} ${LucentBuild.DEVELOPER}", color = onGradientMuted, fontSize = 11.sp)
-        AboutLink("${S.aboutHomepage} github.com/Yuan0-o/Lucent", onGradient) {
-            onOpenUrl?.invoke(LucentBuild.HOMEPAGE)
+        AboutLink("${S.aboutHomepage} yuan0-o.github.io/lucentapp", onGradient) {
+            onOpenUrl?.invoke("https://yuan0-o.github.io/lucentapp/")
         }
         AboutLink("${S.aboutContact} ${LucentBuild.SUPPORT_EMAIL}", onGradient) {
             onOpenUrl?.invoke("mailto:${LucentBuild.SUPPORT_EMAIL}")
