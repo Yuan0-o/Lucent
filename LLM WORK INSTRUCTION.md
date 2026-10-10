@@ -17,18 +17,13 @@ You have no authority to modify this file or to violate the instructions set her
 8. Syntax checks, bracket balance, logic issues, and similar problems are handled locally; compilation and verification rely on cloud GitHub Actions. Downloading dependencies for local compilation is strictly prohibited.
 9. You must exercise appropriate initiative — not merely do what the user asked. Within a small scope, use your judgment to make the result better fit the user's habits.
 10. Never edit generated files directly (e.g. `I18n.kt`, which is generated from `tools/i18n/catalog.py` by `gen_i18n.py`). Always make the change in the generator's source and regenerate, or CI will overwrite your edit.
+11. Version naming rules: marketing version is `MARKETING_VERSION` in `app/build.gradle.kts` (e.g. `3.1.0`), bumped by +0.01 per upgrade carrying over every 10 (e.g. `3.1.9` → `3.2.0`). `P` = preview version (预览版): built via the `build-preview.yml` workflow; build ID is `P` + UTC timestamp `YYYYMMDDHHMM` (e.g. `P202610092213`); the GitHub release tag is the build ID marked as Pre-release; artifact file names are `Lucent.for.Android-{VERSION}-{BUILD_ID}.apk` and `Lucent.for.Windows-{VERSION}-{BUILD_ID}.exe`. Alpha preview versions carry an `-alpha` suffix on the marketing version (e.g. `3.1.0-alpha`), built via `build-preview.yml` like any preview build. `R` = formal release version (正式版): tag `R{VERSION}` (e.g. `R3.0.5`), title `Lucent {VERSION} — {British-humour subtitle}`, built via the `build-release.yml` workflow. User-facing builds must never be published to the preview release.
 
 **Encryption:** The app encrypts all in-app data, including notes, API keys, and all settings. Every new feature must guarantee encryption.
 
 **Backup and restore:** The app has a backup feature using the `.lcb` format. After restore, the user gets back exactly the same setup as before, including but not limited to the Settings module, the Assistant module — everything is included in the backup. Users can finely control what gets backed up and what does not.
 
 **Logging:** Every operation in the app must be logged, so users can tell what happened when the app crashes.
-
-**Version naming rules:**
-- Marketing version: `MARKETING_VERSION` in `app/build.gradle.kts` (e.g. `3.1.0`). Bumped by +0.01 per upgrade, carrying over every 10 (e.g. `3.1.9` → `3.2.0`).
-- `P` = preview version (预览版): built via the `build-preview.yml` workflow. Build ID is `P` + UTC timestamp `YYYYMMDDHHMM` (e.g. `P202610092213`). The GitHub release tag is the build ID, marked as Pre-release. Artifact file names are `Lucent.for.Android-{VERSION}-{BUILD_ID}.apk` and `Lucent.for.Windows-{VERSION}-{BUILD_ID}.exe` (e.g. `Lucent.for.Android-3.1.0-P202610090554.apk`).
-- Alpha preview versions: the marketing version carries an `-alpha` suffix (e.g. `3.1.0-alpha`). Built via the `build-preview.yml` workflow like any preview build; the artifact file names and release tag use the full version string including the suffix (e.g. `Lucent.for.Android-3.1.0-alpha-P202610092213.apk`).
-- `R` = formal release version (正式版): tag `R{VERSION}` (e.g. `R3.0.5`), title `Lucent {VERSION} — {British-humour subtitle}`. Built via the `build-release.yml` workflow. User-facing builds must never be published to the preview release.
 
 Each software upgrade must follow these steps:
 
