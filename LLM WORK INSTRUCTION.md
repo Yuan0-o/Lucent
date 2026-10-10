@@ -24,13 +24,19 @@ You have no authority to modify this file or to violate the instructions set her
 
 **Logging:** Every operation in the app must be logged, so users can tell what happened when the app crashes.
 
+**Version naming rules:**
+- Marketing version: `MARKETING_VERSION` in `app/build.gradle.kts` (e.g. `3.1.0`). Bumped by +0.01 per upgrade, carrying over every 10 (e.g. `3.1.9` → `3.2.0`).
+- Preview builds: built via the `build-preview.yml` workflow. Build ID is `P` + UTC timestamp `YYYYMMDDHHMM` (e.g. `P202610092213`). The GitHub release tag is the build ID, marked as Pre-release. Artifact file names are `Lucent.for.Android-{VERSION}-{BUILD_ID}.apk` and `Lucent.for.Windows-{VERSION}-{BUILD_ID}.exe` (e.g. `Lucent.for.Android-3.1.0-P202610090554.apk`).
+- Alpha preview builds: same as preview builds but the build ID uses an `A` prefix instead of `P` (e.g. `A202610092213`). Alpha builds are for earlier, less stable internal testing; they follow the same artifact naming pattern with the `A` build ID. The `build-preview.yml` workflow accepts a custom `build_id` input — pass the `A`-prefixed ID to produce an alpha build.
+- Formal releases: tag `v{VERSION}` (e.g. `v3.0.5`), title `Lucent {VERSION} — {British-humour subtitle}`. Built via the `build-release.yml` workflow. User-facing builds must never be published to the preview release.
+
 Each software upgrade must follow these steps:
 
 1. Understand the user's requirements accurately. If anything is unclear, ask — never improvise.
 2. Read through the existing code to avoid contradicting it (unless the user explicitly asks to overturn existing logic, in which case you must still tell the user what existing logic was overturned).
 3. Plan the overall steps, define what each step does, and follow the plan strictly.
-4. Complete all steps, then re-check the code for logic errors, unbalanced brackets, missing spaces, or other common oversights, ensuring correctness. Then bump the software version by +0.01 (carrying over every 10), or as the user requests. On every version update, remember to update the About section in Settings.
-5. Push to GitHub Actions for unit tests, and keep fixing based on error logs until tests pass. Then use the dedicated GitHub Action to build the APK and EXE in one go, auto-filling the tag and release title, and upload to a draft release. If you cannot push GitHub Actions, the user will do this step manually and return the error logs to you for fixes. Afterwards, delete most Action run records, keeping only the latest successful run of each workflow. Note: there is no need to download the built assets locally for the user.
+4. Complete all steps, then re-check the code for logic errors, unbalanced brackets, missing spaces, or other common oversights, ensuring correctness. Then bump the software version by +0.01 (carrying over every 10, e.g. 3.1.9 → 3.2.0), or as the user requests. On every version update, remember to update the About section in Settings. The marketing version lives in `MARKETING_VERSION` in `app/build.gradle.kts`.
+5. Push to GitHub Actions for unit tests, and keep fixing based on error logs until tests pass. Then use the dedicated GitHub Action to build the APK and EXE in one go (the `build-preview.yml` workflow), auto-filling the tag and release title, and upload to the preview release. If you cannot push GitHub Actions, the user will do this step manually and return the error logs to you for fixes. Afterwards, delete most Action run records, keeping only the latest successful run of each workflow. Note: there is no need to download the built assets locally for the user.
 6. In a British-humour style, write release notes of around 500 words based on this round's improvements and new features, in four languages — English (default), Chinese, Japanese, and Korean. The notes must not contain anything negative, such as remaining issues with the software. Follow the title style of previous releases (major versions have their style, minor versions theirs, patch versions theirs — judge by this version number and existing releases) to draft the title, then push the release notes.
 
 As the user plans to develop iOS, macOS, and similar versions: if the user asks you to develop iOS, macOS, HarmonyOS, or Linux versions based on existing features, proactively ask the user to update this file.
