@@ -27,7 +27,7 @@ You have no authority to modify this file or to violate the instructions set her
 **Version naming rules:**
 - Marketing version: `MARKETING_VERSION` in `app/build.gradle.kts` (e.g. `3.1.0`). Bumped by +0.01 per upgrade, carrying over every 10 (e.g. `3.1.9` → `3.2.0`).
 - Preview builds: built via the `build-preview.yml` workflow. Build ID is `P` + UTC timestamp `YYYYMMDDHHMM` (e.g. `P202610092213`). The GitHub release tag is the build ID, marked as Pre-release. Artifact file names are `Lucent.for.Android-{VERSION}-{BUILD_ID}.apk` and `Lucent.for.Windows-{VERSION}-{BUILD_ID}.exe` (e.g. `Lucent.for.Android-3.1.0-P202610090554.apk`).
-- Alpha preview builds: same as preview builds but the build ID uses an `A` prefix instead of `P` (e.g. `A202610092213`). Alpha builds are for earlier, less stable internal testing; they follow the same artifact naming pattern with the `A` build ID. The `build-preview.yml` workflow accepts a custom `build_id` input — pass the `A`-prefixed ID to produce an alpha build.
+- Alpha preview versions: the marketing version carries an `-alpha` suffix (e.g. `3.1.0-alpha`). Built via the `build-preview.yml` workflow like any preview build; the artifact file names and release tag use the full version string including the suffix (e.g. `Lucent.for.Android-3.1.0-alpha-P202610092213.apk`).
 - Formal releases: tag `v{VERSION}` (e.g. `v3.0.5`), title `Lucent {VERSION} — {British-humour subtitle}`. Built via the `build-release.yml` workflow. User-facing builds must never be published to the preview release.
 
 Each software upgrade must follow these steps:
