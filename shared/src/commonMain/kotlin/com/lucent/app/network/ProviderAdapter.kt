@@ -181,7 +181,7 @@ private fun reasoningChannel(delta: JsonObject?): String {
         val value = delta[key]?.jsonPrimitive?.content ?: ""
         if (value.isNotEmpty()) return value
     }
-    val details = delta["reasoning_details"]?.jsonArray ?: return ""
+    val details = (delta["reasoning_details"] as? JsonArray) ?: return ""
     val sb = StringBuilder()
     for (i in 0 until details.size) {
         val part = details[i].jsonObject
@@ -278,7 +278,7 @@ private fun imageFromOpenAiImages(images: JsonArray?): Pair<String, String>? {
     if (images == null) return null
     var found: Pair<String, String>? = null
     for (i in 0 until images.size) {
-        val url = images[i].jsonObject["image_url"]?.jsonObject?.get("url")?.jsonPrimitive?.content ?: ""
+        val url = (images[i].jsonObject["image_url"] as? JsonObject)?.get("url")?.jsonPrimitive?.content ?: ""
         parseDataUrl(url)?.let { found = it }
     }
     return found
@@ -459,10 +459,10 @@ object OpenAiAdapter : ProviderAdapter {
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
-        json["usage"]?.jsonObject?.let { reported ->
+        (json["usage"] as? JsonObject)?.let { reported ->
             if (reported.isNotEmpty()) acc.usage = openAiUsage(reported)
         }
-        val delta = json["choices"]?.jsonArray?.let { if (it.isEmpty()) null else it[0].jsonObject["delta"]?.jsonObject }
+        val delta = (json["choices"] as? JsonArray)?.let { if (it.isEmpty()) null else (it[0] as? JsonObject)?.get("delta") as? JsonObject }
         val reasoning = reasoningChannel(delta)
         if (reasoning.isNotEmpty()) {
             acc.fullReasoning.append(reasoning)
@@ -470,19 +470,19 @@ object OpenAiAdapter : ProviderAdapter {
         }
         val piece = delta?.get("content")?.jsonPrimitive?.contentOrNull ?: ""
         if (piece.isNotEmpty()) routeContent(piece, acc, onDelta, onReasoning)
-        delta?.get("tool_calls")?.jsonArray?.let { tcArr ->
+        (delta?.get("tool_calls") as? JsonArray)?.let { tcArr ->
             for (i in 0 until tcArr.size) {
                 val tc = tcArr[i].jsonObject
                 val idx = tc["index"]?.jsonPrimitive?.intOrNull ?: 0
                 val a = acc.openAiToolAcc.getOrPut(idx) { ToolAcc() }
                 tc["id"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }?.let { a.id = it }
-                tc["function"]?.jsonObject?.let { fn ->
+                (tc["function"] as? JsonObject)?.let { fn ->
                     fn["name"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }?.let { a.name = it }
                     a.args.append(fn["arguments"]?.jsonPrimitive?.contentOrNull ?: "")
                 }
             }
         }
-        imageFromOpenAiImages(delta?.get("images")?.jsonArray)?.let {
+        imageFromOpenAiImages((delta?.get("images") as? JsonArray))?.let {
             acc.returnedImageMime = it.first; acc.returnedImageData = it.second
         }
     }
@@ -673,7 +673,7 @@ object AnthropicAdapter : ProviderAdapter {
 
     override fun parseReply(bodyStr: String): RawModelReply {
         val json = Json.parseToJsonElement(bodyStr).jsonObject
-        val contentArray = json["content"]?.jsonArray ?: buildJsonArray {}
+        val contentArray = (json["content"] as? JsonArray) ?: buildJsonArray {}
         var text: String? = null
         val toolCalls = mutableListOf<ToolCallRequest>()
         for (i in 0 until contentArray.size) {
@@ -681,12 +681,12 @@ object AnthropicAdapter : ProviderAdapter {
             when (block["type"]?.jsonPrimitive?.content) {
                 "text" -> text = (text ?: "") + (block["text"]?.jsonPrimitive?.content ?: "")
                 "tool_use" -> {
-                    val input = block["input"]?.jsonObject ?: buildJsonObject {}
+                    val input = (block["input"] as? JsonObject) ?: buildJsonObject {}
                     toolCalls.add(ToolCallRequest(block["id"]?.jsonPrimitive?.content ?: "", block["name"]?.jsonPrimitive?.content ?: "", Json.encodeToString(JsonElement.serializer(), input)))
                 }
             }
         }
-        return RawModelReply(text, toolCalls, usage = anthropicUsage(json["usage"]?.jsonObject))
+        return RawModelReply(text, toolCalls, usage = anthropicUsage((json["usage"] as? JsonObject)))
     }
 
     override fun parseStreamEvent(
@@ -697,17 +697,17 @@ object AnthropicAdapter : ProviderAdapter {
     ) {
         when (json["type"]?.jsonPrimitive?.content) {
             "message_start" -> {
-                json["message"]?.jsonObject?.get("usage")?.jsonObject?.let {
+                ((json["message"] as? JsonObject)?.get("usage") as? JsonObject)?.let {
                     acc.usage = mergeUsage(acc.usage, anthropicUsage(it))
                 }
             }
             "message_delta" -> {
-                json["usage"]?.jsonObject?.let {
+                (json["usage"] as? JsonObject)?.let {
                     acc.usage = mergeUsage(acc.usage, anthropicUsage(it))
                 }
             }
             "content_block_start" -> {
-                val block = json["content_block"]?.jsonObject
+                val block = (json["content_block"] as? JsonObject)
                 val idx = json["index"]?.jsonPrimitive?.intOrNull ?: 0
                 when (block?.get("type")?.jsonPrimitive?.content) {
                     "tool_use" -> acc.anthropicToolAcc[idx] = ToolAcc(id = block["id"]?.jsonPrimitive?.content ?: "", name = block["name"]?.jsonPrimitive?.content ?: "")
@@ -716,7 +716,7 @@ object AnthropicAdapter : ProviderAdapter {
                 }
             }
             "content_block_delta" -> {
-                val delta = json["delta"]?.jsonObject
+                val delta = (json["delta"] as? JsonObject)
                 when (delta?.get("type")?.jsonPrimitive?.content) {
                     "text_delta" -> {
                         val piece = delta["text"]?.jsonPrimitive?.contentOrNull ?: ""
@@ -849,7 +849,7 @@ object GoogleAdapter : ProviderAdapter {
             if (contentsData.isNotEmpty() && contentsData.last()["role"]?.jsonPrimitive?.content == "user") {
                 val lastIdx = contentsData.lastIndex
                 val lastMsg = contentsData[lastIdx]
-                val parts = lastMsg["parts"]?.jsonArray?.toMutableList() ?: mutableListOf()
+                val parts = (lastMsg["parts"] as? JsonArray)?.toMutableList() ?: mutableListOf()
                 parts.add(buildJsonObject { put("text", context) })
                 contentsData[lastIdx] = buildJsonObject {
                     lastMsg.forEach { (k, v) -> put(k, v) }
@@ -902,10 +902,10 @@ object GoogleAdapter : ProviderAdapter {
 
     override fun parseReply(bodyStr: String): RawModelReply {
         val json = Json.parseToJsonElement(bodyStr).jsonObject
-        val candidates = json["candidates"]?.jsonArray
+        val candidates = (json["candidates"] as? JsonArray)
         if (candidates == null || candidates.isEmpty()) return RawModelReply(null, emptyList())
-        val content = candidates[0].jsonObject["content"]?.jsonObject ?: buildJsonObject {}
-        val parts = content["parts"]?.jsonArray ?: buildJsonArray {}
+        val content = (candidates[0].jsonObject["content"] as? JsonObject) ?: buildJsonObject {}
+        val parts = (content["parts"] as? JsonArray) ?: buildJsonArray {}
         var text: String? = null
         val toolCalls = mutableListOf<ToolCallRequest>()
         var imageMime: String? = null
@@ -914,17 +914,17 @@ object GoogleAdapter : ProviderAdapter {
         for (i in 0 until parts.size) {
             val part = parts[i].jsonObject
             if (part.containsKey("text")) text = (text ?: "") + (part["text"]?.jsonPrimitive?.content ?: "")
-            part["functionCall"]?.jsonObject?.let { fc ->
-                val args = fc["args"]?.jsonObject ?: buildJsonObject {}
+            (part["functionCall"] as? JsonObject)?.let { fc ->
+                val args = (fc["args"] as? JsonObject) ?: buildJsonObject {}
                 val sig = part["thoughtSignature"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }
                 toolCalls.add(ToolCallRequest("call_$i", fc["name"]?.jsonPrimitive?.content ?: "", Json.encodeToString(JsonElement.serializer(), args), sig))
             }
-            part["inlineData"]?.jsonObject?.let { inlineData ->
+            (part["inlineData"] as? JsonObject)?.let { inlineData ->
                 imageMime = inlineData["mimeType"]?.jsonPrimitive?.content
                 imageData = inlineData["data"]?.jsonPrimitive?.content
             }
         }
-        return RawModelReply(text, toolCalls, imageMime, imageData, usage = googleUsage(json["usageMetadata"]?.jsonObject))
+        return RawModelReply(text, toolCalls, imageMime, imageData, usage = googleUsage((json["usageMetadata"] as? JsonObject)))
     }
 
     override fun parseStreamEvent(
@@ -933,9 +933,9 @@ object GoogleAdapter : ProviderAdapter {
         onDelta: (String) -> Unit,
         onReasoning: (String) -> Unit
     ) {
-        json["usageMetadata"]?.jsonObject?.let { acc.usage = googleUsage(it) }
-        val candidates = json["candidates"]?.jsonArray
-        val parts = if (candidates != null && candidates.isNotEmpty()) candidates[0].jsonObject["content"]?.jsonObject?.get("parts")?.jsonArray else null
+        (json["usageMetadata"] as? JsonObject)?.let { acc.usage = googleUsage(it) }
+        val candidates = (json["candidates"] as? JsonArray)
+        val parts = if (candidates != null && candidates.isNotEmpty()) ((candidates[0].jsonObject["content"] as? JsonObject)?.get("parts") as? JsonArray) else null
         if (parts != null) {
             for (i in 0 until parts.size) {
                 val part = parts[i].jsonObject
@@ -948,14 +948,14 @@ object GoogleAdapter : ProviderAdapter {
                         routeContent(piece, acc, onDelta, onReasoning)
                     }
                 }
-                part["functionCall"]?.jsonObject?.let { fc ->
-                    val args = fc["args"]?.jsonObject ?: buildJsonObject {}
+                (part["functionCall"] as? JsonObject)?.let { fc ->
+                    val args = (fc["args"] as? JsonObject) ?: buildJsonObject {}
                     val a = acc.openAiToolAcc.getOrPut(i) { ToolAcc() }
                     a.name = fc["name"]?.jsonPrimitive?.content ?: ""
                     a.args.append(Json.encodeToString(JsonElement.serializer(), args))
                     part["thoughtSignature"]?.jsonPrimitive?.content?.takeIf { it.isNotEmpty() }?.let { a.thoughtSignature = it }
                 }
-                part["inlineData"]?.jsonObject?.let { inlineData ->
+                (part["inlineData"] as? JsonObject)?.let { inlineData ->
                     acc.returnedImageMime = inlineData["mimeType"]?.jsonPrimitive?.content
                     acc.returnedImageData = inlineData["data"]?.jsonPrimitive?.content
                 }

@@ -44,7 +44,7 @@ object TodoTools : HarnessGroupTools {
     }
 
     private fun write(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
-        val array = args["todos"]?.jsonArray ?: JsonArray(emptyList())
+        val array = (args["todos"] as? JsonArray) ?: JsonArray(emptyList())
         val items = mutableListOf<TodoItem>()
         for (i in 0 until array.size) {
             when (val entry = array[i]) {

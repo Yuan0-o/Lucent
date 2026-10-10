@@ -602,7 +602,7 @@ object FileTools : HarnessGroupTools {
 
     private fun batchFiles(ctx: HarnessCtx, args: JsonObject): ToolExecResult {
         val action = (args["action"]?.jsonPrimitive?.content ?: "").lowercase()
-        val paths = args["paths"]?.jsonArray ?: JsonArray(emptyList())
+        val paths = (args["paths"] as? JsonArray) ?: JsonArray(emptyList())
         if (paths.size == 0) return ToolExecResult("Give me the paths to work on.", success = false)
         val find = (args["find"]?.jsonPrimitive?.content ?: "")
         val replace = (args["replace"]?.jsonPrimitive?.content ?: "")
@@ -712,7 +712,7 @@ object FileTools : HarnessGroupTools {
         val action = (args["action"]?.jsonPrimitive?.content ?: "zip").lowercase()
         val archive = if (action == "unzip") Workspace.forReadFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
         else Workspace.forWriteFile(ctx, args["path"]?.jsonPrimitive?.content ?: "")
-        return if (action == "unzip") unzip(ctx, archive) else zip(ctx, archive, args["paths"]?.jsonArray)
+        return if (action == "unzip") unzip(ctx, archive) else zip(ctx, archive, (args["paths"] as? JsonArray))
     }
 
     private fun zip(ctx: HarnessCtx, archive: Path, paths: JsonArray?): ToolExecResult {

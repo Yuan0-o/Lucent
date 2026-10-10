@@ -286,7 +286,7 @@ object BrowserTools : HarnessGroupTools {
 
     private fun searchQueries(args: JsonObject): List<String> {
         val single = (args["query"]?.jsonPrimitive?.content ?: "").trim()
-        val many = args["queries"]?.jsonArray
+        val many = (args["queries"] as? JsonArray)
         val collected = buildList {
             if (single.isNotEmpty()) add(single)
             if (many != null) {

@@ -355,7 +355,7 @@ object TerminalTools : HarnessGroupTools {
         val dir = workdirOf(ctx, args)
         val timeout = timeoutOf(ctx, args)
         val env = mutableMapOf<String, String>()
-        val envJson = args["env"]?.jsonObject
+        val envJson = (args["env"] as? JsonObject)
         if (envJson != null) {
             val keys = envJson.keys.iterator()
             while (keys.hasNext()) {

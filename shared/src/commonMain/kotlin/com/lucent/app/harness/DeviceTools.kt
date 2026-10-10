@@ -169,7 +169,7 @@ object DeviceTools : HarnessGroupTools {
         val question = (args["question"]?.jsonPrimitive?.content ?: "").trim()
         if (question.isEmpty()) return ToolExecResult("What should I ask?", success = false)
         val options = mutableListOf<String>()
-        val array = args["options"]?.jsonArray
+        val array = (args["options"] as? JsonArray)
         if (array != null) {
             for (i in 0 until array.size) {
                 val value = array[i].jsonPrimitive.content

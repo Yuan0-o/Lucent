@@ -247,7 +247,7 @@ object AgentTools : HarnessGroupTools {
             return ToolExecResult("Too many sub-agents are already running; wait for one to finish.", success = false)
         }
         val tools = mutableSetOf<String>()
-        val array: JsonArray? = args["tools"]?.jsonArray
+        val array: JsonArray? = (args["tools"] as? JsonArray)
         if (array != null) {
             for (i in 0 until array.size) {
                 val value = array[i].jsonPrimitive.content

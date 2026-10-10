@@ -64,7 +64,7 @@ object PlanTools : HarnessGroupTools {
         val host = HarnessRuntime.host
             ?: return ToolExecResult("This build cannot ask the user anything.", success = false)
         val options = mutableListOf<String>()
-        val array = args["options"]?.jsonArray
+        val array = (args["options"] as? JsonArray)
         if (array != null) {
             for (i in 0 until array.size) {
                 val value = (array[i] as? JsonPrimitive)?.content ?: ""
@@ -77,7 +77,7 @@ object PlanTools : HarnessGroupTools {
     }
 
     private fun updatePlan(args: JsonObject): ToolExecResult {
-        val array = args["steps"]?.jsonArray ?: JsonArray(emptyList())
+        val array = (args["steps"] as? JsonArray) ?: JsonArray(emptyList())
         if (array.size == 0) return ToolExecResult("Give me the steps.", success = false)
         val steps = mutableListOf<PlanStep>()
         for (i in 0 until array.size) {
