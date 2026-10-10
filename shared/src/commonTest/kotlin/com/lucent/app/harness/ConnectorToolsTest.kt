@@ -61,7 +61,6 @@ class ConnectorToolsTest {
                 fail("Crashed with JsonObject exception: ${e.message}")
             }
         } catch (e: Exception) {
-            // Ignore other exceptions
         } finally {
             dir.deleteRecursively()
         }

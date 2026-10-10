@@ -52,7 +52,6 @@ class TerminalToolsTest {
                 fail("Crashed with JsonObject exception: ${e.message}")
             }
         } catch (e: Exception) {
-            // other exceptions are fine
         } finally {
             dir.deleteRecursively()
         }
